@@ -3,6 +3,7 @@ from __future__ import annotations
 import typer
 
 from eawf import __version__
+from eawf.cli.commands.validate import validate as validate_cmd
 
 app = typer.Typer(
     name="eawf",
@@ -10,6 +11,8 @@ app = typer.Typer(
     no_args_is_help=False,
     add_completion=False,
 )
+
+app.command(name="validate")(validate_cmd)
 
 
 def _version_callback(value: bool) -> None:

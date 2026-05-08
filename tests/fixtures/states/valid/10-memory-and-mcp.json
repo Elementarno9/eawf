@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "urn": "urn:eawf:v1:state:QR",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "project": {
+    "code": "QR",
+    "slug": "quant-research",
+    "title": "Quant Research",
+    "description": "",
+    "domains": ["quant"],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": "urn:eawf:v1:repo:QR"
+  },
+  "current": {
+    "project_code": "QR",
+    "subproject_id": null,
+    "phase_id": null,
+    "iter_id": null,
+    "active_wave_ids": [],
+    "active_session_ids": []
+  },
+  "workspace": null,
+  "memory_index": {
+    "MEM-001": {
+      "id": "MEM-001",
+      "scope_id": "QR",
+      "summary": "Use uv run for all Python invocations",
+      "confidence": "high",
+      "status": "active",
+      "store_record_id": "MEM-REC-001",
+      "review_due": null
+    }
+  },
+  "mcp_servers": {
+    "filesystem": {
+      "id": "filesystem",
+      "owner": "eawf",
+      "command": "/usr/local/bin/mcp-fs",
+      "args": ["--root", "/abs/path"],
+      "env_refs": [],
+      "risk": "read-write",
+      "write_capable": true,
+      "status": "installed",
+      "installed_targets": ["claude"]
+    }
+  },
+  "phases": {},
+  "iters": {},
+  "waves": {},
+  "artifacts": {},
+  "agent_sessions": {},
+  "plugins": {},
+  "indexes": {}
+}

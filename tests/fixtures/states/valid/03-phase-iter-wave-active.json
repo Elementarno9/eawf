@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "urn": "urn:eawf:v1:state:QR",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "project": {
+    "code": "QR",
+    "slug": "quant-research",
+    "title": "Quant Research",
+    "description": "",
+    "domains": ["quant"],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": "urn:eawf:v1:repo:QR"
+  },
+  "current": {
+    "project_code": "QR",
+    "subproject_id": null,
+    "phase_id": "P01",
+    "iter_id": "P01-I01",
+    "active_wave_ids": ["P01-I01-W01"],
+    "active_session_ids": []
+  },
+  "workspace": null,
+  "phases": {
+    "P01": {
+      "id": "P01",
+      "scope_id": "QR",
+      "title": "Bootstrap",
+      "status": "active",
+      "iter_ids": ["P01-I01"],
+      "outcome_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null,
+      "audit_id": null
+    }
+  },
+  "iters": {
+    "P01-I01": {
+      "id": "P01-I01",
+      "phase_id": "P01",
+      "title": "First iter",
+      "status": "active",
+      "wave_ids": ["P01-I01-W01"],
+      "estimate_id": null,
+      "audit_id": null,
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null
+    }
+  },
+  "waves": {
+    "P01-I01-W01": {
+      "id": "P01-I01-W01",
+      "iter_id": "P01-I01",
+      "title": "Implement validate",
+      "status": "in_progress",
+      "deps": [],
+      "file_scopes": ["src/eawf/validate/"],
+      "claim_session_id": null,
+      "worktree_id": null,
+      "commit": null,
+      "outcome": null,
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null
+    }
+  },
+  "artifacts": {},
+  "agent_sessions": {},
+  "plugins": {},
+  "indexes": {}
+}

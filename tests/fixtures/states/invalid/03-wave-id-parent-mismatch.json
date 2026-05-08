@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "urn": "urn:eawf:v1:state:QR",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "project": {
+    "code": "QR",
+    "slug": "quant-research",
+    "title": "Quant Research",
+    "description": "",
+    "domains": ["quant"],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": "urn:eawf:v1:repo:QR"
+  },
+  "current": {
+    "project_code": "QR",
+    "subproject_id": null,
+    "phase_id": null,
+    "iter_id": null,
+    "active_wave_ids": [],
+    "active_session_ids": []
+  },
+  "workspace": null,
+  "phases": {
+    "P01": {
+      "id": "P01",
+      "scope_id": "QR",
+      "title": "Bootstrap",
+      "status": "active",
+      "iter_ids": ["P01-I01"],
+      "outcome_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null,
+      "audit_id": null
+    },
+    "P02": {
+      "id": "P02",
+      "scope_id": "QR",
+      "title": "Second",
+      "status": "active",
+      "iter_ids": ["P02-I05"],
+      "outcome_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null,
+      "audit_id": null
+    }
+  },
+  "iters": {
+    "P01-I01": {
+      "id": "P01-I01",
+      "phase_id": "P01",
+      "title": "First iter",
+      "status": "active",
+      "wave_ids": ["P01-I01-W01"],
+      "estimate_id": null,
+      "audit_id": null,
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null
+    },
+    "P02-I05": {
+      "id": "P02-I05",
+      "phase_id": "P02",
+      "title": "Second iter",
+      "status": "active",
+      "wave_ids": [],
+      "estimate_id": null,
+      "audit_id": null,
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null
+    }
+  },
+  "waves": {
+    "P01-I01-W01": {
+      "id": "P01-I01-W01",
+      "iter_id": "P02-I05",
+      "title": "Mismatched wave",
+      "status": "in_progress",
+      "deps": [],
+      "file_scopes": [],
+      "claim_session_id": null,
+      "worktree_id": null,
+      "commit": null,
+      "outcome": null,
+      "opened_at": "2026-05-08T00:00:00Z",
+      "closed_at": null
+    }
+  },
+  "artifacts": {},
+  "agent_sessions": {},
+  "plugins": {},
+  "indexes": {}
+}

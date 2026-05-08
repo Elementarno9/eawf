@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "urn": "urn:eawf:v1:state:QR",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "project": {
+    "code": "QR",
+    "slug": "quant-research",
+    "title": "Quant Research",
+    "description": null,
+    "domains": ["quant"],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": "urn:eawf:v1:repo:QR"
+  },
+  "current": {
+    "project_code": "QR",
+    "subproject_id": null,
+    "phase_id": "P01",
+    "iter_id": "P02-I01",
+    "active_wave_ids": [],
+    "active_session_ids": []
+  },
+  "workspace": null,
+  "phases": {
+    "P01": {
+      "id": "P01",
+      "scope_id": "QR",
+      "title": "Phase 1",
+      "status": "active",
+      "iter_ids": ["P01-I01"],
+      "outcome_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z"
+    },
+    "P02": {
+      "id": "P02",
+      "scope_id": "QR",
+      "title": "Phase 2",
+      "status": "active",
+      "iter_ids": ["P02-I01"],
+      "outcome_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z"
+    }
+  },
+  "iters": {
+    "P01-I01": {
+      "id": "P01-I01",
+      "phase_id": "P01",
+      "title": "Iter 1.1",
+      "status": "active",
+      "wave_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z"
+    },
+    "P02-I01": {
+      "id": "P02-I01",
+      "phase_id": "P02",
+      "title": "Iter 2.1",
+      "status": "active",
+      "wave_ids": [],
+      "opened_at": "2026-05-08T00:00:00Z"
+    }
+  },
+  "waves": {},
+  "artifacts": {},
+  "agent_sessions": {},
+  "plugins": {},
+  "indexes": {}
+}

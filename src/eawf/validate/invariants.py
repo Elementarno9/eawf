@@ -1,0 +1,350 @@
+"""Cross-entity invariants for eawf state.
+
+Each invariant is a pure function ``State -> Iterable[Violation]``. Schema-level
+checks (``extra="forbid"``, type/enum/regex) live on the Pydantic models in
+:mod:`eawf.state.models`; this module covers the rules from
+``eawf-schema-inventory.md`` §"Validation invariants" that span multiple
+entities.
+
+Codes follow the ``INV.<CATEGORY>.<SPECIFIC>`` convention; they are part of
+the CLI/test contract and must not be renamed without updating fixtures.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+
+from eawf.state.enums import (
+    IterStatus,
+    OutcomeStatus,
+    PhaseStatus,
+    WaveStatus,
+)
+from eawf.state.ids import parents_of
+from eawf.state.models import State
+
+logger = logging.getLogger(__name__)
+
+_OPEN_PHASE_STATUSES: frozenset[str] = frozenset(
+    {PhaseStatus.PLANNED.value, PhaseStatus.ACTIVE.value}
+)
+_OPEN_ITER_STATUSES: frozenset[str] = frozenset({IterStatus.PLANNED.value, IterStatus.ACTIVE.value})
+_ACTIVE_WAVE_STATUSES: frozenset[str] = frozenset(
+    {WaveStatus.CLAIMED.value, WaveStatus.IN_PROGRESS.value}
+)
+_OPEN_WAVE_STATUSES: frozenset[str] = frozenset(
+    {WaveStatus.PENDING.value, WaveStatus.CLAIMED.value, WaveStatus.IN_PROGRESS.value}
+)
+
+
+@dataclass(frozen=True)
+class Violation:
+    """A single invariant violation."""
+
+    code: str
+    path: str
+    message: str
+
+
+Invariant = Callable[[State], Iterable[Violation]]
+
+
+def check_parent_ids(state: State) -> Iterable[Violation]:
+    """Iter/wave parentage rules (``INV.PARENT.*``).
+
+    - ``iters[*].phase_id`` must exist in ``phases``.
+    - ``waves[*].iter_id`` must exist in ``iters``.
+    - The encoded parents from the entity ID must match the recorded
+      ``phase_id`` / ``iter_id`` fields.
+    """
+    for iter_id, it in state.iters.items():
+        # Encoded phase parent must match recorded phase_id.
+        encoded = parents_of(it.id)
+        encoded_phase = encoded[0] if encoded else None
+        if encoded_phase is not None and encoded_phase != it.phase_id:
+            yield Violation(
+                code="INV.PARENT.ITER_ID_MISMATCH",
+                path=f"/iters/{iter_id}/phase_id",
+                message=(
+                    f"iter {it.id!r} encodes phase {encoded_phase!r} "
+                    f"but phase_id is {it.phase_id!r}"
+                ),
+            )
+        if it.phase_id not in state.phases:
+            yield Violation(
+                code="INV.PARENT.ITER_PHASE_MISSING",
+                path=f"/iters/{iter_id}/phase_id",
+                message=(f"iter {it.id!r} references missing phase {it.phase_id!r}"),
+            )
+
+    for wave_id, w in state.waves.items():
+        encoded = parents_of(w.id)
+        encoded_iter = encoded[1] if len(encoded) >= 2 else None
+        if encoded_iter is not None and encoded_iter != w.iter_id:
+            yield Violation(
+                code="INV.PARENT.WAVE_ID_MISMATCH",
+                path=f"/waves/{wave_id}/iter_id",
+                message=(
+                    f"wave {w.id!r} encodes iter {encoded_iter!r} but iter_id is {w.iter_id!r}"
+                ),
+            )
+        if w.iter_id not in state.iters:
+            yield Violation(
+                code="INV.PARENT.WAVE_ITER_MISSING",
+                path=f"/waves/{wave_id}/iter_id",
+                message=(f"wave {w.id!r} references missing iter {w.iter_id!r}"),
+            )
+
+
+def check_current_pointers(state: State) -> Iterable[Violation]:
+    """``current.*`` pointers must reference open lifecycle entries.
+
+    - ``current.phase_id`` (if non-null) must name a phase whose status is
+      ``planned`` or ``active``.
+    - ``current.iter_id`` (if non-null) must name an iter whose status is
+      ``planned`` or ``active``.
+    - ``current.active_wave_ids`` must reference waves whose status is
+      ``claimed`` or ``in_progress``.
+    """
+    cp = state.current
+
+    if cp.phase_id is not None:
+        phase = state.phases.get(cp.phase_id)
+        if phase is None:
+            yield Violation(
+                code="INV.CURRENT.PHASE_MISSING",
+                path="/current/phase_id",
+                message=f"current.phase_id {cp.phase_id!r} not in phases",
+            )
+        elif phase.status not in _OPEN_PHASE_STATUSES:
+            yield Violation(
+                code="INV.CURRENT.PHASE_NOT_OPEN",
+                path="/current/phase_id",
+                message=(
+                    f"current.phase_id {cp.phase_id!r} has status "
+                    f"{phase.status.value!r}; expected planned or active"
+                ),
+            )
+
+    if cp.iter_id is not None:
+        it = state.iters.get(cp.iter_id)
+        if it is None:
+            yield Violation(
+                code="INV.CURRENT.ITER_MISSING",
+                path="/current/iter_id",
+                message=f"current.iter_id {cp.iter_id!r} not in iters",
+            )
+        elif it.status not in _OPEN_ITER_STATUSES:
+            yield Violation(
+                code="INV.CURRENT.ITER_NOT_OPEN",
+                path="/current/iter_id",
+                message=(
+                    f"current.iter_id {cp.iter_id!r} has status "
+                    f"{it.status.value!r}; expected planned or active"
+                ),
+            )
+
+    if cp.phase_id is not None and cp.iter_id is not None and cp.iter_id in state.iters:
+        iter_phase = state.iters[cp.iter_id].phase_id
+        if iter_phase != cp.phase_id:
+            yield Violation(
+                code="INV.CURRENT.ITER_PHASE_MISMATCH",
+                path="/current/iter_id",
+                message=(
+                    f"current.iter_id {cp.iter_id!r} belongs to phase "
+                    f"{iter_phase!r}, not current.phase_id {cp.phase_id!r}"
+                ),
+            )
+
+    for wave_id in cp.active_wave_ids:
+        w = state.waves.get(wave_id)
+        if w is None:
+            yield Violation(
+                code="INV.CURRENT.WAVE_MISSING",
+                path="/current/active_wave_ids",
+                message=f"active wave {wave_id!r} not in waves",
+            )
+        elif w.status not in _ACTIVE_WAVE_STATUSES:
+            yield Violation(
+                code="INV.CURRENT.WAVE_NOT_ACTIVE",
+                path="/current/active_wave_ids",
+                message=(
+                    f"active wave {wave_id!r} has status "
+                    f"{w.status.value!r}; expected claimed or in_progress"
+                ),
+            )
+
+
+def check_closure_rules(state: State) -> Iterable[Violation]:
+    """Closed parents must not have open children (``INV.CLOSURE.*``).
+
+    - A ``closed`` phase must not have iter children whose status is in
+      ``{planned, active}``.
+    - A ``closed`` iter must not have wave children whose status is in
+      ``{pending, claimed, in_progress}``.
+    """
+    for phase_id, phase in state.phases.items():
+        if phase.status != PhaseStatus.CLOSED.value:
+            continue
+        for iter_id, it in state.iters.items():
+            if it.phase_id != phase_id:
+                continue
+            if it.status in _OPEN_ITER_STATUSES:
+                yield Violation(
+                    code="INV.CLOSURE.PHASE_HAS_OPEN_ITER",
+                    path=f"/phases/{phase_id}",
+                    message=(
+                        f"closed phase {phase_id!r} has open iter "
+                        f"{iter_id!r} (status {it.status.value!r})"
+                    ),
+                )
+
+    for iter_id, it in state.iters.items():
+        if it.status != IterStatus.CLOSED.value:
+            continue
+        for wave_id, w in state.waves.items():
+            if w.iter_id != iter_id:
+                continue
+            if w.status in _OPEN_WAVE_STATUSES:
+                yield Violation(
+                    code="INV.CLOSURE.ITER_HAS_OPEN_WAVE",
+                    path=f"/iters/{iter_id}",
+                    message=(
+                        f"closed iter {iter_id!r} has open wave "
+                        f"{wave_id!r} (status {w.status.value!r})"
+                    ),
+                )
+
+
+def check_audit_evidence(state: State) -> Iterable[Violation]:
+    """Outcomes/hypotheses with verdicts require an ``audit_id`` (``INV.AUDIT.*``).
+
+    - Outcomes whose status is ``met`` or ``missed`` must have ``audit_id``
+      non-null.
+    - Hypotheses whose verdict is non-null (i.e. resolved) must have
+      ``audit_id`` non-null.
+    """
+    if state.outcomes is not None:
+        for oid, outcome in state.outcomes.items():
+            if outcome.status not in {
+                OutcomeStatus.MET.value,
+                OutcomeStatus.MISSED.value,
+            }:
+                continue
+            if outcome.audit_id is None:
+                yield Violation(
+                    code="INV.AUDIT.OUTCOME_MISSING_AUDIT",
+                    path=f"/outcomes/{oid}/audit_id",
+                    message=(
+                        f"outcome {oid!r} has status {outcome.status.value!r} but no audit_id"
+                    ),
+                )
+
+    if state.hypotheses is not None:
+        for hid, hyp in state.hypotheses.items():
+            if hyp.verdict is None:
+                continue
+            # Verdict is non-null (one of confirmed/rejected/inconclusive).
+            if hyp.audit_id is None:
+                yield Violation(
+                    code="INV.AUDIT.HYPOTHESIS_MISSING_AUDIT",
+                    path=f"/hypotheses/{hid}/audit_id",
+                    message=(
+                        f"hypothesis {hid!r} has verdict {hyp.verdict.value!r} but no audit_id"
+                    ),
+                )
+
+
+def check_mcp_plugin_owners(state: State) -> Iterable[Violation]:
+    """All ``mcp_servers`` entries must declare ``owner == "eawf"``.
+
+    Phase 1 enforces a single managed-owner policy: any non-``"eawf"`` owner is
+    flagged as ``INV.OWNER.MCP_NON_EAWF``. The :class:`McpServer` model already
+    requires an ``owner`` field, so no presence check is needed.
+    """
+    if state.mcp_servers is None:
+        return
+    for mid, server in state.mcp_servers.items():
+        if server.owner != "eawf":
+            yield Violation(
+                code="INV.OWNER.MCP_NON_EAWF",
+                path=f"/mcp_servers/{mid}/owner",
+                message=(f"mcp_servers[{mid!r}].owner is {server.owner!r}; expected 'eawf'"),
+            )
+
+
+def check_plugin_runtimes(state: State) -> Iterable[Violation]:
+    """All ``plugins`` entries must declare ``runtime == "claude"`` in v0.1.
+
+    The ``runtime`` field is a free string at the schema layer because future
+    profiles may add more runtimes; for v0.1 the spec restricts it to
+    ``"claude"`` and any other value is flagged as
+    ``INV.OWNER.PLUGIN_NON_CLAUDE``.
+    """
+    if state.plugins is None:
+        return
+    for pid, plugin in state.plugins.items():
+        if plugin.runtime != "claude":
+            yield Violation(
+                code="INV.OWNER.PLUGIN_NON_CLAUDE",
+                path=f"/plugins/{pid}/runtime",
+                message=(f"plugins[{pid!r}].runtime is {plugin.runtime!r}; expected 'claude'"),
+            )
+
+
+def check_scope_consistency(state: State) -> Iterable[Violation]:
+    """``scope_kind`` must match the presence of ``project`` / ``workspace``.
+
+    - ``scope_kind == "repo"`` requires ``state.project`` to be non-null.
+    - ``scope_kind == "workspace"`` requires ``state.workspace`` to be non-null
+      AND must NOT embed ``state.project`` (workspace states reference repos
+      via ``WorkspaceIndex``, not by embedding a project).
+    """
+    sk = state.scope_kind.value if hasattr(state.scope_kind, "value") else str(state.scope_kind)
+    if sk == "repo":
+        if state.project is None:
+            yield Violation(
+                code="INV.SCOPE.REPO_REQUIRES_PROJECT",
+                path="/project",
+                message="scope_kind 'repo' requires project to be non-null",
+            )
+    elif sk == "workspace":
+        if state.workspace is None:
+            yield Violation(
+                code="INV.SCOPE.WORKSPACE_REQUIRES_INDEX",
+                path="/workspace",
+                message="scope_kind 'workspace' requires workspace index to be non-null",
+            )
+        if state.project is not None:
+            yield Violation(
+                code="INV.SCOPE.WORKSPACE_NO_PROJECT",
+                path="/project",
+                message="scope_kind 'workspace' must not embed project",
+            )
+
+
+def check_plugin_owners(state: State) -> Iterable[Violation]:
+    """All ``plugins`` entries must declare ``owner == "eawf"`` (Phase 1)."""
+    if state.plugins is None:
+        return
+    for pid, plugin in state.plugins.items():
+        if plugin.owner != "eawf":
+            yield Violation(
+                code="INV.OWNER.PLUGIN_NON_EAWF",
+                path=f"/plugins/{pid}/owner",
+                message=(f"plugins[{pid!r}].owner is {plugin.owner!r}; expected 'eawf'"),
+            )
+
+
+ALL_INVARIANTS: tuple[Invariant, ...] = (
+    check_parent_ids,
+    check_current_pointers,
+    check_closure_rules,
+    check_audit_evidence,
+    check_mcp_plugin_owners,
+    check_plugin_runtimes,
+    check_scope_consistency,
+    check_plugin_owners,
+)
