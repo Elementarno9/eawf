@@ -9,6 +9,7 @@ authors = [
     { name = "Elementarno9", email = "edwardpro9@gmail.com" },
 ]
 dependencies = [
+    "jinja2>=3.1.0",
     "jsonschema>=4.26.0",
     "orjson>=3.11.9",
     "platformdirs>=4.9.6",
