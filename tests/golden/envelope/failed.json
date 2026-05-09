@@ -1,0 +1,21 @@
+{
+  "body": "Traceback (most recent call last):\n  File \"src/eawf/skills/audit.py\", line 42, in action\n    raise RuntimeError(\"audit harness crashed\")\nRuntimeError: audit harness crashed\n",
+  "footer": {
+    "repair_commands": [
+      "uv run pytest tests/integration/test_audit_smoke.py",
+      "eawf doctor"
+    ],
+    "warnings": []
+  },
+  "header": {
+    "finished_at": "2026-05-09T00:00:05Z",
+    "instrument_probe": {
+      "git": "ok"
+    },
+    "scope": "urn:eawf:v1:state:QR/P00-I01",
+    "session": "urn:eawf:v1:store:QR/sessions/SES-004",
+    "skill": "/audit",
+    "started_at": "2026-05-09T00:00:00Z",
+    "status": "failed"
+  }
+}
