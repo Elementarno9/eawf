@@ -140,11 +140,10 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
 def test_skill_list_shows_all_ten_names(cli_runner: CliRunner) -> None:
     """Every canonical skill name appears in the table.
 
-    Post-W02 the six core skills (``/research``, ``/prep``, ``/audit``,
-    ``/ship``, ``/review``, ``/polish``) are registered at import time and
-    report ``installed``; the four meta skills (W03) still report
-    ``missing``. The "every name visible" invariant the table contract
-    promises is independent of the per-skill registration state.
+    Post-W03 every canonical skill (six core + four meta) is registered
+    at import time and reports ``installed``. The "every name visible"
+    invariant the table contract promises is independent of the
+    per-skill registration state.
     """
     result = cli_runner.invoke(app, ["skill", "list"])
     assert result.exit_code == 0, result.stdout
@@ -162,10 +161,9 @@ def test_skill_list_shows_all_ten_names(cli_runner: CliRunner) -> None:
     ]
     for name in expected_names:
         assert name in result.stdout, f"missing {name!r} in: {result.stdout}"
-    # Both row variants must be visible: W02 lands six core skills as
-    # ``installed``; the four meta skills (W03) still report ``missing``.
+    # Post-W03 every row reports ``installed``; ``missing`` only surfaces
+    # via the explicit-unregister fixtures in other tests.
     assert "installed" in result.stdout
-    assert "missing" in result.stdout
 
 
 def test_skill_list_marks_registered_skill_installed(
@@ -199,8 +197,8 @@ def test_skill_list_json_payload_carries_status_and_schema(
     assert research["body_schema"] == "eawf.skills.bodies.research.ResearchBody"
     # /audit is registered by W02 import-side effects.
     assert by_name["/audit"]["status"] == "installed"
-    # Meta skills (W03) still report missing.
-    assert by_name["/flow"]["status"] == "missing"
+    # Meta skills (W03) are also registered post-W03.
+    assert by_name["/flow"]["status"] == "installed"
     assert by_name["/flow"]["body_schema"] == "eawf.skills.bodies.flow.FlowBody"
 
 
