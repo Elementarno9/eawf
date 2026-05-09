@@ -79,10 +79,16 @@ def test_compose_single_passthrough() -> None:
 
 
 def test_compose_deep_merge_simple() -> None:
-    """Composing core + python yields a block list with both ids in order."""
+    """Composing core + python yields core blocks first, then python blocks."""
     composed = compose([load_profile("core"), load_profile("python")])
     block_ids = [b.id for b in composed.render_blocks]
-    assert block_ids == ["non-negotiable-rules", "python-style"]
+    # Core ships the rule scaffolding; python ships style + test discipline.
+    assert "non-negotiable-rules" in block_ids
+    assert "python-style" in block_ids
+    assert "test-discipline" in block_ids
+    # Core blocks render before python blocks (caller order is profile order).
+    assert block_ids.index("non-negotiable-rules") < block_ids.index("python-style")
+    assert block_ids.index("python-style") < block_ids.index("test-discipline")
     assert composed.name == "core+python"
 
 
