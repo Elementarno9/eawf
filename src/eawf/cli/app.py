@@ -173,6 +173,12 @@ from eawf.cli.commands.config import config_app  # noqa: E402
 app.add_typer(config_app, name="config")
 # --- end W06 ---
 
+# --- P03 W01 doctor registration ---
+from eawf.cli.commands.doctor import doctor_app  # noqa: E402
+
+app.add_typer(doctor_app, name="doctor")
+# --- end P03 W01 ---
+
 
 def main() -> None:
     app()
