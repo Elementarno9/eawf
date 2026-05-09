@@ -1,6 +1,6 @@
 """Render subsystem for eawf — managed-region markers, manifest, drift detection.
 
-Public surface (Phase 3 W03):
+Public surface (Phase 3 W04):
 
 - :mod:`eawf.render.regions` — marker parsing, ``replace_region``,
   ``extract_region``, ``find_regions``, ``compute_hash``,
@@ -13,8 +13,11 @@ Public surface (Phase 3 W03):
 - :mod:`eawf.render.drift` — hash-based drift detection,
   :class:`~eawf.render.drift.DriftReport`,
   :func:`~eawf.render.drift.detect_drift`.
+- :mod:`eawf.render.agents_md` — :class:`~eawf.render.agents_md.RenderResult`,
+  :func:`~eawf.render.agents_md.render_agents_md`.
+- :mod:`eawf.render.claude_shim` — :func:`~eawf.render.claude_shim.render_claude_md`.
 
-The render layer is library-only in W03 — CLI surface lands in W04+ via
+The render layer is library-only in W04 — CLI surface lands in W05+ via
 ``eawf render`` / ``eawf sync``.
 """
 

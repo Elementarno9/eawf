@@ -1,0 +1,19 @@
+{# Per-render-block template for AGENTS.md.
+
+   Context variables:
+     block:    the eawf.profiles.models.RenderBlock currently being rendered.
+     composed: the full ComposedProfile (so future templates can reach for
+               provenance / sibling render_blocks if needed).
+
+   The current rendering policy is "the YAML body_template is already markdown,
+   emit it verbatim". That gives profile authors complete control over their
+   block's surface text without forcing them to think about jinja escaping.
+
+   When a future profile body needs jinja substitution inside body_template,
+   replace the line below with `{{ block.body_template | render_jinja(composed) }}`
+   or similar — the renderer routes both the block and the composed profile
+   into this template's context, so adding a richer expansion is non-breaking.
+
+   The trailing newline matters: replace_region strips one boundary newline at
+   each end of the body, so the literal output below round-trips cleanly. #}
+{{- block.body_template -}}
