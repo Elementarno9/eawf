@@ -1,0 +1,37 @@
+{#- Claude Code hook bash wrapper template. Variables: event_type
+   (HookEventType.value, e.g. "pre_commit"), claude_event_name
+   (display name written into the synthesised JSON payload, mapped per
+   `eawf.render.hooks.HOOK_REGISTRY`). The wrapper reads up to four
+   positional args from Claude, synthesises a JSON payload, and pipes
+   it to `uv run eawf hook run <event_type> --runtime claude`. POSIX
+   bash 3.2 compatible. -#}
+#!/usr/bin/env bash
+# Eä-managed Claude Code hook wrapper for {{ event_type }}.
+# Generator: eawf plugin install claude (managed file — re-render via
+# `eawf plugin update claude`; hand-edits are detected by `eawf plugin doctor`).
+set -euo pipefail
+
+# Synthesise a JSON payload from positional args (Claude passes args, not stdin).
+# We escape only the minimum set of characters required for a JSON string body
+# (backslash + double-quote) so the payload is portable across bash versions.
+_eawf_json_escape() {
+    local s="${1-}"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
+
+_eawf_arg1="$(_eawf_json_escape "${1-}")"
+_eawf_arg2="$(_eawf_json_escape "${2-}")"
+_eawf_arg3="$(_eawf_json_escape "${3-}")"
+_eawf_arg4="$(_eawf_json_escape "${4-}")"
+
+_eawf_payload=$(printf '{"hook_event_name":"%s","claude_event_name":"%s","args":["%s","%s","%s","%s"]}' \
+    "{{ claude_event_name }}" \
+    "{{ event_type }}" \
+    "${_eawf_arg1}" \
+    "${_eawf_arg2}" \
+    "${_eawf_arg3}" \
+    "${_eawf_arg4}")
+
+printf '%s' "${_eawf_payload}" | exec uv run eawf hook run {{ event_type }} --runtime claude

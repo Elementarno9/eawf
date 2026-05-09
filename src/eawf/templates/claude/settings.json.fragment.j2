@@ -1,0 +1,42 @@
+{# Claude Code settings.json fragment Eä installs under the
+   ``__eawf_managed`` namespace.
+
+   Per ea-proposal §2 (managed JSON/YAML metadata under an Eä-owned
+   key), Eä never writes outside ``__eawf_managed``. User-owned keys
+   like ``$schema``, ``permissions``, ``additionalDirectories``,
+   ``skillOverrides`` are preserved verbatim by the patcher.
+
+   Variables:
+     version:        plugin schema version string ("1.0").
+     hash:           16-hex content hash of the rendered fragment body
+                     (assigned by plugin_install — set in code, not in
+                     the template).
+     skills:         list[dict{name, version}] of installed skills.
+     agents:         list[dict{name, version}] of installed agent
+                     subagents.
+     hooks:          list[dict{event_type, path}] of installed hook
+                     wrappers.
+     generated_at:   ISO 8601 UTC timestamp recorded on each install.
+
+   The rendered fragment is a JSON object body (no enclosing braces)
+   so the patcher can splice it into the parent ``settings.json`` under
+   the ``__eawf_managed`` key without re-parsing the wrapper. #}
+{
+  "version": "{{ version }}",
+  "generated_at": "{{ generated_at }}",
+  "skills": [
+{%- for skill in skills %}
+    {"name": "{{ skill.name }}", "version": "{{ skill.version }}"}{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ],
+  "agents": [
+{%- for agent in agents %}
+    {"name": "{{ agent.name }}", "version": "{{ agent.version }}"}{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ],
+  "hooks": [
+{%- for hook in hooks %}
+    {"event_type": "{{ hook.event_type }}", "path": "{{ hook.path }}"}{% if not loop.last %},{% endif %}
+{%- endfor %}
+  ]
+}

@@ -1,0 +1,25 @@
+---
+name: init
+description: Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree.
+argument-hint: "[--profile=<id>]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /init
+
+## Canonical algorithm
+
+1. Discover existing `.ea/` (if any) and load profile composition.
+2. Render managed regions of `AGENTS.md`, `CLAUDE.md`, `.claude/`.
+3. Persist `.ea/state.json` and `.ea/profile.yaml`.
+
+## Pre-flight checklist
+
+- [ ] Working tree is clean before the first init.
+- [ ] Profile composition is declared.
+
+## Output contract
+
+Skill envelope wrapping the wizard outcome. `status=needs_user` when
+the wizard pauses on an unanswered question.
