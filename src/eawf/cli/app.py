@@ -185,6 +185,16 @@ from eawf.cli.commands.init import init_cmd  # noqa: E402
 app.command(name="init", help="Initialise a new Eä Workflow workspace.")(init_cmd)
 # --- end P03 W05 ---
 
+# --- P03 W06 workspace + repo + clone-repo registrations ---
+from eawf.cli.commands.clone_repo import clone_repo_cmd  # noqa: E402
+from eawf.cli.commands.repo import repo_app  # noqa: E402
+from eawf.cli.commands.workspace import workspace_app  # noqa: E402
+
+app.add_typer(workspace_app, name="workspace")
+app.add_typer(repo_app, name="repo")
+app.command(name="clone-repo")(clone_repo_cmd)
+# --- end P03 W06 ---
+
 
 def main() -> None:
     app()
