@@ -1,7 +1,7 @@
 """``eawf doctor`` check implementations.
 
-Each public ``check_*`` function returns a :class:`CheckResult`. Three checks
-ship with Wave W01 — together they answer the v0.1 plan §11 question "is
+Each public ``check_*`` function returns a :class:`CheckResult`. Five checks
+ship after Wave W08 — together they answer the v0.1 plan §11 question "is
 this install workable?".
 
 - :func:`check_tools_available` — runs the instrument probe and surfaces its
@@ -13,6 +13,11 @@ this install workable?".
   the workspace anchor.
 - :func:`check_config_resolves` — reports whether the layered config merge
   succeeds for the workspace.
+- :func:`check_manifest_in_sync` — reports whether the on-disk managed-region
+  hashes match the manifest at ``.ea/indexes/generated.json`` (W08).
+- :func:`check_render_output_roundtrip` — proves the
+  :mod:`eawf.render.envelope` JSON ⇄ markdown round-trip is byte-stable on a
+  synthetic envelope; if this regresses every skill is broken (W08).
 
 The doctor command (`eawf.cli.commands.doctor`) consumes the list, formats it
 via :mod:`eawf.doctor.report`, and selects the highest-severity status to
@@ -25,11 +30,15 @@ import logging
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from eawf.config.layered import merge_config
 from eawf.config.profile import KNOWN_PROFILES
 from eawf.install.instrument_probe import probe
+from eawf.render.drift import detect_drift
+from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
+from eawf.render.manifest import Manifest
+from eawf.render.manifest import load as load_manifest
 from eawf.state.resolve import resolve_with_reason
 
 logger = logging.getLogger(__name__)
@@ -166,6 +175,119 @@ def check_config_resolves(*, workspace: Path | None) -> CheckResult:
     )
 
 
+def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
+    """Verify on-disk managed regions match the manifest hashes.
+
+    Behaviour:
+
+    - ``workspace`` is ``None`` (or unresolvable) → ``warn`` (no anchor).
+    - Manifest absent → ``ok`` (uninitialised; the renderer has not run yet —
+      :func:`check_state_present` already covers the "is this thing initialised?"
+      angle).
+    - Manifest present but parse-broken → ``fail`` with the parse error.
+    - Manifest present, every region's recomputed hash matches → ``ok``.
+    - Manifest present, any region missing or hand-edited → ``warn`` with a
+      compact summary of the offending ``target::id`` entries.
+
+    The walk is per-target — for each unique ``target`` field in the manifest,
+    :func:`eawf.render.drift.detect_drift` reads the file once and emits one
+    :class:`~eawf.render.drift.DriftReport` per region.
+    """
+    if workspace is None:
+        return CheckResult(
+            name="manifest_in_sync",
+            status="warn",
+            detail="no workspace anchor; cannot resolve manifest path",
+        )
+    manifest_path = Path(workspace) / ".ea" / "indexes" / "generated.json"
+    if not manifest_path.exists():
+        return CheckResult(
+            name="manifest_in_sync",
+            status="ok",
+            detail=f"no manifest at {manifest_path}; nothing to verify",
+        )
+    try:
+        manifest: Manifest = load_manifest(manifest_path)
+    except (ValueError, ValidationError) as exc:
+        return CheckResult(
+            name="manifest_in_sync",
+            status="fail",
+            detail=f"manifest at {manifest_path} is malformed: {exc}",
+        )
+
+    # Group entries by target so we read each file at most once.
+    targets: dict[str, list[str]] = {}
+    for entry in manifest.generated.values():
+        targets.setdefault(entry.target, []).append(entry.region_id)
+
+    drift_summaries: list[str] = []
+    for target_str in sorted(targets):
+        # Manifest stores POSIX-form paths; resolve relative to the workspace
+        # so a manifest written with ``"AGENTS.md"`` resolves correctly.
+        target_path = Path(target_str)
+        if not target_path.is_absolute():
+            target_path = Path(workspace) / target_path
+        reports = detect_drift(target_path, manifest)
+        for report in reports:
+            if report.kind == "ok":
+                continue
+            drift_summaries.append(f"{target_str}::{report.id}={report.kind}")
+
+    if drift_summaries:
+        # Cap the surfaced list so the detail line stays one-line readable —
+        # the exact list is also recoverable via ``eawf sync --check``.
+        joined = ", ".join(drift_summaries[:5])
+        suffix = f" (+{len(drift_summaries) - 5} more)" if len(drift_summaries) > 5 else ""
+        return CheckResult(
+            name="manifest_in_sync",
+            status="warn",
+            detail=f"drift: {joined}{suffix}",
+        )
+
+    n_entries = len(manifest.generated)
+    return CheckResult(
+        name="manifest_in_sync",
+        status="ok",
+        detail=f"{n_entries} region(s) hash-stable",
+    )
+
+
+def check_render_output_roundtrip() -> CheckResult:
+    """Round-trip a synthetic :class:`OutputEnvelope` to confirm the wire-form holds.
+
+    The check is deterministic and self-contained: it constructs a minimal
+    but non-trivial envelope, serialises with :func:`to_markdown`, parses
+    back with :func:`from_markdown`, and asserts equality. If the envelope
+    parser regresses, every skill that emits a JSON envelope is broken — so
+    this check anchors W07's API contract on every doctor run.
+    """
+    sample = OutputEnvelope(
+        header={"smoke": True, "skill": "doctor.roundtrip"},
+        body="round-trip test\n",
+        footer={"warnings": []},
+    )
+    rendered = to_markdown(sample)
+    try:
+        parsed = from_markdown(rendered)
+    except (ValueError, ValidationError) as exc:
+        return CheckResult(
+            name="render_output_roundtrip",
+            status="fail",
+            detail=f"from_markdown failed: {exc}",
+        )
+    if parsed != sample:
+        return CheckResult(
+            name="render_output_roundtrip",
+            status="fail",
+            detail="envelope round-trip lost data (header/body/footer mismatch)",
+        )
+    return CheckResult(
+        name="render_output_roundtrip",
+        status="ok",
+        detail="envelope JSON ⇄ markdown round-trip byte-stable",
+    )
+
+
 def tools_available(
     *,
     workspace: Path,
@@ -180,6 +302,16 @@ def tools_available(
         reprobe=reprobe,
         cache_path=cache_path,
     )
+
+
+def manifest_in_sync(*, workspace: Path | None) -> CheckResult:
+    """Public alias for :func:`check_manifest_in_sync`."""
+    return check_manifest_in_sync(workspace=workspace)
+
+
+def render_output_roundtrip() -> CheckResult:
+    """Public alias for :func:`check_render_output_roundtrip`."""
+    return check_render_output_roundtrip()
 
 
 def state_present(*, workspace: Path | None) -> CheckResult:
@@ -203,8 +335,10 @@ def run_all(
 
     The instrument probe is the only check whose hard failure aborts the
     function; it raises :class:`eawf.cli.errors.InstrumentMissing` so the CLI
-    can map it to exit code ``6``. State and config checks always return a
-    :class:`CheckResult`.
+    can map it to exit code ``6``. Every other check returns a
+    :class:`CheckResult`. W08 adds the manifest-in-sync and
+    render-output-roundtrip checks at the end of the list so the canonical
+    envelope shape mirrors the order operators see in the doctor table.
     """
     workspace_for_probe = workspace if workspace is not None else Path.cwd()
     results = [
@@ -216,5 +350,7 @@ def run_all(
         ),
         check_state_present(workspace=workspace),
         check_config_resolves(workspace=workspace),
+        check_manifest_in_sync(workspace=workspace),
+        check_render_output_roundtrip(),
     ]
     return results

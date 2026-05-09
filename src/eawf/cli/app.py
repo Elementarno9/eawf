@@ -201,6 +201,12 @@ from eawf.cli.commands.render_output import render_output_cmd  # noqa: E402
 app.command(name="render-output")(render_output_cmd)
 # --- end W07 ---
 
+# --- P03 W08 sync registration ---
+from eawf.cli.commands.sync import sync_cmd  # noqa: E402
+
+app.command(name="sync")(sync_cmd)
+# --- end W08 ---
+
 
 def main() -> None:
     app()

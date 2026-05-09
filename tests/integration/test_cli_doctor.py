@@ -55,6 +55,7 @@ def test_doctor_green_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 
 def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The JSON envelope lists every check ``run_all`` produces (W08: five)."""
     monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
@@ -64,7 +65,13 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     assert body["ok"] is True
     assert body["status"] == "ok"
     names = {c["name"] for c in body["checks"]}
-    assert names == {"tools_available", "state_present", "config_resolves"}
+    assert names == {
+        "tools_available",
+        "state_present",
+        "config_resolves",
+        "manifest_in_sync",
+        "render_output_roundtrip",
+    }
 
 
 def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

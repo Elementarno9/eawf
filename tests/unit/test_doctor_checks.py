@@ -112,7 +112,8 @@ def test_check_config_resolves_unknown_profile_warns(
     assert "bogus" in (result.detail or "")
 
 
-def test_run_all_returns_three_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """W08 extends ``run_all`` with manifest_in_sync + render_output_roundtrip."""
     from eawf.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
@@ -121,9 +122,11 @@ def test_run_all_returns_three_results(tmp_path: Path, monkeypatch: pytest.Monke
     )
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 3
+    assert len(results) == 5
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
         "config_resolves",
+        "manifest_in_sync",
+        "render_output_roundtrip",
     }
