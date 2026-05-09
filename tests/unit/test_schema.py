@@ -75,9 +75,30 @@ def test_state_schema_rejects_extra_field() -> None:
         jsonschema.validate(payload, schema)
 
 
-def test_placeholder_schemas_parse_as_jsonschema() -> None:
-    for name in ("config.schema.json", "skill-output.schema.json"):
-        body = json.loads((SCHEMAS_DIR / name).read_text())
-        assert body["$schema"].startswith("https://json-schema.org/draft/2020-12")
-        assert body["type"] == "object"
-        assert body["additionalProperties"] is True
+def test_placeholder_schema_parses_as_jsonschema() -> None:
+    """``config.schema.json`` is still the placeholder until Phase 5/6 fills it."""
+    body = json.loads((SCHEMAS_DIR / "config.schema.json").read_text())
+    assert body["$schema"].startswith("https://json-schema.org/draft/2020-12")
+    assert body["type"] == "object"
+    assert body["additionalProperties"] is True
+
+
+def test_skill_output_schema_committed_matches_generated(tmp_path: Path) -> None:
+    """Phase 4 W01 generated skill-output schema must match the committed file."""
+    schema_mod.dump_schemas(tmp_path)
+    generated = json.loads((tmp_path / "skill-output.schema.json").read_text())
+    committed = json.loads((SCHEMAS_DIR / "skill-output.schema.json").read_text())
+    assert generated == committed
+
+
+def test_skill_output_schema_has_required_top_level_fields() -> None:
+    """The skill-output schema is a typed envelope, not the placeholder."""
+    body = json.loads((SCHEMAS_DIR / "skill-output.schema.json").read_text())
+    assert body["title"] == "EawfSkillOutput"
+    assert body["$schema"].startswith("https://json-schema.org/draft/2020-12")
+    # Phase 4 W01 freezes header/body/footer.
+    assert body["additionalProperties"] is False
+    assert body["required"] == ["header", "body", "footer"]
+    # The five envelope statuses must be present in the schema.
+    statuses = body["$defs"]["EnvelopeHeader"]["properties"]["status"]["enum"]
+    assert set(statuses) == {"ok", "needs_user", "blocked", "failed", "partial"}

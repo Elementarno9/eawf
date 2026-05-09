@@ -7,46 +7,140 @@ The contract is two-fold:
   — byte-stable idempotence (round-trip never drifts after the first
   emit).
 
-Hypothesis generates header/footer dicts of primitive YAML-safe values
-and a printable body string. Body characters are restricted to the
-printable-ASCII + common-whitespace range so ``yaml.safe_dump`` never
-escapes the body in surprising ways and the closing-fence detection
-inside :func:`from_markdown` stays unambiguous.
+Phase 4 W01 narrowed the header/footer to typed Pydantic models, so
+this property test composes Hypothesis strategies for the typed shape:
+:class:`EnvelopeHeader` (frozen ``skill``/``status`` literals, URN-ish
+``scope`` and ``session`` strings, datetime pair) and
+:class:`EnvelopeFooter` (six list fields plus the optional
+``repair_commands``).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
-
-# YAML-safe key alphabet: letters, digits, underscores, dashes. Avoids the
-# special chars (``:``, ``#``, ``-`` leading, etc.) that yaml would quote.
-_KEY_ALPHABET = (
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"  # pragma: allowlist secret
+from eawf.render.envelope import (
+    EnvelopeFooter,
+    EnvelopeHeader,
+    EnvelopeStatus,
+    EnvelopeWarning,
+    InstrumentStatus,
+    OutputEnvelope,
+    SkillName,
+    from_markdown,
+    to_markdown,
 )
-keys = st.text(alphabet=_KEY_ALPHABET, min_size=1, max_size=12)
 
-# Value strategies kept primitive — Phase 4 W01 will introduce a typed
-# header/footer model and the property test will tighten with it.
-primitive_values = st.one_of(
+_skill_names: tuple[SkillName, ...] = (
+    "/research",
+    "/prep",
+    "/audit",
+    "/ship",
+    "/review",
+    "/polish",
+    "/init",
+    "/roadmap",
+    "/differentiate",
+    "/flow",
+)
+_statuses: tuple[EnvelopeStatus, ...] = ("ok", "needs_user", "blocked", "failed", "partial")
+_instrument_statuses: tuple[InstrumentStatus, ...] = ("ok", "missing", "degraded")
+
+# URN-shaped scope/session keep the strings recognisable but bounded.
+# YAML-safe alphabet: letters + digits + dash + underscore.
+_URN_ALPHABET = (
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"  # pragma: allowlist secret
+)
+_scopes = st.text(
+    alphabet=_URN_ALPHABET,
+    min_size=1,
+    max_size=12,
+).map(lambda s: f"urn:eawf:v1:state:{s}")
+_sessions = st.text(
+    alphabet=_URN_ALPHABET,
+    min_size=1,
+    max_size=12,
+).map(lambda s: f"urn:eawf:v1:store:QR/sessions/SES-{s}")
+_started_at = st.datetimes(
+    min_value=datetime(2026, 1, 1).replace(tzinfo=None),
+    max_value=datetime(2027, 1, 1).replace(tzinfo=None),
+).map(lambda dt: dt.replace(tzinfo=UTC))
+_durations = st.integers(min_value=0, max_value=86_400).map(lambda s: timedelta(seconds=s))
+
+_INSTRUMENT_KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz_"  # pragma: allowlist secret
+_instrument_keys = st.text(
+    alphabet=_INSTRUMENT_KEY_ALPHABET,
+    min_size=1,
+    max_size=8,
+)
+_instrument_probe = st.dictionaries(
+    keys=_instrument_keys,
+    values=st.sampled_from(_instrument_statuses),
+    max_size=4,
+)
+
+
+@st.composite
+def envelope_headers(draw: st.DrawFn) -> EnvelopeHeader:
+    """Build a typed :class:`EnvelopeHeader` with monotonic timestamps."""
+    started = draw(_started_at)
+    finished = started + draw(_durations)
+    return EnvelopeHeader(
+        skill=draw(st.sampled_from(_skill_names)),
+        scope=draw(_scopes),
+        session=draw(_sessions),
+        started_at=started,
+        finished_at=finished,
+        status=draw(st.sampled_from(_statuses)),
+        instrument_probe=draw(_instrument_probe),
+    )
+
+
+_string_lists = st.lists(
     st.text(
-        alphabet=st.characters(
-            whitelist_categories=("Ll", "Lu", "Nd"),
-            whitelist_characters=" _-.",
-            min_codepoint=32,
-            max_codepoint=126,
-        ),
-        max_size=20,
+        alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_:",
+        min_size=1,
+        max_size=10,
     ),
-    st.integers(min_value=-(10**6), max_value=10**6),
-    st.booleans(),
+    max_size=4,
 )
 
-dict_values: st.SearchStrategy[dict[str, Any]] = st.dictionaries(keys, primitive_values, max_size=6)
+
+_warnings = st.lists(
+    st.builds(
+        EnvelopeWarning,
+        code=st.text(alphabet="abcdefghijklmnopqrstuvwxyz_", min_size=1, max_size=12),
+        detail=st.text(
+            alphabet=st.characters(
+                whitelist_categories=("Ll", "Lu", "Nd"),
+                whitelist_characters=" _-.",
+                min_codepoint=32,
+                max_codepoint=126,
+            ),
+            max_size=20,
+        ),
+    ),
+    max_size=3,
+)
+
+
+@st.composite
+def envelope_footers(draw: st.DrawFn) -> EnvelopeFooter:
+    """Build a typed :class:`EnvelopeFooter` with bounded list sizes."""
+    repair = draw(st.one_of(st.none(), _string_lists))
+    return EnvelopeFooter(
+        persisted_artifacts=draw(_string_lists),
+        persisted_store_records=draw(_string_lists),
+        state_mutations=draw(_string_lists),
+        evidence_refs=draw(_string_lists),
+        next_valid_actions=draw(_string_lists),
+        warnings=draw(_warnings),
+        repair_commands=repair,
+    )
+
 
 # The body must not embed the closing footer marker; otherwise a
 # Hypothesis-generated body could shadow the real footer comment.
@@ -64,18 +158,20 @@ body_text = st.text(
 ).filter(lambda s: "<!-- eawf:footer" not in s and "-->" not in s)
 
 
-envelopes = st.builds(
-    OutputEnvelope,
-    header=dict_values,
-    body=body_text,
-    footer=dict_values,
-)
+@st.composite
+def envelopes(draw: st.DrawFn) -> OutputEnvelope:
+    """Build a typed :class:`OutputEnvelope` with a string body."""
+    return OutputEnvelope(
+        header=draw(envelope_headers()),
+        body=draw(body_text),
+        footer=draw(envelope_footers()),
+    )
 
 
-@given(env=envelopes)
+@given(env=envelopes())
 @settings(max_examples=150, deadline=None)
 def test_envelope_roundtrip_eq(env: OutputEnvelope) -> None:
-    """``from_markdown(to_markdown(env)) == env`` for any valid envelope."""
+    """``from_markdown(to_markdown(env)) == env`` for any valid typed envelope."""
     md = to_markdown(env)
     parsed = from_markdown(md)
     assert parsed.header == env.header
@@ -84,7 +180,7 @@ def test_envelope_roundtrip_eq(env: OutputEnvelope) -> None:
     assert parsed == env
 
 
-@given(env=envelopes)
+@given(env=envelopes())
 @settings(max_examples=150, deadline=None)
 def test_envelope_roundtrip_byte_stable(env: OutputEnvelope) -> None:
     """Two consecutive emits are byte-identical (no drift)."""

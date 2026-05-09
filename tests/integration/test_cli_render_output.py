@@ -17,21 +17,27 @@ from eawf.cli.exit_codes import VALIDATION_FAILED
 runner = CliRunner()
 
 # A minimal but representative envelope used as the round-trip seed.
+# Phase 4 W01 narrowed the header/footer to typed Pydantic models; the
+# fixture uses the typed shape (URN-scoped scope/session, ISO-8601
+# timestamps, frozen skill literal).
 _ENVELOPE_JSON: str = json.dumps(
     {
         "header": {
-            "skill": "research-spike",
-            "scope": "PROJECT",
-            "session": "s1",
+            "skill": "/research",
+            "scope": "urn:eawf:v1:state:QR/P00",
+            "session": "urn:eawf:v1:store:QR/sessions/SES-001",
+            "started_at": "2026-05-09T00:00:00Z",
+            "finished_at": "2026-05-09T00:00:01Z",
             "status": "ok",
+            "instrument_probe": {"git": "ok"},
         },
         "body": "## Body\n\nFirst para.\n\nSecond para.\n",
         "footer": {
-            "artifacts": ["doc-1", "doc-2"],
-            "store_records": [],
-            "mutations": ["m-1"],
-            "evidence": {"hypothesis": "H01-01"},
-            "next_actions": ["audit"],
+            "persisted_artifacts": ["urn:eawf:v1:artifact:QR/A1"],
+            "persisted_store_records": [],
+            "state_mutations": ["m-1"],
+            "evidence_refs": ["urn:eawf:v1:audit:QR/AU-1"],
+            "next_valid_actions": ["audit"],
             "warnings": [],
         },
     },

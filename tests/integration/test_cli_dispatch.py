@@ -54,4 +54,7 @@ def test_validate_subcommand_still_registered() -> None:
     """Phase 1 ``validate`` command must remain wired through the new app."""
     result = runner.invoke(app, ["validate", "--help"])
     assert result.exit_code == 0
-    assert "Validate a state document" in result.stdout
+    # Phase 4 W01 narrowed the help to mention envelope mode too;
+    # check for the stable ``Validate a state`` substring that
+    # survives the narrowing.
+    assert "Validate a state" in result.stdout
