@@ -155,8 +155,11 @@ _string_body = st.text(
 ).filter(lambda s: "<!-- eawf:footer" not in s and "<!-- eawf:body" not in s and "-->" not in s)
 
 
+_YAML_SAFE_ALPHABET = (
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"  # pragma: allowlist secret
+)
 _yaml_safe_keys = st.text(
-    alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
+    alphabet=_YAML_SAFE_ALPHABET,
     min_size=1,
     max_size=12,
 )
