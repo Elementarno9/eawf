@@ -195,6 +195,12 @@ app.add_typer(repo_app, name="repo")
 app.command(name="clone-repo")(clone_repo_cmd)
 # --- end P03 W06 ---
 
+# --- P03 W07 render-output registration ---
+from eawf.cli.commands.render_output import render_output_cmd  # noqa: E402
+
+app.command(name="render-output")(render_output_cmd)
+# --- end W07 ---
+
 
 def main() -> None:
     app()
