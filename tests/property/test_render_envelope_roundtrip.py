@@ -25,7 +25,9 @@ from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
 
 # YAML-safe key alphabet: letters, digits, underscores, dashes. Avoids the
 # special chars (``:``, ``#``, ``-`` leading, etc.) that yaml would quote.
-_KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+_KEY_ALPHABET = (
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"  # pragma: allowlist secret
+)
 keys = st.text(alphabet=_KEY_ALPHABET, min_size=1, max_size=12)
 
 # Value strategies kept primitive — Phase 4 W01 will introduce a typed
