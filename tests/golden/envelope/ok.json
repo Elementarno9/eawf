@@ -1,0 +1,32 @@
+{
+  "body": "Research brief BR-001 captured.\n",
+  "footer": {
+    "evidence_refs": [
+      "urn:eawf:v1:audit:QR/AU-1"
+    ],
+    "next_valid_actions": [
+      "eawf prep P00-I01"
+    ],
+    "persisted_artifacts": [
+      "urn:eawf:v1:artifact:QR/A1"
+    ],
+    "persisted_store_records": [
+      "urn:eawf:v1:store:QR/research/BR-001"
+    ],
+    "state_mutations": [
+      "phases.P00.status=active"
+    ],
+    "warnings": []
+  },
+  "header": {
+    "finished_at": "2026-05-09T00:00:01Z",
+    "instrument_probe": {
+      "git": "ok"
+    },
+    "scope": "urn:eawf:v1:state:QR/P00",
+    "session": "urn:eawf:v1:store:QR/sessions/SES-001",
+    "skill": "/research",
+    "started_at": "2026-05-09T00:00:00Z",
+    "status": "ok"
+  }
+}

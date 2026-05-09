@@ -1,0 +1,27 @@
+{
+  "body": "instrument probe failed: gh CLI not installed (hard requirement)\n",
+  "footer": {
+    "repair_commands": [
+      "brew install gh",
+      "gh auth login"
+    ],
+    "warnings": [
+      {
+        "code": "instrument_missing",
+        "detail": "gh not installed; PR open skipped"
+      }
+    ]
+  },
+  "header": {
+    "finished_at": "2026-05-09T00:00:00Z",
+    "instrument_probe": {
+      "gh": "missing",
+      "git": "ok"
+    },
+    "scope": "urn:eawf:v1:state:QR/P00",
+    "session": "urn:eawf:v1:store:QR/sessions/SES-003",
+    "skill": "/ship",
+    "started_at": "2026-05-09T00:00:00Z",
+    "status": "blocked"
+  }
+}

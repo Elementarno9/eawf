@@ -1,0 +1,31 @@
+{
+  "body": "Polish pass completed for 3 of 5 groups; aborted on memory_pass.\n",
+  "footer": {
+    "next_valid_actions": [
+      "eawf skill run /polish --resume"
+    ],
+    "persisted_artifacts": [
+      "urn:eawf:v1:artifact:QR/POLISH-1"
+    ],
+    "state_mutations": [
+      "polish.P00.run-id=POLISH-1"
+    ],
+    "warnings": [
+      {
+        "code": "skill_partial",
+        "detail": "memory_pass aborted; 3/5 groups completed"
+      }
+    ]
+  },
+  "header": {
+    "finished_at": "2026-05-09T00:01:30Z",
+    "instrument_probe": {
+      "git": "ok"
+    },
+    "scope": "urn:eawf:v1:state:QR/P00",
+    "session": "urn:eawf:v1:store:QR/sessions/SES-005",
+    "skill": "/polish",
+    "started_at": "2026-05-09T00:00:00Z",
+    "status": "partial"
+  }
+}

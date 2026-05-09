@@ -1,0 +1,35 @@
+{
+  "body": {
+    "user_question": {
+      "options": [
+        {
+          "description": "Use the existing research brief.",
+          "label": "Reuse"
+        },
+        {
+          "description": "Run /research again.",
+          "label": "Re-research"
+        }
+      ],
+      "question": "A research brief already exists for this scope. What next?"
+    }
+  },
+  "footer": {
+    "next_valid_actions": [
+      "eawf skill run /research --reuse",
+      "eawf skill run /research --rerun"
+    ],
+    "warnings": []
+  },
+  "header": {
+    "finished_at": "2026-05-09T00:00:02Z",
+    "instrument_probe": {
+      "git": "ok"
+    },
+    "scope": "urn:eawf:v1:state:QR/P00",
+    "session": "urn:eawf:v1:store:QR/sessions/SES-002",
+    "skill": "/research",
+    "started_at": "2026-05-09T00:00:00Z",
+    "status": "needs_user"
+  }
+}
