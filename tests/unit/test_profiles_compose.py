@@ -176,9 +176,7 @@ def test_compose_no_inputs_makes_empty_label() -> None:
 
 
 def test_compose_real_three_profile_combo() -> None:
-    composed = compose(
-        [load_profile("core"), load_profile("python"), load_profile("research")]
-    )
+    composed = compose([load_profile("core"), load_profile("python"), load_profile("research")])
     assert "hypotheses" in composed.state_extensions.fields_required
     assert "audits" in composed.state_extensions.fields_required
     assert composed.provenance["state_extensions"] == ["research"]

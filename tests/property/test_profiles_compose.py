@@ -103,9 +103,7 @@ def test_compose_idempotent(profiles: list[ProfileBody]) -> None:
     # Re-wrap the composed view as a single ProfileBody so it can be fed
     # back into compose. ProfileBody and ComposedProfile share every field
     # except provenance.
-    fed_back = ProfileBody.model_validate(
-        once.model_dump(mode="python", exclude={"provenance"})
-    )
+    fed_back = ProfileBody.model_validate(once.model_dump(mode="python", exclude={"provenance"}))
     twice = compose([fed_back])
 
     # Compare the merge-bearing fields only — the synthetic ``name`` differs
@@ -159,28 +157,17 @@ def test_compose_provenance_complete(profiles: list[ProfileBody]) -> None:
     prov = composed.provenance
 
     if composed.state_extensions.fields_required:
-        assert prov["state_extensions"], (
-            "state_extensions populated but provenance is empty"
-        )
+        assert prov["state_extensions"], "state_extensions populated but provenance is empty"
         assert all(name in {b.name for b in profiles} for name in prov["state_extensions"])
 
     if composed.instrument_requirements:
         assert prov["instrument_requirements"]
-        assert all(
-            name in {b.name for b in profiles}
-            for name in prov["instrument_requirements"]
-        )
+        assert all(name in {b.name for b in profiles} for name in prov["instrument_requirements"])
 
     if composed.skills_referenced:
         assert prov["skills_referenced"]
-        assert all(
-            name in {b.name for b in profiles}
-            for name in prov["skills_referenced"]
-        )
+        assert all(name in {b.name for b in profiles} for name in prov["skills_referenced"])
 
     if composed.hooks_referenced:
         assert prov["hooks_referenced"]
-        assert all(
-            name in {b.name for b in profiles}
-            for name in prov["hooks_referenced"]
-        )
+        assert all(name in {b.name for b in profiles} for name in prov["hooks_referenced"])

@@ -74,9 +74,7 @@ def load_profile(profile_id: str) -> ProfileBody:
             CLI surface.
     """
     if profile_id not in list_profiles():
-        raise InvalidInput(
-            f"unknown profile {profile_id!r}; choose from {list(list_profiles())}"
-        )
+        raise InvalidInput(f"unknown profile {profile_id!r}; choose from {list(list_profiles())}")
 
     data = files(_DATA_PACKAGE)
     raw = data.joinpath(f"{profile_id}{_YAML_SUFFIX}").read_text(encoding="utf-8")
@@ -84,23 +82,18 @@ def load_profile(profile_id: str) -> ProfileBody:
     try:
         parsed = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
-        raise ValidationFailed(
-            f"profile {profile_id!r}: malformed YAML: {exc}"
-        ) from exc
+        raise ValidationFailed(f"profile {profile_id!r}: malformed YAML: {exc}") from exc
     if parsed is None:
         parsed = {}
     if not isinstance(parsed, dict):
         raise ValidationFailed(
-            f"profile {profile_id!r}: top-level must be a mapping, "
-            f"got {type(parsed).__name__}"
+            f"profile {profile_id!r}: top-level must be a mapping, got {type(parsed).__name__}"
         )
 
     try:
         body = ProfileBody.model_validate(parsed)
     except ValidationError as exc:
-        raise ValidationFailed(
-            f"profile {profile_id!r}: schema rejected: {exc}"
-        ) from exc
+        raise ValidationFailed(f"profile {profile_id!r}: schema rejected: {exc}") from exc
 
     logger.debug(
         f"load_profile: loaded {profile_id!r} "
