@@ -84,11 +84,15 @@ def integration_research_skill() -> Iterator[type[Skill]]:
                 evidence_refs=["urn:eawf:v1:store:audit/AUD-001"],
             )
 
+    previous = registry.lookup("/research")
+    registry.unregister("/research")
     registry.register(_IntegrationResearchSkill)
     try:
         yield _IntegrationResearchSkill
     finally:
         registry.unregister("/research")
+        if previous is not None:
+            registry.register(previous)
 
 
 @pytest.mark.integration

@@ -48,7 +48,9 @@ def stub_research_skill() -> Iterator[type[Skill]]:
 
     The stub returns a fixed ``status=ok`` :class:`SkillResult`. Useful
     for asserting the CLI <-> registry <-> engine wiring without
-    depending on the full W02 implementation.
+    depending on the full W02 implementation. The fixture unregisters
+    the production ``/research`` skill (registered by W02 import-side
+    effects) for the duration of the test so the stub can take its slot.
     """
 
     class _StubResearchSkill(Skill):
@@ -64,11 +66,15 @@ def stub_research_skill() -> Iterator[type[Skill]]:
                 next_valid_actions=["eawf research show BR-stub"],
             )
 
+    previous = registry.lookup("/research")
+    registry.unregister("/research")
     registry.register(_StubResearchSkill)
     try:
         yield _StubResearchSkill
     finally:
         registry.unregister("/research")
+        if previous is not None:
+            registry.register(previous)
 
 
 @pytest.fixture
@@ -76,7 +82,8 @@ def stub_failing_skill() -> Iterator[type[Skill]]:
     """Register a stub ``/audit`` skill whose action raises.
 
     The engine catches the exception and returns ``status=failed``; the
-    CLI must exit with ``VALIDATION_FAILED`` (4).
+    CLI must exit with ``VALIDATION_FAILED`` (4). The fixture displaces
+    the production ``/audit`` skill for the duration of the test.
     """
 
     class _StubFailingSkill(Skill):
@@ -88,18 +95,23 @@ def stub_failing_skill() -> Iterator[type[Skill]]:
         def action(self, ctx: SkillContext) -> SkillResult:
             raise RuntimeError("simulated audit failure")
 
+    previous = registry.lookup("/audit")
+    registry.unregister("/audit")
     registry.register(_StubFailingSkill)
     try:
         yield _StubFailingSkill
     finally:
         registry.unregister("/audit")
+        if previous is not None:
+            registry.register(previous)
 
 
 @pytest.fixture
 def stub_needs_user_skill() -> Iterator[type[Skill]]:
     """Register a stub ``/prep`` skill that returns ``needs_user``.
 
-    The CLI must exit with ``USER_DECLINED`` (7).
+    The CLI must exit with ``USER_DECLINED`` (7). The fixture displaces
+    the production ``/prep`` skill for the duration of the test.
     """
 
     class _StubNeedsUserSkill(Skill):
@@ -114,14 +126,26 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
                 body={"questions": []},
             )
 
+    previous = registry.lookup("/prep")
+    registry.unregister("/prep")
     registry.register(_StubNeedsUserSkill)
     try:
         yield _StubNeedsUserSkill
     finally:
         registry.unregister("/prep")
+        if previous is not None:
+            registry.register(previous)
 
 
-def test_skill_list_shows_all_ten_names_missing_by_default(cli_runner: CliRunner) -> None:
+def test_skill_list_shows_all_ten_names(cli_runner: CliRunner) -> None:
+    """Every canonical skill name appears in the table.
+
+    Post-W02 the six core skills (``/research``, ``/prep``, ``/audit``,
+    ``/ship``, ``/review``, ``/polish``) are registered at import time and
+    report ``installed``; the four meta skills (W03) still report
+    ``missing``. The "every name visible" invariant the table contract
+    promises is independent of the per-skill registration state.
+    """
     result = cli_runner.invoke(app, ["skill", "list"])
     assert result.exit_code == 0, result.stdout
     expected_names = [
@@ -138,9 +162,10 @@ def test_skill_list_shows_all_ten_names_missing_by_default(cli_runner: CliRunner
     ]
     for name in expected_names:
         assert name in result.stdout, f"missing {name!r} in: {result.stdout}"
-    # No registry entries by default → every row is "missing".
+    # Both row variants must be visible: W02 lands six core skills as
+    # ``installed``; the four meta skills (W03) still report ``missing``.
+    assert "installed" in result.stdout
     assert "missing" in result.stdout
-    assert "installed" not in result.stdout
 
 
 def test_skill_list_marks_registered_skill_installed(
@@ -172,8 +197,10 @@ def test_skill_list_json_payload_carries_status_and_schema(
     research = by_name["/research"]
     assert research["status"] == "installed"
     assert research["body_schema"] == "eawf.skills.bodies.research.ResearchBody"
-    # Other skills stay missing.
-    assert by_name["/audit"]["status"] == "missing"
+    # /audit is registered by W02 import-side effects.
+    assert by_name["/audit"]["status"] == "installed"
+    # Meta skills (W03) still report missing.
+    assert by_name["/flow"]["status"] == "missing"
     assert by_name["/flow"]["body_schema"] == "eawf.skills.bodies.flow.FlowBody"
 
 
@@ -184,10 +211,17 @@ def test_skill_run_unknown_skill_returns_invalid_input(cli_runner: CliRunner) ->
 
 
 def test_skill_run_known_but_unregistered_returns_not_found(cli_runner: CliRunner) -> None:
-    # /ship is a valid name but no concrete skill is registered.
+    # /ship is a valid name; the test displaces the W02 production
+    # registration to confirm the NotFound branch fires when the slot is
+    # truly empty.
+    previous = registry.lookup("/ship")
     registry.unregister("/ship")
-    result = cli_runner.invoke(app, ["skill", "run", "/ship"], input="")
-    assert result.exit_code == 2, result.stdout
+    try:
+        result = cli_runner.invoke(app, ["skill", "run", "/ship"], input="")
+        assert result.exit_code == 2, result.stdout
+    finally:
+        if previous is not None:
+            registry.register(previous)
 
 
 def test_skill_run_ok_status_exits_zero(
@@ -304,6 +338,8 @@ def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> 
             captured["args"] = dict(ctx.args)
             return SkillResult(status="ok", body={})
 
+    previous = registry.lookup("/polish")
+    registry.unregister("/polish")
     registry.register(_CapturingSkill)
     try:
         result = cli_runner.invoke(
@@ -315,6 +351,8 @@ def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> 
         assert captured["args"] == {"depth": "quick"}
     finally:
         registry.unregister("/polish")
+        if previous is not None:
+            registry.register(previous)
 
 
 def test_skill_list_help_text_documents_purpose(cli_runner: CliRunner) -> None:
