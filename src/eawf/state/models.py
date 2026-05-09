@@ -377,7 +377,14 @@ class PluginInstall(_StrictModel):
 
 
 class MemorySummary(_StrictModel):
-    """Memory entry summary (full text in memory.jsonl)."""
+    """Memory entry summary (full text in memory.jsonl).
+
+    ``promoted_to_artifact_id`` mirrors the corresponding field on
+    :class:`~eawf.store.kinds.memory.MemoryPayload`: when an entry is
+    canonised into a durable artifact (a :class:`Decision` in v0.1) the cache
+    surface carries the artifact ID so ``memory list`` / ``memory view`` can
+    surface it without replaying the JSONL.
+    """
 
     id: IdStr
     scope_id: str
@@ -386,6 +393,7 @@ class MemorySummary(_StrictModel):
     status: MemoryStatus
     store_record_id: str
     review_due: UtcDatetime | None = None
+    promoted_to_artifact_id: str | None = None
 
 
 class Incident(_StrictModel):

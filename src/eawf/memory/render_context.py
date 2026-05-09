@@ -86,23 +86,50 @@ def render_context(
     anchor_scope: str | None = None,
     budget: int = DEFAULT_BUDGET,
     now: datetime | None = None,
+    include_superseded: bool = False,
+    max_entries: int | None = None,
 ) -> RenderContextResult:
     """Walk memory entries, render until *budget* exhausted.
+
+    Determinism contract (W03 hardening):
+
+    - Given identical (``state``, ``memory.jsonl``, ``anchor_scope``,
+      ``budget``, ``now``, ``include_superseded``, ``max_entries``) inputs the
+      function returns byte-identical ``text`` and identical ``included_ids``
+      ordering. Sort key is the tuple ``(-score, id)`` — score ties break on
+      ascending memory ID.
+    - ``tokens_used <= budget`` ALWAYS. When the very first block already
+      exceeds the budget, the function emits zero blocks rather than overflow.
+      :class:`~eawf.state.enums.MemoryStatus.PRUNED` entries are unconditionally
+      excluded; :class:`~eawf.state.enums.MemoryStatus.SUPERSEDED` entries are
+      excluded by default and admitted only when ``include_superseded=True``.
+    - ``included_ids`` and ``skipped_ids`` are disjoint; their union covers
+      every entry the active/superseded filter admitted.
 
     Args:
         state: Loaded :class:`State` carrying ``memory_index``.
         memory_path: Path to ``memory.jsonl`` for full-body lookup.
         anchor_scope: Optional anchor scope ID; entries closer to it rank higher.
-        budget: Token budget (advisory). Defaults to ``DEFAULT_BUDGET`` (4096).
+        budget: Token budget (HARD; result never exceeds it). Defaults to
+            ``DEFAULT_BUDGET`` (4096).
         now: Override for the current time (for tests). Defaults to UTC now.
+        include_superseded: When ``True``, entries with
+            :class:`~eawf.state.enums.MemoryStatus.SUPERSEDED` are also
+            considered. ``PRUNED`` is never admitted.
+        max_entries: Optional cap on the count of included entries. The
+            budget still wins on either side: an entry that would exceed
+            ``budget`` is skipped even when ``len(included_ids) < max_entries``.
 
     Returns:
         :class:`RenderContextResult` with the rendered Markdown body and the
-        IDs of included vs skipped entries.
+        IDs of included vs skipped entries. ``tokens_used <= budget`` always.
     """
     moment = now if now is not None else datetime.now(UTC)
     index = state.memory_index or {}
-    actives: list[MemorySummary] = [s for s in index.values() if s.status == MemoryStatus.ACTIVE]
+    eligible_statuses: set[MemoryStatus] = {MemoryStatus.ACTIVE}
+    if include_superseded:
+        eligible_statuses.add(MemoryStatus.SUPERSEDED)
+    actives: list[MemorySummary] = [s for s in index.values() if s.status in eligible_statuses]
 
     def score(s: MemorySummary) -> float:
         return (
@@ -118,6 +145,9 @@ def render_context(
     blocks: list[str] = []
     used = 0
     for summary in actives:
+        if max_entries is not None and len(included_ids) >= max_entries:
+            skipped_ids.append(summary.id)
+            continue
         env = find_envelope(memory_path, summary.id)
         body = ""
         if env is not None:
@@ -129,11 +159,10 @@ def render_context(
             f"{body}\n"
         )
         block_tokens = estimate_tokens(block)
-        if used + block_tokens > budget and included_ids:
-            skipped_ids.append(summary.id)
-            continue
-        if used + block_tokens > budget and not included_ids:
-            # Budget too tight even for the first block — skip it too.
+        # Budget is HARD: never include a block that would overflow it, even
+        # when no entry has been included yet (the "first block too big" path
+        # returns zero blocks rather than emit-then-overflow).
+        if used + block_tokens > budget:
             skipped_ids.append(summary.id)
             continue
         blocks.append(block)

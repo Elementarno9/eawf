@@ -196,3 +196,112 @@ def test_render_context_explicit_now_decay(tmp_path: Path) -> None:
         now=datetime(2027, 1, 1, tzinfo=UTC),
     )
     assert rec.summary.id in result.included_ids
+
+
+# --- W03 hardening: budget contract, max_entries, include_superseded ---------
+
+
+def test_render_context_never_exceeds_budget_when_first_block_too_big(tmp_path: Path) -> None:
+    """Even the first block must not overflow the budget — emit zero blocks."""
+    state = _make_state()
+    memory_path = tmp_path / "memory.jsonl"
+    add_memory(
+        state=state,
+        memory_path=memory_path,
+        scope_id="QR",
+        title="huge",
+        body=" ".join(["word"] * 200),
+    )
+    # A budget of 5 is far smaller than even one block.
+    result = render_context(state=state, memory_path=memory_path, budget=5)
+    assert result.tokens_used == 0
+    assert result.included_ids == []
+    assert len(result.skipped_ids) == 1
+    assert result.tokens_used <= result.budget
+
+
+def test_render_context_deterministic_for_fixed_inputs(tmp_path: Path) -> None:
+    state = _make_state()
+    memory_path = tmp_path / "memory.jsonl"
+    for i in range(3):
+        add_memory(
+            state=state,
+            memory_path=memory_path,
+            scope_id="QR",
+            title=f"t{i}",
+            body=f"body {i}",
+        )
+    moment = datetime(2026, 5, 9, 12, tzinfo=UTC)
+    a = render_context(state=state, memory_path=memory_path, budget=4096, now=moment)
+    b = render_context(state=state, memory_path=memory_path, budget=4096, now=moment)
+    assert a.text == b.text
+    assert a.included_ids == b.included_ids
+    assert a.skipped_ids == b.skipped_ids
+    assert a.tokens_used == b.tokens_used
+
+
+def test_render_context_max_entries_caps_count(tmp_path: Path) -> None:
+    state = _make_state()
+    memory_path = tmp_path / "memory.jsonl"
+    for i in range(5):
+        add_memory(
+            state=state,
+            memory_path=memory_path,
+            scope_id="QR",
+            title=f"t{i}",
+            body=f"body{i}",
+        )
+    result = render_context(state=state, memory_path=memory_path, budget=4096, max_entries=2)
+    assert len(result.included_ids) == 2
+    # The remaining entries land in skipped.
+    assert len(result.skipped_ids) == 3
+    assert set(result.included_ids) | set(result.skipped_ids) == set(state.memory_index or {})
+
+
+def test_render_context_excludes_superseded_by_default(tmp_path: Path) -> None:
+    state = _make_state()
+    memory_path = tmp_path / "memory.jsonl"
+    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    from eawf.state.enums import MemoryStatus
+
+    assert state.memory_index is not None
+    state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(
+        update={"status": MemoryStatus.SUPERSEDED}
+    )
+    result = render_context(state=state, memory_path=memory_path, budget=4096)
+    assert rec.summary.id not in result.included_ids
+    assert rec.summary.id not in result.skipped_ids
+
+
+def test_render_context_include_superseded_admits_them(tmp_path: Path) -> None:
+    state = _make_state()
+    memory_path = tmp_path / "memory.jsonl"
+    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    from eawf.state.enums import MemoryStatus
+
+    assert state.memory_index is not None
+    state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(
+        update={"status": MemoryStatus.SUPERSEDED}
+    )
+    result = render_context(
+        state=state, memory_path=memory_path, budget=4096, include_superseded=True
+    )
+    assert rec.summary.id in result.included_ids
+
+
+def test_render_context_pruned_never_admitted(tmp_path: Path) -> None:
+    """PRUNED is excluded even when include_superseded=True."""
+    state = _make_state()
+    memory_path = tmp_path / "memory.jsonl"
+    rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
+    from eawf.state.enums import MemoryStatus
+
+    assert state.memory_index is not None
+    state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(
+        update={"status": MemoryStatus.PRUNED}
+    )
+    result = render_context(
+        state=state, memory_path=memory_path, budget=4096, include_superseded=True
+    )
+    assert rec.summary.id not in result.included_ids
+    assert rec.summary.id not in result.skipped_ids
