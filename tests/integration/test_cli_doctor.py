@@ -103,8 +103,16 @@ def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_doctor_help_lists_flags() -> None:
-    # COLUMNS=200 stops Rich from wrapping flag names on narrow CI terminals.
-    result = runner.invoke(app, ["doctor", "--help"], env={"COLUMNS": "200"})
-    assert result.exit_code == 0
-    assert "--reprobe" in result.output
-    assert "--json" in result.output
+    """The ``doctor`` callback declares ``--reprobe`` and ``--json`` flags.
+
+    Structural check via Click introspection so the assertion never depends on
+    terminal width or Rich help wrapping (which differs across CI runners).
+    """
+    import typer
+
+    from eawf.cli.commands.doctor import doctor_app
+
+    cmd = typer.main.get_command(doctor_app)
+    flag_names = {opt for p in cmd.params for opt in p.opts}
+    assert "--reprobe" in flag_names
+    assert "--json" in flag_names

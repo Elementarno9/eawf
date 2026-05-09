@@ -111,10 +111,16 @@ def test_sync_invalid_profile_in_config_exits_3(tmp_path: Path) -> None:
 
 
 def test_sync_help_lists_flags() -> None:
-    """The Typer surface lists ``--dry-run`` and ``--check`` in its help body."""
-    # COLUMNS=200 stops Rich from wrapping flag names on narrow CI terminals.
-    res = runner.invoke(app, ["sync", "--help"], env={"COLUMNS": "200"})
-    assert res.exit_code == 0
-    assert "--dry-run" in res.output
-    assert "--check" in res.output
-    assert "--target" in res.output
+    """The ``sync`` command declares ``--dry-run``, ``--check``, ``--target`` flags.
+
+    Structural check via Click introspection so the assertion never depends on
+    terminal width or Rich help wrapping (which differs across CI runners).
+    """
+    import typer
+
+    cmd = typer.main.get_command(app)
+    sync_cmd = cmd.commands["sync"]
+    flag_names = {opt for p in sync_cmd.params for opt in p.opts}
+    assert "--dry-run" in flag_names
+    assert "--check" in flag_names
+    assert "--target" in flag_names
