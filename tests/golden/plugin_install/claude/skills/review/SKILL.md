@@ -1,0 +1,28 @@
+---
+name: review
+description: Code review of an open PR or local diff. Surfaces issues with severity tags; no scope creep, no praise.
+argument-hint: "[<PR# | commit-range>]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /review
+
+## Canonical algorithm
+
+1. Resolve target: PR number → `gh pr diff <PR>`; commit range →
+   `git diff <range>`; default → `git diff main...HEAD`.
+2. Walk the diff hunk by hunk. For each hunk, read enough surrounding
+   context to make a judgment.
+3. Apply rules in order: correctness > security > clarity > style.
+4. Tag findings: 🔴 blocker, 🟠 must-fix, 🟡 should-fix, 🔵 nit.
+
+## Pre-flight checklist
+
+- [ ] Read the success criteria for the phase/wave the diff belongs to.
+- [ ] Verify any quantitative claim against `Read`/`grep`.
+
+## Output contract
+
+Skill envelope with a flat findings list grouped by file and an
+aggregate verdict (`approve | request-changes | comment-only`).

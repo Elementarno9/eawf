@@ -213,6 +213,12 @@ from eawf.cli.commands.hook import hook_app  # noqa: E402
 app.add_typer(hook_app, name="hook")
 # --- end P04 W04 ---
 
+# --- P04 W05 plugin registration ---
+from eawf.cli.commands.plugin import plugin_app  # noqa: E402
+
+app.add_typer(plugin_app, name="plugin")
+# --- end P04 W05 ---
+
 # --- P04 W06 cc (Claude Code adapter) registration ---
 from eawf.cli.commands.cc import cc_app  # noqa: E402
 
