@@ -61,7 +61,6 @@ def _build_answers(
     acceptance_tests: bool,
     acceptance_lint: bool,
     acceptance_typecheck: bool,
-    write_confirm: bool,
 ) -> WizardAnswers:
     """Coerce CLI flag values into a validated :class:`WizardAnswers`.
 
@@ -70,6 +69,11 @@ def _build_answers(
     so :class:`WizardAnswers` can apply its own validation. Multichoice
     flags are coerced to tuples (Pydantic accepts lists, but tuples make
     :class:`WizardAnswers` ``frozen=True`` happy on the round-trip).
+
+    ``write_confirm`` is intentionally NOT exposed at the CLI surface — it
+    is reserved for the interactive Textual wizard (see
+    :class:`WizardAnswers` field doc) and has no effect on the
+    ``--no-input`` pipeline. The model default (``True``) carries through.
     """
     return WizardAnswers(
         state_path=str(state_path),
@@ -83,7 +87,6 @@ def _build_answers(
         acceptance_tests=acceptance_tests,
         acceptance_lint=acceptance_lint,
         acceptance_typecheck=acceptance_typecheck,
-        write_confirm=write_confirm,
     )
 
 
@@ -183,13 +186,6 @@ def init_cmd(
             help="Require typecheck as an acceptance gate.",
         ),
     ] = True,
-    write_confirm: Annotated[
-        bool,
-        typer.Option(
-            "--write-confirm/--no-write-confirm",
-            help="Confirm before writing files (interactive only).",
-        ),
-    ] = True,
     force: Annotated[
         bool,
         typer.Option(
@@ -224,7 +220,6 @@ def init_cmd(
                 acceptance_tests=acceptance_tests,
                 acceptance_lint=acceptance_lint,
                 acceptance_typecheck=acceptance_typecheck,
-                write_confirm=write_confirm,
             )
         except ValidationError as exc:
             cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)

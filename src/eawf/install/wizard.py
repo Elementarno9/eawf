@@ -54,7 +54,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.cli.errors import InvalidInput
 from eawf.config.profile import _atomic_write_yaml, _materialise_state_keys
-from eawf.install.steps import WIZARD_STEPS, WizardStep
+from eawf.install.steps import (
+    STEP_LIFECYCLE_DEPTH,
+    STEP_RUNTIME,
+    WIZARD_STEPS,
+    WizardStep,
+)
 from eawf.lock import portalock
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
@@ -75,6 +80,24 @@ logger = logging.getLogger(__name__)
 # they belong to other tooling. The list mirrors the v0.1 contract: state +
 # config are the persistent on-disk state; everything else is rebuildable.
 _CANONICAL_EA_FILES: tuple[str, ...] = ("state.json", "config.yaml")
+
+
+# Single source of truth for the runtime/lifecycle-depth allow-lists. The
+# canonical declaration lives on the matching :class:`WizardStep`; mirroring
+# it here as a frozenset means the field validators stay typo-proof and any
+# future edit to ``STEP_RUNTIME.choices`` / ``STEP_LIFECYCLE_DEPTH.choices``
+# propagates automatically — no parallel hard-coded set in this module.
+#
+# ``WizardStep.choices`` is ``tuple[str, ...] | None`` because non-``choice``
+# kinds carry no enumeration. For these two steps the v0.1 contract
+# guarantees the choices are present (see :mod:`eawf.install.steps` and the
+# :func:`test_wizard_step_choices_only_for_choice_kind` pin); we assert that
+# invariant at module load so a broken steps manifest fails loudly here
+# instead of silently producing an empty allow-list.
+assert STEP_RUNTIME.choices is not None, "STEP_RUNTIME.choices must be populated"
+assert STEP_LIFECYCLE_DEPTH.choices is not None, "STEP_LIFECYCLE_DEPTH.choices must be populated"
+_RUNTIME_CHOICES: frozenset[str] = frozenset(STEP_RUNTIME.choices)
+_LIFECYCLE_DEPTH_CHOICES: frozenset[str] = frozenset(STEP_LIFECYCLE_DEPTH.choices)
 
 
 class WizardAnswers(BaseModel):
@@ -110,6 +133,13 @@ class WizardAnswers(BaseModel):
     acceptance_tests: bool = True
     acceptance_lint: bool = True
     acceptance_typecheck: bool = True
+    # ``write_confirm`` is reserved for the **interactive** wizard surface.
+    # In the v0.1 ``--no-input`` pipeline it has no effect — the pipeline
+    # always proceeds straight to the writes. The field is retained so the
+    # interactive Textual flow can later gate a "confirm? [Y/n]" summary
+    # screen on it without reshaping :class:`WizardAnswers`. The matching
+    # ``--write-confirm`` CLI flag was deliberately not surfaced (per the
+    # P03 W05 review): exposing a flag with no behaviour is misleading.
     write_confirm: bool = True
 
     @field_validator("project_code")
@@ -135,19 +165,27 @@ class WizardAnswers(BaseModel):
     @field_validator("runtime")
     @classmethod
     def _validate_runtime(cls, value: str) -> str:
-        """Match the static set declared by ``STEP_RUNTIME.choices``."""
-        allowed = {"claude-code", "opencode", "generic"}
-        if value not in allowed:
-            raise ValueError(f"runtime {value!r} not in {sorted(allowed)}")
+        """Match the static set declared by ``STEP_RUNTIME.choices``.
+
+        The allow-list is derived from :data:`_RUNTIME_CHOICES` at module
+        load so a future edit to ``STEP_RUNTIME.choices`` propagates here
+        without a parallel hard-coded literal.
+        """
+        if value not in _RUNTIME_CHOICES:
+            raise ValueError(f"runtime {value!r} not in {sorted(_RUNTIME_CHOICES)}")
         return value
 
     @field_validator("lifecycle_depth")
     @classmethod
     def _validate_lifecycle_depth(cls, value: str) -> str:
-        """Match the static set declared by ``STEP_LIFECYCLE_DEPTH.choices``."""
-        allowed = {"phase", "iter", "wave"}
-        if value not in allowed:
-            raise ValueError(f"lifecycle_depth {value!r} not in {sorted(allowed)}")
+        """Match the static set declared by ``STEP_LIFECYCLE_DEPTH.choices``.
+
+        The allow-list is derived from :data:`_LIFECYCLE_DEPTH_CHOICES` at
+        module load so a future edit to ``STEP_LIFECYCLE_DEPTH.choices``
+        propagates here without a parallel hard-coded literal.
+        """
+        if value not in _LIFECYCLE_DEPTH_CHOICES:
+            raise ValueError(f"lifecycle_depth {value!r} not in {sorted(_LIFECYCLE_DEPTH_CHOICES)}")
         return value
 
 
@@ -285,12 +323,33 @@ def run_wizard_no_input(
        manifest, then write the ``CLAUDE.md`` shim. Manifest path is
        ``<target_dir>/.ea/indexes/generated.json``.
 
+    **Failure semantics.** This function is **not transactional**. The
+    write order is ``state.json`` → ``config.yaml`` → ``AGENTS.md`` →
+    manifest → ``CLAUDE.md``; a failure midway leaves whichever files were
+    written before the failure on disk. There is no automatic rollback in
+    v0.1.
+
+    Recovery for v0.1 is one of:
+
+    - **Clean retry.** Re-run with ``--force`` (or call this function with
+      ``force=True``). The pipeline overwrites ``state.json`` /
+      ``config.yaml`` and re-renders ``AGENTS.md`` / manifest / ``CLAUDE.md``
+      from scratch — this is the documented recovery path.
+    - **Manual cleanup.** Delete ``<target_dir>/.ea/``,
+      ``<target_dir>/AGENTS.md`` and ``<target_dir>/CLAUDE.md``, then
+      re-run without ``--force``.
+
+    Phase 6 (or later) is expected to wrap this sequence in a two-phase
+    commit pattern (write to a temp prefix, atomic-rename on success); the
+    public signature stays identical.
+
     Args:
         answers: Validated :class:`WizardAnswers` instance.
         target_dir: Absolute target directory. Created on demand.
         force: When True, overwrite an existing ``.ea/`` even if it has
             canonical files. The default rejection is opinionated — the
             operator must opt in to clobbering an init they did before.
+            Also the documented recovery path after a partial init.
 
     Returns:
         :class:`WizardResult` with absolute paths and a list of materialised
