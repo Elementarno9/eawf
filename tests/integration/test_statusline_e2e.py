@@ -56,9 +56,20 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
         "cwd": str(tmp_path),
         "token_usage": {"input_tokens": 1000, "output_tokens": 200},
     }
+    # Pass ``--workspace tmp_path`` so the state resolver scopes to the empty
+    # tmp dir (which has no ``.ea/state.json`` and no ``.claude/hooks/``).
+    # Without this, the surrounding self-applied repo state (post Phase 5 W06)
+    # would leak into the rendered segments.
     result = runner.invoke(
         app,
-        ["cc", "statusline", "--theme", "ascii-fallback"],
+        [
+            "--workspace",
+            str(tmp_path),
+            "cc",
+            "statusline",
+            "--theme",
+            "ascii-fallback",
+        ],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
