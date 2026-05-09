@@ -44,9 +44,7 @@ def _seed_state(workspace: Path) -> None:
     state.write_text("{}", encoding="utf-8")
 
 
-def test_doctor_green_exits_zero(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_doctor_green_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
@@ -56,9 +54,7 @@ def test_doctor_green_exits_zero(
     assert "overall: ok" in result.output
 
 
-def test_doctor_json_envelope(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
@@ -71,9 +67,7 @@ def test_doctor_json_envelope(
     assert names == {"tools_available", "state_present", "config_resolves"}
 
 
-def test_doctor_reprobe_clears_cache(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cache = tmp_path / "instrument-probe.json"
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(cache))
     cache.write_text(json.dumps({"stale": True}), encoding="utf-8")
@@ -88,9 +82,7 @@ def test_doctor_reprobe_clears_cache(
     assert not cache.exists()
 
 
-def test_doctor_hard_missing_exits_six(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from eawf.cli.errors import InstrumentMissing
 
     def angry_probe(*_args: Any, **_kwargs: Any) -> ProbeReport:

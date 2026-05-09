@@ -32,9 +32,7 @@ def _stub_probe_raises(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
     monkeypatch.setattr("eawf.doctor.checks.probe", fake)
 
 
-def test_check_tools_available_all_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_check_tools_available_all_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from eawf.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
@@ -94,9 +92,7 @@ def test_check_state_present_missing_warns(tmp_path: Path) -> None:
     assert result.status == "warn"
 
 
-def test_check_config_resolves_smoke(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_check_config_resolves_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The check returns ``ok`` against a clean tmp workspace with no overlays."""
     monkeypatch.chdir(tmp_path)
     result = checks.check_config_resolves(workspace=tmp_path)
@@ -116,9 +112,7 @@ def test_check_config_resolves_unknown_profile_warns(
     assert "bogus" in (result.detail or "")
 
 
-def test_run_all_returns_three_results(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_all_returns_three_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from eawf.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(

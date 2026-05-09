@@ -50,6 +50,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Literal
 
@@ -149,7 +150,7 @@ INSTRUMENT_REQUIREMENTS: dict[str, list[InstrumentSpec]] = {
 }
 
 
-def _resolve_cache_path(cache_path: Path) -> Path:
+def resolve_cache_path(cache_path: Path) -> Path:
     """Apply the ``EA_INSTRUMENT_PROBE`` env override, if any.
 
     The env var trumps the explicit argument so CI runners can pin every
@@ -271,10 +272,31 @@ def _read_cache(cache_path: Path) -> ProbeReport | None:
 
 
 def _write_cache(cache_path: Path, report: ProbeReport) -> None:
-    """Persist *report* to *cache_path* (parent dirs created as needed)."""
+    """Persist *report* to *cache_path* atomically.
+
+    Writes to a sibling tempfile in *cache_path*'s parent directory and then
+    ``os.replace``\\s it onto *cache_path*. Concurrent probes may clobber each
+    other's payload but never observe a torn file — the rename is atomic on
+    POSIX and Windows. Heavier portalock-backed coordination is unnecessary
+    for this read-mostly cache (callers fall back to a fresh probe on any
+    read error).
+    """
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     raw = orjson.dumps(report.model_dump(mode="json"), option=orjson.OPT_INDENT_2)
-    cache_path.write_bytes(raw)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=cache_path.parent,
+        prefix=f"{cache_path.name}.tmp.",
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(raw)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, cache_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
     logger.info(f"_write_cache: wrote probe cache to {cache_path}")
 
 
@@ -304,7 +326,7 @@ def probe(
         InstrumentMissing: when at least one ``kind="hard"`` requirement
             failed. The exception message lists every missing hard tool.
     """
-    target_path = _resolve_cache_path(cache_path)
+    target_path = resolve_cache_path(cache_path)
 
     if not reprobe:
         cached = _read_cache(target_path)

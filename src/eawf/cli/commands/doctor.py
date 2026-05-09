@@ -43,7 +43,7 @@ from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.doctor import checks as doctor_checks
 from eawf.doctor.report import overall_status, to_payload, to_text
-from eawf.install.instrument_probe import _resolve_cache_path
+from eawf.install.instrument_probe import resolve_cache_path
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def _maybe_clear_cache(workspace: Path | None) -> None:
     """Delete the probe cache if it exists, honouring ``EA_INSTRUMENT_PROBE``."""
     anchor = workspace if workspace is not None else Path.cwd()
     candidate = anchor / ".ea" / "instrument-probe.json"
-    target = _resolve_cache_path(candidate)
+    target = resolve_cache_path(candidate)
     if target.exists():
         try:
             target.unlink()
@@ -105,7 +105,6 @@ def doctor(
         )
     except InstrumentMissing as exc:
         emit_error(exc, flags=effective_flags)
-        return
 
     payload = to_payload(results)
     text = to_text(results, plain=effective_flags.plain_output)
