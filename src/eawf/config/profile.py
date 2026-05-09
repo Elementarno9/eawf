@@ -41,28 +41,32 @@ from eawf.cli.errors import InvalidInput, NotFound
 from eawf.config.layered import LAYER_ORDER, WRITABLE_LAYERS
 from eawf.config.loader import load_yaml_layer
 from eawf.lock import portalock
+from eawf.profiles.loader import list_profiles, load_profile
 
 logger = logging.getLogger(__name__)
 
 
+def _build_known_profiles() -> dict[str, list[str]]:
+    """Derive the ``id → fields_required`` registry from ``profiles/data/``.
+
+    Replaces the hand-coded table that lived here through Phase 2: the source
+    of truth is now the on-disk profile body. Adding a new profile is one
+    YAML file under :mod:`eawf.profiles.data` plus an entry in any test that
+    enumerates the v0.1 profile set.
+
+    The shape is preserved verbatim (``dict[str, list[str]]``) so callers
+    that key into :data:`KNOWN_PROFILES` continue to work without change.
+    """
+    return {
+        pid: list(load_profile(pid).state_extensions.fields_required) for pid in list_profiles()
+    }
+
+
 # Profile registry. The mapping id → required state-field names mirrors the
-# ``state_extensions.fields_required`` block of each v0.1 profile body in
-# ``ea-proposal.md``. Profiles without state_extensions appear with an empty
-# list. Adding a profile here makes it enableable; rendering details belong to
-# the Phase 5 W04 profile composition pass.
-KNOWN_PROFILES: dict[str, list[str]] = {
-    "core": [],
-    "python": [],
-    "research": ["hypotheses", "audits"],
-    "docs": [],
-    "apps": [],
-    "infra": [],
-    "ml": [],
-    "quant": [],
-    "re": [],
-    "game": [],
-    "robotics": [],
-}
+# ``state_extensions.fields_required`` block of each v0.1 profile body under
+# :mod:`eawf.profiles.data`. Phase 3 W02 replaced the hand-coded table with
+# a derived value; the public shape is unchanged.
+KNOWN_PROFILES: dict[str, list[str]] = _build_known_profiles()
 
 
 def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:

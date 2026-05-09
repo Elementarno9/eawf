@@ -1,0 +1,44 @@
+name: python
+version: "1.0"
+description: "Python codebase profile: type hints, ruff, mypy, uv."
+
+state_extensions:
+  fields_required: []
+
+instrument_requirements:
+  - name: python
+    kind: hard
+    probe: version
+    version_args: ["--version"]
+    version_regex: "^Python\\s+\\d"
+  - name: uv
+    kind: hard
+    probe: version
+    version_args: ["--version"]
+    version_regex: "^uv\\s+\\d"
+  - name: ruff
+    kind: soft
+    probe: version
+    version_args: ["--version"]
+    version_regex: "^ruff\\s+\\d"
+  - name: mypy
+    kind: soft
+    probe: version
+    version_args: ["--version"]
+    version_regex: "^mypy\\s+\\d"
+
+render_blocks:
+  - id: python-style
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ## Python style (python profile)
+
+      - f-strings only; no ``%``-style or ``.format()``.
+      - Full type hints; ``from __future__ import annotations`` at the top of
+        every module.
+      - ``uv run`` for all Python invocations — never ``.venv/bin/python``.
+      - Pre-commit before commit (``uv run pre-commit run --all-files``).
+
+skills_referenced: []
+hooks_referenced: []

@@ -53,6 +53,8 @@ from eawf.config.layered import (
 from eawf.config.loader import load_yaml_layer
 from eawf.config.profile import enable_profile
 from eawf.lock import portalock
+from eawf.profiles.compose import compose
+from eawf.profiles.loader import list_profiles, load_profile
 
 logger = logging.getLogger(__name__)
 
@@ -317,8 +319,24 @@ def config_validate(
         str | None,
         typer.Option("--scope", help="(reserved) Restrict to one layer's contribution."),
     ] = None,
+    composed: Annotated[
+        bool,
+        typer.Option(
+            "--composed",
+            help=(
+                "Emit the composed-profile view (deep-merge of all enabled "
+                "profiles in profiles.enabled) alongside the validation result."
+            ),
+        ),
+    ] = False,
 ) -> None:
-    """Validate the merged config against the minimal Pydantic schema."""
+    """Validate the merged config against the minimal Pydantic schema.
+
+    With ``--composed``, additionally compose every profile listed in
+    ``profiles.enabled`` and include the merged view in the output envelope.
+    The composed view is deterministic (sorted lists, locked render-block
+    order) so repeated invocations produce byte-identical JSON.
+    """
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
 
@@ -340,8 +358,37 @@ def config_validate(
         emit_error(ValidationFailed(f"config schema rejected: {exc}"), flags=flags)
         return  # pragma: no cover
 
-    payload = {"ok": True, "scope": scope}
+    payload: dict[str, Any] = {"ok": True, "scope": scope}
     text = "config: ok"
+
+    if composed:
+        # Resolve the enabled profile list from the merged config. Unknown
+        # ids surface as InvalidInput from load_profile so the user gets a
+        # helpful pointer to the registry.
+        profiles_section = merged.get("profiles") or {}
+        enabled_raw = profiles_section.get("enabled") or []
+        if not isinstance(enabled_raw, list):
+            emit_error(
+                ValidationFailed(
+                    f"profiles.enabled must be a list, got {type(enabled_raw).__name__}"
+                ),
+                flags=flags,
+            )
+            return  # pragma: no cover
+        enabled: list[str] = [str(p) for p in enabled_raw]
+
+        try:
+            bodies = [load_profile(pid) for pid in enabled]
+        except InvalidInput as exc:
+            emit_error(exc, flags=flags)
+            return  # pragma: no cover
+
+        composed_view = compose(bodies)
+        payload["enabled_profiles"] = enabled
+        payload["available_profiles"] = list(list_profiles())
+        payload["composed"] = composed_view.model_dump(mode="json")
+        text = f"config: ok (composed {len(enabled)} profile(s): {composed_view.name})"
+
     emit_json_or_text(payload, text, flags=flags)
 
 

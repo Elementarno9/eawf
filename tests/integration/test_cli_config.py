@@ -275,3 +275,72 @@ def test_profile_enable_with_malformed_yaml_emits_envelope_json_mode(
     assert body["error"] == "ValidationFailed"
     assert body["exit_code"] == 4
     assert body["exit_name"] == "VALIDATION_FAILED"
+
+
+# --- validate --composed ----------------------------------------------------
+
+
+def test_validate_composed_default_enables_core(repo_root: Path) -> None:
+    """``--composed`` on a clean repo composes the built-in default (just ``core``)."""
+    result = runner.invoke(app, ["--json", "config", "validate", "--composed"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert body["ok"] is True
+    # Built-in default has profiles.enabled == ["core"].
+    assert body["enabled_profiles"] == ["core"]
+    assert body["composed"]["name"] == "core"
+    # All 11 profile ids surface in the available list.
+    assert len(body["available_profiles"]) == 11
+
+
+def test_validate_composed_with_three_profiles(repo_root: Path) -> None:
+    """``--composed`` with core+python+research yields the merged view.
+
+    ``profile enable`` writes to ``profiles.enabled`` in the repo layer; the
+    layered merge replaces the built-in default list wholesale (per
+    ea-proposal §"Settings schema": "ordinary lists replace"), so the test
+    plants the full enabled list directly via the YAML to control the order.
+    """
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled: [core, python, research]\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["--json", "config", "validate", "--composed"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert body["ok"] is True
+    assert body["enabled_profiles"] == ["core", "python", "research"]
+    assert body["composed"]["name"] == "core+python+research"
+    # research populates state_extensions.fields_required.
+    assert set(body["composed"]["state_extensions"]["fields_required"]) == {
+        "hypotheses",
+        "audits",
+    }
+    # Provenance traces back to the contributing profiles.
+    assert body["composed"]["provenance"]["state_extensions"] == ["research"]
+
+
+def test_validate_composed_deterministic_output(repo_root: Path) -> None:
+    """Repeated invocations produce byte-identical JSON envelopes."""
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled: [core, python, research]\n",
+        encoding="utf-8",
+    )
+
+    one = runner.invoke(app, ["--json", "config", "validate", "--composed"])
+    two = runner.invoke(app, ["--json", "config", "validate", "--composed"])
+    assert one.exit_code == 0
+    assert two.exit_code == 0
+    assert one.output == two.output
+
+
+def test_validate_composed_unknown_profile_exits_3(repo_root: Path) -> None:
+    """An unknown profile id in ``profiles.enabled`` exits with InvalidInput (3)."""
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled: [bogus]\n", encoding="utf-8"
+    )
+    result = runner.invoke(app, ["--json", "config", "validate", "--composed"])
+    assert result.exit_code == 3, result.output
+    body = json.loads(result.output)
+    assert body["error"] == "InvalidInput"
