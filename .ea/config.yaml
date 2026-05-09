@@ -1,0 +1,18 @@
+acceptance:
+  lint: true
+  tests: true
+  typecheck: true
+lifecycle:
+  depth: phase
+mcp:
+  enabled: []
+plugins:
+  enabled: []
+profiles:
+  enabled:
+  - core
+  - python
+  - research
+runtime:
+  kind: claude-code
+schema_version: '1.0'
