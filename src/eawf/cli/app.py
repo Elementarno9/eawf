@@ -231,6 +231,12 @@ from eawf.cli.commands.skill import skill_app  # noqa: E402
 app.add_typer(skill_app, name="skill")
 # --- end P04 W07 ---
 
+# --- P05 W01 worktree registration ---
+from eawf.cli.commands.worktree import worktree_app  # noqa: E402
+
+app.add_typer(worktree_app, name="worktree")
+# --- end P05 W01 ---
+
 
 def main() -> None:
     app()
