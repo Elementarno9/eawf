@@ -245,7 +245,7 @@ def init_cmd(
     # did NOT pass --no-input — the Textual app needs a live terminal and
     # will crash inside CliRunner. Tests never hit this branch.
     try:
-        result = run_wizard_interactive(target_dir)
+        result = run_wizard_interactive(target_dir, force=force)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return

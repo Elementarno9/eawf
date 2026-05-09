@@ -465,7 +465,7 @@ def _parse_widget_value(step: WizardStep, raw: str) -> Any:
     return raw
 
 
-def run_wizard_interactive(target_dir: Path) -> WizardResult:
+def run_wizard_interactive(target_dir: Path, *, force: bool = False) -> WizardResult:
     """Drive the Textual TTY wizard, then materialise via :func:`run_wizard_no_input`.
 
     The Textual surface is intentionally single-screen: a vertical list of
@@ -481,6 +481,8 @@ def run_wizard_interactive(target_dir: Path) -> WizardResult:
     Args:
         target_dir: Absolute target directory. Forwarded verbatim to
             :func:`run_wizard_no_input` after the operator submits.
+        force: When True, overwrite an existing ``.ea/`` even if it has
+            canonical files; forwarded to :func:`run_wizard_no_input`.
 
     Returns:
         :class:`WizardResult` from the underlying pipeline.
@@ -527,7 +529,7 @@ def run_wizard_interactive(target_dir: Path) -> WizardResult:
     if not captured:
         raise InvalidInput("interactive wizard exited without submitting answers")
     answers = WizardAnswers(**captured)
-    return run_wizard_no_input(answers, target_dir)
+    return run_wizard_no_input(answers, target_dir, force=force)
 
 
 __all__ = [
