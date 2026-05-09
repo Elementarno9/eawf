@@ -135,15 +135,15 @@ def test_footer_repair_commands_optional_list() -> None:
         EnvelopeFooter.model_validate({"repair_commands": "eawf install gh"})
 
 
-def test_header_finished_at_before_started_at_still_constructs() -> None:
-    """Pydantic alone does not enforce monotonic timestamps; the engine does.
+def test_header_finished_at_before_started_at_rejected() -> None:
+    """The model rejects ``finished_at < started_at``.
 
-    Documenting the behaviour explicitly so a future tightening to a
-    ``model_validator`` does not regress silently. If we add the
-    ordering check to the model, flip this test to assert the
-    rejection.
+    Originally pinned the permissive behaviour (engine-only enforcement);
+    Phase 4 W01 review flipped this to a model-level validator so
+    hand-built envelopes (e.g. CLI hook handlers) cannot violate the
+    contract.
     """
     started = datetime(2026, 5, 9, 0, 0, 5, tzinfo=UTC)
     finished = datetime(2026, 5, 9, 0, 0, 0, tzinfo=UTC)
-    header = EnvelopeHeader(**_base_header(started_at=started, finished_at=finished))  # type: ignore[arg-type]
-    assert header.finished_at < header.started_at
+    with pytest.raises(ValidationError, match="finished_at must be >= started_at"):
+        EnvelopeHeader(**_base_header(started_at=started, finished_at=finished))  # type: ignore[arg-type]

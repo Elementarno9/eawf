@@ -238,7 +238,10 @@ def run(
 
     try:
         resolved_event_type = _parse_event_type(event_type)
-        payload = _parse_payload(sys.stdin.read())
+        # Skip stdin read on a TTY so interactive smoke runs don't block
+        # waiting for EOF; piped/redirected stdin reads normally.
+        stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
+        payload = _parse_payload(stdin_text)
         event = _build_event(
             event_type=resolved_event_type,
             payload=payload,
