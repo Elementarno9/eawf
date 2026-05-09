@@ -30,15 +30,36 @@ instrument_requirements:
 render_blocks:
   - id: python-style
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ## Python style (python profile)
 
       - f-strings only; no ``%``-style or ``.format()``.
       - Full type hints; ``from __future__ import annotations`` at the top of
         every module.
-      - ``uv run`` for all Python invocations — never ``.venv/bin/python``.
+      - Library modules use ``logger = logging.getLogger(__name__)``.
+      - ``uv run`` for all Python invocations — never ``.venv/bin/python``
+        or bare ``python``.
       - Pre-commit before commit (``uv run pre-commit run --all-files``).
+      - Before adding a runtime dependency, verify it's not already pulled
+        in transitively.
+
+  - id: test-discipline
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ## Test discipline (python profile)
+
+      - ``pytest.approx`` for any float comparison.
+      - ``numpy.testing.assert_allclose`` for arrays (when numpy is in use).
+      - Public functions MUST have boundary-case AND error-path tests.
+        Boundary: empty, single, off-by-one, max-length. Error: invalid
+        type (``TypeError``), out-of-range (``ValueError``), missing key
+        (``KeyError``), schema mismatch (``ValidationError``).
+      - Test names: ``test_<func>_<scenario>`` — no
+        ``test_compute_iv_solver_1``.
+      - ``pytest.raises`` for error paths; assert message substring when
+        the message is part of the API contract.
 
 skills_referenced: []
 hooks_referenced: []
