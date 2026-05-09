@@ -1,0 +1,235 @@
+{
+  "checks": [
+    {
+      "audit_id": "AU-ITER",
+      "details": null,
+      "name": "ruff_clean",
+      "passed": true,
+      "source": "iter_audit",
+      "wave_id": null
+    },
+    {
+      "audit_id": "AU-ITER",
+      "details": "errors in core",
+      "name": "mypy_strict",
+      "passed": false,
+      "source": "iter_audit",
+      "wave_id": null
+    },
+    {
+      "audit_id": "AU-ITER",
+      "details": null,
+      "name": "tests_green",
+      "passed": true,
+      "source": "iter_audit",
+      "wave_id": null
+    },
+    {
+      "audit_id": null,
+      "details": null,
+      "name": "ok",
+      "passed": true,
+      "source": "wave_outcome",
+      "wave_id": "P05-I01-W00"
+    }
+  ],
+  "dag": {
+    "cycle": [
+      "P05-I01-W02",
+      "P05-I01-W03"
+    ],
+    "edges": [
+      {
+        "from": "P05-I01-W00",
+        "to": "P05-I01-W01"
+      },
+      {
+        "from": "P05-I01-W03",
+        "to": "P05-I01-W02"
+      },
+      {
+        "from": "P05-I01-W02",
+        "to": "P05-I01-W03"
+      },
+      {
+        "from": "P05-I01-W01",
+        "to": "P05-I01-W04"
+      },
+      {
+        "from": "P05-I01-W04",
+        "to": "P05-I01-W05"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "P05-I01-W00",
+        "status": "closed"
+      },
+      {
+        "id": "P05-I01-W01",
+        "status": "in_progress"
+      },
+      {
+        "id": "P05-I01-W02",
+        "status": "pending"
+      },
+      {
+        "id": "P05-I01-W03",
+        "status": "pending"
+      },
+      {
+        "id": "P05-I01-W04",
+        "status": "failed"
+      },
+      {
+        "id": "P05-I01-W05",
+        "status": "pending"
+      }
+    ],
+    "topo_order": null
+  },
+  "iter": {
+    "audit_id": "AU-ITER",
+    "closed_at": null,
+    "estimate_id": null,
+    "id": "P05-I01",
+    "opened_at": "2026-05-08T00:00:00Z",
+    "phase_id": "P05",
+    "status": "active",
+    "title": "Cycle plus risks"
+  },
+  "phase": {
+    "id": "P05",
+    "status": "active",
+    "title": "Phase Five"
+  },
+  "risks": [
+    {
+      "id": "BL-1",
+      "kind": "backlog",
+      "severity": "P0",
+      "status": "open",
+      "title": "fix flake on W03"
+    },
+    {
+      "id": "INC-1",
+      "kind": "incident",
+      "severity": "high",
+      "status": "open",
+      "title": "lock collision on W04"
+    },
+    {
+      "id": "BL-2",
+      "kind": "backlog",
+      "severity": "P1",
+      "status": "open",
+      "title": "improve audit driver"
+    },
+    {
+      "id": "H05-01",
+      "kind": "hypothesis_rejected",
+      "severity": "rejected",
+      "status": "rejected",
+      "title": "approach X scales beyond 1k waves"
+    }
+  ],
+  "summary": {
+    "blocked_waves": [
+      "P05-I01-W02",
+      "P05-I01-W03",
+      "P05-I01-W05"
+    ],
+    "check_count": 4,
+    "check_passed": 3,
+    "risk_count": 4,
+    "wave_count": 6,
+    "wave_status_counts": {
+      "abandoned": 0,
+      "claimed": 0,
+      "closed": 1,
+      "failed": 1,
+      "in_progress": 1,
+      "pending": 3
+    }
+  },
+  "waves": [
+    {
+      "claim_session_id": null,
+      "commit": "1111111aaaa",
+      "deps": [],
+      "file_scopes": [
+        "src/cpr/init.py"
+      ],
+      "id": "P05-I01-W00",
+      "outcome": "ok",
+      "status": "closed",
+      "title": "Bootstrap"
+    },
+    {
+      "claim_session_id": "S-A",
+      "commit": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/cpr/a.py"
+      ],
+      "id": "P05-I01-W01",
+      "outcome": null,
+      "status": "in_progress",
+      "title": "Stage A"
+    },
+    {
+      "claim_session_id": null,
+      "commit": null,
+      "deps": [
+        "P05-I01-W03"
+      ],
+      "file_scopes": [
+        "src/cpr/b.py"
+      ],
+      "id": "P05-I01-W02",
+      "outcome": null,
+      "status": "pending",
+      "title": "Cycle node B"
+    },
+    {
+      "claim_session_id": null,
+      "commit": null,
+      "deps": [
+        "P05-I01-W02"
+      ],
+      "file_scopes": [
+        "src/cpr/c.py"
+      ],
+      "id": "P05-I01-W03",
+      "outcome": null,
+      "status": "pending",
+      "title": "Cycle node C"
+    },
+    {
+      "claim_session_id": null,
+      "commit": null,
+      "deps": [
+        "P05-I01-W01"
+      ],
+      "file_scopes": [],
+      "id": "P05-I01-W04",
+      "outcome": "failed_lock",
+      "status": "failed",
+      "title": "Failure"
+    },
+    {
+      "claim_session_id": null,
+      "commit": null,
+      "deps": [
+        "P05-I01-W04"
+      ],
+      "file_scopes": [],
+      "id": "P05-I01-W05",
+      "outcome": null,
+      "status": "pending",
+      "title": "Final"
+    }
+  ]
+}

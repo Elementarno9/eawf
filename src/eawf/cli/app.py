@@ -249,6 +249,12 @@ from eawf.cli.commands.mcp import mcp_app  # noqa: E402
 app.add_typer(mcp_app, name="mcp")
 # --- end P05 W04 ---
 
+# --- P05 W05 plan registration ---
+from eawf.cli.commands.plan import plan_app  # noqa: E402
+
+app.add_typer(plan_app, name="plan")
+# --- end P05 W05 ---
+
 
 def main() -> None:
     app()
