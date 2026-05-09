@@ -87,7 +87,7 @@ _VALID_STATE: dict[str, Any] = {
             "file_scopes": ["src/eawf/foo.py"],
             "claim_session_id": None,
             "worktree_id": None,
-            "commit": "abc1234567",
+            "commit": "deadbeef",
             "outcome": "ok",
             "opened_at": "2026-05-08T00:00:00Z",
             "closed_at": "2026-05-08T01:00:00Z",
