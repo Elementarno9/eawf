@@ -57,6 +57,7 @@ def _init_core(target: Path) -> None:
     assert res.exit_code == 0, res.output
 
 
+@pytest.mark.integration
 def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A freshly-initialised workspace reports every check as ``ok``."""
     monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
@@ -80,6 +81,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
     assert statuses["render_output_roundtrip"] == "ok"
 
 
+@pytest.mark.integration
 def test_cli_doctor_detects_manifest_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Hand-editing AGENTS.md inside a managed region downgrades the check to ``warn``."""
     monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
@@ -105,6 +107,7 @@ def test_cli_doctor_detects_manifest_drift(tmp_path: Path, monkeypatch: pytest.M
     assert "non-negotiable-rules" in (detail or "")
 
 
+@pytest.mark.integration
 def test_cli_doctor_envelope_roundtrip_check_present(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -121,6 +124,7 @@ def test_cli_doctor_envelope_roundtrip_check_present(
     assert entry["status"] == "ok"
 
 
+@pytest.mark.integration
 def test_cli_doctor_manifest_absent_is_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A workspace with no manifest yet still reports ``manifest_in_sync == ok``.
 
@@ -137,6 +141,7 @@ def test_cli_doctor_manifest_absent_is_ok(tmp_path: Path, monkeypatch: pytest.Mo
     assert statuses["manifest_in_sync"] == "ok"
 
 
+@pytest.mark.integration
 def test_cli_doctor_manifest_malformed_is_fail(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

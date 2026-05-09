@@ -303,7 +303,7 @@ def sync_cmd(
     write reports zero updates (all regions land in ``regions_unchanged``).
     """
     flags: GlobalFlags = ctx.obj
-    target_dir = (target or Path.cwd()).resolve()
+    target_dir = (target or flags.workspace or Path.cwd()).resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
     try:

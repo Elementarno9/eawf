@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
@@ -39,6 +40,7 @@ def _init_core_python(target: Path) -> None:
     assert res.exit_code == 0, res.output
 
 
+@pytest.mark.integration
 def test_cli_sync_idempotent(tmp_path: Path) -> None:
     """Calling sync twice in a row reports zero added/updated regions on the second call."""
     _init_core_python(tmp_path)
@@ -59,6 +61,7 @@ def test_cli_sync_idempotent(tmp_path: Path) -> None:
     assert len(payload2["regions_unchanged"]) >= 1
 
 
+@pytest.mark.integration
 def test_cli_sync_writes_manifest_atomically(tmp_path: Path) -> None:
     """After sync, the manifest file is present, well-formed, and reflects the renderer."""
     _init_core_python(tmp_path)
@@ -77,6 +80,7 @@ def test_cli_sync_writes_manifest_atomically(tmp_path: Path) -> None:
     assert any("python-style" in k for k in keys)
 
 
+@pytest.mark.integration
 def test_cli_sync_emit_json_envelope(tmp_path: Path) -> None:
     """``--json`` prints a structured envelope with the canonical W08 fields."""
     _init_core_python(tmp_path)
@@ -97,6 +101,7 @@ def test_cli_sync_emit_json_envelope(tmp_path: Path) -> None:
         assert isinstance(payload[key], bool)
 
 
+@pytest.mark.integration
 def test_cli_sync_no_config_falls_back_to_builtin_default(tmp_path: Path) -> None:
     """A workspace with no .ea/config.yaml falls back to the built-in ``core`` default.
 
