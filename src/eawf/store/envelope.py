@@ -7,12 +7,12 @@ via the models in ``eawf.store.kinds``.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.state.enums import StoreKind
+from eawf.state.types import UtcDatetime
 
 
 class Envelope(BaseModel):
@@ -24,8 +24,8 @@ class Envelope(BaseModel):
     id: Annotated[str, Field(min_length=1)]
     kind: StoreKind
     scope_id: str | None
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
     summary: Annotated[str, Field(max_length=500)]
     payload: dict[str, Any]
     blob_refs: list[str] = Field(default_factory=list)

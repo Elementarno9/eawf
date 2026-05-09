@@ -150,9 +150,6 @@ def acquire(
                 fh = None
             raise
 
-        if time.monotonic() >= deadline:
-            raise LockTimeout(f"Could not acquire lock {lock_path} within {effective_timeout}s")
-
     assert fh is not None  # guaranteed by loop logic above
 
     _write_holder(fh, lock_path)

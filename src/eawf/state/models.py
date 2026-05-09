@@ -8,7 +8,6 @@ constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -53,11 +52,20 @@ from eawf.state.ids import (
     RE_PROJECT_CODE,
     RE_WAVE,
 )
+from eawf.state.types import UtcDatetime
+from eawf.state.urn import URN_KINDS
 
 # ---- Reusable annotated types -----------------------------------------------
 
+_URN_KINDS_PATTERN = "|".join(sorted(URN_KINDS))
 UrnStr = Annotated[
-    str, Field(pattern=r"^urn:eawf:v1:[a-z]+:[^:?#/]+(?:/[^?#]*)?(?:\?=[^#]*)?(?:#.*)?$")
+    str,
+    Field(
+        pattern=(
+            rf"^urn:eawf:v1:({_URN_KINDS_PATTERN}):"
+            r"[^:?#/]+(?:/[^?#]*)?(?:\?=[^#]*)?(?:#.*)?$"
+        )
+    ),
 ]
 ProjectCodeStr = Annotated[str, Field(pattern=RE_PROJECT_CODE.pattern)]
 PhaseIdStr = Annotated[str, Field(pattern=RE_PHASE.pattern)]
@@ -146,8 +154,8 @@ class Goal(_StrictModel):
     summary: str
     status: GoalStatus
     outcome_ids: list[str] = Field(default_factory=list)
-    created_at: datetime
-    closed_at: datetime | None = None
+    created_at: UtcDatetime
+    closed_at: UtcDatetime | None = None
 
 
 class Outcome(_StrictModel):
@@ -161,7 +169,7 @@ class Outcome(_StrictModel):
     value: float | None = None
     status: OutcomeStatus
     audit_id: str | None = None
-    updated_at: datetime
+    updated_at: UtcDatetime
 
 
 class Phase(_StrictModel):
@@ -174,8 +182,8 @@ class Phase(_StrictModel):
     status: PhaseStatus
     iter_ids: list[IterIdStr] = Field(default_factory=list)
     outcome_ids: list[str] = Field(default_factory=list)
-    opened_at: datetime
-    closed_at: datetime | None = None
+    opened_at: UtcDatetime
+    closed_at: UtcDatetime | None = None
     audit_id: str | None = None
 
 
@@ -189,8 +197,8 @@ class Iter(_StrictModel):
     wave_ids: list[WaveIdStr] = Field(default_factory=list)
     estimate_id: str | None = None
     audit_id: str | None = None
-    opened_at: datetime
-    closed_at: datetime | None = None
+    opened_at: UtcDatetime
+    closed_at: UtcDatetime | None = None
 
 
 class Wave(_StrictModel):
@@ -206,8 +214,8 @@ class Wave(_StrictModel):
     worktree_id: str | None = None
     commit: str | None = None
     outcome: str | None = None
-    opened_at: datetime
-    closed_at: datetime | None = None
+    opened_at: UtcDatetime
+    closed_at: UtcDatetime | None = None
 
 
 class Hypothesis(_StrictModel):
@@ -235,7 +243,7 @@ class Audit(_StrictModel):
     report_artifact_id: str | None = None
     check_results: list[Any] = Field(default_factory=list)
     integrity_results: list[Any] = Field(default_factory=list)
-    created_at: datetime
+    created_at: UtcDatetime
     verdict: AuditVerdict | None = None
 
 
@@ -245,11 +253,10 @@ class Artifact(_StrictModel):
     id: IdStr
     kind: str
     uri: str
-    local_path: str | None = None
     urn: UrnStr
     sha256: str | None = None
     size_bytes: int | None = None
-    created_at: datetime
+    created_at: UtcDatetime
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -262,7 +269,7 @@ class Decision(_StrictModel):
     rationale: str
     alternatives: list[str] = Field(default_factory=list)
     status: DecisionStatus
-    created_at: datetime
+    created_at: UtcDatetime
     superseded_by: str | None = None
 
 
@@ -274,8 +281,8 @@ class BacklogItem(_StrictModel):
     title: str
     priority: BacklogPriority
     status: BacklogStatus
-    created_at: datetime
-    closed_at: datetime | None = None
+    created_at: UtcDatetime
+    closed_at: UtcDatetime | None = None
     resolution: str | None = None
     commit: str | None = None
 
@@ -293,7 +300,7 @@ class EstimateSummary(_StrictModel):
     reference_class: str | None = None
     confidence: Confidence
     current_store_record_id: str
-    updated_at: datetime
+    updated_at: UtcDatetime
 
 
 class ActualSummary(_StrictModel):
@@ -306,7 +313,7 @@ class ActualSummary(_StrictModel):
     attention_eu: float | None = None
     agent_runtime_eu: float | None = None
     current_store_record_id: str
-    updated_at: datetime
+    updated_at: UtcDatetime
 
 
 class AgentSession(_StrictModel):
@@ -320,8 +327,8 @@ class AgentSession(_StrictModel):
     claimed_wave_ids: list[WaveIdStr] = Field(default_factory=list)
     worktree_ids: list[str] = Field(default_factory=list)
     artifact_ids: list[str] = Field(default_factory=list)
-    started_at: datetime
-    ended_at: datetime | None = None
+    started_at: UtcDatetime
+    ended_at: UtcDatetime | None = None
     summary: str | None = None
 
 
@@ -335,7 +342,7 @@ class WorktreeRecord(_StrictModel):
     base_branch: str
     status: WorktreeStatus
     owner_session_id: str | None = None
-    created_at: datetime
+    created_at: UtcDatetime
     merged_commit: str | None = None
 
 
@@ -365,8 +372,8 @@ class PluginInstall(_StrictModel):
     target_path: str
     status: PluginInstallStatus
     managed_files: list[str] = Field(default_factory=list)
-    installed_at: datetime
-    updated_at: datetime
+    installed_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class MemorySummary(_StrictModel):
@@ -378,7 +385,7 @@ class MemorySummary(_StrictModel):
     confidence: Confidence
     status: MemoryStatus
     store_record_id: str
-    review_due: datetime | None = None
+    review_due: UtcDatetime | None = None
 
 
 class Incident(_StrictModel):
@@ -389,8 +396,8 @@ class Incident(_StrictModel):
     severity: IncidentSeverity
     title: str
     status: IncidentStatus
-    opened_at: datetime
-    closed_at: datetime | None = None
+    opened_at: UtcDatetime
+    closed_at: UtcDatetime | None = None
     root_cause: str | None = None
     corrective_action_ids: list[str] = Field(default_factory=list)
     report_artifact_id: str | None = None
@@ -407,8 +414,8 @@ class Flow(_StrictModel):
     policy: dict[str, Any] = Field(default_factory=dict)
     last_safe_checkpoint: str | None = None
     next_action: str | None = None
-    started_at: datetime
-    updated_at: datetime
+    started_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 # ---- State root -------------------------------------------------------------
@@ -420,7 +427,7 @@ class State(_StrictModel):
     schema_version: Literal["1.0"]
     scope_kind: ScopeKind
     urn: UrnStr
-    updated_at: datetime
+    updated_at: UtcDatetime
     project: Project | None
     current: CurrentPointers
     workspace: WorkspaceIndex | None

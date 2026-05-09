@@ -212,18 +212,6 @@
           "title": "Kind",
           "type": "string"
         },
-        "local_path": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Local Path"
-        },
         "metadata": {
           "additionalProperties": true,
           "title": "Metadata",
@@ -258,7 +246,7 @@
           "type": "string"
         },
         "urn": {
-          "pattern": "^urn:eawf:v1:[a-z]+:[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
           "title": "Urn",
           "type": "string"
         }
@@ -1509,7 +1497,7 @@
           "type": "array"
         },
         "repo_urn": {
-          "pattern": "^urn:eawf:v1:[a-z]+:[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
           "title": "Repo Urn",
           "type": "string"
         },
@@ -1817,7 +1805,7 @@
           "type": "string"
         },
         "state_urn": {
-          "pattern": "^urn:eawf:v1:[a-z]+:[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
           "title": "State Urn",
           "type": "string"
         },
@@ -2177,7 +2165,7 @@
       "type": "string"
     },
     "urn": {
-      "pattern": "^urn:eawf:v1:[a-z]+:[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+      "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
       "title": "Urn",
       "type": "string"
     },

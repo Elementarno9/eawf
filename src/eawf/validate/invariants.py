@@ -17,6 +17,10 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from eawf.state.enums import (
+    AgentSessionStatus,
+    BacklogStatus,
+    GoalStatus,
+    IncidentStatus,
     IterStatus,
     OutcomeStatus,
     PhaseStatus,
@@ -36,6 +40,29 @@ _ACTIVE_WAVE_STATUSES: frozenset[str] = frozenset(
 )
 _OPEN_WAVE_STATUSES: frozenset[str] = frozenset(
     {WaveStatus.PENDING.value, WaveStatus.CLAIMED.value, WaveStatus.IN_PROGRESS.value}
+)
+_TERMINAL_PHASE_STATUSES: frozenset[str] = frozenset(
+    {PhaseStatus.CLOSED.value, PhaseStatus.ARCHIVED.value}
+)
+_TERMINAL_ITER_STATUSES: frozenset[str] = frozenset(
+    {IterStatus.CLOSED.value, IterStatus.ABANDONED.value}
+)
+_TERMINAL_WAVE_STATUSES: frozenset[str] = frozenset(
+    {WaveStatus.CLOSED.value, WaveStatus.FAILED.value, WaveStatus.ABANDONED.value}
+)
+_TERMINAL_GOAL_STATUSES: frozenset[str] = frozenset(
+    {GoalStatus.ACHIEVED.value, GoalStatus.ABANDONED.value}
+)
+_TERMINAL_BACKLOG_STATUSES: frozenset[str] = frozenset({BacklogStatus.CLOSED.value})
+_TERMINAL_INCIDENT_STATUSES: frozenset[str] = frozenset(
+    {IncidentStatus.RESOLVED.value, IncidentStatus.WONT_FIX.value}
+)
+_TERMINAL_SESSION_STATUSES: frozenset[str] = frozenset(
+    {
+        AgentSessionStatus.CLOSED.value,
+        AgentSessionStatus.STALE.value,
+        AgentSessionStatus.FAILED.value,
+    }
 )
 
 
@@ -338,10 +365,102 @@ def check_plugin_owners(state: State) -> Iterable[Violation]:
             )
 
 
+def check_closure_timestamps(state: State) -> Iterable[Violation]:
+    """Terminal-status entries must carry their closure timestamp (``INV.CLOSURE.*_NO_TIMESTAMP``).
+
+    - ``Phase`` in ``{closed, archived}`` requires ``closed_at`` non-null.
+    - ``Iter`` in ``{closed, abandoned}`` requires ``closed_at`` non-null.
+    - ``Wave`` in ``{closed, failed, abandoned}`` requires ``closed_at`` non-null.
+    - ``Goal`` in ``{achieved, abandoned}`` requires ``closed_at`` non-null.
+    - ``BacklogItem`` in ``{closed}`` requires ``closed_at`` non-null.
+    - ``Incident`` in ``{resolved, wont-fix}`` requires ``closed_at`` non-null.
+    - ``AgentSession`` in ``{closed, stale, failed}`` requires ``ended_at`` non-null.
+    """
+    for phase_id, phase in state.phases.items():
+        if phase.status in _TERMINAL_PHASE_STATUSES and phase.closed_at is None:
+            yield Violation(
+                code="INV.CLOSURE.PHASE_NO_CLOSED_AT",
+                path=f"/phases/{phase_id}/closed_at",
+                message=(
+                    f"phase {phase_id!r} has terminal status "
+                    f"{phase.status.value!r} but closed_at is null"
+                ),
+            )
+
+    for iter_id, it in state.iters.items():
+        if it.status in _TERMINAL_ITER_STATUSES and it.closed_at is None:
+            yield Violation(
+                code="INV.CLOSURE.ITER_NO_CLOSED_AT",
+                path=f"/iters/{iter_id}/closed_at",
+                message=(
+                    f"iter {iter_id!r} has terminal status "
+                    f"{it.status.value!r} but closed_at is null"
+                ),
+            )
+
+    for wave_id, w in state.waves.items():
+        if w.status in _TERMINAL_WAVE_STATUSES and w.closed_at is None:
+            yield Violation(
+                code="INV.CLOSURE.WAVE_NO_CLOSED_AT",
+                path=f"/waves/{wave_id}/closed_at",
+                message=(
+                    f"wave {wave_id!r} has terminal status {w.status.value!r} but closed_at is null"
+                ),
+            )
+
+    if state.goals is not None:
+        for goal_id, goal in state.goals.items():
+            if goal.status in _TERMINAL_GOAL_STATUSES and goal.closed_at is None:
+                yield Violation(
+                    code="INV.CLOSURE.GOAL_NO_CLOSED_AT",
+                    path=f"/goals/{goal_id}/closed_at",
+                    message=(
+                        f"goal {goal_id!r} has terminal status "
+                        f"{goal.status.value!r} but closed_at is null"
+                    ),
+                )
+
+    if state.backlog is not None:
+        for bid, item in state.backlog.items():
+            if item.status in _TERMINAL_BACKLOG_STATUSES and item.closed_at is None:
+                yield Violation(
+                    code="INV.CLOSURE.BACKLOG_NO_CLOSED_AT",
+                    path=f"/backlog/{bid}/closed_at",
+                    message=(
+                        f"backlog item {bid!r} has terminal status "
+                        f"{item.status.value!r} but closed_at is null"
+                    ),
+                )
+
+    if state.incidents is not None:
+        for iid, inc in state.incidents.items():
+            if inc.status in _TERMINAL_INCIDENT_STATUSES and inc.closed_at is None:
+                yield Violation(
+                    code="INV.CLOSURE.INCIDENT_NO_CLOSED_AT",
+                    path=f"/incidents/{iid}/closed_at",
+                    message=(
+                        f"incident {iid!r} has terminal status "
+                        f"{inc.status.value!r} but closed_at is null"
+                    ),
+                )
+
+    for sid, session in state.agent_sessions.items():
+        if session.status in _TERMINAL_SESSION_STATUSES and session.ended_at is None:
+            yield Violation(
+                code="INV.CLOSURE.SESSION_NO_ENDED_AT",
+                path=f"/agent_sessions/{sid}/ended_at",
+                message=(
+                    f"agent session {sid!r} has terminal status "
+                    f"{session.status.value!r} but ended_at is null"
+                ),
+            )
+
+
 ALL_INVARIANTS: tuple[Invariant, ...] = (
     check_parent_ids,
     check_current_pointers,
     check_closure_rules,
+    check_closure_timestamps,
     check_audit_evidence,
     check_mcp_plugin_owners,
     check_plugin_runtimes,

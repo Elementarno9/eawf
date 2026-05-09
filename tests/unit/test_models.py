@@ -15,6 +15,8 @@ from eawf.state import models
         "urn:eawf:v1:",
         "urn:eawf:v1:state:",
         "urn:eawf:v2:state:QR",
+        "urn:eawf:v1:nonexistent:foo",
+        "urn:eawf:v1:STATE:QR",
     ],
 )
 def test_project_repo_urn_pattern_rejects_malformed(bad_urn: str) -> None:
@@ -430,8 +432,7 @@ def test_artifact_basic() -> None:
     art = models.Artifact(
         id="ART-001",
         kind="report",
-        uri="file:///path/to/report.md",
-        local_path="/path/to/report.md",
+        uri="repo:reports/report.md",
         urn="urn:eawf:v1:artifact:QR/ART-001",
         sha256="0" * 64,
         size_bytes=1024,
@@ -683,3 +684,53 @@ def test_id_str_accepts_minimum_token() -> None:
         closed_at=None,
     )
     assert goal.id == "x"
+
+
+def _minimal_state_payload(updated_at: str) -> dict[str, object]:
+    return {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": updated_at,
+        "project": {
+            "code": "QR",
+            "slug": "quant-research",
+            "title": "Quant Research",
+            "description": "",
+            "domains": ["quant"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {
+            "project_code": "QR",
+            "subproject_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
+def test_naive_datetime_rejected_in_state_root() -> None:
+    payload = _minimal_state_payload("2026-05-08T00:00:00")  # no tz
+    with pytest.raises(ValidationError) as excinfo:
+        models.State.model_validate(payload)
+    assert "timezone-aware" in str(excinfo.value)
+
+
+def test_offset_datetime_normalised_to_utc() -> None:
+    payload = _minimal_state_payload("2026-01-01T00:00:00+05:00")
+    state = models.State.model_validate(payload)
+    assert state.updated_at.tzinfo is UTC
+    expected = datetime(2025, 12, 31, 19, 0, 0, tzinfo=UTC)
+    assert state.updated_at == expected

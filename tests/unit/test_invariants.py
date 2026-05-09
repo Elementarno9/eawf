@@ -18,6 +18,7 @@ from eawf.validate.invariants import (
     Violation,
     check_audit_evidence,
     check_closure_rules,
+    check_closure_timestamps,
     check_current_pointers,
     check_mcp_plugin_owners,
     check_parent_ids,
@@ -526,6 +527,7 @@ def test_check_plugin_owners_flags_user_owned_plugin() -> None:
         "check_parent_ids",
         "check_current_pointers",
         "check_closure_rules",
+        "check_closure_timestamps",
         "check_audit_evidence",
         "check_mcp_plugin_owners",
         "check_plugin_runtimes",
@@ -567,3 +569,128 @@ def test_base_state_payload_is_independent_per_call() -> None:
     c = deepcopy(a)
     a["phases"].clear()
     assert "P01" in c["phases"]
+
+
+# ---- check_closure_timestamps -----------------------------------------------
+
+
+def test_check_closure_timestamps_flags_closed_phase_without_closed_at() -> None:
+    payload = _base_state_payload()
+    phase = _phase("P01", status="closed")
+    phase["closed_at"] = None  # override builder default
+    payload["phases"]["P01"] = phase
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.PHASE_NO_CLOSED_AT" in codes
+
+
+def test_check_closure_timestamps_flags_closed_wave_without_closed_at() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01", status="closed")
+    closed_iter = _iter("P01-I01", phase_id="P01", status="closed")
+    closed_iter["closed_at"] = "2026-05-08T01:00:00Z"
+    payload["iters"]["P01-I01"] = closed_iter
+    payload["waves"]["P01-I01-W01"] = _wave("P01-I01-W01", iter_id="P01-I01", status="closed")
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.WAVE_NO_CLOSED_AT" in codes
+
+
+def test_check_closure_timestamps_flags_stale_session_without_ended_at() -> None:
+    payload = _base_state_payload()
+    payload["agent_sessions"]["S01"] = {
+        "id": "S01",
+        "role": "executor",
+        "runtime": "claude",
+        "scope_id": "QR",
+        "status": "stale",
+        "claimed_wave_ids": [],
+        "worktree_ids": [],
+        "artifact_ids": [],
+        "started_at": "2026-05-08T00:00:00Z",
+        "ended_at": None,
+        "summary": None,
+    }
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.SESSION_NO_ENDED_AT" in codes
+
+
+def test_check_closure_timestamps_clean_state_yields_no_violations() -> None:
+    payload = _base_state_payload()
+    closed_phase = _phase("P01", status="closed")
+    closed_phase["closed_at"] = "2026-05-08T01:00:00Z"
+    payload["phases"]["P01"] = closed_phase
+    state = State.model_validate(payload)
+    assert list(check_closure_timestamps(state)) == []
+
+
+def test_check_closure_timestamps_flags_closed_iter_without_closed_at() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01", status="closed")
+    closed_iter = _iter("P01-I01", phase_id="P01", status="closed")
+    closed_iter["closed_at"] = None  # explicit override; builder leaves it None already
+    payload["iters"]["P01-I01"] = closed_iter
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.ITER_NO_CLOSED_AT" in codes
+
+
+def test_check_closure_timestamps_flags_closed_goal_without_closed_at() -> None:
+    payload = _base_state_payload()
+    payload["goals"] = {
+        "G01": {
+            "id": "G01",
+            "scope_id": "QR",
+            "title": "Reach P99 latency target",
+            "summary": "Drive p99 latency below 100ms.",
+            "status": "achieved",
+            "outcome_ids": [],
+            "created_at": "2026-05-08T00:00:00Z",
+            "closed_at": None,
+        }
+    }
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.GOAL_NO_CLOSED_AT" in codes
+
+
+def test_check_closure_timestamps_flags_closed_backlog_without_closed_at() -> None:
+    payload = _base_state_payload()
+    payload["backlog"] = {
+        "B01": {
+            "id": "B01",
+            "scope_id": "QR",
+            "title": "Migrate to async storage",
+            "priority": "P1",
+            "status": "closed",
+            "created_at": "2026-05-08T00:00:00Z",
+            "closed_at": None,
+            "resolution": None,
+            "commit": None,
+        }
+    }
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.BACKLOG_NO_CLOSED_AT" in codes
+
+
+def test_check_closure_timestamps_flags_closed_incident_without_closed_at() -> None:
+    payload = _base_state_payload()
+    payload["incidents"] = {
+        "INC-001": {
+            "id": "INC-001",
+            "scope_id": "QR",
+            "severity": "high",
+            "title": "Production cache stampede",
+            "status": "resolved",
+            "opened_at": "2026-05-08T00:00:00Z",
+            "closed_at": None,
+            "root_cause": None,
+            "corrective_action_ids": [],
+            "report_artifact_id": None,
+        }
+    }
+    state = State.model_validate(payload)
+    codes = _codes(check_closure_timestamps(state))
+    assert "INV.CLOSURE.INCIDENT_NO_CLOSED_AT" in codes

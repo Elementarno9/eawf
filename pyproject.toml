@@ -15,6 +15,7 @@ dependencies = [
     "portalocker>=3.2.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
+    "pyyaml>=6.0.3",
     "rich>=15.0.0",
     "textual>=8.2.5",
     "typer>=0.25.1",
@@ -37,6 +38,7 @@ dev = [
     "mypy>=1.13",
     "pre-commit>=3.8",
     "detect-secrets>=1.5",
+    "types-PyYAML>=6.0.12.20240917",
 ]
 
 [tool.pytest.ini_options]
@@ -48,6 +50,7 @@ markers = [
     "property: Hypothesis-driven property tests",
     "golden: golden-output regression tests",
     "slow: long-running tests (excluded from default run)",
+    "acceptance: phase-gate end-to-end acceptance scenarios",
 ]
 
 [tool.mypy]

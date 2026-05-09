@@ -35,6 +35,9 @@ EXPECTED_INVALID: dict[str, str | None] = {
     "13-scope-workspace-no-index.json": "INV.SCOPE.WORKSPACE_REQUIRES_INDEX",
     "14-current-iter-phase-mismatch.json": "INV.CURRENT.ITER_PHASE_MISMATCH",
     "15-plugin-non-eawf-owner.json": "INV.OWNER.PLUGIN_NON_EAWF",
+    "16-closed-phase-no-closed-at.json": "INV.CLOSURE.PHASE_NO_CLOSED_AT",
+    "17-closed-wave-no-closed-at.json": "INV.CLOSURE.WAVE_NO_CLOSED_AT",
+    "18-stale-session-no-ended-at.json": "INV.CLOSURE.SESSION_NO_ENDED_AT",
 }
 
 
