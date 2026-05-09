@@ -119,7 +119,10 @@ def _git_clone(
         args.extend(["--depth", str(depth)])
     args.extend([url, str(target_dir)])
     logger.info(f"_git_clone: invoking {args}")
-    res = subprocess.run(args, capture_output=True, text=True, check=False)
+    try:
+        res = subprocess.run(args, capture_output=True, text=True, check=False, timeout=300.0)
+    except subprocess.TimeoutExpired as exc:
+        raise cli_errors.LockConflict(f"git clone timed out after 300s: {url}") from exc
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
         # Treat path-shaped failures as bad input; everything else is transient.
