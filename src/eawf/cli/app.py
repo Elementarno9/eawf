@@ -179,6 +179,12 @@ from eawf.cli.commands.doctor import doctor_app  # noqa: E402
 app.add_typer(doctor_app, name="doctor")
 # --- end P03 W01 ---
 
+# --- P03 W05 init registration ---
+from eawf.cli.commands.init import init_cmd  # noqa: E402
+
+app.command(name="init", help="Initialise a new Eä Workflow workspace.")(init_cmd)
+# --- end P03 W05 ---
+
 
 def main() -> None:
     app()
