@@ -1,0 +1,27 @@
+{
+  "agent_sessions": {},
+  "artifacts": {},
+  "audits": {},
+  "current": {
+    "active_session_ids": [],
+    "active_wave_ids": [],
+    "iter_id": null,
+    "phase_id": null,
+    "project_code": "EAWF",
+    "subproject_id": null
+  },
+  "hypotheses": {},
+  "indexes": {
+    "project_title": ""
+  },
+  "iters": {},
+  "phases": {},
+  "plugins": {},
+  "project": null,
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "updated_at": "2026-05-09T22:53:37.128529+00:00",
+  "urn": "urn:eawf:v1:state:EAWF",
+  "waves": {},
+  "workspace": null
+}
