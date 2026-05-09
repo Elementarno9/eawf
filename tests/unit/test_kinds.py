@@ -301,6 +301,8 @@ def test_actual_optional_fields_default() -> None:
 
 def test_flow_valid_round_trip() -> None:
     raw = {
+        "kind": "flow_record",
+        "flow_id": "FL-0123456789ab",
         "goal": "ship wave 05",
         "policy": {"mode": "auto"},
         "last_safe_checkpoint": None,
@@ -310,11 +312,24 @@ def test_flow_valid_round_trip() -> None:
     loaded = Envelope.model_validate_json(env.model_dump_json())
     payload = FlowPayload.model_validate(loaded.payload)
     assert payload.goal == "ship wave 05"
+    assert payload.flow_id == "FL-0123456789ab"
+    assert payload.kind == "flow_record"
 
 
 def test_flow_invalid_payload_missing_goal() -> None:
     with pytest.raises(ValidationError):
-        FlowPayload.model_validate({"policy": {}})
+        FlowPayload.model_validate({"flow_id": "FL-0123456789ab", "policy": {}})
+
+
+def test_flow_invalid_payload_bad_flow_id_pattern() -> None:
+    with pytest.raises(ValidationError):
+        FlowPayload.model_validate(
+            {
+                "flow_id": "FL-not-hex",
+                "goal": "x",
+                "policy": {},
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
