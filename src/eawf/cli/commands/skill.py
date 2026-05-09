@@ -50,6 +50,9 @@ from eawf.render.envelope import (
     SkillName,
     to_markdown,
 )
+from eawf.skills import (
+    _bootstrap as _skills_bootstrap,  # noqa: F401 — import-side-effect registers W02 skills
+)
 from eawf.skills import registry
 from eawf.skills.bodies import (
     AuditBody,
