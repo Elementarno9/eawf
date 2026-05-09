@@ -46,6 +46,20 @@ To regenerate after a deliberate renderer change:
 """
 
 
+def _normalise_trailing_newline(b: bytes) -> bytes:
+    """Strip a single trailing newline if present.
+
+    Pre-commit's ``end-of-file-fixer`` unconditionally appends a trailing
+    newline to text fixtures. ``orjson.dumps`` and our markdown renderer
+    do not emit one. Comparing against a normalised form lets the
+    pre-commit hook stay enabled without forcing the renderer to mimic
+    an editor convention.
+    """
+    if b.endswith(b"\n"):
+        return b[:-1]
+    return b
+
+
 @pytest.mark.golden
 @pytest.mark.parametrize(
     "fixture_name",
@@ -59,8 +73,8 @@ def test_render_plan_view_matches_golden_markdown(fixture_name: str) -> None:
     fixture = _FIXTURE_DIR / fixture_name
     state = State.model_validate(orjson.loads((fixture / "state.json").read_bytes()))
     view = build_view(state, "P05-I01")
-    actual = render_markdown(view)
-    expected = (fixture / "expected.md").read_text()
+    actual = _normalise_trailing_newline(render_markdown(view).encode("utf-8"))
+    expected = _normalise_trailing_newline((fixture / "expected.md").read_bytes())
     assert actual == expected, (
         f"plan_view markdown drift in fixture {fixture_name!r}. {_REGEN_HINT}"
     )
@@ -83,7 +97,7 @@ def test_render_plan_view_matches_golden_json(fixture_name: str) -> None:
         render_json(view),
         option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS,
     )
-    expected = (fixture / "expected.json").read_bytes()
+    expected = _normalise_trailing_newline((fixture / "expected.json").read_bytes())
     assert actual == expected, f"plan_view JSON drift in fixture {fixture_name!r}. {_REGEN_HINT}"
 
 
