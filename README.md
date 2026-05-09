@@ -23,8 +23,9 @@ uv run mypy src/                   # type-check
 
 ## Status
 
-Pre-Phase-1 bootstrap. The CLI is a stub; commands land in Phase 1 and beyond per
-`eawf-v0.1-plan.md`.
+v0.1 in active development. The state engine, lock layer, JSONL store, schema
+validation, install wizard, profile composition, render layer, and a typed
+skill envelope are landed; the CLI surface tracks `eawf-v0.1-plan.md`.
 
 ## License
 
