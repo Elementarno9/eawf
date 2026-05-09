@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -96,11 +97,16 @@ def _cache_root() -> Path:
 def cache_path_for(session_id: str) -> Path:
     """Return the cache path for *session_id*.
 
-    The basename is ``<session-id>.json``. Empty / non-string session ids
-    fall through to a single ``unknown.json`` so the orchestrator never
-    raises on a malformed payload.
+    The basename is ``<session-id>.json`` after sanitization. Claude's
+    stdin is untrusted, so any character that could escape the cache
+    root via path traversal (``/``, ``\\``, ``..``, NUL) is replaced
+    with ``_`` and the result is truncated to 128 characters. Empty,
+    purely-traversal, or all-disallowed session ids collapse to
+    ``unknown``.
     """
-    safe = session_id if session_id else "unknown"
+    safe = re.sub(r"[^A-Za-z0-9_.\-]", "_", session_id)[:128] if session_id else ""
+    if not safe or safe in {".", ".."} or set(safe) == {"."}:
+        safe = "unknown"
     return _cache_root() / f"{safe}.json"
 
 

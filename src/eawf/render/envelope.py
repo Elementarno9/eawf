@@ -41,7 +41,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Frozen status enum for the envelope header. Mirrors the v0.1 plan §5
 # (canonical-list row "Skill envelope | header.status").
@@ -106,6 +106,16 @@ class EnvelopeHeader(BaseModel):
     finished_at: datetime
     status: EnvelopeStatus
     instrument_probe: dict[str, InstrumentStatus] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _finished_after_started(self) -> EnvelopeHeader:
+        if self.finished_at < self.started_at:
+            raise ValueError(
+                f"finished_at must be >= started_at; got "
+                f"finished_at={self.finished_at.isoformat()} < "
+                f"started_at={self.started_at.isoformat()}"
+            )
+        return self
 
 
 class EnvelopeFooter(BaseModel):

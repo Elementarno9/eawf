@@ -25,6 +25,7 @@ Design rules per Phase 4 W04 design spec §3.3 / acceptance §3:
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -291,6 +292,7 @@ def append_event_idempotent(path: Path, event: HookEvent, *, timeout: float = 5.
         with path.open("ab") as fh:
             fh.write(serialised.encode("utf-8"))
             fh.flush()
+            os.fsync(fh.fileno())
     return True
 
 

@@ -295,7 +295,9 @@ def run_cmd(
 
     try:
         skill_name = _resolve_skill_name(name)
-        args = _parse_stdin_args(sys.stdin.read())
+        # Skip stdin on a TTY so interactive runs don't block on EOF.
+        stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
+        args = _parse_stdin_args(stdin_text)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
