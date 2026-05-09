@@ -233,7 +233,7 @@ def test_build_view_synthesises_wave_outcome_check() -> None:
             status="closed",
             closed_at="2026-05-08T02:00:00Z",
             outcome="ok",
-            commit="deadbeef1234567",
+            commit="deadbeef",
         ),
     )
     state = State.model_validate(s)
