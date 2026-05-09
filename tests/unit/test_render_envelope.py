@@ -2,10 +2,13 @@
 
 These tests pin the markdown wire-form: frontmatter fences, the
 ``<!-- eawf:footer ... -->`` HTML comment, body byte-stability, and the
-malformed-input rejection path.
+malformed-input rejection path. Phase 4 W01 narrows the header/footer
+to typed Pydantic models; the test fixtures here use the typed shape.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 
@@ -13,13 +16,32 @@ from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
 
 
 def _sample_env(**overrides: object) -> OutputEnvelope:
-    base: dict[str, object] = {
-        "header": {"skill": "research-spike", "scope": "PROJECT"},
+    """Build a typed :class:`OutputEnvelope` with sensible defaults.
+
+    The header uses the canonical :data:`SkillName` literal ``"/research"``
+    and stub URN-shaped scope/session strings so the typed model
+    validation passes. Tests that need to vary specific fields pass
+    ``header=...`` / ``body=...`` / ``footer=...`` overrides through
+    the kwargs.
+    """
+    base: dict[str, Any] = {
+        "header": {
+            "skill": "/research",
+            "scope": "urn:eawf:v1:state:QR/P00",
+            "session": "urn:eawf:v1:store:QR/sessions/SES-001",
+            "started_at": "2026-05-09T00:00:00Z",
+            "finished_at": "2026-05-09T00:00:01Z",
+            "status": "ok",
+            "instrument_probe": {"git": "ok"},
+        },
         "body": "Hello, world.\n\nSecond paragraph.\n",
-        "footer": {"artifacts": ["doc-1"], "warnings": []},
+        "footer": {
+            "persisted_artifacts": ["urn:eawf:v1:artifact:QR/A1"],
+            "warnings": [],
+        },
     }
     base.update(overrides)
-    return OutputEnvelope(**base)  # type: ignore[arg-type]
+    return OutputEnvelope.model_validate(base)
 
 
 def test_envelope_to_markdown_emits_frontmatter() -> None:
@@ -36,9 +58,22 @@ def test_envelope_to_markdown_includes_footer_comment() -> None:
 
 
 def test_from_markdown_parses_header() -> None:
-    env = _sample_env(header={"skill": "audit", "scope": "ITER", "session": "s1"})
+    env = _sample_env(
+        header={
+            "skill": "/audit",
+            "scope": "urn:eawf:v1:state:QR/P13-I04",
+            "session": "urn:eawf:v1:store:QR/sessions/SES-2",
+            "started_at": "2026-05-09T00:00:00Z",
+            "finished_at": "2026-05-09T00:00:02Z",
+            "status": "ok",
+            "instrument_probe": {},
+        }
+    )
     parsed = from_markdown(to_markdown(env))
-    assert parsed.header == {"skill": "audit", "scope": "ITER", "session": "s1"}
+    assert parsed.header.skill == "/audit"
+    assert parsed.header.scope == "urn:eawf:v1:state:QR/P13-I04"
+    assert parsed.header.session == "urn:eawf:v1:store:QR/sessions/SES-2"
+    assert parsed.header.status == "ok"
 
 
 def test_from_markdown_parses_body_byte_stable() -> None:
@@ -51,16 +86,22 @@ def test_from_markdown_parses_body_byte_stable() -> None:
 
 def test_from_markdown_parses_footer() -> None:
     footer = {
-        "artifacts": ["a", "b"],
-        "store_records": [],
-        "mutations": ["m-1"],
-        "evidence": {},
-        "next_actions": ["next"],
-        "warnings": ["w"],
+        "persisted_artifacts": ["a", "b"],
+        "persisted_store_records": [],
+        "state_mutations": ["m-1"],
+        "evidence_refs": ["ev-1"],
+        "next_valid_actions": ["next"],
+        "warnings": [{"code": "w", "detail": "warn detail"}],
     }
     env = _sample_env(footer=footer)
     parsed = from_markdown(to_markdown(env))
-    assert parsed.footer == footer
+    assert parsed.footer.persisted_artifacts == ["a", "b"]
+    assert parsed.footer.state_mutations == ["m-1"]
+    assert parsed.footer.evidence_refs == ["ev-1"]
+    assert parsed.footer.next_valid_actions == ["next"]
+    assert len(parsed.footer.warnings) == 1
+    assert parsed.footer.warnings[0].code == "w"
+    assert parsed.footer.warnings[0].detail == "warn detail"
 
 
 def test_from_markdown_rejects_missing_frontmatter() -> None:
@@ -88,16 +129,46 @@ def test_extra_field_on_envelope_rejected() -> None:
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        OutputEnvelope(  # type: ignore[call-arg]
-            header={},
-            body="",
-            footer={},
-            unexpected="oops",  # type: ignore[call-arg]
+        OutputEnvelope.model_validate(
+            {
+                "header": {
+                    "skill": "/research",
+                    "scope": "urn:eawf:v1:state:QR",
+                    "session": "urn:eawf:v1:store:QR/sessions/SES-1",
+                    "started_at": "2026-05-09T00:00:00Z",
+                    "finished_at": "2026-05-09T00:00:01Z",
+                    "status": "ok",
+                    "instrument_probe": {},
+                },
+                "body": "",
+                "footer": {},
+                "unexpected": "oops",
+            }
         )
 
 
 def test_to_markdown_is_deterministic_under_key_reorder() -> None:
     """``sort_keys=True`` makes the YAML byte-identical regardless of insertion order."""
-    a = _sample_env(header={"a": 1, "b": 2})
-    b = _sample_env(header={"b": 2, "a": 1})
+    a = _sample_env(
+        header={
+            "skill": "/research",
+            "scope": "urn:eawf:v1:state:QR",
+            "session": "urn:eawf:v1:store:QR/sessions/SES-1",
+            "started_at": "2026-05-09T00:00:00Z",
+            "finished_at": "2026-05-09T00:00:01Z",
+            "status": "ok",
+            "instrument_probe": {"git": "ok", "gh": "missing"},
+        }
+    )
+    b = _sample_env(
+        header={
+            "skill": "/research",
+            "scope": "urn:eawf:v1:state:QR",
+            "session": "urn:eawf:v1:store:QR/sessions/SES-1",
+            "started_at": "2026-05-09T00:00:00Z",
+            "finished_at": "2026-05-09T00:00:01Z",
+            "status": "ok",
+            "instrument_probe": {"gh": "missing", "git": "ok"},
+        }
+    )
     assert to_markdown(a) == to_markdown(b)

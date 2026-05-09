@@ -261,10 +261,24 @@ def check_render_output_roundtrip() -> CheckResult:
     parser regresses, every skill that emits a JSON envelope is broken — so
     this check anchors W07's API contract on every doctor run.
     """
-    sample = OutputEnvelope(
-        header={"smoke": True, "skill": "doctor.roundtrip"},
-        body="round-trip test\n",
-        footer={"warnings": []},
+    # Phase 4 W01: header + footer are typed; pre-W01 callers passed
+    # ``dict`` literals which Pydantic v2 still coerces into the typed
+    # models on validation. We use a literal dict here so the doctor
+    # smoke check exercises the back-compat path.
+    sample = OutputEnvelope.model_validate(
+        {
+            "header": {
+                "skill": "/init",
+                "scope": "urn:eawf:v1:state:doctor",
+                "session": "urn:eawf:v1:store:doctor/sessions/SES-doctor",
+                "started_at": "2026-05-09T00:00:00Z",
+                "finished_at": "2026-05-09T00:00:01Z",
+                "status": "ok",
+                "instrument_probe": {},
+            },
+            "body": "round-trip test\n",
+            "footer": {"warnings": []},
+        }
     )
     rendered = to_markdown(sample)
     try:

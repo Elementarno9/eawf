@@ -1,6 +1,192 @@
 {
+  "$defs": {
+    "EnvelopeFooter": {
+      "additionalProperties": false,
+      "description": "Typed envelope footer.\n\nFrozen at Phase 4 W01 per design spec §3.1. ``repair_commands`` is\noptional in the schema but the strict validator requires it for\n``status in {blocked, failed}``.\n\nAttributes:\n    persisted_artifacts: URNs of artifacts the skill persisted.\n    persisted_store_records: URNs of store records (events, research\n        briefs, etc.) appended during the run.\n    state_mutations: JSONPath-ish strings naming each state mutation.\n    evidence_refs: URNs of supporting evidence (commits, audits, …).\n    next_valid_actions: CLI command strings the user/agent can run next.\n    warnings: List of :class:`EnvelopeWarning` entries.\n    repair_commands: When ``header.status in {blocked, failed}`` this\n        is a non-empty list of CLI commands the agent should run to\n        recover. Optional for the other three statuses.",
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "next_valid_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Next Valid Actions",
+          "type": "array"
+        },
+        "persisted_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Persisted Artifacts",
+          "type": "array"
+        },
+        "persisted_store_records": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Persisted Store Records",
+          "type": "array"
+        },
+        "repair_commands": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repair Commands"
+        },
+        "state_mutations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "State Mutations",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/EnvelopeWarning"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "title": "EnvelopeFooter",
+      "type": "object"
+    },
+    "EnvelopeHeader": {
+      "additionalProperties": false,
+      "description": "Typed envelope header.\n\nFrozen at Phase 4 W01 per design spec §3.1. All Phase 4 W02-W07\nskills populate this directly; pre-W01 callers (e.g. the doctor smoke\ncheck) get implicit coercion via :meth:`OutputEnvelope.model_validate`.\n\nAttributes:\n    skill: Frozen literal of the skill that produced the envelope.\n    scope: Eä URN for the active state scope.\n    session: Eä URN for the agent session that produced the envelope.\n    started_at: When the skill began running.\n    finished_at: When the skill finished (must be ``>= started_at``).\n    status: Terminal status — one of the five envelope statuses.\n    instrument_probe: Per-tool probe map (e.g. ``{\"git\": \"ok\"}``).",
+      "properties": {
+        "finished_at": {
+          "format": "date-time",
+          "title": "Finished At",
+          "type": "string"
+        },
+        "instrument_probe": {
+          "additionalProperties": {
+            "enum": [
+              "ok",
+              "missing",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "title": "Instrument Probe",
+          "type": "object"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "session": {
+          "title": "Session",
+          "type": "string"
+        },
+        "skill": {
+          "enum": [
+            "/research",
+            "/prep",
+            "/audit",
+            "/ship",
+            "/review",
+            "/polish",
+            "/init",
+            "/roadmap",
+            "/differentiate",
+            "/flow"
+          ],
+          "title": "Skill",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "needs_user",
+            "blocked",
+            "failed",
+            "partial"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill",
+        "scope",
+        "session",
+        "started_at",
+        "finished_at",
+        "status"
+      ],
+      "title": "EnvelopeHeader",
+      "type": "object"
+    },
+    "EnvelopeWarning": {
+      "additionalProperties": false,
+      "description": "Single warning entry under :attr:`EnvelopeFooter.warnings`.\n\nPer `ea-proposal.md` §15.1 footer block. ``code`` is a short ID\n(``instrument_missing``, ``hook_blocked``, …); ``detail`` is a\nhuman-readable sentence.",
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "detail"
+      ],
+      "title": "EnvelopeWarning",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
+  "additionalProperties": false,
+  "description": "Three-part envelope for skill/agent output.\n\nAttributes:\n    header: Typed :class:`EnvelopeHeader`.\n    body: Markdown string or typed body dict per :mod:`eawf.skills.bodies`.\n    footer: Typed :class:`EnvelopeFooter`.",
+  "properties": {
+    "body": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      ],
+      "title": "Body"
+    },
+    "footer": {
+      "$ref": "#/$defs/EnvelopeFooter"
+    },
+    "header": {
+      "$ref": "#/$defs/EnvelopeHeader"
+    }
+  },
+  "required": [
+    "header",
+    "body",
+    "footer"
+  ],
   "title": "EawfSkillOutput",
   "type": "object"
 }
