@@ -239,14 +239,19 @@ def test_render_agents_md_preserves_other_target_manifest_entries(tmp_path: Path
 
 
 def test_render_agents_md_empty_compose_no_regions(tmp_path: Path) -> None:
-    """A composed profile with zero AGENTS.md blocks: file is created empty / unchanged."""
+    """A composed profile with zero AGENTS.md blocks: file is created empty / unchanged.
+
+    The renderer always emits a POSIX-compliant trailing ``\\n`` so
+    ``end-of-file-fixer`` is a no-op; with zero blocks the file therefore
+    contains exactly one newline byte (still effectively empty content).
+    """
     target = tmp_path / "AGENTS.md"
     composed = _make_composed([])
 
     result, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
 
     assert target.exists()
-    assert target.read_text(encoding="utf-8") == ""
+    assert target.read_text(encoding="utf-8") == "\n"
     assert result.regions_added == []
     assert result.regions_updated == []
     assert result.regions_unchanged == []

@@ -246,6 +246,13 @@ def render_agents_md(
             body=body,
         )
 
+    # Ensure POSIX-compliant single trailing newline so end-of-file-fixer is a
+    # no-op on the rendered file and re-renders stay byte-stable. Idempotent:
+    # if the last region's END marker block already ends with '\n', this is a
+    # no-op; otherwise we append exactly one '\n'.
+    if not new_text.endswith("\n"):
+        new_text = new_text + "\n"
+
     with portalock.acquire(target, timeout=5.0):
         _atomic_write_text(target, new_text)
 
