@@ -1,0 +1,478 @@
+{
+  "$defs": {
+    "CheckView": {
+      "additionalProperties": false,
+      "description": "A single acceptance check surfaced in the plan view.",
+      "properties": {
+        "audit_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Audit Id"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "wave_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wave Id"
+        }
+      },
+      "required": [
+        "source",
+        "audit_id",
+        "wave_id",
+        "name",
+        "passed"
+      ],
+      "title": "CheckView",
+      "type": "object"
+    },
+    "DagEdge": {
+      "additionalProperties": false,
+      "description": "A directed edge in the DAG view (``from`` → ``to``).",
+      "properties": {
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "DagEdge",
+      "type": "object"
+    },
+    "DagNode": {
+      "additionalProperties": false,
+      "description": "A node in the DAG view.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status"
+      ],
+      "title": "DagNode",
+      "type": "object"
+    },
+    "DagView": {
+      "additionalProperties": false,
+      "description": "The DAG projection: nodes + edges + topo order or cycle.",
+      "properties": {
+        "cycle": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cycle"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/DagEdge"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/DagNode"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "topo_order": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Topo Order"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "topo_order",
+        "cycle"
+      ],
+      "title": "DagView",
+      "type": "object"
+    },
+    "IterView": {
+      "additionalProperties": false,
+      "description": "Compact projection of :class:`~eawf.state.models.Iter`.",
+      "properties": {
+        "audit_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Id"
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "estimate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimate Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "opened_at": {
+          "title": "Opened At",
+          "type": "string"
+        },
+        "phase_id": {
+          "title": "Phase Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "phase_id",
+        "title",
+        "status",
+        "opened_at"
+      ],
+      "title": "IterView",
+      "type": "object"
+    },
+    "PhaseView": {
+      "additionalProperties": false,
+      "description": "Compact projection of :class:`~eawf.state.models.Phase`.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status"
+      ],
+      "title": "PhaseView",
+      "type": "object"
+    },
+    "RiskView": {
+      "additionalProperties": false,
+      "description": "A composed risk row (backlog | incident | hypothesis_rejected).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Severity"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "severity",
+        "title",
+        "status"
+      ],
+      "title": "RiskView",
+      "type": "object"
+    },
+    "SummaryView": {
+      "additionalProperties": false,
+      "description": "High-level counts and blocked-wave list.",
+      "properties": {
+        "blocked_waves": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocked Waves",
+          "type": "array"
+        },
+        "check_count": {
+          "title": "Check Count",
+          "type": "integer"
+        },
+        "check_passed": {
+          "title": "Check Passed",
+          "type": "integer"
+        },
+        "risk_count": {
+          "title": "Risk Count",
+          "type": "integer"
+        },
+        "wave_count": {
+          "title": "Wave Count",
+          "type": "integer"
+        },
+        "wave_status_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Wave Status Counts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "wave_count",
+        "wave_status_counts",
+        "check_count",
+        "check_passed",
+        "risk_count",
+        "blocked_waves"
+      ],
+      "title": "SummaryView",
+      "type": "object"
+    },
+    "WaveView": {
+      "additionalProperties": false,
+      "description": "Compact projection of :class:`~eawf.state.models.Wave`.",
+      "properties": {
+        "claim_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Session Id"
+        },
+        "commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit"
+        },
+        "deps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Deps",
+          "type": "array"
+        },
+        "file_scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "File Scopes",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "deps",
+        "file_scopes"
+      ],
+      "title": "WaveView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Top-level container for an iter plan view.",
+  "properties": {
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/CheckView"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "dag": {
+      "$ref": "#/$defs/DagView"
+    },
+    "iter": {
+      "$ref": "#/$defs/IterView"
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PhaseView"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "risks": {
+      "items": {
+        "$ref": "#/$defs/RiskView"
+      },
+      "title": "Risks",
+      "type": "array"
+    },
+    "summary": {
+      "$ref": "#/$defs/SummaryView"
+    },
+    "waves": {
+      "items": {
+        "$ref": "#/$defs/WaveView"
+      },
+      "title": "Waves",
+      "type": "array"
+    }
+  },
+  "required": [
+    "iter",
+    "phase",
+    "waves",
+    "dag",
+    "checks",
+    "risks",
+    "summary"
+  ],
+  "title": "EawfPlanView",
+  "type": "object"
+}
