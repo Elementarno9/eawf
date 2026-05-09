@@ -236,6 +236,11 @@ from eawf.cli.commands.worktree import worktree_app  # noqa: E402
 
 app.add_typer(worktree_app, name="worktree")
 # --- end P05 W01 ---
+# --- P05 W02 flow registration ---
+from eawf.cli.commands.flow import flow_app  # noqa: E402
+
+app.add_typer(flow_app, name="flow")
+# --- end P05 W02 ---
 
 
 def main() -> None:
