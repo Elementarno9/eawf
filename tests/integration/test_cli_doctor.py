@@ -103,7 +103,8 @@ def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_doctor_help_lists_flags() -> None:
-    result = runner.invoke(app, ["doctor", "--help"])
+    # COLUMNS=200 stops Rich from wrapping flag names on narrow CI terminals.
+    result = runner.invoke(app, ["doctor", "--help"], env={"COLUMNS": "200"})
     assert result.exit_code == 0
     assert "--reprobe" in result.output
     assert "--json" in result.output
