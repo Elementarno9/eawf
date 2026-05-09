@@ -1,0 +1,163 @@
+{
+  "checks": [
+    {
+      "audit_id": "AU-W01",
+      "details": null,
+      "name": "ruff_clean",
+      "passed": true,
+      "source": "wave_audit",
+      "wave_id": "P05-I01-W01"
+    },
+    {
+      "audit_id": "AU-W01",
+      "details": "two failures",
+      "name": "tests_green",
+      "passed": false,
+      "source": "wave_audit",
+      "wave_id": "P05-I01-W01"
+    },
+    {
+      "audit_id": null,
+      "details": null,
+      "name": "ok",
+      "passed": true,
+      "source": "wave_outcome",
+      "wave_id": "P05-I01-W00"
+    }
+  ],
+  "dag": {
+    "cycle": null,
+    "edges": [
+      {
+        "from": "P05-I01-W00",
+        "to": "P05-I01-W01"
+      },
+      {
+        "from": "P05-I01-W00",
+        "to": "P05-I01-W02"
+      },
+      {
+        "from": "P05-I01-W01",
+        "to": "P05-I01-W03"
+      },
+      {
+        "from": "P05-I01-W02",
+        "to": "P05-I01-W03"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "P05-I01-W00",
+        "status": "closed"
+      },
+      {
+        "id": "P05-I01-W01",
+        "status": "claimed"
+      },
+      {
+        "id": "P05-I01-W02",
+        "status": "pending"
+      },
+      {
+        "id": "P05-I01-W03",
+        "status": "pending"
+      }
+    ],
+    "topo_order": [
+      "P05-I01-W00",
+      "P05-I01-W01",
+      "P05-I01-W02",
+      "P05-I01-W03"
+    ]
+  },
+  "iter": {
+    "audit_id": null,
+    "closed_at": null,
+    "estimate_id": null,
+    "id": "P05-I01",
+    "opened_at": "2026-05-08T00:00:00Z",
+    "phase_id": "P05",
+    "status": "active",
+    "title": "Branch and merge"
+  },
+  "phase": {
+    "id": "P05",
+    "status": "active",
+    "title": "Phase Five"
+  },
+  "risks": [],
+  "summary": {
+    "blocked_waves": [
+      "P05-I01-W03"
+    ],
+    "check_count": 3,
+    "check_passed": 2,
+    "risk_count": 0,
+    "wave_count": 4,
+    "wave_status_counts": {
+      "abandoned": 0,
+      "claimed": 1,
+      "closed": 1,
+      "failed": 0,
+      "in_progress": 0,
+      "pending": 2
+    }
+  },
+  "waves": [
+    {
+      "claim_session_id": null,
+      "commit": "1111111aaaaaa",
+      "deps": [],
+      "file_scopes": [
+        "src/cp/init.py"
+      ],
+      "id": "P05-I01-W00",
+      "outcome": "ok",
+      "status": "closed",
+      "title": "Init"
+    },
+    {
+      "claim_session_id": "S-A",
+      "commit": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/cp/a.py"
+      ],
+      "id": "P05-I01-W01",
+      "outcome": null,
+      "status": "claimed",
+      "title": "Branch A"
+    },
+    {
+      "claim_session_id": null,
+      "commit": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/cp/b.py"
+      ],
+      "id": "P05-I01-W02",
+      "outcome": null,
+      "status": "pending",
+      "title": "Branch B"
+    },
+    {
+      "claim_session_id": null,
+      "commit": null,
+      "deps": [
+        "P05-I01-W01",
+        "P05-I01-W02"
+      ],
+      "file_scopes": [
+        "src/cp/merge.py"
+      ],
+      "id": "P05-I01-W03",
+      "outcome": null,
+      "status": "pending",
+      "title": "Merge"
+    }
+  ]
+}
