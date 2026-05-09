@@ -2,13 +2,14 @@
 
 ``generate_state_schema()`` derives the schema from the Pydantic ``State``
 model using ``mode="serialization"`` so the output reflects the wire format
-rather than Python-side coercions.  ``dump_schemas()`` writes three files
+rather than Python-side coercions.  ``dump_schemas()`` writes four files
 to a target directory:
 
 - ``state.schema.json``       — generated from ``State``.
 - ``config.schema.json``      — placeholder; Phase 2 fills the body.
 - ``skill-output.schema.json`` — generated from ``OutputEnvelope`` at
   Phase 4 W01.
+- ``plan-view.schema.json``    — generated from ``PlanView`` at Phase 5 W05.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from typing import Any
 import orjson
 
 from eawf.render.envelope import OutputEnvelope
+from eawf.render.plan_view import PlanView
 from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,19 @@ def generate_skill_output_schema() -> dict[str, Any]:
     return schema
 
 
+def generate_plan_view_schema() -> dict[str, Any]:
+    """Return the JSON Schema for :class:`PlanView` as a plain dict.
+
+    Uses ``mode="serialization"`` so the schema mirrors the wire format
+    emitted by ``eawf plan show --json``. ``$schema`` and ``title`` are
+    injected so consumers can rely on them.
+    """
+    schema: dict[str, Any] = PlanView.model_json_schema(mode="serialization", by_alias=True)
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["title"] = "EawfPlanView"
+    return schema
+
+
 def dump_schemas(out_dir: Path) -> None:
     """Write all schema files to *out_dir*, creating it if necessary.
 
@@ -66,6 +81,7 @@ def dump_schemas(out_dir: Path) -> None:
     - ``state.schema.json``
     - ``config.schema.json``
     - ``skill-output.schema.json``
+    - ``plan-view.schema.json``
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -87,3 +103,9 @@ def dump_schemas(out_dir: Path) -> None:
         orjson.dumps(skill_output_schema, option=_ORJSON_OPTS)
     )
     logger.debug(f"wrote {out_dir / 'skill-output.schema.json'}")
+
+    plan_view_schema = generate_plan_view_schema()
+    (out_dir / "plan-view.schema.json").write_bytes(
+        orjson.dumps(plan_view_schema, option=_ORJSON_OPTS)
+    )
+    logger.debug(f"wrote {out_dir / 'plan-view.schema.json'}")
