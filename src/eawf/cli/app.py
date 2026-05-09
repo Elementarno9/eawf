@@ -213,6 +213,12 @@ from eawf.cli.commands.hook import hook_app  # noqa: E402
 app.add_typer(hook_app, name="hook")
 # --- end P04 W04 ---
 
+# --- P04 W07 skill registration ---
+from eawf.cli.commands.skill import skill_app  # noqa: E402
+
+app.add_typer(skill_app, name="skill")
+# --- end P04 W07 ---
+
 
 def main() -> None:
     app()

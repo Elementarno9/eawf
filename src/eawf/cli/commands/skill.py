@@ -1,0 +1,324 @@
+"""``eawf skill`` Typer subapp — list and run Eä workflow skills.
+
+Surface contract (Phase 4 W07 acceptance):
+
+- ``eawf skill list`` enumerates all 10 canonical skill names with their
+  body schema name and an ``installed``/``missing`` status.
+- ``eawf skill run <name>`` invokes :func:`~eawf.skills.engine.run_skill`
+  headlessly. Optional JSON args may be piped on stdin and are folded
+  into :attr:`SkillContext.args`. The default output is the markdown
+  envelope produced by :func:`~eawf.render.envelope.to_markdown`; the
+  global ``--json`` flag flips emission to the JSON envelope shape that
+  ``eawf render-output --format markdown`` consumes.
+
+Exit-code mapping (per design spec §4 W07 acceptance #2):
+
+- ``status=ok`` and ``status=partial`` → exit 0 (``OK``).
+- ``status=needs_user`` → exit 7 (``USER_DECLINED`` — closest canonical
+  code; the v0.1 plan §5 reserves the lane for "user declined" which
+  semantically subsumes "the skill is waiting on a user response").
+- ``status=failed`` → exit 4 (``VALIDATION_FAILED`` — the canonical
+  "skill body validation failed" lane).
+- ``status=blocked`` → exit 6 (``INSTRUMENT_MISSING`` — blocked envelopes
+  always carry a probe-failure root cause; the spec only enumerates 0/4/7
+  but the runner must still emit *some* code on the blocked path).
+
+The list table includes a synthetic body-schema "fingerprint" — the
+fully-qualified class name of the body model — so an operator can
+verify `installed` rows against `eawf.skills.bodies` without re-reading
+the spec.
+"""
+
+from __future__ import annotations
+
+import io
+import logging
+import sys
+from typing import Annotated, Any, cast, get_args
+
+import orjson
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from eawf.cli import errors as cli_errors
+from eawf.cli import exit_codes
+from eawf.cli.flags import GlobalFlags
+from eawf.render.envelope import (
+    EnvelopeStatus,
+    OutputEnvelope,
+    SkillName,
+    to_markdown,
+)
+from eawf.skills import registry
+from eawf.skills.bodies import (
+    AuditBody,
+    DifferentiateBody,
+    FlowBody,
+    InitBody,
+    PolishBody,
+    PrepBody,
+    ResearchBody,
+    ReviewBody,
+    RoadmapBody,
+    ShipBody,
+)
+from eawf.skills.engine import Skill, SkillContext, run_skill
+
+logger = logging.getLogger(__name__)
+
+
+skill_app = typer.Typer(
+    name="skill",
+    help="List and run Eä workflow skills.",
+    no_args_is_help=True,
+)
+
+
+# Per-skill metadata used by ``eawf skill list``. Mirrors `ea-proposal.md`
+# §15.1: six core (research/prep/audit/ship/review/polish) + four meta
+# (init/roadmap/differentiate/flow) skill descriptions kept short enough
+# for a terminal table column.
+_SKILL_DESCRIPTIONS: dict[SkillName, str] = {
+    "/research": "Investigate questions; produce a peer-reviewed brief.",
+    "/prep": "Plan a wave: enumerate steps, success criteria, instruments.",
+    "/audit": "Run a structured audit against the active scope and persist findings.",
+    "/ship": "Close a wave/iter: gather artefacts, persist outcomes, advance pointers.",
+    "/review": "Review changes against the active hypothesis and acceptance set.",
+    "/polish": "Apply finishing touches: lint, format, doc updates, link checks.",
+    "/init": "Bootstrap a new Eä Workflow workspace via the install wizard.",
+    "/roadmap": "Plan or update the long-running roadmap from the active scope.",
+    "/differentiate": "Compare options and produce a differentiation matrix.",
+    "/flow": "Composite skill that chains the six core skills end-to-end.",
+}
+
+# Body schema lookup. The "fingerprint" column in ``skill list`` is the
+# fully-qualified class name of this model — stable enough to spot a
+# drift between the canonical body schema and an installed skill at a
+# glance.
+_SKILL_BODY_MODELS: dict[SkillName, type[Any]] = {
+    "/research": ResearchBody,
+    "/prep": PrepBody,
+    "/audit": AuditBody,
+    "/ship": ShipBody,
+    "/review": ReviewBody,
+    "/polish": PolishBody,
+    "/init": InitBody,
+    "/roadmap": RoadmapBody,
+    "/differentiate": DifferentiateBody,
+    "/flow": FlowBody,
+}
+
+
+def _all_skill_names() -> list[SkillName]:
+    """Return the 10 canonical skill names in declaration order.
+
+    Sourced from :data:`~eawf.render.envelope.SkillName` via
+    :func:`typing.get_args` so the list never drifts from the frozen
+    literal.
+    """
+    return list(get_args(SkillName))
+
+
+def _resolve_skill_name(raw: str) -> SkillName:
+    """Coerce *raw* into the frozen :data:`SkillName` literal.
+
+    Accepts the canonical form (``/research``) and the bare form
+    (``research``) so operators don't have to escape the leading slash
+    in shells that interpret it.
+
+    Raises:
+        InvalidInput: ``raw`` is not one of the ten canonical names.
+    """
+    candidate = raw if raw.startswith("/") else f"/{raw}"
+    valid = _all_skill_names()
+    if candidate not in valid:
+        raise cli_errors.InvalidInput(f"unknown skill {raw!r}; expected one of {sorted(valid)}")
+    # mypy narrows ``candidate`` to the :data:`SkillName` literal via the
+    # ``in valid`` membership test, so no cast is required here.
+    return candidate
+
+
+def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
+    """Decode and shape-check the optional stdin JSON args mapping.
+
+    Empty stdin is allowed and yields an empty dict; non-empty input
+    that is not a JSON object is rejected with :class:`InvalidInput`.
+    """
+    if not stdin_text.strip():
+        return {}
+    try:
+        decoded: Any = orjson.loads(stdin_text)
+    except orjson.JSONDecodeError as exc:
+        raise cli_errors.InvalidInput(f"stdin is not valid JSON: {exc}") from exc
+    if not isinstance(decoded, dict):
+        raise cli_errors.InvalidInput(
+            f"stdin payload must be a JSON object; got {type(decoded).__name__}"
+        )
+    return cast(dict[str, Any], decoded)
+
+
+def _exit_for_status(status: EnvelopeStatus) -> int:
+    """Map an envelope status to its canonical exit code.
+
+    See module docstring for the rationale on the four-status mapping.
+    """
+    if status in {"ok", "partial"}:
+        return exit_codes.OK
+    if status == "needs_user":
+        return exit_codes.USER_DECLINED
+    if status == "failed":
+        return exit_codes.VALIDATION_FAILED
+    # status == "blocked"
+    return exit_codes.INSTRUMENT_MISSING
+
+
+def _emit_envelope(env: OutputEnvelope, *, as_json: bool) -> None:
+    """Print *env* to stdout as JSON or as the canonical markdown form."""
+    if as_json:
+        raw = orjson.dumps(
+            env.model_dump(mode="json"),
+            option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS,
+        )
+        typer.echo(raw.decode("utf-8"))
+        return
+    # Markdown wire-form is already newline-terminated.
+    typer.echo(to_markdown(env), nl=False)
+
+
+def _build_list_table(*, plain: bool) -> str:
+    """Render the ``skill list`` table.
+
+    Plain mode emits ``"<name>  <status>  <body>  <description>"`` lines
+    (no ANSI markup) so terminals without colour stay readable. The
+    Rich branch builds a :class:`Table` into a string buffer with a
+    fixed width (100) so the output is deterministic for golden tests.
+    """
+    rows: list[tuple[SkillName, str, str, str]] = []
+    for name in _all_skill_names():
+        registered = registry.lookup(name)
+        status = "installed" if registered is not None else "missing"
+        body_cls = _SKILL_BODY_MODELS[name]
+        fingerprint = f"{body_cls.__module__}.{body_cls.__qualname__}"
+        description = _SKILL_DESCRIPTIONS[name]
+        rows.append((name, status, fingerprint, description))
+
+    if plain:
+        lines: list[str] = []
+        for name, status, fingerprint, description in rows:
+            lines.append(f"{name:<16}  {status:<10}  {fingerprint:<48}  {description}")
+        return "\n".join(lines)
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=120, record=False)
+    table = Table(title="eawf skills", show_lines=False)
+    table.add_column("name", style="cyan")
+    table.add_column("status", justify="left", style="bold")
+    table.add_column("body schema", style="magenta")
+    table.add_column("description")
+    for name, status, fingerprint, description in rows:
+        style = "green" if status == "installed" else "yellow"
+        table.add_row(
+            name,
+            f"[{style}]{status}[/{style}]",
+            fingerprint,
+            description,
+        )
+    console.print(table)
+    return buf.getvalue().rstrip()
+
+
+def _list_payload() -> dict[str, Any]:
+    """Build the JSON shape for ``skill list --json``."""
+    skills: list[dict[str, Any]] = []
+    for name in _all_skill_names():
+        registered = registry.lookup(name)
+        body_cls = _SKILL_BODY_MODELS[name]
+        skills.append(
+            {
+                "name": name,
+                "status": "installed" if registered is not None else "missing",
+                "body_schema": f"{body_cls.__module__}.{body_cls.__qualname__}",
+                "description": _SKILL_DESCRIPTIONS[name],
+            }
+        )
+    return {"skills": skills}
+
+
+@skill_app.command(name="list")
+def list_cmd(ctx: typer.Context) -> None:
+    """Emit a table of all 10 skills + per-skill status and body schema."""
+    flags: GlobalFlags = ctx.obj
+    if flags.json_output:
+        payload = _list_payload()
+        raw = orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
+        typer.echo(raw.decode("utf-8"))
+        return
+    typer.echo(_build_list_table(plain=flags.plain_output))
+
+
+@skill_app.command(name="run")
+def run_cmd(
+    ctx: typer.Context,
+    name: Annotated[
+        str,
+        typer.Argument(
+            help="Skill name to invoke; e.g. '/research' or 'research'.",
+        ),
+    ],
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Eä state-scope URN passed to the SkillContext.",
+        ),
+    ] = "urn:eawf:v1:state:cli-skill-run",
+    session: Annotated[
+        str,
+        typer.Option(
+            "--session",
+            help="Eä session URN passed to the SkillContext.",
+        ),
+    ] = "urn:eawf:v1:store:cli/sessions/SES-skill-run",
+) -> None:
+    """Run a registered skill headlessly and emit its envelope.
+
+    Exit codes follow the design spec mapping (see module docstring):
+    0 (ok/partial), 4 (failed), 6 (blocked), 7 (needs_user). The
+    canonical envelope is emitted on stdout in markdown by default and
+    in JSON when ``--json`` is set on the root.
+    """
+    flags: GlobalFlags = ctx.obj
+
+    try:
+        skill_name = _resolve_skill_name(name)
+        args = _parse_stdin_args(sys.stdin.read())
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    skill_cls = registry.lookup(skill_name)
+    if skill_cls is None:
+        cli_errors.emit_error(
+            cli_errors.NotFound(
+                f"skill {skill_name!r} is not installed; see 'eawf skill list' for available skills"
+            ),
+            flags=flags,
+        )
+        return
+
+    skill_instance: Skill = skill_cls()
+    skill_ctx = SkillContext(scope=scope, session=session, args=args)
+    envelope = run_skill(skill_instance, skill_ctx)
+
+    _emit_envelope(envelope, as_json=flags.json_output)
+    code = _exit_for_status(envelope.header.status)
+    if code != exit_codes.OK:
+        raise typer.Exit(code)
+
+
+__all__ = [
+    "list_cmd",
+    "run_cmd",
+    "skill_app",
+]
