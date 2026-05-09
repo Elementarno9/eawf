@@ -1,0 +1,72 @@
+# Statusline themes for `eawf cc statusline` (Phase 4 W06).
+#
+# Each theme overrides:
+#   - separator: string joined between rendered segments (e.g. " | ").
+#   - skip_failed: when true, modules that raised are dropped from output;
+#     when false they render "<module>:!".
+#   - colors: mapping from segment status to an ANSI escape sequence (or
+#     null/empty to disable color for that status). The renderer prepends
+#     the literal ESC byte () to every non-empty value at runtime so
+#     YAML can keep the values printable.
+#   - glyph: per-module prefix glyph (or null/"" for no glyph).
+#
+# Themes referenced by `EAWF_STATUSLINE_THEME` env var or `--theme` flag.
+# The orchestrator falls back to `default` if the requested theme is
+# missing.
+
+default:
+  separator: " | "
+  skip_failed: false
+  colors:
+    ok: "[32m"        # green
+    warn: "[33m"      # yellow
+    missing: "[90m"   # bright black (grey)
+    degraded: "[31m"  # red
+    reset: "[0m"
+  glyph:
+    state: ""
+    git: ""
+    model_session_cwd: ""
+    context_tokens: ""
+    mcp_health: ""
+    hooks_plugins: ""
+    memory: ""
+    token_saving: ""
+
+powerline:
+  separator: "  "
+  skip_failed: false
+  colors:
+    ok: "[38;5;82m"
+    warn: "[38;5;220m"
+    missing: "[38;5;245m"
+    degraded: "[38;5;196m"
+    reset: "[0m"
+  glyph:
+    state: "P"
+    git: "G"
+    model_session_cwd: "M"
+    context_tokens: "C"
+    mcp_health: "X"
+    hooks_plugins: "H"
+    memory: "R"
+    token_saving: "$"
+
+ascii-fallback:
+  separator: " | "
+  skip_failed: true
+  colors:
+    ok: ""
+    warn: ""
+    missing: ""
+    degraded: ""
+    reset: ""
+  glyph:
+    state: ""
+    git: ""
+    model_session_cwd: ""
+    context_tokens: ""
+    mcp_health: ""
+    hooks_plugins: ""
+    memory: ""
+    token_saving: ""
