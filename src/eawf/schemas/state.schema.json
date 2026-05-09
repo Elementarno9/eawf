@@ -1155,7 +1155,7 @@
     },
     "MemorySummary": {
       "additionalProperties": false,
-      "description": "Memory entry summary (full text in memory.jsonl).",
+      "description": "Memory entry summary (full text in memory.jsonl).\n\n``promoted_to_artifact_id`` mirrors the corresponding field on\n:class:`~eawf.store.kinds.memory.MemoryPayload`: when an entry is\ncanonised into a durable artifact (a :class:`Decision` in v0.1) the cache\nsurface carries the artifact ID so ``memory list`` / ``memory view`` can\nsurface it without replaying the JSONL.",
       "properties": {
         "confidence": {
           "$ref": "#/$defs/Confidence"
@@ -1165,6 +1165,18 @@
           "pattern": "^\\S+$",
           "title": "Id",
           "type": "string"
+        },
+        "promoted_to_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promoted To Artifact Id"
         },
         "review_due": {
           "anyOf": [

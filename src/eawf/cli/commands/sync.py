@@ -11,6 +11,12 @@ from the profiles enabled in ``.ea/config.yaml``) and the ``CLAUDE.md`` shim,
 plus the manifest at ``.ea/indexes/generated.json``. Hand-written content
 *outside* managed regions is preserved by :func:`eawf.render.agents_md.render_agents_md`.
 
+W03 also regenerates Markdown projections of ``memory.jsonl`` under
+``.ea/artifacts/rendered/memory/<scope>.md`` (plus ``_all.md`` union view).
+The whole projection lives inside one managed region per file so re-running
+sync overwrites curated bytes — memory content is curated in
+``memory.jsonl``, not the views.
+
 Implementation note (``--dry-run`` / ``--check``)
 -------------------------------------------------
 
@@ -48,12 +54,14 @@ import tempfile
 from pathlib import Path
 from typing import Annotated
 
+import orjson
 import typer
 
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.config.layered import merge_config
+from eawf.memory.markdown_view import render_all_views
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
 from eawf.render.agents_md import RenderResult, render_agents_md
@@ -61,6 +69,10 @@ from eawf.render.claude_shim import render_claude_md
 from eawf.render.manifest import Manifest
 from eawf.render.manifest import load as load_manifest
 from eawf.render.manifest import save_atomic as save_manifest_atomic
+from eawf.state.enums import StoreKind
+from eawf.state.models import State
+from eawf.store.paths import store_path
+from eawf.validate.strict import validate_state
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +80,97 @@ logger = logging.getLogger(__name__)
 _AGENTS_MD: str = "AGENTS.md"
 _CLAUDE_MD: str = "CLAUDE.md"
 _MANIFEST_RELPATH: str = ".ea/indexes/generated.json"
+_STATE_RELPATH: str = ".ea/state.json"
+_MEMORY_VIEWS_RELDIR: str = ".ea/artifacts/rendered/memory"
+
+
+def _load_state_or_none(state_path: Path) -> State | None:
+    """Best-effort state load; returns None when the workspace has no ``state.json``.
+
+    Sync runs against bare directories at ``init`` time — the memory view
+    pipeline must degrade gracefully when there is no state yet rather than
+    explode. Validation errors propagate to the caller as
+    :class:`cli_errors.InvalidInput` so the existing error envelope still
+    fires.
+    """
+    if not state_path.exists():
+        return None
+    payload = orjson.loads(state_path.read_bytes())
+    report = validate_state(payload, strict_optional=False)
+    if report.state is None:
+        raise cli_errors.InvalidInput(
+            f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
+        )
+    return report.state
+
+
+def _seed_state_for_shadow(target: Path, shadow: Path) -> None:
+    """Copy ``.ea/state.json`` and ``store/memory.jsonl`` into *shadow*.
+
+    The memory-view renderer reads both. The shadow tree is sparse — only the
+    files we actually consume need to be mirrored.
+    """
+    src_state = target / _STATE_RELPATH
+    if src_state.exists():
+        dst_state = shadow / _STATE_RELPATH
+        dst_state.parent.mkdir(parents=True, exist_ok=True)
+        dst_state.write_bytes(src_state.read_bytes())
+    src_memory = store_path(src_state, StoreKind.MEMORY)
+    if src_memory.exists():
+        rel = src_memory.relative_to(target)
+        dst_memory = shadow / rel
+        dst_memory.parent.mkdir(parents=True, exist_ok=True)
+        dst_memory.write_bytes(src_memory.read_bytes())
+
+
+def _render_memory_views(*, target_root: Path, write: bool) -> list[Path]:
+    """Render ``<state_dir>/artifacts/rendered/memory/<scope>.md`` files.
+
+    Returns the sorted list of view paths (or paths that *would* be written
+    when ``write=False``). When the workspace has no ``.ea/state.json`` (e.g.
+    the bare-directory init path) the function returns an empty list.
+    """
+    state_path = target_root / _STATE_RELPATH
+    state = _load_state_or_none(state_path)
+    if state is None:
+        return []
+    memory_path = store_path(state_path, StoreKind.MEMORY)
+    output_dir = target_root / _MEMORY_VIEWS_RELDIR
+    return render_all_views(
+        state=state,
+        memory_path=memory_path,
+        output_dir=output_dir,
+        write=write,
+    )
+
+
+def _detect_memory_view_changes(target_root: Path, shadow_root: Path) -> list[str]:
+    """Byte-diff each ``<scope>.md`` under the memory-views directory.
+
+    Returns the list of relative paths whose bytes differ between *shadow*
+    (the freshly-rendered candidate) and *target* (the on-disk file). A
+    missing target counts as a change. A missing shadow path means the view
+    would be removed (returned with the same path so the caller can surface
+    drift).
+    """
+    rel = _MEMORY_VIEWS_RELDIR
+    target_dir = target_root / rel
+    shadow_dir = shadow_root / rel
+    target_files = {p.relative_to(target_root): p for p in target_dir.glob("*.md")}
+    shadow_files = {p.relative_to(shadow_root): p for p in shadow_dir.glob("*.md")}
+    changed: list[str] = []
+    for relpath in sorted(set(target_files) | set(shadow_files)):
+        tpath = target_root / relpath
+        spath = shadow_root / relpath
+        if not spath.exists():
+            changed.append(str(relpath))
+            continue
+        if not tpath.exists():
+            changed.append(str(relpath))
+            continue
+        if tpath.read_bytes() != spath.read_bytes():
+            changed.append(str(relpath))
+    return changed
 
 
 def _resolve_enabled_profiles(target: Path) -> list[str]:
@@ -233,6 +336,8 @@ def _build_payload(
         "regions_added": report["regions_added"],
         "regions_updated": report["regions_updated"],
         "regions_unchanged": report["regions_unchanged"],
+        "memory_views_regenerated": report.get("memory_views_regenerated", []),
+        "memory_views_changed": report.get("memory_views_changed", []),
     }
 
 
@@ -318,6 +423,7 @@ def sync_cmd(
         with tempfile.TemporaryDirectory() as tmp_root:
             shadow = Path(tmp_root)
             _seed_shadow(target_dir, shadow, _MANIFEST_RELPATH)
+            _seed_state_for_shadow(target_dir, shadow)
             try:
                 agents_result, _before, _after = _render_into(
                     target_root=shadow,
@@ -328,12 +434,25 @@ def sync_cmd(
             except cli_errors.CliError as exc:
                 cli_errors.emit_error(exc, flags=flags)
                 return
+            try:
+                shadow_view_paths = _render_memory_views(target_root=shadow, write=True)
+            except cli_errors.CliError as exc:
+                cli_errors.emit_error(exc, flags=flags)
+                return
+            memory_views_drift = _detect_memory_view_changes(target_dir, shadow)
             report = _detect_changes(
                 target=target_dir,
                 shadow=shadow,
                 agents_result=agents_result,
                 manifest_relpath=_MANIFEST_RELPATH,
             )
+            # Project view paths against the real workspace so the JSON
+            # surface is independent of the shadow tempdir.
+            target_view_paths = sorted(
+                str(target_dir / p.relative_to(shadow)) for p in shadow_view_paths
+            )
+            report["memory_views_regenerated"] = target_view_paths
+            report["memory_views_changed"] = memory_views_drift
         mode = "check" if check else "dry-run"
         payload = _build_payload(
             target=target_dir,
@@ -344,8 +463,13 @@ def sync_cmd(
         emit_json_or_text(payload, _format_text(payload), flags=flags)
         if check:
             # Spec: exit 4 (VALIDATION_FAILED) when sync would emit any
-            # added/updated region. Unchanged regions are not drift.
-            any_drift = bool(report["regions_added"]) or bool(report["regions_updated"])
+            # added/updated region OR any memory view would change. Unchanged
+            # regions and unchanged views are not drift.
+            any_drift = (
+                bool(report["regions_added"])
+                or bool(report["regions_updated"])
+                or bool(report["memory_views_changed"])
+            )
             if any_drift:
                 raise typer.Exit(code=4)
         return
@@ -361,6 +485,11 @@ def sync_cmd(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
+    try:
+        view_paths = _render_memory_views(target_root=target_dir, write=True)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
     report = {
         "agents_md_changed": bool(agents_result.regions_added or agents_result.regions_updated),
         "claude_md_changed": False,  # CLAUDE.md is a constant payload; bytes never drift.
@@ -368,6 +497,8 @@ def sync_cmd(
         "regions_added": list(agents_result.regions_added),
         "regions_updated": list(agents_result.regions_updated),
         "regions_unchanged": list(agents_result.regions_unchanged),
+        "memory_views_regenerated": [str(p) for p in view_paths],
+        "memory_views_changed": [],
     }
     payload = _build_payload(
         target=target_dir,
@@ -379,7 +510,8 @@ def sync_cmd(
     logger.info(
         f"sync_cmd: target={target_dir} profiles={enabled_profiles} "
         f"added={report['regions_added']} updated={report['regions_updated']} "
-        f"unchanged={report['regions_unchanged']}"
+        f"unchanged={report['regions_unchanged']} "
+        f"memory_views_regenerated={report['memory_views_regenerated']}"
     )
 
 
