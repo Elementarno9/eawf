@@ -23,45 +23,15 @@ Public API::
 from __future__ import annotations
 
 import logging
-import os
-import secrets
 from pathlib import Path
 
-from eawf.lock import portalock
+from eawf.render._atomic import atomic_write_text
 from eawf.render.agents_md import RenderResult
 
 logger = logging.getLogger(__name__)
 
 
 _CLAUDE_PAYLOAD: str = "@AGENTS.md\n"
-
-
-def _atomic_write_text(target: Path, payload: str) -> None:
-    """Tempfile + fsync + ``os.replace`` + parent-dir fsync.
-
-    Local copy of :func:`eawf.render.agents_md._atomic_write_text` to keep the
-    shim independent — :mod:`eawf.render.agents_md` is otherwise unrelated to
-    the CLAUDE.md shim path, and importing a private helper from there would
-    create a ``claude_shim → agents_md`` dep that's purely circumstantial.
-    """
-    target.parent.mkdir(parents=True, exist_ok=True)
-    suffix = secrets.token_hex(4)
-    tmp = target.with_name(f"{target.name}.tmp.{suffix}")
-    encoded = payload.encode("utf-8")
-    try:
-        with tmp.open("wb") as fh:
-            fh.write(encoded)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
-        logger.info(f"render.claude_shim wrote {target} bytes={len(encoded)}")
-    finally:
-        tmp.unlink(missing_ok=True)
 
 
 def render_claude_md(target: Path) -> RenderResult:
@@ -81,8 +51,7 @@ def render_claude_md(target: Path) -> RenderResult:
         construction (CLAUDE.md has no managed regions in v0.1).
     """
     target = Path(target)
-    with portalock.acquire(target, timeout=5.0):
-        _atomic_write_text(target, _CLAUDE_PAYLOAD)
+    atomic_write_text(target, _CLAUDE_PAYLOAD)
     return RenderResult(
         target=target,
         regions_added=[],

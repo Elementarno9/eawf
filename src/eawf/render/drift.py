@@ -55,16 +55,19 @@ class DriftReport:
 def detect_drift(target_path: Path, manifest: Manifest) -> list[DriftReport]:
     """Compare the manifest entries for *target_path* against the on-disk file.
 
-    Only manifest entries whose ``target`` field equals ``str(target_path)``
-    are considered — entries pointing at other targets are silently ignored
-    so callers can pass the full project manifest.
+    Only manifest entries whose ``target`` field equals
+    ``Path(target_path).as_posix()`` are considered — entries pointing at
+    other targets are silently ignored so callers can pass the full project
+    manifest. The POSIX form ensures the comparison stays platform-stable
+    (a manifest written on Linux and inspected on Windows still matches).
 
     File missing → every entry for that target reports ``"missing"``. File
     present but parse-malformed → :exc:`~eawf.render.regions.RegionParseError`
     propagates (do not silently swallow corruption).
     """
     target_path = Path(target_path)
-    relevant = [e for e in manifest.generated.values() if e.target == str(target_path)]
+    target_key = target_path.as_posix()
+    relevant = [e for e in manifest.generated.values() if e.target == target_key]
     if not relevant:
         return []
 

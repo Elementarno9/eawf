@@ -47,8 +47,10 @@ def test_claude_shim_idempotent(tmp_path: Path) -> None:
 def test_claude_shim_atomic_write(tmp_path: Path) -> None:
     """The shim writes via a sibling tempfile then ``os.replace``."""
     target = tmp_path / "CLAUDE.md"
+    # Patch the shared helper's ``os.replace`` — extraction in
+    # :mod:`eawf.render._atomic` is the actual call site now.
     with patch(
-        "eawf.render.claude_shim.os.replace",
+        "eawf.render._atomic.os.replace",
         wraps=__import__("os").replace,
     ) as spy:
         render_claude_md(target)

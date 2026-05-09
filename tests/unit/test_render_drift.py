@@ -23,11 +23,12 @@ def _wrap(region_id: str, version: str, body: str) -> str:
 
 
 def _make_manifest(target_path: Path, region_id: str, body: str) -> Manifest:
+    target_key = target_path.as_posix()
     return Manifest(
         version=1,
         generated={
-            f"{target_path}::{region_id}": ManifestEntry(
-                target=str(target_path),
+            f"{target_key}::{region_id}": ManifestEntry(
+                target=target_key,
                 region_id=region_id,
                 version="1.0",
                 hash=regions.compute_hash(body),
@@ -90,19 +91,21 @@ def test_drift_ignores_unrelated_targets(tmp_path: Path) -> None:
 
     # Manifest contains an entry for OTHER.md that should NOT show up when
     # we ask for drift on AGENTS.md.
+    target_key = target.as_posix()
+    other_key = other.as_posix()
     m = Manifest(
         version=1,
         generated={
-            f"{target}::rules": ManifestEntry(
-                target=str(target),
+            f"{target_key}::rules": ManifestEntry(
+                target=target_key,
                 region_id="rules",
                 version="1.0",
                 hash=regions.compute_hash("x"),
                 generator="g",
                 generated_at="2026-01-01T00:00:00+00:00",
             ),
-            f"{other}::stuff": ManifestEntry(
-                target=str(other),
+            f"{other_key}::stuff": ManifestEntry(
+                target=other_key,
                 region_id="stuff",
                 version="1.0",
                 hash="ffffffffffffffff",

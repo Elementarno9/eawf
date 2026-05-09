@@ -30,8 +30,6 @@ Public API::
 from __future__ import annotations
 
 import logging
-import os
-import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -39,9 +37,9 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from eawf.lock import portalock
 from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render import regions
+from eawf.render._atomic import atomic_write_text
 from eawf.render.manifest import Manifest, ManifestEntry
 
 logger = logging.getLogger(__name__)
@@ -141,34 +139,6 @@ def _has_unmanaged_content(text: str) -> bool:
     return any(chunk.strip() != "" for chunk in leftover_chunks)
 
 
-def _atomic_write_text(target: Path, payload: str) -> None:
-    """Tempfile + fsync + ``os.replace`` + parent-dir fsync — text variant.
-
-    Mirrors :func:`eawf.state.writer._write_payload` but writes UTF-8 text
-    rather than orjson bytes, so callers can pass already-rendered markdown.
-    Caller is expected to hold the portalock for *target* (see
-    :func:`render_agents_md`).
-    """
-    target.parent.mkdir(parents=True, exist_ok=True)
-    suffix = secrets.token_hex(4)
-    tmp = target.with_name(f"{target.name}.tmp.{suffix}")
-    encoded = payload.encode("utf-8")
-    try:
-        with tmp.open("wb") as fh:
-            fh.write(encoded)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
-        logger.info(f"render.agents_md wrote {target} bytes={len(encoded)}")
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
 def render_agents_md(
     composed: ComposedProfile,
     target: Path,
@@ -209,7 +179,10 @@ def render_agents_md(
         entries overwritten and other targets carried through.
     """
     target = Path(target)
-    target_str = str(target)
+    # POSIX-form key so manifest entries are byte-identical across OSes —
+    # ``str(Path)`` would embed backslashes on Windows and break drift checks
+    # for repos shared between platforms.
+    target_str = target.as_posix()
 
     blocks = _extract_targeted_blocks(composed)
 
@@ -253,8 +226,7 @@ def render_agents_md(
     if not new_text.endswith("\n"):
         new_text = new_text + "\n"
 
-    with portalock.acquire(target, timeout=5.0):
-        _atomic_write_text(target, new_text)
+    atomic_write_text(target, new_text)
 
     # Preserve manifest entries for OTHER targets, refresh ours from this run.
     new_generated: dict[str, ManifestEntry] = {

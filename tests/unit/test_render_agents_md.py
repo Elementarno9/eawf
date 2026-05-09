@@ -108,7 +108,8 @@ def test_render_agents_md_updates_manifest(tmp_path: Path) -> None:
         generator="profile:test",
     )
 
-    target_str = str(target)
+    # Keys are stored in POSIX form for cross-platform stability.
+    target_str = target.as_posix()
     keys = set(manifest.generated.keys())
     assert keys == {f"{target_str}::alpha", f"{target_str}::beta"}
 
@@ -145,7 +146,7 @@ def test_render_agents_md_filters_by_target(tmp_path: Path) -> None:
     assert region_ids == {"rules"}
     assert result.regions_added == ["rules"]
     # Manifest only holds the AGENTS.md region.
-    assert set(manifest.generated.keys()) == {f"{target!s}::rules"}
+    assert set(manifest.generated.keys()) == {f"{target.as_posix()}::rules"}
 
 
 def test_render_agents_md_atomic_write(tmp_path: Path) -> None:
@@ -153,8 +154,10 @@ def test_render_agents_md_atomic_write(tmp_path: Path) -> None:
     target = tmp_path / "AGENTS.md"
     composed = _make_composed([_block("rules", "## Rules")])
 
+    # Patch the shared helper's ``os.replace`` — extraction in
+    # :mod:`eawf.render._atomic` is the actual call site now.
     with patch(
-        "eawf.render.agents_md.os.replace",
+        "eawf.render._atomic.os.replace",
         wraps=__import__("os").replace,
     ) as spy:
         render_agents_md(composed, target, Manifest(version=1, generated={}))
@@ -235,7 +238,7 @@ def test_render_agents_md_preserves_other_target_manifest_entries(tmp_path: Path
     _, manifest = render_agents_md(composed, target, seed)
 
     assert f"{other_target}::skill-foo" in manifest.generated
-    assert f"{target!s}::rules" in manifest.generated
+    assert f"{target.as_posix()}::rules" in manifest.generated
 
 
 def test_render_agents_md_empty_compose_no_regions(tmp_path: Path) -> None:
