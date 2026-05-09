@@ -207,6 +207,12 @@ from eawf.cli.commands.sync import sync_cmd  # noqa: E402
 app.command(name="sync")(sync_cmd)
 # --- end W08 ---
 
+# --- P04 W04 hook registration ---
+from eawf.cli.commands.hook import hook_app  # noqa: E402
+
+app.add_typer(hook_app, name="hook")
+# --- end P04 W04 ---
+
 
 def main() -> None:
     app()
