@@ -83,6 +83,46 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
 
 
 @pytest.mark.integration
+def test_statusline_env_theme_is_honored_when_no_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``EAWF_STATUSLINE_THEME`` selects the theme when ``--theme`` is omitted."""
+    monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "ascii-fallback")
+    _stub_no_git(monkeypatch)
+
+    payload = {"session_id": "ses-env-theme", "model": "haiku", "cwd": str(tmp_path)}
+    result = runner.invoke(app, ["cc", "statusline"], input=json.dumps(payload))
+    assert result.exit_code == 0, result.output
+    line = result.stdout.rstrip("\n")
+    # ascii-fallback theme: no ANSI escape codes in the rendered line.
+    assert "\x1b[" not in line, f"env-selected ascii-fallback theme leaked colour: {line!r}"
+    assert "model:haiku" in line
+
+
+@pytest.mark.integration
+def test_statusline_flag_wins_over_env_theme(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--theme`` flag takes precedence over ``EAWF_STATUSLINE_THEME``."""
+    monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "default")
+    _stub_no_git(monkeypatch)
+
+    payload = {"session_id": "ses-flag-wins", "model": "haiku", "cwd": str(tmp_path)}
+    result = runner.invoke(
+        app,
+        ["cc", "statusline", "--theme", "ascii-fallback"],
+        input=json.dumps(payload),
+    )
+    assert result.exit_code == 0, result.output
+    line = result.stdout.rstrip("\n")
+    assert "\x1b[" not in line, f"flag override failed; theme leaked colour: {line!r}"
+
+
+@pytest.mark.integration
 def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

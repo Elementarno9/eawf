@@ -125,3 +125,29 @@ def test_hook_run_help_shows_event_type_argument() -> None:
     assert result.exit_code == 0
     # The subcommand is registered as "run" under the hook subapp.
     assert "run" in result.stdout
+
+
+def test_hook_run_blocking_hook_propagates_exit_9(monkeypatch) -> None:
+    """A blocking hook registered via monkeypatch surfaces as exit ``9``."""
+    from eawf.cli.commands import hook as hook_cmd
+    from eawf.hooks.event import HookEventType
+    from eawf.hooks.runner import HookResult, HookRunner
+
+    class _BlockingRunner(HookRunner):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register(
+                HookEventType.PRE_COMMIT,
+                lambda _evt: HookResult(
+                    name="block-me",
+                    block=True,
+                    output="blocked by test",
+                    duration_ms=0.0,
+                    raised=False,
+                ),
+                name="block-me",
+            )
+
+    monkeypatch.setattr(hook_cmd, "HookRunner", _BlockingRunner)
+    result = runner.invoke(app, ["hook", "run", "pre_commit"], input="")
+    assert result.exit_code == 9, result.stdout

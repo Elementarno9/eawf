@@ -95,3 +95,13 @@ def test_plugin_install_unknown_runtime_exits_invalid_input(tmp_path: Path) -> N
     _equip_ea_dir(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "opencode"])
     assert result.exit_code == 3, result.stdout
+
+
+def test_plugin_install_after_hand_edit_aborts(tmp_path: Path) -> None:
+    """Hand-edit + ``plugin install`` re-run exits 8 (``INTEGRITY_VIOLATION``)."""
+    _equip_ea_dir(tmp_path)
+    runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
+    skill_path = tmp_path / ".claude" / "skills" / "research" / "SKILL.md"
+    skill_path.write_text(skill_path.read_text() + "\n# user-edit\n")
+    result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
+    assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
