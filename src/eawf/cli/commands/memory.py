@@ -3,7 +3,9 @@
 Sub-commands:
 
 - ``add``            — write a new memory entry (JSONL + state cache).
-- ``promote``        — promote a JSONL store record to a memory entry.
+- ``promote``        — promote a JSONL store record to a memory entry, or a
+  memory entry up into a durable artifact (``--to artifact``).
+- ``prune``          — soft-delete: flip matched entries' status to ``PRUNED``.
 - ``list``           — list memory entries from the cache (optionally filtered).
 - ``compact``        — wrap :func:`eawf.store.compact.compact_store` for ``memory.jsonl``.
 - ``render-context`` — produce a token-budgeted context block.
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -32,7 +35,12 @@ from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.memory.promotion import PromotionError, promote_record
+from eawf.memory.promotion import (
+    PromotionError,
+    promote_record,
+    promote_to_artifact,
+)
+from eawf.memory.prune import PruneError, prune_memory
 from eawf.memory.render_context import DEFAULT_BUDGET, render_context
 from eawf.memory.staleness import find_stale
 from eawf.memory.store import add_memory, find_envelope, read_envelopes
@@ -183,15 +191,54 @@ def memory_promote(
         str,
         typer.Option(
             "--source-kind",
-            help="Source store filename without .jsonl (e.g. research, decisions).",
+            help="Source store filename without .jsonl (e.g. research, memory).",
         ),
     ] = "research",
     confidence: Annotated[
         str | None, typer.Option("--confidence", help="h/m/l (default medium)")
     ] = None,
+    to: Annotated[
+        str,
+        typer.Option(
+            "--to",
+            help="Promotion target. 'memory' (default) = source record -> memory entry; "
+            "'artifact' = memory entry -> durable artifact (Decision in v0.1).",
+        ),
+    ] = "memory",
+    artifact_kind: Annotated[
+        str,
+        typer.Option(
+            "--artifact-kind",
+            help="Artifact target kind (only 'decision' is supported in v0.1).",
+        ),
+    ] = "decision",
+    artifact_id: Annotated[
+        str | None,
+        typer.Option(
+            "--artifact-id",
+            help="Optional pre-allocated artifact ID; auto-allocated when omitted.",
+        ),
+    ] = None,
 ) -> None:
-    """Promote a store record into a memory entry."""
+    """Promote a record. ``--to memory`` (default) or ``--to artifact``."""
     flags: GlobalFlags = ctx.obj
+    target = to.strip().lower()
+    if target not in {"memory", "artifact"}:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"--to must be one of memory|artifact; got {to!r}"),
+            flags=flags,
+        )
+        return
+    if target == "artifact":
+        _memory_promote_to_artifact(
+            ctx=ctx,
+            session=session,
+            source=source,
+            source_kind=source_kind,
+            artifact_kind=artifact_kind,
+            artifact_id=artifact_id,
+        )
+        return
     try:
         conf = _resolve_confidence(confidence)
         state_path = resolve_state_path(flags.workspace)
@@ -238,6 +285,99 @@ def memory_promote(
                 "session": session,
             },
             text=f"memory promoted: {result.record.summary.id} (from {source})",
+            flags=flags,
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+
+
+def _memory_promote_to_artifact(
+    *,
+    ctx: typer.Context,
+    session: str,
+    source: str,
+    source_kind: str,
+    artifact_kind: str,
+    artifact_id: str | None,
+) -> None:
+    """Handle ``eawf memory promote --to artifact``.
+
+    Memory entries (``MEM-…`` IDs) are canonised into a durable
+    :class:`~eawf.state.models.Decision` row. The implementation lives in
+    :func:`eawf.memory.promotion.promote_to_artifact`; this CLI shim:
+
+    1. Validates that ``--source-kind memory`` is set (the inverse direction
+       requires the source to be a memory entry, not a store record).
+    2. Routes errors to the canonical exit codes (3 INVALID_INPUT / 4
+       VALIDATION_FAILED / 2 NOT_FOUND).
+    3. Emits a ``memory.promote`` event with the artifact ID linked.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        if source_kind.strip().lower() != StoreKind.MEMORY.value:
+            raise cli_errors.InvalidInput(
+                f"--to artifact requires --source-kind memory; got {source_kind!r}"
+            )
+        if artifact_kind.strip().lower() != "decision":
+            raise cli_errors.InvalidInput(
+                f"--artifact-kind must be 'decision' in v0.1; got {artifact_kind!r}"
+            )
+        state_path = resolve_state_path(flags.workspace)
+        memory_path = _memory_path_for(state_path)
+        decisions_path = store_path(state_path, StoreKind.DECISION)
+        events_path = _events_path_for(state_path)
+        with state_transaction(state_path) as state:
+            if session not in state.agent_sessions:
+                raise cli_errors.NotFound(f"session {session!r} not in agent_sessions")
+            try:
+                result = promote_to_artifact(
+                    state=state,
+                    memory_path=memory_path,
+                    decisions_path=decisions_path,
+                    source_id=source,
+                    artifact_kind=artifact_kind,
+                    artifact_id=artifact_id,
+                )
+            except PromotionError as exc:
+                msg = str(exc)
+                if "not in state.memory_index" in msg or "not found" in msg:
+                    raise cli_errors.NotFound(msg) from exc
+                raise cli_errors.InvalidInput(msg) from exc
+        append_event(
+            events_path=events_path,
+            event_id=f"{result.artifact_id}-from-{source}",
+            event_type="memory.promote",
+            actor=session,
+            command="memory promote --to artifact",
+            args_hash=_args_hash(
+                {
+                    "session": session,
+                    "source": source,
+                    "to": "artifact",
+                    "artifact_kind": artifact_kind,
+                }
+            ),
+            status="ok",
+            message=(
+                f"promoted memory={source} to artifact={result.artifact_id} ({artifact_kind})"
+            ),
+            scope_id=result.scope_id,
+            occurred_at=datetime.now(UTC),
+        )
+        emit_json_or_text(
+            payload={
+                "id": result.memory_id,
+                "scope_id": result.scope_id,
+                "promoted_to_artifact_id": result.artifact_id,
+                "artifact_kind": result.artifact_kind,
+                "session": session,
+            },
+            text=(
+                f"memory promoted to artifact: {result.memory_id} -> "
+                f"{result.artifact_id} ({result.artifact_kind})"
+            ),
             flags=flags,
         )
     except cli_errors.CliError as err:
@@ -350,9 +490,45 @@ def memory_render_context(
     budget: Annotated[
         int, typer.Option("--budget", help="Token budget. Default 4096.")
     ] = DEFAULT_BUDGET,
+    include_superseded: Annotated[
+        bool,
+        typer.Option(
+            "--include-superseded",
+            help="Include SUPERSEDED entries (default: only ACTIVE).",
+        ),
+    ] = False,
+    fmt: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="Output format: 'markdown' (default) or 'json'. "
+            "When 'json', the rendered text is omitted from the JSON envelope; "
+            "callers consume included_ids structurally.",
+        ),
+    ] = "markdown",
+    max_entries: Annotated[
+        int | None,
+        typer.Option(
+            "--max-entries",
+            help="Cap on the count of included entries; the budget still wins.",
+        ),
+    ] = None,
 ) -> None:
     """Produce a token-budgeted Markdown rendering of memory entries."""
     flags: GlobalFlags = ctx.obj
+    fmt_norm = fmt.strip().lower()
+    if fmt_norm not in {"markdown", "json"}:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"--format must be markdown|json; got {fmt!r}"),
+            flags=flags,
+        )
+        return
+    if max_entries is not None and max_entries < 0:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"--max-entries must be >= 0; got {max_entries}"),
+            flags=flags,
+        )
+        return
     try:
         state_path = resolve_state_path(flags.workspace)
         memory_path = _memory_path_for(state_path)
@@ -362,20 +538,203 @@ def memory_render_context(
             memory_path=memory_path,
             anchor_scope=scope,
             budget=budget,
+            include_superseded=include_superseded,
+            max_entries=max_entries,
         )
+        payload: dict[str, object] = {
+            "included_ids": result.included_ids,
+            "skipped_ids": result.skipped_ids,
+            "skipped_count": len(result.skipped_ids),
+            "tokens_used": result.tokens_used,
+            "budget": result.budget,
+            "include_superseded": include_superseded,
+            "format": fmt_norm,
+            "max_entries": max_entries,
+        }
+        if fmt_norm == "markdown":
+            payload["text"] = result.text
         emit_json_or_text(
-            payload={
-                "text": result.text,
-                "included_ids": result.included_ids,
-                "skipped_ids": result.skipped_ids,
-                "skipped_count": len(result.skipped_ids),
-                "tokens_used": result.tokens_used,
-                "budget": result.budget,
-            },
+            payload=payload,
             text=result.text
             + (f"\n[skipped: {len(result.skipped_ids)}]" if result.skipped_ids else ""),
             flags=flags,
         )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+
+
+_ISO_DURATION_RE: re.Pattern[str] = re.compile(
+    r"^P(?:(?P<years>\d+)Y)?(?:(?P<months>\d+)M)?(?:(?P<weeks>\d+)W)?(?:(?P<days>\d+)D)?$"
+)
+
+
+def _parse_age_days(raw: str | int) -> int:
+    """Return an integer day count from *raw* (ISO 8601 duration or int).
+
+    Supported shapes:
+
+    - bare integer (``"30"`` or ``30``) → that many days.
+    - ISO 8601 duration ``P<n>D``, ``P<n>W``, ``P<n>M``, ``P<n>Y`` (or
+      combinations such as ``P1M15D``). Months and years use 30/365 day
+      approximations because v0.1 has no calendar engine.
+
+    Raises:
+        InvalidInput: Empty, negative, or malformed input.
+    """
+    if isinstance(raw, int):
+        if raw < 0:
+            raise cli_errors.InvalidInput(f"--older-than must be >= 0; got {raw}")
+        return raw
+    text = raw.strip()
+    if not text:
+        raise cli_errors.InvalidInput("--older-than must not be empty")
+    if text.isdigit():
+        return int(text)
+    match = _ISO_DURATION_RE.match(text)
+    if match is None:
+        raise cli_errors.InvalidInput(
+            f"--older-than {text!r} is not a valid ISO 8601 duration "
+            "(expected like P30D, P3M, P1Y) or integer day count"
+        )
+    parts = {k: int(v) if v is not None else 0 for k, v in match.groupdict().items()}
+    days = parts["days"] + 7 * parts["weeks"] + 30 * parts["months"] + 365 * parts["years"]
+    if days <= 0 and text != "P0D":
+        raise cli_errors.InvalidInput(
+            f"--older-than {text!r} resolved to 0 days; specify a positive duration"
+        )
+    return days
+
+
+@memory_app.command("prune")
+def memory_prune(
+    ctx: typer.Context,
+    scope: Annotated[
+        str | None,
+        typer.Option("--scope", help="Filter by scope ID."),
+    ] = None,
+    older_than: Annotated[
+        str,
+        typer.Option(
+            "--older-than",
+            help="Age threshold (ISO 8601 duration like P30D, or integer days). Default P30D.",
+        ),
+    ] = "P30D",
+    status: Annotated[
+        str,
+        typer.Option(
+            "--status",
+            help="Status filter — only entries currently in this status are pruned. "
+            "Default 'stale'. Use 'active' (with --no-input) to prune live entries.",
+        ),
+    ] = "stale",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Report which IDs would flip without mutating state or jsonl.",
+        ),
+    ] = False,
+) -> None:
+    """Soft-delete prune. Flips status to PRUNED; preserves the prior record."""
+    flags: GlobalFlags = ctx.obj
+    try:
+        try:
+            age_days = _parse_age_days(older_than)
+        except cli_errors.CliError:
+            raise
+        try:
+            status_filter = MemoryStatus(status.strip().lower())
+        except ValueError as exc:
+            raise cli_errors.InvalidInput(
+                f"--status must be one of {[s.value for s in MemoryStatus]}; got {status!r}"
+            ) from exc
+        if status_filter == MemoryStatus.ACTIVE and not flags.no_input:
+            raise cli_errors.UserDeclined(
+                "--status active requires --no-input (or an explicit confirm) — "
+                "pruning live entries is irreversible without compaction."
+            )
+        state_path = resolve_state_path(flags.workspace)
+        memory_path = _memory_path_for(state_path)
+        events_path = _events_path_for(state_path)
+
+        if dry_run:
+            # Read-only path: load state, run prune in dry-run mode, emit
+            # report. No state-transaction needed because nothing is written.
+            state_ro = _load_state(state_path)
+            try:
+                result = prune_memory(
+                    state=state_ro,
+                    memory_path=memory_path,
+                    age_days=age_days,
+                    status_filter=status_filter,
+                    scope_id=scope,
+                    dry_run=True,
+                )
+            except PruneError as exc:
+                raise cli_errors.InvalidInput(str(exc)) from exc
+            payload = {
+                "pruned_ids": result.pruned_ids,
+                "skipped_ids": result.skipped_ids,
+                "dry_run": True,
+                "older_than_days": result.older_than_days,
+                "scope_id": result.scope_id,
+                "status_filter": status_filter.value,
+            }
+            text = (
+                f"would prune: {len(result.pruned_ids)} entries "
+                f"(scope={scope}, older_than_days={age_days}, status={status_filter.value})"
+            )
+            emit_json_or_text(payload=payload, text=text, flags=flags)
+            return
+
+        with state_transaction(state_path) as state:
+            try:
+                result = prune_memory(
+                    state=state,
+                    memory_path=memory_path,
+                    age_days=age_days,
+                    status_filter=status_filter,
+                    scope_id=scope,
+                    dry_run=False,
+                )
+            except PruneError as exc:
+                raise cli_errors.InvalidInput(str(exc)) from exc
+        append_event(
+            events_path=events_path,
+            event_id=f"memory-prune-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
+            event_type="memory.prune",
+            actor="cli",
+            command="memory prune",
+            args_hash=_args_hash(
+                {
+                    "scope": scope,
+                    "older_than_days": age_days,
+                    "status": status_filter.value,
+                }
+            ),
+            status="ok",
+            message=(
+                f"pruned {len(result.pruned_ids)} entries "
+                f"(scope={scope}, older_than_days={age_days})"
+            ),
+            scope_id=scope,
+            occurred_at=datetime.now(UTC),
+        )
+        payload = {
+            "pruned_ids": result.pruned_ids,
+            "skipped_ids": result.skipped_ids,
+            "dry_run": False,
+            "older_than_days": result.older_than_days,
+            "scope_id": result.scope_id,
+            "status_filter": status_filter.value,
+        }
+        text = (
+            f"pruned {len(result.pruned_ids)} entries "
+            f"(scope={scope}, older_than_days={age_days}, status={status_filter.value})"
+        )
+        emit_json_or_text(payload=payload, text=text, flags=flags)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:

@@ -1,4 +1,4 @@
-"""Unit tests for memory.promotion: promote + supersede."""
+"""Unit tests for memory.promotion: promote + supersede + promote_to_artifact."""
 
 from __future__ import annotations
 
@@ -8,9 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from eawf.memory.promotion import PromotionError, promote_record, supersede
+from eawf.memory.promotion import (
+    PromotionError,
+    promote_record,
+    promote_to_artifact,
+    supersede,
+)
 from eawf.memory.store import add_memory
-from eawf.state.enums import Confidence, MemoryStatus, StoreKind
+from eawf.state.enums import Confidence, DecisionStatus, MemoryStatus, StoreKind
 from eawf.state.models import State
 from eawf.store.envelope import Envelope
 
@@ -181,3 +186,149 @@ def test_promote_uses_explicit_now(tmp_path: Path) -> None:
         now=moment,
     )
     assert result.record.envelope.created_at == moment
+
+
+# --- promote_to_artifact: memory -> Decision ---------------------------------
+
+
+def _seed_active_memory(state: State, memory: Path, *, body: str = "body text") -> str:
+    """Add an ACTIVE memory entry and return its ID."""
+    rec = add_memory(
+        state=state,
+        memory_path=memory,
+        scope_id="QR",
+        title="title",
+        body=body,
+        confidence=Confidence.HIGH,
+    )
+    return rec.summary.id
+
+
+def test_promote_to_artifact_creates_decision_record(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    mid = _seed_active_memory(state, memory)
+    moment = datetime(2026, 5, 9, 12, tzinfo=UTC)
+    result = promote_to_artifact(
+        state=state,
+        memory_path=memory,
+        decisions_path=decisions,
+        source_id=mid,
+        now=moment,
+    )
+    assert result.artifact_id.startswith("DEC-20260509-")
+    assert result.decision.status == DecisionStatus.ACTIVE
+    assert result.decision.scope_id == "QR"
+    assert state.decisions[result.artifact_id] == result.decision  # type: ignore[index]
+    # Decision JSONL has the new envelope.
+    lines = decisions.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    decoded = json.loads(lines[0])
+    assert decoded["id"] == result.artifact_id
+    assert decoded["kind"] == "decision"
+
+
+def test_promote_to_artifact_marks_source_memory_superseded(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    mid = _seed_active_memory(state, memory)
+    result = promote_to_artifact(
+        state=state,
+        memory_path=memory,
+        decisions_path=decisions,
+        source_id=mid,
+    )
+    assert state.memory_index is not None
+    assert state.memory_index[mid].status == MemoryStatus.SUPERSEDED
+    assert state.memory_index[mid].promoted_to_artifact_id == result.artifact_id
+
+
+def test_promote_to_artifact_writes_promoted_to_artifact_id_in_jsonl(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    mid = _seed_active_memory(state, memory)
+    result = promote_to_artifact(
+        state=state,
+        memory_path=memory,
+        decisions_path=decisions,
+        source_id=mid,
+    )
+    # Latest memory envelope carries the link.
+    lines = memory.read_text(encoding="utf-8").splitlines()
+    last_for_mid = [json.loads(line) for line in lines if json.loads(line)["id"] == mid][-1]
+    assert last_for_mid["payload"]["promoted_to_artifact_id"] == result.artifact_id
+
+
+def test_promote_to_artifact_rejects_unknown_memory_id(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    with pytest.raises(PromotionError, match=r"not in state\.memory_index"):
+        promote_to_artifact(
+            state=state,
+            memory_path=memory,
+            decisions_path=decisions,
+            source_id="MEM-NOPE",
+        )
+
+
+def test_promote_to_artifact_rejects_unsupported_artifact_kind(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    mid = _seed_active_memory(state, memory)
+    with pytest.raises(PromotionError, match="not supported"):
+        promote_to_artifact(
+            state=state,
+            memory_path=memory,
+            decisions_path=decisions,
+            source_id=mid,
+            artifact_kind="hypothesis",
+        )
+
+
+def test_promote_to_artifact_allocates_unique_decision_id(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    mid_a = _seed_active_memory(state, memory)
+    mid_b = _seed_active_memory(state, memory)
+    moment = datetime(2026, 5, 9, 12, tzinfo=UTC)
+    a = promote_to_artifact(
+        state=state,
+        memory_path=memory,
+        decisions_path=decisions,
+        source_id=mid_a,
+        now=moment,
+    )
+    b = promote_to_artifact(
+        state=state,
+        memory_path=memory,
+        decisions_path=decisions,
+        source_id=mid_b,
+        now=moment,
+    )
+    assert a.artifact_id != b.artifact_id
+    assert a.artifact_id.endswith("-01")
+    assert b.artifact_id.endswith("-02")
+
+
+def test_promote_to_artifact_refuses_pruned_entry(tmp_path: Path) -> None:
+    state = _make_state()
+    memory = tmp_path / "memory.jsonl"
+    decisions = tmp_path / "decision.jsonl"
+    mid = _seed_active_memory(state, memory)
+    assert state.memory_index is not None
+    state.memory_index[mid] = state.memory_index[mid].model_copy(
+        update={"status": MemoryStatus.PRUNED}
+    )
+    with pytest.raises(PromotionError, match="PRUNED"):
+        promote_to_artifact(
+            state=state,
+            memory_path=memory,
+            decisions_path=decisions,
+            source_id=mid,
+        )
