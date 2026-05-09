@@ -1,14 +1,14 @@
-"""Import-side-effect bootstrap for the W02 core skill registrations.
+"""Import-side-effect bootstrap for the ten Skill subclasses.
 
-Importing this module is the canonical way to ensure the six core
-``Skill`` subclasses are registered with :mod:`eawf.skills.registry`.
-Each skill module is imported for its registration decorator
-(``@register``); the imports are otherwise unused.
+Importing this module is the canonical way to ensure all ten ``Skill``
+subclasses (six core + four meta) are registered with
+:mod:`eawf.skills.registry`. Each skill module is imported for its
+registration decorator (``@register``); the imports are otherwise
+unused.
 
 The CLI surface (`eawf.cli.commands.skill`) imports this module so
-``eawf skill list`` reports the six core skills as ``installed`` once
-W02 has landed. Future waves (W03 = meta skills) extend the import set
-here.
+``eawf skill list`` reports every skill as ``installed`` once W02 + W03
+have landed.
 
 A dedicated module avoids two failure modes:
 
@@ -27,14 +27,19 @@ Python module is a no-op.
 
 from __future__ import annotations
 
-# The six core skill subclasses each register themselves via the
-# ``@register`` decorator at import time. ``noqa: F401`` keeps them in
-# the import graph despite the unused-name lint.
+# The ten skill subclasses each register themselves via the ``@register``
+# decorator at import time. ``noqa: F401`` keeps them in the import graph
+# despite the unused-name lint. Order: six core (W02) then four meta
+# (W03); ``flow`` imports the six core skills, so it must come last.
 from eawf.skills import audit as _audit  # noqa: F401
+from eawf.skills import differentiate as _differentiate  # noqa: F401
+from eawf.skills import flow as _flow  # noqa: F401
+from eawf.skills import init as _init  # noqa: F401
 from eawf.skills import polish as _polish  # noqa: F401
 from eawf.skills import prep as _prep  # noqa: F401
 from eawf.skills import research as _research  # noqa: F401
 from eawf.skills import review as _review  # noqa: F401
+from eawf.skills import roadmap as _roadmap  # noqa: F401
 from eawf.skills import ship as _ship  # noqa: F401
 
 __all__: list[str] = []
