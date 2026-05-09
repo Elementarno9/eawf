@@ -86,3 +86,21 @@ def test_wizard_step_dataclass_signature() -> None:
     for f in fields:
         assert hasattr(s, f), f"WizardStep missing field {f!r}"
     assert isinstance(s, WizardStep)
+
+
+def test_run_wizard_interactive_signature_accepts_force() -> None:
+    """The interactive surface must forward ``--force`` so re-init works.
+
+    Regression: the interactive wizard previously dropped the ``force`` flag,
+    so ``eawf init`` against a pre-existing ``.ea/`` raised even when the
+    operator passed ``--force``. Lock the signature here so the regression
+    cannot return silently.
+    """
+    import inspect
+
+    from eawf.install.wizard import run_wizard_interactive
+
+    params = inspect.signature(run_wizard_interactive).parameters
+    msg = f"run_wizard_interactive must accept 'force' kwarg; got {list(params)}"
+    assert "force" in params, msg
+    assert params["force"].default is False
