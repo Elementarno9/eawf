@@ -126,10 +126,14 @@ def test_cli_init_renders_managed_regions_for_each_block(tmp_path: Path) -> None
     assert res.exit_code == 0, res.stdout
 
     text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
-    # Core profile ships exactly one render block (non-negotiable-rules).
-    # Marker shape (per eawf.render.regions): "<!-- BEGIN EAWF:managed id=<id> ... -->".
+    # Core profile ships several render blocks; non-negotiable-rules is the
+    # first and most stable. Marker shape (per eawf.render.regions):
+    # "<!-- BEGIN EAWF:managed id=<id> ... -->".
     assert "BEGIN EAWF:managed id=non-negotiable-rules" in text
     assert "END EAWF:managed id=non-negotiable-rules" in text
+    # A representative subset of the additional core blocks must also render.
+    assert "BEGIN EAWF:managed id=worktree-discipline" in text
+    assert "BEGIN EAWF:managed id=anti-patterns" in text
 
 
 def test_cli_init_no_input_emits_json_envelope(tmp_path: Path) -> None:
