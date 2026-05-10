@@ -363,6 +363,64 @@ def worktree_merge_back_cmd(
     emit_json_or_text(payload, text, flags=flags)
 
 
+# ---- worktree path-fix ------------------------------------------------------
+
+
+@worktree_app.command(name="path-fix")
+def worktree_path_fix_cmd(
+    ctx: typer.Context,
+    apply_all: Annotated[
+        bool,
+        typer.Option("--all", help="Rewrite every record whose path is absolute."),
+    ] = False,
+) -> None:
+    """Rewrite WorktreeRecord.path values from absolute to repo-relative.
+
+    Legacy fix-up: ``worktree create`` historically stored absolute paths,
+    which leaks machine-local prefixes (e.g. ``/Users/...``) into the
+    committed ``state.json``. The writer now stores repo-relative paths
+    by default. This verb walks ``state.worktrees`` and rewrites any
+    remaining absolute path that resolves inside ``repo_root``.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not apply_all:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput("pass --all to rewrite every absolute path"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = _resolve_state_path(flags)
+        repo_root = _resolve_repo_root(state_path).resolve()
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    rewritten: list[dict[str, str]] = []
+    with (
+        worktree_registry_lock(repo_root, timeout=5.0),
+        state_transaction(state_path) as state,
+    ):
+        if state.worktrees is None:
+            state.worktrees = {}
+        for wt_id, record in state.worktrees.items():
+            current = Path(record.path)
+            if not current.is_absolute():
+                continue
+            try:
+                rel = current.resolve().relative_to(repo_root)
+            except ValueError:
+                continue
+            rewritten.append({"id": wt_id, "from": record.path, "to": str(rel)})
+            record.path = str(rel)
+
+    emit_json_or_text(
+        {"rewritten": rewritten, "count": len(rewritten)},
+        f"worktree path-fix: rewrote {len(rewritten)} record(s)",
+        flags=flags,
+    )
+
+
 # ---- worktree cleanup -------------------------------------------------------
 
 

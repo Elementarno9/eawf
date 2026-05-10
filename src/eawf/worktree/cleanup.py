@@ -90,7 +90,7 @@ def cleanup_worktree(
         IntegrityViolation: The dirty/CONFLICTED guard refused.
     """
     record = _find_record_for_wave(state, wave_id)
-    worktree_path = Path(record.path)
+    worktree_path = repo_root / record.path
 
     # ---- 1. Refusal guards ----------------------------------------------
     # Conflicted records preserve evidence; --force overrides.

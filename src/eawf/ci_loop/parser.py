@@ -164,10 +164,7 @@ def parse_pytest_failures(log_text: str) -> list[PytestFailure]:
         # uses the same name in both places).
         bare_name = test_name.rsplit("::", 1)[-1]
         block = traceback_blocks.get(bare_name, "")
-        if tail and block:
-            message = f"{tail}\n{block}"
-        else:
-            message = tail or block
+        message = f"{tail}\n{block}" if tail and block else tail or block
         out.append(
             PytestFailure(
                 nodeid=nodeid,
@@ -221,9 +218,7 @@ def parse_ruff_failures(log_text: str) -> list[RuffFailure]:
 # ``: note:`` lines: notes describe context (e.g. "Revealed type is X")
 # rather than a fail-actionable diagnostic. The ``[error-code]`` tail
 # that mypy emits is folded into the message verbatim.
-_RE_MYPY = re.compile(
-    r"^(?P<path>\S+\.\S+):(?P<line>\d+):\s+error:\s+(?P<message>.+)$"
-)
+_RE_MYPY = re.compile(r"^(?P<path>\S+\.\S+):(?P<line>\d+):\s+error:\s+(?P<message>.+)$")
 
 
 def parse_mypy_failures(log_text: str) -> list[MypyFailure]:

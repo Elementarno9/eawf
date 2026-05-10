@@ -384,8 +384,7 @@ def wave_fix_ci_loop_cmd(
                 "converged": False,
             }
             text = (
-                f"error: ci-fix loop not converging (same failure signature on iter "
-                f"{iter_index})"
+                f"error: ci-fix loop not converging (same failure signature on iter {iter_index})"
             )
             emit_json_or_text(envelope, text, flags=flags)
             raise typer.Exit(cli_errors.ValidationFailed.exit_code)
@@ -428,10 +427,7 @@ def wave_fix_ci_loop_cmd(
         "history": history,
         "converged": converged,
     }
-    text = (
-        f"wave fix-ci-loop parent={parent_wave_id} iters={len(history)} "
-        f"converged={converged}"
-    )
+    text = f"wave fix-ci-loop parent={parent_wave_id} iters={len(history)} converged={converged}"
     emit_json_or_text(envelope, text, flags=flags)
 
 

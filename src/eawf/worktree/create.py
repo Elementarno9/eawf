@@ -225,11 +225,12 @@ def create_worktree(
         # Epoch collision (sub-second re-create on a fast loop). Fall back
         # to a microsecond-suffixed id so we always emit a unique key.
         record_id = f"{record_id}-{now.microsecond:06d}"
+    rel_path = chosen_path.resolve().relative_to(repo_root.resolve())
     record = WorktreeRecord(
         id=record_id,
         wave_id=wave_id,
         branch=chosen_branch,
-        path=str(chosen_path),
+        path=str(rel_path),
         base_branch=chosen_base,
         status=WorktreeStatus.ACTIVE,
         owner_session_id=session_id,

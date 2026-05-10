@@ -13,7 +13,6 @@ from eawf.ci_loop.parser import (
     parse_ruff_failures,
 )
 
-
 # ---- pytest -----------------------------------------------------------------
 
 

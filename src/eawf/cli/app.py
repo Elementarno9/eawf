@@ -265,7 +265,6 @@ app.add_typer(plan_app, name="plan")
 import eawf.cli.commands.wave_ci  # noqa: E402, F401
 
 # --- end P08 W05 ---
-
 # --- P08 W06 pr-review registration (wave review verb hangs off wave_app) ---
 from eawf.cli.commands import pr_review as _pr_review  # noqa: E402, F401
 
