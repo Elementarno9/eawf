@@ -91,6 +91,14 @@ def test_skill_output_schema_committed_matches_generated(tmp_path: Path) -> None
     assert generated == committed
 
 
+def test_plan_view_schema_committed_matches_generated(tmp_path: Path) -> None:
+    """Phase 5 W05 generated plan-view schema must match the committed file."""
+    schema_mod.dump_schemas(tmp_path)
+    generated = json.loads((tmp_path / "plan-view.schema.json").read_text())
+    committed = json.loads((SCHEMAS_DIR / "plan-view.schema.json").read_text())
+    assert generated == committed
+
+
 def test_skill_output_schema_has_required_top_level_fields() -> None:
     """The skill-output schema is a typed envelope, not the placeholder."""
     body = json.loads((SCHEMAS_DIR / "skill-output.schema.json").read_text())

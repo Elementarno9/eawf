@@ -63,7 +63,9 @@ from pathlib import Path
 from typing import Any
 
 import orjson
+from pydantic import ValidationError
 
+from eawf.cli import errors as cli_errors
 from eawf.render.envelope import OutputEnvelope, SkillName
 from eawf.skills._common import (
     emit_event,
@@ -227,16 +229,45 @@ def _state_hash(state_path: Path) -> str:
 
 
 def _canonical_args_per_step_hash(args_per_step: dict[str, Any] | None) -> str:
-    """Return ``sha256:<hex>`` of the canonical-form ``args_per_step`` JSON.
+    """Return ``sha256:<hex>`` of the canonical-form per-step args JSON.
 
     Canonicalisation: sorted keys, no whitespace. None / empty input
     hashes to the SHA of an empty JSON object (``{}``) so the absent and
     all-defaults cases are indistinguishable.
+
+    The runner emits one checkpoint per step and hashes the **per-step**
+    args dict (the value forwarded to that step's :class:`SkillContext`)
+    so per-step arg mutations between resume and the original run are
+    detected by :func:`compute_drift`. Hashing the whole multi-step
+    mapping would yield the same value for every checkpoint and provide
+    no per-step granularity.
     """
     payload = args_per_step or {}
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     digest = hashlib.sha256(blob).hexdigest()
     return f"sha256:{digest}"
+
+
+def _resolve_step_args(
+    args_per_step: dict[str, Any] | None,
+    skill_name: SkillName,
+) -> dict[str, Any]:
+    """Return the per-step args dict for *skill_name*.
+
+    Preference order: full skill name (``"/research"``), then short name
+    (``"research"``). An explicit-key empty dict no longer collapses to
+    the short-name fallback (an ``or`` chain dropped empty dicts because
+    they are falsy).
+    """
+    mapping = args_per_step or {}
+    short = _stop_after_short_name(skill_name)
+    if skill_name in mapping:
+        forwarded = mapping[skill_name]
+    elif short in mapping:
+        forwarded = mapping[short]
+    else:
+        return {}
+    return dict(forwarded) if isinstance(forwarded, dict) else {}
 
 
 def _payload_hash(body: Any) -> str:
@@ -322,7 +353,8 @@ def compute_drift(
             "current": current_profiles,
         }
 
-    current_args_hash = _canonical_args_per_step_hash(args_per_step)
+    current_step_args = _resolve_step_args(args_per_step, checkpoint.step_name)
+    current_args_hash = _canonical_args_per_step_hash(current_step_args)
     if current_args_hash != checkpoint.args_per_step_hash:
         drift["args_per_step"] = {
             "checkpoint": checkpoint.args_per_step_hash,
@@ -591,7 +623,12 @@ class FlowSkill(Skill):
         if isinstance(resume_from_raw, dict):
             resume_envelope_id = resume_from_raw.get("__envelope_id__")
             ckpt_dict = {k: v for k, v in resume_from_raw.items() if k != "__envelope_id__"}
-            resume_from = FlowCheckpointPayload.model_validate(ckpt_dict)
+            try:
+                resume_from = FlowCheckpointPayload.model_validate(ckpt_dict)
+            except ValidationError as exc:
+                raise cli_errors.InvalidInput(
+                    f"resume_from checkpoint failed validation: {exc.errors()[0].get('msg', exc)}"
+                ) from exc
             if isinstance(resume_envelope_id, str):
                 resume_from_id = resume_envelope_id
 
@@ -672,11 +709,11 @@ class FlowSkill(Skill):
                 continue
 
             short = _stop_after_short_name(skill_name)
-            # Build a per-step context.
-            step_args: dict[str, Any] = {}
-            forwarded = args_per_step.get(skill_name) or args_per_step.get(short)
-            if isinstance(forwarded, dict):
-                step_args.update(forwarded)
+            # Build a per-step context using explicit-key precedence so an
+            # empty-dict args entry isn't silently dropped to the
+            # short-name fallback (the ``or`` chain it replaced did so
+            # because empty dicts are falsy).
+            step_args = _resolve_step_args(args_per_step, skill_name)
 
             step_ctx = SkillContext(
                 scope=ctx.scope,
@@ -686,12 +723,15 @@ class FlowSkill(Skill):
                 failure_repair_commands=ctx.failure_repair_commands,
             )
 
-            # Snapshot drift sentinels BEFORE running the step.
+            # Snapshot drift sentinels BEFORE running the step. Hash the
+            # per-step args dict (not the whole multi-step mapping) so
+            # the checkpoint records which args this step actually
+            # consumed; ``compute_drift`` mirrors this on resume.
             workspace_root = _workspace_root_for_state(state_path)
             parent_state_hash = _state_hash(state_path)
             parent_git_head = _current_git_head(workspace_root)
             parent_profile_ids = _current_profile_ids(state_path)
-            args_per_step_hash = _canonical_args_per_step_hash(args_per_step)
+            args_per_step_hash = _canonical_args_per_step_hash(step_args)
 
             started_at = datetime.now(UTC)
 

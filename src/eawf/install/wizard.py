@@ -152,7 +152,9 @@ class WizardAnswers(BaseModel):
     def _validate_project_code(cls, value: str) -> str:
         """Reject anything that does not match the canonical project-code regex."""
         if not RE_PROJECT_CODE.fullmatch(value):
-            raise ValueError(f"project_code {value!r} must match {RE_PROJECT_CODE.pattern}")
+            raise ValueError(
+                "Project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only."
+            )
         return value
 
     @field_validator("profiles")
@@ -519,20 +521,32 @@ def _ask_step(step: WizardStep) -> Any:
     style = _build_style()
 
     if step.kind == "text":
-        return _ensure_answer(
-            questionary.text(step.prompt, default=str(step.default), style=style).ask(),
+        raw_text = _ensure_answer(
+            questionary.text(
+                step.prompt,
+                default=str(step.default),
+                style=style,
+                validate=step.validate,
+            ).ask(),
             step,
         )
+        return step.filter(raw_text) if step.filter is not None else raw_text
     if step.kind == "bool":
         return _ensure_answer(
             questionary.confirm(step.prompt, default=bool(step.default), style=style).ask(),
             step,
         )
     if step.kind == "path":
-        return _ensure_answer(
-            questionary.path(step.prompt, default=str(step.default), style=style).ask(),
+        raw_path = _ensure_answer(
+            questionary.path(
+                step.prompt,
+                default=str(step.default),
+                style=style,
+                validate=step.validate,
+            ).ask(),
             step,
         )
+        return step.filter(raw_path) if step.filter is not None else raw_path
     if step.kind == "choice":
         choices = list(step.choices or [])
         return _ensure_answer(
