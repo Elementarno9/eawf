@@ -98,12 +98,15 @@ def list_worktrees(
         # for every row rather than failing the listing.
         git_entries = []
     git_paths = {entry.get("worktree", "") for entry in git_entries}
+    repo_root_resolved = repo_root.resolve()
     for record in state.worktrees.values():
         if not include_terminal and record.status.value in {"merged", "abandoned"}:
             continue
+        candidate = Path(record.path)
+        abs_record = candidate if candidate.is_absolute() else (repo_root_resolved / candidate)
         yield WorktreeListing(
             record=record,
-            git_present=record.path in git_paths,
+            git_present=str(abs_record) in git_paths,
         )
 
 

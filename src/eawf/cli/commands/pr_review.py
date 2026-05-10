@@ -270,8 +270,13 @@ def _attach_findings(
 
             artifact_id = f"ART-REVIEW-{allocated_audit_id}"
             artifact_uri = _repo_relative_findings_uri(findings_path, state_path)
-            artifact_sha = _file_sha256(findings_path)
-            artifact_size = findings_path.stat().st_size
+            try:
+                artifact_sha = _file_sha256(findings_path)
+                artifact_size = findings_path.stat().st_size
+            except OSError as exc:
+                raise cli_errors.NotFound(
+                    f"findings file disappeared between existence check and read: {exc}"
+                ) from exc
             event_art = artifact_evi.add_artifact(
                 state,
                 artifact_id=artifact_id,

@@ -1137,6 +1137,58 @@ def wave_next_ready_cmd(
     emit_json_or_text(payload, "\n".join(text_lines), flags=flags)
 
 
+@wave_app.command("blocks-rebuild")
+def wave_blocks_rebuild_cmd(
+    ctx: typer.Context,
+    apply_all: Annotated[
+        bool,
+        typer.Option("--all", help="Rebuild blocks for every wave (vs no-op)."),
+    ] = False,
+) -> None:
+    """Rebuild ``Wave.blocks`` reverse-index from sister waves' ``deps``.
+
+    Legacy fix-up: waves planned BEFORE the W02 (B026) feature landed
+    do not have their ``blocks`` list maintained. This verb walks
+    ``state.waves`` and rewrites each wave's ``blocks`` to ``[
+    child_id for child in state.waves.values() if wave_id in child.deps
+    ]``, sorted.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not apply_all:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput("pass --all to rebuild every wave's blocks index"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return
+
+    rewritten: list[dict[str, list[str]]] = []
+    with portalock.acquire(state_path, timeout=5.0):
+        raw = state_path.read_bytes()
+        payload = orjson.loads(raw)
+        state = State.model_validate(payload)
+        for wave_id, wave in state.waves.items():
+            new_blocks = sorted(
+                child_id for child_id, child in state.waves.items() if wave_id in child.deps
+            )
+            if list(wave.blocks) != new_blocks:
+                rewritten.append({"id": wave_id, "from": list(wave.blocks), "to": new_blocks})
+                wave.blocks = new_blocks
+        if rewritten:
+            new_payload = state.model_dump(mode="json")
+            _write_state_unlocked(state_path, new_payload)
+
+    emit_json_or_text(
+        {"rewritten": rewritten, "count": len(rewritten)},
+        f"wave blocks-rebuild: rewrote {len(rewritten)} wave(s)",
+        flags=flags,
+    )
+
+
 # ---- Wave dispatch (subagent prompt rendering, B025) ------------------------
 
 

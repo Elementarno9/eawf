@@ -940,7 +940,10 @@
       "worktree_id": "WT-P08-I01-W01-1778451220"
     },
     "P08-I01-W02": {
-      "blocks": [],
+      "blocks": [
+        "P08-I01-W01",
+        "P08-I01-W03"
+      ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:13:08.058437Z",
       "commit": "149de74",
@@ -962,7 +965,10 @@
       "worktree_id": "WT-P08-I01-W02-1778449665"
     },
     "P08-I01-W03": {
-      "blocks": [],
+      "blocks": [
+        "P08-I01-W05",
+        "P08-I01-W06"
+      ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:29:29.549660Z",
       "commit": "76f23e5",

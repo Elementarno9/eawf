@@ -337,17 +337,21 @@ def wave_fix_ci_loop_cmd(
             flags=flags,
         )
         return
-    try:
-        log_text = _read_log(log)
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-        return
-
     history: list[dict[str, Any]] = []
     current_parent = parent_wave_id
     seen_signature: str | None = None
 
     for iter_index in range(1, max_iters + 1):
+        # Re-read each iter: the caller is expected to land the previous
+        # follow-up and re-run CI before the next loop tick, so the log
+        # content evolves. A static read outside the loop would surface
+        # the same signature on every iter and trip the "not converging"
+        # refusal spuriously after iter 1.
+        try:
+            log_text = _read_log(log)
+        except cli_errors.CliError as err:
+            cli_errors.emit_error(err, flags=flags)
+            return
         failures = _parse_all(log_text)
         if not failures:
             history.append(

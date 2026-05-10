@@ -255,3 +255,20 @@ def test_create_refuses_invalid_wave_id_regex(tmp_path: Path) -> None:
     state = _claimed_state()
     with pytest.raises(cli_errors.InvalidInput):
         create_worktree(state, repo_root=repo, wave_id="not-a-wave")
+
+
+def test_list_worktrees_git_present_cross_check_post_relative_path(
+    tmp_path: Path,
+) -> None:
+    """``list_worktrees`` must combine ``record.path`` (repo-relative) with
+    ``repo_root`` before comparing against ``git worktree list --porcelain``
+    output (which emits absolute paths). Regression for the
+    path-relativization audit fix in P08."""
+    from eawf.worktree import list_worktrees
+
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    rows = list(list_worktrees(state, repo_root=repo))
+    assert len(rows) == 1
+    assert rows[0].git_present is True
