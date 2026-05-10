@@ -48,6 +48,22 @@ eawf doctor                   # readiness checks
 eawf plugin doctor claude     # local drift check
 ```
 
+### Install as a CC plugin (local marketplace)
+
+For a portable Claude Code plugin install (skills + agents only; hooks
+deferred to v0.2 — see B015 in `docs/architecture/plugins.md`):
+
+```bash
+eawf plugin package claude --target ./build/eawf-plugin
+```
+
+Then in Claude Code:
+
+```text
+/plugin marketplace add ./build/eawf-plugin
+/plugin install eawf@eawf-local
+```
+
 ## Verify
 
 ```bash

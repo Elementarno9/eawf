@@ -1,0 +1,48 @@
+{#- Plugin tree README. Rendered as-is (no Jinja variables today, but
+    keeping a `.j2` extension keeps the renderer codepath uniform with
+    the manifest templates). -#}
+# eawf — Claude Code plugin
+
+Eä Workflow as a Claude Code plugin: 10 skills (`/research`, `/prep`,
+`/audit`, `/ship`, `/review`, `/polish`, `/init`, `/roadmap`,
+`/differentiate`, `/flow`) and 8 agents (researcher, planner, executor,
+auditor, reviewer, polisher, operator, domain-specialist).
+
+## Install (local marketplace)
+
+```text
+/plugin marketplace add <path-to-this-directory>
+/plugin install eawf@eawf-local
+```
+
+After install Claude Code surfaces the skills under their slash names
+and the agents under the standard subagent picker.
+
+## What this plugin contains
+
+- `skills/<name>/SKILL.md` — one per Eä skill.
+- `agents/<role>.md` — one per Eä agent role.
+- `.claude-plugin/plugin.json` — plugin manifest.
+- `.claude-plugin/marketplace.json` — local marketplace descriptor.
+
+## What is NOT included (v0.1)
+
+- **Hooks**. Eä's custom hook events (`phase_open`, `wave_close`,
+  `iter_open`) do not map onto Claude Code's standard event taxonomy
+  (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`). A v0.2 release
+  will add a translation layer; tracked as backlog item B015.
+- **`settings.json`**. The plugin install path
+  (`eawf plugin install claude`) writes settings into a per-repo
+  `.claude/` tree. The plugin-package mode (this tree) intentionally
+  emits no settings so it can ship through the CC marketplace.
+- **`.ea/` state**. State lives in your repo, not in the plugin.
+
+## Re-render
+
+Re-emit a fresh tree from the eawf source repo:
+
+```text
+uv run eawf plugin package claude --target <output-dir>
+```
+
+The render is idempotent — repeated runs produce a byte-identical tree.
