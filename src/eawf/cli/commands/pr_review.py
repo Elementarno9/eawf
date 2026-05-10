@@ -136,7 +136,6 @@ def wave_review_cmd(
     # findings is not None — verified above.
     assert findings is not None
     _attach_findings(
-        ctx,
         flags,
         wave_id=wave_id,
         findings_path=findings,
@@ -222,7 +221,6 @@ def _render_review_prompt_section(*, diff_path: Path) -> str:
 
 
 def _attach_findings(
-    ctx: typer.Context,
     flags: GlobalFlags,
     *,
     wave_id: str,

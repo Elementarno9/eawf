@@ -911,8 +911,8 @@ def wave_fail_cmd(
 
 _WAVE_STATUS_EMOJI: dict[WaveStatus, str] = {
     WaveStatus.PENDING: "⏳",  # hourglass
-    WaveStatus.CLAIMED: "\U0001f6a7",  # construction
-    WaveStatus.IN_PROGRESS: "\U0001f6a7",
+    WaveStatus.CLAIMED: "🚧",  # construction
+    WaveStatus.IN_PROGRESS: "🚧",
     WaveStatus.CLOSED: "✅",  # white heavy check mark
     WaveStatus.FAILED: "❌",  # cross mark
     WaveStatus.ABANDONED: "❌",
