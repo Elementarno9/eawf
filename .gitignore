@@ -31,10 +31,12 @@ CLAUDE.md
 .claude/
 .opencode/
 
-# .ea/ — state.json + config.yaml are committed; locks + local scratch + manifest are not.
+# .ea/ — state.json + config.yaml + store/*.jsonl are committed; locks +
+# local scratch + manifest cache + instrument-probe cache are not.
 .ea/locks/
 .ea/local/
 .ea/indexes/
+.ea/instrument-probe.json
 
 # Secrets
 .env
