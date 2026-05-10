@@ -3,7 +3,7 @@
 Phase 4 W01 freezes the field set. ``/differentiate`` compares the
 current scope to peer projects and surfaces differentiators; the body
 holds the comparison axes and the conclusions. W03 fills the
-implementation per `ea-proposal.md` §14.
+implementation per `docs/architecture/workflow.md`.
 """
 
 from __future__ import annotations

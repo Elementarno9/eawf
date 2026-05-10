@@ -1,6 +1,6 @@
 """Ordered list of wizard steps shared by the interactive and ``--no-input`` modes.
 
-Per ``ea-proposal.md`` §9 ("v0.1 init wizard"), ``eawf init`` walks the
+Per ``docs/architecture/installation.md``, ``eawf init`` walks the
 operator through twelve decisions before materialising a fresh ``.ea/``
 directory. Both the questionary TTY surface (:mod:`eawf.install.wizard`)
 and the ``--no-input`` non-interactive path consume this single, ordered
@@ -99,7 +99,7 @@ def _validate_project_code_input(value: str) -> bool | str:
     return "Project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only."
 
 
-# The twelve canonical wizard steps. Ordering matches ``ea-proposal.md`` §9.
+# The twelve canonical wizard steps. Ordering matches ``docs/architecture/installation.md``.
 # Each id is referenced verbatim by :class:`WizardAnswers`; renaming an id
 # is therefore a breaking change that requires a parallel edit in
 # :mod:`eawf.install.wizard`.

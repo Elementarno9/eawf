@@ -1,4 +1,4 @@
-"""Pure EU (Estimation Unit) calculator per ``ea-proposal.md`` §8.
+"""Pure EU (Estimation Unit) calculator per the v0.1 EU spec.
 
 One ``EU`` is 30 minutes of active operator+agent session time by default
 (``estimation.eu_minutes``). Estimates derive ``expected_eu`` and

@@ -1,10 +1,9 @@
 """Built-in (read-only) configuration defaults.
 
-The contents mirror the top-level schema draft in ``ea-proposal.md``
-§"Settings schema" / "Top-level schema draft". Every required section listed
-in ``eawf-schema-inventory.md`` "Config schema required sections" appears here
-so the merged config has every key resolvable to ``built-in`` when no later
-layer overrides.
+The contents mirror the top-level schema draft in
+``docs/architecture/state-model.md``. Every required section listed there
+appears here so the merged config has every key resolvable to ``built-in``
+when no later layer overrides.
 
 This module exposes a single read-only constant: :data:`BUILT_IN_DEFAULTS`.
 Callers that need to mutate the structure (loaders, mergers) MUST deep-copy

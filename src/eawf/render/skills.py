@@ -133,8 +133,7 @@ def render_skill_md(ctx: SkillTemplateContext) -> str:
 # Frozen v0.1 skill registry. Mirrors :data:`SkillName` literal — six core
 # (research/prep/audit/ship/review/polish) + four meta (init/roadmap/
 # differentiate/flow). Bodies are intentionally short pointers; full
-# canonical algorithms live in ea-proposal.md §14 / docs/skills/<name>.md
-# (Phase 5).
+# canonical algorithms live in docs/architecture/workflow.md.
 # ---------------------------------------------------------------------------
 
 _RESEARCH_BODY = """# /research

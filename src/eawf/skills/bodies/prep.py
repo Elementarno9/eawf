@@ -1,6 +1,6 @@
 """``/prep`` skill body.
 
-Frozen at Phase 4 W01 per `ea-proposal.md` §15.2:
+Per ``docs/architecture/envelope.md``:
 
     /prep body: { iter_id, objective, non_goals, dag: [{task_id, deps,
                   file_scope, commands, evidence, risk}], waves:

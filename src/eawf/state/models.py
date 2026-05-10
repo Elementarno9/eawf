@@ -1,6 +1,6 @@
 """Pydantic v2 state models for eawf.
 
-Mirrors ``eawf-schema-inventory.md``. Every model uses
+Mirrors ``docs/architecture/state-model.md``. Every model uses
 ``ConfigDict(extra="forbid")``. ID-shaped fields use regex patterns from
 :mod:`eawf.state.ids`. URN-shaped fields use the ``urn:eawf:v1:`` prefix
 constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).

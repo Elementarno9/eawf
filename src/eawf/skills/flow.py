@@ -1,8 +1,8 @@
 """``/flow`` skill — composite controller running the six core skills in order.
 
-Per `ea-proposal.md` §14 ``/flow`` drives a one-click ADD iteration:
-research → prep → execute (includes audit) → ship. The v0.1 plan §4 W03
-constrains this further: ``/flow`` runs all six core skills sequentially
+Per `docs/architecture/workflow.md` ``/flow`` drives a one-click ADD iteration:
+research → prep → execute (includes audit) → ship. ``/flow`` runs all six
+core skills sequentially
 (research → prep → audit → ship → review → polish), accumulating per-step
 envelopes under :attr:`FlowBody.steps`.
 

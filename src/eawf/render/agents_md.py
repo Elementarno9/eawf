@@ -1,6 +1,6 @@
 """Render AGENTS.md from a composed profile, preserving hand-edits in the file.
 
-Per ``eawf-v0.1-plan.md`` §P03 W04 (line 249):
+Per ``docs/policy/agents-claude-md.md``:
 
 - Take a :class:`~eawf.profiles.models.ComposedProfile` whose ``render_blocks``
   list declares the regions that should appear on disk.

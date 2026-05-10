@@ -1,4 +1,4 @@
-"""Canonical Eä exit codes per ``ea-proposal.md`` §7 / v0.1 plan §5.
+"""Canonical Eä exit codes per ``docs/reference/exit-codes.md``.
 
 Every CLI handler uses these constants when raising :class:`typer.Exit` so the
 exit-code surface is stable across runtimes. The :class:`eawf.cli.errors.CliError`

@@ -1,6 +1,6 @@
 """``/research`` skill body.
 
-Frozen at Phase 4 W01 per `ea-proposal.md` §15.2:
+Per ``docs/architecture/envelope.md``:
 
     /research body: { brief_id, questions: [{q, answer, confidence,
                        sources}], options: [{name, tradeoffs, complexity,

@@ -1,6 +1,6 @@
 """``/review`` skill body.
 
-Frozen at Phase 4 W01 per `ea-proposal.md` §15.2:
+Per ``docs/architecture/envelope.md``:
 
     /review body: { pr_url, base, head, findings: [{severity, location,
                     comment, suggested_fix}], recommendation:

@@ -1,6 +1,6 @@
 """``/flow`` skill body.
 
-Phase 4 W01 freezes the field set. Per `ea-proposal.md` §15.2, the
+Per ``docs/architecture/envelope.md``, the
 ``/flow`` body wraps the per-step envelopes of the six core skills it
 runs in sequence. Each step is stored as the dict-form of an
 :class:`~eawf.render.envelope.OutputEnvelope`; the runtime can re-validate

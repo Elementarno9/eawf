@@ -1,6 +1,6 @@
 """Profile composition subsystem for eawf.
 
-Per ``ea-proposal.md`` §"v0.1 profile bodies", each profile is a YAML body that
+Per ``docs/architecture/profiles.md``, each profile is a YAML body that
 declares:
 
 - ``name`` / ``version`` / ``description`` — identity metadata.

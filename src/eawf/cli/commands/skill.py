@@ -78,8 +78,8 @@ skill_app = typer.Typer(
 )
 
 
-# Per-skill metadata used by ``eawf skill list``. Mirrors `ea-proposal.md`
-# §15.1: six core (research/prep/audit/ship/review/polish) + four meta
+# Per-skill metadata used by ``eawf skill list``. Mirrors `docs/architecture/envelope.md`:
+# six core (research/prep/audit/ship/review/polish) + four meta
 # (init/roadmap/differentiate/flow) skill descriptions kept short enough
 # for a terminal table column.
 _SKILL_DESCRIPTIONS: dict[SkillName, str] = {

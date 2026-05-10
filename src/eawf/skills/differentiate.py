@@ -1,7 +1,7 @@
 """``/differentiate`` skill — generate project-specialised agent definitions.
 
-Implements the §14 algorithm for ``/differentiate`` from
-``ea-proposal.md``:
+Implements the ``/differentiate`` algorithm per
+``docs/architecture/workflow.md``:
 
 1. Probe instruments via ``EA_INSTRUMENT_PROBE``.
 2. Resolve scope: workspace, repo, project, subproject, phase, or

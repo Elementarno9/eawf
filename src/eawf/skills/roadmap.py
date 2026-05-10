@@ -1,6 +1,6 @@
 """``/roadmap`` skill — propose or extend the steady Eä roadmap.
 
-Implements the §14 algorithm for ``/roadmap`` from ``ea-proposal.md``:
+Implements the ``/roadmap`` algorithm per ``docs/architecture/workflow.md``:
 
 1. Probe instruments via ``EA_INSTRUMENT_PROBE``.
 2. Resolve scope: workspace, repo, project, subproject, explicit goal

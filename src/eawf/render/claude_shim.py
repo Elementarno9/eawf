@@ -1,6 +1,6 @@
 """CLAUDE.md shim renderer — emits the literal ``@AGENTS.md\\n`` import.
 
-Per ``ea-proposal.md`` and the v0.1 plan: CLAUDE.md is a one-line file whose
+Per ``docs/policy/agents-claude-md.md``: CLAUDE.md is a one-line file whose
 sole purpose is the Claude Code ``@AGENTS.md`` import directive. There are no
 managed regions; the entire file is generated content. Re-rendering is
 therefore idempotent — same one-byte difference between presence and absence,

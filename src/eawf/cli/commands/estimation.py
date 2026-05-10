@@ -1,4 +1,4 @@
-"""Typer sub-apps for ``eawf estimate`` and ``eawf actual`` per ea-proposal §8.
+"""Typer sub-apps for ``eawf estimate`` and ``eawf actual`` per the v0.1 EU spec.
 
 This module exposes two Typer groups:
 
@@ -15,7 +15,7 @@ Both groups follow the cross-cutting Phase 2 mutation pattern:
         store.append(envelope)
         events.append(event)
 
-Defaults for the ``estimation`` config block come from ea-proposal §8 since
+Defaults for the ``estimation`` config block come from the v0.1 EU spec since
 ``eawf config`` (Phase 2 W06) is not yet wired. When W06 lands, this module
 will read the merged config instead of the hard-coded defaults below.
 """
@@ -70,7 +70,7 @@ from eawf.validate.strict import validate_state
 
 logger = logging.getLogger(__name__)
 
-# ---- Defaults from ea-proposal §8 (until P02-W06 lands config) -----------------
+# ---- Defaults from the v0.1 EU spec (until P02-W06 lands config) -----------------
 
 DEFAULT_EU_MINUTES: Decimal = Decimal("30")
 DEFAULT_CENTRAL_MULTIPLIER: Decimal = Decimal("0.50")

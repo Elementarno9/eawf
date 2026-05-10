@@ -5,7 +5,7 @@ without the user supplying every flag. v0.1.1 will populate it.
 v0.1 ships with an empty tuple so ``eawf mcp add --from-catalog`` can
 be added in v0.1.1 without surface churn.
 
-Per ``eawf-v0.1-plan.md`` §9 line 461, non-env secret backends
+Per ``docs/architecture/installation.md``, non-env secret backends
 (1Password, sops, age) are deferred — every catalog entry, when added,
 must declare its env-refs as ``${ENV:NAME}`` only.
 """

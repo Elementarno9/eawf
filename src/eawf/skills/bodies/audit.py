@@ -1,6 +1,6 @@
 """``/audit`` skill body.
 
-Frozen at Phase 4 W01 per `ea-proposal.md` §15.2:
+Per ``docs/architecture/envelope.md``:
 
     /audit body: { scope_id, kind: evaluation|ship-gate, checks_run:
                    [{check_id, command, status, output_blob}],
