@@ -1733,6 +1733,7 @@
         "token_budget": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -1744,6 +1745,7 @@
         },
         "tokens_consumed": {
           "default": 0,
+          "minimum": 0,
           "title": "Tokens Consumed",
           "type": "integer"
         },

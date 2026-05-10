@@ -167,8 +167,11 @@ def wave_land(
         strategy=STRATEGY_CHERRY_PICK,
     )
 
-    record_path = merge_result.record.path
-    _refuse_on_conflict(wave_id, merge_result, record_path)
+    record_path_value = Path(merge_result.record.path)
+    abs_record_path = (
+        record_path_value if record_path_value.is_absolute() else repo_root / record_path_value
+    )
+    _refuse_on_conflict(wave_id, merge_result, str(abs_record_path))
 
     # Conflict path is guarded above; the success branch must have a
     # non-None merged_commit (merge_back populates HEAD on the no-op
