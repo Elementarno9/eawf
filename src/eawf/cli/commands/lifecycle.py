@@ -63,6 +63,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
+from eawf.dispatch import render_wave_prompt
 from eawf.lifecycle.allocator import (
     allocate_iter_id,
     allocate_phase_id,
@@ -1134,6 +1135,166 @@ def wave_next_ready_cmd(
     if blocked_by_failure:
         text_lines.append(f"blocked by failure: {blocked_by_failure}")
     emit_json_or_text(payload, "\n".join(text_lines), flags=flags)
+
+
+# ---- Wave dispatch (subagent prompt rendering, B025) ------------------------
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write *content* to *path* atomically.
+
+    Uses ``tempfile``-style suffix + :func:`os.replace` so partial writes
+    are never visible to a peer reader. The parent directory is created
+    if it is missing.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    suffix = secrets.token_hex(4)
+    tmp = path.with_name(f"{path.name}.tmp.{suffix}")
+    try:
+        with tmp.open("w", encoding="utf-8") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _waves_in_iter(state: State, iter_id: str) -> list[tuple[str, Any]]:
+    """Return (wave_id, Wave) pairs in id-ascending order for *iter_id*."""
+    return sorted(
+        ((wid, w) for wid, w in state.waves.items() if w.iter_id == iter_id),
+        key=lambda kv: kv[0],
+    )
+
+
+def _ready_wave_ids(state: State, iter_id: str) -> list[str]:
+    """Same logic as ``wave next-ready``: pending waves with every dep closed.
+
+    A wave whose dep is FAILED is excluded (matches the
+    blocked_by_failure surface in :func:`wave_next_ready_cmd`).
+    """
+    ready: list[str] = []
+    for wid, w in _waves_in_iter(state, iter_id):
+        if w.status != WaveStatus.PENDING:
+            continue
+        dep_waves = [state.waves[d] for d in w.deps if d in state.waves]
+        if any(dw.status == WaveStatus.FAILED for dw in dep_waves):
+            continue
+        if all(dw.status == WaveStatus.CLOSED for dw in dep_waves):
+            ready.append(wid)
+    return ready
+
+
+@wave_app.command("dispatch")
+def wave_dispatch_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to render a prompt for.")],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            help="Write the prompt to this path atomically (still emit envelope summary).",
+        ),
+    ] = None,
+) -> None:
+    """Render the subagent prompt for *wave_id* (read-only).
+
+    Prints the prompt to stdout in text mode or wraps it in a JSON
+    envelope under ``--json``. With ``--output PATH`` the prompt is
+    instead written to *PATH* atomically and the envelope/summary is
+    surfaced to stdout. A wave that is already CLOSED / FAILED /
+    ABANDONED still renders successfully (history view); a stderr note
+    flags the terminal status.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, flags = loaded
+    if wave_id not in state.waves:
+        cli_errors.emit_error(
+            cli_errors.NotFound(f"unknown wave: {wave_id}"),
+            flags=flags,
+        )
+        return
+    try:
+        prompt = render_wave_prompt(state, wave_id)
+    except KeyError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return
+    wave = state.waves[wave_id]
+    if wave.status in {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}:
+        print(
+            f"note: wave {wave_id!r} has terminal status {wave.status.value!r}; "
+            f"prompt rendered for history-only inspection",
+            file=sys.stderr,
+        )
+    if output is not None:
+        _atomic_write_text(output, prompt)
+        envelope: dict[str, Any] = {
+            "wave": wave_id,
+            "output": str(output),
+            "bytes_written": len(prompt.encode("utf-8")),
+        }
+        text = f"wave dispatch {wave_id} written to {output}"
+        emit_json_or_text(envelope, text, flags=flags)
+        return
+    envelope = {"wave": wave_id, "prompt": prompt}
+    emit_json_or_text(envelope, prompt, flags=flags)
+
+
+@wave_app.command("dispatch-batch")
+def wave_dispatch_batch_cmd(
+    ctx: typer.Context,
+    iter_flag: Annotated[
+        str | None,
+        typer.Option("--iter", help="Iter ID to enumerate (defaults to current iter)."),
+    ] = None,
+    ready_only: Annotated[
+        bool,
+        typer.Option("--ready-only", help="Restrict output to waves returned by next-ready."),
+    ] = False,
+) -> None:
+    """Render prompts for every (or every ready) pending wave under an iter.
+
+    Without ``--ready-only`` the verb walks every pending wave under
+    the iter. With ``--ready-only`` only the waves
+    :func:`wave_next_ready_cmd` would surface (deps all closed, no
+    failed-dep blockers) are rendered.
+    """
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, flags = loaded
+    target_iter = _resolve_iter_for_query(state, flags, iter_flag=iter_flag)
+    if target_iter is None:
+        return
+    if ready_only:
+        wave_ids = _ready_wave_ids(state, target_iter)
+    else:
+        wave_ids = [
+            wid for wid, w in _waves_in_iter(state, target_iter) if w.status == WaveStatus.PENDING
+        ]
+    prompts: list[dict[str, Any]] = []
+    text_chunks: list[str] = []
+    for wid in wave_ids:
+        try:
+            prompt = render_wave_prompt(state, wid)
+        except KeyError as exc:
+            cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+            return
+        prompts.append({"wave": wid, "prompt": prompt})
+        text_chunks.append(f"---- WAVE {wid} ----\n{prompt}")
+    payload: dict[str, Any] = {"iter": target_iter, "prompts": prompts}
+    text = "\n".join(text_chunks) if text_chunks else f"iter {target_iter}: no waves to dispatch"
+    emit_json_or_text(payload, text, flags=flags)
 
 
 # ---- Wave budget handlers --------------------------------------------------
