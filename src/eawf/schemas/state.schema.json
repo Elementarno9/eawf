@@ -1636,6 +1636,14 @@
       "additionalProperties": false,
       "description": "Atomic execution unit under an iter.",
       "properties": {
+        "blocks": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "type": "string"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
         "claim_session_id": {
           "anyOf": [
             {

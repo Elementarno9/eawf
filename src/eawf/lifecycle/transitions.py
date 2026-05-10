@@ -247,8 +247,13 @@ def plan_wave(
     """Insert a new wave with status ``pending``.
 
     Raises:
-        LifecycleError: if iter is missing/closed, wave id duplicates, or
-            any declared dep references a missing wave id.
+        LifecycleError: if iter is missing/closed, wave id duplicates, any
+            declared dep references a missing wave id, the dep set names
+            the wave itself, or the resulting graph would contain a cycle.
+
+    Side-effects on the reverse-index: for every ``dep`` in *deps*, the
+    dep wave's ``blocks`` list is mutated in-place to include *wave_id*
+    (idempotent — already-present ids are not duplicated).
     """
     it = state.iters.get(iter_id)
     if it is None:
@@ -258,15 +263,24 @@ def plan_wave(
     if wave_id in state.waves:
         raise LifecycleError(f"wave {wave_id!r} already exists")
     deps_list = list(deps or [])
+    if wave_id in deps_list:
+        raise LifecycleError(f"wave {wave_id!r} cannot depend on itself")
     for dep in deps_list:
         if dep not in state.waves:
             raise LifecycleError(f"unknown dep wave {dep!r}")
+    # Cycle check: simulate the post-insert DAG over deps and topo-sort.
+    # The new wave depends on every entry of ``deps_list``; existing
+    # waves keep their current ``deps``. If toposort fails any node
+    # remains unprocessed -> cycle. Self-dep is already rejected above.
+    if _would_create_cycle(state, new_id=wave_id, new_deps=deps_list):
+        raise LifecycleError(f"adding wave {wave_id!r} with deps={deps_list} would create a cycle")
     wave = Wave(
         id=wave_id,
         iter_id=iter_id,
         title=title,
         status=WaveStatus.PENDING,
         deps=deps_list,
+        blocks=[],
         file_scopes=list(file_scopes),
         claim_session_id=None,
         worktree_id=None,
@@ -278,8 +292,52 @@ def plan_wave(
     state.waves[wave_id] = wave
     if wave_id not in it.wave_ids:
         it.wave_ids.append(wave_id)
+    # Maintain the reverse "blocks" index: every dep gains the new wave
+    # in its blocks list (idempotent).
+    for dep in deps_list:
+        dep_wave = state.waves[dep]
+        if wave_id not in dep_wave.blocks:
+            dep_wave.blocks.append(wave_id)
     logger.info(f"plan_wave id={wave_id} iter={iter_id} files={file_scopes} deps={deps_list}")
     return wave
+
+
+def _would_create_cycle(
+    state: State,
+    *,
+    new_id: str,
+    new_deps: list[str],
+) -> bool:
+    """Return True iff inserting *new_id* with *new_deps* yields a cycle.
+
+    Kahn-style topo sort over the union {existing waves' deps,
+    new_id -> new_deps}. If any node remains unprocessed after the
+    sweep there is at least one cycle reachable from / containing it.
+    """
+    # adjacency: child_id -> set of parent dep ids (edges parent -> child)
+    deps_by_node: dict[str, set[str]] = {wid: set(w.deps) for wid, w in state.waves.items()}
+    deps_by_node[new_id] = set(new_deps)
+    # in_degree: incoming-edge count per node (an edge dep -> wave for each dep)
+    in_degree: dict[str, int] = {node: len(parents) for node, parents in deps_by_node.items()}
+    # children index: parent_id -> list of waves that list it as a dep
+    children: dict[str, list[str]] = {node: [] for node in deps_by_node}
+    for node, parents in deps_by_node.items():
+        for parent in parents:
+            # Skip dangling dep ids that were already rejected by the
+            # caller's "unknown dep" guard — guard against KeyError if a
+            # call site sneaks past that check.
+            if parent in children:
+                children[parent].append(node)
+    ready = [node for node, count in in_degree.items() if count == 0]
+    visited = 0
+    while ready:
+        node = ready.pop()
+        visited += 1
+        for child in children[node]:
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                ready.append(child)
+    return visited != len(deps_by_node)
 
 
 def claim_wave(state: State, *, wave_id: str, session_id: str) -> Wave:
