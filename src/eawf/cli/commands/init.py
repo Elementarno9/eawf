@@ -50,6 +50,24 @@ from eawf.lock import portalock
 logger = logging.getLogger(__name__)
 
 
+def _friendly_validation_message(exc: ValidationError) -> str:
+    """Return the first error message from *exc*, stripped of Pydantic prefix.
+
+    Pydantic v2 prepends ``"Value error, "`` to messages raised from
+    :class:`ValueError` inside field validators. The wizard validators
+    already produce operator-facing copy, so the prefix is noise; we
+    strip it before handing the text to :class:`InvalidInput`.
+    """
+    errors = exc.errors()
+    if not errors:
+        return str(exc)
+    msg = str(errors[0].get("msg", "")).strip()
+    prefix = "Value error, "
+    if msg.startswith(prefix):
+        msg = msg[len(prefix) :]
+    return msg or str(exc)
+
+
 def _build_answers(
     *,
     state_path: Path,
@@ -224,7 +242,10 @@ def init_cmd(
                 acceptance_typecheck=acceptance_typecheck,
             )
         except ValidationError as exc:
-            cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+            cli_errors.emit_error(
+                cli_errors.InvalidInput(_friendly_validation_message(exc)),
+                flags=flags,
+            )
             return
         try:
             result = run_wizard_no_input(answers, target_dir, force=force)
@@ -249,6 +270,12 @@ def init_cmd(
     # ``create_app_session`` to drive this branch deterministically.
     try:
         result = run_wizard_interactive(target_dir, force=force)
+    except ValidationError as exc:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(_friendly_validation_message(exc)),
+            flags=flags,
+        )
+        return
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
