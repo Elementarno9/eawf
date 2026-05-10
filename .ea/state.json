@@ -223,7 +223,21 @@
     "project_code": "EAWF",
     "subproject_id": null
   },
-  "decisions": {},
+  "decisions": {
+    "D01": {
+      "alternatives": [
+        "Keep plan §4 P06 scope verbatim; defer spec internalization to v0.1.1",
+        "Split into P06=spec internalization + P07=hardening"
+      ],
+      "created_at": "2026-05-10T13:25:45.960934Z",
+      "id": "D01",
+      "rationale": "Plan §4 lists P06 as Hardening + GA (Linux polish, golden scenarios, release tag). Phase 6 reframed to (a) internalize the v0.1 design spec into docs/, (b) dogfood eawf on its own repo, (c) ship the v0.1 PR. The displaced hardening work is captured in v0.2 backlog items B001 (Linux CI matrix), B009 (golden scenarios), B010 (v0.1.0 release tag).",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "P06 rescope: spec internalization + dogfood instead of plan §4 'Hardening + GA'",
+      "superseded_by": null
+    }
+  },
   "estimates": null,
   "goals": {
     "G01": {
@@ -349,7 +363,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T12:50:38.955852Z",
+  "updated_at": "2026-05-10T13:25:45.960934Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
