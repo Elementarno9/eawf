@@ -1,7 +1,7 @@
 [project]
 name = "eawf"
-version = "0.1.0.dev0"
-description = "Eä Workflow — agent-driven development framework (v0.1 in development)"
+version = "0.1.0"
+description = "Eä Workflow — agent-driven development framework"
 readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "MIT" }
