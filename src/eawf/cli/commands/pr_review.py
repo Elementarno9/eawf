@@ -118,17 +118,13 @@ def wave_review_cmd(
 
     if findings is not None and diff is not None:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                "exactly one of --findings or --diff must be provided"
-            ),
+            cli_errors.InvalidInput("exactly one of --findings or --diff must be provided"),
             flags=flags,
         )
         return
     if findings is None and diff is None:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                "exactly one of --findings or --diff must be provided"
-            ),
+            cli_errors.InvalidInput("exactly one of --findings or --diff must be provided"),
             flags=flags,
         )
         return
@@ -185,10 +181,7 @@ def _emit_review_request(
         "diff_path": str(diff_path),
         "review_request": review_request,
     }
-    text = (
-        f"wave review {wave_id} (prompt-prep)\n"
-        f"diff: {diff_path}\n\n{review_request}"
-    )
+    text = f"wave review {wave_id} (prompt-prep)\ndiff: {diff_path}\n\n{review_request}"
     emit_json_or_text(envelope, text, flags=flags)
 
 
@@ -272,9 +265,7 @@ def _attach_findings(
             wave = _resolve_wave_or_raise(state, wave_id)
             scope_id = _resolve_wave_scope(state, wave)
             final_scope_id = scope_id
-            allocated_audit_id = audit_id_override or _allocate_audit_id(
-                state, wave_id=wave_id
-            )
+            allocated_audit_id = audit_id_override or _allocate_audit_id(state, wave_id=wave_id)
             final_audit_id = allocated_audit_id
 
             artifact_id = f"ART-REVIEW-{allocated_audit_id}"
@@ -353,14 +344,10 @@ def _resolve_wave_scope(state: State, wave: Wave) -> str:
     """Walk wave → iter → phase → scope_id; raise on a broken edge."""
     it = state.iters.get(wave.iter_id)
     if it is None:
-        raise cli_errors.NotFound(
-            f"wave {wave.id!r} references unknown iter {wave.iter_id!r}"
-        )
+        raise cli_errors.NotFound(f"wave {wave.id!r} references unknown iter {wave.iter_id!r}")
     phase = state.phases.get(it.phase_id)
     if phase is None:
-        raise cli_errors.NotFound(
-            f"iter {it.id!r} references unknown phase {it.phase_id!r}"
-        )
+        raise cli_errors.NotFound(f"iter {it.id!r} references unknown phase {it.phase_id!r}")
     return phase.scope_id
 
 
@@ -381,9 +368,7 @@ def _allocate_audit_id(state: State, *, wave_id: str) -> str:
     for n in range(1, 100):
         if n not in used:
             return f"A{n:02d}{suffix}"
-    raise cli_errors.ValidationFailed(
-        f"audit-id allocation saturated for wave {wave_id!r}"
-    )
+    raise cli_errors.ValidationFailed(f"audit-id allocation saturated for wave {wave_id!r}")
 
 
 def _map_to_audit_verdict(review_verdict: ReviewVerdict) -> AuditVerdict:
@@ -437,8 +422,7 @@ def _render_findings_text(
 ) -> str:
     """Render the human-readable findings table for text mode."""
     header = (
-        f"wave review {wave_id} -> audit {audit_id} verdict={review_verdict}\n"
-        f"  summary: {tally}\n"
+        f"wave review {wave_id} -> audit {audit_id} verdict={review_verdict}\n  summary: {tally}\n"
     )
     if not findings:
         return header + "  findings: (none)"

@@ -10,8 +10,7 @@ from eawf.pr_review.parser import Finding, parse_findings
 def test_parse_findings_single_blocker_line() -> None:
     """A single canonical blocker line parses into one :class:`Finding`."""
     markdown = (
-        "src/eawf/auth.py:42: \U0001f534 blocker: SQL injection in lookup. "
-        "Use parameterised query."
+        "src/eawf/auth.py:42: \U0001f534 blocker: SQL injection in lookup. Use parameterised query."
     )
     findings = parse_findings(markdown)
     assert len(findings) == 1
@@ -71,8 +70,7 @@ def test_parse_findings_ignores_commentary_lines() -> None:
 def test_parse_findings_missing_line_number_yields_none() -> None:
     """The ``path::`` form (empty line slot) gives ``line=None``."""
     markdown = (
-        "src/eawf/missing.py:: \U0001f7e1 should-fix: file-level rename suggestion. "
-        "Rename module."
+        "src/eawf/missing.py:: \U0001f7e1 should-fix: file-level rename suggestion. Rename module."
     )
     findings = parse_findings(markdown)
     assert len(findings) == 1
