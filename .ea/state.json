@@ -268,6 +268,281 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Statusline parity with hand-rolled wrapper: rows: rich (multi-line), ctx/5h/7d progress bars, async stale-while-revalidate cache + prewarm wiring, glyph_mode/color_mode/rows config, module toggles + 'eawf global install' wizard per docs/architecture/statusline.md"
+    },
+    "B019": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:40.083539Z",
+      "id": "B019",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) — locks D02; target P09 evidence cluster"
+    },
+    "B020": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:40.490366Z",
+      "id": "B020",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis set-verdict' requires --audit <AID> — locks D03; target P09"
+    },
+    "B021": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:40.903684Z",
+      "id": "B021",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Artifact registry: sha256 mandatory for local files, optional for URL artifacts; 'eawf artifact verify' recomputes on demand — locks D04; target P09"
+    },
+    "B022": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:41.318125Z",
+      "id": "B022",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Integrity-check runner: auto-runs on 'eawf phase close'; 'eawf validate --integrity' opt-in manual; failures block close (--force requires audit reason) — locks D05; target P09"
+    },
+    "B023": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:41.727797Z",
+      "id": "B023",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Cross-language profile bodies (rust, go, ts) — pytest_pass analogue per language; target P09 runtime cluster"
+    },
+    "B024": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:55.658260Z",
+      "id": "B024",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them — target P10 distribution cluster"
+    },
+    "B025": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:56.068438Z",
+      "id": "B025",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block + relevant decisions/hypotheses/audits into self-contained prompt for the agent harness — target P08 orchestration"
+    },
+    "B026": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:56.478547Z",
+      "id": "B026",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch — target P08 orchestration"
+    },
+    "B027": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:56.888900Z",
+      "id": "B027",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits back into parent feature branch, mark wave landed in state — target P08 orchestration"
+    },
+    "B028": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:49:57.303775Z",
+      "id": "B028",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08 observability"
+    },
+    "B029": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:07.282092Z",
+      "id": "B029",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Decision-graph viz (text + dot/mermaid): render decisions/hypotheses/audits/backlog as a graph for human review — target P11 observability"
+    },
+    "B030": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:07.697320Z",
+      "id": "B030",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Memory GC + summarisation: compact/decay project memory and event log past a threshold; surface canonical summaries to agents — target P11 observability"
+    },
+    "B031": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:08.113757Z",
+      "id": "B031",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Doc-drift linter ('eawf doc verify'): detect when rendered docs disagree with state.json (closed phases referenced as active, missing audits, etc.) — target P11"
+    },
+    "B032": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:08.523474Z",
+      "id": "B032",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "PR-body generator from state: 'eawf pr render' produces phase PR body (Summary + Test plan + Phase deliverables) from state.json — target P11"
+    },
+    "B033": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:08.940895Z",
+      "id": "B033",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Skill eval harness (golden envelopes): regression tests for the dispatcher itself; measure dispatch quality across model/version changes — target P11"
+    },
+    "B034": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:19.505518Z",
+      "id": "B034",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Sandbox/permission policy module: TDAD-style bounded autonomy — explicit policy declares what an agent may do per wave/profile — target P11 runtime"
+    },
+    "B035": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:19.922171Z",
+      "id": "B035",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Per-wave/profile MCP scoping: Composio-style capability narrowing — bind MCP tools to scopes — target P10 distribution"
+    },
+    "B036": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:20.336797Z",
+      "id": "B036",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Non-Eä migration helper: import a foreign repo into eawf (detect language, scaffold .ea/, seed phase plan) — target v0.4 migration"
+    },
+    "B037": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:20.750046Z",
+      "id": "B037",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers; decay + summarisation hooks — target P11 observability"
+    },
+    "B038": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:21.169681Z",
+      "id": "B038",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki pattern — distil state.json into a human-readable narrative project wiki — target P11"
+    },
+    "B039": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:30.775755Z",
+      "id": "B039",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to source files; show what state-changes touch which files — target P11"
+    },
+    "B040": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:31.188663Z",
+      "id": "B040",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up wave to address failures, repeat until green — target P08 orchestration"
+    },
+    "B041": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:31.601134Z",
+      "id": "B041",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "PR review automation: dispatch reviewer subagent against the diff, attach findings as 'audit add --kind review' — target P08 orchestration"
+    },
+    "B042": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:32.019320Z",
+      "id": "B042",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Self-eval benchmark harness: score dispatcher's wave outputs against golden traces; CI-gates regression — target P12 observability"
+    },
+    "B043": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T19:50:32.427338Z",
+      "id": "B043",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "User-skill registry: per-user skill catalogue independent of project's plugin tree — target P09 distribution"
     }
   },
   "current": {
@@ -290,6 +565,74 @@
       "scope_id": "EAWF",
       "status": "active",
       "summary": "P06 rescope: spec internalization + dogfood instead of plan §4 'Hardening + GA'",
+      "superseded_by": null
+    },
+    "D02": {
+      "alternatives": [
+        "python-callable-only (every check needs a code change)",
+        "hybrid (yaml + python escape hatch)",
+        "defer to v0.2.1"
+      ],
+      "created_at": "2026-05-10T19:48:55.001291Z",
+      "id": "D02",
+      "rationale": "Bottleneck is non-coders authoring audits, not expressing arbitrary logic. YAML + registry of built-in kinds (file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) lets check-authors stay in YAML; new kinds are a code change. Hybrid escape hatch can come later if real example pushes against the registry.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "B019 audit-check DSL: yaml declarative + check-kind registry",
+      "superseded_by": null
+    },
+    "D03": {
+      "alternatives": [
+        "audit link required at hypothesis open time",
+        "audit link fully optional"
+      ],
+      "created_at": "2026-05-10T19:49:01.231132Z",
+      "id": "D03",
+      "rationale": "Audit link gates the commitment, not the exploration. Forcing audit at hypothesis open time forces premature audit design; making it fully optional fails the verify-before-claim rule. Permissive open + required audit on set-verdict matches the dogfood workflow.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "B020 hypothesis lifecycle: audit-link required at set-verdict only",
+      "superseded_by": null
+    },
+    "D04": {
+      "alternatives": [
+        "mandatory everywhere (files + URLs)",
+        "fully optional",
+        "defer to v0.2.1"
+      ],
+      "created_at": "2026-05-10T19:49:06.729261Z",
+      "id": "D04",
+      "rationale": "Local file integrity is cheap to enforce; URL integrity is a different problem (provenance + fetch policy). Mandatory-everywhere couples the registry to network state at registration. eawf artifact verify recomputes on demand for both cases.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "B021 artifact registry: sha256 mandatory for files, optional for URLs",
+      "superseded_by": null
+    },
+    "D05": {
+      "alternatives": [
+        "run on every state mutation",
+        "manual-only (no auto trigger)",
+        "defer to v0.2.1"
+      ],
+      "created_at": "2026-05-10T19:49:13.099461Z",
+      "id": "D05",
+      "rationale": "Phase close is the natural integrity boundary; manual run is the escape hatch for debugging. Every-mutation is too slow on hot paths like wave dispatch; manual-only is easy to forget. Failures block phase close; --force requires audit reason so the bypass is recorded.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "B022 integrity runner: auto on phase close + opt-in eawf validate --integrity",
+      "superseded_by": null
+    },
+    "D06": {
+      "alternatives": [
+        "hand-edit state.json now",
+        "ship the verbs as a P06 follow-up commit before tagging v0.1.0"
+      ],
+      "created_at": "2026-05-10T19:49:20.589570Z",
+      "id": "D06",
+      "rationale": "v0.1 CLI lacks 'eawf audit set-verdict' and 'eawf backlog set-priority' verbs. Hand-editing state.json would violate AGENTS.md rule 4 (state CLI is the only mutator). Safer to ship the verbs in P07 and do the retro-stamping (A01..A06 verdicts; B015/B017 P2->P1) at P07 closeout in one pass.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Defer retro audit-verdict + backlog priority-bumps to P07 CLI completeness",
       "superseded_by": null
     }
   },
@@ -418,7 +761,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T19:06:54.237098Z",
+  "updated_at": "2026-05-10T19:50:32.427338Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
