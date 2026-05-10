@@ -192,6 +192,28 @@ def test_remove_runtime_entry_refuses_user_owned(tmp_path: Path) -> None:
         )
 
 
+def test_remove_runtime_entry_force_overrides_user_owner(tmp_path: Path) -> None:
+    """``force=True`` deletes a user-owned entry the IntegrityViolation would normally protect."""
+    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    user_block = {"command": "/manual", "args": ["--keep"]}
+    settings_path.write_text(
+        json.dumps({"mcpServers": {"manual": user_block}}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    result = remove_runtime_entry(
+        server_id="manual",
+        runtime="claude",
+        target_dir=tmp_path,
+        force=True,
+    )
+    assert result.action == "removed"
+    parsed = _read_json(settings_path)
+    # ``mcpServers`` is dropped when the only entry is removed.
+    assert "mcpServers" not in parsed
+    assert result.user_entries_preserved == []
+
+
 def test_remove_runtime_entry_deletes_only_eawf_owned(tmp_path: Path) -> None:
     settings_path = tmp_path / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True)

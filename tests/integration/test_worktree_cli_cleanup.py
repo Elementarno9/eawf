@@ -76,7 +76,12 @@ def test_cli_cleanup_after_merge(tmp_path: Path) -> None:
 
 
 def test_cli_cleanup_refuses_dirty_no_force(tmp_path: Path) -> None:
-    """A dirty worktree refuses cleanup without ``--force`` (exit 8)."""
+    """A dirty worktree refuses cleanup without ``--force`` (exit 8).
+
+    Post-condition: the polluting file is still on disk after the
+    refusal, so a silent success that swallowed the dirty marker can't
+    pass this gate.
+    """
     repo, state_path = _seed_repo_with_state(tmp_path / "repo")
     wt_path, _ = _create_worktree_and_commit(
         repo,
@@ -86,7 +91,8 @@ def test_cli_cleanup_refuses_dirty_no_force(tmp_path: Path) -> None:
         msg="add hello",
     )
     # Pollute the worktree (but DO NOT merge, so status stays ACTIVE).
-    (Path(wt_path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
+    scratch = Path(wt_path) / "scratch.txt"
+    scratch.write_text("dirty\n", encoding="utf-8")
     res = runner.invoke(
         app,
         [
@@ -101,3 +107,7 @@ def test_cli_cleanup_refuses_dirty_no_force(tmp_path: Path) -> None:
     )
     assert res.exit_code == 8, res.stdout
     assert "dirty" in res.stdout
+    # Refusal must have left the worktree untouched — the polluting
+    # file is still present and the worktree directory exists.
+    assert scratch.exists(), "cleanup refused but the dirty file was removed anyway"
+    assert Path(wt_path).exists(), "cleanup refused but the worktree dir was removed"

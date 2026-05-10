@@ -7,7 +7,9 @@ Bypasses the CLI; exercises ``build_view``, ``render_markdown``, and
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -22,6 +24,19 @@ from eawf.render.plan_view import (
     render_markdown,
 )
 from eawf.state.models import State
+
+_GOLDEN_STATE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "golden"
+    / "plan_view"
+    / "core_python_research"
+    / "state.json"
+)
+
+
+def _golden_state() -> State:
+    """Load the committed plan-view golden fixture as a typed :class:`State`."""
+    return State.model_validate(json.loads(_GOLDEN_STATE_PATH.read_text(encoding="utf-8")))
 
 
 def _base_state() -> dict[str, Any]:
@@ -377,6 +392,55 @@ def test_render_json_section_filter_keeps_envelope_shape() -> None:
     assert env["risks"] == []
     assert env["checks"] == []
     assert env["dag"]["nodes"] == []
+
+
+def test_render_json_dag_envelope() -> None:
+    """``--show dag`` keeps the canonical envelope shape and populates DAG only."""
+    state = _golden_state()
+    view = build_view(state, "P05-I01")
+    env = render_json(view, sections=PlanSection.DAG)
+    # Header + summary always present; only DAG body populated.
+    assert set(env.keys()) == {"iter", "phase", "waves", "dag", "checks", "risks", "summary"}
+    assert env["waves"] == []
+    assert env["checks"] == []
+    assert env["risks"] == []
+    assert env["dag"]["nodes"], "dag.nodes should be populated for the golden fixture"
+    # Topo order or cycle is mutually exclusive — exactly one of them is set.
+    assert (env["dag"]["topo_order"] is None) != (env["dag"]["cycle"] is None)
+
+
+def test_render_json_checks_envelope() -> None:
+    """``--show checks`` populates ``checks`` from the iter audit + wave outcomes."""
+    state = _golden_state()
+    view = build_view(state, "P05-I01")
+    env = render_json(view, sections=PlanSection.CHECKS)
+    assert set(env.keys()) == {"iter", "phase", "waves", "dag", "checks", "risks", "summary"}
+    assert env["waves"] == []
+    assert env["risks"] == []
+    assert env["dag"]["nodes"] == []
+    assert env["checks"], "checks should be populated for the golden fixture"
+    # Each row carries the documented surface keys.
+    for c in env["checks"]:
+        assert set(c.keys()) >= {"source", "audit_id", "wave_id", "name", "passed"}
+    # Summary still carries the count derived from the unrestricted view.
+    assert env["summary"]["check_count"] == len(env["checks"])
+
+
+def test_render_json_risks_envelope() -> None:
+    """``--show risks`` populates ``risks`` from backlog/incidents/hypotheses."""
+    state = _golden_state()
+    view = build_view(state, "P05-I01")
+    env = render_json(view, sections=PlanSection.RISKS)
+    assert set(env.keys()) == {"iter", "phase", "waves", "dag", "checks", "risks", "summary"}
+    assert env["waves"] == []
+    assert env["checks"] == []
+    assert env["dag"]["nodes"] == []
+    assert env["risks"], "risks should be populated for the golden fixture"
+    # Summary risk_count mirrors the populated list length.
+    assert env["summary"]["risk_count"] == len(env["risks"])
+    # Each row carries the documented surface keys.
+    for r in env["risks"]:
+        assert set(r.keys()) >= {"kind", "id", "severity", "title", "status"}
 
 
 def test_parse_check_result_skips_malformed_row() -> None:
