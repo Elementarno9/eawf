@@ -30,8 +30,11 @@ silently add or drop a step.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
+
+from eawf.state.ids import RE_PROJECT_CODE
 
 # Narrow set of input shapes. Adding a new kind requires adding a matching
 # branch in both the questionary surface and :class:`WizardAnswers`;
@@ -61,6 +64,14 @@ class WizardStep:
             manifest for the wizard surface.
         choices: Allowed values for ``kind="choice"``. Always ``None`` for
             other kinds.
+        validate: Optional inline-validation callable threaded through
+            ``questionary.text``/``questionary.path`` so a malformed entry
+            is rejected at the prompt rather than after the wizard
+            finishes. Returns ``True`` on success or a friendly error
+            string on failure (questionary contract).
+        filter: Optional post-collection normaliser applied before the
+            answer is returned to the wizard runner. Currently used for
+            ``project_code`` to auto-uppercase the entered value.
     """
 
     id: str
@@ -69,6 +80,23 @@ class WizardStep:
     default: Any
     cli_flag: str
     choices: tuple[str, ...] | None = None
+    validate: Callable[[str], bool | str] | None = None
+    filter: Callable[[str], str] | None = None
+
+
+def _validate_project_code_input(value: str) -> bool | str:
+    """Questionary-side inline validator for :data:`STEP_PROJECT_CODE`.
+
+    Uppercases the entry before matching the canonical regex so a
+    lowercase entry like ``"demo"`` is accepted; :data:`STEP_PROJECT_CODE`
+    pairs this with ``filter=str.upper`` so the recorded answer is
+    normalised to uppercase before reaching :class:`WizardAnswers`.
+    Returns ``True`` on success or the friendly error string surfaced
+    inline by questionary on failure.
+    """
+    if RE_PROJECT_CODE.fullmatch(value.upper()):
+        return True
+    return "Project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only."
 
 
 # The twelve canonical wizard steps. Ordering matches ``ea-proposal.md`` §9.
@@ -85,10 +113,12 @@ STEP_STATE_PATH = WizardStep(
 
 STEP_PROJECT_CODE = WizardStep(
     id="project_code",
-    prompt="Project code (uppercase, alnum/dash, 2-16 chars)?",
+    prompt="Project code (2-16 chars, A-Z/0-9/-/_; auto-uppercased)?",
     kind="text",
     default="",
     cli_flag="--project-code",
+    validate=_validate_project_code_input,
+    filter=str.upper,
 )
 
 STEP_PROJECT_TITLE = WizardStep(
@@ -190,6 +220,9 @@ WIZARD_STEPS: tuple[WizardStep, ...] = (
     STEP_ACCEPTANCE_TYPECHECK,
     STEP_WRITE_CONFIRM,
 )
+
+
+assert len({s.id for s in WIZARD_STEPS}) == len(WIZARD_STEPS), "WIZARD_STEPS ids must be unique"
 
 
 __all__ = [

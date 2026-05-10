@@ -65,7 +65,7 @@ class ArtifactPromotionResult:
 def _load_source(store_path: Path, source_id: str) -> Envelope:
     """Return the latest envelope for *source_id* in *store_path*."""
     if not store_path.exists():
-        raise PromotionError(f"store file does not exist: {store_path}")
+        raise PromotionError(f"store file does not exist: {store_path.name}")
     latest: Envelope | None = None
     for line in store_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
