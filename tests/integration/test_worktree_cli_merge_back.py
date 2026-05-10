@@ -172,3 +172,113 @@ def test_cli_merge_back_conflict_envelope(tmp_path: Path) -> None:
     state = orjson.loads(state_path.read_bytes())
     record_id = next(iter(state["worktrees"]))
     assert state["worktrees"][record_id]["status"] == "conflicted"
+
+
+def _trigger_conflict(repo: Path, state_path: Path) -> None:
+    """Drive the merge-back path until a conflict envelope lands.
+
+    Shared scaffolding for the ``--continue`` / ``--abort`` resume tests:
+    edits ``conflict.txt`` on parent, creates a worktree that mutates
+    the same file, then advances the parent again so the cherry-pick
+    refuses with a conflict.
+    """
+    (repo / "conflict.txt").write_text("parent\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "parent edit"], check=True)
+    _create_worktree_and_commit(
+        repo,
+        state_path,
+        file_name="conflict.txt",
+        content="worktree\n",
+        msg="worktree edit",
+    )
+    (repo / "conflict.txt").write_text("parent v2\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "parent v2"], check=True)
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(repo),
+            "worktree",
+            "merge-back",
+            "--wave",
+            "P05-I01-W01",
+        ],
+        env={**os.environ, "EA_STATE": str(state_path)},
+    )
+    assert res.exit_code == 0, res.stdout
+    assert json.loads(res.stdout)["status"] == "conflicted"
+
+
+def test_cli_merge_back_continue_envelope(tmp_path: Path) -> None:
+    """``--continue`` after manual resolution lands the merge and reports MERGED."""
+    repo, state_path = _seed_repo_with_state(tmp_path / "repo")
+    _trigger_conflict(repo, state_path)
+    # Resolve the conflict in the parent worktree by accepting the
+    # worktree's content. The diff vs. parent's HEAD is non-empty
+    # (``parent v2`` → ``worktree``) so cherry-pick --continue produces
+    # a real commit and the unit-level
+    # ``test_continue_after_resolution_completes`` confirms the same
+    # convergence pattern lands MERGED.
+    (repo / "conflict.txt").write_text("worktree\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "conflict.txt"], check=True)
+
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(repo),
+            "worktree",
+            "merge-back",
+            "--wave",
+            "P05-I01-W01",
+            "--continue",
+        ],
+        env={**os.environ, "EA_STATE": str(state_path)},
+    )
+    assert res.exit_code == 0, res.stdout
+    envelope = json.loads(res.stdout)
+    # The continue envelope mirrors the success-shape: status string is
+    # the WorktreeStatus value (``merged``), strategy is preserved, and
+    # the conflict block is gone.
+    assert envelope["status"] == "merged"
+    assert envelope["strategy"] == "cherry_pick"
+    assert "conflict" not in envelope
+    state = orjson.loads(state_path.read_bytes())
+    record_id = next(iter(state["worktrees"]))
+    assert state["worktrees"][record_id]["status"] == "merged"
+
+
+def test_cli_merge_back_abort_envelope(tmp_path: Path) -> None:
+    """``--abort`` after a conflict marks the record ABANDONED and clears merged_commit."""
+    repo, state_path = _seed_repo_with_state(tmp_path / "repo")
+    _trigger_conflict(repo, state_path)
+
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(repo),
+            "worktree",
+            "merge-back",
+            "--wave",
+            "P05-I01-W01",
+            "--abort",
+        ],
+        env={**os.environ, "EA_STATE": str(state_path)},
+    )
+    assert res.exit_code == 0, res.stdout
+    envelope = json.loads(res.stdout)
+    # Abort envelope shape mirrors the success branch (no ``conflict``
+    # block) but the recorded WorktreeStatus is ``abandoned`` and the
+    # merged_commit is cleared.
+    assert envelope["status"] == "abandoned"
+    assert "conflict" not in envelope
+    assert envelope.get("merged_commit") is None
+    state = orjson.loads(state_path.read_bytes())
+    record_id = next(iter(state["worktrees"]))
+    assert state["worktrees"][record_id]["status"] == "abandoned"

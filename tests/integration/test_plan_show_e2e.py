@@ -359,3 +359,22 @@ def test_plan_show_format_json_consistent_with_global_json(
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.stdout)
     assert envelope["iter"]["id"] == "P05-I01"
+
+
+def test_plan_show_invalid_json_exits_4(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A corrupted state.json surfaces as ValidationFailed (exit 4), not a traceback."""
+    state_dir = tmp_path / ".ea"
+    state_dir.mkdir(exist_ok=True)
+    state_path = state_dir / "state.json"
+    # Truncated JSON object — orjson.JSONDecodeError lands inside plan show's
+    # except branch and maps to ValidationFailed.
+    state_path.write_text('{"schema_version": "1.0",', encoding="utf-8")
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    result = runner.invoke(app, ["--json", "plan", "show"])
+    assert result.exit_code == 4, result.output
+    body = json.loads(result.stdout)
+    assert body["error"] == "ValidationFailed"
+    assert "not valid JSON" in body["message"]
