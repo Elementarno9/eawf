@@ -2,10 +2,12 @@
 
 Surface contract:
 
-- ``eawf init`` (no flags, TTY) launches the Textual wizard. CI must pass
-  ``--no-input``; absent ``--no-input`` and an actual TTY, the launcher
-  falls through to interactive mode anyway and the test harness will fail
-  fast (Textual cannot bind to a fake TTY).
+- ``eawf init`` (no flags, TTY) launches the questionary wizard. CI must
+  pass ``--no-input``; absent ``--no-input`` and an actual TTY, the
+  launcher falls through to interactive mode anyway. Tests that need to
+  drive the interactive surface inject a
+  :class:`prompt_toolkit.input.PipeInput` via
+  :func:`prompt_toolkit.application.create_app_session`.
 - ``eawf init --no-input --project-code DEMO --profile core ...`` runs the
   pure pipeline in :func:`eawf.install.wizard.run_wizard_no_input`.
 - ``eawf init --force`` allows the pipeline to overwrite an existing
@@ -71,7 +73,7 @@ def _build_answers(
     :class:`WizardAnswers` ``frozen=True`` happy on the round-trip).
 
     ``write_confirm`` is intentionally NOT exposed at the CLI surface — it
-    is reserved for the interactive Textual wizard (see
+    is reserved for the interactive questionary wizard (see
     :class:`WizardAnswers` field doc) and has no effect on the
     ``--no-input`` pipeline. The model default (``True``) carries through.
     """
@@ -241,9 +243,10 @@ def init_cmd(
         emit_json_or_text(payload, text, flags=flags)
         return
 
-    # Interactive path. We only attempt the Textual launch if the operator
-    # did NOT pass --no-input — the Textual app needs a live terminal and
-    # will crash inside CliRunner. Tests never hit this branch.
+    # Interactive path. We only attempt the questionary launch if the
+    # operator did NOT pass --no-input — questionary needs a live terminal
+    # by default. Tests inject a ``prompt_toolkit.input.PipeInput`` via
+    # ``create_app_session`` to drive this branch deterministically.
     try:
         result = run_wizard_interactive(target_dir, force=force)
     except cli_errors.CliError as exc:

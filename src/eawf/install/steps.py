@@ -2,17 +2,18 @@
 
 Per ``ea-proposal.md`` §9 ("v0.1 init wizard"), ``eawf init`` walks the
 operator through twelve decisions before materialising a fresh ``.ea/``
-directory. Both the Textual TTY surface (:mod:`eawf.install.wizard`) and the
-``--no-input`` non-interactive path consume this single, ordered list so the
-two surfaces can never drift on either prompt count or prompt order.
+directory. Both the questionary TTY surface (:mod:`eawf.install.wizard`)
+and the ``--no-input`` non-interactive path consume this single, ordered
+list so the two surfaces can never drift on either prompt count or prompt
+order.
 
 Each step is described by an immutable :class:`WizardStep` carrying:
 
 - ``id``      — answer key in :class:`~eawf.install.wizard.WizardAnswers`.
-- ``prompt``  — short human-readable label (Textual renders it; ``--no-input``
-  surfaces it only on validation errors).
-- ``kind``    — narrow Literal of the input shape; chosen so each kind maps to
-  a single Textual widget *and* a single argparse-side option type.
+- ``prompt``  — short human-readable label (questionary renders it;
+  ``--no-input`` surfaces it only on validation errors).
+- ``kind``    — narrow Literal of the input shape; chosen so each kind maps
+  to a single questionary prompt *and* a single argparse-side option type.
 - ``default`` — value used when the operator skips the prompt OR omits the
   flag in ``--no-input``. None of the defaults are required-fields; the
   wizard layer enforces "required" via Pydantic, not via a sentinel here.
@@ -33,9 +34,9 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 # Narrow set of input shapes. Adding a new kind requires adding a matching
-# branch in both the Textual surface and :class:`WizardAnswers`; keeping the
-# Literal narrow surfaces "I added a kind but forgot the renderer" at type
-# check time.
+# branch in both the questionary surface and :class:`WizardAnswers`;
+# keeping the Literal narrow surfaces "I added a kind but forgot the
+# renderer" at type check time.
 WizardKind = Literal["text", "choice", "multichoice", "bool", "path"]
 
 
@@ -46,9 +47,9 @@ class WizardStep:
     Attributes:
         id: Stable answer key (matches the field name on
             :class:`~eawf.install.wizard.WizardAnswers`).
-        prompt: One-line label. Used by Textual for the field caption and
-            by ``--no-input`` validation errors when a required answer is
-            missing.
+        prompt: One-line label. Used by questionary for the prompt text
+            and by ``--no-input`` validation errors when a required answer
+            is missing.
         kind: One of ``text``, ``choice``, ``multichoice``, ``bool``,
             ``path`` — see :data:`WizardKind`.
         default: Default value if the operator does not provide one.
