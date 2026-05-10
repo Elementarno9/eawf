@@ -8,6 +8,7 @@ is exercised. ``EA_STATE`` is pointed at a fixture stamped under ``tmp_path``.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from copy import deepcopy
 from pathlib import Path
@@ -21,6 +22,9 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 
 runner = CliRunner()
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -334,10 +338,14 @@ def test_plan_show_section_filter_restricts_markdown_body(
 def test_plan_show_help_lists_all_options() -> None:
     result = runner.invoke(app, ["plan", "show", "--help"])
     assert result.exit_code == 0, result.output
-    assert "--iter" in result.stdout
-    assert "--format" in result.stdout
-    assert "--show" in result.stdout
-    assert "--ascii" in result.stdout
+    # Typer's Rich formatter wraps option names in ANSI bold/dim sequences when
+    # rendering through CliRunner (no real TTY); strip them before substring
+    # checks so the assertion survives both decorated and plain output.
+    out = _ANSI_RE.sub("", result.stdout)
+    assert "--iter" in out, out
+    assert "--format" in out, out
+    assert "--show" in out, out
+    assert "--ascii" in out, out
 
 
 def test_plan_show_format_json_consistent_with_global_json(
