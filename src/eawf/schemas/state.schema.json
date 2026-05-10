@@ -1730,6 +1730,23 @@
           "title": "Title",
           "type": "string"
         },
+        "token_budget": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Budget"
+        },
+        "tokens_consumed": {
+          "default": 0,
+          "title": "Tokens Consumed",
+          "type": "integer"
+        },
         "worktree_id": {
           "anyOf": [
             {

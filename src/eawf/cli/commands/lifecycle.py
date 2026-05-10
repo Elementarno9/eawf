@@ -39,6 +39,7 @@ import hashlib
 import logging
 import os
 import secrets
+import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,6 +49,16 @@ import orjson
 import typer
 from pydantic import ValidationError as PydValidationError
 
+from eawf.budget.policy import BLOCK_TAG, WARN_TAG
+from eawf.budget.service import (
+    check_budget as budget_check,
+)
+from eawf.budget.service import (
+    record_consumption as budget_record,
+)
+from eawf.budget.service import (
+    set_budget as budget_set,
+)
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
@@ -115,6 +126,13 @@ wave_app = typer.Typer(
     help="Wave lifecycle (plan, claim, close, fail, graph, next-ready).",
     no_args_is_help=True,
 )
+
+wave_budget_app = typer.Typer(
+    name="budget",
+    help="Per-wave token-budget cap (set, consume, show).",
+    no_args_is_help=True,
+)
+wave_app.add_typer(wave_budget_app, name="budget")
 
 
 # ---- Internal helpers -------------------------------------------------------
@@ -768,6 +786,20 @@ def wave_claim_cmd(
             flags=flags,
         )
         return
+
+    def _claim_with_budget_gate(state: State) -> None:
+        wave = state.waves.get(wave_id)
+        if (
+            wave is not None
+            and wave.token_budget is not None
+            and wave.tokens_consumed >= wave.token_budget
+        ):
+            raise cli_errors.ValidationFailed(
+                f"wave {wave_id!r} is over token budget "
+                f"({wave.tokens_consumed}/{wave.token_budget}); raise budget or split work"
+            )
+        claim_wave(state, wave_id=wave_id, session_id=session)
+
     _run_mutation(
         ctx,
         command="wave claim",
@@ -783,9 +815,7 @@ def wave_claim_cmd(
             "session": session,
             "worktree_policy": worktree_policy,
         },
-        mutate=lambda state: _wrap_no_return(
-            claim_wave(state, wave_id=wave_id, session_id=session)
-        ),
+        mutate=_claim_with_budget_gate,
     )
 
 
@@ -1106,6 +1136,176 @@ def wave_next_ready_cmd(
     emit_json_or_text(payload, "\n".join(text_lines), flags=flags)
 
 
+# ---- Wave budget handlers --------------------------------------------------
+
+
+@wave_budget_app.command("set")
+def wave_budget_set_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID whose budget is being set.")],
+    tokens: Annotated[int, typer.Argument(help="Non-negative token cap (0 allowed).")],
+) -> None:
+    """Set ``Wave.token_budget`` for *wave_id* (non-negative integer)."""
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    if tokens < 0:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"--tokens must be non-negative; got {tokens}"),
+            flags=flags,
+        )
+        return
+
+    def _mutator(state: State) -> None:
+        try:
+            budget_set(state, wave_id, tokens)
+        except KeyError as exc:
+            raise cli_errors.NotFound(str(exc)) from exc
+
+    _run_mutation(
+        ctx,
+        command="wave budget set",
+        args={"id": wave_id, "tokens": tokens},
+        scope_id=wave_id,
+        text=f"wave budget set {wave_id} tokens={tokens}",
+        envelope=lambda: {"wave": wave_id, "token_budget": tokens},
+        mutate=_mutator,
+    )
+
+
+@wave_budget_app.command("consume")
+def wave_budget_consume_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID accumulating consumption.")],
+    tokens: Annotated[int, typer.Argument(help="Non-negative token delta to add.")],
+) -> None:
+    """Add *tokens* to ``Wave.tokens_consumed`` and surface the policy verdict.
+
+    Exits ``VALIDATION_FAILED`` (4) when the post-add classification is
+    ``block:over-budget``. A ``warn:75-percent`` classification prints a
+    stderr warning but exits zero.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    if tokens < 0:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"--tokens must be non-negative; got {tokens}"),
+            flags=flags,
+        )
+        return
+
+    result: dict[str, Any] = {}
+
+    def _mutator(state: State) -> None:
+        try:
+            wave, tag = budget_record(state, wave_id, tokens)
+        except KeyError as exc:
+            raise cli_errors.NotFound(str(exc)) from exc
+        result["classification"] = tag
+        result["tokens_consumed"] = wave.tokens_consumed
+        result["token_budget"] = wave.token_budget
+        if tag == BLOCK_TAG:
+            raise cli_errors.ValidationFailed(
+                f"wave {wave_id!r} is over token budget "
+                f"({wave.tokens_consumed}/{wave.token_budget}); "
+                f"raise budget or split work"
+            )
+
+    _run_mutation(
+        ctx,
+        command="wave budget consume",
+        args={"id": wave_id, "tokens": tokens},
+        scope_id=wave_id,
+        text=f"wave budget consume {wave_id} tokens={tokens}",
+        envelope=lambda: {
+            "wave": wave_id,
+            "delta": tokens,
+            "tokens_consumed": result.get("tokens_consumed"),
+            "token_budget": result.get("token_budget"),
+            "classification": result.get("classification"),
+        },
+        mutate=_mutator,
+    )
+
+    if result.get("classification") == WARN_TAG:
+        consumed = result.get("tokens_consumed")
+        budget_val = result.get("token_budget")
+        logger.warning(f"wave {wave_id!r} at 75% of token budget ({consumed}/{budget_val})")
+        print(
+            f"warn: wave {wave_id!r} at 75% of token budget ({consumed}/{budget_val})",
+            file=sys.stderr,
+        )
+
+
+@wave_budget_app.command("show")
+def wave_budget_show_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to inspect (read-only).")],
+) -> None:
+    """Print *wave_id*'s budget, consumption, remainder, and policy verdict."""
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return
+    if not state_path.exists():
+        cli_errors.emit_error(
+            cli_errors.NotFound(f"state file not found: {state_path}"),
+            flags=flags,
+        )
+        return
+    try:
+        payload = _read_state_payload(state_path)
+        try:
+            state = State.model_validate(payload)
+        except PydValidationError as exc:
+            raise cli_errors.IntegrityViolation(
+                f"state at {state_path} fails schema validation: {exc}"
+            ) from exc
+        try:
+            classification = budget_check(state, wave_id)
+        except KeyError as exc:
+            raise cli_errors.NotFound(str(exc)) from exc
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    wave = state.waves[wave_id]
+    budget_val = wave.token_budget
+    consumed = wave.tokens_consumed
+    remaining = None if budget_val is None else budget_val - consumed
+    envelope = {
+        "wave": wave_id,
+        "token_budget": budget_val,
+        "tokens_consumed": consumed,
+        "remaining": remaining,
+        "classification": classification,
+    }
+    budget_display = "unset" if budget_val is None else str(budget_val)
+    remaining_display = "n/a" if remaining is None else str(remaining)
+    text = (
+        f"wave {wave_id} budget={budget_display} consumed={consumed} "
+        f"remaining={remaining_display} status={classification or 'ok'}"
+    )
+    emit_json_or_text(envelope, text, flags=flags)
+
+
 # ---- Mutation runner --------------------------------------------------------
 
 
@@ -1203,4 +1403,5 @@ __all__ = [
     "project_app",
     "subproject_app",
     "wave_app",
+    "wave_budget_app",
 ]
