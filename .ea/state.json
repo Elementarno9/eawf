@@ -224,6 +224,28 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap show' (rich table — phases/iters/waves with collapsible done branches, in-progress + planned work, EU estimate vs actual), then build the bare-'eawf' multi-pane TUI on the same data model (state pane + roadmap pane + git pane + memory pane); per fixed-decisions.md the Textual-style dashboard is deferred beyond v0.1"
+    },
+    "B015": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T14:47:38.354765Z",
+      "id": "B015",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Plugin-mode hooks: map eawf custom events to standard CC hook events"
+    },
+    "B016": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T14:47:38.781639Z",
+      "id": "B016",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Auto-publish to remote CC marketplace via GitHub Actions workflow"
     }
   },
   "current": {
@@ -374,7 +396,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T13:47:07.026954Z",
+  "updated_at": "2026-05-10T14:47:38.781639Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
