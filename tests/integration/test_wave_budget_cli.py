@@ -42,14 +42,8 @@ def _bootstrap_pending_wave(workspace: Path, wave_id: str = "P01-I01-W01") -> No
         ).exit_code
         == 0
     )
-    assert (
-        runner.invoke(app, ["phase", "open", "--auto", "--title", "Bootstrap"]).exit_code
-        == 0
-    )
-    assert (
-        runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "Iter1"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["phase", "open", "--auto", "--title", "Bootstrap"]).exit_code == 0
+    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "Iter1"]).exit_code == 0
     assert (
         runner.invoke(
             app,
@@ -112,9 +106,7 @@ def test_wave_budget_set_negative_exits_3(workspace: Path) -> None:
 
 def test_wave_budget_consume_warn_exit_zero(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
-    assert (
-        runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
-    )
+    assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
     res = runner.invoke(
         app,
         ["--json", "wave", "budget", "consume", "P01-I01-W01", "750"],
@@ -126,9 +118,7 @@ def test_wave_budget_consume_warn_exit_zero(workspace: Path) -> None:
 
 def test_wave_budget_consume_block_nonzero_exit(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
-    assert (
-        runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
-    )
+    assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
     res = runner.invoke(
         app,
         ["wave", "budget", "consume", "P01-I01-W01", "1000"],
@@ -144,9 +134,7 @@ def test_wave_budget_consume_block_nonzero_exit(workspace: Path) -> None:
 
 def test_wave_budget_consume_unknown_wave_exits_2(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
-    res = runner.invoke(
-        app, ["wave", "budget", "consume", "P09-I09-W09", "100"]
-    )
+    res = runner.invoke(app, ["wave", "budget", "consume", "P09-I09-W09", "100"])
     assert res.exit_code == 2, res.stdout
 
 
@@ -175,10 +163,7 @@ def test_wave_claim_refuses_over_budget(workspace: Path) -> None:
     # *manual* over-budget setup by lowering the budget below the
     # current consumption with ``set``.
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
-    assert (
-        runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code == 0
     # Lower the budget to match the existing consumption — wave is now
     # exactly at 100 % and ``wave claim`` must refuse.
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "750"]).exit_code == 0
