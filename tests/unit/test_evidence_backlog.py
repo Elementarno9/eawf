@@ -130,6 +130,64 @@ def test_close_backlog_happy_with_complete_audit(tmp_path: Path) -> None:
     assert event.payload["event_type"] == "backlog.close"
 
 
+def test_set_priority_happy_each_value(tmp_path: Path) -> None:
+    """Boundary: each priority value transition succeeds and writes a single event."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    for new in (BacklogPriority.P1, BacklogPriority.P0, BacklogPriority.P3):
+        event = backlog.set_priority(state, item_id="B023", priority=new)
+        assert state.backlog["B023"].priority == new
+        assert event.payload["event_type"] == "backlog.set_priority"
+
+
+def test_set_priority_unknown_raises_not_found(tmp_path: Path) -> None:
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    with pytest.raises(cli_errors.NotFound, match="B999"):
+        backlog.set_priority(state, item_id="B999", priority=BacklogPriority.P1)
+
+
+def test_set_priority_closed_item_raises(tmp_path: Path) -> None:
+    """Closed items are frozen — set_priority rejects with InvalidInput."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+        verdict=AuditVerdict.PASS,
+    )
+    backlog.close_backlog(
+        state,
+        item_id="B023",
+        resolution="done",
+        commit="abc",
+        audit_id="AUD-001",
+    )
+    with pytest.raises(cli_errors.InvalidInput, match="closed"):
+        backlog.set_priority(state, item_id="B023", priority=BacklogPriority.P0)
+
+
+def test_set_priority_no_op_rejected(tmp_path: Path) -> None:
+    """Re-applying the same priority is rejected to keep the event log clean."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    with pytest.raises(cli_errors.InvalidInput, match="already has priority"):
+        backlog.set_priority(state, item_id="B023", priority=BacklogPriority.P2)
+
+
 def test_state_transaction_persists_close_backlog(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     paths = _io.store_paths(state_path)
