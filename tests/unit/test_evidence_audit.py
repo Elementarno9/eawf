@@ -286,6 +286,150 @@ def test_add_audit_rejects_unknown_report_artifact_id(tmp_path: Path) -> None:
     assert (state.audits or {}) == {}
 
 
+def test_set_verdict_lifts_pending_to_complete(tmp_path: Path) -> None:
+    """Pending audit + --report lands status=complete with the supplied verdict."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+    )
+    assert state.audits["AUD-001"].status == AuditStatus.PENDING
+
+    record, event = audit.set_verdict(
+        state,
+        audit_id="AUD-001",
+        verdict=AuditVerdict.PASS,
+        report_artifact_id="ART-001",
+    )
+    a = state.audits["AUD-001"]
+    assert a.status == AuditStatus.COMPLETE
+    assert a.verdict == AuditVerdict.PASS
+    assert a.report_artifact_id == "ART-001"
+    assert record.payload["verdict"] == "pass"
+    assert event.payload["event_type"] == "audit.set_verdict"
+
+
+def test_set_verdict_pending_without_report_raises(tmp_path: Path) -> None:
+    """Pending audit + no --report raises InvalidInput."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+    )
+    with pytest.raises(cli_errors.InvalidInput, match="pending"):
+        audit.set_verdict(
+            state,
+            audit_id="AUD-001",
+            verdict=AuditVerdict.PASS,
+            report_artifact_id=None,
+        )
+
+
+def test_set_verdict_unknown_audit_raises(tmp_path: Path) -> None:
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    with pytest.raises(cli_errors.NotFound, match="AUD-999"):
+        audit.set_verdict(
+            state,
+            audit_id="AUD-999",
+            verdict=AuditVerdict.PASS,
+        )
+
+
+def test_set_verdict_orphan_report_raises(tmp_path: Path) -> None:
+    """Pending audit + unknown artifact raises InvalidInput (orphan-ref guard)."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+    )
+    with pytest.raises(cli_errors.InvalidInput, match="ART-999"):
+        audit.set_verdict(
+            state,
+            audit_id="AUD-001",
+            verdict=AuditVerdict.PASS,
+            report_artifact_id="ART-999",
+        )
+
+
+def test_set_verdict_complete_audit_updates_verdict(tmp_path: Path) -> None:
+    """Already-complete audit: verdict updated in place, report unchanged."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+        verdict=AuditVerdict.MINOR,
+    )
+    audit.set_verdict(
+        state,
+        audit_id="AUD-001",
+        verdict=AuditVerdict.PASS,
+    )
+    a = state.audits["AUD-001"]
+    assert a.verdict == AuditVerdict.PASS
+    assert a.report_artifact_id == "ART-001"
+    assert a.status == AuditStatus.COMPLETE
+
+
+def test_set_verdict_complete_rejects_differing_report(tmp_path: Path) -> None:
+    """Already-complete audit: differing --report rejected to prevent silent relink."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_artifact(state, "ART-001")
+    _seed_artifact(state, "ART-002")
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+    )
+    with pytest.raises(cli_errors.InvalidInput, match="ART-002"):
+        audit.set_verdict(
+            state,
+            audit_id="AUD-001",
+            verdict=AuditVerdict.PASS,
+            report_artifact_id="ART-002",
+        )
+
+
+def test_set_verdict_complete_accepts_same_report(tmp_path: Path) -> None:
+    """Passing the same --report on a complete audit is a no-op for the field."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+    )
+    audit.set_verdict(
+        state,
+        audit_id="AUD-001",
+        verdict=AuditVerdict.PASS,
+        report_artifact_id="ART-001",
+    )
+    assert state.audits["AUD-001"].verdict == AuditVerdict.PASS
+    assert state.audits["AUD-001"].report_artifact_id == "ART-001"
+
+
 def test_add_audit_accepts_known_report_artifact_id(tmp_path: Path) -> None:
     """Happy path for the orphan-ref guard: the cited artifact already
     exists in state.artifacts, so the audit lands status=complete."""

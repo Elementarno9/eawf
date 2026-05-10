@@ -201,6 +201,98 @@ def run_audit(
     return record, event
 
 
+def set_verdict(
+    state: State,
+    *,
+    audit_id: str,
+    verdict: AuditVerdict,
+    report_artifact_id: str | None = None,
+) -> tuple[Envelope, Envelope]:
+    """Set ``verdict`` on an existing audit; lift ``PENDING`` audits to
+    ``COMPLETE`` when ``report_artifact_id`` is supplied.
+
+    Behaviour matrix:
+
+    * ``audit_id`` absent → :class:`NotFound`.
+    * Audit ``PENDING`` and ``report_artifact_id`` is ``None`` →
+      :class:`InvalidInput` (a verdict requires evidence).
+    * Audit ``PENDING`` and ``report_artifact_id`` provided → orphan-ref
+      guard mirrors :func:`add_audit`; on success the audit lifts to
+      ``COMPLETE`` with the supplied ``report_artifact_id`` and ``verdict``.
+    * Audit ``COMPLETE`` → ``verdict`` is updated in place. Supplying a
+      ``report_artifact_id`` that *differs* from the existing one is rejected
+      so callers cannot silently relink the evidence anchor; passing the
+      same id (or omitting it) is a no-op for the report field.
+    """
+    audits: dict[str, Audit] = dict(state.audits or {})
+    if audit_id not in audits:
+        raise NotFound(f"audit {audit_id!r} not found")
+
+    prior = audits[audit_id]
+    new_status: AuditStatus
+    new_report: str | None
+
+    if prior.status == AuditStatus.PENDING:
+        if report_artifact_id is None:
+            raise InvalidInput(
+                f"audit {audit_id!r} is pending; --report required to lift to complete"
+            )
+        if report_artifact_id not in state.artifacts:
+            raise InvalidInput(f"unknown artifact id: {report_artifact_id!r}")
+        new_status = AuditStatus.COMPLETE
+        new_report = report_artifact_id
+    else:
+        if report_artifact_id is not None and report_artifact_id != prior.report_artifact_id:
+            raise InvalidInput(
+                f"audit {audit_id!r} already has report={prior.report_artifact_id!r}; "
+                f"cannot replace with {report_artifact_id!r}"
+            )
+        new_status = prior.status
+        new_report = prior.report_artifact_id
+
+    now = datetime.now(UTC)
+    updated = prior.model_copy(
+        update={
+            "status": new_status,
+            "report_artifact_id": new_report,
+            "verdict": verdict,
+        }
+    )
+    audits[audit_id] = updated
+    state.audits = audits
+    state.updated_at = now
+
+    ts_ms = int(now.timestamp() * 1000)
+    record = _io.kind_envelope(
+        record_id=f"{audit_id}-VERDICT-{ts_ms}",
+        kind=StoreKind.AUDIT,
+        scope_id=updated.scope_id,
+        summary=f"audit {audit_id} verdict={verdict.value}",
+        payload={
+            "audit_kind": updated.kind.value,
+            "verdict": verdict.value,
+            "check_results": list(updated.check_results),
+            "report_artifact_id": new_report,
+        },
+        artifact_ids=[new_report] if new_report else [],
+    )
+    event = _io.event_envelope(
+        event_id=f"EVT-audit-set-verdict-{audit_id}-{ts_ms}",
+        scope_id=updated.scope_id,
+        event_type="audit.set_verdict",
+        actor="cli",
+        command="audit set-verdict",
+        args={
+            "audit_id": audit_id,
+            "verdict": verdict.value,
+            "report_artifact_id": report_artifact_id,
+        },
+        summary=f"audit {audit_id} verdict={verdict.value}",
+        artifact_ids=[new_report] if new_report else [],
+    )
+    return record, event
+
+
 def add_integrity(
     state: State,
     *,
