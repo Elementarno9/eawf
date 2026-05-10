@@ -202,7 +202,7 @@ def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> byt
       :class:`ValueError`.
     - Replace (or insert) the ``__eawf_managed`` key with *managed_body*;
       every other key is preserved verbatim — Eä never writes outside
-      its namespace per docs/architecture/overview.md.
+      its namespace per docs/architecture/plugins.md.
     - Render the resulting object as deterministic JSON (sorted keys,
       4-space indent, trailing newline) so two installs are byte-stable.
     """

@@ -188,7 +188,7 @@ fallback ladder rather than fake completion.
 `/flow` wraps the 6 core skills as a resumable controller. Algorithm:
 
 1. **Start / Resume**: create or resume flow record in
-   `.ea/stores/flow.jsonl` with goal, budgets, current pointers, stop
+   `.ea/store/flow.jsonl` with goal, budgets, current pointers, stop
    conditions, policy, last safe checkpoint, and next action.
 2. **Research loop**: run `/research` repeatedly within `time_budget`,
    `research_budget`, `agent_budget`, and `cost_budget` until unknowns
@@ -412,7 +412,7 @@ Profile composition MUST complete before AGENTS.md or any plugin / skill
 ```text
 /flow "goal" [budgets] [--ship ask|auto|none] [--stop-after research|prep|audit|ship] [--resume]
 │
-├─ [Start/Resume]  flow record exists in .ea/stores/flow.jsonl?
+├─ [Start/Resume]  flow record exists in .ea/store/flow.jsonl?
 │   ├─ yes → resume from last_safe_checkpoint (reconcile drift)
 │   └─ no → create flow record {goal, budgets, current_pointers, policy}
 │

@@ -68,7 +68,7 @@ eawf/
     hooks/                       # `eawf hook run` runner
     doctor/                      # install/runtime diagnostics
     validate/                    # strict validation + invariants
-    logging/                     # events.jsonl writer
+    logging/                     # event.jsonl writer
     templates/                   # AGENTS.md.j2, CLAUDE.md.j2, hooks, commits, PRs
     schemas/                     # state.schema.json, config.schema.json, skill-output.schema.json
   tests/
@@ -101,14 +101,16 @@ Use **`.ea/`**, not `.add/`. Recommended project layout:
   permissions.yaml         # capability policy (committed)
   agents.yaml              # project agent registry (committed)
   hooks.yaml               # enabled hooks and policy (committed)
-  stores/                  # JSONL stores
+  store/                   # JSONL stores (one file per StoreKind)
     research.jsonl         # research briefs/events
-    audits.jsonl           # audit reports/results
-    incidents.jsonl        # incident timelines/root cause records
-    estimates.jsonl        # estimate versions + actual segments + recovery events
+    audit.jsonl            # audit reports/results
+    incident.jsonl         # incident timelines/root cause records
+    estimate.jsonl         # estimate versions
+    actual.jsonl           # actual segments + recovery events
     memory.jsonl           # authoritative memory entries
-    decisions.jsonl        # decision records
-    events.jsonl           # append-only audit log
+    decision.jsonl         # decision records
+    event.jsonl            # append-only audit log
+    flow.jsonl             # flow run records
   artifacts/
     blobs/sha256/<hash>    # large payloads, command outputs, rendered files
     rendered/*.md          # optional generated human views (committed when curated)
@@ -136,8 +138,8 @@ Committed by default when `.ea/` is not gitignored:
   `.ea/schema.json`, `.ea/acceptance.yaml`,
   `.ea/mcp.yaml` (without secrets), `.ea/permissions.yaml`,
   `.ea/agents.yaml`, `.ea/hooks.yaml`,
-  `.ea/stores/*.jsonl` for non-local stores (memory, audits, decisions,
-  research, incidents, estimates, events).
+  `.ea/store/*.jsonl` for non-local stores (memory, audit, decision,
+  research, incident, estimate, actual, event, flow).
 
 Always gitignored:
 

@@ -1,19 +1,19 @@
 """Layered config merge engine with source tracking.
 
-Per ``docs/architecture/state-model.md``:
+Eä settings are layered:
 
-    Eä settings are layered:
+1. built-in defaults
+2. global ``~/.config/eawf/config.yaml``
+3. workspace ``<workspace>/.ea/config.yaml``
+4. repo ``<repo>/.ea/config.yaml``
+5. local ``<repo>/.ea/local/config.yaml``
+6. env vars / CLI flags
 
-    1. built-in defaults
-    2. global ``~/.config/eawf/config.yaml``
-    3. workspace ``<workspace>/.ea/config.yaml``
-    4. repo ``<repo>/.ea/config.yaml``
-    5. local ``<repo>/.ea/local/config.yaml``
-    6. env vars / CLI flags
-
-    Later layers override earlier layers. Merge semantics: maps deep-merge,
-    scalar values replace, keyed lists merge by stable ``id``, ordinary lists
-    replace, and CLI/env overrides are runtime-only unless explicitly saved.
+Later layers override earlier layers. Merge semantics: maps deep-merge,
+scalar values replace, keyed lists merge by stable ``id``, ordinary lists
+replace, and CLI/env overrides are runtime-only unless explicitly saved.
+Top-level sections required in the merged config are listed in
+``docs/architecture/envelope.md`` "Config schema required sections".
 
 The single public entry point is :func:`merge_config`. It returns a tuple of
 ``(merged_config, source_map)`` where ``source_map[dotted_key] = layer``. The
@@ -59,7 +59,8 @@ _FILE_LAYERS: tuple[str, ...] = ("global", "workspace", "repo", "local")
 # read-only; env and cli are runtime-only.
 WRITABLE_LAYERS: tuple[str, ...] = _FILE_LAYERS
 
-# Env-var prefix per docs/architecture/state-model.md.
+# Env-var prefix for the ``env`` config layer (the ``EAWF_FOO__BAR`` form
+# is described above; reflected in tests and ``eawf config get`` output).
 _ENV_PREFIX: str = "EAWF_"
 
 
@@ -156,10 +157,10 @@ def _deep_merge_with_sources(
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Deep-merge *overlay* into *base*, recording the layer of each leaf.
 
-    Maps merge per-key; lists and scalars replace wholesale (per
-    docs/architecture/state-model.md: "ordinary lists replace"). The
-    keyed-list merge described in the design spec is deferred to Phase 3
-    W02 — for v0.1 P02 we treat all lists as ordinary.
+    Maps merge per-key; lists and scalars replace wholesale ("ordinary
+    lists replace" per the layered-config rules above). The keyed-list
+    merge by stable ``id`` is deferred to Phase 3 W02 — for v0.1 P02 we
+    treat all lists as ordinary.
 
     Returns:
         ``(merged, source_map)`` — fresh dicts; the inputs are not mutated.

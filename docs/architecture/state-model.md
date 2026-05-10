@@ -152,19 +152,19 @@ keys as `{}` during the next `eawf sync`.
 | Iter | `id`, `phase_id`, `title`, `status`, `wave_ids`, `estimate_id`, `audit_id`, `opened_at`, `closed_at` | state | parent inferred by ID |
 | Wave | `id`, `iter_id`, `title`, `status`, `deps`, `file_scopes`, `claim_session_id`, `worktree_id`, `commit`, `outcome`, `opened_at`, `closed_at` | state | atomic execution unit |
 | Hypothesis | `id`, `scope_id`, `text`, `metric`, `confirm`, `reject`, `status`, `verdict`, `audit_id`, `source_artifact_id` | state + optional artifact | thresholds concrete |
-| Audit | `id`, `scope_id`, `kind`, `status`, `report_artifact_id`, `check_results`, `integrity_results`, `created_at`, `verdict` | state + audits.jsonl | evidence only |
+| Audit | `id`, `scope_id`, `kind`, `status`, `report_artifact_id`, `check_results`, `integrity_results`, `created_at`, `verdict` | state + `audit.jsonl` | evidence only |
 | Artifact | `id`, `kind`, `uri`, `local_path`, `urn`, `sha256`, `size_bytes`, `created_at`, `metadata` | state / index | hash for files / blobs |
-| Decision | `id`, `scope_id`, `summary`, `rationale`, `alternatives`, `status`, `created_at`, `superseded_by` | state + decisions.jsonl | rationale required |
+| Decision | `id`, `scope_id`, `summary`, `rationale`, `alternatives`, `status`, `created_at`, `superseded_by` | state + `decision.jsonl` | rationale required |
 | BacklogItem | `id`, `scope_id`, `title`, `priority`, `status`, `created_at`, `closed_at`, `resolution`, `commit` | state | priority enum |
-| EstimateSummary | `id`, `scope_id`, `expected_eu`, `pessimistic_eu`, `confidence`, `current_store_record_id`, `updated_at` | state + estimates.jsonl | history in store |
-| ActualSummary | `id`, `scope_id`, `status`, `elapsed_eu`, `attention_eu`, `agent_runtime_eu`, `current_store_record_id`, `updated_at` | state + estimates.jsonl | segments in store |
+| EstimateSummary | `id`, `scope_id`, `expected_eu`, `pessimistic_eu`, `confidence`, `current_store_record_id`, `updated_at` | state + `estimate.jsonl` | history in store |
+| ActualSummary | `id`, `scope_id`, `status`, `elapsed_eu`, `attention_eu`, `agent_runtime_eu`, `current_store_record_id`, `updated_at` | state + `actual.jsonl` | segments in store |
 | AgentSession | `id`, `role`, `runtime`, `scope_id`, `status`, `claimed_wave_ids`, `worktree_ids`, `artifact_ids`, `started_at`, `ended_at`, `summary` | state + events | provenance |
 | WorktreeRecord | `id`, `wave_id`, `branch`, `path`, `base_branch`, `status`, `owner_session_id`, `created_at`, `merged_commit` | state | git-owned path |
 | McpServer | `id`, `owner`, `command`, `args`, `env_refs`, `risk`, `write_capable`, `status`, `installed_targets` | state / config | `owner` must be `eawf` for managed servers |
 | PluginInstall | `id`, `runtime`, `scope`, `target_path`, `status`, `managed_files`, `installed_at`, `updated_at` | state / config | Claude only v0.1 |
-| MemorySummary | `id`, `scope_id`, `summary`, `confidence`, `status`, `store_record_id`, `review_due` | state + memory.jsonl | JSONL authoritative |
-| Incident | `id`, `scope_id`, `severity`, `title`, `status`, `opened_at`, `closed_at`, `root_cause`, `corrective_action_ids`, `report_artifact_id` | state + incidents.jsonl | severity enum `low` \| `medium` \| `high` \| `critical` |
-| Flow | `id`, `goal`, `budgets`, `status`, `current_pointers`, `policy`, `last_safe_checkpoint`, `next_action`, `started_at`, `updated_at` | state pointer + flow.jsonl | status enum `pending` \| `in_progress` \| `paused` \| `blocked` \| `done` \| `abandoned` \| `superseded` |
+| MemorySummary | `id`, `scope_id`, `summary`, `confidence`, `status`, `store_record_id`, `review_due` | state + `memory.jsonl` | JSONL authoritative |
+| Incident | `id`, `scope_id`, `severity`, `title`, `status`, `opened_at`, `closed_at`, `root_cause`, `corrective_action_ids`, `report_artifact_id` | state + `incident.jsonl` | severity enum `low` \| `medium` \| `high` \| `critical` |
+| Flow | `id`, `goal`, `budgets`, `status`, `current_pointers`, `policy`, `last_safe_checkpoint`, `next_action`, `started_at`, `updated_at` | state pointer + `flow.jsonl` | status enum `pending` \| `in_progress` \| `paused` \| `blocked` \| `done` \| `abandoned` \| `superseded` |
 
 ## ID grammar
 
@@ -241,8 +241,9 @@ Clocks tracked separately:
 Storage:
 
 - `state.json` keeps the current estimate / actual summary per scope.
-- `.ea/stores/estimates.jsonl` stores all estimate versions, supersession
-  links, actual segments, and recovery events.
+- `.ea/store/estimate.jsonl` stores all estimate versions and supersession
+  links; `.ea/store/actual.jsonl` stores actual segments and recovery
+  events.
 
 Actuals are append-only segment records. Never overwrite prior measured
 session time. If a session stops, the runtime crashes, or the PC powers
@@ -271,20 +272,20 @@ Suggested thresholds:
 
 ## URN namespace
 
+Implemented kinds (source of truth: `URN_KINDS` in
+`src/eawf/state/urn.py`):
+
 ```text
-urn:eawf:v1:repo:<code>
 urn:eawf:v1:workspace:<code>
+urn:eawf:v1:repo:<code>
 urn:eawf:v1:state:<owner>/<scope-id>
-urn:eawf:v1:store:<owner>/<kind>/<id>
 urn:eawf:v1:artifact:<owner>/<id>
-urn:eawf:v1:audit:<owner>/<id>
+urn:eawf:v1:store:<owner>/<kind>/<id>
+urn:eawf:v1:blob:<owner>/sha256/<hash>
+urn:eawf:v1:pr:<owner>/<number>
 urn:eawf:v1:commit:<owner>/<sha>
-urn:eawf:v1:session:<owner>/<id>
-urn:eawf:v1:hypothesis:<owner>/<id>
-urn:eawf:v1:incident:<owner>/<id>
-urn:eawf:v1:decision:<owner>/<id>
-urn:eawf:v1:goal:<owner>/<id>
-urn:eawf:v1:outcome:<owner>/<id>
+urn:eawf:v1:branch:<owner>/<name>
+urn:eawf:v1:secret:<NAME>
 ```
 
 See `docs/reference/urn-namespace.md` for the full URN specification

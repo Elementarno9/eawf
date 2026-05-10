@@ -1,7 +1,7 @@
 """Layered configuration subsystem for eawf.
 
-Per ``docs/architecture/state-model.md``, configuration is layered with the
-following precedence (lowest to highest, later overrides earlier):
+Configuration is layered with the following precedence (lowest to
+highest, later overrides earlier):
 
 1. built-in defaults (read-only, baked into the package)
 2. global ``~/.config/eawf/config.yaml``
@@ -10,6 +10,9 @@ following precedence (lowest to highest, later overrides earlier):
 5. local ``<repo>/.ea/local/config.yaml``
 6. environment variables (``EAWF_*``)
 7. CLI overrides
+
+Required top-level sections of the merged config follow
+``docs/architecture/envelope.md`` "Config schema required sections".
 
 Public API:
 

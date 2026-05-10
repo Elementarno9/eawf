@@ -120,7 +120,7 @@ Hook design rules:
 - Hooks are fail-open for advisory checks and fail-closed only for
   state corruption, secrets, destructive actions, or protected-branch
   VCS policy.
-- Hooks emit structured events to `.ea/stores/events.jsonl` when they
+- Hooks emit structured events to `.ea/store/event.jsonl` when they
   block, degrade, or skip due to missing tools.
 - Deterministic checks belong in hooks; reasoning-heavy decisions
   belong in skills.

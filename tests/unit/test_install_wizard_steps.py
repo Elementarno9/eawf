@@ -3,8 +3,8 @@
 Pin the contract that:
 
 - :data:`~eawf.install.steps.WIZARD_STEPS` always contains exactly twelve
-  steps (matches ``ea-proposal.md`` §9 — adding a thirteenth or removing
-  one is a spec change that has to land here first).
+  steps (matches ``docs/architecture/installation.md`` — adding a thirteenth
+  or removing one is a spec change that has to land here first).
 - All step ids are unique (so :class:`WizardAnswers` can map id → field
   without collision).
 - The first step is the state-path prompt — both surfaces call this
