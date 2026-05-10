@@ -1,6 +1,6 @@
 """Resolve the active ``.ea/state.json`` path for CLI handlers.
 
-Precedence, highest first (per ``ea-proposal.md`` §17 and v0.1 plan §W00):
+Precedence, highest first (per ``docs/architecture/cli-surface.md``):
 
 1. ``EA_STATE`` environment variable (absolute or relative file path).
 2. ``-w / --workspace`` flag from :class:`eawf.cli.flags.GlobalFlags` — joined

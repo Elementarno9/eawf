@@ -1,6 +1,6 @@
 """``/polish`` skill body.
 
-Frozen at Phase 4 W01 per `ea-proposal.md` §15.2:
+Per ``docs/architecture/envelope.md``:
 
     /polish body: { groups: [{topic, scope, risk, items: [{kind:
                     stale_doc|duplicate_rule|broken_link|orphan_artifact|

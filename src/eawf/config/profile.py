@@ -1,6 +1,6 @@
 """Profile enable: write to a config layer + materialise required state keys.
 
-Per ``ea-proposal.md`` §"v0.1 profile bodies", each profile may declare
+Per ``docs/architecture/profiles.md``, each profile may declare
 ``state_extensions.fields_required`` — a list of top-level state keys that
 must exist for the profile's skills/audits to function. ``config profile
 enable <id>`` is responsible for two things:
@@ -10,7 +10,7 @@ enable <id>`` is responsible for two things:
 2. Materialise any *fields_required* on ``state.json`` as empty containers
    ``{}`` so later mutations write into typed dicts instead of attribute
    errors. This mirrors the "materialize newly-required keys as ``{}``" rule
-   from §9 of ``ea-proposal.md``.
+   from ``docs/architecture/installation.md``.
 
 Mutation discipline (per ``AGENTS.md`` rule 4 + spec):
 

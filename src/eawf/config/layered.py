@@ -1,6 +1,6 @@
 """Layered config merge engine with source tracking.
 
-Per ``ea-proposal.md`` §"Settings schema":
+Per ``docs/architecture/state-model.md``:
 
     Eä settings are layered:
 
@@ -59,7 +59,7 @@ _FILE_LAYERS: tuple[str, ...] = ("global", "workspace", "repo", "local")
 # read-only; env and cli are runtime-only.
 WRITABLE_LAYERS: tuple[str, ...] = _FILE_LAYERS
 
-# Env-var prefix per ea-proposal §"Settings schema".
+# Env-var prefix per docs/architecture/state-model.md.
 _ENV_PREFIX: str = "EAWF_"
 
 
@@ -156,10 +156,10 @@ def _deep_merge_with_sources(
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Deep-merge *overlay* into *base*, recording the layer of each leaf.
 
-    Maps merge per-key; lists and scalars replace wholesale (per ea-proposal
-    §"Settings schema": "ordinary lists replace"). The keyed-list merge
-    described in the proposal is deferred to Phase 3 W02 — for v0.1 P02 we
-    treat all lists as ordinary.
+    Maps merge per-key; lists and scalars replace wholesale (per
+    docs/architecture/state-model.md: "ordinary lists replace"). The
+    keyed-list merge described in the design spec is deferred to Phase 3
+    W02 — for v0.1 P02 we treat all lists as ordinary.
 
     Returns:
         ``(merged, source_map)`` — fresh dicts; the inputs are not mutated.

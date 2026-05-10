@@ -10,7 +10,7 @@ regardless of this flag.
 
 Phase 4 W01 adds :func:`validate_envelope` and :class:`EnvelopeValidationReport`:
 the strict validator for skill output envelopes. It enforces the two
-strict-mode contracts from `ea-proposal.md` §15.1:
+strict-mode contracts from `docs/architecture/envelope.md`:
 
 - ``status=needs_user`` MUST set ``body.user_question``.
 - ``status in {blocked, failed}`` MUST set non-empty ``footer.repair_commands``.

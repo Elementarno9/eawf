@@ -1,6 +1,6 @@
 """``eawf init`` wizard — questionary interactive surface + pure ``--no-input`` pipeline.
 
-Per ``eawf-v0.1-plan.md`` §P03 W05 the init wizard has two surfaces sharing
+Per ``docs/architecture/installation.md`` the init wizard has two surfaces sharing
 one engine:
 
 1. **Pure pipeline.** :func:`run_wizard_no_input` takes a fully populated

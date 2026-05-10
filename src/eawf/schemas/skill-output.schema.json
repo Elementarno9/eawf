@@ -140,7 +140,7 @@
     },
     "EnvelopeWarning": {
       "additionalProperties": false,
-      "description": "Single warning entry under :attr:`EnvelopeFooter.warnings`.\n\nPer `ea-proposal.md` §15.1 footer block. ``code`` is a short ID\n(``instrument_missing``, ``hook_blocked``, …); ``detail`` is a\nhuman-readable sentence.",
+      "description": "Single warning entry under :attr:`EnvelopeFooter.warnings`.\n\nPer `docs/architecture/envelope.md` footer block. ``code`` is a short ID\n(``instrument_missing``, ``hook_blocked``, …); ``detail`` is a\nhuman-readable sentence.",
       "properties": {
         "code": {
           "title": "Code",

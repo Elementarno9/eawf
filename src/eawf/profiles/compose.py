@@ -1,6 +1,6 @@
 """Profile composition — deep-merge a sequence of profile bodies.
 
-Per ``eawf-v0.1-plan.md`` §P03 W02 (line 247):
+Per ``docs/architecture/profiles.md``:
 
 - Maps: deep-merge — later overrides earlier per key, except for keys named in
   :data:`STRICTEST_KEYS` where the more-restrictive value wins regardless of

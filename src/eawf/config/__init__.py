@@ -1,6 +1,6 @@
 """Layered configuration subsystem for eawf.
 
-Per ``ea-proposal.md`` §"Settings schema", configuration is layered with the
+Per ``docs/architecture/state-model.md``, configuration is layered with the
 following precedence (lowest to highest, later overrides earlier):
 
 1. built-in defaults (read-only, baked into the package)

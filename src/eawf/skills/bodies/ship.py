@@ -1,6 +1,6 @@
 """``/ship`` skill body.
 
-Frozen at Phase 4 W01 per `ea-proposal.md` §15.2:
+Per ``docs/architecture/envelope.md``:
 
     /ship body: { commit_groups: [{message, files, evidence_refs}],
                   push: {ref, status}, pr: {action, url, template,

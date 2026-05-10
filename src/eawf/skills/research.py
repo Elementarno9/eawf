@@ -1,6 +1,6 @@
 """``/research`` skill — investigate questions and produce a peer-reviewed brief.
 
-Implements the §14 algorithm for ``/research`` from ``ea-proposal.md``:
+Implements the ``/research`` algorithm per ``docs/architecture/workflow.md``:
 
 1. Probe instruments via ``EA_INSTRUMENT_PROBE``; abort if hard requirement
    missing.

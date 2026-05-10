@@ -76,7 +76,7 @@ def _root(
     )
     if ctx.invoked_subcommand is None:
         typer.echo(f"eawf {__version__}")
-        typer.echo("v0.1 in development; see eawf-v0.1-plan.md")
+        typer.echo("v0.1 — see docs/")
 
 
 @app.command(name="version")

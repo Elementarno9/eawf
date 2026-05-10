@@ -47,7 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # (canonical-list row "Skill envelope | header.status").
 EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 
-# Frozen skill name enum. Mirrors `ea-proposal.md` §15.1: six core +
+# Frozen skill name enum. Mirrors `docs/architecture/envelope.md`: six core +
 # four meta workflow skills.
 SkillName = Literal[
     "/research",
@@ -69,7 +69,7 @@ InstrumentStatus = Literal["ok", "missing", "degraded"]
 class EnvelopeWarning(BaseModel):
     """Single warning entry under :attr:`EnvelopeFooter.warnings`.
 
-    Per `ea-proposal.md` §15.1 footer block. ``code`` is a short ID
+    Per `docs/architecture/envelope.md` footer block. ``code`` is a short ID
     (``instrument_missing``, ``hook_blocked``, …); ``detail`` is a
     human-readable sentence.
     """

@@ -1,6 +1,6 @@
 """Per-skill body Pydantic models.
 
-Frozen at Phase 4 W01 per design spec §3.2 and `ea-proposal.md` §15.2.
+Per ``docs/architecture/envelope.md``.
 Field set is additive after this wave: any new field must be optional and
 must not change the meaning of an existing field. Breaking changes
 require an explicit ``[CORE]`` commit on ``feature/eawf-v0.1``.

@@ -6,7 +6,7 @@ skill never duplicates wizard logic — its job is to translate a fully
 populated :class:`WizardAnswers` into a typed :class:`InitBody` and let
 the engine emit the canonical envelope.
 
-Lifecycle (per `ea-proposal.md` §14):
+Lifecycle (per `docs/architecture/workflow.md`):
 
 1. Probe instruments via ``EA_INSTRUMENT_PROBE``.
 2. If ``ctx.args`` already carries every wizard answer → run the pure

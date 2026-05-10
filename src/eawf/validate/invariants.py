@@ -3,7 +3,7 @@
 Each invariant is a pure function ``State -> Iterable[Violation]``. Schema-level
 checks (``extra="forbid"``, type/enum/regex) live on the Pydantic models in
 :mod:`eawf.state.models`; this module covers the rules from
-``eawf-schema-inventory.md`` §"Validation invariants" that span multiple
+``docs/architecture/state-model.md`` that span multiple
 entities.
 
 Codes follow the ``INV.<CATEGORY>.<SPECIFIC>`` convention; they are part of

@@ -12,7 +12,7 @@ Two shapes live here:
   :func:`eawf.profiles.compose.compose`. Adds a ``provenance`` map recording
   which input profiles contributed each top-level key.
 
-Field semantics mirror ``ea-proposal.md`` §"v0.1 profile bodies":
+Field semantics mirror ``docs/architecture/profiles.md``:
 
 - ``state_extensions.fields_required`` — top-level state keys to materialise.
 - ``instrument_requirements`` — ``{name, kind, probe, version_args, version_regex}``.

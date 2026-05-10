@@ -2,7 +2,7 @@
 
 Phase 4 W01 freezes the field set. ``/roadmap`` proposes phases/iters
 and ranks them; the body holds the candidate list plus the chosen
-ordering. W03 fills the implementation per `ea-proposal.md` §14.
+ordering. W03 fills the implementation per `docs/architecture/workflow.md`.
 """
 
 from __future__ import annotations

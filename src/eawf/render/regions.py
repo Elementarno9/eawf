@@ -1,6 +1,6 @@
 """Managed-region markers + parsing for rendered files (AGENTS.md, .claude/, ...).
 
-Marker format (line-anchored HTML comment, mirrors ``ea-proposal.md`` §"render"):
+Marker format (line-anchored HTML comment, mirrors ``docs/architecture/plugins.md``):
 
     <!-- BEGIN EAWF:managed id=<ID> version=<MAJOR.MINOR> hash=<16-hex> -->
     <body>

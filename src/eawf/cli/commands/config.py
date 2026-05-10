@@ -1,6 +1,6 @@
 """``eawf config`` Typer sub-app — get/set/validate/profile enable.
 
-Per ``eawf-command-matrix.md`` rows 25-27 + 74:
+Per ``docs/architecture/cli-surface.md``:
 
 - ``eawf config get <key> [--scope]``           → merged value + source layer
 - ``eawf config set <key> <value> --scope L``   → write to layer L (built-in
@@ -83,7 +83,7 @@ class _ConfigSchema(BaseModel):
     Per the plan §W06 acceptance: "config validate runs the merged config
     through Pydantic config schema (placeholder body extended in Phase 3 W02
     — for v0.1 P02 we fill the minimal schema sections from
-    ``eawf-schema-inventory.md`` 'Config schema required sections')."
+    ``docs/architecture/state-model.md`` 'Config schema required sections')."
 
     The minimal contract is: every required top-level section listed in the
     inventory is present and is a mapping (or, for the ``commands`` section,

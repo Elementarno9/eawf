@@ -1,7 +1,7 @@
 """Shared :class:`UserQuestion` body fragment.
 
 When a skill terminates with ``header.status == "needs_user"`` it MUST
-populate ``body.user_question`` (per `ea-proposal.md` §15.1 render rules).
+populate ``body.user_question`` (per `docs/architecture/envelope.md` render rules).
 The strict validator (:mod:`eawf.validate.strict`) enforces this.
 
 The shape is the 2-4-option ``AskUserQuestion`` payload from the

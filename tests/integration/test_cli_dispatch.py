@@ -34,7 +34,7 @@ def test_bare_invocation_prints_banner() -> None:
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "eawf 0.1.0" in result.stdout
-    assert "v0.1 in development" in result.stdout
+    assert "v0.1 — see docs/" in result.stdout
 
 
 def test_version_text_envelope() -> None:
