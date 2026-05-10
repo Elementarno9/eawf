@@ -261,6 +261,11 @@ from eawf.cli.commands.plan import plan_app  # noqa: E402
 app.add_typer(plan_app, name="plan")
 # --- end P05 W05 ---
 
+# --- P08 W05 wave fix-ci registration (commands attach to wave_app on import) ---
+import eawf.cli.commands.wave_ci  # noqa: E402, F401
+
+# --- end P08 W05 ---
+
 
 def main() -> None:
     app()
