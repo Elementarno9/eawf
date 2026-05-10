@@ -111,9 +111,25 @@ def _last_audit(state: State, audit_id: str | None) -> dict[str, str | None] | N
 
 
 def _project_summary(state: State) -> dict[str, str] | None:
-    """Return a compact ``{code, title, status}`` projection of ``state.project``."""
+    """Return a compact ``{code, title, status}`` projection of ``state.project``.
+
+    When ``state.project`` is ``None`` but ``state.current.project_code`` is
+    populated (the v0.1 ``eawf init`` contract — project code stamped, full
+    ``Project`` record deferred to ``eawf project init``), fall back to the
+    current pointer with ``status="uninitialised"`` and the title pulled from
+    ``state.indexes`` (empty string when missing). This stops a fresh init
+    from rendering ``project: <none>`` even though the code is on disk.
+    """
     if state.project is None:
-        return None
+        if state.current.project_code is None:
+            return None
+        title_raw = state.indexes.get("project_title", "")
+        title = title_raw if isinstance(title_raw, str) else ""
+        return {
+            "code": state.current.project_code,
+            "title": title,
+            "status": "uninitialised",
+        }
     return {
         "code": state.project.code,
         "title": state.project.title,
@@ -295,7 +311,15 @@ def status(
 def _format_text(payload: dict[str, Any]) -> str:
     """Render *payload* as a compact multi-line summary for human consumption."""
     proj = payload.get("project")
-    proj_line = f"project: {proj['code']} ({proj['title']})" if proj else "project: <none>"
+    if proj:
+        # Title is the human-friendly slug; when missing (uninitialised
+        # fallback path with no ``--project-title`` set) fall back to the
+        # status string so the operator sees ``project: REPRO (uninitialised)``
+        # instead of an empty parenthesised group.
+        descriptor = proj["title"] or proj["status"]
+        proj_line = f"project: {proj['code']} ({descriptor})"
+    else:
+        proj_line = "project: <none>"
     cur = payload["current"]
     cur_line = (
         f"current: phase={cur['phase_id']} iter={cur['iter_id']} "
