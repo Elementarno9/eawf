@@ -549,6 +549,57 @@ def audit_integrity(
     )
 
 
+@audit_app.command("set-verdict")
+def audit_set_verdict(
+    ctx: typer.Context,
+    audit_id: Annotated[str, typer.Argument(help="Audit id")],
+    verdict: Annotated[
+        AuditVerdict,
+        typer.Option("--verdict", help="pass / minor / major"),
+    ],
+    report: Annotated[
+        str | None,
+        typer.Option(
+            "--report",
+            help="Report artifact id (required to lift a pending audit to complete).",
+        ),
+    ] = None,
+) -> None:
+    """Stamp a verdict on an existing audit.
+
+    A pending audit lifts to status=complete only when ``--report`` points at
+    an existing artifact; a complete audit accepts ``--verdict`` updates
+    in place but rejects a differing ``--report``.
+    """
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        with state_transaction(state_path) as state:
+            record, event = audit_evi.set_verdict(
+                state,
+                audit_id=audit_id,
+                verdict=verdict,
+                report_artifact_id=report,
+            )
+            paths = store_paths(state_path)
+            append_jsonl(paths[StoreKind.AUDIT], record)
+            append_jsonl(paths[StoreKind.EVENT], event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "audit_id": audit_id,
+            "verdict": verdict.value,
+            "report_artifact_id": report,
+        },
+        f"audit {audit_id} verdict={verdict.value}",
+        flags,
+    )
+
+
 @audit_app.command("show")
 def audit_show(
     ctx: typer.Context,
@@ -963,6 +1014,41 @@ def backlog_add(
             "status": "open",
         },
         f"backlog {item_id} added priority={priority.value}",
+        flags,
+    )
+
+
+@backlog_app.command("set-priority")
+def backlog_set_priority(
+    ctx: typer.Context,
+    item_id: Annotated[str, typer.Argument(help="Backlog item id")],
+    priority: Annotated[
+        BacklogPriority,
+        typer.Option("--priority", help="P0 / P1 / P2 / P3"),
+    ],
+) -> None:
+    """Update the priority of an open backlog item."""
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        with state_transaction(state_path) as state:
+            event = backlog_evi.set_priority(
+                state,
+                item_id=item_id,
+                priority=priority,
+            )
+            append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "item_id": item_id,
+            "priority": priority.value,
+        },
+        f"backlog {item_id} priority={priority.value}",
         flags,
     )
 

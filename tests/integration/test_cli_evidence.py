@@ -406,6 +406,68 @@ def test_audit_show_unknown_exits_not_found(state_path: Path) -> None:
     assert result.exit_code == 2  # NOT_FOUND
 
 
+def test_audit_set_verdict_lifts_pending(state_path: Path) -> None:
+    """Happy path: pending audit + --report lifts to complete with verdict."""
+    runner.invoke(
+        app,
+        [
+            "artifact",
+            "add",
+            "ART-CLOSE",
+            "--kind",
+            "audit_report",
+            "--uri",
+            "repo:.ea/artifacts/close.md",
+        ],
+    )
+    runner.invoke(
+        app,
+        ["audit", "add", "AUD-001", "--scope-id", "QR", "--kind", "evaluation"],
+    )
+    result = runner.invoke(
+        app,
+        [
+            "audit",
+            "set-verdict",
+            "AUD-001",
+            "--verdict",
+            "pass",
+            "--report",
+            "ART-CLOSE",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    body = json.loads(state_path.read_text())
+    assert body["audits"]["AUD-001"]["status"] == "complete"
+    assert body["audits"]["AUD-001"]["verdict"] == "pass"
+    assert body["audits"]["AUD-001"]["report_artifact_id"] == "ART-CLOSE"
+    audit_lines = (state_path.parent / "store" / "audit.jsonl").read_text().splitlines()
+    assert len(audit_lines) == 2  # add + set-verdict
+    events = (state_path.parent / "store" / "event.jsonl").read_text().splitlines()
+    assert any("audit.set_verdict" in line for line in events)
+
+
+def test_audit_set_verdict_pending_without_report_exits_invalid_input(
+    state_path: Path,
+) -> None:
+    """Error path: pending audit + no --report exits 3 (INVALID_INPUT)."""
+    runner.invoke(
+        app,
+        ["audit", "add", "AUD-001", "--scope-id", "QR", "--kind", "evaluation"],
+    )
+    result = runner.invoke(
+        app,
+        ["--json", "audit", "set-verdict", "AUD-001", "--verdict", "pass"],
+    )
+    assert result.exit_code == 3, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["error"] == "InvalidInput"
+    assert "pending" in payload["message"]
+    body = json.loads(state_path.read_text())
+    assert body["audits"]["AUD-001"]["verdict"] is None
+    assert body["audits"]["AUD-001"]["status"] == "pending"
+
+
 def test_audit_list_filters(state_path: Path) -> None:
     _seed_complete_audit("AUD-001")
     runner.invoke(
@@ -653,6 +715,42 @@ def test_backlog_close_happy_path(state_path: Path) -> None:
     body = json.loads(state_path.read_text())
     assert body["backlog"]["B023"]["status"] == "closed"
     assert body["backlog"]["B023"]["commit"] == "abc123"
+
+
+def test_backlog_set_priority_happy_path(state_path: Path) -> None:
+    """Happy path: open backlog item priority bumped P2 → P0; one event appended."""
+    runner.invoke(
+        app,
+        [
+            "backlog",
+            "add",
+            "B023",
+            "--title",
+            "Split workflow",
+            "--priority",
+            "P2",
+        ],
+    )
+    result = runner.invoke(
+        app,
+        ["backlog", "set-priority", "B023", "--priority", "P0"],
+    )
+    assert result.exit_code == 0, result.stdout
+    body = json.loads(state_path.read_text())
+    assert body["backlog"]["B023"]["priority"] == "P0"
+    events = (state_path.parent / "store" / "event.jsonl").read_text().splitlines()
+    assert any("backlog.set_priority" in line for line in events)
+
+
+def test_backlog_set_priority_unknown_exits_not_found(state_path: Path) -> None:
+    """Error path: missing backlog id exits 2 (NOT_FOUND)."""
+    result = runner.invoke(
+        app,
+        ["--json", "backlog", "set-priority", "B999", "--priority", "P1"],
+    )
+    assert result.exit_code == 2, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["error"] == "NotFound"
 
 
 # ---- cross-cutting ---------------------------------------------------------
