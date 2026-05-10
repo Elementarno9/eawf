@@ -5,9 +5,9 @@ without the user supplying every flag. v0.1.1 will populate it.
 v0.1 ships with an empty tuple so ``eawf mcp add --from-catalog`` can
 be added in v0.1.1 without surface churn.
 
-Per ``docs/architecture/installation.md``, non-env secret backends
-(1Password, sops, age) are deferred — every catalog entry, when added,
-must declare its env-refs as ``${ENV:NAME}`` only.
+Per ``docs/architecture/plugins.md`` MCP-catalog defaults, non-env
+secret backends (1Password, sops, age) are deferred — every catalog
+entry, when added, must declare its env-refs as ``${ENV:NAME}`` only.
 """
 
 from __future__ import annotations

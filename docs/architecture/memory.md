@@ -8,9 +8,9 @@ token-efficient.
 ## Memory storage
 
 ```text
-Project/repo memory      .ea/stores/memory.jsonl
-Workspace memory         <workspace>/.ea/stores/memory.jsonl
-User/global memory       ~/.ea/stores/memory.jsonl
+Project/repo memory      .ea/store/memory.jsonl
+Workspace memory         <workspace>/.ea/store/memory.jsonl
+User/global memory       ~/.ea/store/memory.jsonl
 Generated markdown views .ea/artifacts/rendered/memory/*.md
 Session scratch          .ea/local/sessions/* (gitignored)
 ```
@@ -25,7 +25,7 @@ Rules:
 - `memory.jsonl` is the authoritative memory source of truth in v0.1.
 - Markdown memory files are generated / curated views only, never
   lifecycle authority.
-- User preferences live in global `~/.ea/stores/memory.jsonl`.
+- User preferences live in global `~/.ea/store/memory.jsonl`.
 - Session scratch is local and expires.
 - State remains authoritative for lifecycle; memory explains recurring
   context / gotchas.
@@ -53,7 +53,7 @@ eawf memory render-context --budget 2000
 ```
 
 `eawf memory` is the only writer of `memory.jsonl`. Multiple terminals
-coordinate via sibling lockfiles such as `.ea/stores/memory.jsonl.lock`
+coordinate via sibling lockfiles such as `.ea/store/memory.jsonl.lock`
 and `.ea/state.json.lock`.
 
 ## Sync with terminals
@@ -80,7 +80,7 @@ summary: One sentence, <= 200 chars
 body: Details, <= 1000 chars unless artifact-linked
 source: urn:eawf:v1:artifact:QR/ART-20260505-source
 confidence: high | medium | low
-status: active | superseded | stale | rejected
+status: active | stale | superseded | pruned
 review_due: 2026-08-01
 superseded_by: null
 ```

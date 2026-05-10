@@ -1,6 +1,6 @@
 """Tests for :func:`eawf.cli.scope.resolve_state_path`.
 
-Precedence per ``ea-proposal.md`` §17 / v0.1 plan §W00:
+Precedence per ``docs/architecture/cli-surface.md`` (scope precedence):
 
 1. ``EA_STATE`` env var (wins over everything).
 2. ``-w / --workspace`` flag (wins over pwd-upward).

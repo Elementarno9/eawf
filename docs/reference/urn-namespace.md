@@ -17,9 +17,8 @@ urn:eawf:v1:<kind>:<owner>[/<id-or-path>][?=<query>][#<fragment>]
 - **NID**: `eawf`.
 - **Version**: `v1` immediately after NID in the NSS.
 - **Kind** is lowercase ASCII: `workspace`, `repo`, `state`,
-  `artifact`, `store`, `blob`, `pr`, `commit`, `branch`, `secret`,
-  `audit`, `session`, `hypothesis`, `incident`, `decision`, `goal`,
-  `outcome`.
+  `artifact`, `store`, `blob`, `pr`, `commit`, `branch`, `secret`.
+  Source of truth: `URN_KINDS` in `src/eawf/state/urn.py`.
 - **Codes** are uppercase where human-defined: `TM`, `QR`, `COLLAR`.
 - **Assigned-name** (`urn:eawf:...` before `?=` or `#`) is the
   identity. Query / fragment are view / selection hints and ignored
@@ -54,7 +53,8 @@ urn:eawf:v1:secret:FRED_API_KEY
 - `state` resolves to entity in owner state. Owner can be repo code
   (`QR`) or workspace code (`TM`).
 - `store` resolves to JSONL record under owner
-  `.ea/stores/<store>.jsonl`.
+  `.ea/store/<kind>.jsonl` (singular `store/` directory; per-kind file
+  named after the singular `StoreKind` value).
 - `artifact` resolves through state artifact index to durable
   evidence / output metadata.
 - `blob` resolves through content-addressed blob store for immutable
@@ -66,16 +66,16 @@ urn:eawf:v1:secret:FRED_API_KEY
 ## Store roots
 
 ```text
-repo-local:       <repo>/.ea/stores/
-workspace-level:  <workspace>/.ea/stores/
-local/private:    <repo>/.ea/local/stores/ or <workspace>/.ea/local/stores/
+repo-local:       <repo>/.ea/store/
+workspace-level:  <workspace>/.ea/store/
+local/private:    <repo>/.ea/local/store/ or <workspace>/.ea/local/store/
 ```
 
 ## `store` vs `artifact` vs `blob`
 
-- **`store`** is structured record storage: memories, incidents,
-  audits, research, decisions, events. Example:
-  `urn:eawf:v1:store:QR/audits/AUD-P13-I04` resolves to one JSONL
+- **`store`** is structured record storage: memory, incident,
+  audit, research, decision, event. Example:
+  `urn:eawf:v1:store:QR/audit/AUD-P13-I04` resolves to one JSONL
   record.
 - **`artifact`** is durable output / evidence metadata: report,
   screenshot set, HTML, data manifest, generated markdown, PR body.

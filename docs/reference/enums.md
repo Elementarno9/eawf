@@ -24,6 +24,7 @@ This file is the canonical reference for all `StrEnum` classes defined in
 | incident | severity | `IncidentSeverity` | `low`, `medium`, `high`, `critical` | Impact severity of an incident |
 | incident | status | `IncidentStatus` | `open`, `mitigated`, `resolved`, `wont-fix` | Incident resolution lifecycle |
 | flow | status | `FlowStatus` | `pending`, `in_progress`, `paused`, `blocked`, `done`, `abandoned`, `superseded` | Workflow / flow run state |
+| actual | status | `ActualStatus` | `planned`, `active`, `done`, `interrupted`, `blocked`, `abandoned`, `failed`, `superseded` | Actual segment lifecycle |
 | agent_session | role | `AgentSessionRole` | `researcher`, `planner`, `executor`, `auditor`, `reviewer`, `polisher`, `operator`, `domain-specialist` | Agent role within a session |
 | agent_session | status | `AgentSessionStatus` | `active`, `checkpointed`, `closed`, `stale`, `failed` | Agent session lifecycle |
 | worktree | status | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` | Git worktree lifecycle |

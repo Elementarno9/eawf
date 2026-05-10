@@ -56,7 +56,7 @@ def test_layer_order_canonical() -> None:
 
 
 def test_built_in_defaults_have_every_required_top_level_section() -> None:
-    """Every section in eawf-schema-inventory.md 'Config schema required sections'."""
+    """Every section in docs/architecture/envelope.md 'Config schema required sections'."""
     required = {
         "cli",
         "project",

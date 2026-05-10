@@ -17,11 +17,13 @@ state: workspace-level by default, repo sub-state when enabled.
 
 ```bash
 eawf status                  # Shows current project / subproject / phase / iter / waves, blockers, next actions.
-eawf plan show               # Shows active generated plan / spec from state-backed records.
+eawf plan show               # Shows active generated plan / spec from state-backed records (incl. backlog).
 eawf decision list           # Lists decisions stored in state.
-eawf backlog list            # Lists backlog items stored in state.
 eawf hypothesis list         # Lists hypothesis status from state.
 eawf audit list              # Lists audit reports and verdicts from state.
+
+# Backlog items live in state; query directly when no dedicated CLI verb fits:
+jq '.backlog' .ea/state.json
 ```
 
 Generated markdown specs / reports may still exist as **artifacts**
@@ -33,7 +35,7 @@ to them via artifact IDs.
 State-first lets agents and humans both read the same source. A
 `PLAN.md` written by one session and edited by another session creates
 two competing truths; reconciling them after the fact is pure
-overhead. Eä keeps the decision history in `decisions.jsonl`, the
+overhead. Eä keeps the decision history in `decision.jsonl`, the
 backlog in `backlog` state entries, and the current plan rendered on
 demand from active iter / wave records.
 
@@ -44,14 +46,16 @@ demand from active iter / wave records.
   state.json                  # compact authoritative index / current pointers
   config.yaml                 # human-editable project settings
   schema.json                 # pinned schema
-  stores/
+  store/                      # JSONL stores (one file per StoreKind, singular)
     research.jsonl            # large research briefs / events
-    audits.jsonl              # audit reports / results
-    incidents.jsonl           # timelines / root cause records
-    estimates.jsonl           # estimate history, superseded estimates, actual segments
+    audit.jsonl               # audit reports / results
+    incident.jsonl            # timelines / root cause records
+    estimate.jsonl            # estimate history, superseded estimates
+    actual.jsonl              # actual segments + recovery events
     memory.jsonl              # durable memory entries
-    decisions.jsonl           # decision records if too large for state
-    events.jsonl              # append-only state / event history
+    decision.jsonl            # decision records if too large for state
+    event.jsonl               # append-only state / event history
+    flow.jsonl                # flow run records
   artifacts/
     blobs/sha256/<hash>       # large payloads, command output, rendered files
     rendered/*.md             # optional generated human views
@@ -65,8 +69,8 @@ Rules:
 - `state.json` stores IDs, status, summaries, pointers, current fields,
   metrics, evidence refs.
 - Estimate / actual state entries store current summaries only; complete
-  estimate versions and actual segments live in
-  `.ea/stores/estimates.jsonl`.
+  estimate versions live in `.ea/store/estimate.jsonl` and actual
+  segments in `.ea/store/actual.jsonl`.
 - JSONL stores append-friendly large records. Each line is one
   validated object with `id`, `kind`, `schema_version`, timestamps,
   scope, summary, payload or blob refs.
@@ -85,11 +89,11 @@ estimates because human readability is provided by CLI views, not raw
 files.
 
 Default policy: commit all nonlocal stores (`research.jsonl`,
-`audits.jsonl`, `incidents.jsonl`, `estimates.jsonl`, `memory.jsonl`,
-`decisions.jsonl`, `events.jsonl`) when project policy allows;
-local / session scratch and large blobs stay under `.ea/local/` or
-gitignored blob storage. `events.jsonl` is an append-only audit log
-only, not a replay source of truth.
+`audit.jsonl`, `incident.jsonl`, `estimate.jsonl`, `actual.jsonl`,
+`memory.jsonl`, `decision.jsonl`, `event.jsonl`, `flow.jsonl`) when
+project policy allows; local / session scratch and large blobs stay
+under `.ea/local/` or gitignored blob storage. `event.jsonl` is an
+append-only audit log only, not a replay source of truth.
 
 ## Cross-references
 

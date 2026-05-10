@@ -2,7 +2,7 @@
 
 The exit-code module defines the integer constants used by every CLI handler
 and the ``CliError`` taxonomy in :mod:`eawf.cli.errors`. The values are part
-of the public contract per ``ea-proposal.md`` §7 and the v0.1 plan §5.
+of the public contract per ``docs/reference/exit-codes.md``.
 """
 
 from __future__ import annotations

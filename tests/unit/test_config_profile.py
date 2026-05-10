@@ -211,7 +211,7 @@ def test_state_top_level_must_be_mapping(tmp_path: Path) -> None:
 
 
 def test_known_profiles_includes_v0_1_set() -> None:
-    """All v0.1 profile ids per ea-proposal §13 are registered."""
+    """All v0.1 profile ids per docs/architecture/profiles.md are registered."""
     expected = {
         "core",
         "python",

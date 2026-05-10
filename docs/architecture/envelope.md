@@ -114,7 +114,7 @@ memory, decision, event, flow) shares this envelope:
 
 ## Event payload fields
 
-`events.jsonl` is audit-log only. Event payload requires:
+`.ea/store/event.jsonl` is audit-log only. Event payload requires:
 `event_type`, `actor`, `command`, `args_hash`, `scope_id`,
 `before_state_version`, `after_state_version`, `status`, `message`,
 `artifact_ids`, `timestamp`.

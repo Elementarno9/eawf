@@ -297,9 +297,10 @@ def test_validate_composed_with_three_profiles(repo_root: Path) -> None:
     """``--composed`` with core+python+research yields the merged view.
 
     ``profile enable`` writes to ``profiles.enabled`` in the repo layer; the
-    layered merge replaces the built-in default list wholesale (per
-    ea-proposal §"Settings schema": "ordinary lists replace"), so the test
-    plants the full enabled list directly via the YAML to control the order.
+    layered merge replaces the built-in default list wholesale ("ordinary
+    lists replace" per the layered-config rules in
+    ``docs/architecture/envelope.md``), so the test plants the full enabled
+    list directly via the YAML to control the order.
     """
     (repo_root / ".ea" / "config.yaml").write_text(
         "profiles:\n  enabled: [core, python, research]\n",

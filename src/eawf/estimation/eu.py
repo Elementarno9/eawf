@@ -1,6 +1,7 @@
-"""Pure EU (Estimation Unit) calculator per the v0.1 EU spec.
+"""Pure EU (Estimation Unit) calculator.
 
-One ``EU`` is 30 minutes of active operator+agent session time by default
+Per ``docs/architecture/state-model.md`` "Estimation model": one ``EU``
+is 30 minutes of active operator+agent session time by default
 (``estimation.eu_minutes``). Estimates derive ``expected_eu`` and
 ``pessimistic_eu`` by multiplying a *raw_minutes* baseline by
 ``central_multiplier`` / ``pessimistic_multiplier`` from the configured

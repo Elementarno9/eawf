@@ -24,7 +24,7 @@ payloads:                             # per-event extension shapes
 
 Idempotence key: `(event_type, scope_id, occurred_at)`. The runner /
 CLI handler treats two events with the same triple as the same event;
-`events.jsonl` appends one row per triple.
+`.ea/store/event.jsonl` appends one row per triple.
 
 ## Event types
 

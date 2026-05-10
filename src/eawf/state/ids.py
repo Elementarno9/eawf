@@ -6,7 +6,7 @@ Iter IDs: ``P\\d{2}-I\\d{2}`` (e.g., ``P13-I04``).
 Wave IDs: ``P\\d{2}-I\\d{2}-W\\d{2}`` (e.g., ``P13-I04-W01``).
 Hypothesis IDs: ``H\\d{2}-\\d{2}`` plus an optional subproject prefix.
 
-All IDs use two-digit zero-padded suffixes per `docs/reference/urn-namespace.md`.
+All IDs use two-digit zero-padded suffixes per `docs/architecture/state-model.md`.
 """
 
 from __future__ import annotations

@@ -53,12 +53,12 @@ decision (`eawf decision add`).
 
 ## Stores
 
-- All nonlocal `.ea/stores/*.jsonl` are committed by default when
+- All nonlocal `.ea/store/*.jsonl` are committed by default when
   project policy allows; scratch / local stores and large noisy blobs
   remain gitignored.
 - Secret / privacy scan always runs before ship / checkpoint commits
-  involving `.ea/stores/*.jsonl`; findings block by default.
-- `events.jsonl` is audit-log only, not source of truth or a replay
+  involving `.ea/store/*.jsonl`; findings block by default.
+- `event.jsonl` is audit-log only, not source of truth or a replay
   guarantee.
 - `memory.jsonl` is authoritative for memory; markdown memory files
   are views.
@@ -72,9 +72,10 @@ decision (`eawf decision add`).
 
 ## UI
 
-- Textual is the default TTY interactive installer / config / dashboard
-  UI; non-TTY command paths remain scriptable
-  (`--json` / `--plain` / `--no-input`).
+- `questionary + rich` is the default TTY interactive UI for the
+  install wizard and per-command prompts; non-TTY command paths remain
+  scriptable (`--json` / `--plain` / `--no-input`). A multi-pane
+  Textual-style dashboard for `eawf` (no args) is deferred beyond v0.1.
 
 ## Generated assets
 

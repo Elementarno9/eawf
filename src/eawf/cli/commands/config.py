@@ -80,10 +80,9 @@ def _resolve_anchors(flags: GlobalFlags) -> tuple[Path, Path | None]:
 class _ConfigSchema(BaseModel):
     """Minimal Pydantic schema for ``config validate``.
 
-    Per the plan §W06 acceptance: "config validate runs the merged config
-    through Pydantic config schema (placeholder body extended in Phase 3 W02
-    — for v0.1 P02 we fill the minimal schema sections from
-    ``docs/architecture/state-model.md`` 'Config schema required sections')."
+    For v0.1 P02 the minimal schema mirrors the section list in
+    ``docs/architecture/envelope.md`` "Config schema required sections".
+    Phase 3 W02 will tighten each section into a strict Pydantic model.
 
     The minimal contract is: every required top-level section listed in the
     inventory is present and is a mapping (or, for the ``commands`` section,

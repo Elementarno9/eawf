@@ -10,7 +10,7 @@ State is the core, so commands are direct: `eawf phase`, `eawf iter`,
 All commands support `--json`, `--plain`, `--no-input`, and deterministic
 non-TTY behavior unless explicitly TUI-only. All mutating commands
 acquire the relevant sibling lockfile and append an audit event to
-`.ea/stores/events.jsonl`.
+`.ea/store/event.jsonl`.
 
 Run `eawf <command> --help` for the authoritative flag list. Source of
 truth: `src/eawf/cli/app.py` and the per-group handlers in
@@ -24,7 +24,7 @@ code (see `docs/reference/exit-codes.md`).
 
 | Command | Inputs / options | Output | Mutates | Errors / blocks | Source |
 |---|---|---|---:|---|---|
-| `eawf` | none, TTY | Textual dashboard | no | non-TTY falls back to status / help | `cli/app.py` |
+| `eawf` | none, TTY | interactive dashboard (deferred; v0.1 falls back to status / help) | no | non-TTY falls back to status / help | `cli/app.py` |
 | `eawf status` | `--scope`, `--workspace`, `--json` | active scope, blockers, git, checks | no | no state found | `cli/commands/status.py` |
 | `eawf init` | `--repo`, `--workspace`, `--minimal`, `--no-input`, project fields | `.ea/`, AGENTS / CLAUDE, optional plugin plan | yes | dirty / unmanaged overwrite, invalid answers | `cli/commands/init.py` |
 | `eawf global install` | alias / statusline / plugin / MCP choices | user config + Claude user assets | yes | alias collision, settings conflict | `install/global_install.py` |
@@ -100,40 +100,48 @@ v0.1 it is unbound (avoiding the conventional Python / GCC meaning of
 
 ## CLI / TUI implementation stack
 
-`Textual` alone cannot replace `typer + rich`:
+The v0.1 stack is `typer + rich` for the CLI surface and
+`questionary + rich` for TTY-interactive prompts (install wizard,
+configuration flows). Roles:
 
 - **typer**: parses `eawf phase open --title X`, generates `--help`,
-  shell completion. Textual has no arg-parser surface — it is a TTY app
-  framework, not a CLI dispatcher.
+  shell completion.
 - **rich**: non-TTY rendering for `eawf status --json`, `--plain`, piped
-  output. Textual spins up event loop + screen — wrong layer for
-  headless invocation.
+  output, tables in scripts.
+- **questionary**: portable single-prompt TTY interaction backed by
+  `prompt_toolkit`. Used for the `eawf init` wizard and short
+  per-command prompts; falls back to `--no-input` for non-interactive
+  callers.
 
-Core runtime deps (8 packages, clean install):
+Core runtime deps (clean install, source of truth: `pyproject.toml`):
 
 | Package | Role |
 |---|---|
 | `typer` | command parsing, `--help`, shell completion |
 | `rich` | non-interactive formatted output (`--plain`, `--json`, tables in scripts) |
-| `textual` | TTY-interactive: bare `eawf` dashboard, install wizard, configuration flows |
+| `questionary` (+ `prompt_toolkit`) | TTY-interactive prompts: install wizard, configuration flows |
 | `pydantic` + `pydantic-settings` | strict config / state schemas |
 | `platformdirs` | global / user config paths |
 | `orjson` | fast JSON / JSONL read / write |
 | `jsonschema` | emitted schema for non-Python consumers |
+| `jinja2` | template rendering (AGENTS.md, plugin assets, CC settings) |
 | `portalocker` | cross-platform sibling lockfiles |
+| `pyyaml` | layered YAML config / state-extension loaders |
 
-`prompt_toolkit`, `questionary`, `InquirerPy`, and `watchfiles` are NOT
-runtime deps — Textual covers the surface, and dual event loops are
-avoided.
+`InquirerPy`, `textual`, and `watchfiles` are NOT runtime deps — the
+`typer + rich + questionary` trio covers the v0.1 surface and avoids
+dual event loops.
 
 ## Bare `eawf` interactive dashboard
 
-Running `eawf` with no args opens a Textual TUI when attached to a TTY.
-On non-TTY, falls back to `eawf status --plain` or help. Default panes:
-state, roadmap, hypotheses, budgets, audits, PR / ship, memory, config,
-artifacts. The dashboard never mutates state without explicit
-confirmation; it watches `.ea/state.json`, `.ea/config.yaml`, artifact
-indexes, git branch / status, and optional runtime session files.
+Running `eawf` with no args is the entry point for the future
+interactive dashboard. v0.1 falls back to `eawf status --plain` or help
+on every invocation; a richer multi-pane TUI (state, roadmap,
+hypotheses, budgets, audits, PR / ship, memory, config, artifacts) is
+deferred beyond v0.1. When materialised it will never mutate state
+without explicit confirmation; it will watch `.ea/state.json`,
+`.ea/config.yaml`, artifact indexes, git branch / status, and optional
+runtime session files.
 
 ## Cross-references
 

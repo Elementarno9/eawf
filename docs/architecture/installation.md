@@ -50,7 +50,8 @@ Fallbacks:
 ### Step 0: instrument probe
 
 Before any other step, Eä probes available instruments and caches the
-result in `EA_INSTRUMENT_PROBE` for the current process.
+result at `.ea/instrument-probe.json` (override path with
+`EA_INSTRUMENT_PROBE`).
 
 Probe order:
 

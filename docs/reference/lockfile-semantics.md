@@ -10,15 +10,15 @@ read-modify-write, atomic-rename the result, and release the lock.
 - Sibling lockfile: `<target>.lock` in the same directory as `<target>`.
 - Examples:
   - `.ea/state.json` is locked by `.ea/state.json.lock`.
-  - `.ea/stores/memory.jsonl` is locked by
-    `.ea/stores/memory.jsonl.lock`.
-  - `~/.ea/stores/memory.jsonl` is locked by
-    `~/.ea/stores/memory.jsonl.lock`.
+  - `.ea/store/memory.jsonl` is locked by
+    `.ea/store/memory.jsonl.lock`.
+  - `~/.ea/store/memory.jsonl` is locked by
+    `~/.ea/store/memory.jsonl.lock`.
 
 ## Acquire timeout
 
 - Default acquire timeout: **5 seconds**.
-- Configurable via `EA_LOCK_TIMEOUT` (seconds, integer).
+- Configurable via `EA_LOCK_TIMEOUT` (seconds, float).
 - Acquire failure raises `LOCK_CONFLICT` (exit code 5; see
   `docs/reference/exit-codes.md`).
 
@@ -49,7 +49,7 @@ A lock is stale when:
 On stale-lock detection:
 
 1. Acquire the lock by stealing it.
-2. Emit a `lock_stolen` event to `.ea/stores/events.jsonl` with the
+2. Emit a `lock_stolen` event to `.ea/store/event.jsonl` with the
    stolen holder identity, the new holder identity, and the reason
    (dead PID or heartbeat-stale).
 3. Continue the requested write.
@@ -101,7 +101,9 @@ Phase 1 W04 property tests assert:
 ## Cross-references
 
 - Exit codes — `docs/reference/exit-codes.md`.
-- Hook events (`lock_stolen`, etc.) — `docs/reference/hook-events.md`.
+- Hook events — `docs/reference/hook-events.md`. (`lock_stolen` is a
+  logged event tag in `src/eawf/lock/portalock.py`, **not** a
+  `HookEventType`.)
 - State CLI as the only mutator — `docs/architecture/cli-surface.md`.
 - Source: `src/eawf/lock/portalock.py`, `src/eawf/lock/sibling.py`,
   `src/eawf/lock/stale.py`, `src/eawf/state/writer.py`.

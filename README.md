@@ -17,7 +17,6 @@ uv tool install --from . eawf
 cd /path/to/your/repo
 eawf init                            # interactive wizard
 eawf plugin install claude           # render local .claude/ skills/agents/hooks
-eawf cc statusline install           # show active phase/wave in CC statusline
 eawf phase open --auto --title "Bootstrap"
 ```
 
@@ -45,7 +44,6 @@ machine-specific renders, not committed assets. Re-render anytime via
 
 ```bash
 eawf plugin install claude    # render local skills/agents/hooks
-eawf cc statusline install    # CC statusline integration
 eawf doctor                   # readiness checks
 eawf plugin doctor claude     # local drift check
 ```
