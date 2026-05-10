@@ -262,7 +262,10 @@ def package_cmd(
         Path | None,
         typer.Option(
             "--target",
-            help="Output directory (default: ./build/eawf-plugin/).",
+            help=(
+                "Output directory. Defaults to <workspace>/build/eawf-plugin/ "
+                "(or ./build/eawf-plugin/ when no workspace anchor)."
+            ),
         ),
     ] = None,
     include_marketplace: Annotated[

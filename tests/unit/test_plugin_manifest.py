@@ -126,3 +126,47 @@ def test_manifest_emits_repository_when_present() -> None:
     parsed = json.loads(rendered)
     assert parsed["repository"] == "https://example.com/repo"
     assert "homepage" not in parsed
+
+
+def test_manifest_handles_special_chars_in_author_name() -> None:
+    """Quotes / backslashes in author_name must not corrupt JSON."""
+    rendered = render_plugin_manifest(
+        version="0.1.0.dev0",
+        author_name='X "quoted" \\Y',
+        author_email=None,
+        homepage=None,
+        repository=None,
+    )
+    parsed = json.loads(rendered)  # must not raise
+    assert parsed["author"]["name"] == 'X "quoted" \\Y'
+
+
+def test_manifest_handles_special_chars_in_url_fields() -> None:
+    """Backslashes / quotes in homepage / repository round-trip cleanly."""
+    rendered = render_plugin_manifest(
+        version="0.1.0.dev0",
+        author_name="X",
+        author_email=None,
+        homepage='https://example.com/"odd"',
+        repository="https://example.com/path\\with\\slashes",
+    )
+    parsed = json.loads(rendered)
+    assert parsed["homepage"] == 'https://example.com/"odd"'
+    assert parsed["repository"] == "https://example.com/path\\with\\slashes"
+
+
+def test_manifest_drops_hardcoded_skill_agent_counts() -> None:
+    """Description must not lie when the skill / agent registries grow."""
+    rendered = render_plugin_manifest(
+        version="0.1.0.dev0",
+        author_name="X",
+        author_email=None,
+        homepage=None,
+        repository=None,
+    )
+    parsed = json.loads(rendered)
+    description = parsed["description"]
+    # No literal counts in the description; the README and docs carry
+    # the canonical lists when callers want them enumerated.
+    assert "10 skills" not in description
+    assert "8 agents" not in description

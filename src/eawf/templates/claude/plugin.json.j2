@@ -13,14 +13,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "eawf",
-  "description": "Eä Workflow — state-first, agent-driven development framework. 10 skills + 8 agents for research → plan → execute → ship workflows.",
-  "version": "{{ version }}",
-  "author": {"name": "{{ author_name }}"},
+  "description": "Eä Workflow — state-first, agent-driven development framework. Skills + agents for research → plan → execute → ship workflows.",
+  "version": {{ version | tojson }},
+  "author": {"name": {{ author_name | tojson }}},
 {%- if homepage %}
-  "homepage": "{{ homepage }}",
+  "homepage": {{ homepage | tojson }},
 {%- endif %}
 {%- if repository %}
-  "repository": "{{ repository }}",
+  "repository": {{ repository | tojson }},
 {%- endif %}
   "license": "MIT",
   "keywords": ["workflow", "agents", "state-machine", "tdd", "research"],

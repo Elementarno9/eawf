@@ -8,9 +8,11 @@ template renderers; W06 adds the statusline modules. Phase 6 W05 adds
 emits a standalone CC-plugin-marketplace-installable tree (separate
 from the per-repo ``.claude/`` install path).
 
-The package is intentionally empty of business logic so importing
-``eawf.runtimes.claude`` is cheap and side-effect-free; the convenience
-re-exports below pull lazily from their owning submodules.
+The convenience re-exports below pull from
+:mod:`~eawf.runtimes.claude.plugin_package`, so importing
+``eawf.runtimes.claude`` eagerly loads the renderer dependencies
+(jinja2, tomllib, the skill / agent registries). Callers that need a
+lighter import path should reach into the relevant submodule directly.
 """
 
 from __future__ import annotations
