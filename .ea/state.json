@@ -560,7 +560,7 @@
     "active_session_ids": [],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P07",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -765,6 +765,18 @@
       "status": "closed",
       "subproject_id": null,
       "title": "v0.1 ship: spec internalization + dogfood"
+    },
+    "P07": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P07",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T21:01:17.854978Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "v0.2 P07: state-CLI verbs (audit set-verdict, backlog set-priority) + retro-stamp v0.1 verdicts"
     }
   },
   "plugins": {},
@@ -785,7 +797,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T20:35:25.648863Z",
+  "updated_at": "2026-05-10T21:01:17.855032Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
