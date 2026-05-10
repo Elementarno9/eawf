@@ -36,10 +36,7 @@ def _bootstrap_chain(workspace: Path) -> None:
         == 0
     )
     assert runner.invoke(app, ["phase", "open", "--auto", "--title", "x"]).exit_code == 0
-    assert (
-        runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code == 0
     for wid, deps in (
         ("P01-I01-W01", None),
         ("P01-I01-W02", "P01-I01-W01"),
@@ -130,10 +127,7 @@ def test_wave_graph_empty_iter(workspace: Path) -> None:
         == 0
     )
     assert runner.invoke(app, ["phase", "open", "--auto", "--title", "x"]).exit_code == 0
-    assert (
-        runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code == 0
     res = runner.invoke(app, ["--json", "wave", "graph"])
     assert res.exit_code == 0, res.stdout
     payload = json.loads(res.stdout)
@@ -151,10 +145,7 @@ def test_wave_next_ready_when_dep_closed(workspace: Path) -> None:
     assert res.exit_code == 0, res.stdout
     assert json.loads(res.stdout)["ready"] == ["P01-I01-W01"]
     # Claim + close W01.
-    assert (
-        runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"]).exit_code == 0
     assert (
         runner.invoke(
             app,
@@ -172,10 +163,7 @@ def test_wave_next_ready_when_dep_closed(workspace: Path) -> None:
 def test_wave_next_ready_excludes_failure_blocked(workspace: Path) -> None:
     """A pending wave whose dep failed must NOT appear in ready."""
     _bootstrap_chain(workspace)
-    assert (
-        runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"]).exit_code == 0
     assert (
         runner.invoke(
             app,
@@ -200,10 +188,7 @@ def test_wave_next_ready_empty_when_nothing_pending(workspace: Path) -> None:
         == 0
     )
     assert runner.invoke(app, ["phase", "open", "--auto", "--title", "x"]).exit_code == 0
-    assert (
-        runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code
-        == 0
-    )
+    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code == 0
     res = runner.invoke(app, ["--json", "wave", "next-ready"])
     assert res.exit_code == 0, res.stdout
     assert json.loads(res.stdout)["ready"] == []
