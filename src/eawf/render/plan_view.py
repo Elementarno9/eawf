@@ -527,7 +527,12 @@ def build_view(state: State, iter_id: str) -> PlanView:
     for wid in iter_obj.wave_ids:
         if wid in state.waves:
             waves.append(state.waves[wid])
-        # Dangling refs are silently skipped — eawf validate surfaces them.
+        else:
+            # Dangling refs are silently skipped at the plan-view layer
+            # (the canonical surface for cycle / dangling-ref errors is
+            # ``eawf validate``); the debug log lets an operator
+            # cross-reference the absence without re-running validate.
+            logger.debug(f"plan_view: dangling wave_id {wid!r} skipped for iter {iter_obj.id!r}")
 
     iter_view = IterView(
         id=iter_obj.id,

@@ -33,18 +33,22 @@ def test_git_worktree_add_missing_git_raises_instrument_missing(
     assert "git executable not found" in str(exc_info.value)
 
 
-def test_git_worktree_add_timeout_maps_to_lock_conflict(
+def test_git_worktree_add_timeout_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """A :class:`subprocess.TimeoutExpired` is mapped to :class:`LockConflict` (exit 5)."""
+    """A :class:`subprocess.TimeoutExpired` is mapped to :class:`IntegrityViolation` (exit 8).
+
+    A timeout is a hung-git symptom, not a sibling-lock-held condition;
+    ``LockConflict`` would lie about the failure mode.
+    """
     monkeypatch.setattr("eawf.worktree.git.shutil.which", lambda _name: "/usr/bin/git")
 
     def _raise_timeout(*_args: Any, **_kwargs: Any) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=["git"], timeout=1.0)
 
     monkeypatch.setattr("eawf.worktree.git.subprocess.run", _raise_timeout)
-    with pytest.raises(cli_errors.LockConflict) as exc_info:
+    with pytest.raises(cli_errors.IntegrityViolation) as exc_info:
         git.worktree_add(
             tmp_path,
             branch="feature/test",
