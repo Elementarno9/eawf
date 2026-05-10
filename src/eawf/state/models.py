@@ -213,6 +213,8 @@ class Wave(_StrictModel):
     file_scopes: list[str] = Field(default_factory=list)
     claim_session_id: str | None = None
     worktree_id: str | None = None
+    token_budget: int | None = None
+    tokens_consumed: int = 0
     commit: str | None = None
     outcome: str | None = None
     opened_at: UtcDatetime
