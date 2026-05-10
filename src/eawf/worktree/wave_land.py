@@ -341,9 +341,7 @@ def wave_land_batch(
         for wid in candidates:
             wave = state.waves[wid]
             deps_ok = all(
-                state.waves[d].status == WaveStatus.CLOSED
-                for d in wave.deps
-                if d in state.waves
+                state.waves[d].status == WaveStatus.CLOSED for d in wave.deps if d in state.waves
             )
             if deps_ok:
                 filtered.append(wid)
