@@ -592,8 +592,8 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P08-I01",
+    "phase_id": "P08",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -723,7 +723,26 @@
   "hypotheses": null,
   "incidents": null,
   "indexes": {},
-  "iters": {},
+  "iters": {
+    "P08-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:31.667630Z",
+      "phase_id": "P08",
+      "status": "active",
+      "title": "P08-I01: orchestration waves",
+      "wave_ids": [
+        "P08-I01-W02",
+        "P08-I01-W03",
+        "P08-I01-W04",
+        "P08-I01-W05",
+        "P08-I01-W06",
+        "P08-I01-W01"
+      ]
+    }
+  },
   "mcp_servers": null,
   "memory_index": null,
   "outcomes": null,
@@ -823,6 +842,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "v0.2 P07: state-CLI verbs (audit set-verdict, backlog set-priority) + retro-stamp v0.1 verdicts"
+    },
+    "P08": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P08",
+      "iter_ids": [
+        "P08-I01"
+      ],
+      "opened_at": "2026-05-10T21:46:21.109991Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "Orchestration core (wave dispatch + DAG + land + budgets + fix-ci + review)"
     }
   },
   "plugins": {},
@@ -843,9 +876,127 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T21:27:57.937474Z",
+  "updated_at": "2026-05-10T21:46:45.260137Z",
   "urn": "urn:eawf:v1:state:EAWF",
-  "waves": {},
+  "waves": {
+    "P08-I01-W01": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P08-I01-W02"
+      ],
+      "file_scopes": [
+        "src/eawf/dispatch/**",
+        "src/eawf/cli/commands/wave_dispatch.py",
+        "tests/dispatch/**"
+      ],
+      "id": "P08-I01-W01",
+      "iter_id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:45.260116Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B025 subagent prompt renderer (wave dispatch)",
+      "worktree_id": null
+    },
+    "P08-I01-W02": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/state/migrations/**",
+        "src/eawf/cli/commands/lifecycle.py",
+        "tests/state/**"
+      ],
+      "id": "P08-I01-W02",
+      "iter_id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:39.762631Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B026 wave DAG persistence in state.waves",
+      "worktree_id": null
+    },
+    "P08-I01-W03": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P08-I01-W02"
+      ],
+      "file_scopes": [
+        "src/eawf/worktree/merge_back.py",
+        "src/eawf/cli/commands/worktree.py",
+        "tests/worktree/**"
+      ],
+      "id": "P08-I01-W03",
+      "iter_id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:40.156927Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B027 cherry-pick automation (wave land)",
+      "worktree_id": null
+    },
+    "P08-I01-W04": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/budget/**",
+        "src/eawf/cli/commands/wave_budget.py",
+        "tests/budget/**"
+      ],
+      "id": "P08-I01-W04",
+      "iter_id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:40.551109Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B028 per-wave token-budget cap",
+      "worktree_id": null
+    },
+    "P08-I01-W05": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P08-I01-W03"
+      ],
+      "file_scopes": [
+        "src/eawf/ci_loop/**",
+        "src/eawf/cli/commands/wave_fix_ci.py",
+        "tests/ci_loop/**"
+      ],
+      "id": "P08-I01-W05",
+      "iter_id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:40.954397Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B040 CI-fix loop (wave fix-ci)",
+      "worktree_id": null
+    },
+    "P08-I01-W06": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P08-I01-W03"
+      ],
+      "file_scopes": [
+        "src/eawf/pr_review/**",
+        "src/eawf/cli/commands/wave_review.py",
+        "tests/pr_review/**"
+      ],
+      "id": "P08-I01-W06",
+      "iter_id": "P08-I01",
+      "opened_at": "2026-05-10T21:46:41.350163Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B041 PR review automation",
+      "worktree_id": null
+    }
+  },
   "workspace": null,
   "worktrees": null
 }
