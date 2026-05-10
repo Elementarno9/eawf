@@ -1,27 +1,357 @@
 {
+  "actuals": null,
   "agent_sessions": {},
   "artifacts": {},
-  "audits": {},
+  "audits": {
+    "A01-P00": {
+      "check_results": [],
+      "created_at": "2026-05-10T12:49:57.714684Z",
+      "id": "A01-P00",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
+    },
+    "A02-P01": {
+      "check_results": [],
+      "created_at": "2026-05-10T12:50:04.123162Z",
+      "id": "A02-P01",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
+    },
+    "A03-P02": {
+      "check_results": [],
+      "created_at": "2026-05-10T12:50:04.483673Z",
+      "id": "A03-P02",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
+    },
+    "A04-P03": {
+      "check_results": [],
+      "created_at": "2026-05-10T12:50:18.142595Z",
+      "id": "A04-P03",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
+    },
+    "A05-P04": {
+      "check_results": [],
+      "created_at": "2026-05-10T12:50:19.214354Z",
+      "id": "A05-P04",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
+    },
+    "A06-P05": {
+      "check_results": [],
+      "created_at": "2026-05-10T12:50:20.251725Z",
+      "id": "A06-P05",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
+    }
+  },
+  "backlog": {
+    "B001": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:34.695399Z",
+      "id": "B001",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Linux CI matrix"
+    },
+    "B002": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:35.036761Z",
+      "id": "B002",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Windows v0.1.1 support"
+    },
+    "B003": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:35.385269Z",
+      "id": "B003",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "OpenCode runtime adapter"
+    },
+    "B004": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:35.733145Z",
+      "id": "B004",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "npm wrapper distribution"
+    },
+    "B005": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:36.132398Z",
+      "id": "B005",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "PyPI publish"
+    },
+    "B006": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:36.481668Z",
+      "id": "B006",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Quant profile body"
+    },
+    "B007": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:36.826924Z",
+      "id": "B007",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "ML profile body"
+    },
+    "B008": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:37.178741Z",
+      "id": "B008",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Catalog stub bodies (re/game/apps/infra/docs/robotics)"
+    },
+    "B009": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:37.530831Z",
+      "id": "B009",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Golden scenarios (fresh_repo, enrich_existing, flow_full)"
+    },
+    "B010": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:37.904560Z",
+      "id": "B010",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "v0.1.0 release tag + GitHub release notes"
+    },
+    "B011": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:38.253644Z",
+      "id": "B011",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Multi-repo workspace polish (cross-repo state aggregation, workspace dashboard, multi-repo PR coordination)"
+    },
+    "B012": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:38.608711Z",
+      "id": "B012",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Telemetry / metrics emit (eawf metrics: EU estimate vs actual variance, audit pass rate, lock contention)"
+    },
+    "B013": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T12:50:38.955852Z",
+      "id": "B013",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Other-harness support investigation (Codex, Cursor, Aider) — reuse runtimes/<name>/ pattern; main cost: hook-event mapping + settings schema"
+    }
+  },
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P06",
     "project_code": "EAWF",
     "subproject_id": null
   },
-  "hypotheses": {},
-  "indexes": {
-    "project_title": ""
+  "decisions": {},
+  "estimates": null,
+  "goals": {
+    "G01": {
+      "closed_at": null,
+      "created_at": "2026-05-10T12:49:25.190833Z",
+      "id": "G01",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "open",
+      "summary": "v0.1: state-first, parallel-waves, multi-runtime; ship the framework dogfooded on its own repo",
+      "title": "Build agent-driven development framework"
+    }
   },
+  "health": null,
+  "hypotheses": null,
+  "incidents": null,
+  "indexes": {},
   "iters": {},
-  "phases": {},
+  "mcp_servers": null,
+  "memory_index": null,
+  "outcomes": null,
+  "phases": {
+    "P00": {
+      "audit_id": "A01-P00",
+      "closed_at": "2026-05-10T12:49:35.795254Z",
+      "id": "P00",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:49:35.093737Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Repo bootstrap"
+    },
+    "P01": {
+      "audit_id": "A02-P01",
+      "closed_at": "2026-05-10T12:49:36.845938Z",
+      "id": "P01",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:49:36.148016Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "State + store + lock + URN + IDs + validate"
+    },
+    "P02": {
+      "audit_id": "A03-P02",
+      "closed_at": "2026-05-10T12:49:37.987593Z",
+      "id": "P02",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:49:37.224878Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Direct CLI commands (state-mutation core)"
+    },
+    "P03": {
+      "audit_id": "A04-P03",
+      "closed_at": "2026-05-10T12:50:18.490662Z",
+      "id": "P03",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:50:17.793212Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Init wizard + workspace + render layer"
+    },
+    "P04": {
+      "audit_id": "A05-P04",
+      "closed_at": "2026-05-10T12:50:19.556964Z",
+      "id": "P04",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:50:18.839120Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Skills + envelope + Claude adapter + hooks + statusline"
+    },
+    "P05": {
+      "audit_id": "A06-P05",
+      "closed_at": "2026-05-10T12:50:20.603525Z",
+      "id": "P05",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:50:19.902417Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Worktree + flow resume + memory authoritative + MCP + plan show + self-apply"
+    },
+    "P06": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P06",
+      "iter_ids": [],
+      "opened_at": "2026-05-10T12:50:20.945586Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "v0.1 ship: spec internalization + dogfood"
+    }
+  },
   "plugins": {},
-  "project": null,
+  "project": {
+    "code": "EAWF",
+    "default_branch": "main",
+    "description": null,
+    "domains": [
+      "framework",
+      "workflow",
+      "tooling"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:EAWF",
+    "slug": "eawf",
+    "status": "active",
+    "title": "Eä Workflow"
+  },
   "schema_version": "1.0",
   "scope_kind": "repo",
-  "updated_at": "2026-05-09T22:53:37.128529+00:00",
+  "subprojects": null,
+  "updated_at": "2026-05-10T12:50:38.955852Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
-  "workspace": null
+  "workspace": null,
+  "worktrees": null
 }
