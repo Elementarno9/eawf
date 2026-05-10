@@ -25,8 +25,6 @@ from __future__ import annotations
 
 import logging
 import sys
-import uuid
-from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
 import orjson
@@ -43,17 +41,15 @@ from eawf.skills._common import resolve_active_state_path
 from eawf.skills.engine import SkillContext, run_skill
 from eawf.skills.flow import (
     FlowSkill,
+    abort_flow_record,
     in_progress_flow_ids,
     latest_active_flow_id,
     load_flow_records,
     load_latest_records_per_flow,
     load_latest_safe_checkpoint,
 )
-from eawf.state.enums import FlowStatus, StoreKind
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.flow import FlowCheckpointPayload, FlowPayload
-from eawf.store.paths import store_path
+from eawf.state.enums import FlowStatus
+from eawf.store.kinds.flow import FlowCheckpointPayload
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +366,9 @@ def status_cmd(
             fid for fid, r in latest_records.items() if r.status == FlowStatus.IN_PROGRESS
         ]
         if in_progress:
-            target = in_progress[0]
+            # Deterministic pick when multiple in-progress flows exist;
+            # mirrors the sorted diagnostic in ``abort_cmd``.
+            target = sorted(in_progress)[0]
         elif latest_records:
             # Pick the most recently-appended flow_record; falls back to
             # the alphabetically-first flow_id only if the helper
@@ -511,35 +509,13 @@ def abort_cmd(
         target = flow_id
 
     previous = latest_records[target]
-    new_status = FlowStatus.ABANDONED
-
-    policy: dict[str, Any] = dict(previous.policy)
-    if reason is not None:
-        policy["abort_reason"] = reason
-
-    # Build and append the new flow_record envelope.
-    payload = FlowPayload(
-        flow_id=target,
-        goal=previous.goal,
-        policy=policy,
-        last_safe_checkpoint=previous.last_safe_checkpoint,
-        next_action=None,
-        status=new_status,
-    )
-    envelope_id = f"EV-{uuid.uuid4().hex[:12]}"
-    envelope = Envelope(
-        schema_version="1.0",
-        id=envelope_id,
-        kind=StoreKind.FLOW,
+    _envelope_id, new_payload = abort_flow_record(
+        state_path,
         scope_id=scope,
-        created_at=datetime.now(UTC),
-        updated_at=None,
-        summary=f"flow: {target} abort previous={previous.status.value}",
-        payload=payload.model_dump(mode="json"),
-        blob_refs=[],
-        artifact_ids=[],
+        previous=previous,
+        reason=reason,
     )
-    append_envelope(store_path(state_path, StoreKind.FLOW), envelope)
+    new_status = new_payload.status
 
     response = {
         "flow_id": target,
