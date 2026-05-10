@@ -95,22 +95,50 @@ class PackageResult:
 # --------------------------------------------------------------------------- #
 
 
-def _project_root() -> Path:
-    """Return the eawf source root that ships pyproject.toml.
+_MAX_PYPROJECT_WALK_LEVELS: int = 2
 
-    Walks up from this module's ``__file__`` until a ``pyproject.toml``
-    appears. Falls back to the cwd when run from a wheel without
-    pyproject (the manifest then uses fallback values).
+
+def _eawf_pyproject() -> Path | None:
+    """Return the path to eawf's own pyproject.toml, or ``None`` if not found.
+
+    Anchors on :mod:`eawf` via :func:`importlib.resources.files` so the
+    lookup cannot wander into a host project's pyproject when eawf is
+    installed as a wheel inside another project tree. We walk up at
+    most :data:`_MAX_PYPROJECT_WALK_LEVELS` directories and require the
+    discovered ``pyproject.toml`` to declare ``[project].name == "eawf"``
+    — otherwise we treat it as foreign and return ``None``.
+
+    For source-tree (editable) installs this resolves to the repo's own
+    pyproject; for wheel installs it returns ``None`` and the caller
+    falls back to safe defaults.
     """
-    here = Path(__file__).resolve()
-    for candidate in [here.parent, *here.parents]:
-        if (candidate / "pyproject.toml").exists():
-            return candidate
-    return Path.cwd()
+    package_root = Path(str(files("eawf"))).resolve()
+    candidates = [package_root, *package_root.parents][: _MAX_PYPROJECT_WALK_LEVELS + 1]
+    for candidate in candidates:
+        pyproject_path = candidate / "pyproject.toml"
+        if not pyproject_path.is_file():
+            continue
+        try:
+            with pyproject_path.open("rb") as fh:
+                data = tomllib.load(fh)
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            logger.debug(f"skipping unreadable pyproject {pyproject_path}: {exc}")
+            continue
+        project = data.get("project", {})
+        if project.get("name") == "eawf":
+            return pyproject_path
+        # First pyproject we found is for a host project; stop —
+        # the eawf wheel does not ship a pyproject of its own.
+        return None
+    return None
 
 
 def _read_pyproject_metadata() -> dict[str, Any]:
-    """Parse ``[project]`` from pyproject.toml; return author/url metadata.
+    """Parse ``[project]`` from eawf's pyproject.toml; return author/url metadata.
+
+    Anchors on the eawf package (via :func:`_eawf_pyproject`) so wheel
+    installs that live inside an unrelated host project do not pick up
+    the host's pyproject metadata.
 
     Returns a dict with keys:
         author_name : str
@@ -120,15 +148,15 @@ def _read_pyproject_metadata() -> dict[str, Any]:
 
     All keys are optional — missing fields fall back to safe defaults.
     """
-    pyproject_path = _project_root() / "pyproject.toml"
     metadata: dict[str, Any] = {
         "author_name": _PLUGIN_NAME,
         "author_email": None,
         "homepage": None,
         "repository": None,
     }
-    if not pyproject_path.exists():
-        logger.warning(f"pyproject.toml not found at {pyproject_path}; using fallback metadata")
+    pyproject_path = _eawf_pyproject()
+    if pyproject_path is None:
+        logger.debug("eawf pyproject.toml not located; using fallback plugin metadata")
         return metadata
     with pyproject_path.open("rb") as fh:
         data = tomllib.load(fh)
@@ -286,7 +314,8 @@ def _is_own_previous_output(target_dir: Path) -> bool:
         return False
     try:
         body = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug(f"unreadable plugin.json at {manifest_path}: {exc}")
         return False
     if not isinstance(body, dict):
         return False

@@ -6,7 +6,7 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "eawf-local",
   "description": "Eä Workflow local marketplace (single-plugin)",
-  "owner": {"name": "{{ author_name }}"},
+  "owner": {"name": {{ author_name | tojson }}},
   "plugins": [
     {"name": "eawf", "source": "./", "category": "workflow"}
   ]
