@@ -203,7 +203,8 @@ def worktree_list_cmd(
         return
 
     try:
-        # Read-only path: no state_transaction needed; load directly.
+        # Read-only listing: state_transaction held for a consistent
+        # snapshot against concurrent cleanup/create mutations.
         with state_transaction(state_path) as state:
             rows = list(list_worktrees(state, repo_root=repo_root, include_terminal=all_))
     except cli_errors.CliError as err:

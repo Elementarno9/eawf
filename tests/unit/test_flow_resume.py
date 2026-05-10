@@ -29,6 +29,7 @@ from eawf.skills import flow as flow_module
 from eawf.skills.flow import (
     _canonical_args_per_step_hash,
     _state_hash,
+    abort_flow_record,
     compute_drift,
     in_progress_flow_ids,
     is_safe_step_boundary,
@@ -437,6 +438,42 @@ def test_cli_run_resume_no_safe_checkpoint_returns_integrity_violation(
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
     assert result.exit_code == 8, result.stdout
+
+
+def test_abort_flow_record_appends_abandoned_envelope(tmp_path: Path) -> None:
+    state_dir = _make_state_dir(tmp_path)
+    state_path = state_dir / "state.json"
+    fid = "FL-0123456789ab"
+    _append_flow_record(
+        state_dir,
+        flow_id=fid,
+        status=FlowStatus.IN_PROGRESS,
+        envelope_id="EV-001",
+        policy={"stop_after": "audit"},
+    )
+    previous = load_latest_records_per_flow(state_path)[fid]
+    before_lines = store_path(state_path, StoreKind.FLOW).read_text(encoding="utf-8").splitlines()
+
+    envelope_id, new_payload = abort_flow_record(
+        state_path,
+        scope_id="urn:eawf:v1:state:test",
+        previous=previous,
+        reason="user requested",
+    )
+
+    assert envelope_id.startswith("EV-")
+    assert new_payload.status is FlowStatus.ABANDONED
+    assert new_payload.policy["abort_reason"] == "user requested"
+    # Pre-existing policy keys preserved.
+    assert new_payload.policy["stop_after"] == "audit"
+    assert new_payload.flow_id == fid
+    assert new_payload.goal == previous.goal
+
+    after_lines = store_path(state_path, StoreKind.FLOW).read_text(encoding="utf-8").splitlines()
+    assert len(after_lines) == len(before_lines) + 1
+
+    latest = load_latest_records_per_flow(state_path)[fid]
+    assert latest.status is FlowStatus.ABANDONED
 
 
 def test_cli_abort_unknown_flow_returns_not_found(cli_state_dir: Path) -> None:

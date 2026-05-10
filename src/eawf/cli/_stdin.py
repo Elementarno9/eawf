@@ -18,23 +18,22 @@ import sys
 
 import typer
 
-_HINT = (
-    "{name} expects a JSON envelope on stdin. "
-    "Pipe a payload (e.g. `echo '{{}}' | {name}`) "
-    "or invoke via the Claude Code hook."
-)
-
 
 def require_piped_stdin(name: str) -> None:
     """Exit ``2`` with a hint when stdin is a TTY (no piped input).
 
     *name* is the command label surfaced in the hint (e.g.
-    ``"eawf cc statusline"``); it is repeated twice in the message via the
-    template above. Callers invoke this immediately before any
-    ``sys.stdin.read()`` so the operator sees the hint instead of a hang.
+    ``"eawf cc statusline"``); it is repeated twice in the message.
+    Callers invoke this immediately before any ``sys.stdin.read()`` so
+    the operator sees the hint instead of a hang.
     """
     if sys.stdin.isatty():
-        typer.echo(_HINT.format(name=name), err=True)
+        typer.echo(
+            f"{name} expects a JSON envelope on stdin. "
+            f"Pipe a payload (e.g. `echo '{{}}' | {name}`) "
+            f"or invoke via the Claude Code hook.",
+            err=True,
+        )
         raise typer.Exit(code=2)
 
 

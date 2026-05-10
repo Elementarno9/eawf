@@ -444,6 +444,51 @@ def _emit_flow_record(
     return envelope_id
 
 
+def abort_flow_record(
+    state_path: Path,
+    *,
+    scope_id: str,
+    previous: FlowPayload,
+    reason: str | None = None,
+) -> tuple[str, FlowPayload]:
+    """Append an ``abandoned`` flow_record envelope.
+
+    Builds a :class:`FlowPayload` derived from *previous* with
+    ``status = ABANDONED`` (and ``policy['abort_reason'] = reason``
+    when supplied), wraps it in an :class:`Envelope`, and appends to
+    the flow JSONL via :func:`append_envelope`.
+
+    Returns ``(envelope_id, new_payload)`` so the caller can surface
+    the new status and envelope id without re-reading the store.
+    """
+    policy: dict[str, Any] = dict(previous.policy)
+    if reason is not None:
+        policy["abort_reason"] = reason
+    new_payload = FlowPayload(
+        flow_id=previous.flow_id,
+        goal=previous.goal,
+        policy=policy,
+        last_safe_checkpoint=previous.last_safe_checkpoint,
+        next_action=None,
+        status=FlowStatus.ABANDONED,
+    )
+    envelope_id = _new_envelope_id()
+    envelope = Envelope(
+        schema_version="1.0",
+        id=envelope_id,
+        kind=StoreKind.FLOW,
+        scope_id=scope_id,
+        created_at=datetime.now(UTC),
+        updated_at=None,
+        summary=(f"flow: {previous.flow_id} abort previous={previous.status.value}"),
+        payload=new_payload.model_dump(mode="json"),
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(_flow_jsonl_path(state_path), envelope)
+    return envelope_id, new_payload
+
+
 def _emit_checkpoint(
     *,
     state_path: Path,
@@ -904,6 +949,7 @@ class FlowSkill(Skill):
 
 __all__ = [
     "FlowSkill",
+    "abort_flow_record",
     "compute_drift",
     "in_progress_flow_ids",
     "is_safe_step_boundary",
