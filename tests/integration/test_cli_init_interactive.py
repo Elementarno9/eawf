@@ -220,3 +220,57 @@ _REFERENCED_STEPS = (
     STEP_ACCEPTANCE_TYPECHECK,
     STEP_WRITE_CONFIRM,
 )
+
+
+# ---- inline-validate / auto-uppercase regression pins ---------------------
+
+
+def test_step_project_code_validate_accepts_uppercase_canonical_form() -> None:
+    """The inline validator returns ``True`` for a canonical uppercase code."""
+    assert STEP_PROJECT_CODE.validate is not None
+    assert STEP_PROJECT_CODE.validate("DEMO") is True
+
+
+def test_wizard_inline_validate_lowercase_project_code() -> None:
+    """The inline validator accepts lowercase input by uppercasing before regex match.
+
+    The fix repairs the user-reported wizard UX: a lowercase entry like
+    ``"fsdf"`` previously survived all 12 steps before a Pydantic
+    ``ValidationError`` blob landed at the end. The inline callback now
+    accepts it (after uppercasing) so the recorded value can be auto-
+    normalised by ``filter=str.upper``.
+    """
+    assert STEP_PROJECT_CODE.validate is not None
+    assert STEP_PROJECT_CODE.validate("fsdf") is True
+    assert STEP_PROJECT_CODE.filter is not None
+    assert STEP_PROJECT_CODE.filter("fsdf") == "FSDF"
+
+
+def test_wizard_inline_validate_rejects_malformed_input_with_friendly_msg() -> None:
+    """Truly invalid input returns the operator-facing friendly string, not a Pydantic blob."""
+    assert STEP_PROJECT_CODE.validate is not None
+    out = STEP_PROJECT_CODE.validate("1bad")  # leading digit fails the regex
+    assert isinstance(out, str)
+    assert "must be 2-16 characters" in out
+    assert "Pydantic" not in out and "ValidationError" not in out
+
+
+def test_wizard_lowercase_project_code_auto_uppercased(tmp_path: Path) -> None:
+    """End-to-end: a lowercase entry round-trips into an uppercase ``project_code`` in state.json.
+
+    Drives the full questionary wizard via prompt_toolkit pipe input.
+    The lowercase entry passes the inline validate (uppercase-then-
+    match), then ``filter=str.upper`` normalises the recorded answer,
+    and the wizard pipeline writes a state.json whose ``current.project_code``
+    is uppercase.
+    """
+    project_code_lower = "wztest"
+    expected_upper = "WZTEST"
+    with create_pipe_input() as inp, create_app_session(input=inp, output=DummyOutput()):
+        _send_full_wizard_inputs(inp, project_code=project_code_lower)
+        result = run_wizard_interactive(tmp_path, force=False)
+    assert result.project_code == expected_upper
+    import orjson
+
+    payload = orjson.loads((tmp_path / ".ea" / "state.json").read_bytes())
+    assert payload["current"]["project_code"] == expected_upper
