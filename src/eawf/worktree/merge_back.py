@@ -10,6 +10,10 @@ Two strategies:
 - ``rebase_then_ff``: rebase the worktree branch on *target* (inside
   the worktree) and fast-forward the parent. On conflict, the rebase
   is left mid-flight; ``--continue`` resumes it from the worktree.
+  If the parent is not fast-forwardable post-rebase (a concurrent
+  commit landed on *target* between the rebase and the merge step),
+  raises :class:`~eawf.cli.errors.IntegrityViolation` rather than
+  force-updating — operator must re-attempt under a fresh lock.
 
 Both strategies preserve evidence on conflict — the on-disk repo state
 (``.git/CHERRY_PICK_HEAD`` for cherry-pick, ``rebase-merge`` for rebase)
