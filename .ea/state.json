@@ -90,6 +90,17 @@
       "scope_id": "EAWF",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A08-P07": {
+      "check_results": [],
+      "created_at": "2026-05-10T21:18:23.745141Z",
+      "id": "A08-P07",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-v0.1-closeout",
+      "scope_id": "EAWF",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -571,7 +582,7 @@
     "active_session_ids": [],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": "P07",
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -778,14 +789,14 @@
       "title": "v0.1 ship: spec internalization + dogfood"
     },
     "P07": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A08-P07",
+      "closed_at": "2026-05-10T21:18:29.418817Z",
       "id": "P07",
       "iter_ids": [],
       "opened_at": "2026-05-10T21:01:17.854978Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "v0.2 P07: state-CLI verbs (audit set-verdict, backlog set-priority) + retro-stamp v0.1 verdicts"
     }
@@ -808,7 +819,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T21:16:50.708293Z",
+  "updated_at": "2026-05-10T21:18:29.418845Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
