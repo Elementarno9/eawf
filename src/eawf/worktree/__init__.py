@@ -42,6 +42,12 @@ from eawf.worktree.merge_back import (
     MergeBackResult,
     merge_back,
 )
+from eawf.worktree.wave_land import (
+    WaveLandBatchResult,
+    WaveLandResult,
+    wave_land,
+    wave_land_batch,
+)
 
 # Module alias so callers can `except WorktreeError` without importing
 # the cli.errors module directly. The taxonomy stays canonical (one
@@ -106,11 +112,15 @@ __all__ = [
     "STRATEGY_REBASE_THEN_FF",
     "CleanupResult",
     "MergeBackResult",
+    "WaveLandBatchResult",
+    "WaveLandResult",
     "WorktreeError",
     "WorktreeListing",
     "cleanup_worktree",
     "create_worktree",
     "list_worktrees",
     "merge_back",
+    "wave_land",
+    "wave_land_batch",
     "worktree_registry_lock",
 ]
