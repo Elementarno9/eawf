@@ -30,11 +30,10 @@ def test_unknown_command_exits_with_code_2() -> None:
 
 
 def test_bare_invocation_prints_banner() -> None:
-    """``eawf`` with no subcommand emits the version banner — Phase 1 contract."""
+    """``eawf`` with no subcommand emits the package-version banner."""
     result = runner.invoke(app, [])
     assert result.exit_code == 0
     assert "eawf 0.1.0" in result.stdout
-    assert "v0.1 — see docs/" in result.stdout
 
 
 def test_version_text_envelope() -> None:
