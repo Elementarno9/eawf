@@ -645,6 +645,19 @@
       "status": "active",
       "summary": "Defer retro audit-verdict + backlog priority-bumps to P07 CLI completeness",
       "superseded_by": null
+    },
+    "D07": {
+      "alternatives": [
+        "squash-merge (collapses history; rejected — incident 2026-05-10 PR #3 squashed by ship skill, reverted via force-push, redone as rebase-merge in PR #4)",
+        "merge-commit (disabled at repo level)"
+      ],
+      "created_at": "2026-05-10T20:35:25.648863Z",
+      "id": "D07",
+      "rationale": "Squash collapses per-wave/per-commit history into a single fat commit on main, losing the symbol-prefixed audit trail (e.g. [P06-W05] [P06-CORE]) that AGENTS.md commit-prefix rule and the wave/audit chain depend on for reconstructibility from git log. Rebase-merge preserves linear, individual commits with their original messages — matches the cherry-pick discipline that already feeds the long-running phase branch. Merge-commits forbidden by repo settings (mergeCommitAllowed=false). Default for all phase PRs unless explicitly overridden.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "PR merge strategy: rebase-and-merge; never squash, never merge-commit",
+      "superseded_by": null
     }
   },
   "estimates": null,
@@ -772,7 +785,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T19:51:26.967908Z",
+  "updated_at": "2026-05-10T20:35:25.648863Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
