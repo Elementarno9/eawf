@@ -895,7 +895,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T22:29:43.876065Z",
+  "updated_at": "2026-05-10T22:29:58.880694Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1008,7 +1008,7 @@
       "title": "B040 CI-fix loop (wave fix-ci)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P08-I01-W05-1778452198"
     },
     "P08-I01-W06": {
       "blocks": [],
@@ -1031,7 +1031,7 @@
       "title": "B041 PR review automation",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P08-I01-W06-1778452198"
     }
   },
   "workspace": null,
@@ -1079,6 +1079,28 @@
       "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w04",
       "status": "abandoned",
       "wave_id": "P08-I01-W04"
+    },
+    "WT-P08-I01-W05-1778452198": {
+      "base_branch": "feature/EAWF-v0.2",
+      "branch": "feature/eawf-v0.1-p08-w05",
+      "created_at": "2026-05-10T22:29:58.263612Z",
+      "id": "WT-P08-I01-W05-1778452198",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w05",
+      "status": "active",
+      "wave_id": "P08-I01-W05"
+    },
+    "WT-P08-I01-W06-1778452198": {
+      "base_branch": "feature/EAWF-v0.2",
+      "branch": "feature/eawf-v0.1-p08-w06",
+      "created_at": "2026-05-10T22:29:58.880694Z",
+      "id": "WT-P08-I01-W06-1778452198",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w06",
+      "status": "active",
+      "wave_id": "P08-I01-W06"
     }
   }
 }
