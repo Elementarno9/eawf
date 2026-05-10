@@ -32,7 +32,7 @@ def test_cleanup_refuses_dirty(tmp_path: Path) -> None:
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     # Leave the worktree dirty (untracked file).
-    (Path(record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
+    ((repo / record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
     with pytest.raises(cli_errors.IntegrityViolation) as exc_info:
         cleanup_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     assert "dirty" in str(exc_info.value)
@@ -43,7 +43,7 @@ def test_cleanup_force_removes_dirty(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    (Path(record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
+    ((repo / record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
     result = cleanup_worktree(state, repo_root=repo, wave_id="P05-I01-W01", force=True)
     assert not Path(result.removed_path).exists()
     assert state.worktrees is not None
@@ -55,12 +55,13 @@ def test_cleanup_prunes_git_registry(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    abs_path = str((repo / record.path).resolve())
     pre = worktree_list(repo)
-    assert any(record.path == entry.get("worktree", "") for entry in pre)
+    assert any(abs_path == entry.get("worktree", "") for entry in pre)
 
     cleanup_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     post = worktree_list(repo)
-    assert not any(record.path == entry.get("worktree", "") for entry in post)
+    assert not any(abs_path == entry.get("worktree", "") for entry in post)
 
 
 def test_cleanup_keep_branch_preserves_branch(tmp_path: Path) -> None:

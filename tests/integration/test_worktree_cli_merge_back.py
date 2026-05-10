@@ -55,7 +55,7 @@ def _create_worktree_and_commit(
     )
     assert res.exit_code == 0, res.stdout
     envelope = json.loads(res.stdout)
-    wt_path = Path(envelope["path"])
+    wt_path = repo / envelope["path"]
     (wt_path / file_name).write_text(content, encoding="utf-8")
     subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True)
     subprocess.run(["git", "-C", str(wt_path), "commit", "-q", "-m", msg], check=True)

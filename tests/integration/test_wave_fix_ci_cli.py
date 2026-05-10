@@ -168,8 +168,7 @@ def test_wave_fix_ci_no_failures_exit_zero_envelope(workspace: Path) -> None:
     parent = _bootstrap_with_parent(workspace)
     log_path = _write_log(
         workspace,
-        "=========== passed ===========\n"
-        "All checks passed.\n",
+        "=========== passed ===========\nAll checks passed.\n",
     )
     before = _state_payload(workspace)
     res = runner.invoke(

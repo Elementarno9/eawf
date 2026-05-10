@@ -49,7 +49,7 @@ def test_cherry_pick_clean_marks_merged(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    sha = _commit_in(Path(record.path), name="hello.txt", content="x\n", msg="add hello")
+    sha = _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
     result = merge_back(state, repo_root=repo, wave_id="P05-I01-W01")
     assert not result.conflicted
@@ -71,7 +71,7 @@ def test_cherry_pick_conflict_marks_conflicted(tmp_path: Path) -> None:
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     # Worktree edits the same file with different content.
     _commit_in(
-        Path(record.path),
+        (repo / record.path),
         name="conflict.txt",
         content="worktree\n",
         msg="worktree edit",
@@ -99,7 +99,7 @@ def test_continue_after_resolution_completes(tmp_path: Path) -> None:
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in(
-        Path(record.path),
+        (repo / record.path),
         name="conflict.txt",
         content="worktree\n",
         msg="worktree edit",
@@ -133,7 +133,7 @@ def test_abort_marks_abandoned(tmp_path: Path) -> None:
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in(
-        Path(record.path),
+        (repo / record.path),
         name="conflict.txt",
         content="worktree\n",
         msg="worktree edit",
@@ -156,7 +156,7 @@ def test_rebase_then_ff_clean(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    _commit_in(Path(record.path), name="hello.txt", content="x\n", msg="add hello")
+    _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
     result = merge_back(
         state,

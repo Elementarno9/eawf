@@ -1040,7 +1040,7 @@
       "id": "WT-P08-I01-W01-1778451220",
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
-      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w01",
+      "path": ".claude/worktrees/p08-w01",
       "status": "abandoned",
       "wave_id": "P08-I01-W01"
     },
@@ -1051,7 +1051,7 @@
       "id": "WT-P08-I01-W02-1778449665",
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
-      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w02",
+      "path": ".claude/worktrees/p08-w02",
       "status": "abandoned",
       "wave_id": "P08-I01-W02"
     },
@@ -1062,7 +1062,7 @@
       "id": "WT-P08-I01-W03-1778451221",
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
-      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w03",
+      "path": ".claude/worktrees/p08-w03",
       "status": "abandoned",
       "wave_id": "P08-I01-W03"
     },
@@ -1073,7 +1073,7 @@
       "id": "WT-P08-I01-W04-1778449666",
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
-      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w04",
+      "path": ".claude/worktrees/p08-w04",
       "status": "abandoned",
       "wave_id": "P08-I01-W04"
     },
@@ -1084,7 +1084,7 @@
       "id": "WT-P08-I01-W05-1778452198",
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
-      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w05",
+      "path": ".claude/worktrees/p08-w05",
       "status": "abandoned",
       "wave_id": "P08-I01-W05"
     },
@@ -1095,7 +1095,7 @@
       "id": "WT-P08-I01-W06-1778452198",
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
-      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w06",
+      "path": ".claude/worktrees/p08-w06",
       "status": "abandoned",
       "wave_id": "P08-I01-W06"
     }

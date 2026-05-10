@@ -188,7 +188,7 @@ def _rebase_then_ff(
     target_branch: str,
 ) -> MergeBackResult:
     """Rebase the worktree branch on *target_branch*, then ff-merge."""
-    worktree_path = Path(record.path)
+    worktree_path = repo_root / record.path
     clean, detail = git.rebase(worktree_path, target=target_branch)
     if not clean:
         files = _conflict_files(worktree_path)
@@ -266,7 +266,7 @@ def _continue_resume(
         # Otherwise replay any remaining commits.
         return _cherry_pick_loop(repo_root, record=record, target_branch=target_branch)
 
-    worktree_path = Path(record.path)
+    worktree_path = repo_root / record.path
     if git.rebase_in_progress(worktree_path):
         clean, _detail = git.rebase_continue(worktree_path)
         if not clean:
@@ -335,7 +335,7 @@ def merge_back(
     if abort:
         # Honour whichever evidence is on disk. If neither, the abort is
         # a state-only ABANDONED transition.
-        worktree_path = Path(record.path)
+        worktree_path = repo_root / record.path
         if git.cherry_pick_in_progress(repo_root):
             git.cherry_pick_abort(repo_root)
         if git.rebase_in_progress(worktree_path):

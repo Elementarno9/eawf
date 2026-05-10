@@ -57,7 +57,7 @@ def test_wave_land_runs_cherry_pick_and_closes_wave(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    sha = _commit_in(Path(record.path), name="hello.txt", content="x\n", msg="add hello")
+    sha = _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
     result = wave_land(state, repo_root=repo, wave_id="P05-I01-W01")
 
@@ -75,7 +75,7 @@ def test_wave_land_runs_cherry_pick_and_closes_wave(tmp_path: Path) -> None:
     assert state.worktrees[record.id].status == WorktreeStatus.MERGED
     assert result.worktree_cleaned is True
     # Cleanup ran -> on-disk worktree directory is gone.
-    assert not Path(record.path).exists()
+    assert not (repo / record.path).exists()
 
 
 def test_wave_land_default_outcome_text(tmp_path: Path) -> None:
@@ -83,7 +83,7 @@ def test_wave_land_default_outcome_text(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    _commit_in(Path(record.path), name="hello.txt", content="x\n", msg="add hello")
+    _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
     result = wave_land(state, repo_root=repo, wave_id="P05-I01-W01")
 
@@ -99,7 +99,7 @@ def test_wave_land_keep_worktree_skips_cleanup(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    _commit_in(Path(record.path), name="hello.txt", content="x\n", msg="add hello")
+    _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
 
     result = wave_land(
         state,
@@ -110,7 +110,7 @@ def test_wave_land_keep_worktree_skips_cleanup(tmp_path: Path) -> None:
 
     assert result.worktree_cleaned is False
     assert result.cleanup is None
-    assert Path(record.path).exists()
+    assert (repo / record.path).exists()
     # The worktree record remains MERGED (cleanup did not run).
     assert state.worktrees is not None
     assert state.worktrees[record.id].status == WorktreeStatus.MERGED
@@ -138,7 +138,7 @@ def test_wave_land_conflict_does_not_close_wave(tmp_path: Path) -> None:
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in(
-        Path(record.path),
+        (repo / record.path),
         name="conflict.txt",
         content="worktree\n",
         msg="worktree edit",
@@ -182,10 +182,10 @@ def test_wave_land_batch_runs_in_dep_order(tmp_path: Path) -> None:
     iter_obj.wave_ids = ["P05-I01-W01", "P05-I01-W02"]
 
     record_a = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    _commit_in(Path(record_a.path), name="hello.txt", content="x\n", msg="add hello")
+    _commit_in((repo / record_a.path), name="hello.txt", content="x\n", msg="add hello")
 
     record_b = create_worktree(state, repo_root=repo, wave_id="P05-I01-W02")
-    _commit_in(Path(record_b.path), name="goodbye.txt", content="y\n", msg="add goodbye")
+    _commit_in((repo / record_b.path), name="goodbye.txt", content="y\n", msg="add goodbye")
 
     batch_result = wave_land_batch(state, repo_root=repo)
 
@@ -220,13 +220,13 @@ def test_wave_land_batch_stops_on_first_failure(tmp_path: Path) -> None:
 
     record_a = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     _commit_in(
-        Path(record_a.path),
+        (repo / record_a.path),
         name="conflict.txt",
         content="wt-a\n",
         msg="wt-a edit",
     )
     record_b = create_worktree(state, repo_root=repo, wave_id="P05-I01-W02")
-    _commit_in(Path(record_b.path), name="goodbye.txt", content="y\n", msg="add goodbye")
+    _commit_in((repo / record_b.path), name="goodbye.txt", content="y\n", msg="add goodbye")
 
     # Move the parent forward so W01's worktree commit will conflict.
     (repo / "conflict.txt").write_text("parent v2\n", encoding="utf-8")
