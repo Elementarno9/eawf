@@ -607,10 +607,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P08-I01-W05",
-      "P08-I01-W06"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P08-I01",
     "phase_id": "P08",
     "project_code": "EAWF",
@@ -895,7 +892,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T22:29:58.880694Z",
+  "updated_at": "2026-05-10T22:46:33.075474Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -990,8 +987,8 @@
     "P08-I01-W05": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-10T22:46:30.776412Z",
+      "commit": "9f135cd",
       "deps": [
         "P08-I01-W03"
       ],
@@ -1003,8 +1000,8 @@
       "id": "P08-I01-W05",
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.954397Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "CI-fix loop: pytest/ruff/mypy parser + wave fix-ci/fix-ci-loop CLI (14 tests)",
+      "status": "closed",
       "title": "B040 CI-fix loop (wave fix-ci)",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1013,8 +1010,8 @@
     "P08-I01-W06": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-10T22:46:31.147208Z",
+      "commit": "c868068",
       "deps": [
         "P08-I01-W03"
       ],
@@ -1026,8 +1023,8 @@
       "id": "P08-I01-W06",
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:41.350163Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "PR review automation: findings parser + verdict policy + wave review CLI (19 tests)",
+      "status": "closed",
       "title": "B041 PR review automation",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1088,7 +1085,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w05",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P08-I01-W05"
     },
     "WT-P08-I01-W06-1778452198": {
@@ -1099,7 +1096,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w06",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P08-I01-W06"
     }
   }
