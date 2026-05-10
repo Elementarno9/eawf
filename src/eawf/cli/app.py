@@ -198,7 +198,14 @@ app.command(name="clone-repo")(clone_repo_cmd)
 # --- P03 W07 render-output registration ---
 from eawf.cli.commands.render_output import render_output_cmd  # noqa: E402
 
-app.command(name="render-output")(render_output_cmd)
+app.command(
+    name="render-output",
+    help=(
+        "Convert between JSON and markdown forms of the output envelope "
+        "(reads JSON or markdown from stdin). At a TTY with no piped data "
+        "the command exits 2 with a hint instead of hanging."
+    ),
+)(render_output_cmd)
 # --- end W07 ---
 
 # --- P03 W08 sync registration ---

@@ -22,6 +22,7 @@ from typing import Annotated
 
 import typer
 
+from eawf.cli._stdin import require_piped_stdin
 from eawf.cli.flags import GlobalFlags
 from eawf.runtimes.claude import statusline as statusline_orchestrator
 
@@ -43,7 +44,14 @@ statusline_app = typer.Typer(
 )
 
 
-@statusline_app.callback(invoke_without_command=True)
+@statusline_app.callback(
+    invoke_without_command=True,
+    help=(
+        "Render the Eä statusline for Claude Code "
+        "(reads JSON envelope from stdin). At a TTY with no piped data the "
+        "command exits 2 with a hint instead of hanging."
+    ),
+)
 def statusline_root(
     ctx: typer.Context,
     theme: Annotated[
@@ -62,6 +70,7 @@ def statusline_root(
     """
     if ctx.invoked_subcommand is not None:
         return
+    require_piped_stdin("eawf cc statusline")
     flags: GlobalFlags = ctx.obj
     line = statusline_orchestrator.run_with_cache(
         workspace=flags.workspace,
@@ -74,7 +83,14 @@ def statusline_root(
     typer.echo(line, color=True)
 
 
-@statusline_app.command(name="prewarm")
+@statusline_app.command(
+    name="prewarm",
+    help=(
+        "Render once and cache the line per Claude session id "
+        "(reads JSON envelope from stdin). At a TTY with no piped data the "
+        "command exits 2 with a hint instead of hanging."
+    ),
+)
 def statusline_prewarm(
     ctx: typer.Context,
     theme: Annotated[
@@ -86,6 +102,7 @@ def statusline_prewarm(
     ] = None,
 ) -> None:
     """Render once and write the line to the per-session cache file."""
+    require_piped_stdin("eawf cc statusline prewarm")
     flags: GlobalFlags = ctx.obj
     statusline_orchestrator.prewarm(
         workspace=flags.workspace,

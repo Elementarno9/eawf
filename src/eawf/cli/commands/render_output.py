@@ -29,6 +29,7 @@ import typer
 from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
+from eawf.cli._stdin import require_piped_stdin
 from eawf.cli.flags import GlobalFlags
 from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
 
@@ -86,6 +87,7 @@ def render_output_cmd(
         )
         return
 
+    require_piped_stdin("eawf render-output")
     stdin_text = sys.stdin.read()
 
     try:
