@@ -31,7 +31,65 @@ Responsibilities:
 
 Source: `src/eawf/runtimes/claude/`. Plugin lifecycle commands:
 `eawf plugin install claude`, `eawf plugin update claude`,
-`eawf plugin doctor claude`.
+`eawf plugin doctor claude`, `eawf plugin package claude`.
+
+## Two install modes
+
+The Claude Code adapter exposes two distinct emission paths. They are
+designed to coexist — pick the one that matches the audience.
+
+| Mode | Command | Output | Audience |
+|---|---|---|---|
+| Repo install | `eawf plugin install claude` | `<repo>/.claude/skills/`, `agents/`, `hooks/`, `settings.json` | Per-repo workspace wiring; pairs with `.ea/state.json` and the runtime hook router. |
+| Plugin package | `eawf plugin package claude` | `<target>/.claude-plugin/plugin.json` + `<target>/skills/` + `<target>/agents/` + optional `marketplace.json` + optional `README.md` | Standalone Claude Code marketplace install via `/plugin marketplace add <path>` then `/plugin install eawf@eawf-local`. |
+
+### Repo install mode
+
+Writes per-repo assets under `<repo>/.claude/`. This is the path the
+Eä `eawf init` wizard wires up. It carries hook scripts (event router
+glue) and patches `settings.json` with an `__eawf_managed` namespace so
+the per-repo plugin doctor can detect drift. Source of truth:
+`src/eawf/runtimes/claude/plugin_install.py`.
+
+### Plugin-package mode
+
+Writes a self-contained tree at `<target>/` that Claude Code can install
+through its plugin marketplace surface. The output deliberately differs
+from the repo-install layout:
+
+- **No `.claude/` prefix.** The tree IS the plugin; CC mounts it under
+  `~/.claude/plugins/...` automatically when the user runs
+  `/plugin install`.
+- **No `hooks/`.** See "Why hooks are deferred" below.
+- **No `settings.json`.** A marketplace plugin must not write into the
+  user's CC settings; that surface is owned by the user.
+- **No `.ea/`.** Project state lives in the user's repo, not in the
+  plugin.
+
+Source of truth: `src/eawf/runtimes/claude/plugin_package.py`. The
+emit is byte-stable: re-running with the same inputs produces a
+byte-identical tree (covered by the W05 idempotence test).
+
+### Why hooks are deferred to v0.2 (B015)
+
+Eä's hook event taxonomy is custom (`phase_open`, `wave_close`,
+`iter_open`, etc.) and tracks the workflow state machine. Claude Code's
+plugin-side hook event taxonomy is a different shape entirely:
+`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`, `UserPromptSubmit`.
+
+The two surfaces do not have a 1:1 mapping. A v0.2 release will add a
+small translation layer so a `PreToolUse` event can dispatch to the Eä
+router, which then matches against the Eä event taxonomy and runs the
+right Eä-defined handlers. Shipping that translator is a separate
+design decision (the mapping is lossy in both directions); deferring
+keeps the v0.1 plugin-package surface clean and focused on the
+skill/agent assets that DO map cleanly.
+
+Tracked as backlog item B015. Until that lands, users who want
+hook-aware Eä behaviour should use the repo-install path
+(`eawf plugin install claude`), which writes the hook scripts and the
+`__eawf_managed` settings into the per-repo `.claude/` tree where Eä
+controls the runtime contract.
 
 Generated assets update only Eä-owned files or managed regions
 (`<!-- BEGIN EAWF:managed ... -->` / `<!-- END EAWF:managed ... -->`).

@@ -34,6 +34,7 @@ from eawf.runtimes.claude.plugin_install import (
     IntegrityViolation,
     install_plugin,
 )
+from eawf.runtimes.claude.plugin_package import PackageResult, package_plugin
 from eawf.runtimes.claude.plugin_update import UpdateResult, update_plugin
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,34 @@ def _doctor_text(report: DoctorReport) -> str:
     return "\n".join(parts)
 
 
+def _package_payload(result: PackageResult) -> dict[str, object]:
+    """Render :class:`PackageResult` as the JSON envelope body."""
+    return {
+        "target": str(result.target),
+        "dry_run": result.dry_run,
+        "skills": list(result.skills),
+        "agents": list(result.agents),
+        "wrote_marketplace": result.wrote_marketplace,
+        "wrote_readme": result.wrote_readme,
+    }
+
+
+def _package_text(result: PackageResult) -> str:
+    """Render :class:`PackageResult` as a human-readable summary."""
+    parts = [f"plugin package ({'dry-run' if result.dry_run else 'wrote'}) → {result.target}"]
+    parts.append(f"  skills:      {len(result.skills)}")
+    parts.append(f"  agents:      {len(result.agents)}")
+    parts.append(f"  marketplace: {'yes' if result.wrote_marketplace else 'no'}")
+    parts.append(f"  readme:      {'yes' if result.wrote_readme else 'no'}")
+    return "\n".join(parts)
+
+
+def _default_package_target(flags: GlobalFlags) -> Path:
+    """Default ``--target`` for ``plugin package`` — ``<workspace>/build/eawf-plugin/``."""
+    base = (flags.workspace or Path.cwd()).resolve()
+    return base / "build" / "eawf-plugin"
+
+
 @plugin_app.command(name="install")
 def install_cmd(
     ctx: typer.Context,
@@ -220,6 +249,81 @@ def doctor_cmd(
     emit_json_or_text(_doctor_payload(report), _doctor_text(report), flags=flags)
     if not report.clean:
         raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+
+
+@plugin_app.command(name="package")
+def package_cmd(
+    ctx: typer.Context,
+    runtime: Annotated[
+        str,
+        typer.Argument(help="Runtime to package (currently only `claude`)."),
+    ],
+    target: Annotated[
+        Path | None,
+        typer.Option(
+            "--target",
+            help="Output directory (default: ./build/eawf-plugin/).",
+        ),
+    ] = None,
+    include_marketplace: Annotated[
+        bool,
+        typer.Option(
+            "--include-marketplace/--no-marketplace",
+            help="Emit .claude-plugin/marketplace.json (default: yes).",
+        ),
+    ] = True,
+    include_readme: Annotated[
+        bool,
+        typer.Option(
+            "--include-readme/--no-readme",
+            help="Emit README.md (default: yes).",
+        ),
+    ] = True,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite a non-empty target that is not a previous eawf plugin output.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="List what would be written; write nothing.",
+        ),
+    ] = False,
+) -> None:
+    """Emit an installable Claude Code plugin tree."""
+    flags: GlobalFlags = ctx.obj
+    try:
+        _validate_runtime(runtime)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    resolved_target = (target or _default_package_target(flags)).resolve()
+    try:
+        result = package_plugin(
+            resolved_target,
+            include_marketplace=include_marketplace,
+            include_readme=include_readme,
+            force=force,
+            dry_run=dry_run,
+        )
+    except IntegrityViolation as exc:
+        cli_errors.emit_error(
+            cli_errors.IntegrityViolation(str(exc)),
+            flags=flags,
+        )
+        return
+    except ValueError as exc:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(str(exc)),
+            flags=flags,
+        )
+        return
+
+    emit_json_or_text(_package_payload(result), _package_text(result), flags=flags)
 
 
 __all__ = [

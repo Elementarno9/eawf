@@ -1,0 +1,29 @@
+{#- Claude Code plugin.json manifest template.
+
+    Variables (all required, see :func:`render_plugin_manifest`):
+      version       — eawf package version string.
+      author_name   — author display name (no email; never emitted).
+      homepage      — optional URL or ``None`` (key omitted when None).
+      repository    — optional URL or ``None`` (key omitted when None).
+
+    The wrapper renderer post-processes this template's output through
+    ``json.loads → json.dumps(sort_keys=True, indent=2) + "\n"`` so the
+    final manifest is byte-stable regardless of Jinja whitespace. Author
+    email is intentionally absent; the spec forbids leaking it. -#}
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "eawf",
+  "description": "Eä Workflow — state-first, agent-driven development framework. 10 skills + 8 agents for research → plan → execute → ship workflows.",
+  "version": "{{ version }}",
+  "author": {"name": "{{ author_name }}"},
+{%- if homepage %}
+  "homepage": "{{ homepage }}",
+{%- endif %}
+{%- if repository %}
+  "repository": "{{ repository }}",
+{%- endif %}
+  "license": "MIT",
+  "keywords": ["workflow", "agents", "state-machine", "tdd", "research"],
+  "skills": "./skills",
+  "agents": "./agents"
+}
