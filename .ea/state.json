@@ -607,7 +607,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P08-I01-W01",
+      "P08-I01-W03"
+    ],
     "iter_id": "P08-I01",
     "phase_id": "P08",
     "project_code": "EAWF",
@@ -892,12 +895,12 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T22:13:18.311746Z",
+  "updated_at": "2026-05-10T22:13:41.143827Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -912,11 +915,11 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:45.260116Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B025 subagent prompt renderer (wave dispatch)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P08-I01-W01-1778451220"
     },
     "P08-I01-W02": {
       "blocks": [],
@@ -942,7 +945,7 @@
     },
     "P08-I01-W03": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -957,11 +960,11 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.156927Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B027 cherry-pick automation (wave land)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P08-I01-W03-1778451221"
     },
     "P08-I01-W04": {
       "blocks": [],
@@ -1033,6 +1036,17 @@
   },
   "workspace": null,
   "worktrees": {
+    "WT-P08-I01-W01-1778451220": {
+      "base_branch": "feature/EAWF-v0.2",
+      "branch": "feature/eawf-v0.1-p08-w01",
+      "created_at": "2026-05-10T22:13:40.576051Z",
+      "id": "WT-P08-I01-W01-1778451220",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w01",
+      "status": "active",
+      "wave_id": "P08-I01-W01"
+    },
     "WT-P08-I01-W02-1778449665": {
       "base_branch": "feature/EAWF-v0.2",
       "branch": "feature/eawf-v0.1-p08-w02",
@@ -1043,6 +1057,17 @@
       "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w02",
       "status": "abandoned",
       "wave_id": "P08-I01-W02"
+    },
+    "WT-P08-I01-W03-1778451221": {
+      "base_branch": "feature/EAWF-v0.2",
+      "branch": "feature/eawf-v0.1-p08-w03",
+      "created_at": "2026-05-10T22:13:41.143827Z",
+      "id": "WT-P08-I01-W03-1778451221",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w03",
+      "status": "active",
+      "wave_id": "P08-I01-W03"
     },
     "WT-P08-I01-W04-1778449666": {
       "base_branch": "feature/EAWF-v0.2",
