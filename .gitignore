@@ -20,9 +20,13 @@ htmlcov/
 .vscode/
 *.swp
 
-# Eä-managed.
-# AGENTS.md is committed (managed by render layer; user-region preserved on re-render).
-# CLAUDE.md + .claude/ stay gitignored until plugin-install pass is self-applied.
+# Eä-managed surface:
+#  - AGENTS.md is committed (managed by `eawf sync`; user-region preserved
+#    on re-render).
+#  - CLAUDE.md + .claude/ stay gitignored permanently — these are
+#    machine-specific renders of the CC plugin tree (run
+#    `eawf plugin install claude` locally to regenerate). Only AGENTS.md
+#    is the committed agent contract.
 CLAUDE.md
 .claude/
 .opencode/
