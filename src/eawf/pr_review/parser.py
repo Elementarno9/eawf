@@ -174,7 +174,7 @@ def _resolve_severity(*, head: str, sev_tag: str) -> Severity:
     if from_emoji is not None and from_text is not None and from_emoji != from_text:
         raise ValueError(
             f"severity mismatch between emoji and textual tag: "
-            f"emoji={head!r} → {from_emoji!r}, text={sev_tag!r}"
+            f"emoji={head!r} -> {from_emoji!r}, text={sev_tag!r}"
         )
     return from_emoji or from_text  # type: ignore[return-value]
 

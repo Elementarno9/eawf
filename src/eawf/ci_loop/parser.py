@@ -172,7 +172,7 @@ def parse_pytest_failures(log_text: str) -> list[PytestFailure]:
                 message=message,
             )
         )
-    logger.debug(f"parse_pytest_failures lines={len(lines)} → {len(out)} failures")
+    logger.debug(f"parse_pytest_failures lines={len(lines)} failures={len(out)}")
     return out
 
 
@@ -208,7 +208,7 @@ def parse_ruff_failures(log_text: str) -> list[RuffFailure]:
                 message=match.group("message").strip(),
             )
         )
-    logger.debug(f"parse_ruff_failures → {len(out)} failures")
+    logger.debug(f"parse_ruff_failures failures={len(out)}")
     return out
 
 
@@ -240,7 +240,7 @@ def parse_mypy_failures(log_text: str) -> list[MypyFailure]:
                 message=match.group("message").strip(),
             )
         )
-    logger.debug(f"parse_mypy_failures → {len(out)} failures")
+    logger.debug(f"parse_mypy_failures failures={len(out)}")
     return out
 
 
