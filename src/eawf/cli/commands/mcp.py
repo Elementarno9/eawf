@@ -65,6 +65,17 @@ _SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude",)
 _OWNER_FILTERS: tuple[str, ...] = ("eawf", "user", "all")
 
 
+def _escape_tsv_field(value: str) -> str:
+    """Escape ``\\t`` and ``\\n`` so a TSV row stays single-line.
+
+    Without this a command field like ``"sh -c 'echo a\\nb'"`` shears
+    when piped into ``cut -f`` because the embedded newline ends the
+    record. We escape the backslash too so a real ``"\\\\n"`` doesn't
+    round-trip back into a newline.
+    """
+    return value.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
+
+
 def _resolve_target(flags: GlobalFlags) -> Path:
     """Resolve the workspace root the mcp commands operate against."""
     return (flags.workspace or Path.cwd()).resolve()
@@ -591,8 +602,9 @@ def list_cmd(
             for entry in rows:
                 targets_raw = entry.get("installed_targets", [])
                 targets = list(targets_raw) if isinstance(targets_raw, (list, tuple)) else []
+                command_field = _escape_tsv_field(str(entry.get("command", "")))
                 text_lines.append(
-                    f"{entry['id']}\t{entry['owner']}\t{entry['command']}\t{entry['risk']}"
+                    f"{entry['id']}\t{entry['owner']}\t{command_field}\t{entry['risk']}"
                     f"\t{entry['status']}\t{','.join(str(t) for t in targets)}"
                 )
         else:

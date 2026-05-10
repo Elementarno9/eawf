@@ -141,6 +141,11 @@ def worktree_create_cmd(
 
     explicit_base = base is not None
     record = None
+    # Lock ordering invariant: every worktree mutator acquires the
+    # registry lock FIRST, then the state-transaction lock. The two
+    # target disjoint paths so they never deadlock on themselves, but
+    # mixing the order across handlers would deadlock against a sibling
+    # mutator holding the opposite pair. Always: registry → state.
     try:
         with (
             worktree_registry_lock(repo_root, timeout=5.0),
@@ -283,6 +288,11 @@ def worktree_merge_back_cmd(
         return
 
     result = None
+    # Lock ordering invariant: every worktree mutator acquires the
+    # registry lock FIRST, then the state-transaction lock. The two
+    # target disjoint paths so they never deadlock on themselves, but
+    # mixing the order across handlers would deadlock against a sibling
+    # mutator holding the opposite pair. Always: registry → state.
     try:
         with (
             worktree_registry_lock(repo_root, timeout=5.0),
@@ -373,6 +383,11 @@ def worktree_cleanup_cmd(
         return
 
     result = None
+    # Lock ordering invariant: every worktree mutator acquires the
+    # registry lock FIRST, then the state-transaction lock. The two
+    # target disjoint paths so they never deadlock on themselves, but
+    # mixing the order across handlers would deadlock against a sibling
+    # mutator holding the opposite pair. Always: registry → state.
     try:
         with (
             worktree_registry_lock(repo_root, timeout=5.0),

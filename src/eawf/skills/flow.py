@@ -338,9 +338,12 @@ def compute_drift(
 
     workspace_root = _workspace_root_for_state(state_path)
     current_head = _current_git_head(workspace_root)
-    if (current_head, checkpoint.parent_git_head) != (None, None) and (
-        current_head != checkpoint.parent_git_head
-    ):
+    if current_head is None and checkpoint.parent_git_head is None:
+        logger.debug(
+            "compute_drift: git_head None on both sides (workspace not a git repo "
+            "or git unavailable); skipping git drift comparison"
+        )
+    elif current_head != checkpoint.parent_git_head:
         drift["git_head"] = {
             "checkpoint": checkpoint.parent_git_head,
             "current": current_head,
@@ -579,6 +582,25 @@ def in_progress_flow_ids(state_path: Path) -> list[str]:
     return [fid for fid, record in latest.items() if record.status == FlowStatus.IN_PROGRESS]
 
 
+def latest_active_flow_id(state_path: Path) -> str | None:
+    """Return the flow_id of the most recently-appended ``flow_record`` envelope.
+
+    Append order in ``flow.jsonl`` reflects chronological order (each
+    append is single-writer), so the last seen ``flow_record`` flow_id
+    is the most recently-active flow. Used by ``eawf flow status`` to
+    pick a deterministic default when the operator did not pass
+    ``--flow-id`` and no flow is in-progress.
+    """
+    out: str | None = None
+    for _envelope_id, payload in load_flow_records(state_path):
+        if payload.get("kind") != "flow_record":
+            continue
+        flow_id = payload.get("flow_id")
+        if isinstance(flow_id, str):
+            out = flow_id
+    return out
+
+
 # ---- Skill registration ----------------------------------------------------
 
 
@@ -703,9 +725,11 @@ class FlowSkill(Skill):
         # values at step START, not at runner start.
         for idx, (skill_name, skill_cls) in enumerate(self.flow_order):
             if idx < start_index:
-                # Skipped step (resume prefix). Project a minimal
-                # placeholder envelope dict so ``body.steps`` still
-                # describes the canonical six-step shape.
+                # Skipped step (resume prefix). ``body.steps`` reflects
+                # the post-resume tail only; the resumed checkpoint id
+                # is recorded separately on
+                # ``body.resume_from_checkpoint_id`` so consumers can
+                # still tie the tail back to the original prefix.
                 continue
 
             short = _stop_after_short_name(skill_name)
@@ -883,6 +907,7 @@ __all__ = [
     "compute_drift",
     "in_progress_flow_ids",
     "is_safe_step_boundary",
+    "latest_active_flow_id",
     "load_flow_records",
     "load_latest_records_per_flow",
     "load_latest_safe_checkpoint",

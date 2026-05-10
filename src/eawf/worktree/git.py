@@ -10,7 +10,9 @@ The structure mirrors :func:`eawf.cli.commands.clone_repo._git_clone`:
 - :func:`shutil.which` check up-front maps to
   :class:`~eawf.cli.errors.InstrumentMissing` (exit 6).
 - :class:`subprocess.TimeoutExpired` maps to
-  :class:`~eawf.cli.errors.LockConflict` (exit 5) — these are transient.
+  :class:`~eawf.cli.errors.IntegrityViolation` (exit 8). A timeout is a
+  transient hung-git symptom, not a sibling-lock-held condition; mapping
+  it to ``LockConflict`` would lie to operators about the failure mode.
 - Non-zero exit is dispatched per-helper, with stderr-marker matching
   for the well-known git error strings (``"fatal: not a git repository"``,
   ``"fatal: invalid reference"``, ``"fatal: already a working tree"``).
@@ -52,7 +54,7 @@ def _run(
     cwd: Path | None = None,
     timeout: float = _FAST_TIMEOUT,
 ) -> subprocess.CompletedProcess[str]:
-    """Invoke *args* via :func:`subprocess.run`, mapping timeout to LockConflict."""
+    """Invoke *args* via :func:`subprocess.run`, mapping timeout to IntegrityViolation."""
     _ensure_git()
     logger.info(f"_run: invoking {args} cwd={cwd} timeout={timeout}")
     try:
@@ -65,7 +67,7 @@ def _run(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise cli_errors.LockConflict(
+        raise cli_errors.IntegrityViolation(
             f"git command timed out after {timeout}s: {' '.join(args)}"
         ) from exc
 
@@ -421,6 +423,11 @@ def rebase_in_progress(worktree: Path) -> bool:
         except OSError:
             return False
         if content.startswith("gitdir:"):
+            if ":" not in content:
+                # Defensive: ``startswith("gitdir:")`` already implies a
+                # colon, but a malformed file (no second segment) would
+                # crash on the unconditional split below.
+                return False
             actual = Path(content.split(":", 1)[1].strip())
             if not actual.is_absolute():
                 actual = (worktree / actual).resolve()

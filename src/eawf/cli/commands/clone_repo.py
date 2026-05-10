@@ -32,19 +32,23 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.commands.init import init_cmd as _init_cmd
 from eawf.cli.flags import GlobalFlags
-from eawf.state.ids import is_project_code
+from eawf.state.ids import is_project_code, normalize_to_project_code
 
 logger = logging.getLogger(__name__)
 
-# Recognises https/ssh/git/file URIs and the ``git@host:path`` shorthand.
-_GIT_URL_RE = re.compile(r"^(?:(?:https?|git|ssh|file)://[^\s]+|git@[^:\s]+:[^\s]+)$")
+# Recognises https/ssh/file URIs and the ``git@host:path`` shorthand.
+# Drops ``http://`` and ``git://`` — both transit cleartext and have no
+# authentication story. ``file://`` stays because integration tests
+# bootstrap from a local bare repo over that scheme, and locking it out
+# would force every CI fixture to spin up a loopback HTTPS server.
+_GIT_URL_RE = re.compile(r"^(?:(?:https|ssh|file)://[^\s]+|git@[^:\s]+:[^\s]+)$")
 
 
 def _validate_git_url(url: str) -> None:
     """Reject non-URL strings before we shell out to git."""
     if not url or not _GIT_URL_RE.match(url):
         raise cli_errors.InvalidInput(
-            f"not a git URL: {url!r} (expected https://, ssh://, git://, file://, or git@host:path)"
+            f"not a git URL: {url!r} (expected https://, ssh://, file://, or git@host:path)"
         )
 
 
@@ -74,7 +78,11 @@ def _derive_project_code(target_dir: Path, project_code: str | None) -> str:
     Precedence:
 
     - Explicit ``--project-code`` always wins (after regex validation).
-    - Otherwise we uppercase the target's basename and validate.
+    - Otherwise we delegate to :func:`eawf.state.ids.normalize_to_project_code`
+      which uppercases the basename and collapses space/underscore into
+      dash before validating against :data:`RE_PROJECT_CODE`. Single
+      source of truth for the coercion rules — the wizard validator and
+      the clone-repo derivation now agree byte-for-byte.
 
     Raises :class:`InvalidInput` when neither path produces a valid code.
     """
@@ -84,13 +92,10 @@ def _derive_project_code(target_dir: Path, project_code: str | None) -> str:
                 f"--project-code {project_code!r} must match ^[A-Z][A-Z0-9_-]{{1,15}}$"
             )
         return project_code
-    candidate = target_dir.name.upper().replace(" ", "-")
-    if not is_project_code(candidate):
-        raise cli_errors.InvalidInput(
-            f"derived project code {candidate!r} from {target_dir.name!r} "
-            "does not match ^[A-Z][A-Z0-9_-]{1,15}$; pass --project-code"
-        )
-    return candidate
+    try:
+        return normalize_to_project_code(target_dir.name)
+    except ValueError as exc:
+        raise cli_errors.InvalidInput(f"{exc}; pass --project-code") from exc
 
 
 def _git_clone(

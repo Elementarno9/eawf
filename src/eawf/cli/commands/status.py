@@ -78,6 +78,22 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
     return proc.stdout.strip()
 
 
+def _find_git_root(start: Path) -> Path:
+    """Walk up from *start* to the first ancestor containing ``.git``.
+
+    Falls back to *start* (resolved) when no ``.git`` is found in the
+    ancestor chain — git invocations from there will return ``None``
+    via :func:`_run_git`'s safe-degrade path. Used so a custom
+    ``--state-path`` outside ``<repo>/.ea/`` still locates the
+    enclosing repo for the head/branch/dirty queries.
+    """
+    p = start.resolve()
+    for ancestor in (p, *p.parents):
+        if (ancestor / ".git").exists():
+            return ancestor
+    return p
+
+
 def _git_info(cwd: Path) -> dict[str, str | bool | None]:
     """Return ``{head, branch, dirty}`` for *cwd*.
 
@@ -300,7 +316,7 @@ def status(
         "active_waves": _active_waves(state),
         "active_sessions": _active_sessions(state),
         "last_closed_waves": _last_closed_waves(state),
-        "git": _git_info(cwd=state_path.parent.parent),
+        "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "blockers": _blockers(state),
     }
 
