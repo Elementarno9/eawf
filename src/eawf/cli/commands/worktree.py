@@ -12,6 +12,17 @@ Subcommands:
 - ``worktree cleanup`` — tear down the worktree directory + branch,
   refusing-by-default for dirty/CONFLICTED records.
 
+This module also wires the wave-centric automation verbs onto the
+``wave`` noun-group (imported from
+:mod:`eawf.cli.commands.lifecycle`):
+
+- ``wave land`` — cherry-pick a wave's worktree commits onto the
+  parent branch, then close the wave with the resulting SHA. This is
+  the AGENTS.md-discipline-compliant entry point (cherry-pick only,
+  never merge).
+- ``wave land-batch`` — apply ``wave land`` to every eligible wave in
+  dep order; stop on the first failure.
+
 Every mutating handler runs inside
 :func:`eawf.cli._mutation.state_transaction` (state-side serialisation)
 *and* :func:`eawf.worktree.locks.worktree_registry_lock` (git-side
@@ -30,10 +41,11 @@ import typer
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
+from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.ids import is_wave_id
+from eawf.state.ids import is_iter_id, is_wave_id
 from eawf.worktree import (
     STRATEGY_CHERRY_PICK,
     STRATEGY_REBASE_THEN_FF,
@@ -41,6 +53,8 @@ from eawf.worktree import (
     create_worktree,
     list_worktrees,
     merge_back,
+    wave_land,
+    wave_land_batch,
     worktree_registry_lock,
 )
 from eawf.worktree.git import repo_root as resolve_repo_root
@@ -418,6 +432,184 @@ def worktree_cleanup_cmd(
         f"branch_deleted={result.branch_deleted}",
         flags=flags,
     )
+
+
+# ---- wave land --------------------------------------------------------------
+# These verbs hang off ``wave_app`` (defined in lifecycle.py). We register
+# them here because the implementation depends on the worktree subsystem.
+# Importing ``wave_app`` rather than mutating ``lifecycle.py`` keeps the
+# parallel-wave discipline intact: W01 owns lifecycle.py, this wave owns
+# worktree.py.
+
+
+@wave_app.command(name="land")
+def wave_land_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to land.")],
+    outcome: Annotated[
+        str | None,
+        typer.Option(
+            "--outcome",
+            help=(
+                "Outcome text stamped on the wave; defaults to a synthesised "
+                "summary based on the picked-commit count."
+            ),
+        ),
+    ] = None,
+    keep_worktree: Annotated[
+        bool,
+        typer.Option(
+            "--keep-worktree",
+            help="Skip the post-close worktree cleanup.",
+        ),
+    ] = False,
+) -> None:
+    """Cherry-pick the wave's worktree commits onto the parent branch.
+
+    Always uses cherry-pick (per AGENTS.md rule 11). On conflict, the
+    wave is *not* closed and the on-disk repo state is preserved so the
+    operator can resolve and re-run.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = _resolve_state_path(flags)
+        repo_root = _resolve_repo_root(state_path)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    result = None
+    # Lock ordering invariant: registry → state (see module docstring).
+    try:
+        with (
+            worktree_registry_lock(repo_root, timeout=5.0),
+            state_transaction(state_path) as state,
+        ):
+            result = wave_land(
+                state,
+                repo_root=repo_root,
+                wave_id=wave_id,
+                outcome=outcome,
+                keep_worktree=keep_worktree,
+            )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    assert result is not None
+    payload: dict[str, Any] = {
+        "wave": result.wave_id,
+        "commits": list(result.commits),
+        "outcome": result.outcome,
+        "worktree_cleaned": result.worktree_cleaned,
+        "merged_commit": result.merged_commit,
+    }
+    text = (
+        f"wave land {wave_id} commits={result.commits} "
+        f"outcome={result.outcome!r} cleaned={result.worktree_cleaned}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@wave_app.command(name="land-batch")
+def wave_land_batch_cmd(
+    ctx: typer.Context,
+    iter_flag: Annotated[
+        str | None,
+        typer.Option(
+            "--iter",
+            help="Scope the batch to waves in this iter id.",
+        ),
+    ] = None,
+    ready_only: Annotated[
+        bool,
+        typer.Option(
+            "--ready-only",
+            help="Skip waves whose declared deps are not all CLOSED.",
+        ),
+    ] = False,
+    keep_worktree: Annotated[
+        bool,
+        typer.Option(
+            "--keep-worktree",
+            help="Skip the post-close worktree cleanup for each landed wave.",
+        ),
+    ] = False,
+) -> None:
+    """Apply ``wave land`` to every eligible wave in dep order; stop on failure."""
+    flags: GlobalFlags = ctx.obj
+    if iter_flag is not None and not is_iter_id(iter_flag):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid iter id: {iter_flag!r}"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = _resolve_state_path(flags)
+        repo_root = _resolve_repo_root(state_path)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    batch_result = None
+    try:
+        with (
+            worktree_registry_lock(repo_root, timeout=5.0),
+            state_transaction(state_path) as state,
+        ):
+            batch_result = wave_land_batch(
+                state,
+                repo_root=repo_root,
+                iter_id=iter_flag,
+                ready_only=ready_only,
+                keep_worktree=keep_worktree,
+            )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    assert batch_result is not None
+    landed_payload = [
+        {
+            "wave": r.wave_id,
+            "commits": list(r.commits),
+            "outcome": r.outcome,
+            "worktree_cleaned": r.worktree_cleaned,
+            "merged_commit": r.merged_commit,
+        }
+        for r in batch_result.landed
+    ]
+    payload: dict[str, Any] = {
+        "landed": landed_payload,
+        "failed_wave": batch_result.failed_wave,
+        "error": batch_result.error,
+        "skipped": list(batch_result.skipped),
+    }
+    landed_count = len(batch_result.landed)
+    if batch_result.failed_wave is None:
+        text = f"wave land-batch landed={landed_count} skipped={batch_result.skipped}"
+        emit_json_or_text(payload, text, flags=flags)
+        return
+
+    # Partial-batch failure path. The successful prefix is persisted
+    # (state_transaction committed the prior mutations); the envelope
+    # carries both the landed prefix and the failing wave so the
+    # operator can resolve and re-run on the remainder. Exit code 4
+    # (VALIDATION_FAILED) is the conservative choice — batch invariant
+    # was not satisfied — and matches how individual ``wave land``
+    # surfaces close-time failures.
+    text = (
+        f"wave land-batch landed={landed_count} failed_at={batch_result.failed_wave} "
+        f"error={batch_result.error!r}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+    raise typer.Exit(cli_errors.ValidationFailed.exit_code)
 
 
 __all__ = [
