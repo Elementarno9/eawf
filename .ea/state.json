@@ -608,8 +608,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P08-I01-W01",
-      "P08-I01-W03"
+      "P08-I01-W05",
+      "P08-I01-W06"
     ],
     "iter_id": "P08-I01",
     "phase_id": "P08",
@@ -895,14 +895,14 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T22:13:41.143827Z",
+  "updated_at": "2026-05-10T22:29:43.876065Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-10T22:29:29.132215Z",
+      "commit": "5d29d97",
       "deps": [
         "P08-I01-W02"
       ],
@@ -914,8 +914,8 @@
       "id": "P08-I01-W01",
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:45.260116Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "subagent prompt renderer + wave dispatch/dispatch-batch CLI (17 tests)",
+      "status": "closed",
       "title": "B025 subagent prompt renderer (wave dispatch)",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -946,8 +946,8 @@
     "P08-I01-W03": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-10T22:29:29.549660Z",
+      "commit": "76f23e5",
       "deps": [
         "P08-I01-W02"
       ],
@@ -959,8 +959,8 @@
       "id": "P08-I01-W03",
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.156927Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "wave land cherry-pick automation + wave land-batch (13 tests)",
+      "status": "closed",
       "title": "B027 cherry-pick automation (wave land)",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -989,7 +989,7 @@
     },
     "P08-I01-W05": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1004,7 +1004,7 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.954397Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B040 CI-fix loop (wave fix-ci)",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1012,7 +1012,7 @@
     },
     "P08-I01-W06": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1027,7 +1027,7 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:41.350163Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B041 PR review automation",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1044,7 +1044,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w01",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P08-I01-W01"
     },
     "WT-P08-I01-W02-1778449665": {
@@ -1066,7 +1066,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": "/Users/user/Workspace/TM/eawf/.claude/worktrees/p08-w03",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P08-I01-W03"
     },
     "WT-P08-I01-W04-1778449666": {
