@@ -40,7 +40,6 @@ from eawf.state.models import (
     WorktreeRecord,
 )
 
-
 # ---- Builders ---------------------------------------------------------------
 
 
