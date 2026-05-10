@@ -1166,7 +1166,7 @@ def wave_blocks_rebuild_cmd(
         cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
         return
 
-    rewritten: list[dict[str, list[str]]] = []
+    rewritten: list[dict[str, Any]] = []
     with portalock.acquire(state_path, timeout=5.0):
         raw = state_path.read_bytes()
         payload = orjson.loads(raw)
