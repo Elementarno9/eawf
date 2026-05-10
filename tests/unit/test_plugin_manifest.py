@@ -54,10 +54,14 @@ def test_manifest_required_fields() -> None:
         repository=None,
     )
     parsed = json.loads(rendered)
-    for key in ("name", "version", "license", "skills", "agents", "keywords"):
+    for key in ("name", "version", "license", "keywords"):
         assert key in parsed
-    assert parsed["skills"] == "./skills"
-    assert parsed["agents"] == "./agents"
+    # ``skills`` and ``agents`` are intentionally omitted so Claude Code
+    # falls back to its default discovery (``./skills/`` and ``./agents/``).
+    # Emitting ``"agents": "./agents"`` was rejected by the CC manifest
+    # schema with ``agents: Invalid input``.
+    assert "skills" not in parsed
+    assert "agents" not in parsed
     assert parsed["name"] == "eawf"
     assert parsed["license"] == "MIT"
 

@@ -46,8 +46,13 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     manifest = json.loads((target / ".claude-plugin" / "plugin.json").read_text())
     assert manifest["name"] == "eawf"
     assert manifest["license"] == "MIT"
-    assert manifest["skills"] == "./skills"
-    assert manifest["agents"] == "./agents"
+    # ``skills`` / ``agents`` keys are intentionally omitted; CC discovers
+    # ``./skills/`` and ``./agents/`` via its default scan. Emitting
+    # ``"agents": "./agents"`` was rejected by the manifest schema as
+    # ``agents: Invalid input`` (the schema expects an array of file
+    # paths there, not a directory string).
+    assert "skills" not in manifest
+    assert "agents" not in manifest
     # PII guards on the manifest body.
     serialised = json.dumps(manifest)
     assert "@" not in serialised
