@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import logging
 import sys
+import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
 import orjson
@@ -42,6 +44,7 @@ from eawf.skills.engine import SkillContext, run_skill
 from eawf.skills.flow import (
     FlowSkill,
     in_progress_flow_ids,
+    latest_active_flow_id,
     load_flow_records,
     load_latest_records_per_flow,
     load_latest_safe_checkpoint,
@@ -209,10 +212,23 @@ def run_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
 
+    # Precedence: stdin args populate first; CLI flags override on
+    # conflict. Debug-log a no-op-side-effect line on override so the
+    # operator can trace "why didn't my stdin --topic take effect"
+    # without resorting to print statements.
     skill_args: dict[str, Any] = dict(stdin_args)
     if topic is not None:
+        if "topic" in skill_args and skill_args["topic"] != topic:
+            logger.debug(
+                f"flow.run: --topic={topic!r} overrides stdin topic={skill_args['topic']!r}"
+            )
         skill_args["topic"] = topic
     if stop_after is not None:
+        if "stop_after" in skill_args and skill_args["stop_after"] != stop_after:
+            logger.debug(
+                f"flow.run: --stop-after={stop_after!r} overrides "
+                f"stdin stop_after={skill_args['stop_after']!r}"
+            )
         skill_args["stop_after"] = stop_after
 
     if resume:
@@ -236,7 +252,10 @@ def run_cmd(
                 flags=flags,
             )
             return
-        ckpt_id, ckpt = ckpt_lookup
+        else:
+            # Explicit else so the unpack lives in the narrowed branch
+            # rather than dangling under an early-return contract.
+            ckpt_id, ckpt = ckpt_lookup
 
         # Compute drift against the live workspace.
         from eawf.skills.flow import compute_drift
@@ -353,7 +372,13 @@ def status_cmd(
         if in_progress:
             target = in_progress[0]
         elif latest_records:
-            target = next(iter(latest_records))
+            # Pick the most recently-appended flow_record; falls back to
+            # the alphabetically-first flow_id only if the helper
+            # can't locate any flow_record envelope (defensive — the
+            # records dict was non-empty so at least one envelope must
+            # be present).
+            recent = latest_active_flow_id(state_path)
+            target = recent if recent in latest_records else sorted(latest_records.keys())[0]
         else:
             cli_errors.emit_error(
                 cli_errors.NotFound("no flow records found for the active scope"),
@@ -501,9 +526,6 @@ def abort_cmd(
         next_action=None,
         status=new_status,
     )
-    import uuid
-    from datetime import UTC, datetime
-
     envelope_id = f"EV-{uuid.uuid4().hex[:12]}"
     envelope = Envelope(
         schema_version="1.0",

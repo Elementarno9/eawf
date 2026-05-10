@@ -357,8 +357,8 @@ def remove_runtime_entry(
     if not _is_eawf_owned(existing) and not force:
         raise IntegrityViolation(
             f"runtime config entry {server_id!r} is user-owned; "
-            "refusing to remove. Pass --keep-runtime-entry to drop only the state row, "
-            "or --force to override."
+            "refusing to remove. Pass --keep-runtime-entry to drop only the state row "
+            "(the runtime entry stays untouched; remove it manually if needed)."
         )
 
     del mcp_servers[server_id]

@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 _DEFAULT_BRANCH_PREFIX: str = "feature/eawf-v0.1"
+# ``.`` stays in the regex because the canonical default branch name
+# ``feature/eawf-v0.1-pNN-wMM`` carries a dot in the version segment.
+# Git's own ref-name rules already reject dangerous shapes (``..``,
+# trailing ``.lock``, leading ``/``); the validator below piles on a
+# whitespace check so the regex itself can stay permissive.
 _BRANCH_NAME_RE = re.compile(r"^[A-Za-z0-9._/\-]+$")
 
 

@@ -102,11 +102,14 @@ def cleanup_worktree(
 
     # Dirty-tree guard. Skip when status is already MERGED (the
     # post-merge worktree often retains cherry-pick artifacts that are
-    # innocuous) or when the path is already gone.
+    # innocuous) or when the path is already gone. Only suppress
+    # ``InstrumentMissing`` so a broken git invocation still surfaces:
+    # ``IntegrityViolation`` (rc!=0) and ``LockConflict`` (timeout) are
+    # operator-actionable signals that the cleanup must not swallow.
     if worktree_path.exists() and record.status == WorktreeStatus.ACTIVE and not force:
         try:
             dirty = git.status_porcelain(worktree_path)
-        except cli_errors.CliError:
+        except cli_errors.InstrumentMissing:
             dirty = []
         if dirty:
             raise cli_errors.IntegrityViolation(

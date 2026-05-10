@@ -20,6 +20,26 @@ RE_WAVE = re.compile(r"^P\d{2}-I\d{2}-W\d{2}$")
 RE_HYPOTHESIS = re.compile(r"^H\d{2}-\d{2}$")
 RE_HYPOTHESIS_SCOPED = re.compile(r"^[A-Z][A-Z0-9_-]{1,15}-H\d{2}-\d{2}$")
 
+
+def normalize_to_project_code(name: str) -> str:
+    """Coerce *name* into a valid project code or raise :class:`ValueError`.
+
+    Normalisation: uppercase, then collapse spaces and underscores into
+    dashes (the canonical separator). Validates the result against
+    :data:`RE_PROJECT_CODE`. Used by ``eawf clone-repo`` to derive a
+    code from the cloned directory's basename when ``--project-code``
+    is not supplied — keeping the rule in one place stops two surfaces
+    drifting on what counts as "valid".
+    """
+    candidate = name.upper().replace(" ", "-").replace("_", "-")
+    if not RE_PROJECT_CODE.fullmatch(candidate):
+        raise ValueError(
+            f"cannot derive valid project_code from {name!r}; "
+            f"got {candidate!r} which fails {RE_PROJECT_CODE.pattern}"
+        )
+    return candidate
+
+
 _MAX_SUFFIX = 99
 
 
