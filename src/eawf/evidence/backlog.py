@@ -67,6 +67,51 @@ def add_backlog(
     )
 
 
+def set_priority(
+    state: State,
+    *,
+    item_id: str,
+    priority: BacklogPriority,
+) -> Envelope:
+    """Update the priority of an open backlog item in place.
+
+    Raises:
+        NotFound: when ``item_id`` is absent from :attr:`State.backlog`.
+        InvalidInput: when the item is :attr:`BacklogStatus.CLOSED` (closed
+            items are frozen) or when the requested ``priority`` already
+            equals the current value (no-op rejected so the event log does
+            not silently churn).
+    """
+    backlog: dict[str, BacklogItem] = dict(state.backlog or {})
+    if item_id not in backlog:
+        raise NotFound(f"backlog item {item_id!r} not found")
+
+    prior = backlog[item_id]
+    if prior.status == BacklogStatus.CLOSED:
+        raise InvalidInput(f"backlog item {item_id!r} is closed; cannot change priority")
+    if prior.priority == priority:
+        raise InvalidInput(f"backlog item {item_id!r} already has priority={priority.value!r}")
+
+    now = datetime.now(UTC)
+    updated = prior.model_copy(update={"priority": priority})
+    backlog[item_id] = updated
+    state.backlog = backlog
+    state.updated_at = now
+
+    return _io.event_envelope(
+        event_id=f"EVT-backlog-set-priority-{item_id}-{int(now.timestamp() * 1000)}",
+        scope_id=updated.scope_id,
+        event_type="backlog.set_priority",
+        actor="cli",
+        command="backlog set-priority",
+        args={
+            "item_id": item_id,
+            "priority": priority.value,
+        },
+        summary=f"backlog {item_id} priority={priority.value}",
+    )
+
+
 def close_backlog(
     state: State,
     *,
