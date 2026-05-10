@@ -576,6 +576,17 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "User-skill registry: per-user skill catalogue independent of project's plugin tree — target P09 distribution"
+    },
+    "B044": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-10T21:27:57.937474Z",
+      "id": "B044",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "AGENTS.md sync-from-decisions render path"
     }
   },
   "current": {
@@ -679,6 +690,19 @@
       "scope_id": "EAWF",
       "status": "active",
       "summary": "PR merge strategy: rebase-and-merge; never squash, never merge-commit",
+      "superseded_by": null
+    },
+    "D08": {
+      "alternatives": [
+        "Adopt review-driven PR cadence immediately (rejected: mid-game policy churn)",
+        "Lock per-phase PR forever (rejected: pre-decides v0.2.0 retro)"
+      ],
+      "created_at": "2026-05-10T21:26:53.450950Z",
+      "id": "D08",
+      "rationale": "User proposed shifting from per-phase PR to review-driven + version-bump PR mid-v0.2. Mid-stream workflow change = state-of-record drift risk; defer re-evaluation to v0.2.0 cut, when iter/phase aggregation pattern is fully exercised.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Defer PR-cadence policy change until v0.2.0 ship",
       "superseded_by": null
     }
   },
@@ -819,7 +843,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T21:18:29.418845Z",
+  "updated_at": "2026-05-10T21:27:57.937474Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {},
   "workspace": null,
