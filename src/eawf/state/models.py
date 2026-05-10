@@ -209,6 +209,7 @@ class Wave(_StrictModel):
     title: str
     status: WaveStatus
     deps: list[WaveIdStr] = Field(default_factory=list)
+    blocks: list[WaveIdStr] = Field(default_factory=list)
     file_scopes: list[str] = Field(default_factory=list)
     claim_session_id: str | None = None
     worktree_id: str | None = None

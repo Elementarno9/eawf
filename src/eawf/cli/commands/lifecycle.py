@@ -70,7 +70,7 @@ from eawf.lifecycle.transitions import (
     switch_subproject,
 )
 from eawf.lock import portalock
-from eawf.state.enums import ProjectStatus, ScopeKind, StoreKind
+from eawf.state.enums import ProjectStatus, ScopeKind, StoreKind, WaveStatus
 from eawf.state.ids import (
     is_iter_id,
     is_phase_id,
@@ -112,7 +112,7 @@ iter_app = typer.Typer(
 )
 wave_app = typer.Typer(
     name="wave",
-    help="Wave lifecycle (plan, claim, close, fail).",
+    help="Wave lifecycle (plan, claim, close, fail, graph, next-ready).",
     no_args_is_help=True,
 )
 
@@ -873,6 +873,237 @@ def wave_fail_cmd(
         envelope=lambda: {"wave": wave_id, "reason": reason},
         mutate=lambda state: _wrap_no_return(fail_wave(state, wave_id=wave_id, reason=reason)),
     )
+
+
+# ---- Wave DAG read-only verbs (B026) ---------------------------------------
+
+
+_WAVE_STATUS_EMOJI: dict[WaveStatus, str] = {
+    WaveStatus.PENDING: "⏳",  # hourglass
+    WaveStatus.CLAIMED: "\U0001f6a7",  # construction
+    WaveStatus.IN_PROGRESS: "\U0001f6a7",
+    WaveStatus.CLOSED: "✅",  # white heavy check mark
+    WaveStatus.FAILED: "❌",  # cross mark
+    WaveStatus.ABANDONED: "❌",
+}
+
+
+def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None:
+    """Resolve + read + parse state.json under no lock.
+
+    Read-only verbs ride the same scope-resolution path mutators use, but
+    do not need the sibling lock — a stale snapshot is acceptable for
+    enumeration. Returns ``None`` after emitting the canonical error
+    envelope when resolution / parse fails (caller treats ``None`` as
+    "exit was already raised by ``emit_error``").
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return None
+    if not state_path.exists():
+        cli_errors.emit_error(
+            cli_errors.NotFound(f"state file not found: {state_path}; run `eawf project init`"),
+            flags=flags,
+        )
+        return None
+    payload = _read_state_payload(state_path)
+    try:
+        state = State.model_validate(payload)
+    except PydValidationError as exc:
+        cli_errors.emit_error(
+            cli_errors.IntegrityViolation(f"state at {state_path} fails schema validation: {exc}"),
+            flags=flags,
+        )
+        return None
+    return state, flags
+
+
+def _resolve_iter_for_query(
+    state: State,
+    flags: GlobalFlags,
+    *,
+    iter_flag: str | None,
+) -> str | None:
+    """Pick the target iter for a read-only DAG verb.
+
+    Precedence: explicit ``--iter`` > ``state.current.iter_id``. Returns
+    ``None`` after emitting the canonical envelope when neither is set
+    (the caller treats ``None`` as "exit raised").
+    """
+    if iter_flag is not None:
+        if not is_iter_id(iter_flag):
+            cli_errors.emit_error(
+                cli_errors.InvalidInput(f"invalid iter id: {iter_flag!r}"),
+                flags=flags,
+            )
+            return None
+        if iter_flag not in state.iters:
+            cli_errors.emit_error(
+                cli_errors.InvalidInput(f"unknown iter {iter_flag!r}"),
+                flags=flags,
+            )
+            return None
+        return iter_flag
+    if state.current.iter_id is not None:
+        return state.current.iter_id
+    cli_errors.emit_error(
+        cli_errors.InvalidInput(
+            "no --iter given and state.current.iter_id is unset; specify --iter"
+        ),
+        flags=flags,
+    )
+    return None
+
+
+def _topo_order_with_depth(waves: list[tuple[str, list[str]]]) -> list[tuple[str, int]]:
+    """Topo-sort *waves* and assign each node its longest-path depth.
+
+    Each entry is ``(wave_id, deps_in_iter)`` — deps that point outside
+    *waves* are ignored. The output preserves topological order; nodes
+    at the same depth are emitted in ascending id order.
+    """
+    ids = [wid for wid, _ in waves]
+    id_set = set(ids)
+    deps_in: dict[str, list[str]] = {wid: [d for d in deps if d in id_set] for wid, deps in waves}
+    children: dict[str, list[str]] = {wid: [] for wid in ids}
+    for wid, deps in deps_in.items():
+        for d in deps:
+            children[d].append(wid)
+    in_degree = {wid: len(deps_in[wid]) for wid in ids}
+    depth: dict[str, int] = dict.fromkeys(ids, 0)
+    # Kahn with deterministic id-sorted ready queue.
+    ready = sorted([wid for wid, deg in in_degree.items() if deg == 0])
+    order: list[tuple[str, int]] = []
+    while ready:
+        # Pop deterministically: smallest id at the current frontier.
+        node = ready.pop(0)
+        order.append((node, depth[node]))
+        for child in sorted(children[node]):
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                depth[child] = max(depth[child], depth[node] + 1)
+                # Insert in sort order so the next pop stays deterministic.
+                _insort(ready, child)
+            else:
+                depth[child] = max(depth[child], depth[node] + 1)
+    # Any nodes left unprocessed (cycles) get appended at the end in id order
+    # — defensive: ``plan_wave`` rejects cycles, so this branch is unreachable
+    # for state.json produced by the state CLI alone.
+    remaining = sorted(wid for wid in ids if wid not in {n for n, _ in order})
+    for wid in remaining:
+        order.append((wid, depth[wid]))
+    return order
+
+
+def _insort(target: list[str], item: str) -> None:
+    """In-place sorted insert (avoids importing bisect for one call)."""
+    lo, hi = 0, len(target)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if target[mid] < item:
+            lo = mid + 1
+        else:
+            hi = mid
+    target.insert(lo, item)
+
+
+@wave_app.command("graph")
+def wave_graph_cmd(
+    ctx: typer.Context,
+    iter_flag: Annotated[
+        str | None,
+        typer.Option("--iter", help="Iter ID to graph (defaults to current iter)."),
+    ] = None,
+) -> None:
+    """Print the wave DAG for an iter in topological order.
+
+    Each row is ``<emoji> <wave-id> <title-truncated-60> blocks=[...]
+    blocked_by=[...]`` indented two spaces per topo-depth level. Sort
+    order: topo first, then ascending wave id at each frontier.
+    """
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, flags = loaded
+    target_iter = _resolve_iter_for_query(state, flags, iter_flag=iter_flag)
+    if target_iter is None:
+        return
+    rows = [(wid, w) for wid, w in state.waves.items() if w.iter_id == target_iter]
+    rows.sort(key=lambda kv: kv[0])
+    deps_pairs = [(wid, list(w.deps)) for wid, w in rows]
+    order = _topo_order_with_depth(deps_pairs)
+    wave_by_id = dict(rows)
+    json_rows: list[dict[str, Any]] = []
+    text_lines: list[str] = []
+    for wid, depth in order:
+        w = wave_by_id[wid]
+        emoji = _WAVE_STATUS_EMOJI.get(w.status, "?")
+        title = w.title if len(w.title) <= 60 else w.title[:57] + "..."
+        indent = "  " * depth
+        text_lines.append(
+            f"{indent}{emoji} {wid} {title} blocks={list(w.blocks)} blocked_by={list(w.deps)}"
+        )
+        json_rows.append(
+            {
+                "id": wid,
+                "status": w.status.value,
+                "title": w.title,
+                "depth": depth,
+                "blocks": list(w.blocks),
+                "blocked_by": list(w.deps),
+            }
+        )
+    payload: dict[str, Any] = {"iter": target_iter, "waves": json_rows}
+    text = "\n".join(text_lines) if text_lines else f"iter {target_iter}: no waves"
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@wave_app.command("next-ready")
+def wave_next_ready_cmd(
+    ctx: typer.Context,
+    iter_flag: Annotated[
+        str | None,
+        typer.Option("--iter", help="Iter ID to inspect (defaults to current iter)."),
+    ] = None,
+) -> None:
+    """List pending waves whose every dep is ``closed``.
+
+    Failed deps do NOT make a child ready — children of failed deps are
+    surfaced in the ``blocked_by_failure`` section so the operator can
+    decide whether to re-plan or unblock manually.
+    """
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, flags = loaded
+    target_iter = _resolve_iter_for_query(state, flags, iter_flag=iter_flag)
+    if target_iter is None:
+        return
+    ready: list[str] = []
+    blocked_by_failure: list[str] = []
+    for wid, w in sorted(state.waves.items()):
+        if w.iter_id != target_iter:
+            continue
+        if w.status != WaveStatus.PENDING:
+            continue
+        dep_waves = [state.waves[d] for d in w.deps if d in state.waves]
+        if any(dw.status == WaveStatus.FAILED for dw in dep_waves):
+            blocked_by_failure.append(wid)
+            continue
+        if all(dw.status == WaveStatus.CLOSED for dw in dep_waves):
+            ready.append(wid)
+    payload: dict[str, Any] = {
+        "iter": target_iter,
+        "ready": ready,
+        "blocked_by_failure": blocked_by_failure,
+    }
+    text_lines = [f"ready: {ready}"]
+    if blocked_by_failure:
+        text_lines.append(f"blocked by failure: {blocked_by_failure}")
+    emit_json_or_text(payload, "\n".join(text_lines), flags=flags)
 
 
 # ---- Mutation runner --------------------------------------------------------
