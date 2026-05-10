@@ -1,4 +1,4 @@
-"""``eawf init`` wizard — Textual interactive surface + pure ``--no-input`` pipeline.
+"""``eawf init`` wizard — questionary interactive surface + pure ``--no-input`` pipeline.
 
 Per ``eawf-v0.1-plan.md`` §P03 W05 the init wizard has two surfaces sharing
 one engine:
@@ -8,24 +8,29 @@ one engine:
    ``AGENTS.md`` + ``CLAUDE.md`` + the render manifest. No user interaction.
    Re-running with the same answers is byte-stable on the rendered files.
 
-2. **Interactive Textual app.** :func:`run_wizard_interactive` collects
-   answers via a one-screen form whose widgets are derived from
-   :data:`~eawf.install.steps.WIZARD_STEPS`, then delegates to the same pure
-   pipeline. The Textual surface is intentionally tiny: a vertical list of
-   labelled inputs and a single submit button.
+2. **Interactive questionary loop.** :func:`run_wizard_interactive` walks
+   :data:`~eawf.install.steps.WIZARD_STEPS` sequentially, dispatching each
+   step kind to the matching :mod:`questionary` prompt, then delegates to
+   the same pure pipeline. Answers stream through a typed, sequential
+   loop so the surface stays minimal and the dependency footprint stays
+   small (questionary pulls :mod:`prompt_toolkit`, no reactive UI stack).
 
 The pure pipeline is the contract — the interactive surface is a usability
-nicety. CI exercises ``--no-input`` directly via :class:`typer.testing.CliRunner`;
-``run_wizard_interactive`` is covered indirectly by the rare cases that drive
-the Textual ``pilot`` test runner.
+nicety. CI exercises ``--no-input`` directly via
+:class:`typer.testing.CliRunner`; :func:`run_wizard_interactive` is covered
+by piping :class:`prompt_toolkit.input.PipeInput` into a session-scoped
+input source (see ``tests/integration/test_cli_init_interactive.py``).
 
 Public API:
 
 - :class:`WizardAnswers` — Pydantic v2 model mirroring the 12 step ids,
   forbidding extras and validating ``project_code`` plus ``profiles`` membership.
 - :class:`WizardResult` — Pydantic v2 model summarising the artefacts written.
+- :class:`WizardCancelled` — raised when the operator aborts a prompt
+  (Ctrl-C / EOF). Subclass of :class:`~eawf.cli.errors.UserDeclined` so the
+  CLI handler maps it to the canonical ``USER_DECLINED`` exit code.
 - :func:`run_wizard_no_input` — pure pipeline.
-- :func:`run_wizard_interactive` — Textual TTY entry-point.
+- :func:`run_wizard_interactive` — questionary TTY entry-point.
 
 Compatibility note (``enable_profile``):
 
@@ -52,7 +57,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import InvalidInput, UserDeclined
 from eawf.config.profile import _atomic_write_yaml, _materialise_state_keys
 from eawf.install.steps import (
     STEP_LIFECYCLE_DEPTH,
@@ -136,8 +141,8 @@ class WizardAnswers(BaseModel):
     # ``write_confirm`` is reserved for the **interactive** wizard surface.
     # In the v0.1 ``--no-input`` pipeline it has no effect — the pipeline
     # always proceeds straight to the writes. The field is retained so the
-    # interactive Textual flow can later gate a "confirm? [Y/n]" summary
-    # screen on it without reshaping :class:`WizardAnswers`. The matching
+    # interactive questionary flow can later gate a "confirm? [Y/n]" summary
+    # prompt on it without reshaping :class:`WizardAnswers`. The matching
     # ``--write-confirm`` CLI flag was deliberately not surfaced (per the
     # P03 W05 review): exposing a flag with no behaviour is misleading.
     write_confirm: bool = True
@@ -436,51 +441,161 @@ def run_wizard_no_input(
     )
 
 
-# ---- Textual interactive surface --------------------------------------------
+# ---- questionary interactive surface ----------------------------------------
 
 
-def _step_widget_default(step: WizardStep) -> str:
-    """Render the default value of *step* as a string for the Textual widget.
+class WizardCancelled(UserDeclined):
+    """Operator aborted a wizard prompt (Ctrl-C / EOF / Esc).
 
-    Multichoice defaults are joined on commas (``"core,python"``), bool
-    defaults render as the literal Python repr (``"True"`` / ``"False"``).
-    The resulting string is parseable by :func:`_parse_widget_value` —
-    keeping a single string-only Textual surface dramatically simplifies
-    the widget layer at the cost of a small parse step on submit.
+    Subclass of :class:`~eawf.cli.errors.UserDeclined` so the CLI handler's
+    existing ``except cli_errors.CliError`` clause catches it and exits with
+    the canonical ``USER_DECLINED`` code.
     """
-    if step.kind == "multichoice":
-        return ",".join(step.default)
-    if step.kind == "bool":
-        return "true" if bool(step.default) else "false"
-    return str(step.default)
 
 
-def _parse_widget_value(step: WizardStep, raw: str) -> Any:
-    """Parse *raw* into the typed shape :class:`WizardAnswers` expects."""
-    raw = raw.strip()
+# Pinned questionary style — cyan question marks / pointers, green answer
+# text, dim grey instruction. Matches the demo at ``/tmp/eawf-questionary-demo.py``
+# (do NOT commit the demo). The colours are 256-colour hex codes so a TTY
+# without truecolour still renders sensibly.
+_MODERN_STYLE: tuple[tuple[str, str], ...] = (
+    ("qmark", "fg:#5fafff bold"),
+    ("question", "bold"),
+    ("answer", "fg:#87ff87 bold"),
+    ("pointer", "fg:#5fafff bold"),
+    ("highlighted", "fg:#5fafff bold"),
+    ("selected", "fg:#87ff87"),
+    ("instruction", "fg:#666666 italic"),
+)
+_CHECK_GLYPH: str = "[bold green]✔[/]"
+
+
+def _build_style() -> Any:
+    """Lazily import ``questionary.Style`` to keep ``--no-input`` lean.
+
+    The pure pipeline must not pay the prompt_toolkit / questionary import
+    tax — the import is therefore deferred to the moment the interactive
+    surface actually needs a style object.
+    """
+    from questionary import Style
+
+    return Style(list(_MODERN_STYLE))
+
+
+def _ensure_answer(value: Any, step: WizardStep) -> Any:
+    """Return *value* or raise :class:`WizardCancelled` when it is ``None``.
+
+    questionary returns ``None`` from ``.ask()`` whenever the operator hits
+    Ctrl-C / Esc / EOF. The public CLI surface treats that as a
+    user-declined cancellation rather than a validation failure — exit
+    code ``USER_DECLINED`` is reserved for exactly this case.
+    """
+    if value is None:
+        raise WizardCancelled(f"wizard cancelled at step {step.id!r}")
+    return value
+
+
+def _ask_step(step: WizardStep) -> Any:
+    """Dispatch *step* to the matching questionary prompt and return the typed value.
+
+    Handles all five :class:`~eawf.install.steps.WizardKind` variants:
+
+    - ``text`` / ``path`` — :func:`questionary.text` /
+      :func:`questionary.path` with the step's default pre-filled.
+    - ``bool`` — :func:`questionary.confirm` with the boolean default.
+    - ``choice`` — :func:`questionary.select` with the static choices and
+      typeahead filter (``use_search_filter=True`` mandates
+      ``use_jk_keys=False`` and ``use_emacs_keys=False`` per the questionary
+      contract — using ``j``/``k`` as filter keys collides with vim-style
+      navigation).
+    - ``multichoice`` — :func:`questionary.checkbox` for the ``profiles``
+      step (choices are sourced from
+      :func:`~eawf.profiles.loader.list_profiles` at runtime), or a
+      free-form comma-separated text fallback for ``plugins`` / ``mcp``
+      where the v0.1 contract has no static enumeration.
+    """
+    import questionary
+    from questionary import Choice
+
+    style = _build_style()
+
+    if step.kind == "text":
+        return _ensure_answer(
+            questionary.text(step.prompt, default=str(step.default), style=style).ask(),
+            step,
+        )
     if step.kind == "bool":
-        return raw.lower() in {"1", "true", "yes", "y", "on"}
+        return _ensure_answer(
+            questionary.confirm(step.prompt, default=bool(step.default), style=style).ask(),
+            step,
+        )
+    if step.kind == "path":
+        return _ensure_answer(
+            questionary.path(step.prompt, default=str(step.default), style=style).ask(),
+            step,
+        )
+    if step.kind == "choice":
+        choices = list(step.choices or [])
+        return _ensure_answer(
+            questionary.select(
+                step.prompt,
+                choices=choices,
+                default=str(step.default),
+                style=style,
+                use_search_filter=True,
+                use_jk_keys=False,
+                use_emacs_keys=False,
+            ).ask(),
+            step,
+        )
     if step.kind == "multichoice":
-        return tuple(p for p in (item.strip() for item in raw.split(",")) if p)
-    return raw
+        if step.id == "profiles":
+            available = list(list_profiles())
+            preselected = set(step.default or ())
+            opts = [Choice(name, checked=(name in preselected)) for name in available]
+            value = _ensure_answer(
+                questionary.checkbox(
+                    step.prompt,
+                    choices=opts,
+                    style=style,
+                    use_search_filter=True,
+                    use_jk_keys=False,
+                    use_emacs_keys=False,
+                ).ask(),
+                step,
+            )
+            return tuple(value)
+        # ``plugins`` / ``mcp`` — no static enumeration in the v0.1 contract.
+        # Fall back to a comma-separated free-form text input so the operator
+        # can list ad-hoc identifiers without us inventing a static menu.
+        default = ",".join(step.default or ())
+        raw = _ensure_answer(
+            questionary.text(
+                f"{step.prompt} (comma-separated, blank for none)",
+                default=default,
+                style=style,
+            ).ask(),
+            step,
+        )
+        return tuple(item.strip() for item in str(raw).split(",") if item.strip())
+    raise InvalidInput(f"unknown wizard step kind: {step.kind}")
 
 
 def run_wizard_interactive(target_dir: Path, *, force: bool = False) -> WizardResult:
-    """Drive the Textual TTY wizard, then materialise via :func:`run_wizard_no_input`.
+    """Drive the questionary TTY wizard, then materialise via :func:`run_wizard_no_input`.
 
-    The Textual surface is intentionally single-screen: a vertical list of
-    captioned :class:`textual.widgets.Input` widgets — one per step —
-    followed by a submit :class:`textual.widgets.Button`. Submit harvests
-    every input, parses it via :func:`_parse_widget_value`, validates with
-    :class:`WizardAnswers`, and exits the app with the validated answers.
-    The caller (this function) then runs the pure pipeline.
+    Walks :data:`~eawf.install.steps.WIZARD_STEPS` sequentially. Each step
+    is dispatched to :func:`_ask_step`, the typed answer is collected into
+    a dict keyed by ``step.id``, and a one-line summary is printed via the
+    shared :class:`rich.console.Console` (matching the demo's collapse
+    style at ``/tmp/eawf-questionary-demo.py``).
 
-    The Textual import is local to the function so that pure ``--no-input``
-    callers never pull the framework into memory.
+    Heavy imports (``questionary``, ``rich``) are deferred to the function
+    body so pure ``--no-input`` callers never pay the prompt_toolkit /
+    rich import tax.
 
     Args:
         target_dir: Absolute target directory. Forwarded verbatim to
-            :func:`run_wizard_no_input` after the operator submits.
+            :func:`run_wizard_no_input` after the operator finishes.
         force: When True, overwrite an existing ``.ea/`` even if it has
             canonical files; forwarded to :func:`run_wizard_no_input`.
 
@@ -488,52 +603,31 @@ def run_wizard_interactive(target_dir: Path, *, force: bool = False) -> WizardRe
         :class:`WizardResult` from the underlying pipeline.
 
     Raises:
-        InvalidInput: When the operator's submitted answers fail Pydantic
-            validation. The Textual surface keeps the same exception
-            taxonomy as ``--no-input`` so the CLI handler maps to exit 3
+        WizardCancelled: When the operator aborts a prompt (Ctrl-C / EOF /
+            Esc). Maps to ``USER_DECLINED`` exit code.
+        InvalidInput: When the collected answers fail Pydantic validation.
+            The interactive surface keeps the same exception taxonomy as
+            ``--no-input`` so the CLI handler maps to ``INVALID_INPUT``
             uniformly.
     """
-    from textual.app import App, ComposeResult
-    from textual.containers import Vertical
-    from textual.widgets import Button, Input, Label
+    from rich.console import Console
 
-    captured: dict[str, Any] = {}
+    console = Console()
+    answers: dict[str, Any] = {}
+    for step in WIZARD_STEPS:
+        value = _ask_step(step)
+        answers[step.id] = value
+        # Collapse-to-summary line so the operator sees what the wizard
+        # captured at a glance after the prompt scrolls past.
+        console.print(f"  {_CHECK_GLYPH} [dim]{step.prompt}[/] [bold]{value}[/]")
 
-    class _WizardApp(App[dict[str, Any]]):
-        """One-screen form bound to :data:`WIZARD_STEPS`."""
-
-        CSS = ""  # Defaults are fine — the test harness drives via pilot.
-
-        def compose(self) -> ComposeResult:
-            with Vertical(id="wizard-form"):
-                for step in WIZARD_STEPS:
-                    yield Label(step.prompt, id=f"label-{step.id}")
-                    yield Input(
-                        value=_step_widget_default(step),
-                        id=f"input-{step.id}",
-                    )
-                yield Button("Submit", id="submit", variant="primary")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id != "submit":
-                return
-            raw_values: dict[str, Any] = {}
-            for step in WIZARD_STEPS:
-                widget = self.query_one(f"#input-{step.id}", Input)
-                raw_values[step.id] = _parse_widget_value(step, widget.value)
-            captured.update(raw_values)
-            self.exit(raw_values)
-
-    app = _WizardApp()
-    app.run()
-    if not captured:
-        raise InvalidInput("interactive wizard exited without submitting answers")
-    answers = WizardAnswers(**captured)
-    return run_wizard_no_input(answers, target_dir, force=force)
+    validated = WizardAnswers(**answers)
+    return run_wizard_no_input(validated, target_dir, force=force)
 
 
 __all__ = [
     "WizardAnswers",
+    "WizardCancelled",
     "WizardResult",
     "run_wizard_interactive",
     "run_wizard_no_input",
