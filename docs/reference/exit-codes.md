@@ -2,8 +2,7 @@
 
 Canonical exit codes emitted by every `eawf` CLI handler. The constants live
 in `src/eawf/cli/exit_codes.py`; the matching `CliError` subclasses live in
-`src/eawf/cli/errors.py`. See `ea-proposal.md` §7 and `eawf-v0.1-plan.md` §5
-for the source-of-truth tables.
+`src/eawf/cli/errors.py`.
 
 | Code | Name | When |
 |------|----------------------|---------------------------------------------|

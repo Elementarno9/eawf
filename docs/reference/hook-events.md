@@ -1,6 +1,6 @@
 # Eä hook events (v1)
 
-Frozen at Phase 4 Wave 04. Source of truth: `src/eawf/hooks/event.py`
+Source of truth: `src/eawf/hooks/event.py`
 (:class:`HookEventType`, :class:`HookEvent`). The Claude Code translation
 table lives in `src/eawf/runtimes/claude/hooks_router.py`.
 
