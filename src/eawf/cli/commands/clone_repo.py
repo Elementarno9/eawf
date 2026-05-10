@@ -233,8 +233,9 @@ def clone_repo_cmd(
 
     # The clone succeeded; pivot to the init surface. ``init_cmd`` honours
     # ``--no-input`` semantics via the global flag — if the operator did not
-    # pass --no-input the wizard would try to launch Textual, which is
-    # incompatible with a freshly-cloned tree's likely use-case (CI, scripts).
+    # pass --no-input the wizard would launch the questionary prompt loop,
+    # which is incompatible with a freshly-cloned tree's likely use-case
+    # (CI, scripts).
     # We force ``--no-input`` semantics by mutating the resolved flags object
     # for the duration of this call; the original GlobalFlags belong to the
     # parent ctx so we restore on the way out.

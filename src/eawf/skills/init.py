@@ -17,10 +17,10 @@ Lifecycle (per `ea-proposal.md` §14):
    :class:`UserQuestion` populated under :attr:`InitBody.user_question`.
    The runtime can then re-invoke with the missing answers.
 
-v0.1 contract: the skill does **not** drive the Textual surface. The
-runtime adapter is responsible for collecting the answers — the skill
-expects the validated mapping on ``ctx.args``. This keeps the skill
-loop-free and matches the §14 algorithm step 6 ("Ask approval with
+v0.1 contract: the skill does **not** drive the questionary surface.
+The runtime adapter is responsible for collecting the answers — the
+skill expects the validated mapping on ``ctx.args``. This keeps the
+skill loop-free and matches the §14 algorithm step 6 ("Ask approval with
 concrete options").
 
 Honoured ``ctx.args`` keys:
@@ -100,7 +100,7 @@ def _build_user_question(missing: list[str]) -> UserQuestion:
             ),
             UserQuestionOption(
                 label="run_interactive",
-                description="Drive the Textual wizard surface (eawf init --interactive).",
+                description="Drive the questionary wizard surface (eawf init --interactive).",
             ),
             UserQuestionOption(
                 label="cancel",
