@@ -24,7 +24,9 @@ from __future__ import annotations
 import json
 from typing import cast
 
+import click
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
@@ -172,15 +174,20 @@ def test_render_cmd_json_for_every_registry_entry(cli_runner: CliRunner) -> None
         assert payload["body"].startswith("---\n")
 
 
-def test_render_cmd_help_text_documents_format_option(cli_runner: CliRunner) -> None:
-    """``eawf skill render --help`` surfaces the ``--format`` option so
-    operators discover both alternatives without reading the source.
+def test_render_cmd_help_documents_format_alternatives(cli_runner: CliRunner) -> None:
+    """The ``--format`` option's docstring lists both ``skill-md`` and ``json``.
+
+    Asserted against the introspected Click option (not the rendered
+    ``--help`` text) because Typer's Rich-driven help formatter degrades
+    to an empty panel under :class:`CliRunner` (non-TTY), making any
+    stdout-substring check brittle across rich versions and CI runners.
     """
-    # COLUMNS=200 keeps Typer's rich help renderer from word-wrapping the
-    # ``--format`` option name into an ellipsis under CI's narrow default
-    # terminal width (Click's default 80 cols truncates to ``--for...``).
-    result = cli_runner.invoke(app, ["skill", "render", "--help"], env={"COLUMNS": "200"})
-    assert result.exit_code == 0
-    assert "--format" in result.stdout
-    assert "skill-md" in result.stdout
-    assert "json" in result.stdout
+    # Resolve the bound Click command via Typer's ``get_command`` shim;
+    # the test stays a docstring check rather than an end-to-end help
+    # render so Rich's non-TTY downgrade can't drop the option panel.
+    click_app = cast(click.Group, typer.main.get_command(app))
+    skill_group = cast(click.Group, click_app.commands["skill"])
+    render = skill_group.commands["render"]
+    fmt_param = next(cast(click.Option, p) for p in render.params if "--format" in (p.opts or []))
+    assert "skill-md" in (fmt_param.help or "")
+    assert "json" in (fmt_param.help or "")
