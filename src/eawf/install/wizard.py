@@ -58,6 +58,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.cli.errors import InvalidInput, UserDeclined
+from eawf.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.config.profile import _atomic_write_yaml, _materialise_state_keys
 from eawf.install.steps import (
     STEP_LIFECYCLE_DEPTH,
@@ -289,9 +290,15 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     end-of-file-fixer become idempotent on the second pass.
     """
     return {
-        "schema_version": "1.0",
+        "schema_version": CONFIG_SCHEMA_VERSION,
         "profiles": {"enabled": list(answers.profiles)},
-        "runtime": {"kind": answers.runtime},
+        # ``adapters`` is the canonical selector list (D14, B056); ``kind``
+        # is kept as a deprecated alias = ``adapters[0]`` so legacy callers
+        # that read ``runtime.kind`` keep working until the v0.4 cleanup.
+        "runtime": {
+            "adapters": [answers.runtime],
+            "kind": answers.runtime,
+        },
         "lifecycle": {"depth": answers.lifecycle_depth},
         "acceptance": {
             "tests": answers.acceptance_tests,

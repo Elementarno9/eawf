@@ -218,6 +218,49 @@ def _coerce_scalar(raw: str) -> Any:
     return raw
 
 
+_LEGACY_RUNTIME_WARN_EMITTED = False
+
+
+def _normalise_runtime_adapters(overlay: dict[str, Any]) -> None:
+    """In-place D14 shim: synthesise ``runtime.adapters`` from legacy ``runtime.kind``.
+
+    Applied per-overlay BEFORE the deep-merge so that a legacy overlay
+    ``{runtime: {kind: <id>}}`` projects to
+    ``{runtime: {kind: <id>, adapters: [<id>]}}`` and the synthesised
+    adapter list wins over any earlier layer's value.
+
+    Behaviour:
+    - When the overlay has ``runtime.kind`` set but lacks (or has an
+      empty) ``runtime.adapters``, replace ``runtime.adapters`` with
+      ``[kind]`` and emit a one-time deprecation warning via
+      ``logging.warning``.
+    - When both keys exist, the explicit ``adapters`` list wins.
+    - When the overlay carries no ``runtime`` block, the helper is a
+      no-op.
+
+    The deprecation warning fires at most once per process.
+    """
+    global _LEGACY_RUNTIME_WARN_EMITTED
+    runtime = overlay.get("runtime")
+    if not isinstance(runtime, dict):
+        return
+    adapters = runtime.get("adapters")
+    kind = runtime.get("kind")
+    if isinstance(adapters, list) and adapters:
+        return
+    if kind:
+        runtime["adapters"] = [kind]
+        if not _LEGACY_RUNTIME_WARN_EMITTED:
+            logger.warning(
+                "deprecated_runtime_kind config still uses 'runtime.kind' "
+                "without 'runtime.adapters'; synthesising adapters=[%r]. "
+                "Bump config schema_version to 1.1 and emit "
+                "'runtime.adapters: [<id>]' to silence this warning.",
+                kind,
+            )
+            _LEGACY_RUNTIME_WARN_EMITTED = True
+
+
 def merge_config(
     *,
     workspace: Path | None = None,
@@ -255,6 +298,7 @@ def merge_config(
 
     # Layer 2: global.
     global_overlay = load_yaml_layer(global_config_path())
+    _normalise_runtime_adapters(global_overlay)
     merged, sources = _deep_merge_with_sources(
         base=merged,
         base_sources=sources,
@@ -265,6 +309,7 @@ def merge_config(
     # Layer 3: workspace (only if anchor provided).
     if workspace is not None:
         ws_overlay = load_yaml_layer(workspace_config_path(workspace))
+        _normalise_runtime_adapters(ws_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
             base_sources=sources,
@@ -275,6 +320,7 @@ def merge_config(
     # Layer 4: repo (only if anchor provided).
     if repo is not None:
         repo_overlay = load_yaml_layer(repo_config_path(repo))
+        _normalise_runtime_adapters(repo_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
             base_sources=sources,
@@ -284,6 +330,7 @@ def merge_config(
 
         # Layer 5: local.
         local_overlay = load_yaml_layer(local_config_path(repo))
+        _normalise_runtime_adapters(local_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
             base_sources=sources,
@@ -294,6 +341,7 @@ def merge_config(
     # Layer 6: env.
     env_overlay = _collect_env_overrides(effective_env)
     if env_overlay:
+        _normalise_runtime_adapters(env_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
             base_sources=sources,
@@ -303,10 +351,12 @@ def merge_config(
 
     # Layer 7: CLI overrides.
     if overrides:
+        normalised_overrides: Any = dict(overrides)
+        _normalise_runtime_adapters(normalised_overrides)
         merged, sources = _deep_merge_with_sources(
             base=merged,
             base_sources=sources,
-            overlay=overrides,
+            overlay=normalised_overrides,
             overlay_layer="cli",
         )
 
