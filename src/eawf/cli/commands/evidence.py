@@ -987,7 +987,7 @@ def artifact_add(
                 artifact_id=artifact_id,
                 kind=kind,
                 uri=uri,
-                scope=resolved_scope,
+                scope_id=resolved_scope,
                 sha256=sha256,
                 size_bytes=size,
             )

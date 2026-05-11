@@ -133,6 +133,6 @@ def save_atomic(path: Path, manifest: Manifest) -> None:
                 os.fsync(parent_fd)
             finally:
                 os.close(parent_fd)
-            logger.info(f"render.manifest saved {path} bytes={len(payload)}")
+            logger.info(f"render.manifest path={path} bytes={len(payload)}")
         finally:
             tmp.unlink(missing_ok=True)

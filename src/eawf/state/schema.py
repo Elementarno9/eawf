@@ -74,8 +74,8 @@ def generate_plan_view_schema() -> dict[str, Any]:
     return schema
 
 
-def dump_schemas(out_dir: Path) -> None:
-    """Write all schema files to *out_dir*, creating it if necessary.
+def dump_schemas(output_dir: Path) -> None:
+    """Write all schema files to *output_dir*, creating it if necessary.
 
     Files written (deterministic, sorted keys):
     - ``state.schema.json``
@@ -83,29 +83,32 @@ def dump_schemas(out_dir: Path) -> None:
     - ``skill-output.schema.json``
     - ``plan-view.schema.json``
     """
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     state_schema = generate_state_schema()
-    (out_dir / "state.schema.json").write_bytes(orjson.dumps(state_schema, option=_ORJSON_OPTS))
-    logger.debug(f"wrote {out_dir / 'state.schema.json'}")
+    (output_dir / "state.schema.json").write_bytes(
+        orjson.dumps(state_schema, option=_ORJSON_OPTS) + b"\n"
+    )
+    logger.debug(f"dump_schemas target={output_dir / 'state.schema.json'}")
 
-    (out_dir / "config.schema.json").write_bytes(
+    (output_dir / "config.schema.json").write_bytes(
         orjson.dumps(
             {**PLACEHOLDER, "title": "EawfConfig"},
             option=_ORJSON_OPTS,
         )
+        + b"\n"
     )
-    logger.debug(f"wrote {out_dir / 'config.schema.json'}")
+    logger.debug(f"dump_schemas target={output_dir / 'config.schema.json'}")
 
     skill_output_schema = generate_skill_output_schema()
-    (out_dir / "skill-output.schema.json").write_bytes(
-        orjson.dumps(skill_output_schema, option=_ORJSON_OPTS)
+    (output_dir / "skill-output.schema.json").write_bytes(
+        orjson.dumps(skill_output_schema, option=_ORJSON_OPTS) + b"\n"
     )
-    logger.debug(f"wrote {out_dir / 'skill-output.schema.json'}")
+    logger.debug(f"dump_schemas target={output_dir / 'skill-output.schema.json'}")
 
     plan_view_schema = generate_plan_view_schema()
-    (out_dir / "plan-view.schema.json").write_bytes(
-        orjson.dumps(plan_view_schema, option=_ORJSON_OPTS)
+    (output_dir / "plan-view.schema.json").write_bytes(
+        orjson.dumps(plan_view_schema, option=_ORJSON_OPTS) + b"\n"
     )
-    logger.debug(f"wrote {out_dir / 'plan-view.schema.json'}")
+    logger.debug(f"dump_schemas target={output_dir / 'plan-view.schema.json'}")

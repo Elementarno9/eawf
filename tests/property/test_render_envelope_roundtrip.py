@@ -90,7 +90,7 @@ def envelope_headers(draw: st.DrawFn) -> EnvelopeHeader:
     finished = started + draw(_durations)
     return EnvelopeHeader(
         skill=draw(st.sampled_from(_skill_names)),
-        scope=draw(_scopes),
+        scope_id=draw(_scopes),
         session=draw(_sessions),
         started_at=started,
         finished_at=finished,

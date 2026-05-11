@@ -67,11 +67,11 @@ def parse(raw: str) -> Urn:
         raise ValueError(f"unknown URN kind: {kind!r}")
     rest = match.group("rest")
     if not rest:
-        raise ValueError(f"empty URN owner: {raw!r}")
+        raise ValueError(f"empty URN owner (no rest segment): {raw!r}")
     owner, sep, urn_id = rest.partition("/")
     owner = unquote(owner)
     if not owner:
-        raise ValueError(f"empty URN owner: {raw!r}")
+        raise ValueError(f"empty URN owner (empty before slash): {raw!r}")
     return Urn(
         kind=kind,
         owner=owner,
@@ -86,8 +86,9 @@ def build(kind: str, *, owner: str, id: str | None = None) -> str:
 
     For non-``repo`` and non-``artifact`` kinds, ``id`` MUST NOT contain ``/``.
 
-    Raises ``ValueError`` if ``kind`` is unknown, ``owner`` is empty, or ``id``
-    contains a forbidden ``/``.
+    Raises:
+        ValueError: When ``kind`` is unknown, ``owner`` is empty, or
+            ``id`` contains a forbidden ``/``.
     """
     if kind not in URN_KINDS:
         raise ValueError(f"unknown URN kind: {kind!r}")

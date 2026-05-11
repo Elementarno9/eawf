@@ -205,7 +205,7 @@ def probe_one(spec: InstrumentSpec) -> ProbeResult:
             timeout=_VERSION_TIMEOUT_SECONDS,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        logger.warning(f"probe_one: {spec.name} version probe failed: {exc}")
+        logger.warning(f"probe_one tool={spec.name!r} status=failed exc={exc!r}")
         return ProbeResult(
             name=spec.name,
             kind=spec.kind,
@@ -250,17 +250,17 @@ def _read_cache(cache_path: Path) -> ProbeReport | None:
     try:
         raw = cache_path.read_bytes()
     except OSError as exc:
-        logger.warning(f"_read_cache: cannot read {cache_path}: {exc}")
+        logger.warning(f"_read_cache path={cache_path} status=unreadable exc={exc!r}")
         return None
     try:
         body = orjson.loads(raw)
     except orjson.JSONDecodeError as exc:
-        logger.warning(f"_read_cache: invalid JSON at {cache_path}: {exc}")
+        logger.warning(f"_read_cache path={cache_path} status=invalid_json exc={exc!r}")
         return None
     try:
         report = ProbeReport.model_validate(body)
     except Exception as exc:
-        logger.warning(f"_read_cache: schema mismatch at {cache_path}: {exc}")
+        logger.warning(f"_read_cache path={cache_path} status=schema_mismatch exc={exc!r}")
         return None
     if report.probe_version != PROBE_VERSION:
         logger.info(
@@ -297,7 +297,7 @@ def _write_cache(cache_path: Path, report: ProbeReport) -> None:
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
-    logger.info(f"_write_cache: wrote probe cache to {cache_path}")
+    logger.info(f"_write_cache path={cache_path} bytes={len(raw)}")
 
 
 def probe(

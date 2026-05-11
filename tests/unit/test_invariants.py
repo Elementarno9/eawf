@@ -413,7 +413,7 @@ def _plugin(pid: str, *, runtime: str = "claude") -> dict[str, Any]:
         "id": pid,
         "owner": "eawf",
         "runtime": runtime,
-        "scope": "user",
+        "scope_id": "user",
         "target_path": f"~/.config/{pid}",
         "status": "installed",
         "managed_files": [],

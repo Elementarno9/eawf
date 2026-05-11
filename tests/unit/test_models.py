@@ -559,7 +559,7 @@ def test_plugin_install_owner_required() -> None:
             {
                 "id": "PI-001",
                 "runtime": "claude",
-                "scope": "repo",
+                "scope_id": "repo",
                 "target_path": "/abs/path",
                 "status": "installed",
                 "managed_files": [],
@@ -575,7 +575,7 @@ def test_plugin_install_with_owner() -> None:
         id="PI-001",
         owner="eawf",
         runtime="claude",
-        scope="repo",
+        scope_id="repo",
         target_path="/abs/path",
         status="installed",
         managed_files=[],

@@ -337,7 +337,7 @@ def test_flow_body_round_trip_with_step_dicts() -> None:
                 {
                     "header": {
                         "skill": "/research",
-                        "scope": "urn:eawf:v1:state:QR",
+                        "scope_id": "urn:eawf:v1:state:QR",
                         "session": "urn:eawf:v1:store:QR/sessions/SES-1",
                         "started_at": "2026-05-09T00:00:00Z",
                         "finished_at": "2026-05-09T00:00:01Z",

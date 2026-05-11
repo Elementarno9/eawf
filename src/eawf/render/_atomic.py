@@ -59,6 +59,6 @@ def atomic_write_text(target: Path, payload: str) -> None:
                 os.fsync(parent_fd)
             finally:
                 os.close(parent_fd)
-        logger.info(f"render._atomic wrote {target} bytes={len(encoded)}")
+        logger.info(f"render._atomic target={target} bytes={len(encoded)}")
     finally:
         tmp.unlink(missing_ok=True)

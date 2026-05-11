@@ -3,8 +3,8 @@
 Phase 4 W01 narrowed both from ``dict[str, Any]`` to dedicated Pydantic
 models with ``extra="forbid"``. These tests pin:
 
-- the required-field set (skill, scope, session, started_at, finished_at,
-  status);
+- the required-field set (skill, scope_id, session, started_at,
+  finished_at, status);
 - the frozen literal enums (skill, status, instrument_probe values);
 - the ``extra="forbid"`` rejection on unknown keys for both header and
   footer; and
@@ -26,7 +26,7 @@ def _base_header(**overrides: object) -> dict[str, object]:
     """Helper mirroring the pattern from ``tests/unit/test_envelope.py:14``."""
     defaults: dict[str, object] = {
         "skill": "/research",
-        "scope": "urn:eawf:v1:state:QR/P00",
+        "scope_id": "urn:eawf:v1:state:QR/P00",
         "session": "urn:eawf:v1:store:QR/sessions/SES-1",
         "started_at": datetime(2026, 5, 9, 0, 0, 0, tzinfo=UTC),
         "finished_at": datetime(2026, 5, 9, 0, 0, 1, tzinfo=UTC),

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def _get_wave_or_raise(state: State, wave_id: str) -> Wave:
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise KeyError(f"unknown wave {wave_id!r}")
+        raise KeyError(f"unknown wave: {wave_id!r}")
     return wave
 
 

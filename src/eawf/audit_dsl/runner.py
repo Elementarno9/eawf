@@ -85,7 +85,7 @@ def run_checks(
     out: list[CheckResult] = []
     for spec in specs:
         fn = CHECK_REGISTRY[spec.kind]
-        logger.debug("audit_dsl: dispatching %s (kind=%s)", spec.name, spec.kind)
+        logger.debug(f"audit_dsl: dispatching {spec.name} kind={spec.kind}")
         out.append(fn(spec, base))
     return out
 

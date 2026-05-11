@@ -153,7 +153,7 @@ class WizardAnswers(BaseModel):
         """Reject anything that does not match the canonical project-code regex."""
         if not RE_PROJECT_CODE.fullmatch(value):
             raise ValueError(
-                "Project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only."
+                "project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only"
             )
         return value
 

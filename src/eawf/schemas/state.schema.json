@@ -1495,8 +1495,8 @@
           "title": "Runtime",
           "type": "string"
         },
-        "scope": {
-          "title": "Scope",
+        "scope_id": {
+          "title": "Scope Id",
           "type": "string"
         },
         "status": {
@@ -1516,7 +1516,7 @@
         "id",
         "owner",
         "runtime",
-        "scope",
+        "scope_id",
         "target_path",
         "status",
         "installed_at",

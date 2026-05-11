@@ -32,7 +32,7 @@ def test_add_artifact_happy(tmp_path: Path) -> None:
         artifact_id="ART-001",
         kind="audit_report",
         uri="repo:.ea/artifacts/audit-001.md",
-        scope="QR",
+        scope_id="QR",
         sha256="a" * 64,
         size_bytes=1024,
     )
@@ -48,11 +48,11 @@ def test_add_artifact_duplicate_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
     artifact.add_artifact(
-        state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope="QR"
+        state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope_id="QR"
     )
     with pytest.raises(cli_errors.InvalidInput, match="already exists"):
         artifact.add_artifact(
-            state, artifact_id="ART-001", kind="audit_report", uri="repo:bar.md", scope="QR"
+            state, artifact_id="ART-001", kind="audit_report", uri="repo:bar.md", scope_id="QR"
         )
 
 
@@ -73,7 +73,7 @@ def test_add_artifact_rejects_local_uri(tmp_path: Path, uri: str) -> None:
             artifact_id="ART-001",
             kind="audit_report",
             uri=uri,
-            scope="QR",
+            scope_id="QR",
         )
 
 
@@ -96,7 +96,7 @@ def test_state_transaction_persists_add_artifact(tmp_path: Path) -> None:
     paths = _io.store_paths(state_path)
     with state_transaction(state_path) as state:
         event = artifact.add_artifact(
-            state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope="QR"
+            state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope_id="QR"
         )
         _io.append_jsonl(paths[StoreKind.EVENT], event)
     body = json.loads(state_path.read_text())

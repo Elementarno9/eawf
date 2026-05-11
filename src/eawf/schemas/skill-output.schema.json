@@ -67,7 +67,7 @@
     },
     "EnvelopeHeader": {
       "additionalProperties": false,
-      "description": "Typed envelope header.\n\nFrozen at Phase 4 W01 per design spec §3.1. All Phase 4 W02-W07\nskills populate this directly; pre-W01 callers (e.g. the doctor smoke\ncheck) get implicit coercion via :meth:`OutputEnvelope.model_validate`.\n\nAttributes:\n    skill: Frozen literal of the skill that produced the envelope.\n    scope: Eä URN for the active state scope.\n    session: Eä URN for the agent session that produced the envelope.\n    started_at: When the skill began running.\n    finished_at: When the skill finished (must be ``>= started_at``).\n    status: Terminal status — one of the five envelope statuses.\n    instrument_probe: Per-tool probe map (e.g. ``{\"git\": \"ok\"}``).",
+      "description": "Typed envelope header.\n\nFrozen at Phase 4 W01 per design spec §3.1. All Phase 4 W02-W07\nskills populate this directly; pre-W01 callers (e.g. the doctor smoke\ncheck) get implicit coercion via :meth:`OutputEnvelope.model_validate`.\n\nAttributes:\n    skill: Frozen literal of the skill that produced the envelope.\n    scope_id: Eä URN for the active state scope.\n    session: Eä URN for the agent session that produced the envelope.\n    started_at: When the skill began running.\n    finished_at: When the skill finished (must be ``>= started_at``).\n    status: Terminal status — one of the five envelope statuses.\n    instrument_probe: Per-tool probe map (e.g. ``{\"git\": \"ok\"}``).",
       "properties": {
         "finished_at": {
           "format": "date-time",
@@ -86,8 +86,8 @@
           "title": "Instrument Probe",
           "type": "object"
         },
-        "scope": {
-          "title": "Scope",
+        "scope_id": {
+          "title": "Scope Id",
           "type": "string"
         },
         "session": {
@@ -129,7 +129,7 @@
       },
       "required": [
         "skill",
-        "scope",
+        "scope_id",
         "session",
         "started_at",
         "finished_at",

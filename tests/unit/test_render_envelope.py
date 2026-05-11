@@ -27,7 +27,7 @@ def _sample_env(**overrides: object) -> OutputEnvelope:
     base: dict[str, Any] = {
         "header": {
             "skill": "/research",
-            "scope": "urn:eawf:v1:state:QR/P00",
+            "scope_id": "urn:eawf:v1:state:QR/P00",
             "session": "urn:eawf:v1:store:QR/sessions/SES-001",
             "started_at": "2026-05-09T00:00:00Z",
             "finished_at": "2026-05-09T00:00:01Z",
@@ -61,7 +61,7 @@ def test_from_markdown_parses_header() -> None:
     env = _sample_env(
         header={
             "skill": "/audit",
-            "scope": "urn:eawf:v1:state:QR/P13-I04",
+            "scope_id": "urn:eawf:v1:state:QR/P13-I04",
             "session": "urn:eawf:v1:store:QR/sessions/SES-2",
             "started_at": "2026-05-09T00:00:00Z",
             "finished_at": "2026-05-09T00:00:02Z",
@@ -71,7 +71,7 @@ def test_from_markdown_parses_header() -> None:
     )
     parsed = from_markdown(to_markdown(env))
     assert parsed.header.skill == "/audit"
-    assert parsed.header.scope == "urn:eawf:v1:state:QR/P13-I04"
+    assert parsed.header.scope_id == "urn:eawf:v1:state:QR/P13-I04"
     assert parsed.header.session == "urn:eawf:v1:store:QR/sessions/SES-2"
     assert parsed.header.status == "ok"
 
@@ -133,7 +133,7 @@ def test_extra_field_on_envelope_rejected() -> None:
             {
                 "header": {
                     "skill": "/research",
-                    "scope": "urn:eawf:v1:state:QR",
+                    "scope_id": "urn:eawf:v1:state:QR",
                     "session": "urn:eawf:v1:store:QR/sessions/SES-1",
                     "started_at": "2026-05-09T00:00:00Z",
                     "finished_at": "2026-05-09T00:00:01Z",
@@ -152,7 +152,7 @@ def test_to_markdown_is_deterministic_under_key_reorder() -> None:
     a = _sample_env(
         header={
             "skill": "/research",
-            "scope": "urn:eawf:v1:state:QR",
+            "scope_id": "urn:eawf:v1:state:QR",
             "session": "urn:eawf:v1:store:QR/sessions/SES-1",
             "started_at": "2026-05-09T00:00:00Z",
             "finished_at": "2026-05-09T00:00:01Z",
@@ -163,7 +163,7 @@ def test_to_markdown_is_deterministic_under_key_reorder() -> None:
     b = _sample_env(
         header={
             "skill": "/research",
-            "scope": "urn:eawf:v1:state:QR",
+            "scope_id": "urn:eawf:v1:state:QR",
             "session": "urn:eawf:v1:store:QR/sessions/SES-1",
             "started_at": "2026-05-09T00:00:00Z",
             "finished_at": "2026-05-09T00:00:01Z",

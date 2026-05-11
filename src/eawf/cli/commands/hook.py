@@ -154,7 +154,7 @@ def _envelope_for(
     )
     header = EnvelopeHeader(
         skill="/audit",
-        scope=event.scope_id or "urn:eawf:v1:state:hook-run",
+        scope_id=event.scope_id or "urn:eawf:v1:state:hook-run",
         session="urn:eawf:v1:store:hook/sessions/SES-cli",
         started_at=started_at,
         finished_at=finished_at,

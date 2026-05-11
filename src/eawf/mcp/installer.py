@@ -164,8 +164,11 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
 def _read_settings(path: Path) -> dict[str, Any]:
     """Return the parsed top-level object at *path*, or ``{}``.
 
-    Raises :class:`ValueError` for non-empty / non-object content —
-    mirrors the patcher contract from ``plugin_install.py:220-223``.
+    Mirrors the patcher contract from ``plugin_install.py:220-223``.
+
+    Raises:
+        ValueError: When the file content is non-empty and not a JSON
+            object, or when it fails to parse as JSON.
     """
     if not path.exists():
         return {}

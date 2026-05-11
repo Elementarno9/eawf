@@ -48,7 +48,7 @@ class UserQuestion(BaseModel):
     @classmethod
     def _check_option_count(cls, value: list[UserQuestionOption]) -> list[UserQuestionOption]:
         if not 2 <= len(value) <= 4:
-            raise ValueError(f"UserQuestion.options must contain 2-4 entries; got {len(value)}")
+            raise ValueError(f"options must contain 2-4 entries; got {len(value)}")
         return value
 
 
