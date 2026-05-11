@@ -23,7 +23,7 @@ from eawf.state.models import State
 logger = logging.getLogger(__name__)
 
 
-class PrBodyNotFound(LookupError):
+class PrBodyNotFound(LookupError):  # noqa: N818 — pairs with cli.errors.NotFound naming
     """Raised when the requested phase id is not present in ``state.phases``."""
 
 
