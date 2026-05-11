@@ -184,6 +184,14 @@ from eawf.cli.commands.doc import doc_app  # noqa: E402
 app.add_typer(doc_app, name="doc")
 # --- end P12 W03 ---
 
+# --- P12 W04 PR body + wiki render registration ---
+from eawf.cli.commands.pr import pr_app  # noqa: E402
+from eawf.cli.commands.wiki import wiki_app  # noqa: E402
+
+app.add_typer(pr_app, name="pr")
+app.add_typer(wiki_app, name="wiki")
+# --- end P12 W04 ---
+
 # --- P03 W05 init registration ---
 from eawf.cli.commands.init import init_cmd  # noqa: E402
 

@@ -725,7 +725,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P12-I01-W03"
+      "P12-I01-W04"
     ],
     "iter_id": "P12-I01",
     "phase_id": "P12",
@@ -1134,7 +1134,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T13:12:50.962079Z",
+  "updated_at": "2026-05-11T13:15:43.615757Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1577,8 +1577,8 @@
     "P12-I01-W03": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T13:13:40.278328Z",
+      "commit": "ad45089",
       "deps": [],
       "file_scopes": [
         "src/eawf/doctor/doc_verify.py",
@@ -1588,8 +1588,8 @@
       "id": "P12-I01-W03",
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:43.258193Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Doc-drift linter (verify_docs + eawf doc verify CLI + 6 tests)",
+      "status": "closed",
       "title": "B031 doc-drift linter",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1597,7 +1597,7 @@
     },
     "P12-I01-W04": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1613,7 +1613,7 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:43.652488Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B032+B038 PR body + wiki render",
       "token_budget": null,
       "tokens_consumed": 0,
