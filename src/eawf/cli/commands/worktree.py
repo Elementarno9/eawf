@@ -34,7 +34,7 @@ state lock guards ``state.json`` and the registry lock guards
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Annotated, Any
 
 import typer
@@ -366,6 +366,19 @@ def worktree_merge_back_cmd(
 # ---- worktree path-fix ------------------------------------------------------
 
 
+def _is_path_absolute_any_platform(path_str: str) -> bool:
+    """True iff *path_str* is absolute on POSIX **or** Windows.
+
+    ``pathlib.Path`` is platform-bound: a POSIX-rooted string like
+    ``/Users/foo`` parses as a relative ``WindowsPath`` on Windows, and
+    a drive-letter string like ``C:\\foo`` parses as a relative
+    ``PosixPath`` on macOS / Linux. Worktree state.json files are
+    portable, so the path-fix sweep must recognise either dialect.
+    Same pattern as :func:`eawf.evidence.artifact._validate_artifact_location`.
+    """
+    return PurePosixPath(path_str).is_absolute() or PureWindowsPath(path_str).is_absolute()
+
+
 @worktree_app.command(name="path-fix")
 def worktree_path_fix_cmd(
     ctx: typer.Context,
@@ -404,9 +417,9 @@ def worktree_path_fix_cmd(
         if state.worktrees is None:
             state.worktrees = {}
         for wt_id, record in state.worktrees.items():
-            current = Path(record.path)
-            if not current.is_absolute():
+            if not _is_path_absolute_any_platform(record.path):
                 continue
+            current = Path(record.path)
             try:
                 rel = current.resolve().relative_to(repo_root)
             except ValueError:
