@@ -24,6 +24,7 @@ worktree-registry lock (when applicable).
 
 from __future__ import annotations
 
+import bisect
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -270,24 +271,12 @@ def _candidate_waves_for_batch(state: State, iter_id: str | None) -> list[str]:
             in_degree[child] -= 1
             if in_degree[child] == 0:
                 # Maintain id-sorted ready queue for determinism.
-                _insort(ready, child)
+                bisect.insort(ready, child)
     # Any nodes left have cycles — should never happen (plan_wave rejects
     # cycles) but append defensively in id order for stable output.
     leftover = sorted(wid for wid in candidate_set if wid not in ordered)
     ordered.extend(leftover)
     return ordered
-
-
-def _insort(target: list[str], item: str) -> None:
-    """In-place sorted insert for the topo queue."""
-    lo, hi = 0, len(target)
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if target[mid] < item:
-            lo = mid + 1
-        else:
-            hi = mid
-    target.insert(lo, item)
 
 
 @dataclass
