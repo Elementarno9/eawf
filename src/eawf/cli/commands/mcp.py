@@ -49,7 +49,7 @@ from eawf.mcp.installer import (
     remove_runtime_entry,
 )
 from eawf.state.enums import McpRisk, McpStatus
-from eawf.state.models import McpServer
+from eawf.state.models import McpGrant, McpServer
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ mcp_app = typer.Typer(
 
 _SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude",)
 _OWNER_FILTERS: tuple[str, ...] = ("eawf", "user", "all")
+_GRANT_SCOPE_KINDS: tuple[str, ...] = ("wave", "profile", "global")
 
 
 def _escape_tsv_field(value: str) -> str:
@@ -109,6 +110,17 @@ def _server_payload(server: McpServer) -> dict[str, object]:
         "write_capable": server.write_capable,
         "status": server.status.value,
         "installed_targets": list(server.installed_targets),
+    }
+
+
+def _grant_payload(grant: McpGrant) -> dict[str, object]:
+    """Render *grant* as a JSON-friendly dict for envelopes."""
+    return {
+        "id": grant.id,
+        "scope_kind": grant.scope_kind,
+        "scope_id": grant.scope_id,
+        "server_id": grant.server_id,
+        "granted_at": grant.granted_at.isoformat(),
     }
 
 
@@ -617,6 +629,154 @@ def list_cmd(
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
+
+
+@mcp_app.command(name="grant")
+def grant_cmd(
+    ctx: typer.Context,
+    scope_kind: Annotated[
+        str,
+        typer.Argument(
+            help="Scope shape: wave | profile | global.",
+            metavar="SCOPE_KIND",
+        ),
+    ],
+    scope_id: Annotated[
+        str,
+        typer.Argument(
+            help=(
+                "Scope identifier (e.g. wave id `P10-I01-W04`, profile name, or "
+                "the literal `global`)."
+            ),
+            metavar="SCOPE_ID",
+        ),
+    ],
+    server_id: Annotated[
+        str,
+        typer.Argument(help="MCP server id from state.mcp_servers.", metavar="SERVER_ID"),
+    ],
+    grant_id: Annotated[
+        str | None,
+        typer.Option(
+            "--grant-id",
+            help=(
+                "Override the auto-generated grant id (default: `GRANT-<n>` "
+                "with n = max existing + 1)."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Bind an MCP server to a scope so dispatch can project allowed-tools.
+
+    The grant body is persisted under ``state.mcp_grants[grant_id]``;
+    ``state.updated_at`` is bumped by :func:`state_transaction`.
+
+    The transaction validates referential integrity after mutation: if
+    *server_id* is not registered in ``state.mcp_servers``, the
+    ``INV.REF.MCP_GRANT_SERVER_MISSING`` invariant fires and the write is
+    rolled back as :class:`ValidationFailed`.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        if scope_kind not in _GRANT_SCOPE_KINDS:
+            raise cli_errors.InvalidInput(
+                f"scope_kind must be one of {list(_GRANT_SCOPE_KINDS)}; got {scope_kind!r}"
+            )
+        state_path = resolve_state_path(flags.workspace)
+        with state_transaction(state_path) as state:
+            grants = state.mcp_grants if state.mcp_grants is not None else {}
+            if grant_id is None:
+                next_n = 1
+                for existing_id in grants:
+                    if existing_id.startswith("GRANT-"):
+                        try:
+                            n = int(existing_id.removeprefix("GRANT-"))
+                        except ValueError:
+                            continue
+                        next_n = max(next_n, n + 1)
+                resolved_grant_id = f"GRANT-{next_n}"
+            else:
+                resolved_grant_id = grant_id
+            if resolved_grant_id in grants:
+                raise cli_errors.InvalidInput(
+                    f"mcp grant id {resolved_grant_id!r} already exists; "
+                    "pick another or run `eawf mcp revoke` first"
+                )
+            try:
+                grant = McpGrant(
+                    id=resolved_grant_id,
+                    scope_kind=scope_kind,  # type: ignore[arg-type]
+                    scope_id=scope_id,
+                    server_id=server_id,
+                    granted_at=datetime.now(UTC),
+                )
+            except ValidationError as exc:
+                raise cli_errors.InvalidInput(str(exc)) from exc
+            grants[resolved_grant_id] = grant
+            state.mcp_grants = grants
+            state.updated_at = datetime.now(UTC)
+        emit_json_or_text(
+            payload=_grant_payload(grant),
+            text=(
+                f"mcp granted: {grant.id} ({grant.scope_kind}={grant.scope_id} → {grant.server_id})"
+            ),
+            flags=flags,
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+
+
+@mcp_app.command(name="revoke")
+def revoke_cmd(
+    ctx: typer.Context,
+    grant_id: Annotated[
+        str,
+        typer.Argument(help="Grant id from state.mcp_grants.", metavar="GRANT_ID"),
+    ],
+) -> None:
+    """Remove an MCP grant from ``state.mcp_grants``.
+
+    Bumps ``state.updated_at`` and clears the map slot. When the last
+    grant is removed, ``mcp_grants`` is reset to ``None`` so the
+    nullable-vs-empty distinction stays parallel to the ``mcp_servers``
+    handling in :func:`remove_cmd`.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        state_path = resolve_state_path(flags.workspace)
+        removed: McpGrant | None = None
+        with state_transaction(state_path) as state:
+            grants = state.mcp_grants or {}
+            grant = grants.get(grant_id)
+            if grant is None:
+                raise cli_errors.NotFound(
+                    f"mcp grant id {grant_id!r} not registered; nothing to revoke"
+                )
+            del grants[grant_id]
+            state.mcp_grants = grants if grants else None
+            state.updated_at = datetime.now(UTC)
+            removed = grant
+        assert removed is not None
+        emit_json_or_text(
+            payload={
+                "id": removed.id,
+                "removed_from_state": True,
+                "scope_kind": removed.scope_kind,
+                "scope_id": removed.scope_id,
+                "server_id": removed.server_id,
+            },
+            text=(
+                f"mcp revoked: {removed.id} "
+                f"({removed.scope_kind}={removed.scope_id} → {removed.server_id})"
+            ),
+            flags=flags,
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
 
 
 __all__ = ["mcp_app"]

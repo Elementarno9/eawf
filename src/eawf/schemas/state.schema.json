@@ -1061,6 +1061,51 @@
       "title": "IterStatus",
       "type": "string"
     },
+    "McpGrant": {
+      "additionalProperties": false,
+      "description": "Scope-binding between an MCP server and a wave/profile/global scope.\n\nA grant is the projection key the dispatcher uses to compute\n``allowed_tools`` for a runtime: when the dispatched wave matches\n``scope_kind=\"wave\"`` / ``scope_id=<wave_id>`` (or a broader scope),\nthe grant's ``server_id`` contributes ``mcp__<server_id>__*`` to the\nSDK envelope's allowed-tools list. ``server_id`` MUST reference an\nentry in :attr:`State.mcp_servers`; the referential check lives in\n:func:`eawf.validate.invariants.check_mcp_grant_server_ref` and emits\n``INV.REF.MCP_GRANT_SERVER_MISSING`` when the reference dangles.\n\nThe ``id`` field follows the ``GRANT-<n>`` convention (verified by\n:mod:`tests.unit.test_state_mcp_grant_model`); it is otherwise an\n:data:`IdStr` so the schema-level pattern stays additive and the\nconvention can evolve without a schema break.",
+      "properties": {
+        "granted_at": {
+          "format": "date-time",
+          "title": "Granted At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_kind": {
+          "enum": [
+            "wave",
+            "profile",
+            "global"
+          ],
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "server_id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Server Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_kind",
+        "scope_id",
+        "server_id",
+        "granted_at"
+      ],
+      "title": "McpGrant",
+      "type": "object"
+    },
     "McpRisk": {
       "enum": [
         "read",
@@ -2105,6 +2150,21 @@
       },
       "title": "Iters",
       "type": "object"
+    },
+    "mcp_grants": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/McpGrant"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mcp Grants"
     },
     "mcp_servers": {
       "anyOf": [
