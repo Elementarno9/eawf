@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-11
+
+### Added
+- Phase 7: state-CLI completeness — `audit set-verdict` mutator (B028),
+  `backlog set-priority` mutator + CLI (B026), v0.1 retro-stamp of audits
+  A01..A07, D08 deferring PR-cadence policy revisit to v0.2 ship.
+- Phase 8: orchestration core — subagent prompt renderer (B025), wave
+  land cherry-pick CLI (B027), CI-fix loop wave plan + parser (B040),
+  wave review CLI + findings parser (B041), budget-consume CLI.
+- Phase 9: backlog cleanups — insort dedup refactor, `Wave.blocks`
+  reverse-index invariant validator, cross-platform absoluteness check
+  in worktree path-fix, surface discarded delta in budget-consume
+  rollback error.
+- Phase 10: multi-runtime — `eawf skill render` CLI, `state.mcp_grants`
+  table + grant/revoke CLI, `claude-agent-sdk` dispatch adapter,
+  dual-runtime envelope ship-gate demo.
+- Phase 11: workflow ergonomics — `planning.auto_plan` +
+  `flow.auto_accept` config defaults, SKILL.md bodies prompting
+  plan-mode + AskUserQuestion gates, P11 skill registry tests.
+- Phase 12: backlog cluster — decision graph render (B029), memory GC
+  + tiered memory (B030+B037), doc-drift linter (B031), PR-body
+  renderer + project wiki (B032+B038), skill eval harness with golden
+  envelopes (B033), sandbox/permission policy table + CLI (B034),
+  file-impact graph (B039).
+- Phase 13: feature cluster + v0.2 ship-gate — end-to-end golden
+  scenarios under `golden_scenarios` pytest marker (B009), self-eval
+  semantic scoring with 0.85 threshold gate (B042), audit-check DSL
+  skeleton with 5 check kinds + YAML runner (B019, D02 resolved),
+  session-level plugin-mode hooks (`SessionStart`/`Stop`/`PreToolUse`
+  /`PostToolUse` on Bash `git commit`/`git push`) wired into
+  `eawf plugin package claude` (B015), user-scope install probe via
+  `eawf doctor --user-scope` + `eawf plugin update claude --check`
+  (B017).
+
+### Changed
+- Backlog hygiene: 13 shipped items (B025, B027, B029-B034, B037-B041)
+  closed against their resolving commits and audit references.
+- `docs/architecture/plugins.md` § hooks rewritten: deferred-to-v0.2
+  paragraph replaced with the session-level event map; eawf-internal
+  lifecycle events (wave/iter/phase/audit) stay fired by the state
+  CLI through `eawf hook run`.
+- `docs/architecture/profiles.md` + `docs/policy/fixed-decisions.md`:
+  quant/ml stub note refreshed — the audit-check DSL skeleton landed
+  in P13 W04; profile bodies (B006/B007) still pending for v0.3.
+- `README.md`: dropped "(hooks deferred to v0.2 — see B015)"
+  parenthetical from the local-marketplace install section.
+- Decisions: D09 defers B005 PyPI publish to v0.3, D10 keeps the
+  one-PR-per-phase cadence through v0.2 close, D11 locks P13 scope
+  at the 7 declared waves.
+
+### Fixed
+- `PrBodyNotFound` N818 lint silenced after P12 close (P12-CORE).
+- Pre-commit hook drift on `state.json` line-numbers absorbed by
+  `.secrets.baseline` refresh in P10/P11 carry-over.
+- Various per-phase PR-review must-fixes (P08/P09/P10).
+
+### Known limitations (rolled forward to v0.3)
+- `state.project.version_target` setter is not yet exposed by the
+  state CLI; the field stays unset for v0.2. Tracked as B048.
+- True user-scope plugin auto-update (background process) deferred;
+  P13 W07 ships the probe (`doctor --user-scope` + `plugin update
+  --check`) only.
+- Quant + ML profile bodies (B006/B007) stay catalog-stubs in v0.2;
+  the DSL is functional, but the profile bodies have not been
+  authored. v0.3 work.
+
 ## [0.1.0] - 2026-05-10
 
 ### Added

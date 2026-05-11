@@ -739,13 +739,37 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix docstring (worktree.py:393)"
+    },
+    "B048": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T14:52:28.239930Z",
+      "id": "B048",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "State CLI: project version-target setter (v0.3 prep)"
+    },
+    "B049": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T14:52:28.981761Z",
+      "id": "B049",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Sandbox-policy enforcement in audit-check DSL command_exit_zero (v0.3)"
     }
   },
   "current": {
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P13-I01-W06"
+    ],
     "iter_id": "P13-I01",
     "phase_id": "P13",
     "project_code": "EAWF",
@@ -1236,7 +1260,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:50:23.253220Z",
+  "updated_at": "2026-05-11T14:52:34.679386Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1921,7 +1945,7 @@
     },
     "P13-I01-W06": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1944,7 +1968,7 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:06.925391Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "Version bump 0.2.0 + CHANGELOG mine",
       "token_budget": null,
       "tokens_consumed": 0,
