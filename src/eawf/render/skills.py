@@ -129,6 +129,27 @@ def render_skill_md(ctx: SkillTemplateContext) -> str:
     return rendered
 
 
+def render_skill_md_from_spec(spec: SkillSpec) -> str:
+    """Render a SKILL.md from a :class:`SkillSpec`.
+
+    Convenience wrapper that builds the :class:`SkillTemplateContext`
+    from *spec* and forwards to :func:`render_skill_md`. Used by both
+    :mod:`eawf.runtimes.claude.plugin_install` (file-on-disk render) and
+    :func:`eawf.cli.commands.skill.render_cmd` (stdout dump) so the two
+    code paths emit byte-identical bytes for the same registry entry.
+    """
+    return render_skill_md(
+        SkillTemplateContext(
+            skill_name=spec.skill_name,
+            description=spec.description,
+            argument_hint=spec.argument_hint,
+            user_invocable=spec.user_invocable,
+            disable_model_invocation=spec.disable_model_invocation,
+            body=spec.body,
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Frozen v0.1 skill registry. Mirrors :data:`SkillName` literal — six core
 # (research/prep/audit/ship/review/polish) + four meta (init/roadmap/
@@ -465,4 +486,5 @@ __all__ = [
     "SkillSpec",
     "SkillTemplateContext",
     "render_skill_md",
+    "render_skill_md_from_spec",
 ]
