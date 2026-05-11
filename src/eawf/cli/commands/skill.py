@@ -50,6 +50,7 @@ from eawf.render.envelope import (
     SkillName,
     to_markdown,
 )
+from eawf.render.skills import SKILL_REGISTRY, SkillSpec, render_skill_md_from_spec
 from eawf.skills import (
     _bootstrap as _skills_bootstrap,  # noqa: F401 — import-side-effect registers W02 skills
 )
@@ -248,6 +249,50 @@ def _list_payload() -> dict[str, Any]:
     return {"skills": skills}
 
 
+def _skill_payload(name: SkillName) -> dict[str, Any]:
+    """Build the per-skill row :func:`_list_payload` would emit for *name*.
+
+    Returns the same four keys (``name``, ``status``, ``body_schema``,
+    ``description``) so the ``skill render --format=json`` surface stays
+    aligned with the ``skill list --json`` surface. The caller is
+    expected to splice an additional ``body`` field carrying the
+    canonical SKILL.md text.
+    """
+    registered = registry.lookup(name)
+    body_cls = _SKILL_BODY_MODELS[name]
+    return {
+        "name": name,
+        "status": "installed" if registered is not None else "missing",
+        "body_schema": f"{body_cls.__module__}.{body_cls.__qualname__}",
+        "description": _SKILL_DESCRIPTIONS[name],
+    }
+
+
+def _resolve_skill_spec(name: SkillName) -> SkillSpec:
+    """Return the :class:`SkillSpec` for *name* (slashed canonical form).
+
+    :data:`SKILL_REGISTRY` stores bare skill names (e.g. ``"research"``)
+    but the CLI / :data:`SkillName` literal uses the slashed canonical
+    form (``"/research"``). This helper bridges the two so callers can
+    work in the slashed namespace.
+
+    Raises:
+        cli_errors.InvalidInput: ``name`` has no matching :data:`SkillSpec`
+            entry. This should be unreachable in practice because
+            :func:`_resolve_skill_name` validates the canonical literal
+            BEFORE we land here — the registry and the literal are
+            frozen at the same ten names — but we still raise the
+            canonical error so the surface stays defensive.
+    """
+    bare = name.removeprefix("/")
+    for spec in SKILL_REGISTRY:
+        if spec.skill_name == bare:
+            return spec
+    raise cli_errors.InvalidInput(
+        f"no SkillSpec registered for {name!r}; SKILL_REGISTRY and SkillName drifted"
+    )
+
+
 @skill_app.command(name="list")
 def list_cmd(ctx: typer.Context) -> None:
     """Emit a table of all 10 skills + per-skill status and body schema."""
@@ -258,6 +303,81 @@ def list_cmd(ctx: typer.Context) -> None:
         typer.echo(raw.decode("utf-8"))
         return
     typer.echo(_build_list_table(plain=flags.plain_output))
+
+
+# Frozen set of valid ``--format`` values for the ``render`` command.
+# Centralised so the InvalidInput message lists the exact alternatives
+# the surface accepts; bare ``Literal`` would let Typer auto-coerce but
+# would not give us a stable rejection message for an arbitrary input.
+_RENDER_FORMATS: frozenset[str] = frozenset({"skill-md", "json"})
+
+
+@skill_app.command(name="render")
+def render_cmd(
+    ctx: typer.Context,
+    name: Annotated[
+        str,
+        typer.Argument(
+            help="Skill name to render; e.g. '/research' or 'research'.",
+        ),
+    ],
+    format_: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help=(
+                "Render shape: 'skill-md' for canonical SKILL.md bytes; "
+                "'json' for a metadata+body object."
+            ),
+        ),
+    ] = "skill-md",
+) -> None:
+    """Render a registered skill's metadata or SKILL.md body to stdout.
+
+    ``--format=skill-md`` (the default) prints bytes byte-equal to the
+    SKILL.md emitted by :mod:`eawf.runtimes.claude.plugin_install` for
+    the same skill — the two code paths share the
+    :func:`~eawf.render.skills.render_skill_md_from_spec` helper.
+
+    ``--format=json`` prints a JSON object carrying the same
+    ``name``/``status``/``body_schema``/``description`` keys as one
+    row of ``skill list --json`` plus a ``body`` field holding the
+    canonical SKILL.md string.
+
+    Unknown skill name → :class:`~eawf.cli.errors.InvalidInput`
+    (exit code 3, mirrors :func:`_resolve_skill_name`).
+    Unknown ``--format`` → :class:`~eawf.cli.errors.InvalidInput`
+    (same code), with the canonical alternatives listed in the
+    rejection message.
+    """
+    flags: GlobalFlags = ctx.obj
+
+    try:
+        skill_name = _resolve_skill_name(name)
+        if format_ not in _RENDER_FORMATS:
+            raise cli_errors.InvalidInput(
+                f"unknown --format {format_!r}; expected one of {sorted(_RENDER_FORMATS)}"
+            )
+        spec = _resolve_skill_spec(skill_name)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    body = render_skill_md_from_spec(spec)
+
+    if format_ == "skill-md":
+        # Print SKILL.md bytes verbatim — the body already ends with "\n"
+        # per render_skill_md's normalisation, and typer.echo would
+        # double-newline if we let it append. Pass nl=False to mirror
+        # the byte-equal contract with plugin_install.atomic_write_text.
+        typer.echo(body, nl=False)
+        return
+
+    # format_ == "json"
+    payload = _skill_payload(skill_name)
+    payload["body"] = body
+    raw = orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
+    typer.echo(raw.decode("utf-8"))
 
 
 @skill_app.command(name="run")
@@ -324,6 +444,7 @@ def run_cmd(
 
 __all__ = [
     "list_cmd",
+    "render_cmd",
     "run_cmd",
     "skill_app",
 ]
