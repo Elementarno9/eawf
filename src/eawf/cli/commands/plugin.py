@@ -36,6 +36,15 @@ from eawf.runtimes.claude.plugin_install import (
 )
 from eawf.runtimes.claude.plugin_package import PackageResult, package_plugin
 from eawf.runtimes.claude.plugin_update import UpdateResult, update_plugin
+from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
+from eawf.runtimes.codex import install_plugin as codex_install_plugin
+from eawf.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
+from eawf.runtimes.codex.plugin_install import (
+    InstallResult as CodexInstallResult,
+)
+from eawf.runtimes.codex.plugin_install import (
+    IntegrityViolation as CodexIntegrityViolation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +56,7 @@ plugin_app = typer.Typer(
 )
 
 
-_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude",)
+_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex")
 
 
 def _validate_runtime(runtime: str) -> None:
@@ -111,6 +120,65 @@ def _install_text(result: InstallResult) -> str:
     parts.append(f"  agents:   {len(result.agents)} files")
     parts.append(f"  hooks:    {len(result.hooks)} files")
     parts.append(f"  settings: {result.settings.action if result.settings else 'no-op'}")
+    return "\n".join(parts)
+
+
+def _codex_install_payload(result: CodexInstallResult) -> dict[str, object]:
+    """Render the Codex :class:`InstallResult` as the JSON envelope body."""
+    return {
+        "runtime": "codex",
+        "target_dir": str(result.target_dir),
+        "dry_run": result.dry_run,
+        "skills": [{"path": str(d.path), "action": d.action} for d in result.skills],
+        "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
+        "hooks": [{"path": str(d.path), "action": d.action} for d in result.hooks],
+        "config": (
+            {"path": str(result.config.path), "action": result.config.action}
+            if result.config is not None
+            else None
+        ),
+    }
+
+
+def _codex_install_text(result: CodexInstallResult) -> str:
+    parts = [
+        f"plugin install codex ({'dry-run' if result.dry_run else 'wrote'}) → {result.target_dir}"
+    ]
+    parts.append(f"  skills:  {len(result.skills)} files")
+    parts.append(f"  agents:  {len(result.agents)} files")
+    parts.append(f"  hooks:   {len(result.hooks)} files")
+    parts.append(f"  config:  {result.config.action if result.config else 'no-op'}")
+    return "\n".join(parts)
+
+
+def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
+    """Render the Codex :class:`DoctorReport` as the JSON envelope body."""
+    return {
+        "runtime": "codex",
+        "target_dir": str(report.target_dir),
+        "clean": report.clean,
+        "ok": [{"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.ok],
+        "drifted": [
+            {
+                "region_id": e.region_id,
+                "path": str(e.path),
+                "kind": e.kind,
+                "on_disk_hash": e.on_disk_hash,
+                "expected_hash": e.expected_hash,
+            }
+            for e in report.drifted
+        ],
+        "missing": [
+            {"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.missing
+        ],
+    }
+
+
+def _codex_doctor_text(report: CodexDoctorReport) -> str:
+    parts = [f"plugin doctor codex → {report.target_dir}"]
+    parts.append(
+        f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
+    )
     return "\n".join(parts)
 
 
@@ -185,6 +253,21 @@ def install_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
     target = _resolve_target(flags)
+    if runtime == "codex":
+        try:
+            codex_result = codex_install_plugin(target, force=force, dry_run=dry_run)
+        except CodexIntegrityViolation as exc:
+            cli_errors.emit_error(
+                cli_errors.IntegrityViolation(str(exc)),
+                flags=flags,
+            )
+            return
+        emit_json_or_text(
+            _codex_install_payload(codex_result),
+            _codex_install_text(codex_result),
+            flags=flags,
+        )
+        return
     try:
         result = install_plugin(target, force=force, dry_run=dry_run)
     except IntegrityViolation as exc:
@@ -218,6 +301,15 @@ def update_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+    if runtime == "codex":
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                "plugin update is not yet wired for runtime 'codex'; "
+                "use `eawf plugin install codex --force` instead"
+            ),
+            flags=flags,
+        )
+        return
     target = _resolve_target(flags)
     try:
         result: UpdateResult = update_plugin(target)
@@ -247,6 +339,16 @@ def doctor_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
     target = _resolve_target(flags)
+    if runtime == "codex":
+        codex_report = codex_doctor_plugin(target)
+        emit_json_or_text(
+            _codex_doctor_payload(codex_report),
+            _codex_doctor_text(codex_report),
+            flags=flags,
+        )
+        if not codex_report.clean:
+            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+        return
     report = doctor_plugin(target)
     emit_json_or_text(_doctor_payload(report), _doctor_text(report), flags=flags)
     if not report.clean:
@@ -315,6 +417,14 @@ def package_cmd(
         _validate_runtime(runtime)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
+        return
+    if runtime != "claude":
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"plugin package is currently Claude-only; got runtime={runtime!r}"
+            ),
+            flags=flags,
+        )
         return
     resolved_target = (target or _default_package_target(flags)).resolve()
     try:
