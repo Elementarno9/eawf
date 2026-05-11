@@ -302,6 +302,28 @@ def check_mcp_plugin_owners(state: State) -> Iterable[Violation]:
             )
 
 
+def check_mcp_grant_server_ref(state: State) -> Iterable[Violation]:
+    """Every ``mcp_grants`` row must reference a known MCP server.
+
+    Each :class:`~eawf.state.models.McpGrant` carries a ``server_id`` whose
+    value must appear as a key in :attr:`State.mcp_servers`; otherwise the
+    dispatcher's allowed-tools projection (P10 W03/W04) would emit a
+    ``mcp__<unknown>__*`` glob the runtime can never match. A dangling
+    reference is flagged as ``INV.REF.MCP_GRANT_SERVER_MISSING`` against the
+    ``server_id`` field so callers can pinpoint the offending grant.
+    """
+    if state.mcp_grants is None:
+        return
+    servers = state.mcp_servers or {}
+    for gid, grant in state.mcp_grants.items():
+        if grant.server_id not in servers:
+            yield Violation(
+                code="INV.REF.MCP_GRANT_SERVER_MISSING",
+                path=f"/mcp_grants/{gid}/server_id",
+                message=(f"mcp_grants[{gid!r}].server_id {grant.server_id!r} not in mcp_servers"),
+            )
+
+
 def check_plugin_runtimes(state: State) -> Iterable[Violation]:
     """All ``plugins`` entries must declare ``runtime == "claude"`` in v0.1.
 
@@ -503,6 +525,7 @@ ALL_INVARIANTS: tuple[Invariant, ...] = (
     check_closure_timestamps,
     check_audit_evidence,
     check_mcp_plugin_owners,
+    check_mcp_grant_server_ref,
     check_plugin_runtimes,
     check_scope_consistency,
     check_plugin_owners,

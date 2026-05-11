@@ -365,6 +365,31 @@ class McpServer(_StrictModel):
     installed_targets: list[str] = Field(default_factory=list)
 
 
+class McpGrant(_StrictModel):
+    """Scope-binding between an MCP server and a wave/profile/global scope.
+
+    A grant is the projection key the dispatcher uses to compute
+    ``allowed_tools`` for a runtime: when the dispatched wave matches
+    ``scope_kind="wave"`` / ``scope_id=<wave_id>`` (or a broader scope),
+    the grant's ``server_id`` contributes ``mcp__<server_id>__*`` to the
+    SDK envelope's allowed-tools list. ``server_id`` MUST reference an
+    entry in :attr:`State.mcp_servers`; the referential check lives in
+    :func:`eawf.validate.invariants.check_mcp_grant_server_ref` and emits
+    ``INV.REF.MCP_GRANT_SERVER_MISSING`` when the reference dangles.
+
+    The ``id`` field follows the ``GRANT-<n>`` convention (verified by
+    :mod:`tests.unit.test_state_mcp_grant_model`); it is otherwise an
+    :data:`IdStr` so the schema-level pattern stays additive and the
+    convention can evolve without a schema break.
+    """
+
+    id: IdStr
+    scope_kind: Literal["wave", "profile", "global"]
+    scope_id: str
+    server_id: IdStr
+    granted_at: UtcDatetime
+
+
 class PluginInstall(_StrictModel):
     """Runtime plugin install record (Claude only in v0.1)."""
 
@@ -460,6 +485,7 @@ class State(_StrictModel):
     agent_sessions: dict[str, AgentSession]
     worktrees: dict[str, WorktreeRecord] | None = None
     mcp_servers: dict[str, McpServer] | None = None
+    mcp_grants: dict[str, McpGrant] | None = None
     plugins: dict[str, PluginInstall]
     memory_index: dict[str, MemorySummary] | None = None
     indexes: dict[str, Any]
