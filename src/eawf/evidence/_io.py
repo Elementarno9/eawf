@@ -49,15 +49,11 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "append_jsonl",
-    "args_hash",
     "artifact_urn",
-    "atomic_write_state",
     "event_envelope",
     "kind_envelope",
     "load_state",
-    "now_iso",
     "store_paths",
-    "validate_or_raise",
 ]
 
 
@@ -191,6 +187,6 @@ def kind_envelope(
     )
 
 
-def artifact_urn(scope: str, artifact_id: str) -> str:
-    """Build a canonical ``urn:eawf:v1:artifact:<scope>/<id>`` URN."""
-    return build_urn("artifact", owner=scope, id=artifact_id)
+def artifact_urn(scope_id: str, artifact_id: str) -> str:
+    """Build a canonical ``urn:eawf:v1:artifact:<scope_id>/<id>`` URN."""
+    return build_urn("artifact", owner=scope_id, id=artifact_id)

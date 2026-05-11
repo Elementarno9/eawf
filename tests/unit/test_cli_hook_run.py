@@ -85,7 +85,7 @@ def test_hook_run_emits_canonical_output_envelope_shape() -> None:
     assert set(payload.keys()) == {"header", "body", "footer"}
     assert set(payload["header"].keys()) == {
         "skill",
-        "scope",
+        "scope_id",
         "session",
         "started_at",
         "finished_at",
@@ -116,8 +116,8 @@ def test_hook_run_supports_scope_and_command_options() -> None:
     assert isinstance(env.body, dict)
     assert env.body["scope_id"] == "P04-I01-W04"
     assert env.body["runtime"] == "claude"
-    # The header.scope falls through to the supplied scope_id.
-    assert env.header.scope == "P04-I01-W04"
+    # The header.scope_id falls through to the supplied scope_id.
+    assert env.header.scope_id == "P04-I01-W04"
 
 
 def test_hook_run_help_shows_event_type_argument() -> None:

@@ -41,7 +41,7 @@ def add_artifact(
     artifact_id: str,
     kind: str,
     uri: str,
-    scope: str,
+    scope_id: str,
     sha256: str | None = None,
     size_bytes: int | None = None,
     metadata: dict[str, Any] | None = None,
@@ -58,7 +58,7 @@ def add_artifact(
         id=artifact_id,
         kind=kind,
         uri=uri,
-        urn=_io.artifact_urn(scope, artifact_id),
+        urn=_io.artifact_urn(scope_id, artifact_id),
         sha256=sha256,
         size_bytes=size_bytes,
         created_at=now,
@@ -70,7 +70,7 @@ def add_artifact(
 
     return _io.event_envelope(
         event_id=f"EVT-artifact-add-{artifact_id}-{int(now.timestamp() * 1000)}",
-        scope_id=scope,
+        scope_id=scope_id,
         event_type="artifact.add",
         actor="cli",
         command="artifact add",

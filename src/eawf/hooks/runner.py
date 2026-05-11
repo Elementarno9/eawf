@@ -211,7 +211,7 @@ _HOOK_RESULT_FIELDS_EXPECTED: frozenset[str] = frozenset(
 )
 if _HOOK_RESULT_FIELDS != _HOOK_RESULT_FIELDS_EXPECTED:  # pragma: no cover - boot guard
     raise RuntimeError(
-        "HookResult fields drift; update _HOOK_RESULT_FIELDS_EXPECTED and bump the consumers."
+        "hook result fields drift; update _HOOK_RESULT_FIELDS_EXPECTED and bump the consumers"
     )
 
 

@@ -104,7 +104,7 @@ def branch_exists(repo: Path, name: str) -> bool:
     res = _run(["git", "-C", str(repo), "branch", "--list", name])
     if res.returncode != 0:
         # `git branch --list` only fails for invalid argv; treat as "no".
-        logger.warning(f"branch_exists: rc={res.returncode} stderr={res.stderr!r}")
+        logger.warning(f"branch_exists rc={res.returncode} stderr={res.stderr!r}")
         return False
     # Output is one line per match; non-empty means the branch exists.
     return bool(res.stdout.strip())

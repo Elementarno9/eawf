@@ -2,7 +2,7 @@
 
 Eä commands and skills exchange a structured envelope with three parts:
 
-- ``header`` — typed :class:`EnvelopeHeader` carrying ``skill``, ``scope``,
+- ``header`` — typed :class:`EnvelopeHeader` carrying ``skill``, ``scope_id``,
   ``session``, ``started_at``/``finished_at``, ``status``, and
   ``instrument_probe``. Frozen at Phase 4 W01.
 - ``body`` — free-form payload. The payload is either a markdown string
@@ -89,7 +89,7 @@ class EnvelopeHeader(BaseModel):
 
     Attributes:
         skill: Frozen literal of the skill that produced the envelope.
-        scope: Eä URN for the active state scope.
+        scope_id: Eä URN for the active state scope.
         session: Eä URN for the agent session that produced the envelope.
         started_at: When the skill began running.
         finished_at: When the skill finished (must be ``>= started_at``).
@@ -100,7 +100,7 @@ class EnvelopeHeader(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     skill: SkillName
-    scope: str
+    scope_id: str
     session: str
     started_at: datetime
     finished_at: datetime

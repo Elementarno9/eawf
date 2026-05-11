@@ -15,8 +15,6 @@ Mutators take a typed :class:`State` and mutate it in place; the CLI handler
 runs them inside :func:`eawf.cli._mutation.state_transaction`.
 """
 
-# TODO(Phase 4): full check-runner replaces the fixture-driven stub in `run`.
-
 from __future__ import annotations
 
 import logging

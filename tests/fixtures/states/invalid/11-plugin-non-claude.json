@@ -27,7 +27,7 @@
       "id": "opencode",
       "owner": "eawf",
       "runtime": "opencode",
-      "scope": "user",
+      "scope_id": "user",
       "target_path": "~/.config/opencode",
       "status": "installed",
       "managed_files": [],

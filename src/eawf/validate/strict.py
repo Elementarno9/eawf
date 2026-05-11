@@ -109,7 +109,7 @@ def validate_state(payload: dict[str, Any], *, strict_optional: bool = False) ->
         state = State.model_validate(payload)
     except ValidationError as exc:
         schema_errors = [_format_pydantic_error(e) for e in exc.errors()]
-        logger.debug(f"schema validation failed with {len(schema_errors)} error(s)")
+        logger.debug(f"validate_state schema_errors={len(schema_errors)}")
         return ValidationReport(
             state=None,
             schema_errors=schema_errors,
@@ -120,7 +120,7 @@ def validate_state(payload: dict[str, Any], *, strict_optional: bool = False) ->
         violations.extend(invariant(state))
     if strict_optional:
         violations.extend(_strict_optional_violations(state))
-    logger.debug(f"invariant pass: {len(violations)} violation(s)")
+    logger.debug(f"validate_state violations={len(violations)}")
     return ValidationReport(state=state, schema_errors=[], violations=violations)
 
 
@@ -204,14 +204,14 @@ def validate_envelope(payload: dict[str, Any]) -> EnvelopeValidationReport:
         envelope = OutputEnvelope.model_validate(payload)
     except ValidationError as exc:
         schema_errors = [_format_pydantic_error(e) for e in exc.errors()]
-        logger.debug(f"envelope schema validation failed with {len(schema_errors)} error(s)")
+        logger.debug(f"validate_envelope schema_errors={len(schema_errors)}")
         return EnvelopeValidationReport(
             envelope=None,
             schema_errors=schema_errors,
             contract_errors=[],
         )
     contract_errors = _envelope_contract_errors(envelope)
-    logger.debug(f"envelope contract pass: {len(contract_errors)} error(s)")
+    logger.debug(f"validate_envelope contract_errors={len(contract_errors)}")
     return EnvelopeValidationReport(
         envelope=envelope,
         schema_errors=[],

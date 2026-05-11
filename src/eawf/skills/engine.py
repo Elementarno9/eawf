@@ -186,7 +186,7 @@ def _build_envelope(
     """
     header = EnvelopeHeader(
         skill=skill_name,
-        scope=ctx.scope,
+        scope_id=ctx.scope,
         session=ctx.session,
         started_at=started_at,
         finished_at=finished_at,

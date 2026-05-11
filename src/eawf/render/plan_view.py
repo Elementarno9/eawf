@@ -302,7 +302,7 @@ def _parse_check_result(
     if not isinstance(name, str) or not isinstance(passed, bool):
         logger.warning(
             f"plan_view: skipping malformed check_result audit_id={audit_id!r} "
-            f"wave_id={wave_id!r} raw={raw!r}"
+            f"wave={wave_id!r} raw={raw!r}"
         )
         return None
     if details is not None and not isinstance(details, str):

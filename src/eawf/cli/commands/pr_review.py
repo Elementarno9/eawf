@@ -280,7 +280,7 @@ def _attach_findings(
                 artifact_id=artifact_id,
                 kind="review_findings",
                 uri=artifact_uri,
-                scope=scope_id,
+                scope_id=scope_id,
                 sha256=artifact_sha,
                 size_bytes=artifact_size,
                 metadata={

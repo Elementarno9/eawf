@@ -100,7 +100,8 @@ def _smallest_free_suffix(used: set[int]) -> int:
 def allocate_next_phase_id(existing: set[str]) -> str:
     """Return the smallest free phase ID not present in ``existing``.
 
-    Raises ``ValueError`` if all 99 suffixes are taken.
+    Raises:
+        ValueError: When all 99 suffixes are taken.
     """
     used: set[int] = set()
     for pid in existing:
@@ -112,8 +113,9 @@ def allocate_next_phase_id(existing: set[str]) -> str:
 def allocate_next_iter_id(phase_id: str, existing: set[str]) -> str:
     """Return the smallest free iter ID under ``phase_id`` not in ``existing``.
 
-    Raises ``ValueError`` if ``phase_id`` is not a valid phase ID, or if
-    all 99 iter suffixes are taken.
+    Raises:
+        ValueError: When ``phase_id`` is not a valid phase ID, or when
+            all 99 iter suffixes are taken.
     """
     if not is_phase_id(phase_id):
         raise ValueError(f"invalid phase id: {phase_id!r}")
@@ -128,8 +130,9 @@ def allocate_next_iter_id(phase_id: str, existing: set[str]) -> str:
 def allocate_next_wave_id(iter_id: str, existing: set[str]) -> str:
     """Return the smallest free wave ID under ``iter_id`` not in ``existing``.
 
-    Raises ``ValueError`` if ``iter_id`` is not a valid iter ID, or if
-    all 99 wave suffixes are taken.
+    Raises:
+        ValueError: When ``iter_id`` is not a valid iter ID, or when
+            all 99 wave suffixes are taken.
     """
     if not is_iter_id(iter_id):
         raise ValueError(f"invalid iter id: {iter_id!r}")

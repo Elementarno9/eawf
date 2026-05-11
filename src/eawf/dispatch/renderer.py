@@ -219,7 +219,7 @@ def render_wave_prompt(
     _ = repo_root  # accepted for API symmetry; not consumed in v0.1
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise KeyError(f"unknown wave: {wave_id}")
+        raise KeyError(f"unknown wave: {wave_id!r}")
 
     scope_id = _resolve_scope_for_wave(state, wave)
 

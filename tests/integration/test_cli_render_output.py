@@ -24,7 +24,7 @@ _ENVELOPE_JSON: str = json.dumps(
     {
         "header": {
             "skill": "/research",
-            "scope": "urn:eawf:v1:state:QR/P00",
+            "scope_id": "urn:eawf:v1:state:QR/P00",
             "session": "urn:eawf:v1:store:QR/sessions/SES-001",
             "started_at": "2026-05-09T00:00:00Z",
             "finished_at": "2026-05-09T00:00:01Z",

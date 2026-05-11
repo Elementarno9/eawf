@@ -12,7 +12,7 @@
     "instrument_probe": {
       "git": "ok"
     },
-    "scope": "urn:eawf:v1:state:QR/P00-I01",
+    "scope_id": "urn:eawf:v1:state:QR/P00-I01",
     "session": "urn:eawf:v1:store:QR/sessions/SES-004",
     "skill": "/audit",
     "started_at": "2026-05-09T00:00:00Z",

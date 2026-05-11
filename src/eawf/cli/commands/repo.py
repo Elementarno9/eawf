@@ -169,7 +169,12 @@ def repo_init_cmd(
 
 
 def _load_workspace_payload(workspace_state_path: Path) -> dict[str, Any]:
-    """Load + JSON-decode *workspace_state_path*. Raises :class:`NotFound`."""
+    """Load + JSON-decode *workspace_state_path*.
+
+    Raises:
+        NotFound: When the workspace state file is absent.
+        IntegrityViolation: When the file content is not valid JSON.
+    """
     if not workspace_state_path.exists():
         raise cli_errors.NotFound(f"workspace state file not found: {workspace_state_path}")
     try:
@@ -181,7 +186,12 @@ def _load_workspace_payload(workspace_state_path: Path) -> dict[str, Any]:
 
 
 def _load_repo_payload(repo_state_path: Path) -> dict[str, Any]:
-    """Load + JSON-decode *repo_state_path*. Raises :class:`NotFound`."""
+    """Load + JSON-decode *repo_state_path*.
+
+    Raises:
+        NotFound: When the repo state file is absent.
+        IntegrityViolation: When the file content is not valid JSON.
+    """
     if not repo_state_path.exists():
         raise cli_errors.NotFound(f"repo state file not found: {repo_state_path}")
     try:

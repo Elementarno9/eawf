@@ -32,7 +32,7 @@
       "id": "p1",
       "owner": "user",
       "runtime": "claude",
-      "scope": "user",
+      "scope_id": "user",
       "target_path": "/tmp/whatever",
       "status": "installed",
       "managed_files": [],

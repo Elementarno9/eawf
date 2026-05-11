@@ -35,6 +35,7 @@ _NAMES: dict[int, str] = {
 def name_for(code: int) -> str:
     """Return the canonical name for *code*.
 
-    Raises :class:`KeyError` for codes outside the canonical 0-9 range.
+    Raises:
+        KeyError: When *code* falls outside the canonical 0-9 range.
     """
     return _NAMES[code]

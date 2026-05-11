@@ -401,7 +401,7 @@ class PluginInstall(_StrictModel):
     id: IdStr
     owner: str
     runtime: str
-    scope: str
+    scope_id: str
     target_path: str
     status: PluginInstallStatus
     managed_files: list[str] = Field(default_factory=list)

@@ -269,7 +269,7 @@ def check_render_output_roundtrip() -> CheckResult:
         {
             "header": {
                 "skill": "/init",
-                "scope": "urn:eawf:v1:state:doctor",
+                "scope_id": "urn:eawf:v1:state:doctor",
                 "session": "urn:eawf:v1:store:doctor/sessions/SES-doctor",
                 "started_at": "2026-05-09T00:00:00Z",
                 "finished_at": "2026-05-09T00:00:01Z",

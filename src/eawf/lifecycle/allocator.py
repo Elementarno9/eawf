@@ -19,8 +19,6 @@ from eawf.state.ids import (
     allocate_next_iter_id,
     allocate_next_phase_id,
     allocate_next_wave_id,
-    is_iter_id,
-    is_phase_id,
 )
 from eawf.state.models import State
 
@@ -31,8 +29,10 @@ def allocate_phase_id(state: State) -> str:
     """Return the smallest free phase id (e.g. ``P01``).
 
     The candidate set is ``state.phases.keys()``; the helper returns the
-    smallest two-digit-padded suffix not already present. Raises
-    :class:`ValueError` when all 99 suffixes are taken.
+    smallest two-digit-padded suffix not already present.
+
+    Raises:
+        ValueError: When all 99 suffixes are taken.
     """
     existing = set(state.phases.keys())
     pid = allocate_next_phase_id(existing)
@@ -43,11 +43,11 @@ def allocate_phase_id(state: State) -> str:
 def allocate_iter_id(state: State, phase_id: str) -> str:
     """Return the smallest free iter id under *phase_id* (e.g. ``P01-I01``).
 
-    Raises :class:`ValueError` when ``phase_id`` is not a valid phase id or
-    when all 99 iter suffixes are taken.
+    Raises:
+        ValueError: When ``phase_id`` is not a valid phase id or when all
+            99 iter suffixes are taken. The phase-id check is delegated
+            to :func:`eawf.state.ids.allocate_next_iter_id`.
     """
-    if not is_phase_id(phase_id):
-        raise ValueError(f"invalid phase id: {phase_id!r}")
     existing = set(state.iters.keys())
     iid = allocate_next_iter_id(phase_id, existing)
     logger.debug(f"allocate_iter_id phase={phase_id} → {iid}")
@@ -57,11 +57,11 @@ def allocate_iter_id(state: State, phase_id: str) -> str:
 def allocate_wave_id(state: State, iter_id: str) -> str:
     """Return the smallest free wave id under *iter_id* (e.g. ``P01-I01-W01``).
 
-    Raises :class:`ValueError` when ``iter_id`` is not a valid iter id or
-    when all 99 wave suffixes are taken.
+    Raises:
+        ValueError: When ``iter_id`` is not a valid iter id or when all
+            99 wave suffixes are taken. The iter-id check is delegated
+            to :func:`eawf.state.ids.allocate_next_wave_id`.
     """
-    if not is_iter_id(iter_id):
-        raise ValueError(f"invalid iter id: {iter_id!r}")
     existing = set(state.waves.keys())
     wid = allocate_next_wave_id(iter_id, existing)
     logger.debug(f"allocate_wave_id iter={iter_id} → {wid}")

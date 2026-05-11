@@ -26,7 +26,7 @@
     "instrument_probe": {
       "git": "ok"
     },
-    "scope": "urn:eawf:v1:state:QR/P00",
+    "scope_id": "urn:eawf:v1:state:QR/P00",
     "session": "urn:eawf:v1:store:QR/sessions/SES-002",
     "skill": "/research",
     "started_at": "2026-05-09T00:00:00Z",
