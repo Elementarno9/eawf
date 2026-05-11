@@ -20,6 +20,12 @@ disable-model-invocation: true
 - [ ] The auditor must NOT have access to the parent conversation.
 - [ ] Every quantitative claim must include `Read`/`Grep` evidence.
 
+## Decision surfaces
+
+On `pass-with-followups`: present the follow-up disposition (open
+backlog, open wave, defer) through `AskUserQuestion`. On `fail`:
+ask whether to halt the flow or open a remediation wave.
+
 ## Output contract
 
 Skill envelope with a per-criterion verdict table and an aggregate

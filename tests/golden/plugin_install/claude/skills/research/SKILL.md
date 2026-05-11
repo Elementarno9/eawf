@@ -23,6 +23,12 @@ disable-model-invocation: true
 - [ ] Cite sources by `path:line` or external URL.
 - [ ] Distinguish "what the code does" from "what the doc claims".
 
+## Decision surfaces
+
+When the verdict reduces to a small set of named alternatives, surface
+the choice through `AskUserQuestion` rather than free-text — the
+operator can pick without retyping the option labels.
+
 ## Output contract
 
 Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill =
