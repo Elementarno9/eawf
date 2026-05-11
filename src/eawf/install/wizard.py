@@ -236,7 +236,7 @@ def _pre_existing_canonical_files(ea_dir: Path) -> list[str]:
 def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, Any]:
     """Build a minimal-but-valid ``state.json`` payload for a fresh init.
 
-    Mirrors the shape used by :func:`eawf.cli.commands.lifecycle.project_init`
+    Mirrors the shape used by :func:`eawf.cli.commands.lifecycle.project_init_cmd`
     so the two entry-points produce identical state files. We deliberately
     do NOT instantiate a :class:`~eawf.state.models.Project` here — the
     project record requires ``domains`` which the wizard does not collect,

@@ -35,6 +35,7 @@ target) exit 3, and anything that is genuinely a missing scope/state exits 2.
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import logging
 import os
@@ -309,7 +310,7 @@ def _empty_state_dict(*, project_code: str, project_payload: dict[str, Any]) -> 
 
 
 @project_app.command("init")
-def project_init(
+def project_init_cmd(
     ctx: typer.Context,
     code: Annotated[str, typer.Argument(help="Project code (uppercase, alnum/dash).")],
     title: Annotated[str, typer.Option("--title", help="Human-readable project title.")],
@@ -1017,7 +1018,7 @@ def _topo_order_with_depth(waves: list[tuple[str, list[str]]]) -> list[tuple[str
             if in_degree[child] == 0:
                 depth[child] = max(depth[child], depth[node] + 1)
                 # Insert in sort order so the next pop stays deterministic.
-                _insort(ready, child)
+                bisect.insort(ready, child)
             else:
                 depth[child] = max(depth[child], depth[node] + 1)
     # Any nodes left unprocessed (cycles) get appended at the end in id order
@@ -1027,18 +1028,6 @@ def _topo_order_with_depth(waves: list[tuple[str, list[str]]]) -> list[tuple[str
     for wid in remaining:
         order.append((wid, depth[wid]))
     return order
-
-
-def _insort(target: list[str], item: str) -> None:
-    """In-place sorted insert (avoids importing bisect for one call)."""
-    lo, hi = 0, len(target)
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if target[mid] < item:
-            lo = mid + 1
-        else:
-            hi = mid
-    target.insert(lo, item)
 
 
 @wave_app.command("graph")
