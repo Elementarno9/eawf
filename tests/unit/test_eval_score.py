@@ -43,10 +43,7 @@ def _envelope(
     can flip individual scoring inputs without touching the rest.
     """
     base_body: dict[str, Any] | str = {"alpha": 1, "beta": 2} if body is None else body
-    warnings = [
-        {"code": f"warn{i}", "detail": f"detail-{i}"}
-        for i in range(warnings_count)
-    ]
+    warnings = [{"code": f"warn{i}", "detail": f"detail-{i}"} for i in range(warnings_count)]
     repair_commands = [f"repair-cmd-{i}" for i in range(repair_commands_count)]
     payload: dict[str, Any] = {
         "header": {
