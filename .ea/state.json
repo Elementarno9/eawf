@@ -682,11 +682,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P10-I01-W01",
-      "P10-I01-W02",
-      "P10-I01-W03"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P10-I01",
     "phase_id": "P10",
     "project_code": "EAWF",
@@ -870,6 +866,7 @@
       ]
     }
   },
+  "mcp_grants": null,
   "mcp_servers": null,
   "memory_index": null,
   "outcomes": null,
@@ -1031,7 +1028,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T10:21:31.283777Z",
+  "updated_at": "2026-05-11T10:43:11.955377Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1265,8 +1262,8 @@
         "P10-I01-W04"
       ],
       "claim_session_id": "p10-flow-w01",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T10:43:00.505929Z",
+      "commit": "1a842fc",
       "deps": [],
       "file_scopes": [
         "src/eawf/cli/commands/skill.py",
@@ -1277,8 +1274,8 @@
       "id": "P10-I01-W01",
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:48.876900Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "skill render command (B024): render_skill_md_from_spec helper, --format=skill-md|json, byte-equal to plugin_install render",
+      "status": "closed",
       "title": "Skill render command",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1289,8 +1286,8 @@
         "P10-I01-W04"
       ],
       "claim_session_id": "p10-flow-w02",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T10:43:01.565652Z",
+      "commit": "3fcdfa6",
       "deps": [],
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -1304,8 +1301,8 @@
       "id": "P10-I01-W02",
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:50.323650Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "mcp_grants table + grant/revoke CLI + INV.REF.MCP_GRANT_SERVER_MISSING invariant + schema regen (B035)",
+      "status": "closed",
       "title": "MCP grants state table + CLI",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1316,8 +1313,8 @@
         "P10-I01-W04"
       ],
       "claim_session_id": "p10-flow-w03",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T10:43:02.296715Z",
+      "commit": "6766d07",
       "deps": [],
       "file_scopes": [
         "src/eawf/mcp/installer.py",
@@ -1329,8 +1326,8 @@
       "id": "P10-I01-W03",
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:51.534514Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "claude-agent-sdk dispatch adapter: render_dispatch_envelope pure-fn + --runtime CLI flag, no new runtime deps",
+      "status": "closed",
       "title": "claude-agent-sdk dispatch adapter",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1437,7 +1434,7 @@
       "merged_commit": null,
       "owner_session_id": "p10-flow-w01",
       "path": ".claude/worktrees/p10-w01",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P10-I01-W01"
     },
     "WT-P10-I01-W02-1778494890": {
@@ -1448,7 +1445,7 @@
       "merged_commit": null,
       "owner_session_id": "p10-flow-w02",
       "path": ".claude/worktrees/p10-w02",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P10-I01-W02"
     },
     "WT-P10-I01-W03-1778494891": {
@@ -1459,7 +1456,7 @@
       "merged_commit": null,
       "owner_session_id": "p10-flow-w03",
       "path": ".claude/worktrees/p10-w03",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P10-I01-W03"
     }
   }
