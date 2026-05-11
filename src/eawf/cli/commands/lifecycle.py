@@ -88,7 +88,14 @@ from eawf.lifecycle.transitions import (
     switch_subproject,
 )
 from eawf.lock import portalock
-from eawf.state.enums import ProjectStatus, ScopeKind, StoreKind, WaveStatus
+from eawf.state.enums import (
+    AuditVerdict,
+    IterStatus,
+    ProjectStatus,
+    ScopeKind,
+    StoreKind,
+    WaveStatus,
+)
 from eawf.state.ids import (
     is_iter_id,
     is_phase_id,
@@ -570,7 +577,168 @@ def phase_close_cmd(
     )
 
 
+def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, Any]:
+    """Compute a structured pre-close checklist for *phase_id*.
+
+    Items: open iters, open waves, audit linkage, waves missing commit/outcome.
+    The handler renders ``ok=True`` only when every blocking item resolves to
+    empty.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase: {phase_id!r}")
+    open_iters = sorted(
+        iid
+        for iid, it in state.iters.items()
+        if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
+    )
+    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    open_waves = sorted(
+        wid
+        for wid, w in state.waves.items()
+        if w.iter_id in iter_ids_in_phase
+        and w.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
+    )
+    closed_waves_missing_commit = sorted(
+        wid
+        for wid, w in state.waves.items()
+        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED and not w.commit
+    )
+    iters_without_audit = sorted(
+        iid
+        for iid, it in state.iters.items()
+        if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+    )
+    blockers = (
+        bool(open_iters)
+        or bool(open_waves)
+        or bool(closed_waves_missing_commit)
+        or bool(iters_without_audit)
+    )
+    return {
+        "phase": phase_id,
+        "phase_status": phase.status.value,
+        "open_iters": open_iters,
+        "open_waves": open_waves,
+        "closed_waves_missing_commit": closed_waves_missing_commit,
+        "iters_without_audit": iters_without_audit,
+        "ok": not blockers,
+    }
+
+
+@phase_app.command("prepare-close")
+def phase_prepare_close_cmd(
+    ctx: typer.Context,
+    phase_id: Annotated[str, typer.Argument(help="Phase ID to prepare for close.")],
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run/--no-dry-run", help="Skip event emission.")
+    ] = True,
+) -> None:
+    """Compute a pre-close checklist for *phase_id* without closing it.
+
+    Read-only by default; pass ``--no-dry-run`` to emit a ``phase prepare-close``
+    event into the JSONL store. ``state.json`` is never mutated by this command.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_phase_id(phase_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return
+    if not state_path.exists():
+        cli_errors.emit_error(
+            cli_errors.NotFound(f"state file not found: {state_path}"),
+            flags=flags,
+        )
+        return
+    try:
+        payload = _read_state_payload(state_path)
+        state = State.model_validate(payload)
+    except PydValidationError as exc:
+        cli_errors.emit_error(
+            cli_errors.IntegrityViolation(f"state at {state_path} fails schema validation: {exc}"),
+            flags=flags,
+        )
+        return
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    try:
+        checklist = _phase_prepare_close_checklist(state, phase_id=phase_id)
+    except LifecycleError as exc:
+        cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+        return
+    if not dry_run:
+        version = _state_version(payload)
+        events_path = store_path(state_path, StoreKind.EVENT)
+        _append_event(
+            events_path,
+            command="phase prepare-close",
+            args={"phase_id": phase_id, "dry_run": False},
+            scope_id=phase_id,
+            before_version=version,
+            after_version=version,
+            summary=f"phase prepare-close {phase_id} ok={checklist['ok']}",
+        )
+    text = (
+        f"phase prepare-close {phase_id} ok={checklist['ok']} "
+        f"open_iters={len(checklist['open_iters'])} "
+        f"open_waves={len(checklist['open_waves'])}"
+    )
+    emit_json_or_text(checklist, text, flags=flags)
+
+
 # ---- Iter handlers ----------------------------------------------------------
+
+
+def _compute_iter_bump_hints(state: State, *, phase_id: str) -> list[str]:
+    """Heuristic D17 trigger detection. Returns a list of hint tags.
+
+    Triggers:
+    - ``previous_iter_audit_failed``: any closed iter in *phase_id* whose
+      audit verdict is not ``pass``.
+    - ``wave_with_many_blockers``: any active wave in the phase has
+      more than 3 unresolved deps (deps that are not in ``closed`` status).
+    - ``phase_scope_expanded``: phase already has at least one closed
+      iter AND its total wave count exceeds 6.
+    """
+    hints: list[str] = []
+    iter_ids = [iid for iid, it in state.iters.items() if it.phase_id == phase_id]
+    closed_iters = [
+        state.iters[iid] for iid in iter_ids if state.iters[iid].status == IterStatus.CLOSED
+    ]
+    audits = state.audits or {}
+    for it in closed_iters:
+        if it.audit_id is None:
+            continue
+        audit = audits.get(it.audit_id)
+        if audit is None or audit.verdict is None:
+            continue
+        if audit.verdict != AuditVerdict.PASS:
+            hints.append("previous_iter_audit_failed")
+            break
+    phase_wave_ids = [wid for wid, w in state.waves.items() if w.iter_id in set(iter_ids)]
+    for wid in phase_wave_ids:
+        w = state.waves[wid]
+        if w.status not in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+            continue
+        unresolved = [
+            d
+            for d in w.deps
+            if state.waves.get(d) is not None and state.waves[d].status != WaveStatus.CLOSED
+        ]
+        if len(unresolved) > 3:
+            hints.append("wave_with_many_blockers")
+            break
+    if len(closed_iters) >= 1 and len(phase_wave_ids) > 6:
+        hints.append("phase_scope_expanded")
+    return hints
 
 
 @iter_app.command("open")
@@ -633,19 +801,30 @@ def iter_open_cmd(
         )
         return
 
-    chosen: dict[str, str] = {}
+    chosen: dict[str, Any] = {}
 
     def _mutator(state: State) -> None:
         target_iter = (
             explicit_iter if explicit_iter is not None else allocate_iter_id(state, explicit_phase)
         )
         chosen["id"] = target_iter
+        chosen["hints"] = _compute_iter_bump_hints(state, phase_id=explicit_phase)
         open_iter(
             state,
             iter_id=target_iter,
             phase_id=explicit_phase,
             title=title,
         )
+
+    def _text() -> str:
+        hint_suffix = f" hints={','.join(chosen['hints'])}" if chosen.get("hints") else ""
+        return f"iter open {chosen['id']} title={title!r}{hint_suffix}"
+
+    def _envelope() -> dict[str, Any]:
+        env: dict[str, Any] = {"iter": chosen["id"], "title": title}
+        if chosen.get("hints"):
+            env["hints"] = list(chosen["hints"])
+        return env
 
     _run_mutation(
         ctx,
@@ -656,8 +835,8 @@ def iter_open_cmd(
             "title": title,
         },
         scope_id_factory=lambda: chosen["id"],
-        text_factory=lambda: f"iter open {chosen['id']} title={title!r}",
-        envelope_factory=lambda: {"iter": chosen["id"], "title": title},
+        text_factory=_text,
+        envelope_factory=_envelope,
         mutate=_mutator,
     )
 
