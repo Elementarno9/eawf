@@ -293,6 +293,12 @@ from eawf.cli.commands.impact import impact_cmd  # noqa: E402
 app.command(name="impact", help="Render decision → wave → file-glob impact graph.")(impact_cmd)
 # --- end P12 W07 ---
 
+# --- P14 W05 profile registration (new + validate + TOFU trust ledger) ---
+from eawf.cli.commands.profile import profile_app  # noqa: E402
+
+app.add_typer(profile_app, name="profile")
+# --- end P14 W05 ---
+
 
 def main() -> None:
     app()
