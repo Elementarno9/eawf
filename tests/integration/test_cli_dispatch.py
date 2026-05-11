@@ -20,7 +20,7 @@ def test_version_json_envelope_round_trips() -> None:
     result = runner.invoke(app, ["--json", "version"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["version"].startswith("0.1.0")
+    assert payload["version"].startswith("0.2.0")
 
 
 def test_unknown_command_exits_with_code_2() -> None:
@@ -33,20 +33,20 @@ def test_bare_invocation_prints_banner() -> None:
     """``eawf`` with no subcommand emits the package-version banner."""
     result = runner.invoke(app, [])
     assert result.exit_code == 0
-    assert "eawf 0.1.0" in result.stdout
+    assert "eawf 0.2.0" in result.stdout
 
 
 def test_version_text_envelope() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "eawf 0.1.0" in result.stdout
+    assert "eawf 0.2.0" in result.stdout
 
 
 def test_version_flag_short_circuits() -> None:
     """The ``--version`` eager flag exits before any subcommand runs."""
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.stdout
+    assert "0.2.0" in result.stdout
 
 
 def test_validate_subcommand_still_registered() -> None:
