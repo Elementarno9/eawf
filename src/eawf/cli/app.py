@@ -178,6 +178,12 @@ from eawf.cli.commands.doctor import doctor_app  # noqa: E402
 app.add_typer(doctor_app, name="doctor")
 # --- end P03 W01 ---
 
+# --- P12 W03 doc-drift linter registration ---
+from eawf.cli.commands.doc import doc_app  # noqa: E402
+
+app.add_typer(doc_app, name="doc")
+# --- end P12 W03 ---
+
 # --- P03 W05 init registration ---
 from eawf.cli.commands.init import init_cmd  # noqa: E402
 
