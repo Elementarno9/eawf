@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.sandbox.policy import SandboxPolicy
 from eawf.state.enums import (
     ActualStatus,
     AgentSessionRole,
@@ -491,6 +492,7 @@ class State(_StrictModel):
     worktrees: dict[str, WorktreeRecord] | None = None
     mcp_servers: dict[str, McpServer] | None = None
     mcp_grants: dict[str, McpGrant] | None = None
+    sandbox_policies: dict[str, SandboxPolicy] | None = None
     plugins: dict[str, PluginInstall]
     memory_index: dict[str, MemorySummary] | None = None
     indexes: dict[str, Any]

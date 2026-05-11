@@ -725,7 +725,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P12-I01-W05"
+      "P12-I01-W06"
     ],
     "iter_id": "P12-I01",
     "phase_id": "P12",
@@ -1131,10 +1131,24 @@
     "status": "active",
     "title": "Eä Workflow"
   },
+  "sandbox_policies": {
+    "POL-1": {
+      "allowed_tools": [
+        "Read",
+        "Edit",
+        "Bash"
+      ],
+      "denied_tools": [],
+      "granted_at": "2026-05-11T13:20:53.395685Z",
+      "id": "POL-1",
+      "scope_id": "P12-I01-W01",
+      "scope_kind": "wave"
+    }
+  },
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T13:18:41.513254Z",
+  "updated_at": "2026-05-11T13:22:20.583695Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1622,8 +1636,8 @@
     "P12-I01-W05": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T13:19:04.760498Z",
+      "commit": "835437f",
       "deps": [],
       "file_scopes": [
         "tests/eval/**",
@@ -1632,8 +1646,8 @@
       "id": "P12-I01-W05",
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.040533Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Skill eval harness (6 golden envelopes + pytest -m eval gate)",
+      "status": "closed",
       "title": "B033 skill eval harness",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1641,7 +1655,7 @@
     },
     "P12-I01-W06": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1658,7 +1672,7 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.441254Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B034 sandbox policy",
       "token_budget": null,
       "tokens_consumed": 0,

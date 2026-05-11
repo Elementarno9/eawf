@@ -1605,6 +1605,59 @@
       "title": "ProjectStatus",
       "type": "string"
     },
+    "SandboxPolicy": {
+      "additionalProperties": false,
+      "description": "Scope-binding between a wave/profile/global scope and a tool list.\n\nStrict shape — unknown keys are rejected so state-level corruption is\ncaught at load time.",
+      "properties": {
+        "allowed_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Tools",
+          "type": "array"
+        },
+        "denied_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Denied Tools",
+          "type": "array"
+        },
+        "granted_at": {
+          "format": "date-time",
+          "title": "Granted At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "scope_id": {
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_kind": {
+          "enum": [
+            "wave",
+            "profile",
+            "global"
+          ],
+          "title": "Scope Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_kind",
+        "scope_id",
+        "granted_at"
+      ],
+      "title": "SandboxPolicy",
+      "type": "object"
+    },
     "ScopeKind": {
       "enum": [
         "repo",
@@ -2248,6 +2301,21 @@
           "type": "null"
         }
       ]
+    },
+    "sandbox_policies": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/SandboxPolicy"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sandbox Policies"
     },
     "schema_version": {
       "const": "1.0",

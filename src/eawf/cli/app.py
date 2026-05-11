@@ -284,6 +284,11 @@ from eawf.cli.commands import pr_review as _pr_review  # noqa: E402, F401
 
 # --- end P08 W06 ---
 
+# --- P12 W06 sandbox policy registration ---
+from eawf.cli.commands import wave_policy as _wave_policy  # noqa: E402, F401
+
+# --- end P12 W06 ---
+
 
 def main() -> None:
     app()

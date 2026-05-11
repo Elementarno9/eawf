@@ -324,6 +324,33 @@ def check_mcp_grant_server_ref(state: State) -> Iterable[Violation]:
             )
 
 
+def check_sandbox_policy_scope_ref(state: State) -> Iterable[Violation]:
+    """Every ``sandbox_policies`` row must reference an existing scope.
+
+    A :class:`~eawf.sandbox.policy.SandboxPolicy` with ``scope_kind="wave"``
+    must reference a wave id present in :attr:`State.waves`; the
+    ``"profile"`` and ``"global"`` shapes are free-form strings in v0.2
+    (profile composition is config-side; ``"global"`` is the literal scope).
+    Dangling wave references are flagged as
+    ``INV.REF.SANDBOX_POLICY_SCOPE_MISSING``.
+    """
+    if state.sandbox_policies is None:
+        return
+    waves = state.waves or {}
+    for pid, policy in state.sandbox_policies.items():
+        if policy.scope_kind != "wave":
+            continue
+        if policy.scope_id not in waves:
+            yield Violation(
+                code="INV.REF.SANDBOX_POLICY_SCOPE_MISSING",
+                path=f"/sandbox_policies/{pid}/scope_id",
+                message=(
+                    f"sandbox_policies[{pid!r}].scope_id {policy.scope_id!r} "
+                    f"not in waves (scope_kind=wave)"
+                ),
+            )
+
+
 def check_plugin_runtimes(state: State) -> Iterable[Violation]:
     """All ``plugins`` entries must declare ``runtime == "claude"`` in v0.1.
 
@@ -526,6 +553,7 @@ ALL_INVARIANTS: tuple[Invariant, ...] = (
     check_audit_evidence,
     check_mcp_plugin_owners,
     check_mcp_grant_server_ref,
+    check_sandbox_policy_scope_ref,
     check_plugin_runtimes,
     check_scope_consistency,
     check_plugin_owners,
