@@ -251,6 +251,76 @@ Run with the configured preferred command:
 <preferred_command> doctor
 ```
 
+## User-scope install
+
+The user-scope flow installs the `eawf` CLI under the operator's home
+directory via `uv tool` so a single binary serves every repo. Per-repo
+plugin assets (skills, agents, hooks under `.claude/`) are still rendered
+by `eawf plugin install claude` inside each project — the user-scope
+install only ships the dispatcher.
+
+### Install
+
+```bash
+# From a local clone (D09: PyPI publication deferred to v0.3):
+uv tool install --from . eawf
+
+# Once published on PyPI (post-v0.3):
+uv tool install eawf
+```
+
+`uv tool install` creates an isolated venv under `~/.local/share/uv/tools/`
+and exposes `eawf` (and the `ea` alias if not colliding) on PATH.
+
+### Per-repo plugin assets
+
+After the user-scope binary is on PATH, render the plugin tree inside
+every repo that wants Eä integration:
+
+```bash
+cd <repo>
+eawf plugin install claude
+```
+
+This writes `.claude/skills/`, `.claude/agents/`, `.claude/hooks/`, and
+patches `.claude/settings.json` with the managed namespace.
+
+### Drift check: `eawf plugin update claude --check`
+
+`plugin update claude --check` runs the renderer in dry-mode: every
+managed file is rendered and diffed against the on-disk payload, but no
+bytes are written. The exit envelope reports which files *would* change
+so the operator can preview before applying.
+
+```bash
+eawf plugin update claude --check    # preview — no writes
+eawf plugin update claude            # apply
+```
+
+The check still raises `IntegrityViolation` (exit code 8) if a hand-edit
+is detected — the same surface as a real update — so the dry-mode is
+safe to wire into CI.
+
+### Version drift check: `eawf doctor --user-scope`
+
+`eawf doctor --user-scope` probes `uv tool list` for an `eawf` entry and
+compares its version against the running binary's `eawf.__version__`.
+The probe is additive — it appends a `user_scope` check to the doctor
+envelope without changing the base check set.
+
+Outcomes:
+
+- `ok` — installed user-scope version matches the running binary.
+- `warn` (stale) — versions differ; the message suggests
+  `uv tool upgrade eawf`.
+- `info` — `uv tool list` ran cleanly but no eawf entry appears (the
+  operator has not run `uv tool install --from . eawf`).
+- `warn` (uv missing) — `uv` is not on PATH; the probe degrades
+  gracefully instead of crashing.
+
+The probe MUST NOT run when `--user-scope` is absent, so the default
+`eawf doctor` invocation stays cheap.
+
 ## Migration into existing workflow projects
 
 Migration automation is **deferred beyond v0.1**. Experience with fresh

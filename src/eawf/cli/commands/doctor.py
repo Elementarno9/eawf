@@ -8,6 +8,11 @@ Surface contract:
   :class:`eawf.cli.errors.InstrumentMissing`).
 - ``eawf doctor --reprobe`` deletes the on-disk probe cache before re-running
   the probes (forces a fresh ``shutil.which`` round-trip per requirement).
+- ``eawf doctor --user-scope`` additionally probes ``uv tool list`` for a
+  user-scope eawf install and appends a ``user_scope`` check to the
+  envelope. The probe never crashes when ``uv`` is absent — it degrades to
+  a ``warn``-status note instead. The flag is additive: when absent, the
+  probe does *not* run.
 - ``eawf --json doctor`` switches to the canonical JSON envelope:
 
   .. code-block:: json
@@ -33,11 +38,16 @@ Exit codes:
 from __future__ import annotations
 
 import logging
+import re
+import shutil
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 
+import eawf
 from eawf.cli.errors import InstrumentMissing, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
@@ -46,6 +56,167 @@ from eawf.doctor.report import overall_status, to_payload, to_text
 from eawf.install.instrument_probe import resolve_cache_path
 
 logger = logging.getLogger(__name__)
+
+# ``uv tool list`` formats each tool as a header line followed by zero or
+# more bullet lines:
+#
+#     eawf v0.1.0
+#     - eawf
+#     - ea
+#
+# The header line is the only one we parse — ``^(\S+)\s+v(\S+)$`` captures
+# the tool name and its installed version. Bullet lines start with ``- `` and
+# are skipped.
+_UV_TOOL_LIST_HEADER_RE: re.Pattern[str] = re.compile(r"^(\S+)\s+v(\S+)$")
+
+
+UserScopeStatus = Literal["ok", "warn", "info"]
+
+
+@dataclass(frozen=True)
+class _UserScopeResult:
+    """Stand-alone result for the user-scope probe.
+
+    ``eawf.doctor.checks.CheckResult`` only supports ``ok|warn|fail`` — the
+    user-scope probe wants an ``info`` outcome (no eawf installed via uv
+    tool, which is not a problem, just an observation). We keep the existing
+    ``CheckResult`` shape untouched and emit this local dataclass instead so
+    the probe stays additive.
+    """
+
+    name: str
+    status: UserScopeStatus
+    detail: str
+
+    def as_payload(self) -> dict[str, str]:
+        """Return a JSON-friendly dict matching the doctor envelope shape."""
+        return {"name": self.name, "status": self.status, "detail": self.detail}
+
+    def as_text(self) -> str:
+        """Return a one-line ``"<STATUS>  <name>  <detail>"`` rendering."""
+        return f"{self.status.upper():<4}  {self.name:<24}  {self.detail}"
+
+
+def _parse_uv_tool_list(stdout: str) -> dict[str, str]:
+    """Return ``{tool_name: version}`` parsed from ``uv tool list`` stdout.
+
+    Lines that do not match the header regex (e.g., the bullet entry lines
+    that follow each tool) are ignored. An empty stdout yields ``{}``.
+    """
+    out: dict[str, str] = {}
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = _UV_TOOL_LIST_HEADER_RE.match(line)
+        if match is None:
+            continue
+        name, version = match.group(1), match.group(2)
+        out[name] = version
+    return out
+
+
+def _which_uv() -> str | None:
+    """Module-local wrapper around :func:`shutil.which` for ``uv``.
+
+    Wrapping the lookup in a named helper lets tests monkeypatch a single
+    function (``eawf.cli.commands.doctor._which_uv``) without leaking the
+    stub to other call sites that share the ``shutil`` module.
+    """
+    return shutil.which("uv")
+
+
+def _run_uv_tool_list() -> subprocess.CompletedProcess[str]:
+    """Module-local wrapper around ``uv tool list`` subprocess invocation.
+
+    The wrapper exists for the same reason as :func:`_which_uv`: tests can
+    monkeypatch ``eawf.cli.commands.doctor._run_uv_tool_list`` to a fake
+    that returns a stub :class:`subprocess.CompletedProcess`, without
+    intercepting the instrument probe's own ``subprocess.run`` calls.
+    """
+    return subprocess.run(
+        ["uv", "tool", "list"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _run_user_scope_check() -> _UserScopeResult:
+    """Probe ``uv tool list`` for a user-scope eawf install.
+
+    The function never raises: missing ``uv`` on PATH and subprocess
+    failures collapse to a ``warn``-status :class:`_UserScopeResult` so the
+    doctor surface stays useful regardless of the operator's setup.
+
+    Outcomes:
+
+    - ``ok`` — ``uv tool list`` reports an ``eawf`` entry whose version
+      matches :data:`eawf.__version__`.
+    - ``warn`` — ``eawf`` is installed but its version differs from
+      :data:`eawf.__version__` (suggests ``uv tool upgrade eawf``); or
+      ``uv`` is not on PATH; or ``uv tool list`` failed.
+    - ``info`` — ``uv tool list`` ran cleanly but no ``eawf`` entry
+      appears (the operator has not installed eawf via ``uv tool`` —
+      points them at ``uv tool install --from . eawf``).
+    """
+    uv_path = _which_uv()
+    if uv_path is None:
+        return _UserScopeResult(
+            name="user_scope",
+            status="warn",
+            detail="uv not on PATH; cannot probe user-scope install",
+        )
+
+    try:
+        completed = _run_uv_tool_list()
+    except (subprocess.CalledProcessError, OSError) as exc:
+        # ``check=False`` already prevents CalledProcessError on non-zero
+        # exit; keep it in the except clause for defence in depth in case a
+        # future caller flips the flag. ``OSError`` covers permission /
+        # ENOENT / EACCES races where ``uv`` disappears between the
+        # ``shutil.which`` call and the subprocess spawn.
+        return _UserScopeResult(
+            name="user_scope",
+            status="warn",
+            detail=f"uv tool list failed: {exc}",
+        )
+
+    if completed.returncode != 0:
+        stderr_summary = (completed.stderr or "").strip().splitlines()
+        head = stderr_summary[0] if stderr_summary else f"exit {completed.returncode}"
+        return _UserScopeResult(
+            name="user_scope",
+            status="warn",
+            detail=f"uv tool list failed: {head}",
+        )
+
+    tools = _parse_uv_tool_list(completed.stdout)
+    installed_version = tools.get("eawf")
+    current_version = eawf.__version__
+
+    if installed_version is None:
+        return _UserScopeResult(
+            name="user_scope",
+            status="info",
+            detail=("eawf not installed via uv tool; install with `uv tool install --from . eawf`"),
+        )
+
+    if installed_version == current_version:
+        return _UserScopeResult(
+            name="user_scope",
+            status="ok",
+            detail=f"user-scope eawf v{installed_version} matches current",
+        )
+
+    return _UserScopeResult(
+        name="user_scope",
+        status="warn",
+        detail=(
+            f"user-scope eawf v{installed_version} differs from current "
+            f"v{current_version} — consider `uv tool upgrade eawf`"
+        ),
+    )
 
 
 doctor_app = typer.Typer(
@@ -79,6 +250,13 @@ def doctor(
             help="Invalidate the cached probe results and re-run every check.",
         ),
     ] = False,
+    user_scope: Annotated[
+        bool,
+        typer.Option(
+            "--user-scope",
+            help="Probe `uv tool list` for a user-scope eawf install.",
+        ),
+    ] = False,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -108,6 +286,21 @@ def doctor(
 
     payload = to_payload(results)
     text = to_text(results, plain=effective_flags.plain_output)
+
+    if user_scope:
+        user_scope_result = _run_user_scope_check()
+        # Append to the JSON envelope (``checks`` list) so structured
+        # consumers see the probe alongside the W08 check set.
+        payload["checks"].append(user_scope_result.as_payload())
+        # ``info`` does not change ``ok`` / ``status``: a missing user-scope
+        # install is informational, not a failure.
+        if user_scope_result.status == "warn" and payload["status"] == "ok":
+            payload["ok"] = False
+            payload["status"] = "warn"
+        # Append a stable single-line tail to the text body so the operator
+        # gets the same datum in TTY output.
+        text = f"{text}\n{user_scope_result.as_text()}"
+
     emit_json_or_text(payload, text, flags=effective_flags)
     if overall_status(results) == "fail":
         # Defence in depth: ``run_all`` already converts hard probe failures

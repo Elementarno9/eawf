@@ -31,7 +31,12 @@ logger = logging.getLogger(__name__)
 UpdateResult = InstallResult
 
 
-def update_plugin(target_dir: Path, *, timestamp: str | None = None) -> UpdateResult:
+def update_plugin(
+    target_dir: Path,
+    *,
+    timestamp: str | None = None,
+    check: bool = False,
+) -> UpdateResult:
     """Re-render the Claude plugin tree under *target_dir*.
 
     Args:
@@ -39,6 +44,14 @@ def update_plugin(target_dir: Path, *, timestamp: str | None = None) -> UpdateRe
         timestamp: ISO 8601 UTC timestamp baked into the manifest /
             ``__eawf_managed`` namespace. Defaults to the same epoch
             as :func:`install_plugin` so re-runs stay byte-stable.
+        check: When ``True``, the update runs in dry-mode — every
+            managed file is rendered and diffed against the on-disk
+            payload, but no bytes are written. The returned
+            :class:`UpdateResult` carries ``dry_run=True`` and each
+            :class:`FileDelta` reports the *would-be* action
+            (``"unchanged"`` when bytes already match, ``"updated"``
+            when a write would happen). Useful for ``plugin update
+            --check`` style preflight probes.
 
     Returns:
         :class:`UpdateResult` summarising the re-rendered tree. Each
@@ -49,12 +62,14 @@ def update_plugin(target_dir: Path, *, timestamp: str | None = None) -> UpdateRe
     Raises:
         IntegrityViolation: A managed file on disk has been
             hand-edited; the update would clobber the user's change.
+            ``check=True`` does *not* suppress this — drift detection
+            runs against disk regardless of dry-run.
     """
-    logger.info(f"update_plugin target={target_dir}")
+    logger.info(f"update_plugin target={target_dir} check={check}")
     return install_plugin(
         Path(target_dir),
         force=False,
-        dry_run=False,
+        dry_run=check,
         timestamp=timestamp,
     )
 
