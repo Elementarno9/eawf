@@ -121,33 +121,41 @@ def run_audit(
     scope_id: str,
     kind: AuditKind,
     fixture_path: Path | None = None,
+    check_results: list[dict[str, Any]] | None = None,
 ) -> tuple[Envelope, Envelope]:
-    """Phase-2 stub: register a complete audit using a fixture-driven path.
+    """Register a complete audit using fixture / DSL / stub check_results.
 
-    The full check-runner (subprocess execution per a spec) lands in Phase 4;
-    here we accept an optional ``fixture_path`` whose contents become the
-    audit's check_results. Without a fixture, the audit lands with a single
-    ``stub`` check_result so the post-mutation invariants still pass.
+    Resolution order for the check_results payload:
+
+    1. ``check_results`` kwarg (Phase 4 path — populated by
+       :mod:`eawf.audit_dsl.runner` via the ``--checks`` option). Wins
+       whenever non-None.
+    2. ``fixture_path`` (Phase 2 escape hatch — kept for v0.2).
+    3. The legacy single-pass stub.
+
+    ``check_results`` and ``fixture_path`` are mutually exclusive at the
+    CLI layer; the library accepts whichever the caller supplies.
     """
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id in audits:
         raise InvalidInput(f"audit {audit_id!r} already exists")
 
-    if fixture_path is not None and fixture_path.exists():
+    resolved: list[dict[str, Any]]
+    if check_results is not None:
+        resolved = list(check_results)
+    elif fixture_path is not None and fixture_path.exists():
         # Fixture-driven check_results: list of {"name", "passed", "details"}.
         import json
 
         try:
-            check_results: list[dict[str, Any]] = json.loads(
-                fixture_path.read_text(encoding="utf-8")
-            )
+            resolved = json.loads(fixture_path.read_text(encoding="utf-8"))
         except Exception as exc:
             raise InvalidInput(f"audit run fixture {fixture_path} not valid JSON: {exc}") from exc
     else:
-        check_results = [{"name": "stub", "passed": True, "details": "Phase 2 stub"}]
+        resolved = [{"name": "stub", "passed": True, "details": "Phase 2 stub"}]
 
     now = datetime.now(UTC)
-    all_passed = all(bool(r.get("passed", False)) for r in check_results)
+    all_passed = all(bool(r.get("passed", False)) for r in resolved)
     verdict = AuditVerdict.PASS if all_passed else AuditVerdict.MAJOR
 
     audit = Audit(
@@ -156,7 +164,7 @@ def run_audit(
         kind=kind,
         status=AuditStatus.COMPLETE,
         report_artifact_id=None,
-        check_results=check_results,
+        check_results=resolved,
         integrity_results=[],
         created_at=now,
         verdict=verdict,
@@ -179,7 +187,7 @@ def run_audit(
                     "passed": bool(r.get("passed", False)),
                     "details": (str(r["details"]) if r.get("details") else None),
                 }
-                for r in check_results
+                for r in resolved
             ],
             "report_artifact_id": None,
         },
@@ -195,6 +203,11 @@ def run_audit(
             "scope_id": scope_id,
             "kind": kind.value,
             "fixture_path": (str(fixture_path) if fixture_path else None),
+            "checks_source": (
+                "dsl"
+                if check_results is not None
+                else ("fixture" if fixture_path is not None else "stub")
+            ),
         },
         summary=f"audit {audit_id} run completed verdict={verdict.value}",
     )

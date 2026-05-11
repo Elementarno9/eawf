@@ -463,15 +463,37 @@ def audit_run(
         Path | None,
         typer.Option(
             "--fixture",
-            help="JSON fixture of check_results (Phase 2 stub).",
+            help="JSON fixture of check_results (legacy Phase 2 escape hatch).",
+        ),
+    ] = None,
+    checks: Annotated[
+        Path | None,
+        typer.Option(
+            "--checks",
+            help="YAML spec for the audit-check DSL (v0.2; B019).",
         ),
     ] = None,
 ) -> None:
-    """Run a fixture-driven audit (Phase 2 stub; full runner in Phase 4)."""
+    """Run an audit. ``--checks`` drives the DSL runner; ``--fixture`` is the
+    legacy JSON escape hatch. Pass at most one of the two.
+    """
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
     try:
+        if checks is not None and fixture is not None:
+            raise cli_errors.InvalidInput("audit run accepts --fixture OR --checks, not both")
+
+        check_results_payload: list[dict[str, Any]] | None = None
+        if checks is not None:
+            from eawf.audit_dsl.runner import load_spec, run_checks
+
+            specs = load_spec(checks)
+            results = run_checks(specs, cwd=state_path.parent.parent)
+            check_results_payload = [
+                {"name": r.name, "passed": r.passed, "details": r.details} for r in results
+            ]
+
         with state_transaction(state_path) as state:
             record, event = audit_evi.run_audit(
                 state,
@@ -479,6 +501,7 @@ def audit_run(
                 scope_id=scope_id,
                 kind=kind,
                 fixture_path=fixture,
+                check_results=check_results_payload,
             )
             paths = store_paths(state_path)
             append_jsonl(paths[StoreKind.AUDIT], record)
@@ -494,6 +517,7 @@ def audit_run(
             "kind": kind.value,
             "status": "complete",
             "fixture_path": str(fixture) if fixture else None,
+            "checks_path": str(checks) if checks else None,
         },
         f"audit {audit_id} run complete",
         flags,
