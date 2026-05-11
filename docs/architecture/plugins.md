@@ -60,7 +60,8 @@ from the repo-install layout:
 - **No `.claude/` prefix.** The tree IS the plugin; CC mounts it under
   `~/.claude/plugins/...` automatically when the user runs
   `/plugin install`.
-- **No `hooks/`.** See "Why hooks are deferred" below.
+- **Session-level `hooks.json` + `hooks/`.** See "Session-level plugin
+  hooks" below.
 - **No `settings.json`.** A marketplace plugin must not write into the
   user's CC settings; that surface is owned by the user.
 - **No `.ea/`.** Project state lives in the user's repo, not in the
@@ -70,26 +71,36 @@ Source of truth: `src/eawf/runtimes/claude/plugin_package.py`. The
 emit is byte-stable: re-running with the same inputs produces a
 byte-identical tree (covered by the W05 idempotence test).
 
-### Why hooks are deferred to v0.2 (B015)
+### Session-level plugin hooks (B015 resolved in v0.2)
 
-Eä's hook event taxonomy is custom (`phase_open`, `wave_close`,
-`iter_open`, etc.) and tracks the workflow state machine. Claude Code's
-plugin-side hook event taxonomy is a different shape entirely:
-`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`, `UserPromptSubmit`.
+The packaged tree includes a `hooks.json` manifest at the plugin root
+plus a `hooks/<event>.sh` wrapper per subscribed event. The split
+between what CC sees and what stays eawf-internal is deliberate:
 
-The two surfaces do not have a 1:1 mapping. A v0.2 release will add a
-small translation layer so a `PreToolUse` event can dispatch to the Eä
-router, which then matches against the Eä event taxonomy and runs the
-right Eä-defined handlers. Shipping that translator is a separate
-design decision (the mapping is lossy in both directions); deferring
-keeps the v0.1 plugin-package surface clean and focused on the
-skill/agent assets that DO map cleanly.
+| Layer | Surface | Events |
+|---|---|---|
+| CC plugin manifest (`hooks.json`) | What Claude Code can observe reliably | `SessionStart`, `Stop`, `PreToolUse(Bash)`, `PostToolUse(Bash)` filtered to `git commit` / `git push` |
+| State CLI (`eawf hook run`) | Workflow-internal lifecycle the state writer controls | `wave_open`/`wave_close`, `iter_open`/`iter_close`, `phase_open`/`phase_close`, `pre_audit`/`post_audit` |
 
-Tracked as backlog item B015. Until that lands, users who want
-hook-aware Eä behaviour should use the repo-install path
-(`eawf plugin install claude`), which writes the hook scripts and the
-`__eawf_managed` settings into the per-repo `.claude/` tree where Eä
-controls the runtime contract.
+The six session-level entries in `hooks.json` cover the events Claude
+Code emits regardless of which skill, agent, or slash command is
+driving the session. The workflow-internal events stay fired from
+inside the state CLI because CC's `UserPromptSubmit` matcher cannot
+observe slash-command sub-skill dispatch (e.g. `/flow` runs sub-skills
+internally without re-emitting their slash prompts) and agent calls
+to the state CLI never trigger a prompt at all. A manifest-level
+subscription to those events would be lossy in both directions, so the
+state writer keeps ownership.
+
+Each `hooks.json` entry resolves to
+`${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh`, the same wrapper script the
+repo-install path emits — payload synthesis, CLI dispatch, and exit
+codes are byte-identical between the two install modes. The mapping
+table lives in `src/eawf/runtimes/claude/hook_map.py` and is the
+single source of truth for which events surface in the CC plugin
+manifest.
+
+Tracked as backlog item B015; resolved in P13 W05.
 
 Generated assets update only Eä-owned files or managed regions
 (`<!-- BEGIN EAWF:managed ... -->` / `<!-- END EAWF:managed ... -->`).

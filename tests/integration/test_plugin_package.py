@@ -40,7 +40,7 @@ def _tree_digest(root: Path) -> str:
 
 
 def test_package_emits_full_tree(tmp_path: Path) -> None:
-    """Full tree contains plugin/marketplace manifests, all skills, all agents."""
+    """Full tree contains plugin/marketplace manifests, skills, agents, hooks."""
     target = tmp_path / "eawf-plugin"
     package_plugin(target, include_marketplace=True, include_readme=True)
     manifest = json.loads((target / ".claude-plugin" / "plugin.json").read_text())
@@ -65,8 +65,36 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert len(list((target / "skills").iterdir())) == 10
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
+    # Session-level plugin hooks emitted by default (B015 — P13 W05).
+    assert (target / "hooks").exists()
+    assert (target / "hooks.json").exists()
+    assert (target / "hooks" / "session_start.sh").exists()
+    assert (target / "hooks" / "session_end.sh").exists()
+    assert (target / "hooks" / "pre_commit.sh").exists()
+    assert (target / "hooks" / "post_commit.sh").exists()
+    assert (target / "hooks" / "pre_push.sh").exists()
+    assert (target / "hooks" / "post_push.sh").exists()
+    # Only the six session-level events appear — workflow-internal
+    # lifecycle events (wave_*, iter_*, phase_*, *_audit) stay fired by
+    # the state CLI through ``eawf hook run``, not by the CC plugin
+    # manifest.
+    assert len(list((target / "hooks").iterdir())) == 6
+    hooks_manifest = json.loads((target / "hooks.json").read_text())
+    assert set(hooks_manifest["hooks"].keys()) == {
+        "SessionStart",
+        "Stop",
+        "PreToolUse",
+        "PostToolUse",
+    }
+    # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
+    # variable so the manifest installs cleanly regardless of where CC
+    # mounts the plugin.
+    for entries in hooks_manifest["hooks"].values():
+        for entry in entries:
+            command = entry["hooks"][0]["command"]
+            assert command.startswith("${CLAUDE_PLUGIN_ROOT}/hooks/")
+            assert "/Users/" not in command
     # Forbidden surfaces.
-    assert not (target / "hooks").exists()
     assert not (target / "settings.json").exists()
     assert not (target / ".claude").exists()
     assert not (target / ".ea").exists()
@@ -109,6 +137,35 @@ def test_package_dry_run_writes_nothing(tmp_path: Path) -> None:
     assert result.dry_run is True
     assert len(result.skills) == 10
     assert len(result.agents) == 8
+    assert result.wrote_hooks is True
+
+
+def test_package_skips_hooks_when_disabled(tmp_path: Path) -> None:
+    """``include_hooks=False`` omits ``hooks.json`` and ``hooks/*.sh``."""
+    target = tmp_path / "eawf-plugin"
+    result = package_plugin(target, include_hooks=False)
+    assert result.wrote_hooks is False
+    assert not (target / "hooks.json").exists()
+    assert not (target / "hooks").exists()
+    # Manifest still emitted regardless.
+    assert (target / ".claude-plugin" / "plugin.json").exists()
+
+
+def test_package_hook_scripts_are_executable(tmp_path: Path) -> None:
+    """The six wrapper scripts land on disk with mode 0o755."""
+    target = tmp_path / "eawf-plugin"
+    package_plugin(target)
+    for name in (
+        "session_start.sh",
+        "session_end.sh",
+        "pre_commit.sh",
+        "post_commit.sh",
+        "pre_push.sh",
+        "post_push.sh",
+    ):
+        path = target / "hooks" / name
+        mode = path.stat().st_mode & 0o777
+        assert mode == 0o755, f"{name} mode={oct(mode)} expected 0o755"
 
 
 def test_package_skips_marketplace_when_disabled(tmp_path: Path) -> None:
@@ -225,6 +282,7 @@ def test_package_cli_json_output(tmp_path: Path) -> None:
     assert payload["dry_run"] is False
     assert payload["wrote_marketplace"] is True
     assert payload["wrote_readme"] is True
+    assert payload["wrote_hooks"] is True
     assert len(payload["skills"]) == 10
     assert len(payload["agents"]) == 8
     assert payload["target"].endswith("out")
@@ -249,3 +307,26 @@ def test_package_cli_no_marketplace_no_readme(tmp_path: Path) -> None:
     assert (target / ".claude-plugin" / "plugin.json").exists()
     assert not (target / ".claude-plugin" / "marketplace.json").exists()
     assert not (target / "README.md").exists()
+
+
+def test_package_cli_no_hooks(tmp_path: Path) -> None:
+    """``--no-hooks`` omits ``hooks.json`` and ``hooks/*.sh`` from the tree."""
+    target = tmp_path / "out"
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "plugin",
+            "package",
+            "claude",
+            "--target",
+            str(target),
+            "--no-hooks",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["wrote_hooks"] is False
+    assert (target / ".claude-plugin" / "plugin.json").exists()
+    assert not (target / "hooks.json").exists()
+    assert not (target / "hooks").exists()

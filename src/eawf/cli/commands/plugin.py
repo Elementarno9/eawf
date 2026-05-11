@@ -140,6 +140,7 @@ def _package_payload(result: PackageResult) -> dict[str, object]:
         "agents": list(result.agents),
         "wrote_marketplace": result.wrote_marketplace,
         "wrote_readme": result.wrote_readme,
+        "wrote_hooks": result.wrote_hooks,
     }
 
 
@@ -150,6 +151,7 @@ def _package_text(result: PackageResult) -> str:
     parts.append(f"  agents:      {len(result.agents)}")
     parts.append(f"  marketplace: {'yes' if result.wrote_marketplace else 'no'}")
     parts.append(f"  readme:      {'yes' if result.wrote_readme else 'no'}")
+    parts.append(f"  hooks:       {'yes' if result.wrote_hooks else 'no'}")
     return "\n".join(parts)
 
 
@@ -282,6 +284,16 @@ def package_cmd(
             help="Emit README.md (default: yes).",
         ),
     ] = True,
+    include_hooks: Annotated[
+        bool,
+        typer.Option(
+            "--include-hooks/--no-hooks",
+            help=(
+                "Emit hooks.json + hooks/<event>.sh wrappers for the six "
+                "session-level Claude Code events (default: yes)."
+            ),
+        ),
+    ] = True,
     force: Annotated[
         bool,
         typer.Option(
@@ -310,6 +322,7 @@ def package_cmd(
             resolved_target,
             include_marketplace=include_marketplace,
             include_readme=include_readme,
+            include_hooks=include_hooks,
             force=force,
             dry_run=dry_run,
         )
