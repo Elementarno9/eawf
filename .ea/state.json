@@ -745,7 +745,12 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P13-I01-W02",
+      "P13-I01-W04",
+      "P13-I01-W05",
+      "P13-I01-W07"
+    ],
     "iter_id": "P13-I01",
     "phase_id": "P13",
     "project_code": "EAWF",
@@ -1236,7 +1241,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:14:04.500568Z",
+  "updated_at": "2026-05-11T14:15:07.472816Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1817,7 +1822,7 @@
         "P13-I01-W03",
         "P13-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1831,7 +1836,7 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:57.733885Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B009 golden scenarios",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1867,7 +1872,7 @@
       "blocks": [
         "P13-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1885,7 +1890,7 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:59.217228Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B019 audit-check DSL skeleton",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1895,7 +1900,7 @@
       "blocks": [
         "P13-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1913,7 +1918,7 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:00.581229Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B015 plugin-mode hooks",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1954,7 +1959,7 @@
       "blocks": [
         "P13-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -1970,7 +1975,7 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:01.571308Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B017 user-scope install",
       "token_budget": null,
       "tokens_consumed": 0,
