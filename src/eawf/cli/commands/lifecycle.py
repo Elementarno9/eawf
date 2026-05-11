@@ -64,8 +64,12 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.dispatch import render_dispatch_envelope, render_wave_prompt
-from eawf.dispatch.renderer import DispatchEnvelope
+from eawf.dispatch import (
+    DISPATCH_RUNTIMES,
+    DispatchEnvelope,
+    render_dispatch_envelope,
+    render_wave_prompt,
+)
 from eawf.lifecycle.allocator import (
     allocate_iter_id,
     allocate_phase_id,
@@ -1228,13 +1232,6 @@ def _ready_wave_ids(state: State, iter_id: str) -> list[str]:
     return ready
 
 
-# CLI-facing runtime names for ``wave dispatch --runtime``. Mirrors the
-# pool exported from :mod:`eawf.dispatch.renderer`. Keeping the literal
-# list inline lets typer surface it in ``--help`` without an import-time
-# cycle.
-_WAVE_DISPATCH_RUNTIMES: tuple[str, ...] = ("claude-code", "claude-agent-sdk")
-
-
 @wave_app.command("dispatch")
 def wave_dispatch_cmd(
     ctx: typer.Context,
@@ -1282,10 +1279,10 @@ def wave_dispatch_cmd(
             flags=flags,
         )
         return
-    if runtime not in _WAVE_DISPATCH_RUNTIMES:
+    if runtime not in DISPATCH_RUNTIMES:
         cli_errors.emit_error(
             cli_errors.InvalidInput(
-                f"unknown runtime {runtime!r}; expected one of {list(_WAVE_DISPATCH_RUNTIMES)}"
+                f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}"
             ),
             flags=flags,
         )
