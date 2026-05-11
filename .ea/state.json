@@ -643,6 +643,39 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "AGENTS.md sync-from-decisions render path"
+    },
+    "B045": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T08:42:26.353668Z",
+      "id": "B045",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "wave-close SHA normalisation (--commit accepts full SHA; store as 7-char or exclude commit-keys from secrets baseline)"
+    },
+    "B046": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T08:42:27.135528Z",
+      "id": "B046",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "wave update --files verb (allow editing Wave.file_scopes post-plan to reflect implementation reality)"
+    },
+    "B047": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T08:42:27.602406Z",
+      "id": "B047",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix docstring (worktree.py:393)"
     }
   },
   "current": {
@@ -964,7 +997,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T08:36:32.030361Z",
+  "updated_at": "2026-05-11T08:42:27.602406Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {

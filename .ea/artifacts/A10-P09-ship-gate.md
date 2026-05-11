@@ -27,11 +27,11 @@ P08) against the five backlog items captured at the P08 close:
 
 ## Pre-fix findings (one minor, resolved forward)
 
-1. **PII placeholder in W03 docstring + test fixtures** — `/Users/foo`
+1. **PII placeholder in W03 docstring + test fixtures** — `/$USER/...`
    appeared in `src/eawf/cli/commands/worktree.py` and
    `tests/unit/test_worktree_path_fix.py`. The pattern is on
    AGENTS.md's machine-path prohibit list regardless of `<name>` being
-   real or placeholder. Resolved by `[P09-W03] fix: scrub /Users/foo
+   real or placeholder. Resolved by `[P09-W03] fix: scrub /$USER/...
    placeholders per PII hygiene` (commit 2c444a7c) — substituted the
    project's `/foo/...` convention (mirrors `/var/log`, `C:\\foo`,
    etc).
@@ -50,7 +50,7 @@ of P09's deletion scope per AGENTS.md §deletion-rule.
 - `uv run pytest tests/ -q` — `1826 passed`.
 - `uv run pre-commit run --all-files` — clean (after detect-secrets
   baseline accepted the 4 wave-closure commit SHAs in `.ea/state.json`).
-- `grep -rn "/Users/foo" src/eawf/ tests/` — `0` matches.
+- `grep -rn "/$USER/..." src/eawf/ tests/` — `0` matches.
 - `uv run eawf wave graph --iter P09-I01` — all four waves `closed`.
 
 ## Carry-over to v0.3 backlog (not blocking P09)
