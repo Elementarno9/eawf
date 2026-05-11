@@ -91,9 +91,13 @@ def test_plugin_install_idempotent_via_cli(tmp_path: Path) -> None:
 
 
 def test_plugin_install_unknown_runtime_exits_invalid_input(tmp_path: Path) -> None:
-    """An unsupported runtime maps to exit 3 (``INVALID_INPUT``)."""
+    """An unsupported runtime maps to exit 3 (``INVALID_INPUT``).
+
+    OpenCode + Codex landed in P14-W06/W07; use a still-deferred id
+    (``goose``) to exercise the rejection path.
+    """
     _equip_ea_dir(tmp_path)
-    result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "opencode"])
+    result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "goose"])
     assert result.exit_code == 3, result.stdout
 
 
