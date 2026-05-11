@@ -11,15 +11,19 @@ public API:
    wave plan/claim/close -> phase close`` walk via
    :class:`typer.testing.CliRunner`.
 
-state.json is NOT byte-stable on its own — :func:`_project_state`
+state.json is NOT byte-stable on its own — :func:`project_state`
 projects it to the subset that is genuinely deterministic across
 runs (schema_version, scope_kind, the ids and statuses of phases /
 iters / waves, and the keys of ``current``). The committed golden
 files under each scenario directory hold exactly that projection,
 serialised as canonical JSON (``json.dumps(sort_keys=True,
-indent=2)`` + trailing newline). AGENTS.md, by contrast, IS
-byte-stable so the ``fresh_repo`` scenario commits the raw bytes
-under ``fresh_repo/agents.golden.md`` and asserts byte-equality.
+indent=2)`` + trailing newline). AGENTS.md is byte-stable across
+runs (verified by a sibling assertion) but its raw body embeds the
+project's canonical rules text — including literal pattern examples
+that the user-scope PII guard rejects on commit. We therefore commit
+a region-id projection (``find_regions`` over the rendered text)
+rather than the raw bytes, and pin byte-stability via a separate
+two-run assertion that never persists the bytes to disk.
 
 Regenerating goldens
 --------------------
@@ -31,9 +35,9 @@ worktree root::
 
 When ``EAWF_GOLDEN_SCENARIOS_REGEN`` is set to a truthy value the
 helpers in this module overwrite the on-disk golden files with the
-live projection/bytes instead of asserting equality. Always commit
-the regenerated files in the same change-set that motivated the
-regen so a reviewer can spot a drift in scope.
+live projection instead of asserting equality. Always commit the
+regenerated files in the same change-set that motivated the regen
+so a reviewer can spot a drift in scope.
 """
 
 from __future__ import annotations
@@ -44,6 +48,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from eawf.render.regions import find_regions
 
 # Directory containing the three scenario golden fixtures, alongside this file.
 SCENARIOS_DIR: Path = Path(__file__).parent
@@ -125,22 +131,26 @@ def assert_or_regen_json(golden_path: Path, live_payload: dict[str, Any]) -> Non
     )
 
 
-def assert_or_regen_bytes(golden_path: Path, live_bytes: bytes) -> None:
-    """Byte-equality assertion (or write) for non-JSON goldens (AGENTS.md)."""
-    if regen_mode():
-        golden_path.parent.mkdir(parents=True, exist_ok=True)
-        golden_path.write_bytes(live_bytes)
-        return
-    assert golden_path.exists(), (
-        f"golden file missing: {golden_path}; "
-        f"regenerate with EAWF_GOLDEN_SCENARIOS_REGEN=1 uv run pytest -m golden_scenarios"
-    )
-    on_disk = golden_path.read_bytes()
-    assert on_disk == live_bytes, (
-        f"golden bytes drifted at {golden_path}. "
-        f"If intentional, regenerate with EAWF_GOLDEN_SCENARIOS_REGEN=1 "
-        f"uv run pytest -m golden_scenarios."
-    )
+def project_agents_md(text: str) -> dict[str, Any]:
+    """Canonical projection of a rendered AGENTS.md onto its region surface.
+
+    Captures the ordered list of managed-region ids and the count of
+    bytes in each region's rendered body. We deliberately avoid
+    committing the raw bytes (some bodies contain literal pattern
+    examples that trip the user-scope PII guard on commit; the byte
+    content itself is already pinned by the sibling
+    ``tests/golden/agents_md/`` fixtures and by the two-run
+    byte-stability assertion in :mod:`.test_scenarios`).
+
+    The projection captures enough surface to flag a structural
+    regression (a missing region, a renamed region, a body that
+    suddenly doubles in size) without naming the bytes.
+    """
+    regions = find_regions(text)
+    return {
+        "region_ids": [r.id for r in regions],
+        "region_byte_lengths": {r.id: len(r.body.encode("utf-8")) for r in regions},
+    }
 
 
 @pytest.fixture

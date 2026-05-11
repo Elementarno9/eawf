@@ -1,0 +1,36 @@
+{
+  "region_byte_lengths": {
+    "agent-tool-discipline": 579,
+    "anti-patterns": 499,
+    "architecture-cli-dispatch": 220,
+    "branch-naming": 276,
+    "commit-prefix": 386,
+    "deletion-rule": 699,
+    "ea-directory-commit-policy": 216,
+    "non-negotiable-rules": 1587,
+    "pr-template": 177,
+    "secrets-hygiene": 916,
+    "state-vs-specs": 131,
+    "symbol-conventions": 238,
+    "verify-before-claim": 642,
+    "workflow-lifecycle": 563,
+    "worktree-discipline": 390
+  },
+  "region_ids": [
+    "non-negotiable-rules",
+    "architecture-cli-dispatch",
+    "ea-directory-commit-policy",
+    "symbol-conventions",
+    "deletion-rule",
+    "state-vs-specs",
+    "verify-before-claim",
+    "worktree-discipline",
+    "commit-prefix",
+    "branch-naming",
+    "secrets-hygiene",
+    "workflow-lifecycle",
+    "pr-template",
+    "agent-tool-discipline",
+    "anti-patterns"
+  ]
+}
