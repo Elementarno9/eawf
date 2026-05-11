@@ -15,7 +15,6 @@ from eawf.skills.discovery import (
     workspace_skills_dir,
 )
 
-
 _VALID_BODY = """\
 ---
 name: /demo

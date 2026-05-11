@@ -304,9 +304,7 @@ def _resolve_skill_spec(name: SkillName) -> SkillSpec:
 _SCOPE_CHOICES: frozenset[str] = frozenset({"builtin", "user", "workspace", "all"})
 
 
-def _discovered_list_payload(
-    *, workspace: Path | None, scope: str
-) -> dict[str, Any]:
+def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str, Any]:
     """Build the ``skill list`` payload spanning builtin + user + workspace.
 
     Each row carries the historical fields (``name``, ``status``,

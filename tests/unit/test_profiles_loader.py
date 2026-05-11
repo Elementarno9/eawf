@@ -32,10 +32,11 @@ _EXPECTED_PROFILES: tuple[str, ...] = (
 )
 
 
-def test_loader_lists_all_eleven_profiles() -> None:
+def test_loader_lists_all_twelve_profiles() -> None:
     profiles = list_profiles()
-    assert len(profiles) == 11
-    assert tuple(sorted(profiles)) == _EXPECTED_PROFILES
+    assert len(profiles) == 12
+    expected = (*_EXPECTED_PROFILES, "a11y")
+    assert tuple(sorted(profiles)) == tuple(sorted(expected))
 
 
 def test_loader_returns_known_profile_body() -> None:

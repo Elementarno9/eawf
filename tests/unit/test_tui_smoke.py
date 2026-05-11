@@ -12,8 +12,8 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.tui.app import (
-    _build_layout,
     _breadcrumb,
+    _build_layout,
     _summary_counts,
     build_status_text,
     render_layout,

@@ -260,3 +260,24 @@ class StoreKind(StrEnum):
     DECISION = "decision"
     EVENT = "event"
     FLOW = "flow"
+
+
+class ArtifactKind(StrEnum):
+    """Closed enumeration of recognised artifact kinds (P14-W11 / B059).
+
+    Existing string ``Artifact.kind`` values migrate onto this enum so
+    downstream consumers can switch on a typed value rather than a free
+    string. Adding a new kind requires bumping this enum *and* updating
+    the URN router so the new kind has a documented routing rule.
+    """
+
+    AUDIT_REPORT = "audit_report"
+    NOTEBOOK = "notebook"
+    DATASET = "dataset"
+    MODEL = "model"
+    BACKTEST = "backtest"
+    STRATEGY = "strategy"
+    BINARY = "binary"
+    SCENE = "scene"
+    PLAYTEST_SESSION = "playtest_session"
+    CVE_REF = "cve_ref"
