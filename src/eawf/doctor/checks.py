@@ -252,6 +252,97 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
     )
 
 
+def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
+    """Compare ``state.mcp_servers`` against runtime-config-emitted entries (D21 / B062).
+
+    For every Eä-owned :class:`McpServer` in state, verify the same id is
+    present on disk under whichever runtime adapters have already
+    materialised an MCP block:
+
+    - Claude: ``<workspace>/.claude/settings.json:mcpServers[<id>]``
+    - OpenCode: ``<workspace>/opencode.json:mcp[<id>]``
+    - Codex: ``<workspace>/.codex/config.toml`` — the v0.3 plugin
+      installer does not yet emit a per-server TOML block, so the
+      runtime is recognised but its absence is not a drift signal.
+
+    The check is **warn**-level when:
+
+    - State has an eawf-owned server but no runtime has emitted it.
+    - A runtime file contains an eawf-owned entry whose id is not in
+      state (orphaned managed entry).
+
+    The check is **ok** when state is empty or when every state id is
+    materialised in at least one runtime file.
+    """
+    import json as _json
+
+    name = "mcp_drift"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    try:
+        state_path, _reason = resolve_with_reason(workspace)
+    except FileNotFoundError, ValueError:
+        return CheckResult(name=name, status="ok", detail="no state.json")
+    if not state_path.exists():
+        return CheckResult(name=name, status="ok", detail="no state.json")
+    try:
+        from eawf.state.models import State
+
+        raw = _json.loads(state_path.read_text(encoding="utf-8"))
+        state = State.model_validate(raw)
+    except _json.JSONDecodeError, ValidationError:
+        # state schema errors surface via ``state_present`` already — keep
+        # this check focused on mcp drift and stay quiet here so doctor's
+        # overall status is not double-flipped for the same root cause.
+        return CheckResult(name=name, status="ok", detail="state.json unparseable")
+    servers = state.mcp_servers or {}
+    eawf_owned = {sid: s for sid, s in servers.items() if s.owner == "eawf"}
+    if not eawf_owned:
+        return CheckResult(name=name, status="ok", detail="no eawf-owned mcp servers")
+    repo_root = state_path.parent.parent
+    claude_path = repo_root / ".claude" / "settings.json"
+    opencode_path = repo_root / "opencode.json"
+    claude_ids: set[str] = set()
+    opencode_ids: set[str] = set()
+    orphans: list[str] = []
+    if claude_path.is_file():
+        try:
+            body = _json.loads(claude_path.read_text(encoding="utf-8") or "{}")
+            servers_block = body.get("mcpServers") or {}
+            for sid, entry in servers_block.items():
+                if isinstance(entry, dict) and entry.get("__eawf_owner") == "eawf":
+                    claude_ids.add(sid)
+                    if sid not in eawf_owned:
+                        orphans.append(f"claude:{sid}")
+        except _json.JSONDecodeError:
+            return CheckResult(name=name, status="warn", detail=f"unreadable {claude_path}")
+    if opencode_path.is_file():
+        try:
+            body = _json.loads(opencode_path.read_text(encoding="utf-8") or "{}")
+            mcp_block = body.get("mcp") or {}
+            for sid, entry in mcp_block.items():
+                if isinstance(entry, dict) and entry.get("__eawf_owner") == "eawf":
+                    opencode_ids.add(sid)
+                    if sid not in eawf_owned:
+                        orphans.append(f"opencode:{sid}")
+        except _json.JSONDecodeError:
+            return CheckResult(name=name, status="warn", detail=f"unreadable {opencode_path}")
+    materialised = claude_ids | opencode_ids
+    missing = sorted(set(eawf_owned) - materialised)
+    if missing or orphans:
+        parts: list[str] = []
+        if missing:
+            parts.append(f"missing-from-runtime: {','.join(missing[:5])}")
+        if orphans:
+            parts.append(f"orphans: {','.join(orphans[:5])}")
+        return CheckResult(name=name, status="warn", detail="; ".join(parts))
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"{len(eawf_owned)} eawf-owned server(s) match runtime emit",
+    )
+
+
 def check_render_output_roundtrip() -> CheckResult:
     """Round-trip a synthetic :class:`OutputEnvelope` to confirm the wire-form holds.
 
@@ -365,6 +456,7 @@ def run_all(
         check_state_present(workspace=workspace),
         check_config_resolves(workspace=workspace),
         check_manifest_in_sync(workspace=workspace),
+        check_mcp_drift(workspace=workspace),
         check_render_output_roundtrip(),
     ]
     return results

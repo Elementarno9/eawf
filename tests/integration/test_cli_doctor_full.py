@@ -74,11 +74,13 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "state_present",
         "config_resolves",
         "manifest_in_sync",
+        "mcp_drift",
         "render_output_roundtrip",
     }
     statuses = {c["name"]: c["status"] for c in payload["checks"]}
     assert statuses["manifest_in_sync"] == "ok"
     assert statuses["render_output_roundtrip"] == "ok"
+    assert statuses["mcp_drift"] == "ok"
 
 
 @pytest.mark.integration
