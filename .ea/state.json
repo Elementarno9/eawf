@@ -899,8 +899,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P14-I01",
+    "phase_id": "P14",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1325,6 +1325,19 @@
         "P13-I01-W03",
         "P13-I01-W06"
       ]
+    },
+    "P14-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P14-I01",
+      "opened_at": "2026-05-11T21:00:03.369199Z",
+      "phase_id": "P14",
+      "status": "active",
+      "title": "P14 main iter",
+      "wave_ids": [
+        "P14-I01-W01"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1511,6 +1524,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "v0.2 P13: feature cluster + ship-gate"
+    },
+    "P14": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P14",
+      "iter_ids": [
+        "P14-I01"
+      ],
+      "opened_at": "2026-05-11T20:59:47.034498Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "Harnesses (Codex + OpenCode) + hygiene preamble"
     }
   },
   "plugins": {},
@@ -1545,7 +1572,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T20:48:03.873356Z",
+  "updated_at": "2026-05-11T21:00:33.174414Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2281,6 +2308,28 @@
       "outcome": "B017 user-scope install — doctor --user-scope probe + update_plugin check=True",
       "status": "closed",
       "title": "B017 user-scope install",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W01": {
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/state/**",
+        "src/eawf/cli/commands/phase.py",
+        "src/eawf/cli/commands/iter.py",
+        "tests/**"
+      ],
+      "id": "P14-I01-W01",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:00:33.174379Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
