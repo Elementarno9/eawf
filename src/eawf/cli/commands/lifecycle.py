@@ -64,7 +64,8 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.dispatch import render_wave_prompt
+from eawf.dispatch import render_dispatch_envelope, render_wave_prompt
+from eawf.dispatch.renderer import DispatchEnvelope
 from eawf.lifecycle.allocator import (
     allocate_iter_id,
     allocate_phase_id,
@@ -1227,6 +1228,13 @@ def _ready_wave_ids(state: State, iter_id: str) -> list[str]:
     return ready
 
 
+# CLI-facing runtime names for ``wave dispatch --runtime``. Mirrors the
+# pool exported from :mod:`eawf.dispatch.renderer`. Keeping the literal
+# list inline lets typer surface it in ``--help`` without an import-time
+# cycle.
+_WAVE_DISPATCH_RUNTIMES: tuple[str, ...] = ("claude-code", "claude-agent-sdk")
+
+
 @wave_app.command("dispatch")
 def wave_dispatch_cmd(
     ctx: typer.Context,
@@ -1238,6 +1246,18 @@ def wave_dispatch_cmd(
             help="Write the prompt to this path atomically (still emit envelope summary).",
         ),
     ] = None,
+    runtime: Annotated[
+        str,
+        typer.Option(
+            "--runtime",
+            help=(
+                "Target runtime adapter. ``claude-code`` (default) prints the "
+                "subagent prompt verbatim; ``claude-agent-sdk`` wraps the prompt "
+                "in an SDK invocation envelope with ``mcp_servers`` and "
+                "``allowed_tools`` projected from state.mcp_grants."
+            ),
+        ),
+    ] = "claude-code",
 ) -> None:
     """Render the subagent prompt for *wave_id* (read-only).
 
@@ -1247,11 +1267,26 @@ def wave_dispatch_cmd(
     surfaced to stdout. A wave that is already CLOSED / FAILED /
     ABANDONED still renders successfully (history view); a stderr note
     flags the terminal status.
+
+    ``--runtime=claude-agent-sdk`` switches the renderer to the
+    pure-dispatch SDK adapter — the prompt body is identical to the
+    claude-code branch, but the JSON envelope (or ``--output`` payload)
+    gains ``runtime``, ``mcp_servers`` and ``allowed_tools`` fields. No
+    runtime dependency on the SDK package is added; the adapter is
+    render-only.
     """
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
             cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    if runtime not in _WAVE_DISPATCH_RUNTIMES:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"unknown runtime {runtime!r}; expected one of {list(_WAVE_DISPATCH_RUNTIMES)}"
+            ),
             flags=flags,
         )
         return
@@ -1266,10 +1301,11 @@ def wave_dispatch_cmd(
         )
         return
     try:
-        prompt = render_wave_prompt(state, wave_id)
+        dispatch_envelope = render_dispatch_envelope(state, wave_id, runtime)
     except KeyError as exc:
         cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
         return
+    prompt = dispatch_envelope.prompt
     wave = state.waves[wave_id]
     if wave.status in {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}:
         print(
@@ -1281,14 +1317,59 @@ def wave_dispatch_cmd(
         _atomic_write_text(output, prompt)
         envelope: dict[str, Any] = {
             "wave": wave_id,
+            "runtime": dispatch_envelope.runtime,
             "output": str(output),
             "bytes_written": len(prompt.encode("utf-8")),
         }
+        if runtime == "claude-agent-sdk":
+            envelope["mcp_servers"] = dispatch_envelope.mcp_servers
+            envelope["allowed_tools"] = dispatch_envelope.allowed_tools
         text = f"wave dispatch {wave_id} written to {output}"
         emit_json_or_text(envelope, text, flags=flags)
         return
-    envelope = {"wave": wave_id, "prompt": prompt}
-    emit_json_or_text(envelope, prompt, flags=flags)
+    envelope = _build_dispatch_stdout_envelope(dispatch_envelope)
+    text_body = _build_dispatch_stdout_text(dispatch_envelope)
+    emit_json_or_text(envelope, text_body, flags=flags)
+
+
+def _build_dispatch_stdout_envelope(env: DispatchEnvelope) -> dict[str, Any]:
+    """Return the ``--json`` payload for a ``wave dispatch`` invocation."""
+    payload: dict[str, Any] = {
+        "wave": env.wave_id,
+        "runtime": env.runtime,
+        "prompt": env.prompt,
+    }
+    if env.runtime == "claude-agent-sdk":
+        payload["mcp_servers"] = env.mcp_servers
+        payload["allowed_tools"] = env.allowed_tools
+    return payload
+
+
+def _build_dispatch_stdout_text(env: DispatchEnvelope) -> str:
+    """Return the text-mode stdout for a ``wave dispatch`` invocation.
+
+    ``claude-code`` prints the prompt verbatim (back-compat with the
+    pre-P10 surface). ``claude-agent-sdk`` prepends a short SDK
+    invocation banner naming the wired-in MCP servers and the projected
+    allow-list so the operator sees the envelope shape without reaching
+    for ``--json``.
+    """
+    if env.runtime == "claude-code":
+        return env.prompt
+    server_ids = [server["id"] for server in env.mcp_servers]
+    lines = [
+        "## claude-agent-sdk envelope",
+        "",
+        f"runtime: {env.runtime}",
+        f"wave: {env.wave_id}",
+        f"mcp_servers: {server_ids}",
+        f"allowed_tools: {env.allowed_tools}",
+        "",
+        "---- prompt ----",
+        "",
+        env.prompt,
+    ]
+    return "\n".join(lines)
 
 
 @wave_app.command("dispatch-batch")
