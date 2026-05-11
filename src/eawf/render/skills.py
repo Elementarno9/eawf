@@ -174,6 +174,12 @@ _RESEARCH_BODY = """# /research
 - [ ] Cite sources by `path:line` or external URL.
 - [ ] Distinguish "what the code does" from "what the doc claims".
 
+## Decision surfaces
+
+When the verdict reduces to a small set of named alternatives, surface
+the choice through `AskUserQuestion` rather than free-text — the
+operator can pick without retyping the option labels.
+
 ## Output contract
 
 Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill =
@@ -187,21 +193,41 @@ _PREP_BODY = """# /prep
 
 1. Resolve `<phase-id>` against the plan / state.
 2. Enumerate waves; mark each `parallel | sequential` per the plan.
-3. For each parallel wave, dispatch a worktree subagent.
-4. For each sequential wave, run inline; cherry-pick parallel-wave
+3. **Plan-mode proposal (default).** If `planning.auto_plan` is `false`
+   (the default; check via `uv run eawf config get planning.auto_plan`)
+   and `--auto-plan` was not passed, enter Claude Code plan mode
+   (`EnterPlanMode`) and present the proposed wave DAG (IDs, deps,
+   file scopes, success criteria, estimated EU). Exit via
+   `ExitPlanMode` only after operator approval. When `auto_plan` is
+   `true` or `--auto-plan` is set, skip the proposal and dispatch
+   inline.
+4. For each parallel wave, dispatch a worktree subagent.
+5. For each sequential wave, run inline; cherry-pick parallel-wave
    commits in between as they finish.
-5. Update plan checkboxes / state via `eawf state phase advance`.
+6. Update plan checkboxes / state via `eawf state phase advance`.
 
 ## Pre-flight checklist
 
 - [ ] Confirm current branch is the long-running phase branch.
 - [ ] Confirm `git status` is clean.
 - [ ] Confirm worktree subagents branch from the parent HEAD.
+- [ ] Plan-mode proposal is the default; pass `--auto-plan` only when
+      the wave DAG is trivial or pre-approved.
+
+## Decision surfaces
+
+When the algorithm reaches a discrete choice (e.g. "split or merge
+waves W03+W04?", "use worktree per wave or run inline?"), surface
+the options via `AskUserQuestion` rather than free-text prompts —
+the operator's UI offers a faster confirm path and the answer is
+machine-parsable.
 
 ## Output contract
 
 Skill envelope describing the dispatched waves and the expected
-cherry-pick order.
+cherry-pick order. When the operator approves a plan-mode proposal,
+the envelope's `body.plan_mode_approval` records the approval source
+(`config-auto-plan`, `arg-auto-plan`, or `operator-approved`).
 """
 
 _AUDIT_BODY = """# /audit
@@ -217,6 +243,12 @@ _AUDIT_BODY = """# /audit
 
 - [ ] The auditor must NOT have access to the parent conversation.
 - [ ] Every quantitative claim must include `Read`/`Grep` evidence.
+
+## Decision surfaces
+
+On `pass-with-followups`: present the follow-up disposition (open
+backlog, open wave, defer) through `AskUserQuestion`. On `fail`:
+ask whether to halt the flow or open a remediation wave.
 
 ## Output contract
 
@@ -240,6 +272,14 @@ _SHIP_BODY = """# /ship
 - [ ] Cherry-picks from worktree subagents have all landed.
 - [ ] CI on the latest push is green.
 
+## Decision surfaces
+
+`gh pr create`, `gh pr merge`, and any push to a protected branch are
+irreversible/visible-to-others actions per AGENTS.md — surface the
+final confirm through `AskUserQuestion` (options: `proceed` / `defer`
+/ `abort`) unless `vcs.auto_push`, `vcs.pr_open`, and the merge
+strategy are pre-resolved by config.
+
 ## Output contract
 
 Skill envelope carrying the PR URL, the post-merge state mutation, and
@@ -262,6 +302,12 @@ _REVIEW_BODY = """# /review
 - [ ] Read the success criteria for the phase/wave the diff belongs to.
 - [ ] Verify any quantitative claim against `Read`/`grep`.
 
+## Decision surfaces
+
+When the final verdict is ambiguous (e.g. one 🟠 finding the operator
+might choose to defer), surface `approve | request-changes |
+comment-only` through `AskUserQuestion` rather than picking silently.
+
 ## Output contract
 
 Skill envelope with a flat findings list grouped by file and an
@@ -282,6 +328,14 @@ _POLISH_BODY = """# /polish
 
 - [ ] Scope is declared and bounded.
 - [ ] No public API rename without explicit user confirmation.
+
+## Decision surfaces
+
+Public-API renames, dead-code deletions, and anything matching
+`polish.deletion_policy` MUST be raised via `AskUserQuestion`
+(options: `apply` / `defer-to-backlog` / `skip`) instead of asking
+in free text. `polish.auto_apply_safe=true` bypasses the prompt for
+the small "safe" subset only (formatting, comment phrasing).
 
 ## Output contract
 
@@ -350,18 +404,38 @@ _FLOW_BODY = """# /flow
 
 1. Run `/research` → `/prep` → `/audit` → `/ship` → `/review` →
    `/polish` sequentially.
-2. On any non-`ok` status, short-circuit with the failing step's
-   repair commands.
+2. **Inter-stage gate (default).** After each step returns
+   `status=ok`, check `flow.auto_accept.<stage>` (via
+   `uv run eawf config get flow.auto_accept.<stage>`). When `false`
+   (the default) and the stage was not listed in `--auto-accept`,
+   ask the operator via `AskUserQuestion` whether to proceed —
+   options: `proceed` / `skip-next` / `stop`. When `true`, advance
+   without a prompt.
+3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
+   `partial`), short-circuit with the failing step's repair commands.
 
 ## Pre-flight checklist
 
 - [ ] All upstream skills are installed.
+- [ ] Per-stage `flow.auto_accept` flags reflect the operator's
+      intended cadence (review existing values; default is "ask each
+      time" for every stage).
+
+## Decision surfaces
+
+`/flow` is a long-running pipeline. Every operator-facing decision
+point — inter-stage gates, "abandon vs retry on `failed`",
+"merge order on `needs_user`" — MUST be raised through
+`AskUserQuestion` so the run stays unstuck without dropping the
+operator into free-text. Per-step skills already follow this rule;
+the flow merely propagates their `needs_user` envelopes verbatim.
 
 ## Output contract
 
-Skill envelope whose body accumulates per-step envelopes; status is
-`ok` when every step passed, otherwise the first non-`ok` step's
-status is propagated.
+Skill envelope whose body accumulates per-step envelopes plus the
+inter-stage gate decisions. Status is `ok` when every step passed
+(after any auto-accept or operator confirm), otherwise the first
+non-`ok` step's status is propagated.
 """
 
 
@@ -384,7 +458,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             "Open the next phase or wave by writing a work plan and"
             " dispatching subagents for execution."
         ),
-        argument_hint="<phase-id> [wave-id]",
+        argument_hint="<phase-id> [wave-id] [--auto-plan]",
         user_invocable=True,
         disable_model_invocation=True,
         body=_PREP_BODY,
@@ -473,7 +547,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             "Run /research → /prep → /audit → /ship → /review → /polish"
             " sequentially; short-circuit on any non-ok status."
         ),
-        argument_hint="<task-slug>",
+        argument_hint="<task-slug> [--auto-accept=<stage>[,<stage>...]]",
         user_invocable=True,
         disable_model_invocation=True,
         body=_FLOW_BODY,
