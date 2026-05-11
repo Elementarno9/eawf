@@ -85,6 +85,16 @@ def test_atomic_write_empty_dict(tmp_path: Path) -> None:
     assert json.loads(target.read_text()) == {}
 
 
+def test_atomic_write_ends_with_newline(tmp_path: Path) -> None:
+    """Payload must terminate with a single ``\\n`` so the file passes
+    the ``end-of-file-fixer`` pre-commit hook on every state mutation."""
+    target = tmp_path / "state.json"
+    writer.atomic_write_json(target, {"k": "v"})
+    raw = target.read_bytes()
+    assert raw.endswith(b"\n")
+    assert not raw.endswith(b"\n\n")
+
+
 def test_atomic_write_tempfile_cleaned_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
