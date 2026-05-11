@@ -119,6 +119,11 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "approval": "ask",
         "max_parallel_waves": 4,
         "require_research_for_unknowns": True,
+        # When False (default), ``/prep`` enters Claude Code plan mode and
+        # presents the proposed wave DAG to the operator before any state
+        # mutation. Set to True (or pass ``--auto-plan`` on the slash
+        # invocation) to skip the proposal and dispatch the plan inline.
+        "auto_plan": False,
     },
     "estimation": {
         "enabled": True,
@@ -156,6 +161,23 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "include_memory": True,
         "include_agent_memory": True,
         "deletion_policy": "recoverable_with_reason",
+    },
+    "flow": {
+        # Per-stage gates. When False (default), ``/flow`` asks the operator
+        # via ``AskUserQuestion`` before advancing past the named step. Set
+        # the per-stage flag to True (or pass ``--auto-accept=<stage>[,...]``)
+        # to advance without a prompt.
+        "auto_accept": {
+            "research": False,
+            "prep": False,
+            "audit": False,
+            "ship": False,
+            "review": False,
+            "polish": False,
+        },
+        # Encourage subagent prompts and skill bodies to surface discrete
+        # decisions through ``AskUserQuestion`` rather than free-text prompts.
+        "ask_on_decisions": True,
     },
     "memory": {
         "stores": ["project", "subproject", "agent", "user"],
