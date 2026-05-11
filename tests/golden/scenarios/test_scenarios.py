@@ -31,7 +31,11 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 from eawf.install.wizard import WizardAnswers, run_wizard_no_input
 
-from .conftest import assert_or_regen_bytes, assert_or_regen_json, project_state
+from .conftest import (
+    assert_or_regen_json,
+    project_agents_md,
+    project_state,
+)
 
 pytestmark = pytest.mark.golden_scenarios
 
@@ -79,10 +83,12 @@ def test_run_wizard_no_input_fresh_repo(
     Asserts:
 
     - ``.ea/state.json`` projection matches ``fresh_repo/state.golden.json``.
-    - ``AGENTS.md`` byte-equals ``fresh_repo/agents.golden.md`` (the
-      rendered body is timestamp-free — :mod:`eawf.render.agents_md`
-      only embeds timestamps in the manifest sidecar, not in the
-      managed-region markers).
+    - ``AGENTS.md`` region projection (ordered region ids + per-region
+      body byte-length) matches ``fresh_repo/agents.golden.json``. The
+      raw bytes are intentionally NOT committed here: their content is
+      already pinned by ``tests/golden/agents_md/core_only.md``, and
+      committing a second copy would re-leak the literal pattern
+      examples that the user-scope PII guard rejects.
     - ``.ea/config.yaml`` and ``CLAUDE.md`` exist (their byte-stability
       is already covered by sibling integration tests; we only assert
       presence here).
@@ -104,9 +110,9 @@ def test_run_wizard_no_input_fresh_repo(
         scenarios_dir / "fresh_repo" / "state.golden.json",
         project_state(live_state),
     )
-    assert_or_regen_bytes(
-        scenarios_dir / "fresh_repo" / "agents.golden.md",
-        agents_md_path.read_bytes(),
+    assert_or_regen_json(
+        scenarios_dir / "fresh_repo" / "agents.golden.json",
+        project_agents_md(agents_md_path.read_text(encoding="utf-8")),
     )
 
 
