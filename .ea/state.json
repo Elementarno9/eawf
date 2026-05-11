@@ -1336,7 +1336,8 @@
       "status": "active",
       "title": "P14 main iter",
       "wave_ids": [
-        "P14-I01-W01"
+        "P14-I01-W01",
+        "P14-I01-W02"
       ]
     }
   },
@@ -1572,7 +1573,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T21:00:33.174414Z",
+  "updated_at": "2026-05-11T21:31:58.495179Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2313,10 +2314,12 @@
       "worktree_id": null
     },
     "P14-I01-W01": {
-      "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "blocks": [
+        "P14-I01-W02"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T21:27:58.133113Z",
+      "commit": "c343e2d",
       "deps": [],
       "file_scopes": [
         "src/eawf/state/**",
@@ -2327,9 +2330,33 @@
       "id": "P14-I01-W01",
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:00:33.174379Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "hygiene preamble landed: phase prepare-close + D17 iter-bump hint + version-coupling test",
+      "status": "closed",
       "title": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W02": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T21:31:58.495166Z",
+      "commit": "e8b5dcc",
+      "deps": [
+        "P14-I01-W01"
+      ],
+      "file_scopes": [
+        ".pre-commit-config.yaml",
+        "tools/commit_prefix_lint.py",
+        "src/eawf/cli/commands/doc.py",
+        "tests/unit/test_commit_prefix_lint.py"
+      ],
+      "id": "P14-I01-W02",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:28:10.662736Z",
+      "outcome": "commit-prefix linter + detect-secrets baseline hash + doc verify pre-push wired",
+      "status": "closed",
+      "title": "Pre-commit hygiene + commit-prefix linter",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
