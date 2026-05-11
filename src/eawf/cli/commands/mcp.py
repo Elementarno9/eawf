@@ -30,7 +30,7 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 
 import typer
 from pydantic import ValidationError
@@ -53,7 +53,6 @@ from eawf.state.enums import McpRisk, McpStatus
 from eawf.state.models import (
     GRANT_SCOPE_KINDS,
     McpGrant,
-    McpGrantScopeKind,
     McpServer,
 )
 
@@ -687,7 +686,6 @@ def grant_cmd(
             raise cli_errors.InvalidInput(
                 f"scope_kind must be one of {list(GRANT_SCOPE_KINDS)}; got {scope_kind!r}"
             )
-        scope_kind_narrowed = cast(McpGrantScopeKind, scope_kind)
         state_path = resolve_state_path(flags.workspace)
         with state_transaction(state_path) as state:
             grants = state.mcp_grants if state.mcp_grants is not None else {}
@@ -700,7 +698,7 @@ def grant_cmd(
             try:
                 grant = McpGrant(
                     id=resolved_grant_id,
-                    scope_kind=scope_kind_narrowed,
+                    scope_kind=scope_kind,
                     scope_id=scope_id,
                     server_id=server_id,
                     granted_at=datetime.now(UTC),
