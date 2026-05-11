@@ -30,10 +30,15 @@ def test_unknown_command_exits_with_code_2() -> None:
 
 
 def test_bare_invocation_prints_banner() -> None:
-    """``eawf`` with no subcommand emits the package-version banner."""
+    """``eawf`` with no subcommand routes to the TUI surface (P14-W10).
+
+    Off-TTY (CliRunner has no real terminal) the TUI falls back to the
+    deterministic status text — its first byte is the ``Eä`` brand per
+    the W10 contract.
+    """
     result = runner.invoke(app, [])
     assert result.exit_code == 0
-    assert "eawf 0.2.0" in result.stdout
+    assert "Eä" in result.stdout
 
 
 def test_version_text_envelope() -> None:
