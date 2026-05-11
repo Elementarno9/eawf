@@ -370,7 +370,7 @@ def _is_path_absolute_any_platform(path_str: str) -> bool:
     """True iff *path_str* is absolute on POSIX **or** Windows.
 
     ``pathlib.Path`` is platform-bound: a POSIX-rooted string like
-    ``/Users/foo`` parses as a relative ``WindowsPath`` on Windows, and
+    ``/foo/bar`` parses as a relative ``WindowsPath`` on Windows, and
     a drive-letter string like ``C:\\foo`` parses as a relative
     ``PosixPath`` on macOS / Linux. Worktree state.json files are
     portable, so the path-fix sweep must recognise either dialect.

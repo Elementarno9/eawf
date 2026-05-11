@@ -1,7 +1,7 @@
 """Unit tests for the worktree ``path-fix`` cross-platform absoluteness helper.
 
 The legacy state.json files written on POSIX hosts store paths like
-``/Users/foo/proj/.claude/worktrees/...``. When such a file is opened on
+``/foo/proj/.claude/worktrees/...``. When such a file is opened on
 Windows, ``pathlib.Path`` parses the string as a *relative* ``WindowsPath``
 (no drive letter), so a Windows-native ``is_absolute()`` check would
 silently skip the legacy entry and leave it as-is. The helper
@@ -19,11 +19,11 @@ from eawf.cli.commands.worktree import _is_path_absolute_any_platform
 @pytest.mark.parametrize(
     "path_str",
     [
-        "/Users/foo/proj/.claude/worktrees/W01",
+        "/foo/proj/.claude/worktrees/W01",
         "/var/log",
         "/",
-        "C:\\Users\\foo\\proj",
-        "C:/Users/foo/proj",
+        "C:\\foo\\proj",
+        "C:/foo/proj",
         "D:\\repo",
         "\\\\server\\share\\worktree",
     ],
