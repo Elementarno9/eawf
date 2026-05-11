@@ -15,11 +15,19 @@ differs from :mod:`eawf.runtimes.claude.plugin_install`:
       agents/<role>.md               # one per AGENT_REGISTRY entry
       README.md                      # gated by ``include_readme``
 
-Crucially, this tree carries NO ``.claude/`` prefix, NO ``hooks/``, NO
-``settings.json``, and NO ``.ea/`` — it is a self-contained plugin, not a
-per-repo workspace render. Hooks are deferred to v0.2 (B015): Eä's
-custom hook events (``phase_open``/``wave_close``/``iter_open``) do not
-map onto the Claude Code standard event taxonomy.
+Crucially, this tree carries NO ``.claude/`` prefix, NO ``settings.json``,
+and NO ``.ea/`` — it is a self-contained plugin, not a per-repo workspace
+render.
+
+Per P13 W05 (B015), the packaged tree now ALSO emits a session-level
+``hooks.json`` at the plugin root plus the corresponding wrapper scripts
+under ``hooks/``. Only the six session-level events Claude Code can
+observe reliably (``SessionStart``, ``Stop``, ``PreToolUse``/
+``PostToolUse`` on bash ``git commit``/``git push``) appear in the
+manifest — workflow-internal lifecycle events (``wave_*``, ``iter_*``,
+``phase_*``, ``*_audit``) stay fired by the state CLI through
+``eawf hook run`` because CC's ``UserPromptSubmit`` matcher cannot
+observe slash-command sub-skill dispatch or agent-driven state writes.
 
 Public API::
 
@@ -32,6 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import tomllib
 from dataclasses import dataclass
 from importlib.resources import files
@@ -43,12 +52,14 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 import eawf
 from eawf.render._atomic import atomic_write_text
 from eawf.render.agents import AGENT_REGISTRY, AgentSpec, AgentTemplateContext, render_agent_md
+from eawf.render.hooks import render_hook_sh
 from eawf.render.skills import (
     SKILL_REGISTRY,
     SkillSpec,
     SkillTemplateContext,
     render_skill_md,
 )
+from eawf.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY, render_plugin_hooks_json
 from eawf.runtimes.claude.plugin_install import IntegrityViolation
 
 logger = logging.getLogger(__name__)
@@ -60,6 +71,11 @@ _MARKETPLACE_TEMPLATE: str = "marketplace.json.j2"
 _README_TEMPLATE: str = "plugin-readme.md.j2"
 
 _PLUGIN_NAME: str = "eawf"
+
+# File mode for hook wrapper scripts — POSIX rwxr-xr-x. Mirrors
+# :data:`eawf.runtimes.claude.plugin_install._HOOK_FILE_MODE` so the
+# packaged tree behaves like the repo-install tree once mounted.
+_HOOK_FILE_MODE: int = 0o755
 
 
 # --------------------------------------------------------------------------- #
@@ -80,6 +96,8 @@ class PackageResult:
             (or *would have been*, in a dry-run).
         wrote_readme: True when ``README.md`` was emitted (or would
             have been, in a dry-run).
+        wrote_hooks: True when ``hooks.json`` + ``hooks/*.sh`` were
+            emitted (or would have been, in a dry-run).
     """
 
     target: Path
@@ -88,6 +106,7 @@ class PackageResult:
     agents: list[str]
     wrote_marketplace: bool
     wrote_readme: bool
+    wrote_hooks: bool
 
 
 # --------------------------------------------------------------------------- #
@@ -361,6 +380,7 @@ def package_plugin(
     *,
     include_marketplace: bool = True,
     include_readme: bool = True,
+    include_hooks: bool = True,
     force: bool = False,
     dry_run: bool = False,
 ) -> PackageResult:
@@ -373,6 +393,12 @@ def package_plugin(
         include_marketplace: Emit ``.claude-plugin/marketplace.json``
             so the directory works as a single-plugin local marketplace.
         include_readme: Emit ``README.md`` describing install steps.
+        include_hooks: Emit ``hooks.json`` at the plugin root plus
+            ``hooks/<event>.sh`` wrappers for the six session-level
+            events in
+            :data:`eawf.runtimes.claude.hook_map.PLUGIN_HOOK_REGISTRY`.
+            Defaults to ``True``; pass ``False`` to package a
+            skills/agents-only tree.
         force: Bypass the non-empty-target check.
         dry_run: Resolve everything (registry walk, manifest render)
             but write no bytes.
@@ -419,6 +445,26 @@ def package_plugin(
         path = target_dir / "agents" / f"{agent_spec.role}.md"
         agent_outputs.append((path, _render_agent(agent_spec)))
 
+    # Pre-render hooks.json + per-event wrappers (B015). Only the six
+    # session-level events in PLUGIN_HOOK_REGISTRY are emitted; the
+    # workflow-internal lifecycle events stay fired by the state CLI
+    # through ``eawf hook run`` (see hook_map.py for the rationale).
+    hooks_manifest: str | None = None
+    hook_outputs: list[tuple[Path, str]] = []
+    if include_hooks:
+        hooks_manifest = render_plugin_hooks_json()
+        # Deduplicate by event_type — the registry may legitimately
+        # list the same event under multiple CC events in a future
+        # extension; we only need one wrapper per event_type on disk.
+        seen: set[str] = set()
+        for hook_spec in PLUGIN_HOOK_REGISTRY:
+            value = hook_spec.event_type.value
+            if value in seen:
+                continue
+            seen.add(value)
+            path = target_dir / "hooks" / f"{value}.sh"
+            hook_outputs.append((path, render_hook_sh(hook_spec.event_type)))
+
     skill_names = [spec.skill_name for spec in SKILL_REGISTRY]
     agent_roles = [spec.role for spec in AGENT_REGISTRY]
 
@@ -426,7 +472,7 @@ def package_plugin(
         logger.info(
             f"package_plugin dry-run target={target_dir} skills={len(skill_names)} "
             f"agents={len(agent_roles)} marketplace={include_marketplace} "
-            f"readme={include_readme}"
+            f"readme={include_readme} hooks={include_hooks}"
         )
         return PackageResult(
             target=target_dir,
@@ -435,6 +481,7 @@ def package_plugin(
             agents=agent_roles,
             wrote_marketplace=include_marketplace,
             wrote_readme=include_readme,
+            wrote_hooks=include_hooks,
         )
 
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -456,10 +503,19 @@ def package_plugin(
     for path, body in agent_outputs:
         atomic_write_text(path, body)
 
+    if hooks_manifest is not None:
+        # hooks.json lives at the plugin tree root (NOT under
+        # ``.claude-plugin/``) per the Claude Code plugin manifest schema.
+        hooks_json_path = target_dir / "hooks.json"
+        atomic_write_text(hooks_json_path, hooks_manifest)
+        for path, body in hook_outputs:
+            atomic_write_text(path, body)
+            os.chmod(path, _HOOK_FILE_MODE)
+
     logger.info(
         f"package_plugin target={target_dir} skills={len(skill_names)} "
         f"agents={len(agent_roles)} marketplace={include_marketplace} "
-        f"readme={include_readme}"
+        f"readme={include_readme} hooks={include_hooks}"
     )
     return PackageResult(
         target=target_dir,
@@ -468,6 +524,7 @@ def package_plugin(
         agents=agent_roles,
         wrote_marketplace=include_marketplace,
         wrote_readme=include_readme,
+        wrote_hooks=include_hooks,
     )
 
 

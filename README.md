@@ -50,8 +50,9 @@ eawf plugin doctor claude     # local drift check
 
 ### Install as a CC plugin (local marketplace)
 
-For a portable Claude Code plugin install (skills + agents only; hooks
-deferred to v0.2 — see B015 in `docs/architecture/plugins.md`):
+For a portable Claude Code plugin install (skills, agents, and the six
+session-level hooks Claude Code can observe — `SessionStart`, `Stop`,
+and `Pre`/`PostToolUse` filtered to bash `git commit`/`git push`):
 
 ```bash
 eawf plugin package claude --target ./build/eawf-plugin
