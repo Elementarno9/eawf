@@ -7,9 +7,12 @@ repair-command counts. The harness is opt-in via the ``eval`` pytest
 marker — default ``uv run pytest`` skips the cluster; the regression run is
 ``uv run pytest -m eval``.
 
-The bar is intentionally low for v0.2: we want a guard-rail that protects
-the envelope contract across model/version changes, not a deep semantic
-check of skill behaviour.
+The shape test (``test_skill_envelope_matches_golden``) is the v0.2
+guard-rail that protects the envelope contract across model/version
+changes. The score test (``test_skill_envelope_score_meets_threshold``)
+adds a P13-W03 / B042 weighted-score regression: each fixture carries a
+per-skill ``eval_score_threshold`` (default ``0.85``) that the live
+envelope must clear via :func:`eawf.eval.score_envelope`.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from typing import cast
 
 import pytest
 
+from eawf.eval import score_envelope
 from eawf.skills.audit import AuditSkill
 from eawf.skills.engine import Skill, SkillContext, run_skill
 from eawf.skills.polish import PolishSkill
@@ -78,4 +82,29 @@ def test_skill_envelope_matches_golden(
     assert repair_count == golden["repair_commands_count"], (
         f"repair-commands count drifted for {slug}: "
         f"expected={golden['repair_commands_count']} got={repair_count}"
+    )
+
+
+@pytest.mark.eval
+@pytest.mark.parametrize("slug,skill_cls", _SKILL_CASES, ids=[s for s, _ in _SKILL_CASES])
+def test_skill_envelope_score_meets_threshold(
+    slug: str,
+    skill_cls: type[Skill],
+    eval_state_dir: Path,
+    eval_ctx: SkillContext,
+) -> None:
+    """Live envelope scores at or above the golden's ``eval_score_threshold``.
+
+    Companion to the shape guard above. The score combines six normalised
+    dimensions (status, body_keys, warnings ±1, repair_commands ±1,
+    evidence_refs presence, state_mutation kinds) into a 0..1 total; the
+    default pass floor is 0.85 with per-fixture overrides supported via
+    the ``eval_score_threshold`` field.
+    """
+    golden = _load_golden(slug)
+    env = run_skill(skill_cls(), eval_ctx)
+    score = score_envelope(env, golden)
+    threshold = float(golden.get("eval_score_threshold", 0.85))  # type: ignore[arg-type]
+    assert score.total >= threshold, (
+        f"score {score.total:.3f} < threshold {threshold:.3f} for {slug}: per_dim={score.per_dim}"
     )

@@ -8,8 +8,11 @@
     "recommendation",
     "user_question"
   ],
+  "eval_score_threshold": 0.85,
+  "evidence_refs_present": false,
   "repair_commands_count": 0,
   "skill": "/research",
+  "state_mutation_kinds": [],
   "status": "ok",
   "warnings_count": 0
 }
