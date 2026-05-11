@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -873,6 +874,52 @@ def decision_list(
     }
     text = "\n".join(f"{d.id}\t{d.status.value}\t{d.summary}" for d in items) or "(none)"
     _emit(payload, text, flags)
+
+
+class _DecisionGraphFormat(StrEnum):
+    """Output format selector for ``decision graph --format``."""
+
+    TEXT = "text"
+    DOT = "dot"
+    MERMAID = "mermaid"
+
+
+@decision_app.command("graph")
+def decision_graph(
+    ctx: typer.Context,
+    fmt: Annotated[
+        _DecisionGraphFormat,
+        typer.Option(
+            "--format",
+            help="Output format (text/dot/mermaid).",
+        ),
+    ] = _DecisionGraphFormat.TEXT,
+) -> None:
+    """Render the decision graph (text, Graphviz DOT, or Mermaid)."""
+    from eawf.render.decision_graph import (
+        build_decision_graph,
+        render_dot,
+        render_mermaid,
+        render_text,
+    )
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+    state = _run_read(flags, load_state, state_path)
+    graph = build_decision_graph(state)
+    if fmt is _DecisionGraphFormat.TEXT:
+        body = render_text(graph)
+    elif fmt is _DecisionGraphFormat.DOT:
+        body = render_dot(graph)
+    else:
+        body = render_mermaid(graph)
+    payload = {
+        "format": fmt.value,
+        "nodes": [n.model_dump() for n in graph.nodes],
+        "edges": [e.model_dump() for e in graph.edges],
+        "body": body,
+    }
+    _emit(payload, body, flags)
 
 
 # ---- artifact --------------------------------------------------------------
