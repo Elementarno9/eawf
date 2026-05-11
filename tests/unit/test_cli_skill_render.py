@@ -176,7 +176,12 @@ def test_render_cmd_help_text_documents_format_option(cli_runner: CliRunner) -> 
     """``eawf skill render --help`` surfaces the ``--format`` option so
     operators discover both alternatives without reading the source.
     """
-    result = cli_runner.invoke(app, ["skill", "render", "--help"])
+    # COLUMNS=200 keeps Typer's rich help renderer from word-wrapping the
+    # ``--format`` option name into an ellipsis under CI's narrow default
+    # terminal width (Click's default 80 cols truncates to ``--for...``).
+    result = cli_runner.invoke(
+        app, ["skill", "render", "--help"], env={"COLUMNS": "200"}
+    )
     assert result.exit_code == 0
     assert "--format" in result.stdout
     assert "skill-md" in result.stdout
