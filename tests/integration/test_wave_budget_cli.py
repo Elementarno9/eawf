@@ -132,6 +132,25 @@ def test_wave_budget_consume_block_nonzero_exit(workspace: Path) -> None:
     assert state["waves"]["P01-I01-W01"]["tokens_consumed"] == 0  # type: ignore[index]
 
 
+def test_wave_budget_consume_block_surfaces_discarded_delta(workspace: Path) -> None:
+    """Error message names pre-rollback consumption, the rejected delta,
+    and the would-be post-add value so the operator can see what was
+    attempted before the transaction rolled back."""
+    _bootstrap_pending_wave(workspace)
+    assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
+    # First consume lands cleanly (warn: 75 %).
+    assert runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code == 0
+    # Second consume tips over the cap; transaction rolls back.
+    res = runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "500"])
+    assert res.exit_code == 4, res.stdout
+    # Pre-rollback consumed, delta, and would-be value all in the message.
+    assert "750+500=1250" in res.stdout
+    assert "discarded" in res.stdout
+    state = _read_state(workspace)
+    # tokens_consumed remains at the pre-rollback value.
+    assert state["waves"]["P01-I01-W01"]["tokens_consumed"] == 750  # type: ignore[index]
+
+
 def test_wave_budget_consume_unknown_wave_exits_2(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
     res = runner.invoke(app, ["wave", "budget", "consume", "P09-I09-W09", "100"])
