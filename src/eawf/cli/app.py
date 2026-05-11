@@ -75,7 +75,13 @@ def _root(
         workspace=workspace,
     )
     if ctx.invoked_subcommand is None:
-        typer.echo(f"eawf {__version__}")
+        # Bare ``eawf`` on a TTY routes to the TUI (config.ui.bare_command
+        # default: "tui"); plain / no-input / non-TTY falls back to the
+        # deterministic status emission per D15 + D23.
+        from eawf.tui.app import run_tui
+
+        rc = run_tui(workspace=workspace, no_input=no_input, plain=plain_output)
+        raise typer.Exit(code=rc)
 
 
 @app.command(name="version")
@@ -298,6 +304,19 @@ from eawf.cli.commands.profile import profile_app  # noqa: E402
 
 app.add_typer(profile_app, name="profile")
 # --- end P14 W05 ---
+
+# --- P14 W10 TUI registration ---
+from eawf.tui.app import run_tui as _run_tui  # noqa: E402
+
+
+@app.command(name="tui", help="Open the Rich-backed Eä TUI (or text fallback off-TTY).")
+def _tui_cmd(ctx: typer.Context) -> None:
+    flags: GlobalFlags = ctx.obj
+    rc = _run_tui(workspace=flags.workspace, no_input=flags.no_input, plain=flags.plain_output)
+    raise typer.Exit(code=rc)
+
+
+# --- end P14 W10 ---
 
 
 def main() -> None:
