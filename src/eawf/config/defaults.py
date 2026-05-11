@@ -19,9 +19,15 @@ from typing import Any
 # it in lockstep with :mod:`eawf.config.layered` and ``cli/commands/config.py``.
 BUILT_IN_LAYER: str = "built-in"
 
+# Single source of truth for the on-disk ``.ea/config.yaml`` schema version.
+# Bumped to ``"1.1"`` in P14-W03 to introduce ``runtime.adapters: list[str]``
+# (D14); the loader keeps a deprecation shim that accepts legacy ``"1.0"``
+# config files whose ``runtime.kind`` is the only adapter selector.
+CONFIG_SCHEMA_VERSION: str = "1.1"
+
 
 _BUILT_IN_DEFAULTS: dict[str, Any] = {
-    "schema_version": "1.0",
+    "schema_version": CONFIG_SCHEMA_VERSION,
     "cli": {
         "canonical_command": "eawf",
         "preferred_command": "eawf",
@@ -61,6 +67,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     },
     "runtime": {
         "default": "claude",
+        # ``adapters`` is the user-facing selector list (D14 / P14-W03).
+        # Built-in default opts the project into the Claude adapter only;
+        # the wizard / workspace overlay extends or replaces it.
+        "adapters": ["claude"],
         "slash_commands": [
             "init",
             "roadmap",
@@ -72,13 +82,17 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "review",
             "polish",
         ],
-        "adapters": {
+        # ``adapter_catalog`` holds the per-adapter config blocks. Indexed
+        # by adapter id; the runtime spine reads it after consulting
+        # ``adapters`` for the selector list.
+        "adapter_catalog": {
             "claude": {
                 "enabled": True,
                 "plugin_install": "ask",
                 "skills_path": ".claude/skills",
                 "agents_path": ".claude/agents",
             },
+            "codex": {"enabled": False, "status": "planned"},
             "opencode": {"enabled": False, "status": "deferred"},
         },
     },

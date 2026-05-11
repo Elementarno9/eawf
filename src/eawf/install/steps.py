@@ -152,7 +152,7 @@ STEP_RUNTIME = WizardStep(
     kind="choice",
     default="claude-code",
     cli_flag="--runtime",
-    choices=("claude-code", "opencode", "generic"),
+    choices=("claude-code", "codex", "opencode", "generic"),
 )
 
 STEP_PLUGINS = WizardStep(
