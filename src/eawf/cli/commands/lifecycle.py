@@ -1414,10 +1414,10 @@ def wave_budget_consume_cmd(
     result: dict[str, Any] = {}
 
     def _mutator(state: State) -> None:
-        wave_pre = state.waves.get(wave_id)
-        if wave_pre is None:
+        wave_before = state.waves.get(wave_id)
+        if wave_before is None:
             raise cli_errors.NotFound(f"unknown wave {wave_id!r}")
-        tokens_pre = wave_pre.tokens_consumed
+        tokens_before = wave_before.tokens_consumed
         # ``budget_record`` raises ``KeyError`` only when *wave_id* is
         # absent — the pre-check above already filtered that, so no
         # further catch is needed here.
@@ -1428,7 +1428,7 @@ def wave_budget_consume_cmd(
         if tag == BLOCK_TAG:
             raise cli_errors.ValidationFailed(
                 f"wave {wave_id!r} would be over token budget "
-                f"(would consume {tokens_pre}+{tokens}={wave.tokens_consumed}, "
+                f"(would consume {tokens_before}+{tokens}={wave.tokens_consumed}, "
                 f"budget {wave.token_budget}); "
                 f"delta of {tokens} discarded — raise budget or split work"
             )
