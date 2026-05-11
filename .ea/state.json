@@ -683,8 +683,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P10-I01",
+    "phase_id": "P10",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -848,6 +848,22 @@
         "P09-I01-W03",
         "P09-I01-W04"
       ]
+    },
+    "P10-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P10-I01",
+      "opened_at": "2026-05-11T10:19:44.869960Z",
+      "phase_id": "P10",
+      "status": "active",
+      "title": "Multi-runtime: skill registry + MCP grants + SDK dispatch",
+      "wave_ids": [
+        "P10-I01-W01",
+        "P10-I01-W02",
+        "P10-I01-W03",
+        "P10-I01-W04"
+      ]
     }
   },
   "mcp_servers": null,
@@ -977,6 +993,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Backlog cleanups deferred from P08 (refactor, validators, cross-platform, envelopes)"
+    },
+    "P10": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P10",
+      "iter_ids": [
+        "P10-I01"
+      ],
+      "opened_at": "2026-05-11T10:19:30.606379Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "Multi-runtime: skill discovery API + MCP scoping"
     }
   },
   "plugins": {},
@@ -997,7 +1027,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T08:42:27.602406Z",
+  "updated_at": "2026-05-11T10:19:55.225544Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1222,6 +1252,106 @@
       "outcome": "Surface discarded delta + pre-rollback consumed in budget-consume block error; rollback persistence documented + tested",
       "status": "closed",
       "title": "Surface discarded_delta in wave budget consume envelope on rollback",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P10-I01-W01": {
+      "blocks": [
+        "P10-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/cli/commands/skill.py",
+        "src/eawf/render/skills.py",
+        "tests/unit/cli/test_skill_render.py",
+        "tests/unit/cli/test_skill_list_payload.py"
+      ],
+      "id": "P10-I01-W01",
+      "iter_id": "P10-I01",
+      "opened_at": "2026-05-11T10:19:48.876900Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Skill render command",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P10-I01-W02": {
+      "blocks": [
+        "P10-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/cli/commands/mcp.py",
+        "src/eawf/validate/invariants.py",
+        "src/eawf/schemas/state.schema.json",
+        "tests/unit/state/test_mcp_grant_model.py",
+        "tests/unit/cli/test_mcp_grant_cmd.py",
+        "tests/unit/validate/test_invariant_mcp_grant_ref.py"
+      ],
+      "id": "P10-I01-W02",
+      "iter_id": "P10-I01",
+      "opened_at": "2026-05-11T10:19:50.323650Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "MCP grants state table + CLI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P10-I01-W03": {
+      "blocks": [
+        "P10-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/mcp/installer.py",
+        "src/eawf/dispatch/renderer.py",
+        "src/eawf/cli/commands/lifecycle.py",
+        "tests/unit/render/test_dispatch_envelope.py",
+        "tests/unit/cli/test_wave_dispatch_runtime.py"
+      ],
+      "id": "P10-I01-W03",
+      "iter_id": "P10-I01",
+      "opened_at": "2026-05-11T10:19:51.534514Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "claude-agent-sdk dispatch adapter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P10-I01-W04": {
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P10-I01-W01",
+        "P10-I01-W02",
+        "P10-I01-W03"
+      ],
+      "file_scopes": [
+        "tests/integration/test_dual_runtime_envelope.py",
+        ".ea/artifacts/A11-P10-ship-gate.md"
+      ],
+      "id": "P10-I01-W04",
+      "iter_id": "P10-I01",
+      "opened_at": "2026-05-11T10:19:55.225521Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Ship-gate dual-runtime envelope demo",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
