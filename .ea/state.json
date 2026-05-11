@@ -26,6 +26,16 @@
       "uri": "repo:.ea/artifacts/A09-P08-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A09-P08"
     },
+    "ART-A10-P09": {
+      "created_at": "2026-05-11T08:36:15.266606Z",
+      "id": "ART-A10-P09",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/A10-P09-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-A10-P09"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -133,6 +143,17 @@
       "integrity_results": [],
       "kind": "ship-gate",
       "report_artifact_id": "ART-A09-P08",
+      "scope_id": "EAWF",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A10-P09": {
+      "check_results": [],
+      "created_at": "2026-05-11T08:36:27.574990Z",
+      "id": "A10-P09",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A10-P09",
       "scope_id": "EAWF",
       "status": "complete",
       "verdict": "pass"
@@ -778,6 +799,22 @@
         "P08-I01-W06",
         "P08-I01-W01"
       ]
+    },
+    "P09-I01": {
+      "audit_id": "A10-P09",
+      "closed_at": "2026-05-11T08:36:31.584978Z",
+      "estimate_id": null,
+      "id": "P09-I01",
+      "opened_at": "2026-05-11T08:15:55.743189Z",
+      "phase_id": "P09",
+      "status": "closed",
+      "title": "P09 backlog sweep",
+      "wave_ids": [
+        "P09-I01-W01",
+        "P09-I01-W02",
+        "P09-I01-W03",
+        "P09-I01-W04"
+      ]
     }
   },
   "mcp_servers": null,
@@ -893,6 +930,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Orchestration core (wave dispatch + DAG + land + budgets + fix-ci + review)"
+    },
+    "P09": {
+      "audit_id": "A10-P09",
+      "closed_at": "2026-05-11T08:36:32.030331Z",
+      "id": "P09",
+      "iter_ids": [
+        "P09-I01"
+      ],
+      "opened_at": "2026-05-11T08:15:52.288121Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Backlog cleanups deferred from P08 (refactor, validators, cross-platform, envelopes)"
     }
   },
   "plugins": {},
@@ -913,7 +964,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-10T23:05:36.191549Z",
+  "updated_at": "2026-05-11T08:36:32.030361Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1056,6 +1107,91 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W06-1778452198"
+    },
+    "P09-I01-W01": {
+      "blocks": [
+        "P09-I01-W04"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T08:18:14.020785Z",
+      "commit": "91c7e469e5121dd16b2f4e2d7f35f55dd2a8650d",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py",
+        "src/eawf/worktree/wave_land.py",
+        "src/eawf/util/sortutil.py"
+      ],
+      "id": "P09-I01-W01",
+      "iter_id": "P09-I01",
+      "opened_at": "2026-05-11T08:16:04.388462Z",
+      "outcome": "Dedup _insort to bisect.insort; rename project_init→project_init_cmd",
+      "status": "closed",
+      "title": "DRY _insort to shared util; rename project_init→project_init_cmd",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P09-I01-W02": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T08:20:17.430900Z",
+      "commit": "5571d1408148fc4d49e2f7f1f59d9661ab37949f",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "tests/state/test_models_blocks_invariant.py"
+      ],
+      "id": "P09-I01-W02",
+      "iter_id": "P09-I01",
+      "opened_at": "2026-05-11T08:16:10.471461Z",
+      "outcome": "Add check_wave_blocks_invariant + INV.GRAPH.{BLOCKS,DEPS}_MISSING_REVERSE codes; ALL_INVARIANTS extended",
+      "status": "closed",
+      "title": "State-level validator for Wave.blocks reverse-index invariant",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P09-I01-W03": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T08:21:40.313753Z",
+      "commit": "3b5b2fb927d9c27e981632c9e7f36a02cd184430",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/cli/commands/worktree.py",
+        "tests/cli/test_worktree_path_fix.py"
+      ],
+      "id": "P09-I01-W03",
+      "iter_id": "P09-I01",
+      "opened_at": "2026-05-11T08:16:11.236826Z",
+      "outcome": "Cross-platform abs-path detection in worktree path-fix via PurePosixPath/PureWindowsPath; helper extracted + tested",
+      "status": "closed",
+      "title": "Cross-platform absoluteness check in worktree path-fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P09-I01-W04": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T08:23:58.605660Z",
+      "commit": "268492749c6f601655357fe92ce92202e0da7d42",
+      "deps": [
+        "P09-I01-W01"
+      ],
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py",
+        "tests/cli/test_wave_budget_consume.py"
+      ],
+      "id": "P09-I01-W04",
+      "iter_id": "P09-I01",
+      "opened_at": "2026-05-11T08:16:12.495035Z",
+      "outcome": "Surface discarded delta + pre-rollback consumed in budget-consume block error; rollback persistence documented + tested",
+      "status": "closed",
+      "title": "Surface discarded_delta in wave budget consume envelope on rollback",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
