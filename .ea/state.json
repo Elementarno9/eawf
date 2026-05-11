@@ -682,7 +682,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P10-I01-W01",
+      "P10-I01-W02",
+      "P10-I01-W03"
+    ],
     "iter_id": "P10-I01",
     "phase_id": "P10",
     "project_code": "EAWF",
@@ -1027,7 +1031,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T10:19:55.225544Z",
+  "updated_at": "2026-05-11T10:21:31.283777Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1260,7 +1264,7 @@
       "blocks": [
         "P10-I01-W04"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p10-flow-w01",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1274,17 +1278,17 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:48.876900Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "Skill render command",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P10-I01-W01-1778494889"
     },
     "P10-I01-W02": {
       "blocks": [
         "P10-I01-W04"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p10-flow-w02",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1301,17 +1305,17 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:50.323650Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "MCP grants state table + CLI",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P10-I01-W02-1778494890"
     },
     "P10-I01-W03": {
       "blocks": [
         "P10-I01-W04"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p10-flow-w03",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1326,11 +1330,11 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:51.534514Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "claude-agent-sdk dispatch adapter",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P10-I01-W03-1778494891"
     },
     "P10-I01-W04": {
       "blocks": [],
@@ -1424,6 +1428,39 @@
       "path": ".claude/worktrees/p08-w06",
       "status": "abandoned",
       "wave_id": "P08-I01-W06"
+    },
+    "WT-P10-I01-W01-1778494889": {
+      "base_branch": "feature/eawf-v0.2-p10-multi-runtime",
+      "branch": "feature/eawf-v0.2-p10-multi-runtime-w01",
+      "created_at": "2026-05-11T10:21:29.271196Z",
+      "id": "WT-P10-I01-W01-1778494889",
+      "merged_commit": null,
+      "owner_session_id": "p10-flow-w01",
+      "path": ".claude/worktrees/p10-w01",
+      "status": "active",
+      "wave_id": "P10-I01-W01"
+    },
+    "WT-P10-I01-W02-1778494890": {
+      "base_branch": "feature/eawf-v0.2-p10-multi-runtime",
+      "branch": "feature/eawf-v0.2-p10-multi-runtime-w02",
+      "created_at": "2026-05-11T10:21:30.598568Z",
+      "id": "WT-P10-I01-W02-1778494890",
+      "merged_commit": null,
+      "owner_session_id": "p10-flow-w02",
+      "path": ".claude/worktrees/p10-w02",
+      "status": "active",
+      "wave_id": "P10-I01-W02"
+    },
+    "WT-P10-I01-W03-1778494891": {
+      "base_branch": "feature/eawf-v0.2-p10-multi-runtime",
+      "branch": "feature/eawf-v0.2-p10-multi-runtime-w03",
+      "created_at": "2026-05-11T10:21:31.283777Z",
+      "id": "WT-P10-I01-W03-1778494891",
+      "merged_commit": null,
+      "owner_session_id": "p10-flow-w03",
+      "path": ".claude/worktrees/p10-w03",
+      "status": "active",
+      "wave_id": "P10-I01-W03"
     }
   }
 }
