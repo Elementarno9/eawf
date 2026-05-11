@@ -704,8 +704,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P10-I01",
-    "phase_id": "P10",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -871,13 +871,13 @@
       ]
     },
     "P10-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A11-P10",
+      "closed_at": "2026-05-11T10:50:23.234293Z",
       "estimate_id": null,
       "id": "P10-I01",
       "opened_at": "2026-05-11T10:19:44.869960Z",
       "phase_id": "P10",
-      "status": "active",
+      "status": "closed",
       "title": "Multi-runtime: skill registry + MCP grants + SDK dispatch",
       "wave_ids": [
         "P10-I01-W01",
@@ -1017,8 +1017,8 @@
       "title": "Backlog cleanups deferred from P08 (refactor, validators, cross-platform, envelopes)"
     },
     "P10": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A11-P10",
+      "closed_at": "2026-05-11T10:50:23.605387Z",
       "id": "P10",
       "iter_ids": [
         "P10-I01"
@@ -1026,7 +1026,7 @@
       "opened_at": "2026-05-11T10:19:30.606379Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "Multi-runtime: skill discovery API + MCP scoping"
     }
@@ -1049,7 +1049,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T10:50:04.485403Z",
+  "updated_at": "2026-05-11T10:50:23.605409Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
