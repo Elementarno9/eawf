@@ -92,8 +92,9 @@ decision (`eawf decision add`).
 ## Profiles
 
 - Core, Python, and Research are functional v0.1 profiles.
-- Quant and ML ship as catalog stubs in v0.1 (functional in v0.2 once
-  the audit-check runner exists).
+- Quant and ML ship as catalog stubs in v0.1; in v0.2 the audit-check
+  DSL skeleton landed (P13 W04, B019) but the profile bodies
+  (B006/B007) remain on the v0.3 backlog.
 - Catalog stubs `re`, `game`, `apps`, `infra`, `docs`, `robotics` ship
   with no body in v0.1.
 
