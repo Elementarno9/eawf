@@ -745,12 +745,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P13-I01-W02",
-      "P13-I01-W04",
-      "P13-I01-W05",
-      "P13-I01-W07"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P13-I01",
     "phase_id": "P13",
     "project_code": "EAWF",
@@ -1241,7 +1236,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:15:07.472816Z",
+  "updated_at": "2026-05-11T14:38:20.272537Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1823,8 +1818,8 @@
         "P13-I01-W06"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:38:19.212561Z",
+      "commit": "8f288ed",
       "deps": [
         "P13-I01-W01"
       ],
@@ -1835,8 +1830,8 @@
       "id": "P13-I01-W02",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:57.733885Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "B009 golden scenarios — 4 cases (fresh_repo, byte-stable agents_md, enrich_existing, flow_full) under golden_scenarios marker",
+      "status": "closed",
       "title": "B009 golden scenarios",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1873,8 +1868,8 @@
         "P13-I01-W06"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:38:19.569156Z",
+      "commit": "d2a5214",
       "deps": [
         "P13-I01-W01"
       ],
@@ -1889,8 +1884,8 @@
       "id": "P13-I01-W04",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:59.217228Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "B019 audit-check DSL — 5 kinds + yaml runner + --checks CLI; D02 closed",
+      "status": "closed",
       "title": "B019 audit-check DSL skeleton",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1901,8 +1896,8 @@
         "P13-I01-W06"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:38:19.919111Z",
+      "commit": "ec9775c",
       "deps": [
         "P13-I01-W01"
       ],
@@ -1917,8 +1912,8 @@
       "id": "P13-I01-W05",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:00.581229Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "B015 plugin-mode hooks — 6 session-level events + hooks.json; eawf-internal lifecycle stays in state CLI",
+      "status": "closed",
       "title": "B015 plugin-mode hooks",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1960,8 +1955,8 @@
         "P13-I01-W06"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:38:20.272524Z",
+      "commit": "ad9bef3",
       "deps": [
         "P13-I01-W01"
       ],
@@ -1974,8 +1969,8 @@
       "id": "P13-I01-W07",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:01.571308Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "B017 user-scope install — doctor --user-scope probe + update_plugin check=True",
+      "status": "closed",
       "title": "B017 user-scope install",
       "token_budget": null,
       "tokens_consumed": 0,
