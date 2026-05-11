@@ -745,9 +745,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P13-I01-W01"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P13-I01",
     "phase_id": "P13",
     "project_code": "EAWF",
@@ -1238,7 +1236,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:13:41.104676Z",
+  "updated_at": "2026-05-11T14:14:04.500568Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1797,8 +1795,8 @@
         "P13-I01-W07"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:14:04.500555Z",
+      "commit": "4991af88ebe08ef678695606f8b5a5375a18b7a5",
       "deps": [],
       "file_scopes": [
         ".ea/state.json",
@@ -1807,8 +1805,8 @@
       "id": "P13-I01-W01",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:53.989701Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Closed 13 shipped backlog items (B025/B027/B029-B034/B037-B041) drifted since P08/P12",
+      "status": "closed",
       "title": "Backlog hygiene — close 13 shipped items",
       "token_budget": null,
       "tokens_consumed": 0,
