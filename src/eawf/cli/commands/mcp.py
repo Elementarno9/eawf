@@ -30,7 +30,7 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 from pydantic import ValidationError
@@ -40,6 +40,7 @@ from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
+from eawf.lifecycle.allocator import allocate_grant_id
 from eawf.mcp.installer import (
     InstallEntryResult,
     IntegrityViolation,
@@ -49,7 +50,12 @@ from eawf.mcp.installer import (
     remove_runtime_entry,
 )
 from eawf.state.enums import McpRisk, McpStatus
-from eawf.state.models import McpGrant, McpServer
+from eawf.state.models import (
+    GRANT_SCOPE_KINDS,
+    McpGrant,
+    McpGrantScopeKind,
+    McpServer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +69,6 @@ mcp_app = typer.Typer(
 
 _SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude",)
 _OWNER_FILTERS: tuple[str, ...] = ("eawf", "user", "all")
-_GRANT_SCOPE_KINDS: tuple[str, ...] = ("wave", "profile", "global")
 
 
 def _escape_tsv_field(value: str) -> str:
@@ -678,25 +683,15 @@ def grant_cmd(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        if scope_kind not in _GRANT_SCOPE_KINDS:
+        if scope_kind not in GRANT_SCOPE_KINDS:
             raise cli_errors.InvalidInput(
-                f"scope_kind must be one of {list(_GRANT_SCOPE_KINDS)}; got {scope_kind!r}"
+                f"scope_kind must be one of {list(GRANT_SCOPE_KINDS)}; got {scope_kind!r}"
             )
+        scope_kind_narrowed = cast(McpGrantScopeKind, scope_kind)
         state_path = resolve_state_path(flags.workspace)
         with state_transaction(state_path) as state:
             grants = state.mcp_grants if state.mcp_grants is not None else {}
-            if grant_id is None:
-                next_n = 1
-                for existing_id in grants:
-                    if existing_id.startswith("GRANT-"):
-                        try:
-                            n = int(existing_id.removeprefix("GRANT-"))
-                        except ValueError:
-                            continue
-                        next_n = max(next_n, n + 1)
-                resolved_grant_id = f"GRANT-{next_n}"
-            else:
-                resolved_grant_id = grant_id
+            resolved_grant_id = grant_id if grant_id is not None else allocate_grant_id(state)
             if resolved_grant_id in grants:
                 raise cli_errors.InvalidInput(
                     f"mcp grant id {resolved_grant_id!r} already exists; "
@@ -705,7 +700,7 @@ def grant_cmd(
             try:
                 grant = McpGrant(
                     id=resolved_grant_id,
-                    scope_kind=scope_kind,  # type: ignore[arg-type]
+                    scope_kind=scope_kind_narrowed,
                     scope_id=scope_id,
                     server_id=server_id,
                     granted_at=datetime.now(UTC),

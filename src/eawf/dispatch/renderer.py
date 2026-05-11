@@ -48,11 +48,11 @@ logger = logging.getLogger(__name__)
 # the internal canonical name ``"claude"`` for back-compat with v0.1
 # settings.json writes; the dispatch adapter exposes ``"claude-code"``
 # at the CLI surface so the two SDK-vs-CLI cousins read symmetrically.
-# Both pools are kept in lockstep — adding a runtime requires touching
-# both this tuple and ``mcp/installer.py:_SUPPORTED_RUNTIMES``.
+# This tuple is the source of truth — the CLI layer imports it directly
+# rather than re-declaring the allow-list.
 _CLI_RUNTIME_CLAUDE_CODE: str = "claude-code"
 _CLI_RUNTIME_CLAUDE_AGENT_SDK: str = "claude-agent-sdk"
-_DISPATCH_RUNTIMES: tuple[str, ...] = (
+DISPATCH_RUNTIMES: tuple[str, ...] = (
     _CLI_RUNTIME_CLAUDE_CODE,
     _CLI_RUNTIME_CLAUDE_AGENT_SDK,
 )
@@ -135,8 +135,8 @@ def render_dispatch_envelope(
             scope chain has a broken link (propagated from
             :func:`render_wave_prompt`).
     """
-    if runtime not in _DISPATCH_RUNTIMES:
-        raise ValueError(f"unknown runtime {runtime!r}; expected one of {list(_DISPATCH_RUNTIMES)}")
+    if runtime not in DISPATCH_RUNTIMES:
+        raise ValueError(f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}")
     prompt = render_wave_prompt(state, wave_id, repo_root=repo_root)
     if runtime == _CLI_RUNTIME_CLAUDE_CODE:
         return DispatchEnvelope(runtime=runtime, wave_id=wave_id, prompt=prompt)
@@ -180,20 +180,14 @@ def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
     For every grant whose ``scope_kind == "wave"`` and ``scope_id ==
     wave_id``, emit ``"mcp__<server_id>__*"``. The result is sorted and
     de-duplicated so identical grants collapse to one allow-list entry.
-
-    The ``mcp_grants`` field lands in W02 (sibling wave). Until the
-    field is on the model, ``getattr(state, "mcp_grants", None)``
-    returns ``None`` and this helper returns ``[]`` — the W03 adapter
-    therefore renders correctly on a pre-W02 ``state.json``.
+    ``state.mcp_grants`` is the nullable map W02 added to :class:`State`;
+    ``None`` or an empty map yield ``[]``.
     """
-    grants = getattr(state, "mcp_grants", None) or {}
+    grants = state.mcp_grants or {}
     tools: set[str] = set()
     for grant in grants.values():
-        scope_kind = getattr(grant, "scope_kind", None)
-        scope_id = getattr(grant, "scope_id", None)
-        server_id = getattr(grant, "server_id", None)
-        if scope_kind == "wave" and scope_id == wave_id and server_id:
-            tools.add(f"mcp__{server_id}__*")
+        if grant.scope_kind == "wave" and grant.scope_id == wave_id:
+            tools.add(f"mcp__{grant.server_id}__*")
     return sorted(tools)
 
 
@@ -429,6 +423,7 @@ def _phase_wave_commit_prefix(wave_id: str) -> tuple[str, str]:
 
 
 __all__ = [
+    "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
     "render_dispatch_envelope",
     "render_wave_prompt",

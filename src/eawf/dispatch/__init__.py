@@ -21,12 +21,14 @@ beyond the module-level ``logger``. The CLI handlers in
 from __future__ import annotations
 
 from eawf.dispatch.renderer import (
+    DISPATCH_RUNTIMES,
     DispatchEnvelope,
     render_dispatch_envelope,
     render_wave_prompt,
 )
 
 __all__ = [
+    "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
     "render_dispatch_envelope",
     "render_wave_prompt",

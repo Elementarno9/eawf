@@ -8,7 +8,7 @@ constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -76,6 +76,9 @@ HypothesisIdStr = Annotated[
     Field(pattern=f"^(?:{RE_HYPOTHESIS.pattern[1:-1]}|{RE_HYPOTHESIS_SCOPED.pattern[1:-1]})$"),
 ]
 IdStr = Annotated[str, Field(min_length=1, pattern=r"^\S+$")]
+
+McpGrantScopeKind = Literal["wave", "profile", "global"]
+GRANT_SCOPE_KINDS: tuple[McpGrantScopeKind, ...] = get_args(McpGrantScopeKind)
 
 
 class _StrictModel(BaseModel):
@@ -384,7 +387,7 @@ class McpGrant(_StrictModel):
     """
 
     id: IdStr
-    scope_kind: Literal["wave", "profile", "global"]
+    scope_kind: McpGrantScopeKind
     scope_id: str
     server_id: IdStr
     granted_at: UtcDatetime
