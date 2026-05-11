@@ -1,0 +1,15 @@
+{
+  "body_keys": [
+    "base",
+    "findings",
+    "head",
+    "posted",
+    "pr_url",
+    "recommendation",
+    "user_question"
+  ],
+  "repair_commands_count": 0,
+  "skill": "/review",
+  "status": "ok",
+  "warnings_count": 0
+}

@@ -1,0 +1,16 @@
+{
+  "body_keys": [
+    "acceptance",
+    "approval_required",
+    "dag",
+    "iter_id",
+    "non_goals",
+    "objective",
+    "user_question",
+    "waves"
+  ],
+  "repair_commands_count": 0,
+  "skill": "/prep",
+  "status": "ok",
+  "warnings_count": 0
+}
