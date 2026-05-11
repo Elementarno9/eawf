@@ -1,0 +1,24 @@
+{
+  "current_keys": [
+    "active_session_ids",
+    "active_wave_ids",
+    "iter_id",
+    "phase_id",
+    "project_code",
+    "subproject_id"
+  ],
+  "iters_ids": [
+    "P01-I01"
+  ],
+  "phases_ids": [
+    "P01"
+  ],
+  "phases_statuses": {
+    "P01": "closed"
+  },
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "waves_ids": [
+    "P01-I01-W01"
+  ]
+}
