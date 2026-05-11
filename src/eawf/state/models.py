@@ -256,7 +256,15 @@ class Audit(_StrictModel):
 
 
 class Artifact(_StrictModel):
-    """Tracked artifact (file/blob/external)."""
+    """Tracked artifact (file/blob/external).
+
+    ``kind`` is a free-form string in v0.3 but the canonical vocabulary is
+    pinned by :class:`~eawf.state.enums.ArtifactKind` (P14-W11 / B059).
+    Callers that already speak the canonical vocabulary can pass an
+    :class:`ArtifactKind` member directly; Pydantic coerces it to the
+    underlying string value on serialisation. The strict-enum tightening
+    lands in v0.4 once every internal caller is migrated.
+    """
 
     id: IdStr
     kind: str

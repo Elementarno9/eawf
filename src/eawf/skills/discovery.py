@@ -202,9 +202,7 @@ def discover_skills(
         discovered[name] = DiscoveredSkill(**{**parsed.__dict__, "name": name})
 
     for spec in SKILL_REGISTRY:
-        normalized = (
-            spec.skill_name if spec.skill_name.startswith("/") else f"/{spec.skill_name}"
-        )
+        normalized = spec.skill_name if spec.skill_name.startswith("/") else f"/{spec.skill_name}"
         if normalized in discovered:
             continue
         discovered[normalized] = DiscoveredSkill(

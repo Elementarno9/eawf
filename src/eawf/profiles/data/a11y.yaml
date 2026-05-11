@@ -1,0 +1,3 @@
+name: a11y
+version: "1.0"
+description: "Accessibility (WCAG 2.2) profile stub — opt-in slot for v0.3 (D20)."

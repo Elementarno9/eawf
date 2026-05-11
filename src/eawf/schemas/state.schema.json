@@ -195,7 +195,7 @@
     },
     "Artifact": {
       "additionalProperties": false,
-      "description": "Tracked artifact (file/blob/external).",
+      "description": "Tracked artifact (file/blob/external).\n\n``kind`` is a free-form string in v0.3 but the canonical vocabulary is\npinned by :class:`~eawf.state.enums.ArtifactKind` (P14-W11 / B059).\nCallers that already speak the canonical vocabulary can pass an\n:class:`ArtifactKind` member directly; Pydantic coerces it to the\nunderlying string value on serialisation. The strict-enum tightening\nlands in v0.4 once every internal caller is migrated.",
       "properties": {
         "created_at": {
           "format": "date-time",
