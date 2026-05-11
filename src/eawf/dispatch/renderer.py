@@ -1,4 +1,4 @@
-"""Subagent prompt renderer (B025).
+"""Subagent prompt renderer (B025) + dispatch envelope (P10 W03).
 
 The renderer takes a validated :class:`~eawf.state.models.State` and a
 target wave id and returns a self-contained Markdown prompt suitable
@@ -16,12 +16,21 @@ The chain is ``wave.iter_id`` → :class:`~eawf.state.models.Iter` →
 ``iter.phase_id`` → :class:`~eawf.state.models.Phase` → ``phase.scope_id``.
 A broken link surfaces as a :class:`KeyError` so callers can map the
 missing edge to the canonical NOT_FOUND exit code.
+
+P10 W03 adds :func:`render_dispatch_envelope`, a pure dispatch adapter
+that wraps the wave prompt in a typed :class:`DispatchEnvelope` for
+either the ``claude-code`` runtime (single-string prompt) or the
+``claude-agent-sdk`` runtime (SDK invocation block with ``mcp_servers``
+and ``allowed_tools`` projected from :attr:`State.mcp_grants`). No new
+runtime dependency on the SDK package — render-only.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from eawf.state.models import (
     Audit,
@@ -35,7 +44,157 @@ from eawf.state.models import (
 logger = logging.getLogger(__name__)
 
 
+# CLI-facing runtime names. The installer's ``_SUPPORTED_RUNTIMES`` uses
+# the internal canonical name ``"claude"`` for back-compat with v0.1
+# settings.json writes; the dispatch adapter exposes ``"claude-code"``
+# at the CLI surface so the two SDK-vs-CLI cousins read symmetrically.
+# Both pools are kept in lockstep — adding a runtime requires touching
+# both this tuple and ``mcp/installer.py:_SUPPORTED_RUNTIMES``.
+_CLI_RUNTIME_CLAUDE_CODE: str = "claude-code"
+_CLI_RUNTIME_CLAUDE_AGENT_SDK: str = "claude-agent-sdk"
+_DISPATCH_RUNTIMES: tuple[str, ...] = (
+    _CLI_RUNTIME_CLAUDE_CODE,
+    _CLI_RUNTIME_CLAUDE_AGENT_SDK,
+)
+
+
 # ---- Public API -------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DispatchEnvelope:
+    """Typed return value of :func:`render_dispatch_envelope`.
+
+    The same shape covers both runtimes — only the per-field contents
+    differ:
+
+    - ``claude-code``: ``prompt`` carries the full Markdown prompt from
+      :func:`render_wave_prompt`; ``mcp_servers`` and ``allowed_tools``
+      are empty lists (the claude-code agent reads MCP wiring from the
+      runtime config on disk, not the envelope).
+    - ``claude-agent-sdk``: ``prompt`` carries the same Markdown body
+      (the SDK consumer slots it into the system prompt); ``mcp_servers``
+      is a list of per-server invocation dicts projected from
+      :attr:`State.mcp_servers`; ``allowed_tools`` is a list of
+      ``mcp__<server_id>__*`` glob strings projected from
+      :attr:`State.mcp_grants` (W02) — empty when ``mcp_grants`` is
+      absent or has no grant for the dispatched wave.
+
+    Attributes:
+        runtime: CLI-facing runtime name (``"claude-code"`` or
+            ``"claude-agent-sdk"``).
+        wave_id: The wave the envelope was rendered for.
+        prompt: The Markdown prompt body (shared across both runtimes).
+        mcp_servers: SDK-side MCP wiring (empty on the claude-code
+            branch). Each entry is a dict with ``id``, ``command``,
+            ``args``, ``env_refs`` mirroring :class:`McpServer` fields.
+        allowed_tools: SDK ``allowed_tools`` allow-list (empty on the
+            claude-code branch). Each entry is a
+            ``"mcp__<server_id>__*"`` glob string.
+    """
+
+    runtime: str
+    wave_id: str
+    prompt: str
+    mcp_servers: list[dict[str, Any]] = field(default_factory=list)
+    allowed_tools: list[str] = field(default_factory=list)
+
+
+def render_dispatch_envelope(
+    state: State,
+    wave_id: str,
+    runtime: str,
+    *,
+    repo_root: Path | None = None,
+) -> DispatchEnvelope:
+    """Return a typed :class:`DispatchEnvelope` for *wave_id* and *runtime*.
+
+    Pure function — no I/O, no logging side-effects beyond the module
+    logger. The CLI handler owns stdout/file writes; this function only
+    produces the typed envelope.
+
+    Args:
+        state: Validated, read-only state snapshot.
+        wave_id: Target wave id (must exist in ``state.waves``).
+        runtime: CLI-facing runtime name. Must be one of
+            ``"claude-code"`` or ``"claude-agent-sdk"``; anything else
+            raises :class:`ValueError` with the canonical
+            ``unknown runtime ...; expected one of [...]`` format that
+            matches :func:`eawf.mcp.installer._validate_runtime`.
+        repo_root: Forwarded to :func:`render_wave_prompt` for API
+            symmetry; not consumed in v0.1.
+
+    Returns:
+        :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
+        ``prompt`` populated for every runtime, plus ``mcp_servers`` and
+        ``allowed_tools`` populated on the ``claude-agent-sdk`` branch.
+
+    Raises:
+        ValueError: ``runtime`` is unsupported.
+        KeyError: ``wave_id`` is missing or the wave → iter → phase →
+            scope chain has a broken link (propagated from
+            :func:`render_wave_prompt`).
+    """
+    if runtime not in _DISPATCH_RUNTIMES:
+        raise ValueError(f"unknown runtime {runtime!r}; expected one of {list(_DISPATCH_RUNTIMES)}")
+    prompt = render_wave_prompt(state, wave_id, repo_root=repo_root)
+    if runtime == _CLI_RUNTIME_CLAUDE_CODE:
+        return DispatchEnvelope(runtime=runtime, wave_id=wave_id, prompt=prompt)
+    # claude-agent-sdk branch: project MCP servers + grant-derived tools.
+    mcp_servers = _project_mcp_servers(state)
+    allowed_tools = _project_allowed_tools(state, wave_id=wave_id)
+    return DispatchEnvelope(
+        runtime=runtime,
+        wave_id=wave_id,
+        prompt=prompt,
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed_tools,
+    )
+
+
+def _project_mcp_servers(state: State) -> list[dict[str, Any]]:
+    """Return the SDK-side ``mcp_servers`` list from :attr:`State.mcp_servers`.
+
+    The shape is intentionally a list of dicts (not :class:`McpServer`
+    instances) because the SDK consumer expects JSON-safe primitives.
+    Returns ``[]`` when ``state.mcp_servers`` is ``None`` or empty.
+    """
+    pool = state.mcp_servers or {}
+    out: list[dict[str, Any]] = []
+    for server_id in sorted(pool):
+        server = pool[server_id]
+        out.append(
+            {
+                "id": server.id,
+                "command": server.command,
+                "args": list(server.args),
+                "env_refs": list(server.env_refs),
+            }
+        )
+    return out
+
+
+def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
+    """Project grants from ``state.mcp_grants`` to SDK ``allowed_tools`` globs.
+
+    For every grant whose ``scope_kind == "wave"`` and ``scope_id ==
+    wave_id``, emit ``"mcp__<server_id>__*"``. The result is sorted and
+    de-duplicated so identical grants collapse to one allow-list entry.
+
+    The ``mcp_grants`` field lands in W02 (sibling wave). Until the
+    field is on the model, ``getattr(state, "mcp_grants", None)``
+    returns ``None`` and this helper returns ``[]`` — the W03 adapter
+    therefore renders correctly on a pre-W02 ``state.json``.
+    """
+    grants = getattr(state, "mcp_grants", None) or {}
+    tools: set[str] = set()
+    for grant in grants.values():
+        scope_kind = getattr(grant, "scope_kind", None)
+        scope_id = getattr(grant, "scope_id", None)
+        server_id = getattr(grant, "server_id", None)
+        if scope_kind == "wave" and scope_id == wave_id and server_id:
+            tools.add(f"mcp__{server_id}__*")
+    return sorted(tools)
 
 
 def render_wave_prompt(
@@ -270,5 +429,7 @@ def _phase_wave_commit_prefix(wave_id: str) -> tuple[str, str]:
 
 
 __all__ = [
+    "DispatchEnvelope",
+    "render_dispatch_envelope",
     "render_wave_prompt",
 ]

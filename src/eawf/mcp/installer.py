@@ -128,8 +128,9 @@ class RuntimeEntry:
     risk: str = ""
 
 
-# Supported runtimes in v0.1. ``opencode`` lands in W06+.
-_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude",)
+# Supported runtimes in v0.1. ``claude-agent-sdk`` is render-only (no
+# on-disk install path); ``opencode`` lands in W06+.
+_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "claude-agent-sdk")
 
 
 def _validate_runtime(runtime: str) -> None:
@@ -141,8 +142,21 @@ def _validate_runtime(runtime: str) -> None:
 
 
 def _settings_path(runtime: str, target_dir: Path) -> Path:
-    """Resolve the on-disk runtime config for *runtime* under *target_dir*."""
+    """Resolve the on-disk runtime config for *runtime* under *target_dir*.
+
+    ``claude-agent-sdk`` is render-only — it has no on-disk settings file
+    and never participates in the install/remove paths. Callers landing
+    on this branch via :func:`install_runtime_entry` / friends will hit
+    a :class:`NotImplementedError`; the renderer (P10 W03) consumes the
+    SDK runtime via :func:`eawf.dispatch.renderer.render_dispatch_envelope`
+    instead.
+    """
     _validate_runtime(runtime)
+    if runtime == "claude-agent-sdk":
+        raise NotImplementedError(
+            f"runtime {runtime!r} has no on-disk settings file; "
+            "dispatch via render_dispatch_envelope, not install_runtime_entry"
+        )
     # Only Claude in v0.1; opencode would land here.
     return target_dir / ".claude" / "settings.json"
 
