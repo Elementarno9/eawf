@@ -22,6 +22,12 @@ disable-model-invocation: true
 - [ ] Read the success criteria for the phase/wave the diff belongs to.
 - [ ] Verify any quantitative claim against `Read`/`grep`.
 
+## Decision surfaces
+
+When the final verdict is ambiguous (e.g. one 🟠 finding the operator
+might choose to defer), surface `approve | request-changes |
+comment-only` through `AskUserQuestion` rather than picking silently.
+
 ## Output contract
 
 Skill envelope with a flat findings list grouped by file and an

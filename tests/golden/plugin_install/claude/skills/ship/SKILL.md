@@ -22,6 +22,14 @@ disable-model-invocation: true
 - [ ] Cherry-picks from worktree subagents have all landed.
 - [ ] CI on the latest push is green.
 
+## Decision surfaces
+
+`gh pr create`, `gh pr merge`, and any push to a protected branch are
+irreversible/visible-to-others actions per AGENTS.md — surface the
+final confirm through `AskUserQuestion` (options: `proceed` / `defer`
+/ `abort`) unless `vcs.auto_push`, `vcs.pr_open`, and the merge
+strategy are pre-resolved by config.
+
 ## Output contract
 
 Skill envelope carrying the PR URL, the post-merge state mutation, and

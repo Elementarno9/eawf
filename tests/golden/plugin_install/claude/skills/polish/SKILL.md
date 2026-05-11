@@ -21,6 +21,14 @@ disable-model-invocation: true
 - [ ] Scope is declared and bounded.
 - [ ] No public API rename without explicit user confirmation.
 
+## Decision surfaces
+
+Public-API renames, dead-code deletions, and anything matching
+`polish.deletion_policy` MUST be raised via `AskUserQuestion`
+(options: `apply` / `defer-to-backlog` / `skip`) instead of asking
+in free text. `polish.auto_apply_safe=true` bypasses the prompt for
+the small "safe" subset only (formatting, comment phrasing).
+
 ## Output contract
 
 Skill envelope with a change list grouped by category and a deferred-
