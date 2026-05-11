@@ -25,6 +25,7 @@ from eawf.validate.invariants import (
     check_plugin_owners,
     check_plugin_runtimes,
     check_scope_consistency,
+    check_wave_blocks_invariant,
 )
 
 # ---- Fixture builders -------------------------------------------------------
@@ -518,6 +519,77 @@ def test_check_plugin_owners_flags_user_owned_plugin() -> None:
     assert "INV.OWNER.PLUGIN_NON_EAWF" in codes
 
 
+# ---- check_wave_blocks_invariant -------------------------------------------
+
+
+def _wave_with_graph(
+    wave_id: str,
+    *,
+    iter_id: str,
+    deps: list[str] | None = None,
+    blocks: list[str] | None = None,
+) -> dict[str, Any]:
+    payload = _wave(wave_id, iter_id=iter_id)
+    payload["deps"] = list(deps or [])
+    payload["blocks"] = list(blocks or [])
+    return payload
+
+
+def test_check_wave_blocks_invariant_no_violations_when_indices_consistent() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["waves"]["P01-I01-W01"] = _wave_with_graph(
+        "P01-I01-W01", iter_id="P01-I01", blocks=["P01-I01-W02"]
+    )
+    payload["waves"]["P01-I01-W02"] = _wave_with_graph(
+        "P01-I01-W02", iter_id="P01-I01", deps=["P01-I01-W01"]
+    )
+    state = State.model_validate(payload)
+    assert list(check_wave_blocks_invariant(state)) == []
+
+
+def test_check_wave_blocks_invariant_flags_missing_reverse_block() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    # W02 deps on W01 but W01.blocks does NOT include W02 → reverse missing.
+    payload["waves"]["P01-I01-W01"] = _wave_with_graph("P01-I01-W01", iter_id="P01-I01")
+    payload["waves"]["P01-I01-W02"] = _wave_with_graph(
+        "P01-I01-W02", iter_id="P01-I01", deps=["P01-I01-W01"]
+    )
+    state = State.model_validate(payload)
+    codes = _codes(check_wave_blocks_invariant(state))
+    assert "INV.GRAPH.BLOCKS_MISSING_REVERSE" in codes
+
+
+def test_check_wave_blocks_invariant_flags_missing_reverse_dep() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    # W01.blocks lists W02 but W02.deps does NOT include W01.
+    payload["waves"]["P01-I01-W01"] = _wave_with_graph(
+        "P01-I01-W01", iter_id="P01-I01", blocks=["P01-I01-W02"]
+    )
+    payload["waves"]["P01-I01-W02"] = _wave_with_graph("P01-I01-W02", iter_id="P01-I01")
+    state = State.model_validate(payload)
+    codes = _codes(check_wave_blocks_invariant(state))
+    assert "INV.GRAPH.DEPS_MISSING_REVERSE" in codes
+
+
+def test_check_wave_blocks_invariant_skips_dangling_peer_silently() -> None:
+    """Dangling refs are flagged by check_parent_ids; this invariant ignores them."""
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    # W01 deps on a wave that does not exist in state — no graph violation.
+    payload["waves"]["P01-I01-W01"] = _wave_with_graph(
+        "P01-I01-W01", iter_id="P01-I01", deps=["P01-I01-W99"]
+    )
+    state = State.model_validate(payload)
+    assert list(check_wave_blocks_invariant(state)) == []
+
+
 # ---- ALL_INVARIANTS aggregate ----------------------------------------------
 
 
@@ -533,6 +605,7 @@ def test_check_plugin_owners_flags_user_owned_plugin() -> None:
         "check_plugin_runtimes",
         "check_scope_consistency",
         "check_plugin_owners",
+        "check_wave_blocks_invariant",
     ],
 )
 def test_all_invariants_includes_each_named_check(name: str) -> None:

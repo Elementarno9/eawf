@@ -365,6 +365,46 @@ def check_plugin_owners(state: State) -> Iterable[Violation]:
             )
 
 
+def check_wave_blocks_invariant(state: State) -> Iterable[Violation]:
+    """Wave ``deps`` / ``blocks`` must be mutually consistent (``INV.GRAPH.*``).
+
+    The ``Wave.blocks`` field is the reverse index of ``Wave.deps``: if wave
+    *X* lists *Y* in ``X.deps``, then *Y* must list *X* in ``Y.blocks`` (and
+    vice versa). When a referenced peer is absent from ``state.waves`` the
+    pair is silently skipped — that failure is reported by
+    :func:`check_parent_ids` already. Repair drift with
+    ``eawf wave blocks-rebuild``.
+    """
+    waves = state.waves
+    for wid, w in waves.items():
+        for dep_id in w.deps:
+            peer = waves.get(dep_id)
+            if peer is None:
+                continue
+            if wid not in peer.blocks:
+                yield Violation(
+                    code="INV.GRAPH.BLOCKS_MISSING_REVERSE",
+                    path=f"/waves/{dep_id}/blocks",
+                    message=(
+                        f"wave {wid!r} declares dep {dep_id!r} but "
+                        f"{dep_id!r}.blocks is missing {wid!r}"
+                    ),
+                )
+        for block_id in w.blocks:
+            peer = waves.get(block_id)
+            if peer is None:
+                continue
+            if wid not in peer.deps:
+                yield Violation(
+                    code="INV.GRAPH.DEPS_MISSING_REVERSE",
+                    path=f"/waves/{block_id}/deps",
+                    message=(
+                        f"wave {wid!r} declares block {block_id!r} but "
+                        f"{block_id!r}.deps is missing {wid!r}"
+                    ),
+                )
+
+
 def check_closure_timestamps(state: State) -> Iterable[Violation]:
     """Terminal-status entries must carry their closure timestamp (``INV.CLOSURE.*_NO_TIMESTAMP``).
 
@@ -466,4 +506,5 @@ ALL_INVARIANTS: tuple[Invariant, ...] = (
     check_plugin_runtimes,
     check_scope_consistency,
     check_plugin_owners,
+    check_wave_blocks_invariant,
 )
