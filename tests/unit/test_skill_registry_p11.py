@@ -30,7 +30,6 @@ from __future__ import annotations
 from eawf.config.defaults import BUILT_IN_DEFAULTS
 from eawf.render.skills import SKILL_REGISTRY
 
-
 _FLOW_STAGES: tuple[str, ...] = (
     "research",
     "prep",
@@ -82,9 +81,7 @@ def test_flow_body_documents_per_stage_gate_and_ask_user_question() -> None:
 
 
 def test_flow_argument_hint_advertises_auto_accept_flag() -> None:
-    assert _spec("flow").argument_hint == (
-        "<task-slug> [--auto-accept=<stage>[,<stage>...]]"
-    )
+    assert _spec("flow").argument_hint == ("<task-slug> [--auto-accept=<stage>[,<stage>...]]")
 
 
 def test_remaining_core_skill_bodies_mention_ask_user_question() -> None:
