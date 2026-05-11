@@ -447,7 +447,7 @@
       "commit": null,
       "created_at": "2026-05-10T19:49:40.083539Z",
       "id": "B019",
-      "priority": "P1",
+      "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -782,6 +782,116 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Sandbox-policy enforcement in audit-check DSL command_exit_zero (v0.3)"
+    },
+    "B050": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:21:10.738617Z",
+      "id": "B050",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Add weekly_eu_target field to state.project for TUI cross-repo totals divisor"
+    },
+    "B054": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:23.928223Z",
+      "id": "B054",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "P14 W01-W02 hygiene preamble: state-writer EOL fix + version-coupling lint + phase prepare-close mutator + iter-bump hint"
+    },
+    "B055": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:24.571000Z",
+      "id": "B055",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Pre-commit hygiene: secrets-baseline content-hash + commit-prefix linter ([P##-CORE] state-only) + doc verify --strict gate"
+    },
+    "B056": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:25.292989Z",
+      "id": "B056",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind deprecated alias)"
+    },
+    "B057": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:26.443210Z",
+      "id": "B057",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Custom-profile discovery roots: .ea/profiles workspace > ~/.eawf/profiles user > builtin; override semantics + mtime cache invalidation"
+    },
+    "B058": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:27.610276Z",
+      "id": "B058",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "eawf profile new --inherit scaffold + profile validate CLI + TOFU content-hash trust ledger in .ea/config.yaml profiles.trusted"
+    },
+    "B059": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:28.717784Z",
+      "id": "B059",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Artifact-kind enum expansion: notebook/dataset/model/backtest/strategy/binary/scene/playtest_session/cve_ref + URN routing + sha256 policy"
+    },
+    "B060": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:29.892674Z",
+      "id": "B060",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "uiux/web/mobile/a11y profile bodies + visual_artifacts state extension + PR-body visual evidence conditional render block"
+    },
+    "B061": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:30.661752Z",
+      "id": "B061",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Skill registry / discovery API across runtimes + user-skill catalogue (~/.eawf/skills); supersedes B024+B043"
+    },
+    "B062": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-11T20:47:31.748840Z",
+      "id": "B062",
+      "priority": "P0",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML) / OpenCode (opencode.json) + plugin doctor MCP drift check + idempotence goldens"
     }
   },
   "current": {
@@ -936,6 +1046,162 @@
       "scope_id": "EAWF",
       "status": "active",
       "summary": "P13 scope lock: 7 waves (W01-W07); no further adds without ADR",
+      "superseded_by": null
+    },
+    "D12": {
+      "alternatives": [
+        "Add 4th adapter slot (Goose/Aider)",
+        "Codex only (drop OpenCode to v0.4)"
+      ],
+      "created_at": "2026-05-11T20:47:38.441970Z",
+      "id": "D12",
+      "rationale": "Goose/Aider/Cursor/Cline deferred to v0.4 to lock P14 at 11 waves; OpenCode and Codex are highest-demand harnesses per operator priority.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "v0.3 harness scope: Claude + Codex + OpenCode only",
+      "superseded_by": null
+    },
+    "D13": {
+      "alternatives": [
+        "Emit .ts with vendored type stubs",
+        "Emit .ts with user-supplied node_modules"
+      ],
+      "created_at": "2026-05-11T20:47:40.501195Z",
+      "id": "D13",
+      "rationale": "Avoid tsx/build-step rabbit hole + @opencode-ai/plugin type-stub churn risk; revisit when OpenCode publishes stable types.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "OpenCode plugin shipped as untyped .js (no TS build dep)",
+      "superseded_by": null
+    },
+    "D14": {
+      "alternatives": [
+        "Keep runtime.kind only; force per-repo single runtime"
+      ],
+      "created_at": "2026-05-11T20:47:41.902963Z",
+      "id": "D14",
+      "rationale": "Multi-runtime repos need list of adapters; runtime.kind kept as deprecated alias mapped to first element; schema_version 1.1.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Profile-config schema bump: runtime.adapters list[str] supersedes runtime.kind",
+      "superseded_by": null
+    },
+    "D15": {
+      "alternatives": [
+        "Textual full-stack",
+        "blessed / urwid"
+      ],
+      "created_at": "2026-05-11T20:47:43.808082Z",
+      "id": "D15",
+      "rationale": "rich already pinned; no new runtime dep; accepts weaker keyboard focus vs Textual; matches P05 anti-Textual precedent.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "TUI stack: rich (rich.live + rich.layout); Textual rejected",
+      "superseded_by": null
+    },
+    "D16": {
+      "alternatives": [
+        "Keep [P##-CORE] catch-all",
+        "Introduce [P##-RFX] review-fix prefix"
+      ],
+      "created_at": "2026-05-11T20:47:45.721863Z",
+      "id": "D16",
+      "rationale": "Any code/test/doc edit must live in a (possibly reactive) wave; pre-commit linter enforces in P14 W02; review-rework no longer wears [P##-CORE].",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "[P##-CORE] restricted to state-only commits; reactive waves append chronologically",
+      "superseded_by": null
+    },
+    "D17": {
+      "alternatives": [
+        "Always show iter in prefix",
+        "Never show iter in prefix"
+      ],
+      "created_at": "2026-05-11T20:47:47.489792Z",
+      "id": "D17",
+      "rationale": "Happy path stays terse; repair cycles visible at git log level; matches existing schema (I01 always opens, I02+ opens on repair triggers).",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Iter-bump triggers: audit fail / PR >3 blockers / mid-phase scope expansion; iter-in-prefix only when >I01",
+      "superseded_by": null
+    },
+    "D18": {
+      "alternatives": [
+        "User > workspace > builtin",
+        "Builtin-only (reject custom)"
+      ],
+      "created_at": "2026-05-11T20:47:53.894577Z",
+      "id": "D18",
+      "rationale": "Workspace > user > builtin override matches existing config layering; mtime-based cache invalidation (drop @functools.cache); validates via ProfileBody.model_validate at load.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Custom-profile discovery: .ea/profiles (workspace) > ~/.eawf/profiles (user) > eawf.profiles.data (builtin)",
+      "superseded_by": null
+    },
+    "D19": {
+      "alternatives": [
+        "Sign profiles cryptographically",
+        "No trust gate (always accept)"
+      ],
+      "created_at": "2026-05-11T20:47:55.827748Z",
+      "id": "D19",
+      "rationale": "First use of non-bundled profile prompts via AskUserQuestion + persists sha256; hash drift re-prompts; bundled shipped-with-wheel auto-trusted.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Profile trust: TOFU content-hash ledger in .ea/config.yaml profiles.trusted; bundled auto-trusted",
+      "superseded_by": null
+    },
+    "D20": {
+      "alternatives": [
+        "Include a11y baseline in uiux profile",
+        "Ship a11y as full profile body in v0.3"
+      ],
+      "created_at": "2026-05-11T20:47:57.767578Z",
+      "id": "D20",
+      "rationale": "Encoding non-negotiable a11y rules without a consumer creates rule-drift; WCAG 2.2 public+stable so baseline can be lifted within one wave when triggered.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "A11y deferred until first UI-touching real project or jurisdictional trigger; a11y.yaml stub-only in v0.3",
+      "superseded_by": null
+    },
+    "D21": {
+      "alternatives": [
+        "Ship eawf mcp serve (full server)",
+        "Read-only eawf mcp serve --read-only",
+        "Both emit-and-serve"
+      ],
+      "created_at": "2026-05-11T20:48:00.453179Z",
+      "id": "D21",
+      "rationale": "Operator priority is harness coverage, not new server runtime; hardens existing emit path (Claude .mcp.json + Codex TOML + OpenCode opencode.json mcp block); plugin doctor verifies drift; own MCP server deferred to v0.4.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "MCP at v0.3: Eä emits MCP configs into harness trees (no own MCP server)",
+      "superseded_by": null
+    },
+    "D22": {
+      "alternatives": [
+        "User-only /blitz (no auto-chain)",
+        "Opt-in via --blitz flag on /research"
+      ],
+      "created_at": "2026-05-11T20:48:02.319590Z",
+      "id": "D22",
+      "rationale": "Tight clarification-loop integration; recursion guard via EAWF_BLITZ_DEPTH env var; max-rounds safety cap default 8.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "/blitz auto-invokes from /research when residual unknowns >1",
+      "superseded_by": null
+    },
+    "D23": {
+      "alternatives": [
+        "Require explicit eawf tui subcommand",
+        "Config-gated default to status"
+      ],
+      "created_at": "2026-05-11T20:48:03.873356Z",
+      "id": "D23",
+      "rationale": "config.bare_command='tui' already wired; non-TTY/--plain/--no-input falls back to deterministic status output; matches workspace+user TUI brief dispatch ladder.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Bare eawf on TTY auto-launches TUI by cwd resolve (workspace > repo > user > status)",
       "superseded_by": null
     }
   },
@@ -1279,7 +1545,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T15:09:14.172142Z",
+  "updated_at": "2026-05-11T20:48:03.873356Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
