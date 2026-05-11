@@ -41,6 +41,7 @@ from __future__ import annotations
 import io
 import logging
 import sys
+from pathlib import Path
 from typing import Annotated, Any, cast, get_args
 
 import orjson
@@ -300,16 +301,88 @@ def _resolve_skill_spec(name: SkillName) -> SkillSpec:
     )
 
 
+_SCOPE_CHOICES: frozenset[str] = frozenset({"builtin", "user", "workspace", "all"})
+
+
+def _discovered_list_payload(
+    *, workspace: Path | None, scope: str
+) -> dict[str, Any]:
+    """Build the ``skill list`` payload spanning builtin + user + workspace.
+
+    Each row carries the historical fields (``name``, ``status``,
+    ``body_schema``, ``description``) plus the new layered metadata
+    introduced by P14-W09: ``source`` (``builtin|user|workspace``),
+    ``runtimes`` (per-runtime visibility hint; empty == visible to all),
+    ``path``, and ``version``.
+    """
+    from eawf.skills.discovery import discover_skills
+
+    rows = discover_skills(workspace=workspace)
+    if scope != "all":
+        rows = [r for r in rows if r.source == scope]
+    items: list[dict[str, Any]] = []
+    builtin_names = set(_all_skill_names())
+    for entry in rows:
+        name = entry.name
+        if name in builtin_names:
+            registered = registry.lookup(cast(SkillName, name))
+            body_cls = _SKILL_BODY_MODELS[cast(SkillName, name)]
+            status = "installed" if registered is not None else "missing"
+            body_schema = f"{body_cls.__module__}.{body_cls.__qualname__}"
+        else:
+            status = "user"
+            body_schema = None
+        items.append(
+            {
+                "name": name,
+                "status": status,
+                "body_schema": body_schema,
+                "description": entry.description,
+                "source": entry.source,
+                "runtimes": list(entry.runtimes),
+                "path": str(entry.path) if entry.path is not None else None,
+                "version": entry.version,
+            }
+        )
+    return {"skills": items, "scope": scope}
+
+
 @skill_app.command(name="list")
-def list_cmd(ctx: typer.Context) -> None:
-    """Emit a table of all 10 skills + per-skill status and body schema."""
+def list_cmd(
+    ctx: typer.Context,
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Filter rows by source layer (builtin|user|workspace|all).",
+        ),
+    ] = "all",
+) -> None:
+    """List every skill resolvable across builtin / user / workspace layers."""
     flags: GlobalFlags = ctx.obj
+    if scope not in _SCOPE_CHOICES:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"unknown scope {scope!r}; expected one of {sorted(_SCOPE_CHOICES)}"
+            ),
+            flags=flags,
+        )
+        return
+    workspace = flags.workspace
     if flags.json_output:
-        payload = _list_payload()
+        payload = _discovered_list_payload(workspace=workspace, scope=scope)
         raw = orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
         typer.echo(raw.decode("utf-8"))
         return
-    typer.echo(_build_list_table(plain=flags.plain_output))
+    payload = _discovered_list_payload(workspace=workspace, scope=scope)
+    lines = [f"# eawf skills (scope={scope})"]
+    for item in payload["skills"]:
+        runtimes = ",".join(item["runtimes"]) if item["runtimes"] else "*"
+        lines.append(
+            f"  {item['name']:<18}  {item['status']:<10}  "
+            f"{item['source']:<9}  runtimes={runtimes:<24}  {item['description']}"
+        )
+    typer.echo("\n".join(lines))
 
 
 # Frozen set of valid ``--format`` values for the ``render`` command.
