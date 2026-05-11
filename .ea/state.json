@@ -725,7 +725,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P12-I01-W06"
+      "P12-I01-W07"
     ],
     "iter_id": "P12-I01",
     "phase_id": "P12",
@@ -1148,7 +1148,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T13:22:20.583695Z",
+  "updated_at": "2026-05-11T13:24:00.366995Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1656,8 +1656,8 @@
     "P12-I01-W06": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T13:22:43.169235Z",
+      "commit": "50a8a10",
       "deps": [],
       "file_scopes": [
         "src/eawf/sandbox/**",
@@ -1671,8 +1671,8 @@
       "id": "P12-I01-W06",
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.441254Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Sandbox policy table + CLI + invariant (13 unit tests)",
+      "status": "closed",
       "title": "B034 sandbox policy",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -1680,7 +1680,7 @@
     },
     "P12-I01-W07": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1693,7 +1693,7 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.829037Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "B039 file impact graph",
       "token_budget": null,
       "tokens_consumed": 0,
