@@ -72,6 +72,7 @@ def test_built_in_defaults_have_every_required_top_level_section() -> None:
         "ship",
         "review",
         "polish",
+        "flow",
         "memory",
         "vcs",
         "worktrees",

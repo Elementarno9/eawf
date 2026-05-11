@@ -108,6 +108,7 @@ class _ConfigSchema(BaseModel):
     ship: dict[str, Any]
     review: dict[str, Any]
     polish: dict[str, Any]
+    flow: dict[str, Any]
     memory: dict[str, Any]
     vcs: dict[str, Any]
     worktrees: dict[str, Any]
