@@ -1,16 +1,23 @@
 """``eawf mcp ...`` Typer commands.
 
-Surface (Phase 5 W04):
+Surface:
 
 - ``add <id>`` — register an Eä-owned MCP entry in
-  ``state.mcp_servers``.
+  ``state.mcp_servers`` (Phase 5 W04).
 - ``install <id>`` — write the entry into the runtime config
-  (Claude only in v0.1). Prompts unless ``--no-input`` is set.
+  (Claude only in v0.1). Prompts unless ``--no-input`` is set
+  (Phase 5 W04).
 - ``update <id>`` — patch an existing Eä-owned entry. Warns when
-  re-install is required.
+  re-install is required (Phase 5 W04).
 - ``remove <id>`` — delete from state and (unless
-  ``--keep-runtime-entry``) from the runtime config.
-- ``list`` — read-only enumeration with owner annotation.
+  ``--keep-runtime-entry``) from the runtime config (Phase 5 W04).
+- ``list`` — read-only enumeration with owner annotation
+  (Phase 5 W04).
+- ``grant <scope_kind> <scope_id> <server_id>`` — bind an MCP
+  server to a scope so dispatch can project allowed-tools
+  (Phase 10 W02).
+- ``revoke <grant_id>`` — drop a grant from ``state.mcp_grants``
+  (Phase 10 W02).
 
 Discipline checklist:
 
@@ -21,6 +28,10 @@ Discipline checklist:
 - User-owned ``mcpServers[*]`` entries in settings.json are byte-equal
   across the whole add/install/update/remove sequence (verified by
   ``tests/integration/test_mcp_install_existing_user_entry.py``).
+- Grants reference :class:`McpServer` rows by id; a dangling
+  ``server_id`` is caught by
+  :func:`eawf.validate.invariants.check_mcp_grant_server_ref` and
+  rolled back as :class:`ValidationFailed` inside ``grant_cmd``.
 """
 
 from __future__ import annotations
@@ -61,7 +72,7 @@ logger = logging.getLogger(__name__)
 
 mcp_app = typer.Typer(
     name="mcp",
-    help="Manage MCP server entries (add/install/update/remove/list).",
+    help="Manage MCP server entries (add/install/update/remove/list/grant/revoke).",
     no_args_is_help=True,
 )
 
@@ -684,7 +695,7 @@ def grant_cmd(
     try:
         if scope_kind not in GRANT_SCOPE_KINDS:
             raise cli_errors.InvalidInput(
-                f"scope_kind must be one of {list(GRANT_SCOPE_KINDS)}; got {scope_kind!r}"
+                f"unknown scope_kind {scope_kind!r}; expected one of {list(GRANT_SCOPE_KINDS)}"
             )
         state_path = resolve_state_path(flags.workspace)
         with state_transaction(state_path) as state:

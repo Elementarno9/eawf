@@ -1,14 +1,21 @@
-"""``eawf skill`` Typer subapp — list and run Eä workflow skills.
+"""``eawf skill`` Typer subapp — list, render, and run Eä workflow skills.
 
-Surface contract (Phase 4 W07 acceptance):
+Surface contract:
 
-- ``eawf skill list`` enumerates all 10 canonical skill names with their
-  body schema name and an ``installed``/``missing`` status.
-- ``eawf skill run <name>`` invokes :func:`~eawf.skills.engine.run_skill`
-  headlessly. Optional JSON args may be piped on stdin and are folded
-  into :attr:`SkillContext.args`. The default output is the markdown
-  envelope produced by :func:`~eawf.render.envelope.to_markdown`; the
-  global ``--json`` flag flips emission to the JSON envelope shape that
+- ``eawf skill list`` (Phase 4 W07) enumerates all 10 canonical skill
+  names with their body schema name and an ``installed``/``missing``
+  status.
+- ``eawf skill render <name>`` (Phase 10 W01) prints a registered
+  skill's canonical ``SKILL.md`` body (``--format=skill-md``, default)
+  or a metadata+body JSON object (``--format=json``). Bytes are
+  byte-equal to the SKILL.md :mod:`eawf.runtimes.claude.plugin_install`
+  writes on disk for the same skill.
+- ``eawf skill run <name>`` (Phase 4 W07) invokes
+  :func:`~eawf.skills.engine.run_skill` headlessly. Optional JSON args
+  may be piped on stdin and are folded into :attr:`SkillContext.args`.
+  The default output is the markdown envelope produced by
+  :func:`~eawf.render.envelope.to_markdown`; the global ``--json``
+  flag flips emission to the JSON envelope shape that
   ``eawf render-output --format markdown`` consumes.
 
 Exit-code mapping (per design spec §4 W07 acceptance #2):
@@ -74,7 +81,7 @@ logger = logging.getLogger(__name__)
 
 skill_app = typer.Typer(
     name="skill",
-    help="List and run Eä workflow skills.",
+    help="List, render, and run Eä workflow skills.",
     no_args_is_help=True,
 )
 
