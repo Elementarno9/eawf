@@ -1390,6 +1390,12 @@ def wave_budget_consume_cmd(
     Exits ``VALIDATION_FAILED`` (4) when the post-add classification is
     ``block:over-budget``. A ``warn:75-percent`` classification prints a
     stderr warning but exits zero.
+
+    On the block path the transaction is rolled back — the on-disk
+    ``tokens_consumed`` keeps its pre-call value, and the rejected delta
+    is named explicitly in the error message (``would consume X+N=Y``)
+    so the operator can see what was attempted before deciding to raise
+    the budget or split the work.
     """
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -1408,6 +1414,10 @@ def wave_budget_consume_cmd(
     result: dict[str, Any] = {}
 
     def _mutator(state: State) -> None:
+        wave_pre = state.waves.get(wave_id)
+        if wave_pre is None:
+            raise cli_errors.NotFound(f"unknown wave {wave_id!r}")
+        tokens_pre = wave_pre.tokens_consumed
         try:
             wave, tag = budget_record(state, wave_id, tokens)
         except KeyError as exc:
@@ -1417,9 +1427,10 @@ def wave_budget_consume_cmd(
         result["token_budget"] = wave.token_budget
         if tag == BLOCK_TAG:
             raise cli_errors.ValidationFailed(
-                f"wave {wave_id!r} is over token budget "
-                f"({wave.tokens_consumed}/{wave.token_budget}); "
-                f"raise budget or split work"
+                f"wave {wave_id!r} would be over token budget "
+                f"(would consume {tokens_pre}+{tokens}={wave.tokens_consumed}, "
+                f"budget {wave.token_budget}); "
+                f"delta of {tokens} discarded — raise budget or split work"
             )
 
     _run_mutation(
