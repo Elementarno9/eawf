@@ -122,11 +122,12 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     )
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 5
+    assert len(results) == 6
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
         "config_resolves",
         "manifest_in_sync",
+        "mcp_drift",
         "render_output_roundtrip",
     }

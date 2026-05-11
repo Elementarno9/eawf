@@ -128,9 +128,15 @@ class RuntimeEntry:
     risk: str = ""
 
 
-# Supported runtimes in v0.1. ``claude-agent-sdk`` is render-only (no
-# on-disk install path); ``opencode`` lands in W06+.
-_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "claude-agent-sdk")
+# Supported runtimes for MCP install/remove. ``claude-agent-sdk`` is
+# render-only (no on-disk install path); ``codex`` (D12) and ``opencode``
+# (D13) emit into their respective adapter config files.
+_SUPPORTED_RUNTIMES: tuple[str, ...] = (
+    "claude",
+    "claude-agent-sdk",
+    "codex",
+    "opencode",
+)
 
 
 def _validate_runtime(runtime: str) -> None:
@@ -145,11 +151,8 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
     """Resolve the on-disk runtime config for *runtime* under *target_dir*.
 
     ``claude-agent-sdk`` is render-only — it has no on-disk settings file
-    and never participates in the install/remove paths. Callers landing
-    on this branch via :func:`install_runtime_entry` / friends will hit
-    a :class:`NotImplementedError`; the renderer (P10 W03) consumes the
-    SDK runtime via :func:`eawf.dispatch.renderer.render_dispatch_envelope`
-    instead.
+    and never participates in the install/remove paths. ``codex`` and
+    ``opencode`` route to their respective adapter config files (D12 / D13).
     """
     _validate_runtime(runtime)
     if runtime == "claude-agent-sdk":
@@ -157,7 +160,14 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
             f"runtime {runtime!r} has no on-disk settings file; "
             "dispatch via render_dispatch_envelope, not install_runtime_entry"
         )
-    # Only Claude in v0.1; opencode would land here.
+    if runtime == "opencode":
+        return target_dir / "opencode.json"
+    if runtime == "codex":
+        # Codex MCP entries live in the same TOML config file as the plugin
+        # install renders. The TOML emit happens through the codex adapter
+        # in v0.4; for v0.3 we sentinel the path so the doctor + install
+        # surfaces stay coherent without yet writing TOML bytes.
+        return target_dir / ".codex" / "config.toml"
     return target_dir / ".claude" / "settings.json"
 
 

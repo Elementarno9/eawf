@@ -307,10 +307,12 @@ def test_list_runtime_entries_missing_settings_returns_empty(tmp_path: Path) -> 
 
 
 def test_install_runtime_entry_unknown_runtime_raises(tmp_path: Path) -> None:
+    # ``opencode`` and ``codex`` landed in P14-W06/W07; use a still-
+    # deferred id (``goose``) to exercise the rejection path.
     with pytest.raises(ValueError):
         install_runtime_entry(
             server=_make_server(),
-            runtime="opencode",
+            runtime="goose",
             target_dir=tmp_path,
             force=False,
         )
