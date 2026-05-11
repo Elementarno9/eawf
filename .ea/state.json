@@ -488,14 +488,14 @@
       "title": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them — target P10 distribution cluster"
     },
     "B025": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:36.067709Z",
+      "commit": "9bdf5c5",
       "created_at": "2026-05-10T19:49:56.068438Z",
       "id": "B025",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "P08-W01 subagent prompt renderer landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block + relevant decisions/hypotheses/audits into self-contained prompt for the agent harness — target P08 orchestration"
     },
     "B026": {
@@ -510,14 +510,14 @@
       "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch — target P08 orchestration"
     },
     "B027": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:36.476093Z",
+      "commit": "235db765",
       "created_at": "2026-05-10T19:49:56.888900Z",
       "id": "B027",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "P08-W03 wave land cherry-pick landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits back into parent feature branch, mark wave landed in state — target P08 orchestration"
     },
     "B028": {
@@ -532,69 +532,69 @@
       "title": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08 observability"
     },
     "B029": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:36.892041Z",
+      "commit": "7fa0d43",
       "created_at": "2026-05-10T19:50:07.282092Z",
       "id": "B029",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W01 decision graph render landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Decision-graph viz (text + dot/mermaid): render decisions/hypotheses/audits/backlog as a graph for human review — target P11 observability"
     },
     "B030": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:37.323985Z",
+      "commit": "d73d138",
       "created_at": "2026-05-10T19:50:07.697320Z",
       "id": "B030",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W02 memory GC + tiered memory landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Memory GC + summarisation: compact/decay project memory and event log past a threshold; surface canonical summaries to agents — target P11 observability"
     },
     "B031": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:37.755671Z",
+      "commit": "685d764",
       "created_at": "2026-05-10T19:50:08.113757Z",
       "id": "B031",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W03 doc-drift linter landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Doc-drift linter ('eawf doc verify'): detect when rendered docs disagree with state.json (closed phases referenced as active, missing audits, etc.) — target P11"
     },
     "B032": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:38.224729Z",
+      "commit": "ad9f625",
       "created_at": "2026-05-10T19:50:08.523474Z",
       "id": "B032",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W04 PR-body + wiki landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "PR-body generator from state: 'eawf pr render' produces phase PR body (Summary + Test plan + Phase deliverables) from state.json — target P11"
     },
     "B033": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:38.625668Z",
+      "commit": "01e9591",
       "created_at": "2026-05-10T19:50:08.940895Z",
       "id": "B033",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W05 skill eval harness landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Skill eval harness (golden envelopes): regression tests for the dispatcher itself; measure dispatch quality across model/version changes — target P11"
     },
     "B034": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:39.036641Z",
+      "commit": "28ae78f",
       "created_at": "2026-05-10T19:50:19.505518Z",
       "id": "B034",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W06 sandbox/permission policy table landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Sandbox/permission policy module: TDAD-style bounded autonomy — explicit policy declares what an agent may do per wave/profile — target P11 runtime"
     },
     "B035": {
@@ -620,58 +620,58 @@
       "title": "Non-Eä migration helper: import a foreign repo into eawf (detect language, scaffold .ea/, seed phase plan) — target v0.4 migration"
     },
     "B037": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:39.448781Z",
+      "commit": "d73d138",
       "created_at": "2026-05-10T19:50:20.750046Z",
       "id": "B037",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W02 tiered memory landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers; decay + summarisation hooks — target P11 observability"
     },
     "B038": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:39.861053Z",
+      "commit": "ad9f625",
       "created_at": "2026-05-10T19:50:21.169681Z",
       "id": "B038",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W04 wiki render landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki pattern — distil state.json into a human-readable narrative project wiki — target P11"
     },
     "B039": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:40.266966Z",
+      "commit": "b6639a0",
       "created_at": "2026-05-10T19:50:30.775755Z",
       "id": "B039",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P12-W07 file-impact graph landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to source files; show what state-changes touch which files — target P11"
     },
     "B040": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:40.695493Z",
+      "commit": "3037dbf",
       "created_at": "2026-05-10T19:50:31.188663Z",
       "id": "B040",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P08-W05 CI-fix loop landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up wave to address failures, repeat until green — target P08 orchestration"
     },
     "B041": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:13:41.104676Z",
+      "commit": "9b13be921",
       "created_at": "2026-05-10T19:50:31.601134Z",
       "id": "B041",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "P08-W06 wave review landed",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "PR review automation: dispatch reviewer subagent against the diff, attach findings as 'audit add --kind review' — target P08 orchestration"
     },
     "B042": {
@@ -745,7 +745,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P13-I01-W01"
+    ],
     "iter_id": "P13-I01",
     "phase_id": "P13",
     "project_code": "EAWF",
@@ -1236,7 +1238,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:13:06.925416Z",
+  "updated_at": "2026-05-11T14:13:41.104676Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1794,7 +1796,7 @@
         "P13-I01-W05",
         "P13-I01-W07"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -1806,7 +1808,7 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:53.989701Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "Backlog hygiene — close 13 shipped items",
       "token_budget": null,
       "tokens_consumed": 0,
