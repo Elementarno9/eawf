@@ -1,0 +1,24 @@
+schema_version: "1.0"
+checks:
+  - kind: file_exists
+    name: pyproject_present
+    args:
+      path: pyproject.toml
+  - kind: regex_in_file
+    name: phase_p13_in_changelog
+    args:
+      path: CHANGELOG.md
+      pattern: "P13"
+  - kind: state_field_equals
+    name: schema_version_pinned
+    args:
+      field: schema_version
+      value: "1.0"
+  - kind: path_glob_nonempty
+    name: src_python_files
+    args:
+      pattern: "src/eawf/**/*.py"
+  - kind: command_exit_zero
+    name: ruff_no_errors
+    args:
+      argv: ["echo", "ok"]
