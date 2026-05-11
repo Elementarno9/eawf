@@ -65,7 +65,7 @@ def atomic_write_json(target: Path, data: Mapping[str, Any]) -> None:
         data:   JSON-serialisable mapping to persist.
     """
     target = Path(target)
-    payload = orjson.dumps(dict(data), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
+    payload = orjson.dumps(dict(data), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS) + b"\n"
     with portalock.acquire(target, timeout=5.0):
         _write_payload(target, payload)
 
@@ -77,5 +77,5 @@ def atomic_write_json_locked(target: Path, data: Mapping[str, Any]) -> None:
     caller already holds the lock for read-modify-write semantics.
     """
     target = Path(target)
-    payload = orjson.dumps(dict(data), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
+    payload = orjson.dumps(dict(data), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS) + b"\n"
     _write_payload(target, payload)
