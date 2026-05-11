@@ -36,6 +36,16 @@
       "uri": "repo:.ea/artifacts/A10-P09-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A10-P09"
     },
+    "ART-A11-P10": {
+      "created_at": "2026-05-11T10:49:17.870612Z",
+      "id": "ART-A11-P10",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/A11-P10-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-A11-P10"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -154,6 +164,17 @@
       "integrity_results": [],
       "kind": "ship-gate",
       "report_artifact_id": "ART-A10-P09",
+      "scope_id": "EAWF",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A11-P10": {
+      "check_results": [],
+      "created_at": "2026-05-11T10:49:22.059241Z",
+      "id": "A11-P10",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A11-P10",
       "scope_id": "EAWF",
       "status": "complete",
       "verdict": "pass"
@@ -1028,7 +1049,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T10:43:11.955377Z",
+  "updated_at": "2026-05-11T10:50:04.485403Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1335,9 +1356,9 @@
     },
     "P10-I01-W04": {
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p10-flow-w04",
+      "closed_at": "2026-05-11T10:50:04.485389Z",
+      "commit": "44bc7c5",
       "deps": [
         "P10-I01-W01",
         "P10-I01-W02",
@@ -1350,8 +1371,8 @@
       "id": "P10-I01-W04",
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:55.225521Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "ship-gate dual-runtime envelope equivalence verified (6 integration tests + A11-P10 audit pass)",
+      "status": "closed",
       "title": "Ship-gate dual-runtime envelope demo",
       "token_budget": null,
       "tokens_consumed": 0,
