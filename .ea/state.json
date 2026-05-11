@@ -746,8 +746,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P13-I01",
+    "phase_id": "P13",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -997,6 +997,25 @@
         "P12-I01-W06",
         "P12-I01-W07"
       ]
+    },
+    "P13-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P13-I01",
+      "opened_at": "2026-05-11T14:12:37.620116Z",
+      "phase_id": "P13",
+      "status": "active",
+      "title": "P13 iter 1",
+      "wave_ids": [
+        "P13-I01-W01",
+        "P13-I01-W02",
+        "P13-I01-W04",
+        "P13-I01-W05",
+        "P13-I01-W07",
+        "P13-I01-W03",
+        "P13-I01-W06"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1169,6 +1188,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "v0.2 P12: backlog cluster (B029..B034, B037..B039)"
+    },
+    "P13": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P13",
+      "iter_ids": [
+        "P13-I01"
+      ],
+      "opened_at": "2026-05-11T14:12:27.041709Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "v0.2 P13: feature cluster + ship-gate"
     }
   },
   "plugins": {},
@@ -1203,7 +1236,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:12:12.008221Z",
+  "updated_at": "2026-05-11T14:13:06.925416Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1750,6 +1783,195 @@
       "outcome": "File-impact graph render + impact CLI (6 unit tests)",
       "status": "closed",
       "title": "B039 file impact graph",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W01": {
+      "blocks": [
+        "P13-I01-W02",
+        "P13-I01-W04",
+        "P13-I01-W05",
+        "P13-I01-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/store/*.jsonl"
+      ],
+      "id": "P13-I01-W01",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:12:53.989701Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Backlog hygiene — close 13 shipped items",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W02": {
+      "blocks": [
+        "P13-I01-W03",
+        "P13-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P13-I01-W01"
+      ],
+      "file_scopes": [
+        "tests/golden/scenarios/**",
+        "pyproject.toml"
+      ],
+      "id": "P13-I01-W02",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:12:57.733885Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B009 golden scenarios",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W03": {
+      "blocks": [
+        "P13-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P13-I01-W02"
+      ],
+      "file_scopes": [
+        "src/eawf/eval/**",
+        "tests/eval/test_skill_eval.py",
+        "tests/eval/golden/*.json",
+        "tests/unit/test_eval_score.py"
+      ],
+      "id": "P13-I01-W03",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:13:05.379970Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B042 self-eval scoring loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W04": {
+      "blocks": [
+        "P13-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P13-I01-W01"
+      ],
+      "file_scopes": [
+        "src/eawf/audit_dsl/**",
+        "src/eawf/cli/commands/evidence.py",
+        "docs/architecture/audit-checks.md",
+        "tests/unit/test_audit_dsl.py",
+        "tests/golden/audit_dsl/**",
+        "pyproject.toml"
+      ],
+      "id": "P13-I01-W04",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:12:59.217228Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B019 audit-check DSL skeleton",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W05": {
+      "blocks": [
+        "P13-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P13-I01-W01"
+      ],
+      "file_scopes": [
+        "src/eawf/runtimes/claude/**",
+        "build/eawf-plugin/**",
+        "tests/golden/test_plugin_install_claude.py",
+        "tests/golden/plugin_install/claude/**",
+        "docs/architecture/plugins.md",
+        "README.md"
+      ],
+      "id": "P13-I01-W05",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:13:00.581229Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B015 plugin-mode hooks",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W06": {
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P13-I01-W02",
+        "P13-I01-W03",
+        "P13-I01-W04",
+        "P13-I01-W05",
+        "P13-I01-W07"
+      ],
+      "file_scopes": [
+        "pyproject.toml",
+        "CHANGELOG.md",
+        ".ea/state.json",
+        "docs/architecture/profiles.md",
+        "docs/architecture/plugins.md",
+        "docs/architecture/installation.md",
+        "docs/policy/fixed-decisions.md"
+      ],
+      "id": "P13-I01-W06",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:13:06.925391Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Version bump 0.2.0 + CHANGELOG mine",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P13-I01-W07": {
+      "blocks": [
+        "P13-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P13-I01-W01"
+      ],
+      "file_scopes": [
+        "docs/architecture/installation.md",
+        "src/eawf/cli/commands/doctor.py",
+        "src/eawf/runtimes/claude/plugin_update.py",
+        "tests/unit/test_doctor_user_scope.py"
+      ],
+      "id": "P13-I01-W07",
+      "iter_id": "P13-I01",
+      "opened_at": "2026-05-11T14:13:01.571308Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "B017 user-scope install",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
