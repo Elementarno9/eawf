@@ -1418,10 +1418,10 @@ def wave_budget_consume_cmd(
         if wave_pre is None:
             raise cli_errors.NotFound(f"unknown wave {wave_id!r}")
         tokens_pre = wave_pre.tokens_consumed
-        try:
-            wave, tag = budget_record(state, wave_id, tokens)
-        except KeyError as exc:
-            raise cli_errors.NotFound(str(exc)) from exc
+        # ``budget_record`` raises ``KeyError`` only when *wave_id* is
+        # absent — the pre-check above already filtered that, so no
+        # further catch is needed here.
+        wave, tag = budget_record(state, wave_id, tokens)
         result["classification"] = tag
         result["tokens_consumed"] = wave.tokens_consumed
         result["token_budget"] = wave.token_budget

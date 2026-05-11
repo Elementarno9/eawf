@@ -40,6 +40,10 @@ def test_absolute_paths_are_detected_on_any_host(path_str: str) -> None:
         "subdir/file.txt",
         "..",
         "",
+        # Drive-letter without slash is drive-relative on Windows ("C:"
+        # alone is not absolute — it names the cwd on drive C:); both
+        # Pure* parsers agree it is not absolute.
+        "C:",
     ],
 )
 def test_relative_paths_are_not_detected_as_absolute(path_str: str) -> None:
