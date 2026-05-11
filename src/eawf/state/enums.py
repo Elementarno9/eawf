@@ -208,6 +208,23 @@ class MemoryStatus(StrEnum):
     PRUNED = "pruned"
 
 
+class MemoryTier(StrEnum):
+    """Tiered-memory placement for ``MemorySummary.tier``.
+
+    Mirrors the Letta/Mem0 working/archival/retrieval split:
+
+    - :attr:`WORKING` — hot tier; included in every render-context envelope.
+    - :attr:`ARCHIVAL` — cold tier; excluded from the default context window
+      but kept queryable for explicit recall (``memory list --tier``).
+    - :attr:`RETRIEVAL` — promoted artifacts surfaced on demand (e.g. via
+      ``memory render-context --tier``).
+    """
+
+    WORKING = "working"
+    ARCHIVAL = "archival"
+    RETRIEVAL = "retrieval"
+
+
 class Confidence(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"

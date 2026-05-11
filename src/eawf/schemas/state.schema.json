@@ -1250,6 +1250,10 @@
         "summary": {
           "title": "Summary",
           "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/MemoryTier",
+          "default": "working"
         }
       },
       "required": [
@@ -1262,6 +1266,16 @@
       ],
       "title": "MemorySummary",
       "type": "object"
+    },
+    "MemoryTier": {
+      "description": "Tiered-memory placement for ``MemorySummary.tier``.\n\nMirrors the Letta/Mem0 working/archival/retrieval split:\n\n- :attr:`WORKING` — hot tier; included in every render-context envelope.\n- :attr:`ARCHIVAL` — cold tier; excluded from the default context window\n  but kept queryable for explicit recall (``memory list --tier``).\n- :attr:`RETRIEVAL` — promoted artifacts surfaced on demand (e.g. via\n  ``memory render-context --tier``).",
+      "enum": [
+        "working",
+        "archival",
+        "retrieval"
+      ],
+      "title": "MemoryTier",
+      "type": "string"
     },
     "Outcome": {
       "additionalProperties": false,

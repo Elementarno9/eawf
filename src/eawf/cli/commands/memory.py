@@ -741,6 +741,157 @@ def memory_prune(
         cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
 
 
+@memory_app.command("gc")
+def memory_gc(
+    ctx: typer.Context,
+    threshold_days: Annotated[
+        int,
+        typer.Option(
+            "--threshold-days",
+            help="Age threshold in days; STALE entries older than this flip tier to ARCHIVAL.",
+        ),
+    ] = 30,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Report which IDs would archive without mutating state.",
+        ),
+    ] = False,
+) -> None:
+    """Archive matched memory entries by flipping their ``tier`` to ARCHIVAL."""
+    from eawf.memory.gc import GcError, gc_memory
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        if threshold_days < 0:
+            raise cli_errors.InvalidInput(f"--threshold-days must be >= 0; got {threshold_days}")
+        state_path = resolve_state_path(flags.workspace)
+        memory_path = _memory_path_for(state_path)
+        events_path = _events_path_for(state_path)
+
+        if dry_run:
+            state_ro = _load_state(state_path)
+            try:
+                report = gc_memory(
+                    state=state_ro,
+                    memory_path=memory_path,
+                    threshold_days=threshold_days,
+                    dry_run=True,
+                )
+            except GcError as exc:
+                raise cli_errors.InvalidInput(str(exc)) from exc
+            payload = {
+                "archived_ids": report.archived_ids,
+                "skipped_ids": report.skipped_ids,
+                "dry_run": True,
+                "threshold_days": report.threshold_days,
+            }
+            text = (
+                f"would archive {len(report.archived_ids)} entries "
+                f"(threshold_days={threshold_days})"
+            )
+            emit_json_or_text(payload=payload, text=text, flags=flags)
+            return
+
+        with state_transaction(state_path) as state:
+            try:
+                report = gc_memory(
+                    state=state,
+                    memory_path=memory_path,
+                    threshold_days=threshold_days,
+                    dry_run=False,
+                )
+            except GcError as exc:
+                raise cli_errors.InvalidInput(str(exc)) from exc
+        append_event(
+            events_path=events_path,
+            event_id=f"memory-gc-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
+            event_type="memory.gc",
+            actor="cli",
+            command="memory gc",
+            args_hash=_args_hash({"threshold_days": threshold_days}),
+            status="ok",
+            message=(
+                f"archived {len(report.archived_ids)} entries (threshold_days={threshold_days})"
+            ),
+            scope_id=None,
+            occurred_at=datetime.now(UTC),
+        )
+        payload = {
+            "archived_ids": report.archived_ids,
+            "skipped_ids": report.skipped_ids,
+            "dry_run": False,
+            "threshold_days": report.threshold_days,
+        }
+        text = f"archived {len(report.archived_ids)} entries (threshold_days={threshold_days})"
+        emit_json_or_text(payload=payload, text=text, flags=flags)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+
+
+@memory_app.command("tier")
+def memory_tier(
+    ctx: typer.Context,
+    mem_id: Annotated[str, typer.Argument(help="Memory entry ID, e.g. MEM-...")],
+    tier: Annotated[
+        str,
+        typer.Option(
+            "--tier",
+            help="Target tier: working / archival / retrieval.",
+        ),
+    ],
+) -> None:
+    """Set the tier on a single memory entry."""
+    from eawf.state.enums import MemoryTier
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        try:
+            target_tier = MemoryTier(tier.strip().lower())
+        except ValueError as exc:
+            raise cli_errors.InvalidInput(
+                f"--tier must be one of {[t.value for t in MemoryTier]}; got {tier!r}"
+            ) from exc
+        state_path = resolve_state_path(flags.workspace)
+        events_path = _events_path_for(state_path)
+        with state_transaction(state_path) as state:
+            index = state.memory_index or {}
+            summary = index.get(mem_id)
+            if summary is None:
+                raise cli_errors.NotFound(f"memory entry not found: {mem_id}")
+            prior = summary.tier
+            index[mem_id] = summary.model_copy(update={"tier": target_tier})
+            state.memory_index = index
+        append_event(
+            events_path=events_path,
+            event_id=f"memory-tier-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
+            event_type="memory.tier",
+            actor="cli",
+            command="memory tier",
+            args_hash=_args_hash({"id": mem_id, "tier": target_tier.value}),
+            status="ok",
+            message=f"tier {prior.value} -> {target_tier.value} for {mem_id}",
+            scope_id=summary.scope_id,
+            occurred_at=datetime.now(UTC),
+        )
+        emit_json_or_text(
+            payload={
+                "id": mem_id,
+                "tier": target_tier.value,
+                "prior_tier": prior.value,
+            },
+            text=f"memory {mem_id} tier: {prior.value} -> {target_tier.value}",
+            flags=flags,
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+
+
 @memory_app.command("view")
 def memory_view(
     ctx: typer.Context,

@@ -34,6 +34,7 @@ from eawf.state.enums import (
     McpRisk,
     McpStatus,
     MemoryStatus,
+    MemoryTier,
     OutcomeDirection,
     OutcomeStatus,
     PhaseStatus,
@@ -425,6 +426,7 @@ class MemorySummary(_StrictModel):
     store_record_id: str
     review_due: UtcDatetime | None = None
     promoted_to_artifact_id: str | None = None
+    tier: MemoryTier = MemoryTier.WORKING
 
 
 class Incident(_StrictModel):
