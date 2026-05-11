@@ -1337,7 +1337,16 @@
       "title": "P14 main iter",
       "wave_ids": [
         "P14-I01-W01",
-        "P14-I01-W02"
+        "P14-I01-W02",
+        "P14-I01-W03",
+        "P14-I01-W04",
+        "P14-I01-W05",
+        "P14-I01-W06",
+        "P14-I01-W07",
+        "P14-I01-W08",
+        "P14-I01-W09",
+        "P14-I01-W10",
+        "P14-I01-W11"
       ]
     }
   },
@@ -1573,7 +1582,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T21:31:58.495179Z",
+  "updated_at": "2026-05-11T23:01:22.700179Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2357,6 +2366,234 @@
       "outcome": "commit-prefix linter + detect-secrets baseline hash + doc verify pre-push wired",
       "status": "closed",
       "title": "Pre-commit hygiene + commit-prefix linter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W03": {
+      "blocks": [
+        "P14-I01-W04",
+        "P14-I01-W06",
+        "P14-I01-W07"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T21:39:06.329869Z",
+      "commit": "3084191",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/install/wizard.py",
+        "src/eawf/install/steps.py",
+        "src/eawf/profiles/models.py",
+        "src/eawf/config/defaults.py",
+        "tests/unit/test_install_wizard.py",
+        "tests/unit/test_config_layering.py"
+      ],
+      "id": "P14-I01-W03",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:32:18.747639Z",
+      "outcome": "runtime.adapters list[str] + codex choice + legacy kind shim",
+      "status": "closed",
+      "title": "Profile-config schema bump: runtime.adapters list",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W04": {
+      "blocks": [
+        "P14-I01-W05"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T21:43:39.087994Z",
+      "commit": "5ff81ad",
+      "deps": [
+        "P14-I01-W03"
+      ],
+      "file_scopes": [
+        "src/eawf/profiles/loader.py",
+        "src/eawf/profiles/discovery.py",
+        "tests/unit/test_profiles_discovery.py"
+      ],
+      "id": "P14-I01-W04",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:39:25.044442Z",
+      "outcome": "layered profile discovery + mtime cache; workspace > user > builtin",
+      "status": "closed",
+      "title": "Custom profile discovery roots + mtime cache",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W05": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T21:49:43.686353Z",
+      "commit": "22abb2f",
+      "deps": [
+        "P14-I01-W04"
+      ],
+      "file_scopes": [
+        "src/eawf/cli/commands/profile.py",
+        "src/eawf/profiles/trust.py",
+        "src/eawf/profiles/models.py",
+        "tests/unit/test_profile_cli.py",
+        "tests/unit/test_profile_trust.py"
+      ],
+      "id": "P14-I01-W05",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:44:21.784088Z",
+      "outcome": "profile new --inherit + validate + TOFU trust ledger",
+      "status": "closed",
+      "title": "Profile new + validate + TOFU trust ledger",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W06": {
+      "blocks": [
+        "P14-I01-W08"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T21:57:34.853049Z",
+      "commit": "af4e1d9",
+      "deps": [
+        "P14-I01-W03"
+      ],
+      "file_scopes": [
+        "src/eawf/runtimes/codex/__init__.py",
+        "src/eawf/runtimes/codex/hook_map.py",
+        "src/eawf/runtimes/codex/plugin_install.py",
+        "src/eawf/runtimes/codex/plugin_doctor.py",
+        "src/eawf/cli/commands/plugin.py",
+        "tests/unit/test_plugin_install_codex.py",
+        "tests/integration/test_plugin_install_full.py"
+      ],
+      "id": "P14-I01-W06",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:50:51.134918Z",
+      "outcome": "Codex runtime adapter: install+doctor+TOML managed block",
+      "status": "closed",
+      "title": "Codex runtime adapter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W07": {
+      "blocks": [
+        "P14-I01-W08"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T22:14:44.738712Z",
+      "commit": "2ac9631",
+      "deps": [
+        "P14-I01-W03"
+      ],
+      "file_scopes": [
+        "src/eawf/runtimes/opencode/__init__.py",
+        "src/eawf/runtimes/opencode/plugin_install.py",
+        "src/eawf/runtimes/opencode/plugin_doctor.py",
+        "src/eawf/runtimes/opencode/templates/plugin.js",
+        "src/eawf/cli/commands/plugin.py",
+        "tests/unit/test_plugin_install_opencode.py"
+      ],
+      "id": "P14-I01-W07",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T21:57:51.148314Z",
+      "outcome": "OpenCode plugin adapter: opencode.json + untyped plugin.js + doctor drift",
+      "status": "closed",
+      "title": "OpenCode plugin adapter (untyped js)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W08": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T22:24:14.309138Z",
+      "commit": "f45829d",
+      "deps": [
+        "P14-I01-W06",
+        "P14-I01-W07"
+      ],
+      "file_scopes": [
+        "src/eawf/mcp/installer.py",
+        "src/eawf/doctor/checks.py",
+        "tests/unit/test_doctor_mcp_drift.py"
+      ],
+      "id": "P14-I01-W08",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T22:15:48.229075Z",
+      "outcome": "doctor check_mcp_drift + MCP installer runtime dispatch (claude+codex+opencode)",
+      "status": "closed",
+      "title": "MCP emit hardening + plugin doctor MCP drift",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W09": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T22:31:24.973405Z",
+      "commit": "df190e3",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/skills/discovery.py",
+        "src/eawf/cli/commands/skill.py",
+        "src/eawf/render/skills.py",
+        "tests/unit/test_skill_registry_user_catalogue.py"
+      ],
+      "id": "P14-I01-W09",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T22:24:59.090192Z",
+      "outcome": "layered skill discovery: workspace > user > builtin + --scope filter",
+      "status": "closed",
+      "title": "Skill registry + user catalogue",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W10": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T22:46:46.811276Z",
+      "commit": "10377e4",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/tui/__init__.py",
+        "src/eawf/tui/app.py",
+        "src/eawf/cli/app.py",
+        "tests/unit/test_tui_smoke.py"
+      ],
+      "id": "P14-I01-W10",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T22:31:52.514972Z",
+      "outcome": "rich-backed TUI scaffold + bare-eawf auto-launch + non-TTY status fallback",
+      "status": "closed",
+      "title": "TUI on rich + bare-eawf auto-launch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I01-W11": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-11T23:01:22.700165Z",
+      "commit": "54b9333",
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/state/enums.py",
+        "src/eawf/profiles/data/a11y.yaml",
+        "src/eawf/skills/blitz.py",
+        "src/eawf/render/skills.py",
+        "tests/unit/test_artifact_kind_enum.py",
+        "tests/unit/test_blitz_recursion_guard.py"
+      ],
+      "id": "P14-I01-W11",
+      "iter_id": "P14-I01",
+      "opened_at": "2026-05-11T22:47:23.381719Z",
+      "outcome": "ArtifactKind enum + a11y profile stub + /blitz recursion guard",
+      "status": "closed",
+      "title": "Artifact-kind enum + a11y stub + /blitz skill scaffold",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
