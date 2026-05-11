@@ -283,11 +283,15 @@ import eawf.cli.commands.wave_ci  # noqa: E402, F401
 from eawf.cli.commands import pr_review as _pr_review  # noqa: E402, F401
 
 # --- end P08 W06 ---
-
 # --- P12 W06 sandbox policy registration ---
 from eawf.cli.commands import wave_policy as _wave_policy  # noqa: E402, F401
 
 # --- end P12 W06 ---
+# --- P12 W07 file impact graph registration ---
+from eawf.cli.commands.impact import impact_cmd  # noqa: E402
+
+app.command(name="impact", help="Render decision → wave → file-glob impact graph.")(impact_cmd)
+# --- end P12 W07 ---
 
 
 def main() -> None:
