@@ -1,0 +1,15 @@
+{
+  "body_keys": [
+    "brief_id",
+    "options",
+    "peer_review",
+    "persisted_brief",
+    "questions",
+    "recommendation",
+    "user_question"
+  ],
+  "repair_commands_count": 0,
+  "skill": "/research",
+  "status": "ok",
+  "warnings_count": 0
+}

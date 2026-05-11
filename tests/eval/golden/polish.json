@@ -1,0 +1,12 @@
+{
+  "body_keys": [
+    "groups",
+    "memory_pass",
+    "report_only",
+    "user_question"
+  ],
+  "repair_commands_count": 0,
+  "skill": "/polish",
+  "status": "ok",
+  "warnings_count": 0
+}

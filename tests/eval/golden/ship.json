@@ -1,0 +1,14 @@
+{
+  "body_keys": [
+    "commit_groups",
+    "estimate_vs_actual",
+    "pr",
+    "push",
+    "rollback_notes",
+    "user_question"
+  ],
+  "repair_commands_count": 0,
+  "skill": "/ship",
+  "status": "ok",
+  "warnings_count": 0
+}

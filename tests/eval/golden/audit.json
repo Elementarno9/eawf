@@ -1,0 +1,16 @@
+{
+  "body_keys": [
+    "audit_artifact_urn",
+    "checks_run",
+    "findings",
+    "hypothesis_verdicts",
+    "kind",
+    "outcomes_measured",
+    "scope_id",
+    "user_question"
+  ],
+  "repair_commands_count": 0,
+  "skill": "/audit",
+  "status": "ok",
+  "warnings_count": 0
+}

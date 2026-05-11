@@ -44,7 +44,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+addopts = "-ra --strict-markers --strict-config -m 'not eval'"
 markers = [
     "unit: fast in-process unit tests",
     "integration: integration tests crossing module boundaries",
@@ -52,6 +52,7 @@ markers = [
     "golden: golden-output regression tests",
     "slow: long-running tests (excluded from default run)",
     "acceptance: phase-gate end-to-end acceptance scenarios",
+    "eval: skill-dispatch golden-envelope regression suite (opt-in)",
 ]
 
 [tool.mypy]
