@@ -45,6 +45,15 @@ from eawf.runtimes.codex.plugin_install import (
 from eawf.runtimes.codex.plugin_install import (
     IntegrityViolation as CodexIntegrityViolation,
 )
+from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
+from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
+from eawf.runtimes.opencode.plugin_doctor import DoctorReport as OpencodeDoctorReport
+from eawf.runtimes.opencode.plugin_install import (
+    InstallResult as OpencodeInstallResult,
+)
+from eawf.runtimes.opencode.plugin_install import (
+    IntegrityViolation as OpencodeIntegrityViolation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +65,7 @@ plugin_app = typer.Typer(
 )
 
 
-_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex")
+_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex", "opencode")
 
 
 def _validate_runtime(runtime: str) -> None:
@@ -182,6 +191,64 @@ def _codex_doctor_text(report: CodexDoctorReport) -> str:
     return "\n".join(parts)
 
 
+def _opencode_install_payload(result: OpencodeInstallResult) -> dict[str, object]:
+    """Render the OpenCode :class:`InstallResult` as the JSON envelope body."""
+    return {
+        "runtime": "opencode",
+        "target_dir": str(result.target_dir),
+        "dry_run": result.dry_run,
+        "plugin_js": (
+            {"path": str(result.plugin_js.path), "action": result.plugin_js.action}
+            if result.plugin_js is not None
+            else None
+        ),
+        "config": (
+            {"path": str(result.config.path), "action": result.config.action}
+            if result.config is not None
+            else None
+        ),
+    }
+
+
+def _opencode_install_text(result: OpencodeInstallResult) -> str:
+    parts = [
+        f"plugin install opencode ({'dry-run' if result.dry_run else 'wrote'}) → {result.target_dir}"
+    ]
+    parts.append(f"  plugin.js: {result.plugin_js.action if result.plugin_js else 'no-op'}")
+    parts.append(f"  config:    {result.config.action if result.config else 'no-op'}")
+    return "\n".join(parts)
+
+
+def _opencode_doctor_payload(report: OpencodeDoctorReport) -> dict[str, object]:
+    return {
+        "runtime": "opencode",
+        "target_dir": str(report.target_dir),
+        "clean": report.clean,
+        "ok": [{"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.ok],
+        "drifted": [
+            {
+                "region_id": e.region_id,
+                "path": str(e.path),
+                "kind": e.kind,
+                "on_disk_hash": e.on_disk_hash,
+                "expected_hash": e.expected_hash,
+            }
+            for e in report.drifted
+        ],
+        "missing": [
+            {"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.missing
+        ],
+    }
+
+
+def _opencode_doctor_text(report: OpencodeDoctorReport) -> str:
+    parts = [f"plugin doctor opencode → {report.target_dir}"]
+    parts.append(
+        f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
+    )
+    return "\n".join(parts)
+
+
 def _doctor_text(report: DoctorReport) -> str:
     """Render :class:`DoctorReport` as a human-readable summary."""
     parts = [f"plugin doctor → {report.target_dir}"]
@@ -268,6 +335,27 @@ def install_cmd(
             flags=flags,
         )
         return
+    if runtime == "opencode":
+        try:
+            oc_result = opencode_install_plugin(target, force=force, dry_run=dry_run)
+        except OpencodeIntegrityViolation as exc:
+            cli_errors.emit_error(
+                cli_errors.IntegrityViolation(str(exc)),
+                flags=flags,
+            )
+            return
+        except ValueError as exc:
+            cli_errors.emit_error(
+                cli_errors.InvalidInput(str(exc)),
+                flags=flags,
+            )
+            return
+        emit_json_or_text(
+            _opencode_install_payload(oc_result),
+            _opencode_install_text(oc_result),
+            flags=flags,
+        )
+        return
     try:
         result = install_plugin(target, force=force, dry_run=dry_run)
     except IntegrityViolation as exc:
@@ -301,11 +389,11 @@ def update_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
-    if runtime == "codex":
+    if runtime in {"codex", "opencode"}:
         cli_errors.emit_error(
             cli_errors.InvalidInput(
-                "plugin update is not yet wired for runtime 'codex'; "
-                "use `eawf plugin install codex --force` instead"
+                f"plugin update is not yet wired for runtime {runtime!r}; "
+                f"use `eawf plugin install {runtime} --force` instead"
             ),
             flags=flags,
         )
@@ -347,6 +435,16 @@ def doctor_cmd(
             flags=flags,
         )
         if not codex_report.clean:
+            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+        return
+    if runtime == "opencode":
+        oc_report = opencode_doctor_plugin(target)
+        emit_json_or_text(
+            _opencode_doctor_payload(oc_report),
+            _opencode_doctor_text(oc_report),
+            flags=flags,
+        )
+        if not oc_report.clean:
             raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
         return
     report = doctor_plugin(target)
