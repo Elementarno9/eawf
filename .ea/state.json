@@ -767,9 +767,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P13-I01-W06"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P13-I01",
     "phase_id": "P13",
     "project_code": "EAWF",
@@ -1260,7 +1258,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T14:52:34.679386Z",
+  "updated_at": "2026-05-11T14:53:04.881076Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -1946,8 +1944,8 @@
     "P13-I01-W06": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-11T14:53:04.881059Z",
+      "commit": "bea3cd0b89adacd1878d3dd45e9983e747c71be4",
       "deps": [
         "P13-I01-W02",
         "P13-I01-W03",
@@ -1967,8 +1965,8 @@
       "id": "P13-I01-W06",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:06.925391Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Version bump 0.1.0→0.2.0; CHANGELOG mined P07..P13; doc scrub; B048+B049 v0.3 backlog filed",
+      "status": "closed",
       "title": "Version bump 0.2.0 + CHANGELOG mine",
       "token_budget": null,
       "tokens_consumed": 0,
