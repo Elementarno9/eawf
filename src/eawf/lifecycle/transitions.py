@@ -163,6 +163,34 @@ def close_phase(
     return phase
 
 
+def reopen_phase(state: State, *, phase_id: str) -> Phase:
+    """Reopen a closed phase. Flips status closed→active, clears closed_at.
+
+    Audit linkage (``audit_id``) is preserved so the original close evidence
+    stays reconstructible; the next ``close_phase`` overwrites it with a new
+    audit. ``state.current.phase_id`` is set to *phase_id* iff no other phase
+    is currently active.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown or not in the closed state.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.CLOSED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; only closed phases can reopen"
+        )
+    phase.status = PhaseStatus.ACTIVE
+    phase.closed_at = None
+    if state.current.phase_id is None:
+        state.current.phase_id = phase_id
+        state.current.iter_id = None
+        state.current.active_wave_ids = []
+    logger.info(f"reopen_phase id={phase_id}")
+    return phase
+
+
 # ---- Iter -------------------------------------------------------------------
 
 

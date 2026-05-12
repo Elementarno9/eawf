@@ -22,6 +22,7 @@ from eawf.lifecycle.transitions import (
     open_iter,
     open_phase,
     plan_wave,
+    reopen_phase,
     switch_subproject,
 )
 from eawf.state.enums import (
@@ -153,6 +154,49 @@ def test_close_phase_already_closed_raises() -> None:
     close_phase(state, phase_id="P01", audit_id="AUD-1")
     with pytest.raises(LifecycleError, match="cannot close"):
         close_phase(state, phase_id="P01", audit_id="AUD-2")
+
+
+def test_reopen_phase_unknown_raises() -> None:
+    state = _empty_state()
+    with pytest.raises(LifecycleError, match="unknown phase"):
+        reopen_phase(state, phase_id="P99")
+
+
+def test_reopen_phase_active_raises() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    with pytest.raises(LifecycleError, match="only closed phases can reopen"):
+        reopen_phase(state, phase_id="P01")
+
+
+def test_reopen_phase_happy_restores_active_and_current() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    close_phase(state, phase_id="P01", audit_id="AUD-1")
+    assert state.current.phase_id is None
+    p = reopen_phase(state, phase_id="P01")
+    assert p.status == PhaseStatus.ACTIVE
+    assert p.closed_at is None
+    assert p.audit_id == "AUD-1"  # preserved for traceability
+    assert state.current.phase_id == "P01"
+
+
+def test_reopen_phase_does_not_steal_current_when_other_phase_active() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    close_phase(state, phase_id="P01", audit_id="AUD-1")
+    open_phase(state, phase_id="P02", title="y")
+    reopen_phase(state, phase_id="P01")
+    assert state.current.phase_id == "P02"
+
+
+def test_reopen_phase_then_open_iter_succeeds() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    close_phase(state, phase_id="P01", audit_id="AUD-1")
+    reopen_phase(state, phase_id="P01")
+    it = open_iter(state, iter_id="P01-I01", phase_id="P01", title="follow-up")
+    assert it.status == IterStatus.ACTIVE
 
 
 # ---- Iter -------------------------------------------------------------------
