@@ -961,9 +961,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_wave_ids": [
+      "P14-I03-W01"
+    ],
+    "iter_id": "P14-I03",
+    "phase_id": "P14",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1424,6 +1426,19 @@
       "wave_ids": [
         "P14-I02-W01"
       ]
+    },
+    "P14-I03": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P14-I03",
+      "opened_at": "2026-05-12T18:43:24.617660Z",
+      "phase_id": "P14",
+      "status": "active",
+      "title": "Codex/OpenCode plugin parity hotfix (B1+B3+B4)",
+      "wave_ids": [
+        "P14-I03-W01"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1612,17 +1627,18 @@
       "title": "v0.2 P13: feature cluster + ship-gate"
     },
     "P14": {
-      "audit_id": "A17-P14",
-      "closed_at": "2026-05-12T18:29:03.767985Z",
+      "audit_id": null,
+      "closed_at": null,
       "id": "P14",
       "iter_ids": [
         "P14-I01",
-        "P14-I02"
+        "P14-I02",
+        "P14-I03"
       ],
       "opened_at": "2026-05-11T20:59:47.034498Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "closed",
+      "status": "active",
       "subproject_id": null,
       "title": "Harnesses (Codex + OpenCode) + hygiene preamble"
     }
@@ -1659,7 +1675,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-12T18:29:03.768011Z",
+  "updated_at": "2026-05-12T18:43:41.658669Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2697,6 +2713,33 @@
       "outcome": "Hotfix complete: codex marketplace package + display fixes. (1) Install/doctor text now derives real destination from result file paths instead of workspace pwd. (2) New `eawf plugin package codex` emits marketplace tree per Codex schema (name + interface.displayName + plugins[].{name,source,policy,category}); operator registers via `codex plugin marketplace add`. (3) Codex install command prints registration tip pointing at package command. 9 new unit tests + 2 integration tests pass; full suite (1851 unit + 380 integration) green; mypy clean.",
       "status": "closed",
       "title": "plugin install native layout + user scope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I03-W01": {
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/runtimes/codex/plugin_doctor.py",
+        "src/eawf/runtimes/codex/plugin_package.py",
+        "src/eawf/runtimes/opencode/plugin_install.py",
+        "src/eawf/runtimes/opencode/plugin_doctor.py",
+        "src/eawf/cli/commands/plugin.py",
+        "tests/unit/test_plugin_package_codex.py",
+        "tests/unit/test_plugin_doctor_codex.py",
+        "tests/unit/test_plugin_install_opencode.py",
+        "tests/unit/test_plugin_doctor_opencode.py"
+      ],
+      "id": "P14-I03-W01",
+      "iter_id": "P14-I03",
+      "opened_at": "2026-05-12T18:43:34.186139Z",
+      "outcome": null,
+      "status": "claimed",
+      "title": "codex doctor folder display + marketplace path + opencode agents/skills emission",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
