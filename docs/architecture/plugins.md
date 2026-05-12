@@ -127,7 +127,45 @@ carries the hash registry the `plugin doctor` command checks.
 Source: `src/eawf/runtimes/codex/`. Plugin lifecycle commands:
 `eawf plugin install codex [--scope ...]`,
 `eawf plugin update codex [--scope ...]`,
-`eawf plugin doctor codex [--scope ...]`.
+`eawf plugin doctor codex [--scope ...]`,
+`eawf plugin package codex [--target ...]`.
+
+### Codex marketplace package
+
+Per the Codex Build-plugin reference, dropping a plugin directory under
+`~/.codex/plugins/<name>/` does **not** auto-load it — Codex requires
+marketplace registration before discovery. The `install codex` command
+writes the plugin tree at the scope-correct location and toggles
+`[plugins.eawf] enabled = true` in `config.toml`, but discovery still
+needs a marketplace step.
+
+`eawf plugin package codex [--target ./build/eawf-codex-marketplace]`
+emits a self-contained marketplace tree:
+
+```text
+<target>/
+  marketplace.json
+  plugins/
+    eawf/
+      .codex-plugin/plugin.json
+      skills/<name>.md
+      agents/<role>.md
+      hooks/<event>.sh
+```
+
+`marketplace.json` carries the Codex marketplace schema (`name`,
+`interface.displayName`, `plugins[].{name,source,policy,category}`)
+with `source: {source: "local", path: "./plugins/eawf"}`. The operator
+then runs:
+
+```bash
+codex plugin marketplace add ./build/eawf-codex-marketplace
+codex plugin install eawf@eawf-local-codex
+```
+
+After install, Codex caches the plugin under
+`~/.codex/plugins/cache/eawf-local-codex/eawf/<version>/` and loads it
+from there.
 
 ## OpenCode adapter
 

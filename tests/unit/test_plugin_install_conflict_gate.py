@@ -40,6 +40,26 @@ def no_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_codex_opencode_user_probes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force codex + opencode user-scope conflict detectors to find nothing.
+
+    Otherwise tests on a developer machine that already has eawf installed
+    under ``~/.codex/plugins/`` or ``~/.config/opencode/plugins/`` would
+    trip the project-scope clash gate. Tests that need a synthetic
+    user-scope conflict patch these detectors back to a stub in the
+    body.
+    """
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.codex_detect_user_install",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        lambda: None,
+    )
+
+
 def test_install_claude_no_conflict_proceeds(tmp_path: Path, no_conflict: None) -> None:
     """Detector returns None → install runs through."""
     res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude", "--dry-run"])

@@ -6,10 +6,15 @@ scope) or ``~/.codex/plugins/eawf/`` (user scope) with the canonical
 reused from :mod:`eawf.render.*`; the renderer is idempotent and the
 install is byte-stable across re-runs.
 
+``package_plugin`` emits a standalone marketplace tree the operator can
+register via ``codex plugin marketplace add <path>`` — required because
+Codex does not auto-load from the user-scope ``~/.codex/plugins/`` dir.
+
 Public re-exports:
 
     InstallResult, install_plugin, expected_paths, Scope, doctor_plugin,
-    DoctorReport, CodexUserPluginConflict, detect_user_install
+    DoctorReport, CodexUserPluginConflict, detect_user_install,
+    PackageResult, package_plugin
 """
 
 from __future__ import annotations
@@ -22,14 +27,17 @@ from eawf.runtimes.codex.plugin_install import (
     expected_paths,
     install_plugin,
 )
+from eawf.runtimes.codex.plugin_package import PackageResult, package_plugin
 
 __all__ = [
     "CodexUserPluginConflict",
     "DoctorReport",
     "InstallResult",
+    "PackageResult",
     "Scope",
     "detect_user_install",
     "doctor_plugin",
     "expected_paths",
     "install_plugin",
+    "package_plugin",
 ]
