@@ -9,7 +9,7 @@ agents,hooks}/`` dump. Output under *plugin_root*:
       .codex-plugin/
         plugin.json              # canonical Codex manifest
         .eawf-managed.json       # sidecar — hash registry for doctor
-      skills/<name>.md
+      skills/<name>/SKILL.md
       hooks/<event>.sh
 
 The scope-correct ``config.toml`` (``<target>/.codex/config.toml`` for
@@ -129,7 +129,7 @@ def _config_target(target_dir: Path, *, scope: Scope, home: Path | None = None) 
 
 
 def _skill_target(plugin_root: Path, spec: SkillSpec) -> Path:
-    return plugin_root / "skills" / f"{spec.skill_name.lstrip('/')}.md"
+    return plugin_root / "skills" / spec.skill_name.lstrip("/") / "SKILL.md"
 
 
 def _hook_target(plugin_root: Path, spec: HookSpec) -> Path:

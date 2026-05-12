@@ -27,6 +27,12 @@ def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
     assert result.manifest.action == "created"
     assert len(result.skills) == len(SKILL_REGISTRY)
     assert len(result.hooks) == len(HOOK_REGISTRY)
+    # Codex requires each skill on disk as a directory containing SKILL.md.
+    plugin_root = target / "plugins" / "eawf"
+    for spec in SKILL_REGISTRY:
+        skill_dir = plugin_root / "skills" / spec.skill_name
+        assert skill_dir.is_dir(), skill_dir
+        assert (skill_dir / "SKILL.md").is_file(), skill_dir / "SKILL.md"
 
 
 def test_marketplace_json_has_required_codex_schema_fields(tmp_path: Path) -> None:

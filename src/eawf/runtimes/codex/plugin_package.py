@@ -29,7 +29,7 @@ Layout::
         eawf/
           .codex-plugin/
             plugin.json                      # canonical plugin manifest
-          skills/<name>.md
+          skills/<name>/SKILL.md
           hooks/<event>.sh
 
 The marketplace manifest sits at ``.agents/plugins/marketplace.json``
@@ -205,7 +205,7 @@ def package_plugin(
 
     skill_deltas: list[FileDelta] = []
     for spec in SKILL_REGISTRY:
-        path = plugin_root / "skills" / f"{spec.skill_name.lstrip('/')}.md"
+        path = plugin_root / "skills" / spec.skill_name.lstrip("/") / "SKILL.md"
         payload = _render_skill(spec).encode("utf-8")
         action = _classify(path, payload)
         if not dry_run:
