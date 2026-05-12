@@ -19,11 +19,14 @@ from pathlib import Path
 from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.opencode.plugin_install import (
+    _DEFAULT_TIMESTAMP,
     Scope,
     _agent_target,
     _command_target,
     _config_target,
     _plugin_js_target,
+    _render_sidecar,
+    _sidecar_fingerprint,
     _sidecar_target,
     expected_agent_bodies,
     expected_command_bodies,
@@ -100,9 +103,9 @@ def doctor_plugin(
 
     ``eawf.js`` is compared byte-for-byte against the template asset
     (stamped with the plugin version). The sidecar
-    (``.eawf-managed.json``) is presence-checked with its on-disk hash
-    recorded. ``opencode.json`` is presence-checked (user is free to
-    author unrelated top-level keys).
+    (``.eawf-managed.json``) is semantically compared, excluding its
+    timestamp/hash pair. ``opencode.json`` is presence-checked (user is
+    free to author unrelated top-level keys).
     """
     target_dir = Path(target_dir).resolve()
     ok: list[DoctorEntry] = []
@@ -151,21 +154,17 @@ def doctor_plugin(
             )
         )
     else:
-        try:
-            sidecar_parsed = json.loads(sidecar_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            sidecar_parsed = None
-        stored_js_hash = None
-        if isinstance(sidecar_parsed, dict):
-            stored_js_hash = sidecar_parsed.get("plugin_js_hash")
+        expected_sidecar = _render_sidecar(_DEFAULT_TIMESTAMP, expected_js_bytes)
+        expected_sidecar_hash = _sidecar_fingerprint(expected_sidecar)
+        on_disk_hash = _sidecar_fingerprint(sidecar_path.read_bytes())
         entry = DoctorEntry(
             region_id="plugin.opencode.sidecar",
             path=sidecar_path,
             kind="sidecar",
-            on_disk_hash=stored_js_hash,
-            expected_hash=expected_js_hash,
+            on_disk_hash=on_disk_hash,
+            expected_hash=expected_sidecar_hash,
         )
-        if stored_js_hash == expected_js_hash:
+        if on_disk_hash == expected_sidecar_hash:
             ok.append(entry)
         else:
             drifted.append(entry)

@@ -227,6 +227,25 @@ def _render_sidecar(timestamp: str) -> bytes:
     return (json.dumps(body, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
+def _sidecar_fingerprint(payload: bytes) -> str:
+    """Return a semantic fingerprint for sidecar bytes.
+
+    ``generated_at`` and the derived ``hash`` field are intentionally ignored so
+    older installs with a non-default timestamp still compare cleanly.
+    """
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except UnicodeDecodeError, json.JSONDecodeError:
+        return hashlib.blake2b(b"raw:" + payload, digest_size=8).hexdigest()
+    if not isinstance(parsed, dict):
+        return hashlib.blake2b(b"raw:" + payload, digest_size=8).hexdigest()
+    comparable = dict(parsed)
+    comparable.pop("generated_at", None)
+    comparable.pop("hash", None)
+    body = json.dumps(comparable, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.blake2b(body, digest_size=8).hexdigest()
+
+
 _MANAGED_BLOCK_RE = re.compile(
     rf"(?ms)^# ---- {re.escape(_MANAGED_TABLE)} begin ----"
     rf".*?^# ---- {re.escape(_MANAGED_TABLE)} end ----\n?"
@@ -349,6 +368,15 @@ def install_plugin(
 
     sidecar_path = _sidecar_target(plugin_root)
     sidecar_payload = _render_sidecar(ts)
+    if (
+        sidecar_path.exists()
+        and not force
+        and _sidecar_fingerprint(sidecar_path.read_bytes()) != _sidecar_fingerprint(sidecar_payload)
+    ):
+        raise IntegrityViolation(
+            f"managed file {sidecar_path} differs from rendered body; "
+            f"rerun with --force to overwrite"
+        )
     sidecar_action = _classify(sidecar_path, sidecar_payload)
     if not dry_run:
         _ensure_dir(sidecar_path.parent)
