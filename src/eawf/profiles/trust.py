@@ -10,7 +10,7 @@ Behaviour:
   into ``<workspace>/.ea/config.yaml`` under
   ``profiles.trusted: {<name>: <hex-sha>}``.
 - Subsequent loads recompute the sha and compare. A match returns ``True``
-  silently; a divergence raises :class:`TrustDrift` so the caller can
+  silently; a divergence raises :class:`TrustDriftError` so the caller can
   re-prompt.
 
 Public API:
@@ -41,11 +41,11 @@ _TRUSTED_KEY: str = "trusted"
 _PROFILES_KEY: str = "profiles"
 
 
-class TrustDrift(Exception):
+class TrustDriftError(Exception):
     """Raised when the stored sha for *profile_id* no longer matches disk."""
 
 
-class UntrustedProfile(Exception):
+class UntrustedProfileError(Exception):
     """Raised when a non-bundled profile has no entry in the trust ledger."""
 
 
@@ -142,9 +142,9 @@ def verify_trust(
             status indicating which path applies.
 
     Raises:
-        TrustDrift: Stored sha for *profile_id* does not match the
+        TrustDriftError: Stored sha for *profile_id* does not match the
             recomputed sha. The caller re-prompts the operator.
-        UntrustedProfile: ``no_input`` is true and the profile has no
+        UntrustedProfileError: ``no_input`` is true and the profile has no
             ledger entry; refuse to load implicitly.
     """
     if path is None or is_bundled(profile_id):
@@ -158,7 +158,7 @@ def verify_trust(
     stored = ledger.get(profile_id)
     if stored is None:
         if no_input:
-            raise UntrustedProfile(
+            raise UntrustedProfileError(
                 f"profile {profile_id!r} is not in the trust ledger; "
                 f"--no-input mode refuses implicit trust grants"
             )
@@ -169,7 +169,7 @@ def verify_trust(
             was_already_trusted=False,
         )
     if stored != sha:
-        raise TrustDrift(
+        raise TrustDriftError(
             f"profile {profile_id!r}: stored sha {stored!r} differs from on-disk sha {sha!r}"
         )
     return TrustStatus(

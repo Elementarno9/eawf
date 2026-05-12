@@ -18,9 +18,10 @@ Per ``feedback_tui_branding`` memory the header brand is literal ``Eä``
 breadcrumb. Per ``feedback_tui_keymap_conventions`` the keymap lists
 arrow keys first with full-name aliases, never vim-only shortcuts.
 
-The v0.3 deliverable is the scaffold — :func:`run_tui` opens a one-shot
-``rich.Live`` view and exits cleanly on ``Esc``. No state mutation; the
-view re-renders on each tick from the current ``state.json``.
+The v0.3 deliverable is the scaffold — :func:`run_tui` opens a
+``rich.Live`` view and blocks on raw-mode keypresses until ``Esc`` /
+``q`` / ``Ctrl-C``. No state mutation; the view re-renders on every
+keystroke from the current ``state.json``.
 
 For non-TTY callers (``--plain``, ``--no-input``, or stdout is not a
 tty) :func:`run_tui` falls back to :func:`build_status_text` — a
@@ -34,11 +35,13 @@ import io
 import json
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from rich.console import Console
 from rich.layout import Layout
+from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
@@ -47,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 _HEADER_BRAND: str = "Eä"
 _FOOTER_KEYMAP: str = "↑↓ navigate · Enter select · Esc quit"
+_EXIT_KEYS: frozenset[str] = frozenset({"\x1b", "q", "Q", "\x03", "\x04", ""})
 
 
 def _load_state(workspace: Path | None) -> dict[str, Any]:
@@ -63,7 +67,7 @@ def _load_state(workspace: Path | None) -> dict[str, Any]:
         return {}
     try:
         return json.loads(candidate.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return {}
 
 
@@ -158,26 +162,71 @@ def _is_tty() -> bool:
     return sys.stdout.isatty()
 
 
+def _read_key_raw() -> str:
+    """Block reading one keypress from ``sys.stdin`` in raw mode.
+
+    Returns the single character read (or empty string on EOF). Raises
+    nothing — ``KeyboardInterrupt`` is mapped to the literal ``"\\x03"``
+    by raw-mode read so the caller's exit-key set picks it up.
+    """
+    try:
+        import termios
+        import tty
+    except ImportError:
+        return sys.stdin.readline()[:1]
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        return sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
 def run_tui(
     *,
     workspace: Path | None = None,
     no_input: bool = False,
     plain: bool = False,
+    read_key: Callable[[], str] | None = None,
 ) -> int:
     """Open the live Rich TUI or emit a single-shot status fallback.
 
+    Args:
+        workspace: Project root containing ``.ea/state.json``. Defaults
+            to ``Path.cwd()``.
+        no_input: Skip the live loop, emit deterministic status text.
+        plain: Same as ``no_input`` — caller chose plain output.
+        read_key: Test seam for the raw-mode keypress reader. Defaults
+            to :func:`_read_key_raw`.
+
     Returns:
-        Exit code (``0`` on clean shutdown, non-zero reserved for
-        future error paths).
+        Exit code (``0`` on clean shutdown).
     """
     state = _load_state(workspace)
     if no_input or plain or not _is_tty():
         text = build_status_text(state)
         print(text)
         return 0
+    reader = read_key or _read_key_raw
     console = Console()
-    layout = _build_layout(state)
-    console.print(layout)
+    try:
+        with Live(
+            _build_layout(state),
+            console=console,
+            screen=True,
+            refresh_per_second=4,
+        ) as live:
+            while True:
+                try:
+                    ch = reader()
+                except KeyboardInterrupt:
+                    break
+                if ch in _EXIT_KEYS:
+                    break
+                live.update(_build_layout(_load_state(workspace)))
+    except KeyboardInterrupt:
+        pass
     return 0
 
 

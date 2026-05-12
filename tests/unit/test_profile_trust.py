@@ -37,7 +37,7 @@ def test_sha_stable_for_same_bytes(tmp_path: Path) -> None:
 def test_unknown_profile_under_no_input_raises(tmp_path: Path) -> None:
     path = tmp_path / "custom.yaml"
     _write_profile(path, "custom")
-    with pytest.raises(trust.UntrustedProfile):
+    with pytest.raises(trust.UntrustedProfileError):
         trust.verify_trust("custom", path=path, ledger={}, no_input=True)
 
 
@@ -61,7 +61,7 @@ def test_trusted_profile_passes(tmp_path: Path) -> None:
 def test_hash_drift_raises(tmp_path: Path) -> None:
     path = tmp_path / "custom.yaml"
     _write_profile(path, "custom")
-    with pytest.raises(trust.TrustDrift):
+    with pytest.raises(trust.TrustDriftError):
         trust.verify_trust(
             "custom",
             path=path,

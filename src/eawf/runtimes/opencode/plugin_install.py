@@ -135,7 +135,7 @@ def _patch_config_json(target_path: Path, managed_body: dict[str, Any]) -> bytes
     parsed.setdefault("mcp", {})
     parsed.setdefault("plugins", [])
     if "plugin.js" not in parsed["plugins"]:
-        parsed["plugins"] = list(parsed["plugins"]) + ["plugin.js"]
+        parsed["plugins"] = [*parsed["plugins"], "plugin.js"]
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return rendered.encode("utf-8")
 
@@ -168,12 +168,11 @@ def install_plugin(
     ts = timestamp or _DEFAULT_TIMESTAMP
     plugin_js_path = _plugin_js_target(target_dir)
     plugin_js_payload = _render_plugin_js().encode("utf-8")
-    if plugin_js_path.exists() and not force:
-        if plugin_js_path.read_bytes() != plugin_js_payload:
-            raise IntegrityViolation(
-                f"managed file {plugin_js_path} differs from rendered body; "
-                f"rerun with --force to overwrite"
-            )
+    if plugin_js_path.exists() and not force and plugin_js_path.read_bytes() != plugin_js_payload:
+        raise IntegrityViolation(
+            f"managed file {plugin_js_path} differs from rendered body; "
+            f"rerun with --force to overwrite"
+        )
     plugin_js_action = _classify(plugin_js_path, plugin_js_payload)
     if not dry_run:
         _ensure_dir(plugin_js_path.parent)

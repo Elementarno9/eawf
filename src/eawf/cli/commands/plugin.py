@@ -211,10 +211,10 @@ def _opencode_install_payload(result: OpencodeInstallResult) -> dict[str, object
 
 
 def _opencode_install_text(result: OpencodeInstallResult) -> str:
-    parts = [
-        f"plugin install opencode ({'dry-run' if result.dry_run else 'wrote'}) → {result.target_dir}"
-    ]
-    parts.append(f"  plugin.js: {result.plugin_js.action if result.plugin_js else 'no-op'}")
+    verb = "dry-run" if result.dry_run else "wrote"
+    parts = [f"plugin install opencode ({verb}) → {result.target_dir}"]
+    plugin_js_action = result.plugin_js.action if result.plugin_js else "no-op"
+    parts.append(f"  plugin.js: {plugin_js_action}")
     parts.append(f"  config:    {result.config.action if result.config else 'no-op'}")
     return "\n".join(parts)
 
