@@ -29,10 +29,10 @@ import sys
 from pathlib import Path
 
 _SUBJECT_RE = re.compile(
-    r"^\[P\d{2}(-W\d{2}|-CORE)?\]\s+"
+    r"^\[P\d{2}(-I\d{2})?(-W\d{2}|-CORE)?\]\s+"
     r"(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\s+\S.*$"
 )
-_CORE_TAG_RE = re.compile(r"^\[P\d{2}-CORE\]\s+")
+_CORE_TAG_RE = re.compile(r"^\[P\d{2}(-I\d{2})?-CORE\]\s+")
 _TRAILER: str = "Co-Authored-By: Claude <noreply@anthropic.com>"
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
