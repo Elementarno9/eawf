@@ -28,6 +28,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
+from eawf.runtimes.claude.plugin_conflict import detect_marketplace_install
 from eawf.runtimes.claude.plugin_doctor import DoctorReport, doctor_plugin
 from eawf.runtimes.claude.plugin_install import (
     InstallResult,
@@ -60,7 +61,10 @@ logger = logging.getLogger(__name__)
 
 plugin_app = typer.Typer(
     name="plugin",
-    help="Install, update, or diagnose runtime plugins (claude, opencode, ...).",
+    help=(
+        "Install, update, or diagnose runtime plugins (claude, codex, opencode). "
+        "Use 'install' for all three; 'package' is Claude-only (marketplace export)."
+    ),
     no_args_is_help=True,
 )
 
@@ -74,6 +78,51 @@ def _validate_runtime(runtime: str) -> None:
         raise cli_errors.InvalidInput(
             f"unknown runtime {runtime!r}; expected one of {list(_SUPPORTED_RUNTIMES)}"
         )
+
+
+def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
+    """Return ``True`` when no CC-marketplace conflict blocks ``install claude``.
+
+    Detects an existing eawf install under ``~/.claude/plugins/``. When found:
+
+    - ``--force`` overrides the gate (caller is acknowledging the duplicate
+      render).
+    - ``--no-input`` mode refuses the install with an :exc:`InvalidInput`
+      error so the operator can pick a path before retrying.
+    - Otherwise prompts via :mod:`questionary` for confirmation; a ``No``
+      answer aborts cleanly.
+    """
+    conflict = detect_marketplace_install()
+    if conflict is None:
+        return True
+    if force:
+        logger.info(f"_claude_conflict_clear bypassed via --force plugin_dir={conflict.plugin_dir}")
+        return True
+    message = (
+        f"detected CC marketplace plugin at {conflict.plugin_dir}; "
+        f"installing the project-local .claude/ tree alongside it will cause "
+        f"Claude Code to see every skill/agent/hook twice"
+    )
+    if flags.no_input:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"{message}. Rerun without --no-input to confirm, pass --force "
+                "to acknowledge, or `/plugin uninstall eawf@eawf-local` inside "
+                "Claude Code first."
+            ),
+            flags=flags,
+        )
+        return False
+    import questionary
+
+    proceed = questionary.confirm(
+        f"{message}.\nProceed with project-local install anyway?",
+        default=False,
+    ).ask()
+    if not proceed:
+        print("plugin install claude: aborted (conflict not acknowledged)")
+        return False
+    return True
 
 
 def _resolve_target(flags: GlobalFlags) -> Path:
@@ -301,11 +350,19 @@ def install_cmd(
     ctx: typer.Context,
     runtime: Annotated[
         str,
-        typer.Argument(help="Runtime to install (currently only `claude`)."),
+        typer.Argument(
+            help="Runtime to install: 'claude', 'codex', or 'opencode'.",
+        ),
     ],
     force: Annotated[
         bool,
-        typer.Option("--force", help="Overwrite hand-edited managed files (use with care)."),
+        typer.Option(
+            "--force",
+            help=(
+                "Overwrite hand-edited managed files. For runtime='claude', "
+                "also bypasses the CC-marketplace-conflict gate."
+            ),
+        ),
     ] = False,
     dry_run: Annotated[
         bool,
@@ -320,6 +377,8 @@ def install_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
     target = _resolve_target(flags)
+    if runtime == "claude" and not _claude_conflict_clear(flags=flags, force=force):
+        return
     if runtime == "codex":
         try:
             codex_result = codex_install_plugin(target, force=force, dry_run=dry_run)
@@ -379,7 +438,9 @@ def update_cmd(
     ctx: typer.Context,
     runtime: Annotated[
         str,
-        typer.Argument(help="Runtime to update (currently only `claude`)."),
+        typer.Argument(
+            help="Runtime to update. Currently 'claude' only; codex/opencode ship in v0.4."
+        ),
     ],
 ) -> None:
     """Re-render a runtime plugin tree, aborting on hand-edits."""
@@ -416,7 +477,7 @@ def doctor_cmd(
     ctx: typer.Context,
     runtime: Annotated[
         str,
-        typer.Argument(help="Runtime to inspect (currently only `claude`)."),
+        typer.Argument(help="Runtime to inspect: 'claude', 'codex', or 'opencode'."),
     ],
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
@@ -458,7 +519,10 @@ def package_cmd(
     ctx: typer.Context,
     runtime: Annotated[
         str,
-        typer.Argument(help="Runtime to package (currently only `claude`)."),
+        typer.Argument(
+            help="Runtime to package. Claude-only — codex/opencode have no "
+            "marketplace concept; use 'eawf plugin install' directly for those."
+        ),
     ],
     target: Annotated[
         Path | None,
