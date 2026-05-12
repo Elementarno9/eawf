@@ -99,3 +99,46 @@ def test_bare_eawf_no_input_emits_status(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-input", "-w", str(tmp_path)])
     assert result.exit_code == 0
     assert "Eä" in result.stdout
+
+
+def test_run_tui_exits_on_esc(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.tui import app as tui_app
+
+    monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
+    rc = tui_app.run_tui(workspace=tmp_path, read_key=lambda: "\x1b")
+    assert rc == 0
+
+
+def test_run_tui_exits_on_q(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.tui import app as tui_app
+
+    monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
+    rc = tui_app.run_tui(workspace=tmp_path, read_key=lambda: "q")
+    assert rc == 0
+
+
+def test_run_tui_exits_on_keyboard_interrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eawf.tui import app as tui_app
+
+    monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
+
+    def boom() -> str:
+        raise KeyboardInterrupt
+
+    rc = tui_app.run_tui(workspace=tmp_path, read_key=boom)
+    assert rc == 0
+
+
+def test_run_tui_loop_iterates_until_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.tui import app as tui_app
+
+    monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
+    keys = iter(["a", "b", "\x1b"])
+
+    def feeder() -> str:
+        return next(keys)
+
+    rc = tui_app.run_tui(workspace=tmp_path, read_key=feeder)
+    assert rc == 0

@@ -178,9 +178,9 @@ def profile_validate_cmd(
                 ledger=ledger,
                 no_input=flags.no_input,
             )
-        except profiles_trust.UntrustedProfile as exc:
+        except profiles_trust.UntrustedProfileError as exc:
             failures.append({"profile": pid, "code": "untrusted", "message": str(exc)})
-        except profiles_trust.TrustDrift as exc:
+        except profiles_trust.TrustDriftError as exc:
             failures.append({"profile": pid, "code": "trust_drift", "message": str(exc)})
     payload = {
         "validated": list(ids),

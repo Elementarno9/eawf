@@ -7,8 +7,12 @@ Enforces:
 2. ``[P##-CORE]`` commits MUST touch only state-bookkeeping paths
    (``.ea/state.json``, ``.ea/store/event.jsonl``, and per-wave spec
    files under ``.ea/specs/``). Touching anything else is rejected.
+3. The canonical ``Co-Authored-By: Claude <noreply@anthropic.com>``
+   trailer MUST be present (the ``prepare-commit-msg`` stage hook
+   auto-inserts it; this backstop rejects commits where the trailer
+   was hand-deleted).
 
-Both checks run as a ``commit-msg``-stage pre-commit hook. The first
+All checks run as a ``commit-msg``-stage pre-commit hook. The first
 argument is the commit-message file path (pre-commit passes it). The
 linter consults ``git diff --cached --name-only`` for staged paths.
 
@@ -29,6 +33,7 @@ _SUBJECT_RE = re.compile(
     r"(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\s+\S.*$"
 )
 _CORE_TAG_RE = re.compile(r"^\[P\d{2}-CORE\]\s+")
+_TRAILER: str = "Co-Authored-By: Claude <noreply@anthropic.com>"
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
     ".ea/store/event.jsonl",
@@ -89,6 +94,12 @@ def lint(message_path: Path, staged: list[str]) -> tuple[int, str]:
                 "CORE commits must mutate only .ea/state.json, "
                 ".ea/store/event.jsonl, or .ea/specs/**"
             )
+    if "Co-Authored-By: Claude" not in text:
+        return 1, (
+            f"missing canonical trailer: {_TRAILER!r}\n"
+            "the prepare-commit-msg hook should auto-insert it; "
+            "re-run `git commit` to retry or paste the trailer manually"
+        )
     return 0, ""
 
 

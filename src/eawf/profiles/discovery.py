@@ -136,9 +136,8 @@ def discover_profile(
             path=None,
             mtime_ns=None,
         )
-    raise InvalidInput(
-        f"unknown profile {profile_id!r}; choose from {list(list_profiles_all(workspace=workspace))}"
-    )
+    choices = list(list_profiles_all(workspace=workspace))
+    raise InvalidInput(f"unknown profile {profile_id!r}; choose from {choices}")
 
 
 def list_profiles_all(*, workspace: Path | str | None = None) -> tuple[str, ...]:

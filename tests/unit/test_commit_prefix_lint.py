@@ -26,9 +26,13 @@ def mod():
     return _load_module()
 
 
-def _write_msg(tmp_path: Path, body: str) -> Path:
+_TRAILER = "\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"
+
+
+def _write_msg(tmp_path: Path, body: str, *, with_trailer: bool = True) -> Path:
     p = tmp_path / "COMMIT_EDITMSG"
-    p.write_text(body, encoding="utf-8")
+    payload = body if not with_trailer else body.rstrip() + _TRAILER
+    p.write_text(payload, encoding="utf-8")
     return p
 
 
@@ -83,7 +87,7 @@ def test_accepts_core_touching_specs(tmp_path: Path, mod) -> None:
 
 
 def test_empty_subject_rejected(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "\n# just a comment\n")
+    msg = _write_msg(tmp_path, "\n# just a comment\n", with_trailer=False)
     code, _diag = mod.lint(msg, [])
     assert code == 1
 
@@ -95,3 +99,14 @@ def test_skip_comment_lines_then_real_subject(tmp_path: Path, mod) -> None:
     )
     code, diag = mod.lint(msg, [])
     assert code == 0, diag
+
+
+def test_rejects_missing_coauthor_trailer(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "[P14-W02] feat: add thing\n\nbody only, no trailer\n",
+        with_trailer=False,
+    )
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "Co-Authored-By: Claude" in diag

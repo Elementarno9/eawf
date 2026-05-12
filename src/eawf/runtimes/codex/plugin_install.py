@@ -154,7 +154,8 @@ def _build_managed_body(timestamp: str) -> dict[str, object]:
 
 
 _MANAGED_BLOCK_RE = re.compile(
-    rf"(?ms)^# ---- {re.escape(_MANAGED_TABLE)} begin ----.*?^# ---- {re.escape(_MANAGED_TABLE)} end ----\n?"
+    rf"(?ms)^# ---- {re.escape(_MANAGED_TABLE)} begin ----"
+    rf".*?^# ---- {re.escape(_MANAGED_TABLE)} end ----\n?"
 )
 _BEGIN_MARKER: str = f"# ---- {_MANAGED_TABLE} begin ----"
 _END_MARKER: str = f"# ---- {_MANAGED_TABLE} end ----"
@@ -246,12 +247,10 @@ def install_plugin(
     for spec in SKILL_REGISTRY:
         path = _skill_target(target_dir, spec)
         payload = _render_skill(spec).encode("utf-8")
-        if path.exists() and not force:
-            if path.read_bytes() != payload:
-                raise IntegrityViolation(
-                    f"managed file {path} differs from rendered body; "
-                    f"rerun with --force to overwrite"
-                )
+        if path.exists() and not force and path.read_bytes() != payload:
+            raise IntegrityViolation(
+                f"managed file {path} differs from rendered body; rerun with --force to overwrite"
+            )
         action = _classify(path, payload)
         if not dry_run:
             _ensure_dir(path.parent)
@@ -261,12 +260,10 @@ def install_plugin(
     for agent_spec in AGENT_REGISTRY:
         path = _agent_target(target_dir, agent_spec)
         payload = _render_agent(agent_spec).encode("utf-8")
-        if path.exists() and not force:
-            if path.read_bytes() != payload:
-                raise IntegrityViolation(
-                    f"managed file {path} differs from rendered body; "
-                    f"rerun with --force to overwrite"
-                )
+        if path.exists() and not force and path.read_bytes() != payload:
+            raise IntegrityViolation(
+                f"managed file {path} differs from rendered body; rerun with --force to overwrite"
+            )
         action = _classify(path, payload)
         if not dry_run:
             _ensure_dir(path.parent)
@@ -276,12 +273,10 @@ def install_plugin(
     for hook_spec in HOOK_REGISTRY:
         path = _hook_target(target_dir, hook_spec)
         payload = render_hook_sh(hook_spec.event_type).encode("utf-8")
-        if path.exists() and not force:
-            if path.read_bytes() != payload:
-                raise IntegrityViolation(
-                    f"managed file {path} differs from rendered body; "
-                    f"rerun with --force to overwrite"
-                )
+        if path.exists() and not force and path.read_bytes() != payload:
+            raise IntegrityViolation(
+                f"managed file {path} differs from rendered body; rerun with --force to overwrite"
+            )
         action = _classify(path, payload)
         if not dry_run:
             _ensure_dir(path.parent)

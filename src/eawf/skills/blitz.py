@@ -9,7 +9,7 @@ Recursion guard
 
 The cap is exposed via the ``EAWF_BLITZ_DEPTH`` environment variable so
 operators can override the depth from the shell without editing source.
-Default cap: ``8``. The :class:`BlitzRecursionExhausted` exception is
+Default cap: ``8``. The :class:`BlitzRecursionExhaustedError` exception is
 raised by :func:`bump_depth` when the cap fires — callers map it to a
 ``status="blocked"`` envelope.
 
@@ -36,7 +36,7 @@ _DEFAULT_DEPTH_CAP: Final[int] = 8
 _DEPTH_COUNTER_ENV_VAR: Final[str] = "EAWF_BLITZ_DEPTH_COUNTER"
 
 
-class BlitzRecursionExhausted(Exception):
+class BlitzRecursionExhaustedError(Exception):
     """Raised when the blitz depth cap fires."""
 
 
@@ -85,13 +85,15 @@ def bump_depth() -> int:
         The new depth value.
 
     Raises:
-        BlitzRecursionExhausted: Incrementing past :func:`depth_cap`
+        BlitzRecursionExhaustedError: Incrementing past :func:`depth_cap`
             would loop forever; the caller must back off to the human.
     """
     cap = depth_cap()
     new_depth = current_depth() + 1
     if new_depth > cap:
-        raise BlitzRecursionExhausted(f"blitz recursion exhausted: depth={new_depth} > cap={cap}")
+        raise BlitzRecursionExhaustedError(
+            f"blitz recursion exhausted: depth={new_depth} > cap={cap}"
+        )
     os.environ[_DEPTH_COUNTER_ENV_VAR] = str(new_depth)
     return new_depth
 
@@ -102,7 +104,7 @@ def should_auto_invoke(*, residual_unknowns: int) -> bool:
 
 
 __all__ = [
-    "BlitzRecursionExhausted",
+    "BlitzRecursionExhaustedError",
     "bump_depth",
     "current_depth",
     "depth_cap",

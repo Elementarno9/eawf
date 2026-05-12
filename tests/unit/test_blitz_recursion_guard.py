@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from eawf.skills.blitz import (
-    BlitzRecursionExhausted,
+    BlitzRecursionExhaustedError,
     bump_depth,
     current_depth,
     depth_cap,
@@ -47,7 +47,7 @@ def test_bump_depth_raises_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EAWF_BLITZ_DEPTH", "2")
     bump_depth()
     bump_depth()
-    with pytest.raises(BlitzRecursionExhausted):
+    with pytest.raises(BlitzRecursionExhaustedError):
         bump_depth()
 
 

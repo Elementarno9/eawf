@@ -19,7 +19,7 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/Yelp/detect-secrets
-    # Baseline-hash: 537238d809fdc33a (.secrets.baseline; recompute and bump
+    # Baseline-hash: ff3b1ff454c883ca (.secrets.baseline; recompute and bump
     # this comment when the baseline is edited so the change is re-acknowledged).
     rev: v1.5.0
     hooks:
@@ -38,9 +38,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: insert-coauthor
+        name: insert-coauthor
+        entry: python3 tools/insert_coauthor.py
+        language: system
+        stages: [prepare-commit-msg]
       - id: commit-prefix-lint
         name: commit-prefix-lint
-        entry: python tools/commit_prefix_lint.py
+        entry: python3 tools/commit_prefix_lint.py
         language: system
         stages: [commit-msg]
       - id: eawf-doc-verify-strict
