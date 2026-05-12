@@ -41,6 +41,7 @@ from eawf.runtimes.claude.plugin_update import UpdateResult, update_plugin
 from eawf.runtimes.codex import detect_user_install as codex_detect_user_install
 from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
 from eawf.runtimes.codex import install_plugin as codex_install_plugin
+from eawf.runtimes.codex import package_plugin as codex_package_plugin
 from eawf.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
 from eawf.runtimes.codex.plugin_install import (
     InstallResult as CodexInstallResult,
@@ -48,6 +49,7 @@ from eawf.runtimes.codex.plugin_install import (
 from eawf.runtimes.codex.plugin_install import (
     IntegrityViolation as CodexIntegrityViolation,
 )
+from eawf.runtimes.codex.plugin_package import PackageResult as CodexPackageResult
 from eawf.runtimes.opencode import detect_user_install as opencode_detect_user_install
 from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
 from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
@@ -325,13 +327,18 @@ def _codex_install_payload(result: CodexInstallResult) -> dict[str, object]:
 
 def _codex_install_text(result: CodexInstallResult) -> str:
     verb = "dry-run" if result.dry_run else "wrote"
-    parts = [f"plugin install codex --scope {result.scope} ({verb}) → {result.target_dir}"]
+    # manifest path is <plugin_root>/.codex-plugin/plugin.json → parents[1] = plugin_root
+    plugin_root = result.manifest.path.parents[1] if result.manifest else result.target_dir
+    parts = [f"plugin install codex --scope {result.scope} ({verb}) → {plugin_root}"]
     parts.append(f"  skills:   {len(result.skills)} files")
     parts.append(f"  agents:   {len(result.agents)} files")
     parts.append(f"  hooks:    {len(result.hooks)} files")
     parts.append(f"  manifest: {result.manifest.action if result.manifest else 'no-op'}")
     parts.append(f"  sidecar:  {result.sidecar.action if result.sidecar else 'no-op'}")
-    parts.append(f"  config:   {result.config.action if result.config else 'no-op'}")
+    if result.config is not None:
+        parts.append(f"  config:   {result.config.action} ({result.config.path})")
+    else:
+        parts.append("  config:   no-op")
     return "\n".join(parts)
 
 
@@ -361,7 +368,14 @@ def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
 
 
 def _codex_doctor_text(report: CodexDoctorReport) -> str:
-    parts = [f"plugin doctor codex --scope {report.scope} → {report.target_dir}"]
+    # find a sample entry to recover the plugin_root
+    sample = next(iter(report.ok + report.drifted + report.missing), None)
+    plugin_root: object = report.target_dir
+    if (sample is not None and sample.kind in {"manifest", "sidecar"}) or (
+        sample is not None and sample.kind in {"skill", "agent", "hook"}
+    ):
+        plugin_root = sample.path.parents[1]
+    parts = [f"plugin doctor codex --scope {report.scope} → {plugin_root}"]
     parts.append(
         f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
     )
@@ -399,11 +413,16 @@ def _opencode_install_payload(result: OpencodeInstallResult) -> dict[str, object
 
 def _opencode_install_text(result: OpencodeInstallResult) -> str:
     verb = "dry-run" if result.dry_run else "wrote"
-    parts = [f"plugin install opencode --scope {result.scope} ({verb}) → {result.target_dir}"]
+    # plugin_js path is <dir>/eawf.js → parent = plugins dir
+    plugin_dir = result.plugin_js.path.parent if result.plugin_js else result.target_dir
+    parts = [f"plugin install opencode --scope {result.scope} ({verb}) → {plugin_dir}"]
     plugin_js_action = result.plugin_js.action if result.plugin_js else "no-op"
     parts.append(f"  plugin.js: {plugin_js_action}")
     parts.append(f"  sidecar:   {result.sidecar.action if result.sidecar else 'no-op'}")
-    parts.append(f"  config:    {result.config.action if result.config else 'no-op'}")
+    if result.config is not None:
+        parts.append(f"  config:    {result.config.action} ({result.config.path})")
+    else:
+        parts.append("  config:    no-op")
     return "\n".join(parts)
 
 
@@ -432,7 +451,12 @@ def _opencode_doctor_payload(report: OpencodeDoctorReport) -> dict[str, object]:
 
 
 def _opencode_doctor_text(report: OpencodeDoctorReport) -> str:
-    parts = [f"plugin doctor opencode --scope {report.scope} → {report.target_dir}"]
+    sample = next(
+        (e for e in report.ok + report.drifted + report.missing if e.kind == "plugin_js"),
+        None,
+    )
+    plugin_dir: object = sample.path.parent if sample is not None else report.target_dir
+    parts = [f"plugin doctor opencode --scope {report.scope} → {plugin_dir}"]
     parts.append(
         f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
     )
@@ -484,10 +508,51 @@ def _package_text(result: PackageResult) -> str:
     return "\n".join(parts)
 
 
-def _default_package_target(flags: GlobalFlags) -> Path:
-    """Default ``--target`` for ``plugin package`` — ``<workspace>/build/eawf-plugin/``."""
+def _default_package_target(flags: GlobalFlags, *, runtime: str) -> Path:
+    """Default ``--target`` for ``plugin package``.
+
+    Claude ships its plugin tree under ``<workspace>/build/eawf-plugin/``;
+    Codex ships its marketplace tree under
+    ``<workspace>/build/eawf-codex-marketplace/`` so the two outputs
+    coexist when both are built side-by-side.
+    """
     base = (flags.workspace or Path.cwd()).resolve()
+    if runtime == "codex":
+        return base / "build" / "eawf-codex-marketplace"
     return base / "build" / "eawf-plugin"
+
+
+def _codex_package_payload(result: CodexPackageResult) -> dict[str, object]:
+    """Render the Codex :class:`PackageResult` as the JSON envelope body."""
+    return {
+        "runtime": "codex",
+        "target": str(result.target),
+        "dry_run": result.dry_run,
+        "skills": [{"path": str(d.path), "action": d.action} for d in result.skills],
+        "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
+        "hooks": [{"path": str(d.path), "action": d.action} for d in result.hooks],
+        "manifest": (
+            {"path": str(result.manifest.path), "action": result.manifest.action}
+            if result.manifest is not None
+            else None
+        ),
+        "marketplace": (
+            {"path": str(result.marketplace.path), "action": result.marketplace.action}
+            if result.marketplace is not None
+            else None
+        ),
+    }
+
+
+def _codex_package_text(result: CodexPackageResult) -> str:
+    verb = "dry-run" if result.dry_run else "wrote"
+    parts = [f"plugin package codex ({verb}) → {result.target}"]
+    parts.append(f"  skills:      {len(result.skills)}")
+    parts.append(f"  agents:      {len(result.agents)}")
+    parts.append(f"  hooks:       {len(result.hooks)}")
+    parts.append(f"  manifest:    {result.manifest.action if result.manifest else 'no-op'}")
+    parts.append(f"  marketplace: {result.marketplace.action if result.marketplace else 'no-op'}")
+    return "\n".join(parts)
 
 
 def _scope_tip_banner(*, runtime: str, scope: str, result_path: Path) -> str | None:
@@ -562,11 +627,23 @@ def install_cmd(
             _codex_install_text(codex_result),
             flags=flags,
         )
-        banner = _scope_tip_banner(
-            runtime=runtime, scope=scope, result_path=codex_result.target_dir
+        codex_plugin_root = (
+            codex_result.manifest.path.parents[1]
+            if codex_result.manifest is not None
+            else codex_result.target_dir
         )
-        if banner and not flags.no_input and not flags.json_output:
-            print(banner)
+        if not flags.no_input and not flags.json_output and not codex_result.dry_run:
+            # Codex does not auto-load from <plugin_root>; marketplace
+            # registration is required for discovery. Steer the operator
+            # at `eawf plugin package codex`.
+            print(
+                "note: codex does not auto-load plugins from this path.\n"
+                "      run `eawf plugin package codex` to emit a marketplace tree\n"
+                "      and `codex plugin marketplace add <target>` to register it."
+            )
+            banner = _scope_tip_banner(runtime=runtime, scope=scope, result_path=codex_plugin_root)
+            if banner:
+                print(banner)
         return
     if runtime == "opencode":
         try:
@@ -590,7 +667,12 @@ def install_cmd(
             _opencode_install_text(oc_result),
             flags=flags,
         )
-        banner = _scope_tip_banner(runtime=runtime, scope=scope, result_path=oc_result.target_dir)
+        oc_plugin_dir = (
+            oc_result.plugin_js.path.parent
+            if oc_result.plugin_js is not None
+            else oc_result.target_dir
+        )
+        banner = _scope_tip_banner(runtime=runtime, scope=scope, result_path=oc_plugin_dir)
         if banner and not flags.no_input and not flags.json_output:
             print(banner)
         return
@@ -733,8 +815,11 @@ def package_cmd(
     runtime: Annotated[
         str,
         typer.Argument(
-            help="Runtime to package. Claude-only — codex/opencode have no "
-            "marketplace concept; use 'eawf plugin install' directly for those."
+            help=(
+                "Runtime to package: 'claude' (Claude Code marketplace plugin) "
+                "or 'codex' (Codex CLI local marketplace). OpenCode has no "
+                "marketplace concept — use 'eawf plugin install opencode' instead."
+            ),
         ),
     ],
     target: Annotated[
@@ -742,8 +827,9 @@ def package_cmd(
         typer.Option(
             "--target",
             help=(
-                "Output directory. Defaults to <workspace>/build/eawf-plugin/ "
-                "(or ./build/eawf-plugin/ when no workspace anchor)."
+                "Output directory. Defaults to "
+                "<workspace>/build/eawf-plugin/ for claude, "
+                "<workspace>/build/eawf-codex-marketplace/ for codex."
             ),
         ),
     ] = None,
@@ -751,14 +837,14 @@ def package_cmd(
         bool,
         typer.Option(
             "--include-marketplace/--no-marketplace",
-            help="Emit .claude-plugin/marketplace.json (default: yes).",
+            help="Emit .claude-plugin/marketplace.json (claude only; default yes).",
         ),
     ] = True,
     include_readme: Annotated[
         bool,
         typer.Option(
             "--include-readme/--no-readme",
-            help="Emit README.md (default: yes).",
+            help="Emit README.md (claude only; default yes).",
         ),
     ] = True,
     include_hooks: Annotated[
@@ -767,7 +853,7 @@ def package_cmd(
             "--include-hooks/--no-hooks",
             help=(
                 "Emit hooks.json + hooks/<event>.sh wrappers for the six "
-                "session-level Claude Code events (default: yes)."
+                "session-level Claude Code events (claude only; default yes)."
             ),
         ),
     ] = True,
@@ -786,22 +872,40 @@ def package_cmd(
         ),
     ] = False,
 ) -> None:
-    """Emit an installable Claude Code plugin tree."""
+    """Emit an installable runtime plugin tree."""
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
-    if runtime != "claude":
+    if runtime == "opencode":
         cli_errors.emit_error(
             cli_errors.InvalidInput(
-                f"plugin package is currently Claude-only; got runtime={runtime!r}"
+                "opencode has no marketplace concept; use "
+                "`eawf plugin install opencode` (project or user scope) instead"
             ),
             flags=flags,
         )
         return
-    resolved_target = (target or _default_package_target(flags)).resolve()
+    resolved_target = (target or _default_package_target(flags, runtime=runtime)).resolve()
+    if runtime == "codex":
+        try:
+            codex_result = codex_package_plugin(resolved_target, force=force, dry_run=dry_run)
+        except ValueError as exc:
+            cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+            return
+        emit_json_or_text(
+            _codex_package_payload(codex_result),
+            _codex_package_text(codex_result),
+            flags=flags,
+        )
+        if not flags.no_input and not flags.json_output and not codex_result.dry_run:
+            print(
+                f"next: codex plugin marketplace add {codex_result.target}\n"
+                f"      codex plugin install eawf@eawf-local-codex"
+            )
+        return
     try:
         result = package_plugin(
             resolved_target,

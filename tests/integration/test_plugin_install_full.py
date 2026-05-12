@@ -27,6 +27,21 @@ def _equip_ea_dir(target: Path) -> None:
     (target / ".ea" / "indexes").mkdir(exist_ok=True)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_user_scope_probes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Neutralise codex + opencode user-scope conflict detectors so the
+    developer machine's real ``~/.codex/plugins/`` /
+    ``~/.config/opencode/plugins/`` cannot trip the gate during tests."""
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.codex_detect_user_install",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        lambda: None,
+    )
+
+
 def test_plugin_install_via_cli_dry_run(tmp_path: Path) -> None:
     """``eawf plugin install claude --dry-run`` exits 0 and writes nothing."""
     _equip_ea_dir(tmp_path)
@@ -188,6 +203,37 @@ def test_plugin_doctor_codex_finds_install_at_scope(
         app, ["-w", str(tmp_path), "plugin", "doctor", "codex", "--scope", "user"]
     )
     assert result.exit_code == 0, result.stdout
+
+
+def test_plugin_package_codex_writes_marketplace_tree(tmp_path: Path) -> None:
+    """``eawf plugin package codex`` emits marketplace.json + plugin tree."""
+    _equip_ea_dir(tmp_path)
+    target = tmp_path / "build" / "codex-mkt"
+    result = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "plugin",
+            "package",
+            "codex",
+            "--target",
+            str(target),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert (target / "marketplace.json").is_file()
+    assert (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").is_file()
+    body = json.loads((target / "marketplace.json").read_text(encoding="utf-8"))
+    assert body["name"] == "eawf-local-codex"
+    assert body["plugins"][0]["name"] == "eawf"
+
+
+def test_plugin_package_opencode_rejected(tmp_path: Path) -> None:
+    """opencode has no marketplace; CLI rejects with InvalidInput."""
+    _equip_ea_dir(tmp_path)
+    result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "package", "opencode"])
+    assert result.exit_code == 3, result.stdout
 
 
 def test_plugin_install_codex_idempotent_at_scope(tmp_path: Path) -> None:
