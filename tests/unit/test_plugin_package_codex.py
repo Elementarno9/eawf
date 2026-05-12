@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.codex import package_plugin
@@ -19,14 +18,14 @@ def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
     assert (target / ".agents" / "plugins" / "marketplace.json").is_file()
     assert (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").is_file()
     assert (target / "plugins" / "eawf" / "skills").is_dir()
-    assert (target / "plugins" / "eawf" / "agents").is_dir()
     assert (target / "plugins" / "eawf" / "hooks").is_dir()
+    # Codex plugin.json has no top-level ``agents`` key — no agents/ dir.
+    assert not (target / "plugins" / "eawf" / "agents").exists()
     assert result.marketplace is not None
     assert result.marketplace.action == "created"
     assert result.manifest is not None
     assert result.manifest.action == "created"
     assert len(result.skills) == len(SKILL_REGISTRY)
-    assert len(result.agents) == len(AGENT_REGISTRY)
     assert len(result.hooks) == len(HOOK_REGISTRY)
 
 

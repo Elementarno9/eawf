@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.codex import doctor_plugin, expected_paths, install_plugin
@@ -53,11 +52,12 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
     assert (root / ".codex-plugin" / "plugin.json").is_file()
     assert (root / ".codex-plugin" / ".eawf-managed.json").is_file()
     assert len(result.skills) == len(SKILL_REGISTRY)
-    assert len(result.agents) == len(AGENT_REGISTRY)
     assert len(result.hooks) == len(HOOK_REGISTRY)
     assert result.scope == scope
     for delta in result.skills:
         assert delta.action == "created"
+    # Codex plugin.json has no top-level ``agents`` key — no agents/ dir.
+    assert (root / "agents").exists() is False
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
@@ -72,7 +72,7 @@ def test_install_idempotent_second_run_unchanged(
     assert second.manifest.action == "unchanged"
     assert second.sidecar is not None
     assert second.sidecar.action == "unchanged"
-    for delta in second.skills + second.agents + second.hooks:
+    for delta in second.skills + second.hooks:
         assert delta.action == "unchanged", (delta.path, delta.action)
 
 

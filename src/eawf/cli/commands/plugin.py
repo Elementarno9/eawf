@@ -305,7 +305,6 @@ def _codex_install_payload(result: CodexInstallResult) -> dict[str, object]:
         "target_dir": str(result.target_dir),
         "dry_run": result.dry_run,
         "skills": [{"path": str(d.path), "action": d.action} for d in result.skills],
-        "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
         "hooks": [{"path": str(d.path), "action": d.action} for d in result.hooks],
         "manifest": (
             {"path": str(result.manifest.path), "action": result.manifest.action}
@@ -331,7 +330,6 @@ def _codex_install_text(result: CodexInstallResult) -> str:
     plugin_root = result.manifest.path.parents[1] if result.manifest else result.target_dir
     parts = [f"plugin install codex --scope {result.scope} ({verb}) → {plugin_root}"]
     parts.append(f"  skills:   {len(result.skills)} files")
-    parts.append(f"  agents:   {len(result.agents)} files")
     parts.append(f"  hooks:    {len(result.hooks)} files")
     parts.append(f"  manifest: {result.manifest.action if result.manifest else 'no-op'}")
     parts.append(f"  sidecar:  {result.sidecar.action if result.sidecar else 'no-op'}")
@@ -527,7 +525,6 @@ def _codex_package_payload(result: CodexPackageResult) -> dict[str, object]:
         "target": str(result.target),
         "dry_run": result.dry_run,
         "skills": [{"path": str(d.path), "action": d.action} for d in result.skills],
-        "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
         "hooks": [{"path": str(d.path), "action": d.action} for d in result.hooks],
         "manifest": (
             {"path": str(result.manifest.path), "action": result.manifest.action}
@@ -546,7 +543,6 @@ def _codex_package_text(result: CodexPackageResult) -> str:
     verb = "dry-run" if result.dry_run else "wrote"
     parts = [f"plugin package codex ({verb}) → {result.target}"]
     parts.append(f"  skills:      {len(result.skills)}")
-    parts.append(f"  agents:      {len(result.agents)}")
     parts.append(f"  hooks:       {len(result.hooks)}")
     parts.append(f"  manifest:    {result.manifest.action if result.manifest else 'no-op'}")
     parts.append(f"  marketplace: {result.marketplace.action if result.marketplace else 'no-op'}")

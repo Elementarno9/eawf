@@ -10,7 +10,6 @@ agents,hooks}/`` dump. Output under *plugin_root*:
         plugin.json              # canonical Codex manifest
         .eawf-managed.json       # sidecar — hash registry for doctor
       skills/<name>.md
-      agents/<role>.md
       hooks/<event>.sh
 
 The scope-correct ``config.toml`` (``<target>/.codex/config.toml`` for
@@ -21,9 +20,9 @@ outside the markers is preserved verbatim.
 
 The Codex manifest schema (``name``, ``version``, ``description``,
 ``skills``, ``hooks``) is taken from the Codex Build-plugin reference.
-``agents/`` is emitted for parity with the eawf render pipeline but is
-not currently advertised in the manifest — Codex ignores unknown asset
-directories.
+Codex's ``plugin.json`` schema has no ``agents`` key — agents live
+nested inside skills (per the skill manifest), so a top-level
+``agents/<role>.md`` render is unreachable and intentionally omitted.
 
 Public API:
 
@@ -46,7 +45,6 @@ from pathlib import Path
 from typing import Literal
 
 from eawf.render._atomic import atomic_write_text
-from eawf.render.agents import AGENT_REGISTRY, AgentSpec, AgentTemplateContext, render_agent_md
 from eawf.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
 from eawf.render.skills import (
     SKILL_REGISTRY,
@@ -90,7 +88,6 @@ class InstallResult:
     target_dir: Path
     scope: Scope = "project"
     skills: list[FileDelta] = field(default_factory=list)
-    agents: list[FileDelta] = field(default_factory=list)
     hooks: list[FileDelta] = field(default_factory=list)
     manifest: FileDelta | None = None
     sidecar: FileDelta | None = None
@@ -135,10 +132,6 @@ def _skill_target(plugin_root: Path, spec: SkillSpec) -> Path:
     return plugin_root / "skills" / f"{spec.skill_name.lstrip('/')}.md"
 
 
-def _agent_target(plugin_root: Path, spec: AgentSpec) -> Path:
-    return plugin_root / "agents" / f"{spec.role}.md"
-
-
 def _hook_target(plugin_root: Path, spec: HookSpec) -> Path:
     return plugin_root / "hooks" / f"{codex_hook_name(spec.event_type)}.sh"
 
@@ -164,26 +157,13 @@ def _render_skill(spec: SkillSpec) -> str:
     )
 
 
-def _render_agent(spec: AgentSpec) -> str:
-    return render_agent_md(
-        AgentTemplateContext(
-            role=spec.role,
-            description=spec.description,
-            tools=spec.tools,
-            model=spec.model,
-            color=spec.color,
-            memory=spec.memory,
-            body=spec.body,
-        )
-    )
-
-
 def _render_manifest() -> bytes:
     """Render the Codex-native ``.codex-plugin/plugin.json`` body.
 
     Schema (per Codex Build-plugin reference): ``name``, ``version``,
-    ``description``, ``skills``, ``hooks``. ``agents/`` is emitted but
-    unreferenced — Codex tolerates extra directories.
+    ``description``, ``skills``, ``hooks``. Codex has no top-level
+    ``agents`` key in ``plugin.json`` — agents live nested inside
+    skills, so no top-level ``agents/`` directory is emitted.
     """
     manifest: dict[str, object] = {
         "name": _PLUGIN_NAME,
@@ -197,7 +177,6 @@ def _render_manifest() -> bytes:
 
 def _build_sidecar_body(timestamp: str) -> dict[str, object]:
     skills_payload = [{"name": spec.skill_name, "version": spec.version} for spec in SKILL_REGISTRY]
-    agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     hooks_payload = [
         {
             "event_type": spec.event_type.value,
@@ -210,7 +189,6 @@ def _build_sidecar_body(timestamp: str) -> dict[str, object]:
         "generator": _GENERATOR,
         "generated_at": timestamp,
         "skills": skills_payload,
-        "agents": agents_payload,
         "hooks": hooks_payload,
     }
     body_json = json.dumps(body, sort_keys=True, separators=(",", ":"))
@@ -301,7 +279,6 @@ def install_plugin(
     plugin_root = _plugin_root(target_dir, scope=scope, home=home)
 
     skill_deltas: list[FileDelta] = []
-    agent_deltas: list[FileDelta] = []
     hook_deltas: list[FileDelta] = []
 
     for spec in SKILL_REGISTRY:
@@ -316,19 +293,6 @@ def install_plugin(
             _ensure_dir(path.parent)
             atomic_write_text(path, payload.decode("utf-8"))
         skill_deltas.append(FileDelta(path=path, action=action))
-
-    for agent_spec in AGENT_REGISTRY:
-        path = _agent_target(plugin_root, agent_spec)
-        payload = _render_agent(agent_spec).encode("utf-8")
-        if path.exists() and not force and path.read_bytes() != payload:
-            raise IntegrityViolation(
-                f"managed file {path} differs from rendered body; rerun with --force to overwrite"
-            )
-        action = _classify(path, payload)
-        if not dry_run:
-            _ensure_dir(path.parent)
-            atomic_write_text(path, payload.decode("utf-8"))
-        agent_deltas.append(FileDelta(path=path, action=action))
 
     for hook_spec in HOOK_REGISTRY:
         path = _hook_target(plugin_root, hook_spec)
@@ -375,7 +339,7 @@ def install_plugin(
 
     logger.info(
         f"install_plugin runtime=codex scope={scope} plugin_root={plugin_root} "
-        f"skills={len(skill_deltas)} agents={len(agent_deltas)} hooks={len(hook_deltas)} "
+        f"skills={len(skill_deltas)} hooks={len(hook_deltas)} "
         f"manifest={manifest_action} sidecar={sidecar_action} config={config_action} "
         f"dry_run={dry_run}"
     )
@@ -383,7 +347,6 @@ def install_plugin(
         target_dir=target_dir,
         scope=scope,
         skills=skill_deltas,
-        agents=agent_deltas,
         hooks=hook_deltas,
         manifest=manifest_delta,
         sidecar=sidecar_delta,
@@ -404,8 +367,6 @@ def expected_paths(
     paths: dict[str, Path] = {}
     for spec in SKILL_REGISTRY:
         paths[f"plugin.codex.skill.{spec.skill_name}"] = _skill_target(plugin_root, spec)
-    for agent_spec in AGENT_REGISTRY:
-        paths[f"plugin.codex.agent.{agent_spec.role}"] = _agent_target(plugin_root, agent_spec)
     for hook_spec in HOOK_REGISTRY:
         paths[f"plugin.codex.hook.{hook_spec.event_type.value}"] = _hook_target(
             plugin_root, hook_spec

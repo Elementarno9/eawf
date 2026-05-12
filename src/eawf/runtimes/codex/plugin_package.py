@@ -3,10 +3,10 @@
 Per the Codex Build-plugin reference, dropping a plugin directly under
 ``~/.codex/plugins/<name>/`` does **not** auto-load it — Codex requires
 a marketplace registration step. ``eawf plugin install codex`` writes
-the plugin tree (skills, agents, hooks, ``.codex-plugin/plugin.json``)
-at the scope-correct location and flips ``[plugins.eawf] enabled = true``
-in ``config.toml``, but the operator still has to register a
-marketplace for Codex to discover it.
+the plugin tree (skills, hooks, ``.codex-plugin/plugin.json``) at the
+scope-correct location and flips ``[plugins.eawf] enabled = true`` in
+``config.toml``, but the operator still has to register a marketplace
+for Codex to discover it.
 
 This module emits a self-contained marketplace tree the operator can
 register with one command::
@@ -30,7 +30,6 @@ Layout::
           .codex-plugin/
             plugin.json                      # canonical plugin manifest
           skills/<name>.md
-          agents/<role>.md
           hooks/<event>.sh
 
 The marketplace manifest sits at ``.agents/plugins/marketplace.json``
@@ -55,13 +54,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from eawf.render._atomic import atomic_write_text
-from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.hooks import HOOK_REGISTRY, render_hook_sh
 from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.codex.hook_map import codex_hook_name
 from eawf.runtimes.codex.plugin_install import (
     IntegrityViolation,
-    _render_agent,
     _render_manifest,
     _render_skill,
 )
@@ -94,7 +91,6 @@ class PackageResult:
 
     target: Path
     skills: list[FileDelta] = field(default_factory=list)
-    agents: list[FileDelta] = field(default_factory=list)
     hooks: list[FileDelta] = field(default_factory=list)
     manifest: FileDelta | None = None
     marketplace: FileDelta | None = None
@@ -217,16 +213,6 @@ def package_plugin(
             atomic_write_text(path, payload.decode("utf-8"))
         skill_deltas.append(FileDelta(path=path, action=action))
 
-    agent_deltas: list[FileDelta] = []
-    for agent_spec in AGENT_REGISTRY:
-        path = plugin_root / "agents" / f"{agent_spec.role}.md"
-        payload = _render_agent(agent_spec).encode("utf-8")
-        action = _classify(path, payload)
-        if not dry_run:
-            _ensure_dir(path.parent)
-            atomic_write_text(path, payload.decode("utf-8"))
-        agent_deltas.append(FileDelta(path=path, action=action))
-
     hook_deltas: list[FileDelta] = []
     for hook_spec in HOOK_REGISTRY:
         path = plugin_root / "hooks" / f"{codex_hook_name(hook_spec.event_type)}.sh"
@@ -259,14 +245,13 @@ def package_plugin(
 
     logger.info(
         f"package_plugin runtime=codex target={target} "
-        f"skills={len(skill_deltas)} agents={len(agent_deltas)} "
-        f"hooks={len(hook_deltas)} manifest={manifest_action} "
-        f"marketplace={marketplace_action} dry_run={dry_run}"
+        f"skills={len(skill_deltas)} hooks={len(hook_deltas)} "
+        f"manifest={manifest_action} marketplace={marketplace_action} "
+        f"dry_run={dry_run}"
     )
     return PackageResult(
         target=target,
         skills=skill_deltas,
-        agents=agent_deltas,
         hooks=hook_deltas,
         manifest=manifest_delta,
         marketplace=marketplace_delta,
