@@ -86,6 +86,15 @@ def test_accepts_core_touching_specs(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
+def test_accepts_core_touching_secrets_baseline(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "[P14-CORE] state: reopen P14\n")
+    code, diag = mod.lint(
+        msg,
+        [".ea/state.json", ".ea/store/event.jsonl", ".secrets.baseline"],
+    )
+    assert code == 0, diag
+
+
 def test_empty_subject_rejected(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "\n# just a comment\n", with_trailer=False)
     code, _diag = mod.lint(msg, [])
