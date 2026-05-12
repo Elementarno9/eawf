@@ -58,6 +58,12 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
         assert delta.action == "created"
     # Codex plugin.json has no top-level ``agents`` key — no agents/ dir.
     assert (root / "agents").exists() is False
+    # Codex requires each skill on disk as a directory containing SKILL.md
+    # (not a flat <name>.md). Verify the directory layout for every skill.
+    for spec in SKILL_REGISTRY:
+        skill_dir = root / "skills" / spec.skill_name
+        assert skill_dir.is_dir(), skill_dir
+        assert (skill_dir / "SKILL.md").is_file(), skill_dir / "SKILL.md"
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
