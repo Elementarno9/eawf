@@ -920,8 +920,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P14-I02",
+    "phase_id": "P14",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1369,6 +1369,19 @@
         "P14-I01-W10",
         "P14-I01-W11"
       ]
+    },
+    "P14-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P14-I02",
+      "opened_at": "2026-05-12T16:55:45.811499Z",
+      "phase_id": "P14",
+      "status": "active",
+      "title": "plugin install native layout + user scope",
+      "wave_ids": [
+        "P14-I02-W01"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1557,16 +1570,17 @@
       "title": "v0.2 P13: feature cluster + ship-gate"
     },
     "P14": {
-      "audit_id": "A15-P14",
-      "closed_at": "2026-05-11T23:03:26.003104Z",
+      "audit_id": null,
+      "closed_at": null,
       "id": "P14",
       "iter_ids": [
-        "P14-I01"
+        "P14-I01",
+        "P14-I02"
       ],
       "opened_at": "2026-05-11T20:59:47.034498Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "closed",
+      "status": "active",
       "subproject_id": null,
       "title": "Harnesses (Codex + OpenCode) + hygiene preamble"
     }
@@ -1603,7 +1617,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-11T23:03:26.003132Z",
+  "updated_at": "2026-05-12T16:55:50.420721Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2615,6 +2629,32 @@
       "outcome": "ArtifactKind enum + a11y profile stub + /blitz recursion guard",
       "status": "closed",
       "title": "Artifact-kind enum + a11y stub + /blitz skill scaffold",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P14-I02-W01": {
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/runtimes/codex/**",
+        "src/eawf/runtimes/opencode/**",
+        "src/eawf/cli/commands/plugin.py",
+        "tests/unit/test_plugin_install_codex.py",
+        "tests/unit/test_plugin_install_opencode.py",
+        "tests/unit/test_plugin_install_conflict_gate.py",
+        "tests/integration/test_plugin_install_full.py",
+        "docs/architecture/plugins.md"
+      ],
+      "id": "P14-I02-W01",
+      "iter_id": "P14-I02",
+      "opened_at": "2026-05-12T16:55:50.420692Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "plugin install native layout + user scope",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
