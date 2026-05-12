@@ -85,6 +85,7 @@ from eawf.lifecycle.transitions import (
     open_iter,
     open_phase,
     plan_wave,
+    reopen_phase,
     switch_subproject,
 )
 from eawf.lock import portalock
@@ -127,7 +128,7 @@ subproject_app = typer.Typer(
 )
 phase_app = typer.Typer(
     name="phase",
-    help="Phase lifecycle (open, close).",
+    help="Phase lifecycle (open, close, reopen).",
     no_args_is_help=True,
 )
 iter_app = typer.Typer(
@@ -574,6 +575,30 @@ def phase_close_cmd(
             )
         ),
         closure_kind=True,
+    )
+
+
+@phase_app.command("reopen")
+def phase_reopen_cmd(
+    ctx: typer.Context,
+    phase_id: Annotated[str, typer.Argument(help="Phase ID to reopen.")],
+) -> None:
+    """Reopen a closed phase. Used for follow-up iters after a phase close."""
+    flags: GlobalFlags = ctx.obj
+    if not is_phase_id(phase_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            flags=flags,
+        )
+        return
+    _run_mutation(
+        ctx,
+        command="phase reopen",
+        args={"id": phase_id},
+        scope_id=phase_id,
+        text=f"phase reopen {phase_id}",
+        envelope=lambda: {"phase": phase_id},
+        mutate=lambda state: _wrap_no_return(reopen_phase(state, phase_id=phase_id)),
     )
 
 
