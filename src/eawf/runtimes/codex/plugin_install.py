@@ -161,9 +161,17 @@ def _render_manifest() -> bytes:
     """Render the Codex-native ``.codex-plugin/plugin.json`` body.
 
     Schema (per Codex Build-plugin reference): ``name``, ``version``,
-    ``description``, ``skills``, ``hooks``. Codex has no top-level
+    ``description``, ``skills``, ``hooks``, plus the ``interface`` block
+    consumed by the Codex marketplace picker (display name, category,
+    short / long descriptions, default prompt). Codex has no top-level
     ``agents`` key in ``plugin.json`` — agents live nested inside
     skills, so no top-level ``agents/`` directory is emitted.
+
+    URL fields (``websiteURL``, ``privacyPolicyURL``,
+    ``termsOfServiceURL``) and asset paths (``composerIcon``, ``logo``)
+    are intentionally omitted: bundling per-developer URLs or assets
+    that may not exist on disk would violate the PII / path-hygiene
+    rule and could break the manifest schema for downstream installs.
     """
     manifest: dict[str, object] = {
         "name": _PLUGIN_NAME,
@@ -171,6 +179,26 @@ def _render_manifest() -> bytes:
         "description": _PLUGIN_DESCRIPTION,
         "skills": "./skills/",
         "hooks": "./hooks/",
+        "interface": {
+            "displayName": "Eä Workflow",
+            "shortDescription": (
+                "Agent-driven development workflow — research, plan, ship in waves."
+            ),
+            "longDescription": (
+                "Eä Workflow (eawf) is an agent-driven software development framework. "
+                "Skills wrap the research → plan → execute → audit → ship → review → polish "
+                "pipeline; hooks gate state mutations on lifecycle events."
+            ),
+            "developerName": "Eä Workflow",
+            "category": "Productivity",
+            "capabilities": ["Write"],
+            "defaultPrompt": [
+                "Use the Eä Workflow skills to drive this iteration. "
+                "Start with /flow or pick a specific stage like /research, /prep, /ship."
+            ],
+            "screenshots": [],
+            "brandColor": "#6B7280",
+        },
     }
     return (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
