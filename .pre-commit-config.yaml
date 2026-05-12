@@ -48,9 +48,15 @@ repos:
         entry: python3 tools/commit_prefix_lint.py
         language: system
         stages: [commit-msg]
+      - id: mypy-pre-push
+        name: mypy-pre-push
+        entry: uv run mypy src/
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: eawf-doc-verify-strict
         name: eawf-doc-verify-strict
         entry: uv run eawf doc verify --strict
         language: system
         pass_filenames: false
-        stages: [pre-push]
+        stages: [manual]

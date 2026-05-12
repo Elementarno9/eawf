@@ -34,6 +34,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 from eawf.render._atomic import atomic_write_text
 from eawf.render.agents import AGENT_REGISTRY, AgentSpec, AgentTemplateContext, render_agent_md
@@ -175,17 +176,20 @@ def _render_managed_toml(body: dict[str, object]) -> str:
         f'hash = "{body["hash"]}"',
         "",
     ]
-    for skill in body["skills"]:  # type: ignore[union-attr]
+    skills_rows = cast(list[dict[str, str]], body["skills"])
+    agents_rows = cast(list[dict[str, str]], body["agents"])
+    hooks_rows = cast(list[dict[str, str]], body["hooks"])
+    for skill in skills_rows:
         lines.append(f"[[{_MANAGED_TABLE}.skills]]")
         lines.append(f'name = "{skill["name"]}"')
         lines.append(f'version = "{skill["version"]}"')
         lines.append("")
-    for agent in body["agents"]:  # type: ignore[union-attr]
+    for agent in agents_rows:
         lines.append(f"[[{_MANAGED_TABLE}.agents]]")
         lines.append(f'name = "{agent["name"]}"')
         lines.append(f'version = "{agent["version"]}"')
         lines.append("")
-    for hook in body["hooks"]:  # type: ignore[union-attr]
+    for hook in hooks_rows:
         lines.append(f"[[{_MANAGED_TABLE}.hooks]]")
         lines.append(f'event_type = "{hook["event_type"]}"')
         lines.append(f'path = "{hook["path"]}"')

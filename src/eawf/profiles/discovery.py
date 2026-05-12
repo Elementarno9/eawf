@@ -189,6 +189,7 @@ def load_profile_with_discovery(
     profile YAML invalidates only its own slot.
     """
     loc = discover_profile(profile_id, workspace=workspace)
+    key: tuple[str, str, int | None]
     if loc.source == "builtin":
         key = ("builtin", profile_id, None)
         cached = _PROFILE_CACHE.get(key)
