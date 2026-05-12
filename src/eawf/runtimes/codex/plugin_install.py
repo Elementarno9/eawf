@@ -61,9 +61,7 @@ Scope = Literal["project", "user"]
 
 _PLUGIN_NAME: str = "eawf"
 _PLUGIN_VERSION: str = "1.0"
-_PLUGIN_DESCRIPTION: str = (
-    "Eä Workflow plugin — agent-driven development skills, agents, and hooks."
-)
+_PLUGIN_DESCRIPTION: str = "Eä Workflow plugin — agent-driven development skills and hooks."
 _GENERATOR: str = "eawf-plugin-codex"
 _MANAGED_TABLE: str = "__eawf_managed"
 _HOOK_FILE_MODE: int = 0o755
