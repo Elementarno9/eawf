@@ -42,17 +42,25 @@ machine-specific renders, not committed assets. Re-render anytime via
 
 ## Suggested setup (Claude Code users)
 
+Pick **one** mode — running both at once makes Claude Code see every
+skill / agent / hook twice (CC dedups by name; active body is
+undefined). `eawf plugin install claude` detects an existing
+marketplace install under `~/.claude/plugins/` and prompts before
+proceeding; pass `--force` to acknowledge a duplicate render.
+
+**Project-local mode** (renders into the working repo; ideal when
+dogfooding eawf or working only on one project):
+
 ```bash
 eawf plugin install claude    # render local skills/agents/hooks
 eawf doctor                   # readiness checks
 eawf plugin doctor claude     # local drift check
 ```
 
-### Install as a CC plugin (local marketplace)
-
-For a portable Claude Code plugin install (skills, agents, and the six
-session-level hooks Claude Code can observe — `SessionStart`, `Stop`,
-and `Pre`/`PostToolUse` filtered to bash `git commit`/`git push`):
+**Marketplace mode** (portable install, ideal when using eawf across
+many repos; emits the skills + agents + six session-level hooks
+`SessionStart` / `Stop` / `Pre`/`PostToolUse` filtered to bash `git
+commit`/`git push`):
 
 ```bash
 eawf plugin package claude --target ./build/eawf-plugin
@@ -64,6 +72,22 @@ Then in Claude Code:
 /plugin marketplace add ./build/eawf-plugin
 /plugin install eawf@eawf-local
 ```
+
+## Other harnesses
+
+`eawf plugin install` also supports two non-Claude harnesses; no
+`package` step is needed because neither has a marketplace concept —
+the renderer writes directly into the workspace root:
+
+```bash
+eawf plugin install codex      # writes .codex/{skills,agents,hooks}/ + config.toml
+eawf plugin install opencode   # writes opencode.json (managed block) + plugin.js
+eawf plugin doctor codex       # codex drift check
+eawf plugin doctor opencode    # opencode drift check
+```
+
+`plugin update` is currently Claude-only; codex / opencode update
+support ships in v0.4.
 
 ## Verify
 
