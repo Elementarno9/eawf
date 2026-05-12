@@ -233,21 +233,26 @@ def _render_opencode_command_md(spec: SkillSpec) -> str:
     """Render an opencode command file from a :class:`SkillSpec`.
 
     Maps each ``user_invocable=True`` Eä skill to ``/<skill_name>``.
-    Argument hints are surfaced in the body preamble because opencode's
-    command frontmatter has no equivalent of Claude Code's
-    ``argument-hint`` key.
+    The body always closes with ``ARGUMENTS: $ARGUMENTS`` so opencode
+    substitutes the invocation args into the prompt (opencode commands
+    use the literal ``$ARGUMENTS`` placeholder — there is no
+    frontmatter ``argument-hint`` key like Claude Code). The argument
+    hint is rendered as a comment before the placeholder so a human
+    reader can still see the expected shape.
     """
-    header_lines = [
+    lines = [
         "---",
         f"description: {spec.description}",
         "---",
         "",
+        spec.body.rstrip(),
+        "",
     ]
     if spec.argument_hint:
-        header_lines.append(f"ARGUMENTS: {spec.argument_hint}")
-        header_lines.append("")
-    header_lines.append(spec.body.rstrip() + "\n")
-    return "\n".join(header_lines)
+        lines.append(f"<!-- argument hint: {spec.argument_hint} -->")
+    lines.append("ARGUMENTS: $ARGUMENTS")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _load_plugin_js_template() -> str:
