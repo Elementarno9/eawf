@@ -1,4 +1,11 @@
-"""Unit tests for the OpenCode runtime plugin installer (P14-W07 / D13)."""
+"""Unit tests for the OpenCode runtime plugin installer (P14-I02-W01).
+
+Covers the native plugin layout (``.opencode/plugins/eawf.js`` plus
+sidecar ``.eawf-managed.json``), removal of the legacy
+``plugins:[...]`` array patch, and scope-aware installs under
+``$OPENCODE_CONFIG_DIR/plugins/eawf.js`` or
+``<home>/.config/opencode/plugins/eawf.js``.
+"""
 
 from __future__ import annotations
 
@@ -14,47 +21,163 @@ from eawf.runtimes.opencode.plugin_install import (
 )
 
 
-def test_install_writes_config_and_plugin_js(tmp_path: Path) -> None:
-    result = install_plugin(tmp_path)
-    config_path = tmp_path / "opencode.json"
-    plugin_path = tmp_path / "plugin.js"
-    assert config_path.is_file()
-    assert plugin_path.is_file()
-    parsed = json.loads(config_path.read_text())
-    assert "__eawf_managed" in parsed
+@pytest.fixture()
+def fake_home(tmp_path: Path) -> Path:
+    home = tmp_path / "fake-home"
+    home.mkdir()
+    return home
+
+
+@pytest.fixture()
+def fake_opencode_config_dir(tmp_path: Path) -> Path:
+    cfg = tmp_path / "fake-xdg-opencode"
+    cfg.mkdir()
+    return cfg
+
+
+def _install_kwargs(scope: str, fake_home: Path, fake_xdg: Path) -> dict[str, object]:
+    """Build kwargs for *scope*. ``user`` scope binds both ``home`` and
+    ``opencode_config_dir`` so the XDG override path is exercised."""
+    if scope == "project":
+        return {"scope": "project"}
+    return {"scope": "user", "home": fake_home, "opencode_config_dir": str(fake_xdg)}
+
+
+def _plugin_js_path(target: Path, scope: str, xdg: Path) -> Path:
+    if scope == "project":
+        return target / ".opencode" / "plugins" / "eawf.js"
+    return xdg / "plugins" / "eawf.js"
+
+
+def _sidecar_path(target: Path, scope: str, xdg: Path) -> Path:
+    if scope == "project":
+        return target / ".opencode" / "plugins" / ".eawf-managed.json"
+    return xdg / "plugins" / ".eawf-managed.json"
+
+
+def _config_path(target: Path, scope: str, xdg: Path) -> Path:
+    if scope == "project":
+        return target / "opencode.json"
+    return xdg / "opencode.json"
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_install_writes_plugin_js_sidecar_and_config(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
+    js_path = _plugin_js_path(tmp_path, scope, fake_opencode_config_dir)
+    sidecar = _sidecar_path(tmp_path, scope, fake_opencode_config_dir)
+    config = _config_path(tmp_path, scope, fake_opencode_config_dir)
+    assert js_path.is_file()
+    assert sidecar.is_file()
+    assert config.is_file()
+    parsed = json.loads(config.read_text(encoding="utf-8"))
     assert "mcp" in parsed
-    assert "plugin.js" in parsed["plugins"]
     assert result.plugin_js is not None
     assert result.plugin_js.action == "created"
-    assert result.config is not None
+    assert result.sidecar is not None
+    assert result.scope == scope
 
 
-def test_install_idempotent(tmp_path: Path) -> None:
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_install_does_not_patch_plugins_array(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    """Regression guard: legacy installer wrote 'plugin.js' into the
+    ``plugins:[...]`` array. Native layout relies on auto-discovery; the
+    array must stay empty (or untouched if user-authored)."""
+    install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
+    config = _config_path(tmp_path, scope, fake_opencode_config_dir)
+    parsed = json.loads(config.read_text(encoding="utf-8"))
+    plugins = parsed.get("plugins")
+    assert plugins is None or plugins == [], plugins
+
+
+def test_install_opencode_does_not_patch_plugins_array_for_user_authored(
+    tmp_path: Path,
+) -> None:
+    """User-authored ``plugins`` array survives unchanged; installer
+    never inserts ``plugin.js`` / ``eawf.js`` into it."""
+    cfg = tmp_path / "opencode.json"
+    cfg.write_text(json.dumps({"plugins": ["other.js"], "mcp": {}}), encoding="utf-8")
     install_plugin(tmp_path)
-    second = install_plugin(tmp_path)
+    parsed = json.loads(cfg.read_text(encoding="utf-8"))
+    assert parsed["plugins"] == ["other.js"]
+
+
+def test_install_opencode_user_scope_writes_into_xdg(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path
+) -> None:
+    install_plugin(
+        tmp_path,
+        scope="user",
+        home=fake_home,
+        opencode_config_dir=str(fake_opencode_config_dir),
+    )
+    assert (fake_opencode_config_dir / "plugins" / "eawf.js").is_file()
+    assert (fake_opencode_config_dir / "plugins" / ".eawf-managed.json").is_file()
+    assert (fake_opencode_config_dir / "opencode.json").is_file()
+
+
+def test_install_opencode_user_scope_env_var_fallback(
+    tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Absent kwarg + ``$OPENCODE_CONFIG_DIR`` set → XDG override
+    routes through the env var."""
+    env_dir = tmp_path / "env-xdg"
+    env_dir.mkdir()
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(env_dir))
+    install_plugin(tmp_path, scope="user", home=fake_home)
+    assert (env_dir / "plugins" / "eawf.js").is_file()
+
+
+def test_install_opencode_user_scope_home_default(
+    tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Absent kwarg + absent env var → ``<home>/.config/opencode/``."""
+    monkeypatch.delenv("OPENCODE_CONFIG_DIR", raising=False)
+    install_plugin(tmp_path, scope="user", home=fake_home)
+    assert (fake_home / ".config" / "opencode" / "plugins" / "eawf.js").is_file()
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_install_idempotent(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
+    second = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
     assert second.plugin_js is not None
     assert second.plugin_js.action == "unchanged"
+    assert second.sidecar is not None
+    assert second.sidecar.action == "unchanged"
     assert second.config is not None
     assert second.config.action == "unchanged"
 
 
-def test_install_dry_run_writes_nothing(tmp_path: Path) -> None:
-    result = install_plugin(tmp_path, dry_run=True)
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_install_dry_run_writes_nothing(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    result = install_plugin(
+        tmp_path, dry_run=True, **_install_kwargs(scope, fake_home, fake_opencode_config_dir)
+    )
     assert result.dry_run is True
-    assert not (tmp_path / "opencode.json").exists()
-    assert not (tmp_path / "plugin.js").exists()
+    assert not _plugin_js_path(tmp_path, scope, fake_opencode_config_dir).exists()
 
 
 def test_install_refuses_hand_edited_plugin_js(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    (tmp_path / "plugin.js").write_text("// hand edit\n")
+    js_path = _plugin_js_path(tmp_path, "project", tmp_path)
+    js_path.write_text("// hand edit\n", encoding="utf-8")
     with pytest.raises(IntegrityViolation):
         install_plugin(tmp_path)
 
 
 def test_install_force_overrides_hand_edit(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    (tmp_path / "plugin.js").write_text("// hand edit\n")
+    js_path = _plugin_js_path(tmp_path, "project", tmp_path)
+    js_path.write_text("// hand edit\n", encoding="utf-8")
     result = install_plugin(tmp_path, force=True)
     assert result.plugin_js is not None
     assert result.plugin_js.action == "updated"
@@ -62,24 +185,38 @@ def test_install_force_overrides_hand_edit(tmp_path: Path) -> None:
 
 def test_install_preserves_user_top_level_keys(tmp_path: Path) -> None:
     config_path = tmp_path / "opencode.json"
-    config_path.write_text(json.dumps({"theme": "midnight", "mcp": {"foo": "bar"}}))
+    config_path.write_text(
+        json.dumps({"theme": "midnight", "mcp": {"foo": "bar"}}), encoding="utf-8"
+    )
     install_plugin(tmp_path)
-    parsed = json.loads(config_path.read_text())
+    parsed = json.loads(config_path.read_text(encoding="utf-8"))
     assert parsed["theme"] == "midnight"
     assert parsed["mcp"]["foo"] == "bar"
-    assert "__eawf_managed" in parsed
+    # No managed namespace baked into user's opencode.json — sidecar owns hashes.
+    assert "__eawf_managed" not in parsed
 
 
 def test_install_rejects_non_object_config(tmp_path: Path) -> None:
-    (tmp_path / "opencode.json").write_text("[]")
+    (tmp_path / "opencode.json").write_text("[]", encoding="utf-8")
     with pytest.raises(ValueError, match="must be a JSON object"):
         install_plugin(tmp_path)
 
 
-def test_doctor_reports_clean_after_install(tmp_path: Path) -> None:
-    install_plugin(tmp_path)
-    report = doctor_plugin(tmp_path)
-    assert report.clean is True
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_doctor_reports_clean_after_install(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
+    if scope == "project":
+        report = doctor_plugin(tmp_path)
+    else:
+        report = doctor_plugin(
+            tmp_path,
+            scope="user",
+            home=fake_home,
+            opencode_config_dir=str(fake_opencode_config_dir),
+        )
+    assert report.clean is True, (report.drifted, report.missing)
 
 
 def test_doctor_flags_missing(tmp_path: Path) -> None:
@@ -90,19 +227,34 @@ def test_doctor_flags_missing(tmp_path: Path) -> None:
 
 def test_doctor_flags_plugin_js_drift(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    (tmp_path / "plugin.js").write_text("// tampered\n")
+    js_path = _plugin_js_path(tmp_path, "project", tmp_path)
+    js_path.write_text("// tampered\n", encoding="utf-8")
     report = doctor_plugin(tmp_path)
     assert report.clean is False
     assert any(e.kind == "plugin_js" for e in report.drifted)
 
 
-def test_doctor_flags_config_missing_managed_hash(tmp_path: Path) -> None:
+def test_doctor_flags_sidecar_missing_hash(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    (tmp_path / "opencode.json").write_text(json.dumps({"mcp": {}}))
+    sidecar = _sidecar_path(tmp_path, "project", tmp_path)
+    sidecar.write_text(json.dumps({"version": "1.0"}), encoding="utf-8")
     report = doctor_plugin(tmp_path)
     assert report.clean is False
-    drifted_kinds = {e.kind for e in report.drifted}
-    assert "config" in drifted_kinds
+    assert any(e.kind == "sidecar" for e in report.drifted)
+
+
+def test_doctor_reports_legacy_workspace_root_paths(tmp_path: Path) -> None:
+    """Legacy ``<target>/plugin.js`` + opencode.json with __eawf_managed
+    are reported as ``legacy_paths``."""
+    legacy_js = tmp_path / "plugin.js"
+    legacy_js.write_text("// legacy\n", encoding="utf-8")
+    legacy_cfg = tmp_path / "opencode.json"
+    legacy_cfg.write_text(
+        json.dumps({"mcp": {}, "__eawf_managed": {"version": "0.x"}}), encoding="utf-8"
+    )
+    install_plugin(tmp_path, force=True)
+    report = doctor_plugin(tmp_path)
+    assert legacy_js in report.legacy_paths
 
 
 def test_expected_plugin_js_carries_version_stamp() -> None:

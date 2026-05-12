@@ -1,21 +1,30 @@
-"""Render the Eä-owned OpenCode plugin (P14-W07 / D12 + D13).
+"""Render the Eä-owned OpenCode plugin (P14-I02-W01).
 
-Outputs under *target_dir*:
+Native OpenCode plugin layout. The renderer drops the legacy
+workspace-root dump (``<ws>/plugin.js`` + ``<ws>/opencode.json`` with a
+``plugins:[...]`` array entry) in favour of OpenCode's native
+auto-discovery dirs:
 
-::
+- ``scope="project"`` → ``<target>/.opencode/plugins/eawf.js`` with
+  sidecar ``<target>/.opencode/plugins/.eawf-managed.json`` and
+  ``<target>/opencode.json`` patched only in its ``mcp`` block.
+- ``scope="user"`` → ``$OPENCODE_CONFIG_DIR/plugins/eawf.js`` (or
+  ``<home>/.config/opencode/plugins/eawf.js`` when the env var is
+  unset) with the corresponding sidecar and config patched at the
+  same scope.
 
-    opencode.json                      # managed JSON config with mcp block
-    plugin.js                          # untyped JS bridge (template asset)
+The ``plugins:[...]`` array inside ``opencode.json`` is reserved for
+npm package plugins; we no longer add ``"plugin.js"`` to it. Auto-load
+handles discovery from the plugins directory.
 
 The renderer is idempotent — two runs against the same target produce
 byte-identical output. ``plugin.js`` is read from the bundled template
-asset and version-stamped; ``opencode.json`` carries the
-``__eawf_managed`` namespace alongside any user-authored top-level
-fields.
+asset and version-stamped.
 
-Public API mirrors the Claude / Codex adapters:
+Public API mirrors the Codex adapter:
 
-    InstallResult, install_plugin, expected_paths, IntegrityViolation
+    InstallResult, install_plugin, expected_paths, IntegrityViolation,
+    Scope
 """
 
 from __future__ import annotations
@@ -23,24 +32,30 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from eawf.render._atomic import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
 
+Scope = Literal["project", "user"]
+
+_PLUGIN_NAME: str = "eawf"
 _PLUGIN_VERSION: str = "1.0"
 _GENERATOR: str = "eawf-plugin-opencode"
-_MANAGED_KEY: str = "__eawf_managed"
 _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 _PLUGIN_TEMPLATE_PACKAGE: str = "eawf.runtimes.opencode.templates"
 _PLUGIN_TEMPLATE_RESOURCE: str = "plugin.js"
 _PLUGIN_VERSION_PLACEHOLDER: str = "__EAWF_PLUGIN_VERSION__"
+_PLUGIN_FILENAME: str = "eawf.js"
+_SIDECAR_FILENAME: str = ".eawf-managed.json"
+_OPENCODE_CONFIG_DIR_ENV: str = "OPENCODE_CONFIG_DIR"
 
 
 @dataclass(frozen=True)
@@ -56,8 +71,10 @@ class InstallResult:
     """Summary of one :func:`install_plugin` call."""
 
     target_dir: Path
+    scope: Scope = "project"
     config: FileDelta | None = None
     plugin_js: FileDelta | None = None
+    sidecar: FileDelta | None = None
     dry_run: bool = False
     deltas: list[FileDelta] = field(default_factory=list)
 
@@ -74,12 +91,76 @@ def _classify(path: Path, payload: bytes) -> str:
     return "updated"
 
 
-def _config_target(target_dir: Path) -> Path:
-    return target_dir / "opencode.json"
+def _user_config_root(
+    *,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    """Return the user-scope OpenCode config root.
+
+    Precedence: explicit *opencode_config_dir* kwarg → ``$OPENCODE_CONFIG_DIR``
+    env var → ``<home>/.config/opencode/``. ``home`` defaults to
+    :func:`pathlib.Path.home`.
+    """
+    if opencode_config_dir is not None:
+        return Path(opencode_config_dir)
+    env_value = os.environ.get(_OPENCODE_CONFIG_DIR_ENV)
+    if env_value:
+        return Path(env_value)
+    base = home if home is not None else Path.home()
+    return base / ".config" / "opencode"
 
 
-def _plugin_js_target(target_dir: Path) -> Path:
-    return target_dir / "plugin.js"
+def _plugins_dir(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    """Return the directory holding ``eawf.js`` + sidecar at *scope*."""
+    if scope == "project":
+        return target_dir / ".opencode" / "plugins"
+    return _user_config_root(home=home, opencode_config_dir=opencode_config_dir) / "plugins"
+
+
+def _config_target(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    """Return the scope-correct ``opencode.json`` path."""
+    if scope == "project":
+        return target_dir / "opencode.json"
+    return _user_config_root(home=home, opencode_config_dir=opencode_config_dir) / "opencode.json"
+
+
+def _plugin_js_target(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    return (
+        _plugins_dir(target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir)
+        / _PLUGIN_FILENAME
+    )
+
+
+def _sidecar_target(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    return (
+        _plugins_dir(target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir)
+        / _SIDECAR_FILENAME
+    )
 
 
 def _load_plugin_js_template() -> str:
@@ -95,25 +176,33 @@ def _render_plugin_js() -> str:
     return template.replace(_PLUGIN_VERSION_PLACEHOLDER, _PLUGIN_VERSION)
 
 
-def _render_managed_body(timestamp: str, plugin_js_bytes: bytes) -> dict[str, Any]:
+def _render_sidecar_body(timestamp: str, plugin_js_bytes: bytes) -> dict[str, Any]:
     body: dict[str, Any] = {
         "version": _PLUGIN_VERSION,
         "generated_at": timestamp,
         "generator": _GENERATOR,
         "plugin_js_hash": hashlib.blake2b(plugin_js_bytes, digest_size=8).hexdigest(),
-        "plugin_js_path": "plugin.js",
+        "plugin_js_path": _PLUGIN_FILENAME,
     }
     body_json = json.dumps(body, sort_keys=True, separators=(",", ":"))
     body["hash"] = hashlib.blake2b(body_json.encode("utf-8"), digest_size=8).hexdigest()
     return body
 
 
-def _patch_config_json(target_path: Path, managed_body: dict[str, Any]) -> bytes:
-    """Return rewritten ``opencode.json`` bytes with the managed namespace patched in.
+def _render_sidecar(timestamp: str, plugin_js_bytes: bytes) -> bytes:
+    body = _render_sidecar_body(timestamp, plugin_js_bytes)
+    return (json.dumps(body, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+
+def _patch_config_json(target_path: Path) -> bytes:
+    """Return rewritten ``opencode.json`` bytes with only the ``mcp`` block ensured.
 
     User-authored top-level keys are preserved verbatim. When the file
-    does not exist, the managed namespace + a minimal ``mcp`` block
-    seed the new file.
+    does not exist, it is seeded with ``{"mcp": {}}`` only — no
+    ``plugins`` array entry, no managed namespace. (Per OpenCode docs,
+    auto-loaded plugins live under ``.opencode/plugins/`` /
+    ``$OPENCODE_CONFIG_DIR/plugins/``; the ``plugins:[...]`` array is
+    reserved for npm packages.)
     """
     parsed: dict[str, Any] = {}
     if target_path.exists():
@@ -131,11 +220,7 @@ def _patch_config_json(target_path: Path, managed_body: dict[str, Any]) -> bytes
                     f"got {type(parsed_any).__name__}"
                 )
             parsed = dict(parsed_any)
-    parsed[_MANAGED_KEY] = managed_body
     parsed.setdefault("mcp", {})
-    parsed.setdefault("plugins", [])
-    if "plugin.js" not in parsed["plugins"]:
-        parsed["plugins"] = [*parsed["plugins"], "plugin.js"]
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return rendered.encode("utf-8")
 
@@ -147,26 +232,43 @@ def _ensure_dir(path: Path) -> None:
 def install_plugin(
     target_dir: Path,
     *,
+    scope: Scope = "project",
     force: bool = False,
     dry_run: bool = False,
     timestamp: str | None = None,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
 ) -> InstallResult:
-    """Render the OpenCode plugin under *target_dir*.
+    """Render the OpenCode plugin at *scope*.
 
     Args:
-        target_dir: Workspace root that hosts ``opencode.json`` + ``plugin.js``.
-        force: When ``True``, hand-edits to ``plugin.js`` are overwritten
-            silently. The ``__eawf_managed`` namespace inside
-            ``opencode.json`` is always rewritten; user-owned keys
-            elsewhere are preserved.
+        target_dir: Workspace root (used only for ``scope="project"``).
+        scope: ``"project"`` (default) writes under
+            ``<target_dir>/.opencode/plugins/``; ``"user"`` writes under
+            ``$OPENCODE_CONFIG_DIR/plugins/`` or
+            ``<home>/.config/opencode/plugins/``.
+        force: When ``True``, hand-edits to ``eawf.js`` are overwritten
+            silently. The ``opencode.json`` ``mcp`` block is always
+            ensured; user-owned keys elsewhere are preserved.
         dry_run: When ``True``, returns the :class:`InstallResult`
             describing what would be written but writes nothing.
-        timestamp: ISO 8601 UTC timestamp baked into the managed body.
+        timestamp: ISO 8601 UTC timestamp baked into the sidecar.
             Defaults to ``"1970-01-01T00:00:00+00:00"``.
+        home: Override for ``Path.home()`` (tests pass ``tmp_path``).
+        opencode_config_dir: Override for ``$OPENCODE_CONFIG_DIR``
+            (tests pass an explicit path).
+
+    Raises:
+        IntegrityViolation: when ``eawf.js`` has been hand-edited and
+            ``force`` is not set.
+        ValueError: when ``opencode.json`` exists but is not a JSON
+            object, or is malformed JSON.
     """
     target_dir = Path(target_dir).resolve()
     ts = timestamp or _DEFAULT_TIMESTAMP
-    plugin_js_path = _plugin_js_target(target_dir)
+    plugin_js_path = _plugin_js_target(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
     plugin_js_payload = _render_plugin_js().encode("utf-8")
     if plugin_js_path.exists() and not force and plugin_js_path.read_bytes() != plugin_js_payload:
         raise IntegrityViolation(
@@ -179,9 +281,20 @@ def install_plugin(
         atomic_write_text(plugin_js_path, plugin_js_payload.decode("utf-8"))
     plugin_js_delta = FileDelta(path=plugin_js_path, action=plugin_js_action)
 
-    config_path = _config_target(target_dir)
-    managed_body = _render_managed_body(ts, plugin_js_payload)
-    config_bytes = _patch_config_json(config_path, managed_body)
+    sidecar_path = _sidecar_target(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+    sidecar_payload = _render_sidecar(ts, plugin_js_payload)
+    sidecar_action = _classify(sidecar_path, sidecar_payload)
+    if not dry_run:
+        _ensure_dir(sidecar_path.parent)
+        atomic_write_text(sidecar_path, sidecar_payload.decode("utf-8"))
+    sidecar_delta = FileDelta(path=sidecar_path, action=sidecar_action)
+
+    config_path = _config_target(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+    config_bytes = _patch_config_json(config_path)
     config_action = _classify(config_path, config_bytes)
     if not dry_run:
         _ensure_dir(config_path.parent)
@@ -189,31 +302,44 @@ def install_plugin(
     config_delta = FileDelta(path=config_path, action=config_action)
 
     logger.info(
-        f"install_plugin runtime=opencode target={target_dir} "
-        f"plugin_js={plugin_js_action} config={config_action} dry_run={dry_run}"
+        f"install_plugin runtime=opencode scope={scope} plugin_js={plugin_js_action} "
+        f"sidecar={sidecar_action} config={config_action} dry_run={dry_run}"
     )
     return InstallResult(
         target_dir=target_dir,
+        scope=scope,
         config=config_delta,
         plugin_js=plugin_js_delta,
+        sidecar=sidecar_delta,
         dry_run=dry_run,
-        deltas=[plugin_js_delta, config_delta],
+        deltas=[plugin_js_delta, sidecar_delta, config_delta],
     )
 
 
-def expected_paths(target_dir: Path) -> tuple[Mapping[str, Path], Path]:
-    """Return ``({region_id: path}, config_path)`` for *target_dir*."""
+def expected_paths(
+    target_dir: Path,
+    *,
+    scope: Scope = "project",
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> tuple[Mapping[str, Path], Path]:
+    """Return ``({region_id: path}, config_path)`` for *target_dir* at *scope*."""
     target_dir = Path(target_dir).resolve()
     return (
         {
-            "plugin.opencode.plugin_js": _plugin_js_target(target_dir),
+            "plugin.opencode.plugin_js": _plugin_js_target(
+                target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+            ),
+            "plugin.opencode.sidecar": _sidecar_target(
+                target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+            ),
         },
-        _config_target(target_dir),
+        _config_target(target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir),
     )
 
 
 def expected_plugin_js_bytes() -> bytes:
-    """Return the rendered ``plugin.js`` bytes (used by the doctor)."""
+    """Return the rendered ``eawf.js`` bytes (used by the doctor)."""
     return _render_plugin_js().encode("utf-8")
 
 
@@ -221,6 +347,7 @@ __all__ = [
     "FileDelta",
     "InstallResult",
     "IntegrityViolation",
+    "Scope",
     "expected_paths",
     "expected_plugin_js_bytes",
     "install_plugin",

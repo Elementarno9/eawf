@@ -109,3 +109,94 @@ def test_plugin_install_after_hand_edit_aborts(tmp_path: Path) -> None:
     skill_path.write_text(skill_path.read_text() + "\n# user-edit\n")
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
     assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_plugin_install_codex_writes_native_layout(
+    tmp_path: Path, scope: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``eawf plugin install codex [--scope]`` lands the native plugin tree."""
+    _equip_ea_dir(tmp_path)
+    if scope == "user":
+        fake_home = tmp_path / "fake-home"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        plugin_root = fake_home / ".codex" / "plugins" / "eawf"
+        config_path = fake_home / ".codex" / "config.toml"
+    else:
+        plugin_root = tmp_path / ".codex" / "plugins" / "eawf"
+        config_path = tmp_path / ".codex" / "config.toml"
+    args = ["-w", str(tmp_path), "plugin", "install", "codex", "--scope", scope]
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.stdout
+    assert (plugin_root / ".codex-plugin" / "plugin.json").is_file()
+    assert (plugin_root / "skills").is_dir()
+    text = config_path.read_text(encoding="utf-8")
+    assert "[plugins.eawf]" in text
+    assert "enabled = true" in text
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_plugin_install_opencode_drops_plugins_array(
+    tmp_path: Path, scope: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``eawf plugin install opencode [--scope]`` writes plugin under
+    auto-discovery dir; does not push ``plugin.js`` / ``eawf.js`` into
+    ``plugins:[...]`` array."""
+    _equip_ea_dir(tmp_path)
+    if scope == "user":
+        fake_xdg = tmp_path / "fake-xdg"
+        fake_xdg.mkdir()
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(fake_xdg))
+        plugin_dir = fake_xdg / "plugins"
+        config_path = fake_xdg / "opencode.json"
+    else:
+        plugin_dir = tmp_path / ".opencode" / "plugins"
+        config_path = tmp_path / "opencode.json"
+    args = ["-w", str(tmp_path), "plugin", "install", "opencode", "--scope", scope]
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.stdout
+    assert (plugin_dir / "eawf.js").is_file()
+    assert (plugin_dir / ".eawf-managed.json").is_file()
+    parsed = json.loads(config_path.read_text(encoding="utf-8"))
+    plugins = parsed.get("plugins")
+    assert plugins is None or plugins == [], plugins
+
+
+def test_plugin_install_claude_user_scope_rejected(tmp_path: Path) -> None:
+    """``plugin install claude --scope user`` exits 3 (``INVALID_INPUT``)."""
+    _equip_ea_dir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "plugin", "install", "claude", "--scope", "user"],
+    )
+    assert result.exit_code == 3, result.stdout
+    combined = result.stdout + (result.stderr or "")
+    assert "project-scope only" in combined or "marketplace" in combined.lower()
+
+
+def test_plugin_doctor_codex_finds_install_at_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``plugin doctor codex --scope <s>`` exits 0 after install at that scope."""
+    _equip_ea_dir(tmp_path)
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "codex", "--scope", "user"])
+    result = runner.invoke(
+        app, ["-w", str(tmp_path), "plugin", "doctor", "codex", "--scope", "user"]
+    )
+    assert result.exit_code == 0, result.stdout
+
+
+def test_plugin_install_codex_idempotent_at_scope(tmp_path: Path) -> None:
+    """Two project-scope codex installs produce byte-identical output."""
+    _equip_ea_dir(tmp_path)
+    runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "codex"])
+    manifest = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json"
+    snapshot = manifest.read_bytes()
+    config_snapshot = (tmp_path / ".codex" / "config.toml").read_bytes()
+    runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "codex"])
+    assert manifest.read_bytes() == snapshot
+    assert (tmp_path / ".codex" / "config.toml").read_bytes() == config_snapshot
