@@ -983,8 +983,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P14-I04",
+    "phase_id": "P14",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1458,6 +1458,17 @@
       "wave_ids": [
         "P14-I03-W01"
       ]
+    },
+    "P14-I04": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P14-I04",
+      "opened_at": "2026-05-12T19:50:47.505895Z",
+      "phase_id": "P14",
+      "status": "active",
+      "title": "Codex plugin schema compliance (drop agents, skill dir, interface block)",
+      "wave_ids": []
     }
   },
   "mcp_grants": null,
@@ -1647,17 +1658,18 @@
     },
     "P14": {
       "audit_id": "A18-P14",
-      "closed_at": "2026-05-12T18:58:57.314164Z",
+      "closed_at": null,
       "id": "P14",
       "iter_ids": [
         "P14-I01",
         "P14-I02",
-        "P14-I03"
+        "P14-I03",
+        "P14-I04"
       ],
       "opened_at": "2026-05-11T20:59:47.034498Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "closed",
+      "status": "active",
       "subproject_id": null,
       "title": "Harnesses (Codex + OpenCode) + hygiene preamble"
     }
@@ -1694,7 +1706,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-12T18:58:57.314189Z",
+  "updated_at": "2026-05-12T19:50:47.505930Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
