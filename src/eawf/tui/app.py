@@ -163,7 +163,16 @@ def _is_tty() -> bool:
 
 
 def _read_one_cbreak(tty_file: Any, termios_mod: Any, tty_mod: Any) -> str:
-    """Read one byte from *tty_file* under cbreak mode; return decoded char."""
+    """Read one keystroke from *tty_file* under cbreak mode.
+
+    A bare ``\\x1b`` (Esc) is distinguished from a CSI / arrow sequence
+    (``\\x1b[A`` etc.) by peeking via :mod:`select` with a 50 ms window
+    after the leading ESC. Any follow-on bytes are drained and joined
+    into the returned string, so the caller's exit-key membership
+    check only matches a *bare* Esc.
+    """
+    import select
+
     fd = tty_file.fileno()
     try:
         old = termios_mod.tcgetattr(fd)
@@ -172,6 +181,16 @@ def _read_one_cbreak(tty_file: Any, termios_mod: Any, tty_mod: Any) -> str:
     try:
         tty_mod.setcbreak(fd)
         ch = tty_file.read(1)
+        if ch == b"\x1b" and select.select([fd], [], [], 0.05)[0]:
+            rest = b""
+            while select.select([fd], [], [], 0.0)[0]:
+                byte = tty_file.read(1)
+                if not byte:
+                    break
+                rest += byte
+                if len(rest) >= 16:
+                    break
+            ch += rest
     finally:
         termios_mod.tcsetattr(fd, termios_mod.TCSADRAIN, old)
     return ch.decode("utf-8", errors="replace") if ch else ""
