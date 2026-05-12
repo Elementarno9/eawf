@@ -153,17 +153,24 @@ emits a self-contained marketplace tree:
       hooks/<event>.sh
 ```
 
-`marketplace.json` carries the Codex marketplace schema (`name`,
-`interface.displayName`, `plugins[].{name,source,policy,category}`)
-with `source: {source: "local", path: "./plugins/eawf"}`. The operator
-then runs:
+`marketplace.json` lives at `.agents/plugins/marketplace.json` per the
+Codex Build-plugin reference (root-level `marketplace.json` is rejected
+by `codex plugin marketplace add`). It carries the Codex marketplace
+schema (`name`, `interface.displayName`,
+`plugins[].{name,source,policy,category}`) with
+`source: {source: "local", path: "./plugins/eawf"}`. The operator then
+runs:
 
 ```bash
 codex plugin marketplace add ./build/eawf-codex-marketplace
-codex plugin install eawf@eawf-local-codex
 ```
 
-After install, Codex caches the plugin under
+`marketplace add` registers the marketplace and auto-installs its
+plugins. Codex has no separate `plugin install` subcommand — only
+`plugin marketplace {add,upgrade,remove}`. The
+`[plugins.eawf] enabled = true` block that `eawf plugin install codex`
+writes to `~/.codex/config.toml` activates the plugin once Codex
+discovers it. After registration, Codex caches the plugin under
 `~/.codex/plugins/cache/eawf-local-codex/eawf/<version>/` and loads it
 from there.
 

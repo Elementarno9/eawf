@@ -901,7 +901,8 @@ def package_cmd(
         if not flags.no_input and not flags.json_output and not codex_result.dry_run:
             print(
                 f"next: codex plugin marketplace add {codex_result.target}\n"
-                f"      codex plugin install eawf@eawf-local-codex"
+                f"      (the [plugins.eawf] enabled=true block in ~/.codex/config.toml "
+                f"activates the plugin; Codex has no separate 'plugin install' subcommand)"
             )
         return
     try:

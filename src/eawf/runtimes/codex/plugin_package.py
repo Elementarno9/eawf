@@ -13,7 +13,12 @@ register with one command::
 
     eawf plugin package codex --target ./build/eawf-codex-marketplace
     codex plugin marketplace add ./build/eawf-codex-marketplace
-    codex plugin install eawf@eawf-local-codex
+
+After ``marketplace add`` the plugin auto-registers; the
+``[plugins.eawf] enabled = true`` block that ``eawf plugin install
+codex`` writes to ``config.toml`` activates it. Codex has no separate
+``plugin install`` subcommand (only ``plugin marketplace add /
+upgrade / remove``).
 
 Layout::
 
