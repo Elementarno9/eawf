@@ -174,6 +174,16 @@ def test_install_refuses_hand_edited_plugin_js(tmp_path: Path) -> None:
         install_plugin(tmp_path)
 
 
+def test_install_refuses_hand_edited_sidecar(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    sidecar = _sidecar_path(tmp_path, "project", tmp_path)
+    body = json.loads(sidecar.read_text(encoding="utf-8"))
+    body["commands"] = []
+    sidecar.write_text(json.dumps(body, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        install_plugin(tmp_path)
+
+
 def test_install_force_overrides_hand_edit(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     js_path = _plugin_js_path(tmp_path, "project", tmp_path)
@@ -238,6 +248,17 @@ def test_doctor_flags_sidecar_missing_hash(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     sidecar = _sidecar_path(tmp_path, "project", tmp_path)
     sidecar.write_text(json.dumps({"version": "1.0"}), encoding="utf-8")
+    report = doctor_plugin(tmp_path)
+    assert report.clean is False
+    assert any(e.kind == "sidecar" for e in report.drifted)
+
+
+def test_doctor_flags_sidecar_registry_drift(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    sidecar = _sidecar_path(tmp_path, "project", tmp_path)
+    body = json.loads(sidecar.read_text(encoding="utf-8"))
+    body["agents"] = []
+    sidecar.write_text(json.dumps(body, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     report = doctor_plugin(tmp_path)
     assert report.clean is False
     assert any(e.kind == "sidecar" for e in report.drifted)

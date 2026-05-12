@@ -109,6 +109,16 @@ def test_install_force_overrides_hand_edit(tmp_path: Path) -> None:
     assert any(d.action == "updated" for d in result.skills)
 
 
+def test_install_rejects_hand_edited_sidecar_without_force(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    sidecar = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / ".eawf-managed.json"
+    body = json.loads(sidecar.read_text(encoding="utf-8"))
+    body["skills"] = []
+    sidecar.write_text(json.dumps(body, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        install_plugin(tmp_path)
+
+
 @pytest.mark.parametrize("scope", ["project", "user"])
 def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scope: str) -> None:
     """Manifest is JSON at ``.codex-plugin/plugin.json`` per Codex schema."""
@@ -190,6 +200,17 @@ def test_doctor_flags_drift(tmp_path: Path) -> None:
     report = doctor_plugin(tmp_path)
     assert report.clean is False
     assert report.drifted
+
+
+def test_doctor_flags_sidecar_drift(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    sidecar = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / ".eawf-managed.json"
+    body = json.loads(sidecar.read_text(encoding="utf-8"))
+    body["hooks"] = []
+    sidecar.write_text(json.dumps(body, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    report = doctor_plugin(tmp_path)
+    assert report.clean is False
+    assert any(e.kind == "sidecar" for e in report.drifted)
 
 
 def test_doctor_report_plugin_root_points_at_scope_dir(tmp_path: Path, fake_home: Path) -> None:

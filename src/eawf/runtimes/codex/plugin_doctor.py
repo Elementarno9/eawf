@@ -21,13 +21,16 @@ from pathlib import Path
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.codex.plugin_install import (
+    _DEFAULT_TIMESTAMP,
     Scope,
     _config_target,
     _hook_target,
     _manifest_target,
     _plugin_root,
     _render_manifest,
+    _render_sidecar,
     _render_skill,
+    _sidecar_fingerprint,
     _sidecar_target,
     _skill_target,
 )
@@ -128,7 +131,7 @@ def doctor_plugin(
     same registries the installer uses. ``config.toml`` is not
     body-compared (user is free to author unrelated TOML sections);
     presence-only check. The sidecar (``.eawf-managed.json``) is
-    body-compared excluding its timestamp.
+    semantically compared excluding its timestamp/hash pair.
     """
     target_dir = Path(target_dir).resolve()
     plugin_root = _plugin_root(target_dir, scope=scope, home=home)
@@ -174,15 +177,19 @@ def doctor_plugin(
             DoctorEntry(region_id="plugin.codex.sidecar", path=sidecar_path, kind="sidecar")
         )
     else:
-        ok.append(
-            DoctorEntry(
-                region_id="plugin.codex.sidecar",
-                path=sidecar_path,
-                kind="sidecar",
-                on_disk_hash=_hash_bytes(sidecar_path.read_bytes()),
-                expected_hash=None,
-            )
+        expected_sidecar_hash = _sidecar_fingerprint(_render_sidecar(_DEFAULT_TIMESTAMP))
+        on_disk_hash = _sidecar_fingerprint(sidecar_path.read_bytes())
+        entry = DoctorEntry(
+            region_id="plugin.codex.sidecar",
+            path=sidecar_path,
+            kind="sidecar",
+            on_disk_hash=on_disk_hash,
+            expected_hash=expected_sidecar_hash,
         )
+        if on_disk_hash == expected_sidecar_hash:
+            ok.append(entry)
+        else:
+            drifted.append(entry)
 
     config_path = _config_target(target_dir, scope=scope, home=home)
     if not config_path.exists():

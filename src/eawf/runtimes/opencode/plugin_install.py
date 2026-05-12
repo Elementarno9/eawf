@@ -294,6 +294,25 @@ def _render_sidecar(timestamp: str, plugin_js_bytes: bytes) -> bytes:
     return (json.dumps(body, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
+def _sidecar_fingerprint(payload: bytes) -> str:
+    """Return a semantic fingerprint for sidecar bytes.
+
+    ``generated_at`` and the derived ``hash`` field are ignored so a
+    timestamp-only refresh does not look like managed-file drift.
+    """
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except UnicodeDecodeError, json.JSONDecodeError:
+        return hashlib.blake2b(b"raw:" + payload, digest_size=8).hexdigest()
+    if not isinstance(parsed, dict):
+        return hashlib.blake2b(b"raw:" + payload, digest_size=8).hexdigest()
+    comparable = dict(parsed)
+    comparable.pop("generated_at", None)
+    comparable.pop("hash", None)
+    body = json.dumps(comparable, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.blake2b(body, digest_size=8).hexdigest()
+
+
 def _patch_config_json(target_path: Path) -> bytes:
     """Return rewritten ``opencode.json`` bytes with only the ``mcp`` block ensured.
 
@@ -385,6 +404,15 @@ def install_plugin(
         target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
     )
     sidecar_payload = _render_sidecar(ts, plugin_js_payload)
+    if (
+        sidecar_path.exists()
+        and not force
+        and _sidecar_fingerprint(sidecar_path.read_bytes()) != _sidecar_fingerprint(sidecar_payload)
+    ):
+        raise IntegrityViolation(
+            f"managed file {sidecar_path} differs from rendered body; "
+            f"rerun with --force to overwrite"
+        )
     sidecar_action = _classify(sidecar_path, sidecar_payload)
     if not dry_run:
         _ensure_dir(sidecar_path.parent)
