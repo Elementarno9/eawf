@@ -121,6 +121,24 @@ def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scop
     assert body["description"]
     assert body["skills"] == "./skills/"
     assert body["hooks"] == "./hooks/"
+    assert "interface" in body
+    iface = body["interface"]
+    assert iface["displayName"] == "Eä Workflow"
+    assert iface["category"] == "Productivity"
+    assert iface["shortDescription"]
+    assert iface["longDescription"]
+    assert isinstance(iface["capabilities"], list)
+    assert isinstance(iface["defaultPrompt"], list)
+
+
+def test_manifest_interface_omits_url_fields(tmp_path: Path) -> None:
+    """Machine-specific URLs / missing asset paths must not leak into the manifest."""
+    install_plugin(tmp_path)
+    manifest_path = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json"
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
+    iface = body["interface"]
+    for k in ("websiteURL", "privacyPolicyURL", "termsOfServiceURL", "composerIcon", "logo"):
+        assert k not in iface, f"{k} leaks into manifest"
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
