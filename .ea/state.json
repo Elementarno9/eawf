@@ -940,9 +940,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_wave_ids": [
+      "P14-I02-W01"
+    ],
+    "iter_id": "P14-I02",
+    "phase_id": "P14",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1392,13 +1394,13 @@
       ]
     },
     "P14-I02": {
-      "audit_id": "A16-P14",
-      "closed_at": "2026-05-12T17:13:55.720214Z",
+      "audit_id": null,
+      "closed_at": null,
       "estimate_id": null,
       "id": "P14-I02",
       "opened_at": "2026-05-12T16:55:45.811499Z",
       "phase_id": "P14",
-      "status": "closed",
+      "status": "active",
       "title": "plugin install native layout + user scope",
       "wave_ids": [
         "P14-I02-W01"
@@ -1591,8 +1593,8 @@
       "title": "v0.2 P13: feature cluster + ship-gate"
     },
     "P14": {
-      "audit_id": "A16-P14",
-      "closed_at": "2026-05-12T17:13:56.155976Z",
+      "audit_id": null,
+      "closed_at": null,
       "id": "P14",
       "iter_ids": [
         "P14-I01",
@@ -1601,7 +1603,7 @@
       "opened_at": "2026-05-11T20:59:47.034498Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "closed",
+      "status": "active",
       "subproject_id": null,
       "title": "Harnesses (Codex + OpenCode) + hygiene preamble"
     }
@@ -2657,7 +2659,7 @@
     "P14-I02-W01": {
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": "2026-05-12T17:12:57.287814Z",
+      "closed_at": null,
       "commit": "ba4682d",
       "deps": [],
       "file_scopes": [
@@ -2674,7 +2676,7 @@
       "iter_id": "P14-I02",
       "opened_at": "2026-05-12T16:55:50.420692Z",
       "outcome": "Plugin install rewritten with native layouts: codex emits .codex/plugins/eawf/.codex-plugin/plugin.json + sidecar, opencode emits .opencode/plugins/eawf.js + sidecar (no plugins:[] entry). --scope project|user wired on install/update/doctor; claude rejects user scope (exit 3). Conflict gates added for codex/opencode user-vs-project clashes. 68 plugin tests pass; full unit (1839) + integration (378) suites green; mypy clean. Pre-commit clean.",
-      "status": "closed",
+      "status": "in_progress",
       "title": "plugin install native layout + user scope",
       "token_budget": null,
       "tokens_consumed": 0,
