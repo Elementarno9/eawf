@@ -142,3 +142,11 @@ def test_run_tui_loop_iterates_until_exit(tmp_path: Path, monkeypatch: pytest.Mo
 
     rc = tui_app.run_tui(workspace=tmp_path, read_key=feeder)
     assert rc == 0
+
+
+def test_run_tui_exits_on_eof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.tui import app as tui_app
+
+    monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
+    rc = tui_app.run_tui(workspace=tmp_path, read_key=lambda: "")
+    assert rc == 0
