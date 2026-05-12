@@ -37,6 +37,11 @@ _TRAILER: str = "Co-Authored-By: Claude <noreply@anthropic.com>"
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
     ".ea/store/event.jsonl",
+    # ``.secrets.baseline`` auto-tracks state.json line numbers; the
+    # detect-secrets pre-commit hook regenerates it whenever state.json
+    # mutates, and refuses to commit when baseline is left unstaged.
+    # CORE commits therefore always need it riding along.
+    ".secrets.baseline",
 )
 _STATE_ONLY_PREFIXES = (".ea/specs/",)
 
