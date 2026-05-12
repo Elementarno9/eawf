@@ -18,17 +18,14 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.codex.plugin_install import (
     Scope,
-    _agent_target,
     _config_target,
     _hook_target,
     _manifest_target,
     _plugin_root,
-    _render_agent,
     _render_manifest,
     _render_skill,
     _sidecar_target,
@@ -42,7 +39,7 @@ class DoctorEntry:
 
     region_id: str
     path: Path
-    kind: str  # Literal["skill", "agent", "hook", "config", "manifest", "sidecar"]
+    kind: str  # Literal["skill", "hook", "config", "manifest", "sidecar"]
     on_disk_hash: str | None = None
     expected_hash: str | None = None
 
@@ -127,8 +124,8 @@ def doctor_plugin(
 ) -> DoctorReport:
     """Inspect the installed Codex plugin tree at *scope*.
 
-    The body of each skill / agent / hook / manifest is recomputed from
-    the same registries the installer uses. ``config.toml`` is not
+    The body of each skill / hook / manifest is recomputed from the
+    same registries the installer uses. ``config.toml`` is not
     body-compared (user is free to author unrelated TOML sections);
     presence-only check. The sidecar (``.eawf-managed.json``) is
     body-compared excluding its timestamp.
@@ -144,16 +141,6 @@ def doctor_plugin(
             region_id=f"plugin.codex.skill.{skill_spec.skill_name}",
             kind="skill",
             expected_body=_render_skill(skill_spec).encode("utf-8"),
-            ok=ok,
-            drifted=drifted,
-            missing=missing,
-        )
-    for agent_spec in AGENT_REGISTRY:
-        _classify_entry(
-            _agent_target(plugin_root, agent_spec),
-            region_id=f"plugin.codex.agent.{agent_spec.role}",
-            kind="agent",
-            expected_body=_render_agent(agent_spec).encode("utf-8"),
             ok=ok,
             drifted=drifted,
             missing=missing,
