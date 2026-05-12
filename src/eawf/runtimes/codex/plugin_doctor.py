@@ -52,6 +52,7 @@ class DoctorReport:
     """Summary of one :func:`doctor_plugin` call."""
 
     target_dir: Path
+    plugin_root: Path
     scope: Scope = "project"
     ok: list[DoctorEntry] = field(default_factory=list)
     drifted: list[DoctorEntry] = field(default_factory=list)
@@ -216,6 +217,7 @@ def doctor_plugin(
     legacy = _detect_legacy_paths(target_dir) if scope == "project" else []
     return DoctorReport(
         target_dir=target_dir,
+        plugin_root=plugin_root,
         scope=scope,
         ok=ok,
         drifted=drifted,

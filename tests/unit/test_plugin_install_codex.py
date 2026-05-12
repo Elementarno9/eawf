@@ -168,6 +168,15 @@ def test_doctor_flags_drift(tmp_path: Path) -> None:
     assert report.drifted
 
 
+def test_doctor_report_plugin_root_points_at_scope_dir(tmp_path: Path, fake_home: Path) -> None:
+    """Regression: user-scope doctor must surface ``~/.codex/plugins/eawf``
+    even when no plugin files are installed (B1 hotfix)."""
+    report = doctor_plugin(tmp_path, scope="user", home=fake_home)
+    assert report.plugin_root == fake_home / ".codex" / "plugins" / "eawf"
+    project_report = doctor_plugin(tmp_path, scope="project")
+    assert project_report.plugin_root == tmp_path / ".codex" / "plugins" / "eawf"
+
+
 def test_doctor_reports_legacy_flat_paths(tmp_path: Path) -> None:
     """Flat ``<target>/.codex/{skills,agents,hooks}/`` is reported as legacy."""
     legacy_dir = tmp_path / ".codex" / "skills"

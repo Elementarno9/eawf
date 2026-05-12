@@ -18,7 +18,8 @@ register with one command::
 Layout::
 
     <target>/
-      marketplace.json                       # Codex marketplace schema
+      .agents/plugins/
+        marketplace.json                     # Codex marketplace manifest
       plugins/
         eawf/
           .codex-plugin/
@@ -26,6 +27,11 @@ Layout::
           skills/<name>.md
           agents/<role>.md
           hooks/<event>.sh
+
+The marketplace manifest sits at ``.agents/plugins/marketplace.json``
+per the Codex Build-plugin reference; ``codex plugin marketplace add
+<target>`` rejects roots that only carry a root-level
+``marketplace.json``.
 
 The renderer is idempotent: re-running produces a byte-identical tree.
 Public API mirrors the Claude package adapter:
@@ -65,6 +71,8 @@ _PLUGIN_CATEGORY: str = "Productivity"
 _HOOK_FILE_MODE: int = 0o755
 _MANIFEST_DIR: str = ".codex-plugin"
 _MANIFEST_FILE: str = "plugin.json"
+_MARKETPLACE_SUBDIR: tuple[str, ...] = (".agents", "plugins")
+_MARKETPLACE_FILE: str = "marketplace.json"
 
 
 @dataclass(frozen=True)
@@ -127,13 +135,21 @@ def _render_marketplace() -> bytes:
     return (json.dumps(body, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
+def _marketplace_path(target: Path) -> Path:
+    path = target
+    for part in _MARKETPLACE_SUBDIR:
+        path = path / part
+    return path / _MARKETPLACE_FILE
+
+
 def _is_own_previous_output(target: Path) -> bool:
     """Treat *target* as a prior eawf packaging output if it carries the
-    expected ``marketplace.json`` + ``plugins/eawf/.codex-plugin/`` layout.
+    expected ``.agents/plugins/marketplace.json`` + ``plugins/eawf/.codex-plugin/``
+    layout. Also accepts the legacy root-level ``marketplace.json`` so an
+    operator can re-run the packager over an older tree without ``--force``.
     """
-    return (target / "marketplace.json").is_file() and (
-        target / "plugins" / _PLUGIN_NAME / _MANIFEST_DIR
-    ).is_dir()
+    has_marketplace = _marketplace_path(target).is_file() or (target / _MARKETPLACE_FILE).is_file()
+    return has_marketplace and (target / "plugins" / _PLUGIN_NAME / _MANIFEST_DIR).is_dir()
 
 
 def _check_target(target: Path, *, force: bool) -> None:
@@ -225,12 +241,15 @@ def package_plugin(
         atomic_write_text(manifest_path, manifest_payload.decode("utf-8"))
     manifest_delta = FileDelta(path=manifest_path, action=manifest_action)
 
-    marketplace_path = target / "marketplace.json"
+    marketplace_path = _marketplace_path(target)
     marketplace_payload = _render_marketplace()
     marketplace_action = _classify(marketplace_path, marketplace_payload)
     if not dry_run:
         _ensure_dir(marketplace_path.parent)
         atomic_write_text(marketplace_path, marketplace_payload.decode("utf-8"))
+        legacy_marketplace = target / _MARKETPLACE_FILE
+        if legacy_marketplace.is_file():
+            legacy_marketplace.unlink()
     marketplace_delta = FileDelta(path=marketplace_path, action=marketplace_action)
 
     logger.info(

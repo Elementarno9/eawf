@@ -222,9 +222,11 @@ def test_plugin_package_codex_writes_marketplace_tree(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.stdout
-    assert (target / "marketplace.json").is_file()
+    manifest_path = target / ".agents" / "plugins" / "marketplace.json"
+    assert manifest_path.is_file()
+    assert not (target / "marketplace.json").exists()
     assert (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").is_file()
-    body = json.loads((target / "marketplace.json").read_text(encoding="utf-8"))
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert body["name"] == "eawf-local-codex"
     assert body["plugins"][0]["name"] == "eawf"
 
