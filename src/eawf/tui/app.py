@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 _HEADER_BRAND: str = "Eä"
 _FOOTER_KEYMAP: str = "↑↓ navigate · Enter select · Esc quit"
-_EXIT_KEYS: frozenset[str] = frozenset({"\x1b", "q", "Q", "\x03", "\x04", ""})
+_EXIT_KEYS: frozenset[str] = frozenset({"\x1b", "q", "Q", "\x03", "\x04"})
 
 
 def _load_state(workspace: Path | None) -> dict[str, Any]:
@@ -162,25 +162,47 @@ def _is_tty() -> bool:
     return sys.stdout.isatty()
 
 
-def _read_key_raw() -> str:
-    """Block reading one keypress from ``sys.stdin`` in raw mode.
+def _read_one_cbreak(tty_file: Any, termios_mod: Any, tty_mod: Any) -> str:
+    """Read one byte from *tty_file* under cbreak mode; return decoded char."""
+    fd = tty_file.fileno()
+    try:
+        old = termios_mod.tcgetattr(fd)
+    except termios_mod.error:
+        return ""
+    try:
+        tty_mod.setcbreak(fd)
+        ch = tty_file.read(1)
+    finally:
+        termios_mod.tcsetattr(fd, termios_mod.TCSADRAIN, old)
+    return ch.decode("utf-8", errors="replace") if ch else ""
 
-    Returns the single character read (or empty string on EOF). Raises
-    nothing — ``KeyboardInterrupt`` is mapped to the literal ``"\\x03"``
-    by raw-mode read so the caller's exit-key set picks it up.
+
+def _read_key_raw() -> str:
+    """Block reading one keypress from the controlling terminal.
+
+    Reads from ``/dev/tty`` so the TUI survives stdin redirection
+    (the parent shell stays the controlling terminal even when
+    ``eawf`` is run from a wrapper that pipes its own stdin). Uses
+    :func:`tty.setcbreak` rather than :func:`tty.setraw` so the
+    output discipline (``OPOST``/``ONLCR``) stays intact for the
+    concurrent ``rich.Live`` renderer thread.
+
+    Returns the single character read, or empty string on EOF
+    (closed tty, ``Ctrl-D`` under cbreak), or empty string when no
+    controlling terminal is available.
     """
     try:
         import termios
         import tty
     except ImportError:
         return sys.stdin.readline()[:1]
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
     try:
-        tty.setraw(fd)
-        return sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        with open("/dev/tty", "rb", buffering=0) as tty_file:
+            return _read_one_cbreak(tty_file, termios, tty)
+    except OSError:
+        if not sys.stdin.isatty():
+            return ""
+        return _read_one_cbreak(sys.stdin.buffer, termios, tty)
 
 
 def run_tui(
@@ -209,18 +231,21 @@ def run_tui(
         print(text)
         return 0
     reader = read_key or _read_key_raw
-    console = Console()
+    console = Console(force_terminal=True)
     try:
         with Live(
             _build_layout(state),
             console=console,
             screen=True,
             refresh_per_second=4,
+            transient=False,
         ) as live:
             while True:
                 try:
                     ch = reader()
                 except KeyboardInterrupt:
+                    break
+                if not ch:
                     break
                 if ch in _EXIT_KEYS:
                     break
