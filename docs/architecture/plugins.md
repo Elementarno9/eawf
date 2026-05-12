@@ -108,23 +108,68 @@ Hash mismatch or unmanaged conflicts raise an error with a diff and
 repair instructions; `eawf sync` fixes managed-region drift when the
 prior managed hash matches.
 
-## OpenCode adapter (deferred to v0.2)
+## Codex adapter
 
-OpenCode supports JS / TS plugins in `.opencode/plugins/` or npm plugins
-in config. Eä would render:
+Renders a native Codex CLI plugin under
+`<plugin_root>/.codex-plugin/plugin.json` (the canonical Codex manifest
+file). Skills, agents, and hooks live in subdirectories of the same
+plugin root; an `[plugins.eawf] enabled = true` table is patched into
+the scope-correct `config.toml` between
+`# ---- __eawf_managed begin/end ----` markers so user-authored TOML
+elsewhere stays untouched. A sidecar `.codex-plugin/.eawf-managed.json`
+carries the hash registry the `plugin doctor` command checks.
 
-```text
-.opencode/plugins/ea.ts
-.opencode/agents/*.md
-.opencode/skills/**/SKILL.md
-opencode.json or managed generated section
-```
+| Scope | Plugin root | Config patched |
+|---|---|---|
+| `project` (default) | `<workspace>/.codex/plugins/eawf/` | `<workspace>/.codex/config.toml` |
+| `user` | `~/.codex/plugins/eawf/` | `~/.codex/config.toml` |
 
-Responsibilities (when shipped): bridge events like
-`tool.execute.before/after`, `session.compacted`, `session.idle`,
-`permission.*`; inject state context into compaction; expose Eä custom
-tools; render agents with OpenCode `mode`, `permission`, `model`,
-`prompt`. v0.1 ships the adapter spec only — no installable code path.
+Source: `src/eawf/runtimes/codex/`. Plugin lifecycle commands:
+`eawf plugin install codex [--scope ...]`,
+`eawf plugin update codex [--scope ...]`,
+`eawf plugin doctor codex [--scope ...]`.
+
+## OpenCode adapter
+
+Renders the native OpenCode plugin file plus its hash sidecar under
+OpenCode's plugin auto-discovery dir. The renderer does not push the
+plugin file into the `plugins:[...]` array inside `opencode.json` —
+that array is reserved for npm packages; auto-discovery handles local
+plugins. `opencode.json` is patched only in its `mcp` block to leave
+user-authored top-level keys untouched.
+
+| Scope | Plugin file | Config patched |
+|---|---|---|
+| `project` (default) | `<workspace>/.opencode/plugins/eawf.js` + sidecar `.eawf-managed.json` | `<workspace>/opencode.json` |
+| `user` | `$OPENCODE_CONFIG_DIR/plugins/eawf.js` (defaults to `~/.config/opencode/plugins/eawf.js`) + sidecar | `$OPENCODE_CONFIG_DIR/opencode.json` |
+
+Source: `src/eawf/runtimes/opencode/`. Plugin lifecycle commands:
+`eawf plugin install opencode [--scope ...]`,
+`eawf plugin update opencode [--scope ...]`,
+`eawf plugin doctor opencode [--scope ...]`.
+
+## `--scope project|user`
+
+Every runtime install command accepts `--scope project` (default) or
+`--scope user`. Project scope writes under the active workspace and
+pairs with `.ea/state.json` and the runtime hook router. User scope
+writes under the runtime's user-config root and applies to every
+workspace the user opens with that runtime.
+
+| Runtime | `--scope user` supported | Notes |
+|---|---|---|
+| `claude` | rejected (`InvalidInput`, exit 3) | use `eawf plugin package claude` + Claude Code's `/plugin install` for cross-workspace installs. |
+| `codex` | yes | writes under `~/.codex/plugins/eawf/`; patches `~/.codex/config.toml`. |
+| `opencode` | yes | writes under `$OPENCODE_CONFIG_DIR/plugins/eawf.js` or `~/.config/opencode/plugins/eawf.js`. |
+
+A project-scope install of `codex` or `opencode` warns when a
+user-scope eawf install of the same runtime already exists (the
+runtime would load two `eawf` plugins with undefined precedence).
+`--force` overrides the warning; `--no-input` mode refuses without
+prompting. The doctor commands additionally surface legacy
+workspace-root paths (`<ws>/plugin.js`, `<ws>/.codex/{skills,agents,hooks}/`)
+under `legacy_paths` so an operator can prune them manually per the
+AGENTS.md deletion rule.
 
 ## Why plugin integration helps
 

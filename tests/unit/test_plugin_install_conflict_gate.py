@@ -116,7 +116,131 @@ def test_install_codex_skips_conflict_gate(tmp_path: Path, fake_conflict: CCPlug
 def test_install_opencode_skips_conflict_gate(
     tmp_path: Path, fake_conflict: CCPluginConflict
 ) -> None:
-    """Same — opencode ignores the gate."""
+    """Same — opencode ignores the claude gate."""
     res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "opencode", "--dry-run"])
     assert res.exit_code == 0, res.output
     assert "plugin install opencode" in res.output
+
+
+def test_install_claude_user_scope_rejected(tmp_path: Path, no_conflict: None) -> None:
+    """``--scope user`` is rejected for claude (CC marketplace owns user scope)."""
+    res = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "plugin", "install", "claude", "--scope", "user"],
+    )
+    assert res.exit_code == 3, res.output
+    combined = res.output + (res.stderr or "")
+    assert "project-scope only" in combined or "marketplace" in combined.lower()
+
+
+def test_install_codex_user_scope_conflict_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Project-scope codex install hits the user-scope clash detector."""
+    fake_dir = tmp_path / "fake-user-codex"
+    fake_dir.mkdir()
+    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.codex_detect_user_install",
+        lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
+    )
+    res = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "--no-input",
+            "plugin",
+            "install",
+            "codex",
+            "--dry-run",
+        ],
+    )
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "user-scope" in combined.lower()
+
+
+def test_install_codex_user_scope_force_bypasses_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_dir = tmp_path / "fake-user-codex"
+    fake_dir.mkdir()
+    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.codex_detect_user_install",
+        lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
+    )
+    res = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "plugin",
+            "install",
+            "codex",
+            "--dry-run",
+            "--force",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+
+
+def test_install_opencode_user_scope_conflict_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Project-scope opencode install hits the user-scope clash detector."""
+    fake_file = tmp_path / "fake-user-opencode-eawf.js"
+    fake_file.write_text("// fake\n", encoding="utf-8")
+    from eawf.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
+
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        lambda: OpenCodeUserPluginConflict(plugin_file=fake_file),
+    )
+    res = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "--no-input",
+            "plugin",
+            "install",
+            "opencode",
+            "--dry-run",
+        ],
+    )
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "user-scope" in combined.lower()
+
+
+def test_install_codex_user_scope_skips_clash_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The codex clash gate fires only on project-scope installs."""
+    fake_dir = tmp_path / "fake-user-codex"
+    fake_dir.mkdir()
+    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+
+    monkeypatch.setattr(
+        "eawf.cli.commands.plugin.codex_detect_user_install",
+        lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
+    )
+    res = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "--no-input",
+            "plugin",
+            "install",
+            "codex",
+            "--scope",
+            "user",
+            "--dry-run",
+        ],
+    )
+    assert res.exit_code == 0, res.output

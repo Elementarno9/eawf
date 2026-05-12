@@ -1,26 +1,27 @@
-"""``eawf plugin install/update/doctor claude`` Typer commands.
+"""``eawf plugin install/update/doctor {claude,codex,opencode}`` Typer commands.
 
-Surface contract per Phase 4 W05 acceptance:
+Surface contract:
 
-- ``eawf plugin install claude [--force] [--dry-run]`` renders the
-  Claude Code plugin tree under the workspace root. Idempotent: re-run
-  produces a byte-identical hash. Hand-edits abort with exit 8 unless
-  ``--force`` is passed.
-- ``eawf plugin update claude`` re-renders the tree, asserting that no
-  managed file has been hand-edited (exit 8 on drift).
-- ``eawf plugin doctor claude`` reports drift / missing files; clean
-  exits 0, dirty exits 8.
+- ``eawf plugin install <runtime> [--scope project|user] [--force] [--dry-run]``
+  renders the runtime plugin tree. ``--scope user`` writes under the
+  runtime's user-scope config dir; ``--scope project`` (default)
+  writes under the workspace. ``claude`` rejects ``--scope user``
+  (use the CC marketplace export instead).
+- ``eawf plugin update <runtime> [--scope ...]`` re-renders the tree,
+  aborting on hand-edits (exit 8 / ``INTEGRITY_VIOLATION``).
+- ``eawf plugin doctor <runtime> [--scope ...]`` reports drift /
+  missing files; clean exits 0, dirty exits 8.
 
-The runtime argument is a positional Typer argument so a future
-``opencode`` adapter (W06+) can register under the same root command
-without a flag rename.
+Idempotent: re-running ``install`` against an unchanged source tree
+produces a byte-identical tree. Hand-edits abort with exit 8 unless
+``--force`` is passed.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 import typer
 
@@ -37,6 +38,7 @@ from eawf.runtimes.claude.plugin_install import (
 )
 from eawf.runtimes.claude.plugin_package import PackageResult, package_plugin
 from eawf.runtimes.claude.plugin_update import UpdateResult, update_plugin
+from eawf.runtimes.codex import detect_user_install as codex_detect_user_install
 from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
 from eawf.runtimes.codex import install_plugin as codex_install_plugin
 from eawf.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
@@ -46,6 +48,7 @@ from eawf.runtimes.codex.plugin_install import (
 from eawf.runtimes.codex.plugin_install import (
     IntegrityViolation as CodexIntegrityViolation,
 )
+from eawf.runtimes.opencode import detect_user_install as opencode_detect_user_install
 from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
 from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
 from eawf.runtimes.opencode.plugin_doctor import DoctorReport as OpencodeDoctorReport
@@ -59,6 +62,9 @@ from eawf.runtimes.opencode.plugin_install import (
 logger = logging.getLogger(__name__)
 
 
+Scope = Literal["project", "user"]
+
+
 plugin_app = typer.Typer(
     name="plugin",
     help=(
@@ -70,6 +76,7 @@ plugin_app = typer.Typer(
 
 
 _SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex", "opencode")
+_VALID_SCOPES: tuple[str, ...] = ("project", "user")
 
 
 def _validate_runtime(runtime: str) -> None:
@@ -77,6 +84,23 @@ def _validate_runtime(runtime: str) -> None:
     if runtime not in _SUPPORTED_RUNTIMES:
         raise cli_errors.InvalidInput(
             f"unknown runtime {runtime!r}; expected one of {list(_SUPPORTED_RUNTIMES)}"
+        )
+
+
+def _validate_scope(scope: str, *, runtime: str) -> None:
+    """Reject invalid scope values, and ``user`` for claude.
+
+    Raises:
+        InvalidInput: when *scope* is not ``project`` / ``user``, or
+            when *runtime* is ``claude`` and *scope* is ``user``.
+    """
+    if scope not in _VALID_SCOPES:
+        raise cli_errors.InvalidInput(
+            f"invalid --scope {scope!r}; expected one of {list(_VALID_SCOPES)}"
+        )
+    if runtime == "claude" and scope == "user":
+        raise cli_errors.InvalidInput(
+            "claude is project-scope only; use the CC marketplace for user-scope installs"
         )
 
 
@@ -122,6 +146,96 @@ def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     if not proceed:
         print("plugin install claude: aborted (conflict not acknowledged)")
         return False
+    return True
+
+
+def _codex_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
+    """Warn when a user-scope codex install of ``eawf`` exists during project install."""
+    conflict = codex_detect_user_install()
+    if conflict is None:
+        return True
+    if force:
+        logger.info(
+            f"_codex_user_conflict_clear bypassed via --force plugin_dir={conflict.plugin_dir}"
+        )
+        return True
+    message = (
+        f"detected user-scope codex eawf install at {conflict.plugin_dir}; "
+        f"running a project-scope install alongside it will cause Codex to "
+        f"resolve two 'eawf' plugins with undefined precedence"
+    )
+    if flags.no_input:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"{message}. Rerun without --no-input to confirm, pass --force "
+                "to acknowledge, or remove the user-scope install first."
+            ),
+            flags=flags,
+        )
+        return False
+    import questionary
+
+    proceed = questionary.confirm(
+        f"{message}.\nProceed with project-scope install anyway?",
+        default=False,
+    ).ask()
+    if not proceed:
+        print("plugin install codex: aborted (conflict not acknowledged)")
+        return False
+    return True
+
+
+def _opencode_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
+    """Warn when a user-scope opencode install of ``eawf.js`` exists during project install."""
+    conflict = opencode_detect_user_install()
+    if conflict is None:
+        return True
+    if force:
+        logger.info(
+            f"_opencode_user_conflict_clear bypassed via --force plugin_file={conflict.plugin_file}"
+        )
+        return True
+    message = (
+        f"detected user-scope opencode eawf install at {conflict.plugin_file}; "
+        f"running a project-scope install alongside it will cause OpenCode to "
+        f"auto-load two 'eawf' plugins with undefined precedence"
+    )
+    if flags.no_input:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"{message}. Rerun without --no-input to confirm, pass --force "
+                "to acknowledge, or remove the user-scope install first."
+            ),
+            flags=flags,
+        )
+        return False
+    import questionary
+
+    proceed = questionary.confirm(
+        f"{message}.\nProceed with project-scope install anyway?",
+        default=False,
+    ).ask()
+    if not proceed:
+        print("plugin install opencode: aborted (conflict not acknowledged)")
+        return False
+    return True
+
+
+def _install_conflict_clear(*, runtime: str, scope: str, flags: GlobalFlags, force: bool) -> bool:
+    """Dispatch conflict-gate detection to the runtime-specific helper.
+
+    For ``claude``: always probe (claude is project-only). For
+    ``codex`` / ``opencode``: probe only on a project-scope install,
+    detecting a clashing user-scope install of the same plugin name.
+    """
+    if runtime == "claude":
+        return _claude_conflict_clear(flags=flags, force=force)
+    if scope != "project":
+        return True
+    if runtime == "codex":
+        return _codex_user_conflict_clear(flags=flags, force=force)
+    if runtime == "opencode":
+        return _opencode_user_conflict_clear(flags=flags, force=force)
     return True
 
 
@@ -185,11 +299,22 @@ def _codex_install_payload(result: CodexInstallResult) -> dict[str, object]:
     """Render the Codex :class:`InstallResult` as the JSON envelope body."""
     return {
         "runtime": "codex",
+        "scope": result.scope,
         "target_dir": str(result.target_dir),
         "dry_run": result.dry_run,
         "skills": [{"path": str(d.path), "action": d.action} for d in result.skills],
         "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
         "hooks": [{"path": str(d.path), "action": d.action} for d in result.hooks],
+        "manifest": (
+            {"path": str(result.manifest.path), "action": result.manifest.action}
+            if result.manifest is not None
+            else None
+        ),
+        "sidecar": (
+            {"path": str(result.sidecar.path), "action": result.sidecar.action}
+            if result.sidecar is not None
+            else None
+        ),
         "config": (
             {"path": str(result.config.path), "action": result.config.action}
             if result.config is not None
@@ -199,13 +324,14 @@ def _codex_install_payload(result: CodexInstallResult) -> dict[str, object]:
 
 
 def _codex_install_text(result: CodexInstallResult) -> str:
-    parts = [
-        f"plugin install codex ({'dry-run' if result.dry_run else 'wrote'}) → {result.target_dir}"
-    ]
-    parts.append(f"  skills:  {len(result.skills)} files")
-    parts.append(f"  agents:  {len(result.agents)} files")
-    parts.append(f"  hooks:   {len(result.hooks)} files")
-    parts.append(f"  config:  {result.config.action if result.config else 'no-op'}")
+    verb = "dry-run" if result.dry_run else "wrote"
+    parts = [f"plugin install codex --scope {result.scope} ({verb}) → {result.target_dir}"]
+    parts.append(f"  skills:   {len(result.skills)} files")
+    parts.append(f"  agents:   {len(result.agents)} files")
+    parts.append(f"  hooks:    {len(result.hooks)} files")
+    parts.append(f"  manifest: {result.manifest.action if result.manifest else 'no-op'}")
+    parts.append(f"  sidecar:  {result.sidecar.action if result.sidecar else 'no-op'}")
+    parts.append(f"  config:   {result.config.action if result.config else 'no-op'}")
     return "\n".join(parts)
 
 
@@ -213,6 +339,7 @@ def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
     """Render the Codex :class:`DoctorReport` as the JSON envelope body."""
     return {
         "runtime": "codex",
+        "scope": report.scope,
         "target_dir": str(report.target_dir),
         "clean": report.clean,
         "ok": [{"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.ok],
@@ -229,14 +356,19 @@ def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
         "missing": [
             {"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.missing
         ],
+        "legacy_paths": [str(p) for p in report.legacy_paths],
     }
 
 
 def _codex_doctor_text(report: CodexDoctorReport) -> str:
-    parts = [f"plugin doctor codex → {report.target_dir}"]
+    parts = [f"plugin doctor codex --scope {report.scope} → {report.target_dir}"]
     parts.append(
         f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
     )
+    if report.legacy_paths:
+        parts.append("  legacy paths (delete manually):")
+        for path in report.legacy_paths:
+            parts.append(f"    - {path}")
     return "\n".join(parts)
 
 
@@ -244,11 +376,17 @@ def _opencode_install_payload(result: OpencodeInstallResult) -> dict[str, object
     """Render the OpenCode :class:`InstallResult` as the JSON envelope body."""
     return {
         "runtime": "opencode",
+        "scope": result.scope,
         "target_dir": str(result.target_dir),
         "dry_run": result.dry_run,
         "plugin_js": (
             {"path": str(result.plugin_js.path), "action": result.plugin_js.action}
             if result.plugin_js is not None
+            else None
+        ),
+        "sidecar": (
+            {"path": str(result.sidecar.path), "action": result.sidecar.action}
+            if result.sidecar is not None
             else None
         ),
         "config": (
@@ -261,9 +399,10 @@ def _opencode_install_payload(result: OpencodeInstallResult) -> dict[str, object
 
 def _opencode_install_text(result: OpencodeInstallResult) -> str:
     verb = "dry-run" if result.dry_run else "wrote"
-    parts = [f"plugin install opencode ({verb}) → {result.target_dir}"]
+    parts = [f"plugin install opencode --scope {result.scope} ({verb}) → {result.target_dir}"]
     plugin_js_action = result.plugin_js.action if result.plugin_js else "no-op"
     parts.append(f"  plugin.js: {plugin_js_action}")
+    parts.append(f"  sidecar:   {result.sidecar.action if result.sidecar else 'no-op'}")
     parts.append(f"  config:    {result.config.action if result.config else 'no-op'}")
     return "\n".join(parts)
 
@@ -271,6 +410,7 @@ def _opencode_install_text(result: OpencodeInstallResult) -> str:
 def _opencode_doctor_payload(report: OpencodeDoctorReport) -> dict[str, object]:
     return {
         "runtime": "opencode",
+        "scope": report.scope,
         "target_dir": str(report.target_dir),
         "clean": report.clean,
         "ok": [{"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.ok],
@@ -287,14 +427,19 @@ def _opencode_doctor_payload(report: OpencodeDoctorReport) -> dict[str, object]:
         "missing": [
             {"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.missing
         ],
+        "legacy_paths": [str(p) for p in report.legacy_paths],
     }
 
 
 def _opencode_doctor_text(report: OpencodeDoctorReport) -> str:
-    parts = [f"plugin doctor opencode → {report.target_dir}"]
+    parts = [f"plugin doctor opencode --scope {report.scope} → {report.target_dir}"]
     parts.append(
         f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
     )
+    if report.legacy_paths:
+        parts.append("  legacy paths (delete manually):")
+        for path in report.legacy_paths:
+            parts.append(f"    - {path}")
     return "\n".join(parts)
 
 
@@ -345,6 +490,18 @@ def _default_package_target(flags: GlobalFlags) -> Path:
     return base / "build" / "eawf-plugin"
 
 
+def _scope_tip_banner(*, runtime: str, scope: str, result_path: Path) -> str | None:
+    """Return the post-install tip banner (text-mode only) or ``None`` to suppress.
+
+    Shown when *runtime* is codex/opencode and *scope* is project — points
+    out the cross-project alternative. Suppressed for claude and for
+    user-scope installs (already where the user asked for).
+    """
+    if runtime == "claude" or scope != "project":
+        return None
+    return f"tip: --scope user installs cross-project (alongside or in lieu of {result_path})"
+
+
 @plugin_app.command(name="install")
 def install_cmd(
     ctx: typer.Context,
@@ -354,13 +511,21 @@ def install_cmd(
             help="Runtime to install: 'claude', 'codex', or 'opencode'.",
         ),
     ],
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Install location: 'project' (default) or 'user' (cross-project).",
+        ),
+    ] = "project",
     force: Annotated[
         bool,
         typer.Option(
             "--force",
             help=(
                 "Overwrite hand-edited managed files. For runtime='claude', "
-                "also bypasses the CC-marketplace-conflict gate."
+                "also bypasses the CC-marketplace-conflict gate; for "
+                "codex/opencode, bypasses the user-scope-clash gate."
             ),
         ),
     ] = False,
@@ -373,15 +538,19 @@ def install_cmd(
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
+        _validate_scope(scope, runtime=runtime)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
     target = _resolve_target(flags)
-    if runtime == "claude" and not _claude_conflict_clear(flags=flags, force=force):
+    if not _install_conflict_clear(runtime=runtime, scope=scope, flags=flags, force=force):
         return
+    scope_lit = cast(Scope, scope)
     if runtime == "codex":
         try:
-            codex_result = codex_install_plugin(target, force=force, dry_run=dry_run)
+            codex_result = codex_install_plugin(
+                target, scope=scope_lit, force=force, dry_run=dry_run
+            )
         except CodexIntegrityViolation as exc:
             cli_errors.emit_error(
                 cli_errors.IntegrityViolation(str(exc)),
@@ -393,10 +562,17 @@ def install_cmd(
             _codex_install_text(codex_result),
             flags=flags,
         )
+        banner = _scope_tip_banner(
+            runtime=runtime, scope=scope, result_path=codex_result.target_dir
+        )
+        if banner and not flags.no_input and not flags.json_output:
+            print(banner)
         return
     if runtime == "opencode":
         try:
-            oc_result = opencode_install_plugin(target, force=force, dry_run=dry_run)
+            oc_result = opencode_install_plugin(
+                target, scope=scope_lit, force=force, dry_run=dry_run
+            )
         except OpencodeIntegrityViolation as exc:
             cli_errors.emit_error(
                 cli_errors.IntegrityViolation(str(exc)),
@@ -414,6 +590,9 @@ def install_cmd(
             _opencode_install_text(oc_result),
             flags=flags,
         )
+        banner = _scope_tip_banner(runtime=runtime, scope=scope, result_path=oc_result.target_dir)
+        if banner and not flags.no_input and not flags.json_output:
+            print(banner)
         return
     try:
         result = install_plugin(target, force=force, dry_run=dry_run)
@@ -438,28 +617,53 @@ def update_cmd(
     ctx: typer.Context,
     runtime: Annotated[
         str,
-        typer.Argument(
-            help="Runtime to update. Currently 'claude' only; codex/opencode ship in v0.4."
-        ),
+        typer.Argument(help="Runtime to update: 'claude', 'codex', or 'opencode'."),
     ],
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Install location: 'project' (default) or 'user' (cross-project).",
+        ),
+    ] = "project",
 ) -> None:
     """Re-render a runtime plugin tree, aborting on hand-edits."""
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
+        _validate_scope(scope, runtime=runtime)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
-    if runtime in {"codex", "opencode"}:
-        cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"plugin update is not yet wired for runtime {runtime!r}; "
-                f"use `eawf plugin install {runtime} --force` instead"
-            ),
+    target = _resolve_target(flags)
+    scope_lit = cast(Scope, scope)
+    if runtime == "codex":
+        try:
+            codex_result = codex_install_plugin(target, scope=scope_lit, force=False)
+        except CodexIntegrityViolation as exc:
+            cli_errors.emit_error(cli_errors.IntegrityViolation(str(exc)), flags=flags)
+            return
+        emit_json_or_text(
+            _codex_install_payload(codex_result),
+            _codex_install_text(codex_result),
             flags=flags,
         )
         return
-    target = _resolve_target(flags)
+    if runtime == "opencode":
+        try:
+            oc_result = opencode_install_plugin(target, scope=scope_lit, force=False)
+        except OpencodeIntegrityViolation as exc:
+            cli_errors.emit_error(cli_errors.IntegrityViolation(str(exc)), flags=flags)
+            return
+        except ValueError as exc:
+            cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+            return
+        emit_json_or_text(
+            _opencode_install_payload(oc_result),
+            _opencode_install_text(oc_result),
+            flags=flags,
+        )
+        return
     try:
         result: UpdateResult = update_plugin(target)
     except IntegrityViolation as exc:
@@ -479,17 +683,26 @@ def doctor_cmd(
         str,
         typer.Argument(help="Runtime to inspect: 'claude', 'codex', or 'opencode'."),
     ],
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Install location to inspect: 'project' (default) or 'user'.",
+        ),
+    ] = "project",
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
+        _validate_scope(scope, runtime=runtime)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
     target = _resolve_target(flags)
+    scope_lit = cast(Scope, scope)
     if runtime == "codex":
-        codex_report = codex_doctor_plugin(target)
+        codex_report = codex_doctor_plugin(target, scope=scope_lit)
         emit_json_or_text(
             _codex_doctor_payload(codex_report),
             _codex_doctor_text(codex_report),
@@ -499,7 +712,7 @@ def doctor_cmd(
             raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
         return
     if runtime == "opencode":
-        oc_report = opencode_doctor_plugin(target)
+        oc_report = opencode_doctor_plugin(target, scope=scope_lit)
         emit_json_or_text(
             _opencode_doctor_payload(oc_report),
             _opencode_doctor_text(oc_report),

@@ -1,21 +1,28 @@
-"""OpenCode runtime adapter for Eä (P14-W07 / D12 + D13).
+"""OpenCode runtime adapter for Eä.
 
-Emits an OpenCode-shaped plugin tree under the workspace root:
-
-- ``opencode.json`` with an ``mcp`` block + ``managed`` namespace
-- ``plugin.js`` — the untyped JS bridge that forwards hook events to
-  ``eawf hook`` over stdio (no TypeScript, no build step per D13)
+Renders a native OpenCode plugin under ``.opencode/plugins/eawf.js``
+(project scope) or ``$OPENCODE_CONFIG_DIR/plugins/eawf.js`` (user
+scope; defaults to ``~/.config/opencode/plugins/eawf.js``). The
+managed-bytes registry lives in a sidecar
+``.eawf-managed.json`` next to the plugin file; ``opencode.json`` is
+patched only in its ``mcp`` block.
 
 Public re-exports:
 
-    InstallResult, install_plugin, expected_paths, doctor_plugin
+    InstallResult, install_plugin, expected_paths, Scope, doctor_plugin,
+    DoctorReport, OpenCodeUserPluginConflict, detect_user_install
 """
 
 from __future__ import annotations
 
+from eawf.runtimes.opencode.plugin_conflict import (
+    OpenCodeUserPluginConflict,
+    detect_user_install,
+)
 from eawf.runtimes.opencode.plugin_doctor import DoctorReport, doctor_plugin
 from eawf.runtimes.opencode.plugin_install import (
     InstallResult,
+    Scope,
     expected_paths,
     install_plugin,
 )
@@ -23,6 +30,9 @@ from eawf.runtimes.opencode.plugin_install import (
 __all__ = [
     "DoctorReport",
     "InstallResult",
+    "OpenCodeUserPluginConflict",
+    "Scope",
+    "detect_user_install",
     "doctor_plugin",
     "expected_paths",
     "install_plugin",
