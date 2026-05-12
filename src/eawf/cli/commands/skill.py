@@ -323,8 +323,8 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
     for entry in rows:
         name = entry.name
         if name in builtin_names:
-            registered = registry.lookup(cast(SkillName, name))
-            body_cls = _SKILL_BODY_MODELS[cast(SkillName, name)]
+            registered = registry.lookup(name)
+            body_cls = _SKILL_BODY_MODELS[name]
             status = "installed" if registered is not None else "missing"
             body_schema = f"{body_cls.__module__}.{body_cls.__qualname__}"
         else:

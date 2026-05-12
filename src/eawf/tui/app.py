@@ -66,9 +66,10 @@ def _load_state(workspace: Path | None) -> dict[str, Any]:
     if not candidate.is_file():
         return {}
     try:
-        return json.loads(candidate.read_text(encoding="utf-8"))
+        data: dict[str, Any] = json.loads(candidate.read_text(encoding="utf-8"))
     except json.JSONDecodeError, OSError:
         return {}
+    return data
 
 
 def _breadcrumb(state: dict[str, Any]) -> str:
