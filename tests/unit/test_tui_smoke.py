@@ -150,3 +150,21 @@ def test_run_tui_exits_on_eof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
     rc = tui_app.run_tui(workspace=tmp_path, read_key=lambda: "")
     assert rc == 0
+
+
+def test_run_tui_does_not_exit_on_arrow_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Arrow keys arrive as ESC-prefixed sequences; bare-ESC exit must not fire."""
+    from eawf.tui import app as tui_app
+
+    monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
+    keys = iter(["\x1b[A", "\x1b[B", "\x1b[C", "\x1b[D", "q"])
+
+    def feeder() -> str:
+        return next(keys)
+
+    rc = tui_app.run_tui(workspace=tmp_path, read_key=feeder)
+    assert rc == 0
+    with pytest.raises(StopIteration):
+        next(keys)
