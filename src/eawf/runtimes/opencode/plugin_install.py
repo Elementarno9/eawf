@@ -40,6 +40,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from eawf.render._atomic import atomic_write_text
+from eawf.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.render.skills import SKILL_REGISTRY, SkillSpec
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,8 @@ class InstallResult:
     config: FileDelta | None = None
     plugin_js: FileDelta | None = None
     sidecar: FileDelta | None = None
+    agents: list[FileDelta] = field(default_factory=list)
+    commands: list[FileDelta] = field(default_factory=list)
     dry_run: bool = False
     deltas: list[FileDelta] = field(default_factory=list)
 
@@ -163,6 +167,89 @@ def _sidecar_target(
     )
 
 
+def _opencode_base(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    """Return the scope root that holds ``agents/``, ``commands/``, ``plugins/``."""
+    if scope == "project":
+        return target_dir / ".opencode"
+    return _user_config_root(home=home, opencode_config_dir=opencode_config_dir)
+
+
+def _agent_target(
+    target_dir: Path,
+    spec: AgentSpec,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    base = _opencode_base(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+    return base / "agents" / f"{spec.role}.md"
+
+
+def _command_target(
+    target_dir: Path,
+    spec: SkillSpec,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    opencode_config_dir: str | None = None,
+) -> Path:
+    base = _opencode_base(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+    return base / "commands" / f"{spec.skill_name}.md"
+
+
+def _render_opencode_agent_md(spec: AgentSpec) -> str:
+    """Render an opencode agent file from an :class:`AgentSpec`.
+
+    Uses the opencode-native frontmatter schema (``description`` / ``mode``);
+    Claude-Code ``name`` / ``tools`` keys are dropped because opencode
+    derives the agent name from the filename and uses a separate
+    ``permission`` object for tool ACLs (omitted here so the operator
+    can layer their own policy in ``opencode.json`` or
+    ``~/.config/opencode/opencode.json``).
+    """
+    lines = [
+        "---",
+        f"description: {spec.description}",
+        "mode: subagent",
+        "---",
+        "",
+        spec.body.rstrip() + "\n",
+    ]
+    return "\n".join(lines)
+
+
+def _render_opencode_command_md(spec: SkillSpec) -> str:
+    """Render an opencode command file from a :class:`SkillSpec`.
+
+    Maps each ``user_invocable=True`` Eä skill to ``/<skill_name>``.
+    Argument hints are surfaced in the body preamble because opencode's
+    command frontmatter has no equivalent of Claude Code's
+    ``argument-hint`` key.
+    """
+    header_lines = [
+        "---",
+        f"description: {spec.description}",
+        "---",
+        "",
+    ]
+    if spec.argument_hint:
+        header_lines.append(f"ARGUMENTS: {spec.argument_hint}")
+        header_lines.append("")
+    header_lines.append(spec.body.rstrip() + "\n")
+    return "\n".join(header_lines)
+
+
 def _load_plugin_js_template() -> str:
     return (
         files(_PLUGIN_TEMPLATE_PACKAGE)
@@ -177,12 +264,20 @@ def _render_plugin_js() -> str:
 
 
 def _render_sidecar_body(timestamp: str, plugin_js_bytes: bytes) -> dict[str, Any]:
+    agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
+    commands_payload = [
+        {"name": spec.skill_name, "version": spec.version}
+        for spec in SKILL_REGISTRY
+        if spec.user_invocable
+    ]
     body: dict[str, Any] = {
         "version": _PLUGIN_VERSION,
         "generated_at": timestamp,
         "generator": _GENERATOR,
         "plugin_js_hash": hashlib.blake2b(plugin_js_bytes, digest_size=8).hexdigest(),
         "plugin_js_path": _PLUGIN_FILENAME,
+        "agents": agents_payload,
+        "commands": commands_payload,
     }
     body_json = json.dumps(body, sort_keys=True, separators=(",", ":"))
     body["hash"] = hashlib.blake2b(body_json.encode("utf-8"), digest_size=8).hexdigest()
@@ -301,9 +396,44 @@ def install_plugin(
         atomic_write_text(config_path, config_bytes.decode("utf-8"))
     config_delta = FileDelta(path=config_path, action=config_action)
 
+    agent_deltas: list[FileDelta] = []
+    for agent_spec in AGENT_REGISTRY:
+        agent_path = _agent_target(
+            target_dir,
+            agent_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+        agent_payload = _render_opencode_agent_md(agent_spec).encode("utf-8")
+        agent_action = _classify(agent_path, agent_payload)
+        if not dry_run:
+            _ensure_dir(agent_path.parent)
+            atomic_write_text(agent_path, agent_payload.decode("utf-8"))
+        agent_deltas.append(FileDelta(path=agent_path, action=agent_action))
+
+    command_deltas: list[FileDelta] = []
+    for skill_spec in SKILL_REGISTRY:
+        if not skill_spec.user_invocable:
+            continue
+        command_path = _command_target(
+            target_dir,
+            skill_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+        command_payload = _render_opencode_command_md(skill_spec).encode("utf-8")
+        command_action = _classify(command_path, command_payload)
+        if not dry_run:
+            _ensure_dir(command_path.parent)
+            atomic_write_text(command_path, command_payload.decode("utf-8"))
+        command_deltas.append(FileDelta(path=command_path, action=command_action))
+
     logger.info(
         f"install_plugin runtime=opencode scope={scope} plugin_js={plugin_js_action} "
-        f"sidecar={sidecar_action} config={config_action} dry_run={dry_run}"
+        f"sidecar={sidecar_action} config={config_action} "
+        f"agents={len(agent_deltas)} commands={len(command_deltas)} dry_run={dry_run}"
     )
     return InstallResult(
         target_dir=target_dir,
@@ -311,8 +441,16 @@ def install_plugin(
         config=config_delta,
         plugin_js=plugin_js_delta,
         sidecar=sidecar_delta,
+        agents=agent_deltas,
+        commands=command_deltas,
         dry_run=dry_run,
-        deltas=[plugin_js_delta, sidecar_delta, config_delta],
+        deltas=[
+            plugin_js_delta,
+            sidecar_delta,
+            config_delta,
+            *agent_deltas,
+            *command_deltas,
+        ],
     )
 
 
@@ -325,15 +463,34 @@ def expected_paths(
 ) -> tuple[Mapping[str, Path], Path]:
     """Return ``({region_id: path}, config_path)`` for *target_dir* at *scope*."""
     target_dir = Path(target_dir).resolve()
+    paths: dict[str, Path] = {
+        "plugin.opencode.plugin_js": _plugin_js_target(
+            target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+        ),
+        "plugin.opencode.sidecar": _sidecar_target(
+            target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+        ),
+    }
+    for agent_spec in AGENT_REGISTRY:
+        paths[f"plugin.opencode.agent.{agent_spec.role}"] = _agent_target(
+            target_dir,
+            agent_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+    for skill_spec in SKILL_REGISTRY:
+        if not skill_spec.user_invocable:
+            continue
+        paths[f"plugin.opencode.command.{skill_spec.skill_name}"] = _command_target(
+            target_dir,
+            skill_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
     return (
-        {
-            "plugin.opencode.plugin_js": _plugin_js_target(
-                target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
-            ),
-            "plugin.opencode.sidecar": _sidecar_target(
-                target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
-            ),
-        },
+        paths,
         _config_target(target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir),
     )
 
@@ -343,11 +500,27 @@ def expected_plugin_js_bytes() -> bytes:
     return _render_plugin_js().encode("utf-8")
 
 
+def expected_agent_bodies() -> dict[str, bytes]:
+    """Return ``{role: rendered_bytes}`` for every emitted agent file."""
+    return {spec.role: _render_opencode_agent_md(spec).encode("utf-8") for spec in AGENT_REGISTRY}
+
+
+def expected_command_bodies() -> dict[str, bytes]:
+    """Return ``{skill_name: rendered_bytes}`` for every emitted command file."""
+    return {
+        spec.skill_name: _render_opencode_command_md(spec).encode("utf-8")
+        for spec in SKILL_REGISTRY
+        if spec.user_invocable
+    }
+
+
 __all__ = [
     "FileDelta",
     "InstallResult",
     "IntegrityViolation",
     "Scope",
+    "expected_agent_bodies",
+    "expected_command_bodies",
     "expected_paths",
     "expected_plugin_js_bytes",
     "install_plugin",

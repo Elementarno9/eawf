@@ -348,6 +348,7 @@ def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
         "runtime": "codex",
         "scope": report.scope,
         "target_dir": str(report.target_dir),
+        "plugin_root": str(report.plugin_root),
         "clean": report.clean,
         "ok": [{"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.ok],
         "drifted": [
@@ -368,14 +369,7 @@ def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
 
 
 def _codex_doctor_text(report: CodexDoctorReport) -> str:
-    # find a sample entry to recover the plugin_root
-    sample = next(iter(report.ok + report.drifted + report.missing), None)
-    plugin_root: object = report.target_dir
-    if (sample is not None and sample.kind in {"manifest", "sidecar"}) or (
-        sample is not None and sample.kind in {"skill", "agent", "hook"}
-    ):
-        plugin_root = sample.path.parents[1]
-    parts = [f"plugin doctor codex --scope {report.scope} → {plugin_root}"]
+    parts = [f"plugin doctor codex --scope {report.scope} → {report.plugin_root}"]
     parts.append(
         f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
     )
@@ -408,6 +402,8 @@ def _opencode_install_payload(result: OpencodeInstallResult) -> dict[str, object
             if result.config is not None
             else None
         ),
+        "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
+        "commands": [{"path": str(d.path), "action": d.action} for d in result.commands],
     }
 
 
@@ -419,6 +415,8 @@ def _opencode_install_text(result: OpencodeInstallResult) -> str:
     plugin_js_action = result.plugin_js.action if result.plugin_js else "no-op"
     parts.append(f"  plugin.js: {plugin_js_action}")
     parts.append(f"  sidecar:   {result.sidecar.action if result.sidecar else 'no-op'}")
+    parts.append(f"  agents:    {len(result.agents)} files")
+    parts.append(f"  commands:  {len(result.commands)} files")
     if result.config is not None:
         parts.append(f"  config:    {result.config.action} ({result.config.path})")
     else:

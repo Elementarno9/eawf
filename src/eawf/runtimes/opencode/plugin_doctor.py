@@ -16,11 +16,17 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eawf.render.agents import AGENT_REGISTRY
+from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtimes.opencode.plugin_install import (
     Scope,
+    _agent_target,
+    _command_target,
     _config_target,
     _plugin_js_target,
     _sidecar_target,
+    expected_agent_bodies,
+    expected_command_bodies,
     expected_plugin_js_bytes,
 )
 
@@ -31,7 +37,7 @@ class DoctorEntry:
 
     region_id: str
     path: Path
-    kind: str  # Literal["plugin_js", "config", "sidecar"]
+    kind: str  # Literal["plugin_js", "config", "sidecar", "agent", "command"]
     on_disk_hash: str | None = None
     expected_hash: str | None = None
 
@@ -186,6 +192,78 @@ def doctor_plugin(
                 expected_hash=None,
             )
         )
+
+    expected_agents = expected_agent_bodies()
+    for agent_spec in AGENT_REGISTRY:
+        agent_path = _agent_target(
+            target_dir,
+            agent_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+        expected_bytes = expected_agents[agent_spec.role]
+        expected_hash = _hash_bytes(expected_bytes)
+        region_id = f"plugin.opencode.agent.{agent_spec.role}"
+        if not agent_path.exists():
+            missing.append(
+                DoctorEntry(
+                    region_id=region_id,
+                    path=agent_path,
+                    kind="agent",
+                    expected_hash=expected_hash,
+                )
+            )
+            continue
+        live_hash = _hash_bytes(agent_path.read_bytes())
+        entry = DoctorEntry(
+            region_id=region_id,
+            path=agent_path,
+            kind="agent",
+            on_disk_hash=live_hash,
+            expected_hash=expected_hash,
+        )
+        if live_hash == expected_hash:
+            ok.append(entry)
+        else:
+            drifted.append(entry)
+
+    expected_commands = expected_command_bodies()
+    for skill_spec in SKILL_REGISTRY:
+        if not skill_spec.user_invocable:
+            continue
+        command_path = _command_target(
+            target_dir,
+            skill_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+        expected_bytes = expected_commands[skill_spec.skill_name]
+        expected_hash = _hash_bytes(expected_bytes)
+        region_id = f"plugin.opencode.command.{skill_spec.skill_name}"
+        if not command_path.exists():
+            missing.append(
+                DoctorEntry(
+                    region_id=region_id,
+                    path=command_path,
+                    kind="command",
+                    expected_hash=expected_hash,
+                )
+            )
+            continue
+        live_hash = _hash_bytes(command_path.read_bytes())
+        entry = DoctorEntry(
+            region_id=region_id,
+            path=command_path,
+            kind="command",
+            on_disk_hash=live_hash,
+            expected_hash=expected_hash,
+        )
+        if live_hash == expected_hash:
+            ok.append(entry)
+        else:
+            drifted.append(entry)
 
     legacy = _detect_legacy_paths(target_dir) if scope == "project" else []
     return DoctorReport(

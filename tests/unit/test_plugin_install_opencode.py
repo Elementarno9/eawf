@@ -261,3 +261,62 @@ def test_expected_plugin_js_carries_version_stamp() -> None:
     body = expected_plugin_js_bytes().decode("utf-8")
     assert "__EAWF_PLUGIN_VERSION__" not in body
     assert "version: '1.0'" in body
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_install_emits_agents_per_registry(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    """Each AGENT_REGISTRY entry produces ``<base>/agents/<role>.md``."""
+    from eawf.render.agents import AGENT_REGISTRY
+
+    result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
+    base = tmp_path / ".opencode" if scope == "project" else fake_opencode_config_dir
+    for spec in AGENT_REGISTRY:
+        agent_path = base / "agents" / f"{spec.role}.md"
+        assert agent_path.is_file(), agent_path
+        body = agent_path.read_text(encoding="utf-8")
+        assert body.startswith("---\n")
+        assert "mode: subagent" in body
+        assert spec.description.splitlines()[0] in body
+    assert len(result.agents) == len(AGENT_REGISTRY)
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_install_emits_commands_for_invocable_skills(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
+) -> None:
+    """Each ``user_invocable=True`` SKILL_REGISTRY entry produces
+    ``<base>/commands/<name>.md``."""
+    from eawf.render.skills import SKILL_REGISTRY
+
+    result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
+    base = tmp_path / ".opencode" if scope == "project" else fake_opencode_config_dir
+    invocable = [s for s in SKILL_REGISTRY if s.user_invocable]
+    for spec in invocable:
+        cmd_path = base / "commands" / f"{spec.skill_name}.md"
+        assert cmd_path.is_file(), cmd_path
+        body = cmd_path.read_text(encoding="utf-8")
+        assert body.startswith("---\n")
+        assert f"description: {spec.description}" in body
+    assert len(result.commands) == len(invocable)
+
+
+def test_doctor_flags_missing_agent_files(
+    tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path
+) -> None:
+    install_plugin(tmp_path)
+    agent_md = tmp_path / ".opencode" / "agents" / "researcher.md"
+    agent_md.unlink()
+    report = doctor_plugin(tmp_path)
+    assert report.clean is False
+    assert any(e.kind == "agent" and "researcher" in str(e.path) for e in report.missing)
+
+
+def test_doctor_flags_drifted_command_files(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    cmd_md = tmp_path / ".opencode" / "commands" / "research.md"
+    cmd_md.write_text("--- tampered ---\n", encoding="utf-8")
+    report = doctor_plugin(tmp_path)
+    assert report.clean is False
+    assert any(e.kind == "command" and "research" in str(e.path) for e in report.drifted)

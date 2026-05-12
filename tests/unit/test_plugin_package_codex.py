@@ -16,7 +16,7 @@ from eawf.runtimes.codex import package_plugin
 def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
     target = tmp_path / "pkg"
     result = package_plugin(target)
-    assert (target / "marketplace.json").is_file()
+    assert (target / ".agents" / "plugins" / "marketplace.json").is_file()
     assert (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").is_file()
     assert (target / "plugins" / "eawf" / "skills").is_dir()
     assert (target / "plugins" / "eawf" / "agents").is_dir()
@@ -35,7 +35,9 @@ def test_marketplace_json_has_required_codex_schema_fields(tmp_path: Path) -> No
     with name/source/policy/category per plugin."""
     target = tmp_path / "pkg"
     package_plugin(target)
-    body = json.loads((target / "marketplace.json").read_text(encoding="utf-8"))
+    body = json.loads(
+        (target / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
+    )
     assert body["name"] == "eawf-local-codex"
     assert body["interface"]["displayName"]
     assert isinstance(body["plugins"], list)
@@ -62,10 +64,10 @@ def test_plugin_manifest_matches_install_renderer(tmp_path: Path) -> None:
 def test_package_idempotent(tmp_path: Path) -> None:
     target = tmp_path / "pkg"
     package_plugin(target)
-    snap_mkt = (target / "marketplace.json").read_bytes()
+    snap_mkt = (target / ".agents" / "plugins" / "marketplace.json").read_bytes()
     snap_man = (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").read_bytes()
     result = package_plugin(target)
-    assert (target / "marketplace.json").read_bytes() == snap_mkt
+    assert (target / ".agents" / "plugins" / "marketplace.json").read_bytes() == snap_mkt
     assert (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").read_bytes() == snap_man
     assert result.marketplace is not None
     assert result.marketplace.action == "unchanged"
@@ -91,7 +93,7 @@ def test_package_force_overwrites_unrelated_target(tmp_path: Path) -> None:
     target.mkdir()
     (target / "unrelated.txt").write_text("hi\n", encoding="utf-8")
     result = package_plugin(target, force=True)
-    assert (target / "marketplace.json").is_file()
+    assert (target / ".agents" / "plugins" / "marketplace.json").is_file()
     assert result.marketplace is not None
 
 
@@ -101,6 +103,24 @@ def test_package_accepts_previous_eawf_output_without_force(tmp_path: Path) -> N
     second = package_plugin(target)
     assert second.marketplace is not None
     assert second.marketplace.action == "unchanged"
+
+
+def test_package_does_not_emit_root_marketplace_json(tmp_path: Path) -> None:
+    """Codex CLI rejects ``<target>/marketplace.json``; manifest must live
+    at ``<target>/.agents/plugins/marketplace.json``."""
+    target = tmp_path / "pkg"
+    package_plugin(target)
+    assert not (target / "marketplace.json").exists()
+    assert (target / ".agents" / "plugins" / "marketplace.json").is_file()
+
+
+def test_package_strips_legacy_root_marketplace_on_rerun(tmp_path: Path) -> None:
+    target = tmp_path / "pkg"
+    package_plugin(target)
+    legacy = target / "marketplace.json"
+    legacy.write_text("{}\n", encoding="utf-8")
+    package_plugin(target)
+    assert not legacy.exists()
 
 
 def test_package_hooks_files_executable(tmp_path: Path) -> None:
