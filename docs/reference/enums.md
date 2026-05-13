@@ -13,11 +13,12 @@ This file is the canonical reference for all `StrEnum` classes defined in
 | phase | status | `PhaseStatus` | `planned`, `active`, `closed`, `archived` | Roadmap phase lifecycle |
 | iter | status | `IterStatus` | `planned`, `active`, `closed`, `abandoned` | Iteration (sprint) lifecycle |
 | wave | status | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` | Wave agent work unit lifecycle |
+| wave | effort_bucket | `EffortBucket` | `XS`, `S`, `M`, `L`, `XL` | Default EU estimate bucket for wave roll-ups |
 | hypothesis | status | `HypothesisStatus` | `pending`, `confirmed`, `rejected`, `inconclusive`, `deferred` | Research hypothesis tracking |
 | hypothesis | verdict | `HypothesisVerdict` | `confirmed`, `rejected`, `inconclusive` | Final verdict on a hypothesis |
 | audit | kind | `AuditKind` | `evaluation`, `ship-gate`, `incident`, `review` | Category of audit event |
 | audit | status | `AuditStatus` | `pending`, `running`, `complete`, `failed` | Audit execution state |
-| audit | verdict | `AuditVerdict` | `pass`, `minor`, `major`, `fail` | Audit outcome quality |
+| audit | verdict | `AuditVerdict` | `pass`, `minor`, `major` | Audit outcome quality |
 | decision | status | `DecisionStatus` | `active`, `superseded`, `reversed` | ADR / decision record lifecycle |
 | backlog | priority | `BacklogPriority` | `P0`, `P1`, `P2`, `P3` | Backlog item urgency (P0 = highest) |
 | backlog | status | `BacklogStatus` | `open`, `in_progress`, `closed`, `deferred` | Backlog item workflow state |
@@ -37,3 +38,4 @@ This file is the canonical reference for all `StrEnum` classes defined in
 | health | — | `Health` | `ok`, `needs_setup`, `degraded` | Doctor / system health check result |
 | scope | kind | `ScopeKind` | `repo`, `workspace` | Scope of a config or profile |
 | store | kind | `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `flow` | Store / artifact category |
+| artifact | kind | `ArtifactKind` | `audit_report`, `notebook`, `dataset`, `model`, `backtest`, `strategy`, `binary`, `scene`, `playtest_session`, `cve_ref`, `research_brief`, `plan_spec` | Durable artifact vocabulary |
