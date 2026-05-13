@@ -355,7 +355,7 @@ def _render_workflow(wave: Wave) -> str:
         "4. Commit with prefix `"
         + commit_prefix
         + " <type>: <summary>` (3-6 bullet body) and the\n"
-        "   `Co-Authored-By: Claude <noreply@anthropic.com>` trailer."
+        "   recognized Claude or Codex `Co-Authored-By` trailer."
     )
     return body
 

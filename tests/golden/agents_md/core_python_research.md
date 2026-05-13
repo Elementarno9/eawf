@@ -158,7 +158,7 @@ Cherry-pick procedure: ``git -C <main-worktree> cherry-pick
 parent worktree. Worktree teardown only after cherry-pick lands.
 
 <!-- END EAWF:managed id=worktree-discipline -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.0 hash=fbe60a9fda783fb2 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.0 hash=8d880a9c124b84bf -->
 ### Commit prefix
 
 ``[P<NN>[-W<NN>]] <type>: <summary>`` — types: ``feat``, ``fix``,
@@ -166,8 +166,8 @@ parent worktree. Worktree teardown only after cherry-pick lands.
 ``ci``, ``revert``. Use ``[CORE]`` for cross-phase work. ``-W<NN>``
 is mandatory when the commit is a planned wave deliverable.
 
-Body: 3-6 bullets on what changed and why. Trailer:
-``Co-Authored-By: Claude <noreply@anthropic.com>``.
+Body: 3-6 bullets on what changed and why. Trailer: a recognized
+Claude or Codex ``Co-Authored-By`` trailer.
 
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=cbc58632710aa3c0 -->
