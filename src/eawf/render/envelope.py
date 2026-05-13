@@ -61,6 +61,7 @@ CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/roadmap",
     "/differentiate",
     "/flow",
+    "/blitz",
 )
 SkillName = str
 

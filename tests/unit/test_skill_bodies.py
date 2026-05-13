@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from eawf.skills.bodies import (
     AuditBody,
+    BlitzBody,
     DifferentiateBody,
     FlowBody,
     InitBody,
@@ -74,6 +75,18 @@ def test_research_body_full_payload_round_trip() -> None:
 def test_research_body_rejects_extra_field() -> None:
     with pytest.raises(ValidationError, match="Extra inputs"):
         ResearchBody.model_validate({"brief_id": "BR-001", "unexpected": True})
+
+
+def test_blitz_body_minimal_construction_and_round_trip() -> None:
+    body = BlitzBody(depth=1, depth_cap=8, residual_unknowns=2)
+    _round_trip(body)
+
+
+def test_blitz_body_rejects_extra_field() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        BlitzBody.model_validate(
+            {"depth": 1, "depth_cap": 8, "residual_unknowns": 2, "unexpected": True}
+        )
 
 
 def test_prep_body_minimal_construction_and_round_trip() -> None:

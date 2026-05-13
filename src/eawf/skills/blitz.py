@@ -26,7 +26,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Final
+from typing import Any, Final
+
+from eawf.render.envelope import SkillName
+from eawf.skills._common import probe_skill_instruments
+from eawf.skills.bodies.blitz import BlitzBody
+from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
+from eawf.skills.registry import register
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +109,59 @@ def should_auto_invoke(*, residual_unknowns: int) -> bool:
     return residual_unknowns > 1
 
 
+@register
+class BlitzSkill(Skill):
+    """Concrete ``/blitz`` skill."""
+
+    name: SkillName = "/blitz"
+
+    def probe(self, ctx: SkillContext) -> ProbeOutcome:
+        return probe_skill_instruments()
+
+    def action(self, ctx: SkillContext) -> SkillResult:
+        args: dict[str, Any] = dict(ctx.args)
+        residual_unknowns = int(args.get("residual_unknowns", 0) or 0)
+        followup_args_raw = args.get("followup_research_args", {})
+        followup_research_args = (
+            dict(followup_args_raw) if isinstance(followup_args_raw, dict) else {}
+        )
+        followup_research_args.setdefault("depth", "quick")
+        followup_research_args.setdefault("blitz", False)
+
+        try:
+            depth = bump_depth()
+        except BlitzRecursionExhaustedError as exc:
+            body = BlitzBody(
+                depth=current_depth() + 1,
+                depth_cap=depth_cap(),
+                residual_unknowns=residual_unknowns,
+                followup_research_args=followup_research_args,
+                next_actions=["reduce residual_unknowns or disable blitz"],
+            )
+            return SkillResult(
+                status="blocked",
+                body=body.model_dump(mode="json"),
+                repair_commands=[str(exc)],
+                next_valid_actions=["rerun /research with blitz=false"],
+            )
+
+        body = BlitzBody(
+            depth=depth,
+            depth_cap=depth_cap(),
+            residual_unknowns=residual_unknowns,
+            followup_research_args=followup_research_args,
+            next_actions=["eawf skill run /research"],
+        )
+        return SkillResult(
+            status="ok",
+            body=body.model_dump(mode="json"),
+            next_valid_actions=["eawf skill run /research"],
+        )
+
+
 __all__ = [
     "BlitzRecursionExhaustedError",
+    "BlitzSkill",
     "bump_depth",
     "current_depth",
     "depth_cap",

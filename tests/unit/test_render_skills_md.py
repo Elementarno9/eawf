@@ -32,6 +32,7 @@ _EXPECTED_SKILL_NAMES: set[str] = {
     "roadmap",
     "differentiate",
     "flow",
+    "blitz",
 }
 
 

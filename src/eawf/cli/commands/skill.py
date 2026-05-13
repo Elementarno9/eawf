@@ -69,6 +69,7 @@ from eawf.skills import (
 from eawf.skills import registry
 from eawf.skills.bodies import (
     AuditBody,
+    BlitzBody,
     DifferentiateBody,
     FlowBody,
     InitBody,
@@ -106,6 +107,7 @@ _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
     "/roadmap": "Plan or update the long-running roadmap from the active scope.",
     "/differentiate": "Compare options and produce a differentiation matrix.",
     "/flow": "Composite skill that chains the six core skills end-to-end.",
+    "/blitz": "Auto-chain research follow-ups when residual unknowns remain.",
 }
 
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the
@@ -123,6 +125,7 @@ _SKILL_BODY_MODELS: dict[SkillName, type[Any]] = {
     "/roadmap": RoadmapBody,
     "/differentiate": DifferentiateBody,
     "/flow": FlowBody,
+    "/blitz": BlitzBody,
 }
 
 

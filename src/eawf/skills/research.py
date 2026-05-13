@@ -41,6 +41,7 @@ from eawf.skills._common import (
     probe_skill_instruments,
     resolve_active_state_path,
 )
+from eawf.skills.blitz import BlitzSkill, should_auto_invoke
 from eawf.skills.bodies.research import (
     ResearchBody,
     ResearchOption,
@@ -48,7 +49,7 @@ from eawf.skills.bodies.research import (
     ResearchRecommendation,
 )
 from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
+from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult, run_skill
 from eawf.skills.registry import register
 from eawf.state.enums import StoreKind
 from eawf.store.append import append_envelope
@@ -142,6 +143,7 @@ class ResearchSkill(Skill):
         depth = raw_depth if raw_depth in _VALID_DEPTHS else _DEFAULT_DEPTH
         topic = str(args.get("topic") or args.get("message") or scope_id)
         final_requested = _bool_arg(args, "final", "save", default=False)
+        blitz_enabled = _bool_arg(args, "blitz", default=True)
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
@@ -291,6 +293,43 @@ class ResearchSkill(Skill):
                 questions=questions,
             )
             persisted_records.append(persisted_brief)
+
+        residual_unknowns = sum(1 for q in questions if "awaiting" in q.answer.lower())
+        if blitz_enabled and should_auto_invoke(residual_unknowns=residual_unknowns):
+            blitz_ctx = SkillContext(
+                scope=ctx.scope,
+                session=ctx.session,
+                instrument_probe=dict(ctx.instrument_probe),
+                args={
+                    "residual_unknowns": residual_unknowns,
+                    "followup_research_args": {
+                        "topic": topic,
+                        "depth": "quick",
+                        "blitz": False,
+                    },
+                },
+            )
+            blitz_env = run_skill(BlitzSkill(), blitz_ctx)
+            next_actions.append("eawf skill run /blitz")
+            next_actions.extend(blitz_env.footer.next_valid_actions)
+            if blitz_env.header.status != "ok":
+                return SkillResult(
+                    status=blitz_env.header.status,
+                    body=ResearchBody(
+                        brief_id=brief_id,
+                        questions=questions,
+                        options=options,
+                        recommendation=recommendation,
+                        peer_review=None,
+                        persisted_brief=persisted_brief,
+                    ).model_dump(mode="json"),
+                    persisted_store_records=persisted_records,
+                    state_mutations=state_mutations,
+                    evidence_refs=evidence_refs,
+                    next_valid_actions=next_actions,
+                    repair_commands=blitz_env.footer.repair_commands
+                    or ["rerun /research with blitz=false"],
+                )
 
         # Step 9 — persist brief when explicitly requested.
         # Step 10 — record decisions / artefacts (v0.1: omitted; the audit
