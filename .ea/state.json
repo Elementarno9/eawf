@@ -1003,9 +1003,12 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_wave_ids": [
+      "P15-I01-W01",
+      "P15-I01-W03"
+    ],
+    "iter_id": "P15-I01",
+    "phase_id": "P15",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1495,6 +1498,22 @@
         "P14-I04-W04",
         "P14-I04-W05"
       ]
+    },
+    "P15-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P15-I01",
+      "opened_at": "2026-05-13T12:39:30.071505Z",
+      "phase_id": "P15",
+      "status": "active",
+      "title": "Skills execution seam",
+      "wave_ids": [
+        "P15-I01-W01",
+        "P15-I01-W03",
+        "P15-I01-W02",
+        "P15-I01-W04"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1698,6 +1717,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Harnesses (Codex + OpenCode) + hygiene preamble"
+    },
+    "P15": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P15",
+      "iter_ids": [
+        "P15-I01"
+      ],
+      "opened_at": "2026-05-13T12:39:29.521890Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "Skills (/research flags, /blitz, registry seam)"
     }
   },
   "plugins": {},
@@ -1732,7 +1765,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-12T20:10:41.442108Z",
+  "updated_at": "2026-05-13T12:39:32.945166Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2877,6 +2910,113 @@
       "outcome": "shipped",
       "status": "closed",
       "title": "Add interface block",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P15-I01-W01": {
+      "blocks": [
+        "P15-I01-W02",
+        "P15-I01-W04"
+      ],
+      "claim_session_id": "SES-20260513T123700Z-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/skills/research.py",
+        "src/eawf/store/kinds/research.py",
+        "tests/unit/test_skill_research.py",
+        "tests/integration/test_skill_run_research.py"
+      ],
+      "id": "P15-I01-W01",
+      "iter_id": "P15-I01",
+      "opened_at": "2026-05-13T12:39:30.543548Z",
+      "outcome": null,
+      "status": "claimed",
+      "title": "/research args + final research-store persistence",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P15-I01-W02": {
+      "blocks": [
+        "P15-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P15-I01-W01"
+      ],
+      "file_scopes": [
+        "src/eawf/skills/blitz.py",
+        "src/eawf/skills/research.py",
+        "src/eawf/render/envelope.py",
+        "src/eawf/render/skills.py",
+        "src/eawf/skills/bodies/**",
+        "tests/unit/test_blitz_recursion_guard.py",
+        "tests/unit/test_skill_research.py"
+      ],
+      "id": "P15-I01-W02",
+      "iter_id": "P15-I01",
+      "opened_at": "2026-05-13T12:39:31.512202Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Registered /blitz skill + /research auto-chain",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P15-I01-W03": {
+      "blocks": [
+        "P15-I01-W04"
+      ],
+      "claim_session_id": "SES-20260513T123700Z-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "file_scopes": [
+        "src/eawf/cli/commands/skill.py",
+        "src/eawf/skills/discovery.py",
+        "tests/unit/test_skill_registry_user_catalogue.py",
+        "tests/unit/test_cli_skill.py"
+      ],
+      "id": "P15-I01-W03",
+      "iter_id": "P15-I01",
+      "opened_at": "2026-05-13T12:39:31.010828Z",
+      "outcome": null,
+      "status": "claimed",
+      "title": "Executable workspace/user skill overlays",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P15-I01-W04": {
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P15-I01-W01",
+        "P15-I01-W02",
+        "P15-I01-W03"
+      ],
+      "file_scopes": [
+        "tests/golden/**",
+        "tests/integration/**",
+        "docs/**",
+        "src/eawf/schemas/**",
+        ".ea/artifacts/**",
+        ".ea/store/audit.jsonl",
+        ".secrets.baseline"
+      ],
+      "id": "P15-I01-W04",
+      "iter_id": "P15-I01",
+      "opened_at": "2026-05-13T12:39:32.000777Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Docs, schemas, plugin goldens, audit evidence, and compatibility sweep",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
