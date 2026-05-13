@@ -50,6 +50,8 @@ def test_research_valid_round_trip() -> None:
     payload = PAYLOAD_MODELS[StoreKind.RESEARCH].model_validate(loaded.payload)
     assert isinstance(payload, ResearchPayload)
     assert payload.topic == "market structure"
+    assert payload.references[0].ref == "s1"
+    assert payload.sources == ["s1"]
 
 
 def test_research_invalid_payload() -> None:

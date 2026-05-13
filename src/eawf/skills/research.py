@@ -35,6 +35,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from eawf.artifacts.references import Citation
 from eawf.render.envelope import SkillName
 from eawf.skills._common import (
     emit_event,
@@ -109,7 +110,10 @@ def _append_research_brief(
     now = datetime.now(UTC)
     findings = [f"{q.q} {q.answer}".strip() for q in questions]
     sources = sorted({src for q in questions for src in q.sources})
-    payload = ResearchPayload(topic=topic, findings=findings, sources=sources)
+    references = [
+        Citation.from_legacy_source(i, source) for i, source in enumerate(sources, start=1)
+    ]
+    payload = ResearchPayload(topic=topic, findings=findings, references=references)
     envelope = Envelope(
         schema_version="1.0",
         id=brief_id,
