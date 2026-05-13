@@ -587,7 +587,7 @@ def run_cmd(
         )
         return
 
-    skill_name = cast(SkillName, candidate)
+    skill_name: SkillName = candidate
 
     skill_cls = registry.lookup(skill_name)
     if skill_cls is None:
