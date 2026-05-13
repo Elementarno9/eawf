@@ -19,8 +19,10 @@ from typing import Annotated, Any
 
 import typer
 
+from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
+from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
@@ -1032,6 +1034,22 @@ def artifact_show(
     )
 
 
+@artifact_app.command("validate")
+def artifact_validate(
+    ctx: typer.Context,
+    path: Annotated[Path, typer.Argument(help="Markdown artifact path.")],
+) -> None:
+    """Validate one markdown artifact body."""
+    flags = _flags(ctx)
+    text = path.read_text(encoding="utf-8")
+    report = validate_markdown_artifact(text)
+    payload = {"ok": report.ok, "errors": report.errors}
+    if not report.ok:
+        _emit(payload, "\n".join(report.errors), flags)
+        raise typer.Exit(code=4)
+    _emit(payload, "artifact validate: ok", flags)
+
+
 # ---- backlog ---------------------------------------------------------------
 
 backlog_app = typer.Typer(
@@ -1173,6 +1191,11 @@ def backlog_close(
         flags,
     )
 
+
+install_promote_command(audit_app, "audit")
+install_promote_command(hypothesis_app, "hypothesis")
+install_promote_command(decision_app, "decision")
+install_promote_command(incident_app, "incident")
 
 __all__ = [
     "artifact_app",

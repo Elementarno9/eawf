@@ -11,6 +11,7 @@ import typer
 from pydantic import ValidationError
 
 from eawf.cli import errors
+from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
@@ -25,6 +26,8 @@ research_app = typer.Typer(
     help="Show and promote research briefs.",
     no_args_is_help=True,
 )
+
+install_promote_command(research_app, "research")
 
 
 def _load_research_envelope(state_path: Path, record_id: str) -> Envelope:
