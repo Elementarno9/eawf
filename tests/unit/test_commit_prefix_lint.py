@@ -167,6 +167,20 @@ def test_rejects_missing_coauthor_trailer(tmp_path: Path, mod) -> None:
     assert "missing recognized co-author trailer" in diag
 
 
+def test_rejects_comment_only_coauthor_trailer(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        (
+            "[P14-W02] feat: add thing\n\nbody only, no trailer\n"
+            "# Co-Authored-By: Codex <noreply@openai.com>\n"
+        ),
+        with_trailer=False,
+    )
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "missing recognized co-author trailer" in diag
+
+
 def test_rejects_unrecognized_coauthor_trailer(tmp_path: Path, mod) -> None:
     msg = _write_msg(
         tmp_path,

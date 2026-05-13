@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from eawf.artifacts.references import citation_numbers_in_text
 from eawf.render.artifact_chassis import (
     render_provenance,
     render_references,
@@ -26,6 +27,12 @@ def render_research_markdown(envelope: Envelope, payload: ResearchPayload) -> st
             lines.append(f"- {finding}")
     else:
         lines.append("(none)")
+    summary_prose = "\n".join(lines)
+    used_refs = set(citation_numbers_in_text(summary_prose))
+    unused_refs = [citation.n for citation in payload.references if citation.n not in used_refs]
+    if unused_refs:
+        markers = " ".join(f"[{n}]" for n in unused_refs)
+        lines.append(f"- References: {markers}")
     lines.append("")
     lines.extend(render_references(payload.references))
     lines.append("")
