@@ -32,6 +32,7 @@ from __future__ import annotations
 # despite the unused-name lint. Order: six core (W02) then four meta
 # (W03); ``flow`` imports the six core skills, so it must come last.
 from eawf.skills import audit as _audit  # noqa: F401
+from eawf.skills import blitz as _blitz  # noqa: F401
 from eawf.skills import differentiate as _differentiate  # noqa: F401
 from eawf.skills import flow as _flow  # noqa: F401
 from eawf.skills import init as _init  # noqa: F401

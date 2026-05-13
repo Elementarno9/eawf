@@ -154,7 +154,7 @@ def test_research_default_does_not_persist_research_brief(state_dir: Path) -> No
 def test_research_final_persists_research_brief(state_dir: Path) -> None:
     skill = ResearchSkill()
     ctx = _ctx()
-    ctx.args = {"topic": "demo topic", "final": True}
+    ctx.args = {"topic": "demo topic", "final": True, "blitz": False}
     env = run_skill(skill, ctx)
     body = ResearchBody.model_validate(cast(dict, env.body))
     assert body.persisted_brief == f"urn:eawf:v1:store:research/{body.brief_id}"
@@ -165,6 +165,30 @@ def test_research_final_persists_research_brief(state_dir: Path) -> None:
     assert record["kind"] == "research"
     assert record["payload"]["topic"] == "demo topic"
     assert body.persisted_brief in env.footer.persisted_store_records
+
+
+def test_research_auto_chains_blitz_for_residual_unknowns(state_dir: Path) -> None:
+    skill = ResearchSkill()
+    env = run_skill(skill, _ctx())
+    assert "eawf skill run /blitz" in env.footer.next_valid_actions
+
+
+def test_research_can_disable_blitz_auto_chain(state_dir: Path) -> None:
+    skill = ResearchSkill()
+    ctx = _ctx()
+    ctx.args = {"blitz": False}
+    env = run_skill(skill, ctx)
+    assert "eawf skill run /blitz" not in env.footer.next_valid_actions
+
+
+def test_research_propagates_blitz_depth_exhaustion(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EAWF_BLITZ_DEPTH", "0")
+    skill = ResearchSkill()
+    env = run_skill(skill, _ctx())
+    assert env.header.status == "blocked"
+    assert env.footer.repair_commands
 
 
 def test_research_skill_registered_with_canonical_name() -> None:

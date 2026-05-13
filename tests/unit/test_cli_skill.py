@@ -159,6 +159,7 @@ def test_skill_list_shows_all_ten_names(cli_runner: CliRunner) -> None:
         "/roadmap",
         "/differentiate",
         "/flow",
+        "/blitz",
     ]
     for name in expected_names:
         assert name in result.stdout, f"missing {name!r} in: {result.stdout}"
@@ -191,7 +192,7 @@ def test_skill_list_json_payload_carries_status_and_schema(
     payload = json.loads(result.stdout)
     assert "skills" in payload
     skills = cast(list[dict[str, object]], payload["skills"])
-    assert len(skills) == 10
+    assert len(skills) == 11
     by_name = {cast(str, s["name"]): s for s in skills}
     research = by_name["/research"]
     assert research["status"] == "installed"
@@ -201,6 +202,8 @@ def test_skill_list_json_payload_carries_status_and_schema(
     # Meta skills (W03) are also registered post-W03.
     assert by_name["/flow"]["status"] == "installed"
     assert by_name["/flow"]["body_schema"] == "eawf.skills.bodies.flow.FlowBody"
+    assert by_name["/blitz"]["status"] == "installed"
+    assert by_name["/blitz"]["body_schema"] == "eawf.skills.bodies.blitz.BlitzBody"
 
 
 def test_skill_run_unknown_skill_returns_invalid_input(cli_runner: CliRunner) -> None:

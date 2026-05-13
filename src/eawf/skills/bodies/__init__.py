@@ -28,6 +28,7 @@ validation requires it on ``header.status == "needs_user"``.
 from __future__ import annotations
 
 from eawf.skills.bodies.audit import AuditBody
+from eawf.skills.bodies.blitz import BlitzBody
 from eawf.skills.bodies.differentiate import DifferentiateBody
 from eawf.skills.bodies.flow import FlowBody
 from eawf.skills.bodies.init import InitBody
@@ -41,6 +42,7 @@ from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
 
 __all__ = [
     "AuditBody",
+    "BlitzBody",
     "DifferentiateBody",
     "FlowBody",
     "InitBody",
