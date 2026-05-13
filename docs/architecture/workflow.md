@@ -32,9 +32,9 @@ Parallel implementation is allowed only when:
 
 | Skill | Purpose | Default automation |
 |---|---|---|
-| `/research [-f] [message]` | Research topic or current-iter unknowns; propose options, tradeoffs, risks, recommendation; peer-review findings; repeated calls extend same brief | Auto fanout, synthesize, review, update state / artifact refs; `-f` saves to configured research folder |
-| `/prep [p##[-i##]] [-i]` | Plan current / selected iter; `-i` plans fixes after `/audit` or `/review` | Build DAG, define waves, acceptance checks, file scopes, worktree needs, wave / iter EU estimates |
-| `/audit [scope]` | Full iteration audit: metrics / results, code quality, tests, docs / state evidence, integrity checks | Run configured checks, fanout reviewers, record `Audit` artifact / verdict |
+| `/research [-f] [message]` | Research topic or current-iter unknowns; propose options, tradeoffs, risks, recommendation; peer-review findings; repeated calls extend same brief | Auto fanout, synthesize, review, update state / artifact refs; `-f` stores typed references and `eawf research show --md` renders the brief |
+| `/prep [p##[-i##]] [-i]` | Plan current / selected iter; `-i` plans fixes after `/audit` or `/review` | Build DAG, define waves, acceptance checks, file scopes, worktree needs, wave tags, and bucket roll-ups |
+| `/audit [scope]` | Full iteration audit: metrics / results, code quality, tests, docs / state evidence, integrity checks | Run configured checks, fanout reviewers, record `Audit` artifact / verdict; `eawf audit show --md` renders the audit chassis |
 | `/ship` | Commit / push / PR open-close controller | Respect auto-commit / auto-push; otherwise create pending-ship artifact and ask; review / promote / prune relevant memories before final state update |
 | `/review` | Review active PR and post templated comment / review | Inspect diff / checks, run focused agents, post only when requested or policy allows |
 | `/polish [-y]` | Whole-repo consistency audit across docs, memory, code, configs, state, agent / subagent memory | Parallel search, grouped cleanup table; promote useful memories, prune obsolete ones; `-y` auto-applies safe tasks |
@@ -83,12 +83,14 @@ fallback ladder rather than fake completion.
 3. Load state, accepted research, decisions, backlog, memory, current
    code / docs, acceptance config.
 4. Define objective and non-goals.
-5. Build task DAG: task ID, deps, file scope, commands, evidence, risk,
-   expected artifact.
+5. Build task DAG: task ID, deps, file scope, success criteria,
+   `agent_role`, `effort_bucket`, commands, evidence, risk, expected
+   artifact.
 6. Partition into waves: parallel only for disjoint / controlled scopes;
    assign worktree policy.
-7. Estimate each wave and roll up the iter budget; do not recalibrate
-   coefficients during the run.
+7. Estimate each wave with effort buckets and roll up
+   `sum_wave_eu` / `critical_path_eu`; do not recalibrate coefficients
+   during the run.
 8. Allocate IDs: `eawf iter open P13` auto-allocates next `P13-Ixx`;
    explicit `P13-I04` infers parent.
 9. Write plan / spec artifact, state wave stubs, and estimate records.
@@ -130,17 +132,19 @@ fallback ladder rather than fake completion.
    by policy.
 5. Build pending-ship artifact: commit groups, messages, files,
    evidence, push / PR action, rollback notes.
-6. Default new-install policy is ask before commit; if auto-commit is
+6. Validate durable artifact markdown with `eawf artifact validate`;
+   promotion paths fail closed on scrub findings and non-dense citations.
+7. Default new-install policy is ask before commit; if auto-commit is
    explicitly enabled and `--no-commit` is not set, commit using
    selected template.
-7. Default new-install policy is ask before push; if auto-push is
+8. Default new-install policy is ask before push; if auto-push is
    explicitly enabled and `--no-push` is not set, push safely.
-8. PR action: open draft / ready, update body, close / merge only if
+9. PR action: open draft / ready, update body, close / merge only if
    configured gates pass.
-9. Merge / close gates: CI green, required reviews, state valid, no
+10. Merge / close gates: CI green, required reviews, state valid, no
    unresolved blockers; force may bypass outcomes only with reason,
    never CI.
-10. Record commits / PR / merge / audit artifacts and final
+11. Record commits / PR / merge / audit artifacts and final
     estimate-vs-actual summary in state; close wave / iter / phase as
     requested.
 11. Remove clean worktrees if policy says; preserve on conflict /

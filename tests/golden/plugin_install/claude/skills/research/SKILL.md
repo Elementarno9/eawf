@@ -15,12 +15,14 @@ disable-model-invocation: true
 3. Compare alternatives — bullet list of options with pros/cons.
 4. Verdict: recommend one path, or recommend "stay open" with the next
    discriminating experiment.
-5. If `--final`: persist a research brief via the `/research` skill body.
+5. If `--final`: persist a research brief with `references` and render
+   it through `eawf research show --md`.
 
 ## Pre-flight checklist
 
 - [ ] No state mutations — read-only.
-- [ ] Cite sources by `path:line` or external URL.
+- [ ] Cite sources as dense `[N]` references backed by `Citation` rows.
+- [ ] Keep promoted artifact prose scrub-clean and repo-relative.
 - [ ] Distinguish "what the code does" from "what the doc claims".
 
 ## Decision surfaces

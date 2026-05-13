@@ -12,14 +12,17 @@ disable-model-invocation: true
 
 1. Resolve `<phase-id>`; verify all waves under it are complete.
 2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff).
-3. Push the long-running feature branch.
-4. Open the phase PR via `gh pr create`.
-5. After merge, advance state via `eawf state phase close <NN>`.
+3. Validate artifact markdown and PR prose against the chassis/scrub
+   rules.
+4. Push the long-running feature branch.
+5. Open the phase PR via `gh pr create`.
+6. After merge, advance state via `eawf state phase close <NN>`.
 
 ## Pre-flight checklist
 
 - [ ] All waves under `<phase-id>` are complete.
 - [ ] Cherry-picks from worktree subagents have all landed.
+- [ ] `eawf artifact validate` passes for promoted markdown.
 - [ ] CI on the latest push is green.
 
 ## Decision surfaces

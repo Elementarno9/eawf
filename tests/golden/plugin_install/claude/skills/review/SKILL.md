@@ -16,11 +16,15 @@ disable-model-invocation: true
    context to make a judgment.
 3. Apply rules in order: correctness > security > clarity > style.
 4. Tag findings: 🔴 blocker, 🟠 must-fix, 🟡 should-fix, 🔵 nit.
+5. Check artifact chassis and dense references when reviewing docs or
+   promoted artifacts.
 
 ## Pre-flight checklist
 
 - [ ] Read the success criteria for the phase/wave the diff belongs to.
 - [ ] Verify any quantitative claim against `Read`/`grep`.
+- [ ] Verify markdown artifacts keep `Summary`, `References`,
+      `Provenance`, and `Scrub` sections.
 
 ## Decision surfaces
 

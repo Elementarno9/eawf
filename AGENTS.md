@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.1 hash=88bf8d6c09ce59b4 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.1 hash=2b8db29f849b47fa -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -31,6 +31,7 @@ non-trivial body has an expansion block immediately following.
 15. **Secrets and PII hygiene.** See ``secrets-hygiene``.
 16. **Naming conventions for fields/params/log keys.** See
     ``naming-conventions``.
+17. **Artifact chassis and citations.** See ``artifact-chassis``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -298,3 +299,18 @@ the supporting artifact id. Decisions reference the audit that justifies
 them so the evidence chain is reconstructible from ``state.json`` alone.
 
 <!-- END EAWF:managed id=research-workflow -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.0 hash=a5a6f9421f5f5d23 -->
+### Artifact chassis and citations
+
+Durable research, plan, audit, decision, hypothesis, and incident
+markdown uses renderer-owned chassis sections: ``Summary``,
+``References``, ``Provenance``, and ``Scrub``. Local drafts under
+``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts
+under ``.ea/artifacts/`` do not.
+
+Citations use dense ``[N]`` markers backed by typed ``Citation`` rows.
+References stay repo-relative, external URL, or Eawf URN. Absolute
+local paths, host-local URLs, and PII must fail validation before
+promotion or PR text ships.
+
+<!-- END EAWF:managed id=artifact-chassis -->

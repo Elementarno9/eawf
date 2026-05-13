@@ -166,12 +166,14 @@ _RESEARCH_BODY = """# /research
 3. Compare alternatives — bullet list of options with pros/cons.
 4. Verdict: recommend one path, or recommend "stay open" with the next
    discriminating experiment.
-5. If `--final`: persist a research brief via the `/research` skill body.
+5. If `--final`: persist a research brief with `references` and render
+   it through `eawf research show --md`.
 
 ## Pre-flight checklist
 
 - [ ] No state mutations — read-only.
-- [ ] Cite sources by `path:line` or external URL.
+- [ ] Cite sources as dense `[N]` references backed by `Citation` rows.
+- [ ] Keep promoted artifact prose scrub-clean and repo-relative.
 - [ ] Distinguish "what the code does" from "what the doc claims".
 
 ## Decision surfaces
@@ -197,20 +199,24 @@ _PREP_BODY = """# /prep
    (the default; check via `uv run eawf config get planning.auto_plan`)
    and `--auto-plan` was not passed, enter Claude Code plan mode
    (`EnterPlanMode`) and present the proposed wave DAG (IDs, deps,
-   file scopes, success criteria, estimated EU). Exit via
+   file scopes, success criteria, `agent_role`, `effort_bucket`).
+   Exit via
    `ExitPlanMode` only after operator approval. When `auto_plan` is
    `true` or `--auto-plan` is set, skip the proposal and dispatch
    inline.
 4. For each parallel wave, dispatch a worktree subagent.
 5. For each sequential wave, run inline; cherry-pick parallel-wave
    commits in between as they finish.
-6. Update plan checkboxes / state via `eawf state phase advance`.
+6. Validate the rendered plan with `eawf plan show --md`; wave tags and
+   bucket roll-ups must match state.
 
 ## Pre-flight checklist
 
 - [ ] Confirm current branch is the long-running phase branch.
 - [ ] Confirm `git status` is clean.
 - [ ] Confirm worktree subagents branch from the parent HEAD.
+- [ ] Every wave has success criteria, agent role, effort bucket, and
+      file scope.
 - [ ] Plan-mode proposal is the default; pass `--auto-plan` only when
       the wave DAG is trivial or pre-approved.
 
@@ -235,14 +241,17 @@ _AUDIT_BODY = """# /audit
 ## Canonical algorithm
 
 1. Resolve target: phase id, wave id, or commit range.
-2. Identify success criteria from the plan / phase spec.
+2. Identify success criteria from the plan / phase spec and cite evidence
+   with dense `[N]` references.
 3. Dispatch the auditor subagent with paths, line numbers, criteria.
 4. Parse the verdict; convert refutations into TODOs or new waves.
+5. Render audit evidence through `eawf audit show --md`.
 
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.
-- [ ] Every quantitative claim must include `Read`/`Grep` evidence.
+- [ ] Every quantitative claim must include source evidence and dense
+      citation refs.
 
 ## Decision surfaces
 
@@ -262,14 +271,17 @@ _SHIP_BODY = """# /ship
 
 1. Resolve `<phase-id>`; verify all waves under it are complete.
 2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff).
-3. Push the long-running feature branch.
-4. Open the phase PR via `gh pr create`.
-5. After merge, advance state via `eawf state phase close <NN>`.
+3. Validate artifact markdown and PR prose against the chassis/scrub
+   rules.
+4. Push the long-running feature branch.
+5. Open the phase PR via `gh pr create`.
+6. After merge, advance state via `eawf state phase close <NN>`.
 
 ## Pre-flight checklist
 
 - [ ] All waves under `<phase-id>` are complete.
 - [ ] Cherry-picks from worktree subagents have all landed.
+- [ ] `eawf artifact validate` passes for promoted markdown.
 - [ ] CI on the latest push is green.
 
 ## Decision surfaces
@@ -296,11 +308,15 @@ _REVIEW_BODY = """# /review
    context to make a judgment.
 3. Apply rules in order: correctness > security > clarity > style.
 4. Tag findings: 🔴 blocker, 🟠 must-fix, 🟡 should-fix, 🔵 nit.
+5. Check artifact chassis and dense references when reviewing docs or
+   promoted artifacts.
 
 ## Pre-flight checklist
 
 - [ ] Read the success criteria for the phase/wave the diff belongs to.
 - [ ] Verify any quantitative claim against `Read`/`grep`.
+- [ ] Verify markdown artifacts keep `Summary`, `References`,
+      `Provenance`, and `Scrub` sections.
 
 ## Decision surfaces
 
@@ -321,7 +337,7 @@ _POLISH_BODY = """# /polish
 1. Resolve scope: default = entire `src/eawf/`; `--scope=<dir|file>`
    narrows.
 2. Sweep checks: naming, docstrings, log fields, error message
-   phrasing, dead code.
+   phrasing, dead code, citation density, draft sentinels, scrub status.
 3. Apply fixes inline. If a change touches public API, stop and ask.
 
 ## Pre-flight checklist
