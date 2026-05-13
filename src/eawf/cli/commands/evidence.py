@@ -49,6 +49,7 @@ from eawf.evidence import (
     outcome as outcome_evi,
 )
 from eawf.evidence._io import append_jsonl, load_state, store_paths
+from eawf.render.audit_report import render_audit_markdown
 from eawf.state.enums import (
     AuditKind,
     AuditStatus,
@@ -629,6 +630,7 @@ def audit_set_verdict(
 def audit_show(
     ctx: typer.Context,
     audit_id: Annotated[str, typer.Argument(help="Audit id")],
+    md: Annotated[bool, typer.Option("--md", help="Render markdown artifact body.")] = False,
 ) -> None:
     """Show metadata for one audit."""
     flags = _flags(ctx)
@@ -636,6 +638,9 @@ def audit_show(
     state = _run_read(flags, load_state, state_path)
 
     audit = _run_read(flags, audit_evi.show_audit, state, audit_id)
+    if md:
+        typer.echo(render_audit_markdown(audit), nl=False)
+        return
     payload = json.loads(audit.model_dump_json())
     _emit(
         payload,
