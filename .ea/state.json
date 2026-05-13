@@ -1025,7 +1025,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P15-I01",
+    "iter_id": null,
     "phase_id": "P15",
     "project_code": "EAWF",
     "subproject_id": null
@@ -1518,13 +1518,13 @@
       ]
     },
     "P15-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A20-P15",
+      "closed_at": "2026-05-13T13:34:56.380307Z",
       "estimate_id": null,
       "id": "P15-I01",
       "opened_at": "2026-05-13T12:39:30.071505Z",
       "phase_id": "P15",
-      "status": "active",
+      "status": "closed",
       "title": "Skills execution seam",
       "wave_ids": [
         "P15-I01-W01",
@@ -1783,7 +1783,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:52:39.089486Z",
+  "updated_at": "2026-05-13T13:34:56.380339Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
