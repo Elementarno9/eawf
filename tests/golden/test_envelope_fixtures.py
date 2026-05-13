@@ -111,7 +111,7 @@ def _valid_envelope_examples() -> list[dict[str, Any]]:
     for status in _STATUSES:
         examples.append(_load_fixture(status))
 
-    # One per skill literal (keeps the rest minimal).
+    # One per builtin skill plus one overlay skill (keeps the rest minimal).
     for skill in (
         "/research",
         "/prep",
@@ -123,12 +123,14 @@ def _valid_envelope_examples() -> list[dict[str, Any]]:
         "/roadmap",
         "/differentiate",
         "/flow",
+        "/blitz",
+        "/workspace-overlay",
     ):
         env = copy.deepcopy(base)
         env["header"]["skill"] = skill
         examples.append(env)
 
-    # Adds up to 5 + 10 = 15 — safely above the ≥10 requirement.
+    # Adds up to 5 + 12 = 17 — safely above the ≥10 requirement.
     return examples
 
 
@@ -162,9 +164,9 @@ def _invalid_envelope_examples() -> list[dict[str, Any]]:
     del e["header"]["started_at"]
     invalid.append(e)
 
-    # 6. Unknown skill literal.
+    # 6. Skill name must be a string, even though overlay names are open.
     e = copy.deepcopy(base)
-    e["header"]["skill"] = "/unknown-skill"
+    e["header"]["skill"] = 123
     invalid.append(e)
 
     # 7. Unknown status literal.
