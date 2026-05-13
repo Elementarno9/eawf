@@ -1783,7 +1783,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:51:00.912256Z",
+  "updated_at": "2026-05-13T12:52:39.089486Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3182,7 +3182,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260513T123700Z-codex",
       "path": ".ea/local/worktrees/p15-w04",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P15-I01-W04"
     }
   }
