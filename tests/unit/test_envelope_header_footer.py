@@ -5,7 +5,7 @@ models with ``extra="forbid"``. These tests pin:
 
 - the required-field set (skill, scope_id, session, started_at,
   finished_at, status);
-- the frozen literal enums (skill, status, instrument_probe values);
+- the status / instrument_probe enums;
 - the ``extra="forbid"`` rejection on unknown keys for both header and
   footer; and
 - the optional/defaulted fields on the footer (every list defaults to
@@ -44,10 +44,10 @@ def test_header_round_trip_json() -> None:
     assert parsed == header
 
 
-def test_header_rejects_unknown_skill_literal() -> None:
-    """``header.skill`` is a frozen Literal; arbitrary names are rejected."""
-    with pytest.raises(ValidationError, match="Input should be"):
-        EnvelopeHeader(**_base_header(skill="research-spike"))  # type: ignore[arg-type]
+def test_header_accepts_overlay_skill_names() -> None:
+    """``header.skill`` accepts workspace/user overlay names."""
+    header = EnvelopeHeader(**_base_header(skill="/research-spike"))  # type: ignore[arg-type]
+    assert header.skill == "/research-spike"
 
 
 def test_header_rejects_unknown_status_literal() -> None:

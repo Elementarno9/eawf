@@ -165,6 +165,7 @@ def test_install_codex_user_scope_conflict_gate(
         "eawf.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
+    monkeypatch.setattr("eawf.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
     res = runner.invoke(
         app,
         [
@@ -193,6 +194,7 @@ def test_install_codex_user_scope_force_bypasses_gate(
         "eawf.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
+    monkeypatch.setattr("eawf.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
     res = runner.invoke(
         app,
         [
@@ -249,6 +251,7 @@ def test_install_codex_user_scope_skips_clash_gate(
         "eawf.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
+    monkeypatch.setattr("eawf.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
     res = runner.invoke(
         app,
         [

@@ -42,6 +42,8 @@ def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     state_path = state_dir / "state.json"
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(state_dir / "instrument-probe.json"))
+    monkeypatch.delenv("EAWF_BLITZ_DEPTH", raising=False)
+    monkeypatch.delenv("EAWF_BLITZ_DEPTH_COUNTER", raising=False)
     return state_dir
 
 
