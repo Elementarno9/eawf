@@ -47,9 +47,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # (canonical-list row "Skill envelope | header.status").
 EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 
-# Frozen skill name enum. Mirrors `docs/architecture/envelope.md`: six core +
-# four meta workflow skills.
-SkillName = Literal[
+# Canonical builtin skill names. Workspace/user overlays may also emit
+# envelopes, so ``SkillName`` is intentionally open while this tuple preserves
+# deterministic builtin ordering for CLI tables and plugin rendering.
+CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/research",
     "/prep",
     "/audit",
@@ -60,7 +61,8 @@ SkillName = Literal[
     "/roadmap",
     "/differentiate",
     "/flow",
-]
+)
+SkillName = str
 
 # Per-instrument probe value. Mirrors the design spec §3.1 envelope shape.
 InstrumentStatus = Literal["ok", "missing", "degraded"]
@@ -354,6 +356,7 @@ def from_markdown(text: str) -> OutputEnvelope:
 
 
 __all__ = [
+    "CANONICAL_SKILL_NAMES",
     "EnvelopeBody",
     "EnvelopeFooter",
     "EnvelopeHeader",

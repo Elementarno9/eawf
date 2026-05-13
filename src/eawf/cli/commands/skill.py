@@ -41,8 +41,9 @@ from __future__ import annotations
 import io
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, cast, get_args
+from typing import Annotated, Any, cast
 
 import orjson
 import typer
@@ -53,6 +54,9 @@ from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.render.envelope import (
+    CANONICAL_SKILL_NAMES,
+    EnvelopeFooter,
+    EnvelopeHeader,
     EnvelopeStatus,
     OutputEnvelope,
     SkillName,
@@ -129,7 +133,7 @@ def _all_skill_names() -> list[SkillName]:
     :func:`typing.get_args` so the list never drifts from the frozen
     literal.
     """
-    return list(get_args(SkillName))
+    return list(CANONICAL_SKILL_NAMES)
 
 
 def _resolve_skill_name(raw: str) -> SkillName:
@@ -142,7 +146,7 @@ def _resolve_skill_name(raw: str) -> SkillName:
     Raises:
         InvalidInput: ``raw`` is not one of the ten canonical names.
     """
-    candidate = raw if raw.startswith("/") else f"/{raw}"
+    candidate = _normalise_skill_input(raw)
     valid = _all_skill_names()
     if candidate not in valid:
         raise cli_errors.InvalidInput(f"unknown skill {raw!r}; expected one of {sorted(valid)}")
@@ -168,6 +172,53 @@ def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
             f"stdin payload must be a JSON object; got {type(decoded).__name__}"
         )
     return cast(dict[str, Any], decoded)
+
+
+def _normalise_skill_input(raw: str) -> str:
+    """Return slash-prefixed skill name."""
+    return raw if raw.startswith("/") else f"/{raw}"
+
+
+def _overlay_envelope(
+    *,
+    name: str,
+    source: str,
+    path: Path | None,
+    body: str,
+    ctx: SkillContext,
+    args: dict[str, Any],
+) -> OutputEnvelope:
+    """Build a dispatch envelope for a discovered markdown skill overlay."""
+    started_at = datetime.now(UTC)
+    finished_at = datetime.now(UTC)
+    return OutputEnvelope(
+        header=EnvelopeHeader(
+            skill=name,
+            scope_id=ctx.scope,
+            session=ctx.session,
+            started_at=started_at,
+            finished_at=finished_at,
+            status="ok",
+            instrument_probe={},
+        ),
+        body={
+            "kind": "skill_overlay_dispatch",
+            "name": name,
+            "source": source,
+            "path": str(path) if path is not None else None,
+            "args": args,
+            "body": body,
+        },
+        footer=EnvelopeFooter(
+            persisted_artifacts=[],
+            persisted_store_records=[],
+            state_mutations=[],
+            evidence_refs=[],
+            next_valid_actions=[],
+            warnings=[],
+            repair_commands=None,
+        ),
+    )
 
 
 def _exit_for_status(status: EnvelopeStatus) -> int:
@@ -492,13 +543,48 @@ def run_cmd(
     flags: GlobalFlags = ctx.obj
 
     try:
-        skill_name = _resolve_skill_name(name)
+        candidate = _normalise_skill_input(name)
         # Skip stdin on a TTY so interactive runs don't block on EOF.
         stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
         args = _parse_stdin_args(stdin_text)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+
+    from eawf.skills.discovery import discover_skills
+
+    overlay = next(
+        (
+            row
+            for row in discover_skills(workspace=flags.workspace)
+            if row.name == candidate and row.source in {"workspace", "user"}
+        ),
+        None,
+    )
+    if overlay is not None:
+        skill_ctx = SkillContext(scope=scope, session=session, args=args)
+        envelope = _overlay_envelope(
+            name=overlay.name,
+            source=overlay.source,
+            path=overlay.path,
+            body=overlay.body,
+            ctx=skill_ctx,
+            args=args,
+        )
+        _emit_envelope(envelope, as_json=flags.json_output)
+        return
+
+    if candidate not in _all_skill_names():
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"unknown skill {name!r}; expected one of {sorted(_all_skill_names())} "
+                "or a workspace/user skill"
+            ),
+            flags=flags,
+        )
+        return
+
+    skill_name = cast(SkillName, candidate)
 
     skill_cls = registry.lookup(skill_name)
     if skill_cls is None:
