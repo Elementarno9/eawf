@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from eawf.render.envelope import SkillName
@@ -49,12 +50,31 @@ from eawf.skills.bodies.research import (
 from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.skills.registry import register
+from eawf.state.enums import StoreKind
+from eawf.store.append import append_envelope
+from eawf.store.envelope import Envelope
+from eawf.store.kinds.research import ResearchPayload
+from eawf.store.paths import store_path
 
 logger = logging.getLogger(__name__)
 
 
 _VALID_DEPTHS: tuple[str, ...] = ("quick", "normal", "deep")
 _DEFAULT_DEPTH: str = "normal"
+
+
+def _bool_arg(args: dict[str, Any], *names: str, default: bool = False) -> bool:
+    """Return a bool-ish skill arg from the first present key."""
+    for name in names:
+        if name not in args:
+            continue
+        raw = args[name]
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(raw)
+    return default
 
 
 def _depth_to_question_slots(depth: str) -> int:
@@ -69,6 +89,40 @@ def _depth_to_question_slots(depth: str) -> int:
     if depth == "deep":
         return 3
     return 2  # normal
+
+
+def _research_brief_urn(brief_id: str) -> str:
+    """Return the public URN for a persisted research brief."""
+    return f"urn:eawf:v1:store:research/{brief_id}"
+
+
+def _append_research_brief(
+    *,
+    state_path: Any,
+    scope_id: str,
+    brief_id: str,
+    topic: str,
+    questions: list[ResearchQuestion],
+) -> str:
+    """Append one research-store record and return its public URN."""
+    now = datetime.now(UTC)
+    findings = [f"{q.q} {q.answer}".strip() for q in questions]
+    sources = sorted({src for q in questions for src in q.sources})
+    payload = ResearchPayload(topic=topic, findings=findings, sources=sources)
+    envelope = Envelope(
+        schema_version="1.0",
+        id=brief_id,
+        kind=StoreKind.RESEARCH,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=f"research brief {brief_id}: {topic[:120]}",
+        payload=payload.model_dump(mode="json"),
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(store_path(state_path, StoreKind.RESEARCH), envelope)
+    return _research_brief_urn(brief_id)
 
 
 @register
@@ -86,6 +140,8 @@ class ResearchSkill(Skill):
         args: dict[str, Any] = dict(ctx.args)
         raw_depth = str(args.get("depth", _DEFAULT_DEPTH))
         depth = raw_depth if raw_depth in _VALID_DEPTHS else _DEFAULT_DEPTH
+        topic = str(args.get("topic") or args.get("message") or scope_id)
+        final_requested = _bool_arg(args, "final", "save", default=False)
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
@@ -225,8 +281,18 @@ class ResearchSkill(Skill):
         )
         persisted_records.append(evt_id)
 
-        # Step 9 — persist brief artifact (v0.1: leave as None placeholder; a
-        # later wave wires --save to the artifact subsystem).
+        persisted_brief: str | None = None
+        if final_requested:
+            persisted_brief = _append_research_brief(
+                state_path=state_path,
+                scope_id=scope_id,
+                brief_id=brief_id,
+                topic=topic,
+                questions=questions,
+            )
+            persisted_records.append(persisted_brief)
+
+        # Step 9 — persist brief when explicitly requested.
         # Step 10 — record decisions / artefacts (v0.1: omitted; the audit
         # path captures verdicts).
 
@@ -236,7 +302,7 @@ class ResearchSkill(Skill):
             options=options,
             recommendation=recommendation,
             peer_review=None,
-            persisted_brief=None,
+            persisted_brief=persisted_brief,
         )
 
         return SkillResult(

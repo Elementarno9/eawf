@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+import orjson
 import pytest
 
 from eawf.render.envelope import EnvelopeWarning
@@ -36,6 +37,8 @@ def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     state_path = state_dir / "state.json"
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(state_dir / "instrument-probe.json"))
+    monkeypatch.delenv("EAWF_BLITZ_DEPTH", raising=False)
+    monkeypatch.delenv("EAWF_BLITZ_DEPTH_COUNTER", raising=False)
     return state_dir
 
 
@@ -138,6 +141,30 @@ def test_research_default_next_actions_present(state_dir: Path) -> None:
     skill = ResearchSkill()
     env = run_skill(skill, _ctx())
     assert "eawf prep" in env.footer.next_valid_actions
+
+
+def test_research_default_does_not_persist_research_brief(state_dir: Path) -> None:
+    skill = ResearchSkill()
+    env = run_skill(skill, _ctx())
+    body = ResearchBody.model_validate(cast(dict, env.body))
+    assert body.persisted_brief is None
+    assert not (state_dir / "store" / "research.jsonl").exists()
+
+
+def test_research_final_persists_research_brief(state_dir: Path) -> None:
+    skill = ResearchSkill()
+    ctx = _ctx()
+    ctx.args = {"topic": "demo topic", "final": True}
+    env = run_skill(skill, ctx)
+    body = ResearchBody.model_validate(cast(dict, env.body))
+    assert body.persisted_brief == f"urn:eawf:v1:store:research/{body.brief_id}"
+    records = (state_dir / "store" / "research.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(records) == 1
+    record = orjson.loads(records[0])
+    assert record["id"] == body.brief_id
+    assert record["kind"] == "research"
+    assert record["payload"]["topic"] == "demo topic"
+    assert body.persisted_brief in env.footer.persisted_store_records
 
 
 def test_research_skill_registered_with_canonical_name() -> None:
