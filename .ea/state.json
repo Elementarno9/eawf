@@ -136,6 +136,16 @@
       "uri": "repo:.ea/artifacts/A20-P15-p15-skills-audit.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A20-P15"
     },
+    "ART-A21-P16": {
+      "created_at": "2026-05-13T23:35:46.141562Z",
+      "id": "ART-A21-P16",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/A21-P16-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-A21-P16"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -364,6 +374,17 @@
       "integrity_results": [],
       "kind": "review",
       "report_artifact_id": "ART-A20-P15",
+      "scope_id": "EAWF",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A21-P16": {
+      "check_results": [],
+      "created_at": "2026-05-13T23:35:46.744015Z",
+      "id": "A21-P16",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A21-P16",
       "scope_id": "EAWF",
       "status": "complete",
       "verdict": "pass"
@@ -1749,6 +1770,18 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Skills (/research flags, /blitz, registry seam)"
+    },
+    "P16": {
+      "audit_id": "A21-P16",
+      "closed_at": "2026-05-13T23:35:47.345432Z",
+      "id": "P16",
+      "iter_ids": [],
+      "opened_at": "2026-05-13T23:35:45.522704Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "closed",
+      "subproject_id": null,
+      "title": "Artifact chassis and estimation"
     }
   },
   "plugins": {},
@@ -1783,10 +1816,11 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T13:53:40.304269Z",
+  "updated_at": "2026-05-13T23:35:47.345468Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:29:29.132215Z",
@@ -1794,6 +1828,7 @@
       "deps": [
         "P08-I01-W02"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/dispatch/**",
         "src/eawf/cli/commands/wave_dispatch.py",
@@ -1804,12 +1839,14 @@
       "opened_at": "2026-05-10T21:46:45.260116Z",
       "outcome": "subagent prompt renderer + wave dispatch/dispatch-batch CLI (17 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B025 subagent prompt renderer (wave dispatch)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W01-1778451220"
     },
     "P08-I01-W02": {
+      "agent_role": null,
       "blocks": [
         "P08-I01-W01",
         "P08-I01-W03"
@@ -1818,6 +1855,7 @@
       "closed_at": "2026-05-10T22:13:08.058437Z",
       "commit": "149de74",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
         "src/eawf/state/migrations/**",
@@ -1829,12 +1867,14 @@
       "opened_at": "2026-05-10T21:46:39.762631Z",
       "outcome": "DAG persistence: blocks index + cycle check + graph/next-ready verbs (24 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B026 wave DAG persistence in state.waves",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W02-1778449665"
     },
     "P08-I01-W03": {
+      "agent_role": null,
       "blocks": [
         "P08-I01-W05",
         "P08-I01-W06"
@@ -1845,6 +1885,7 @@
       "deps": [
         "P08-I01-W02"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/worktree/merge_back.py",
         "src/eawf/cli/commands/worktree.py",
@@ -1855,17 +1896,20 @@
       "opened_at": "2026-05-10T21:46:40.156927Z",
       "outcome": "wave land cherry-pick automation + wave land-batch (13 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B027 cherry-pick automation (wave land)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W03-1778451221"
     },
     "P08-I01-W04": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:13:08.501855Z",
       "commit": "e80e35d",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/budget/**",
         "src/eawf/cli/commands/wave_budget.py",
@@ -1876,12 +1920,14 @@
       "opened_at": "2026-05-10T21:46:40.551109Z",
       "outcome": "token-budget cap: Wave.token_budget/tokens_consumed + budget pkg + wave budget set/consume/show + claim gate (24 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B028 per-wave token-budget cap",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W04-1778449666"
     },
     "P08-I01-W05": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:46:30.776412Z",
@@ -1889,6 +1935,7 @@
       "deps": [
         "P08-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/ci_loop/**",
         "src/eawf/cli/commands/wave_fix_ci.py",
@@ -1899,12 +1946,14 @@
       "opened_at": "2026-05-10T21:46:40.954397Z",
       "outcome": "CI-fix loop: pytest/ruff/mypy parser + wave fix-ci/fix-ci-loop CLI (14 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B040 CI-fix loop (wave fix-ci)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W05-1778452198"
     },
     "P08-I01-W06": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:46:31.147208Z",
@@ -1912,6 +1961,7 @@
       "deps": [
         "P08-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/pr_review/**",
         "src/eawf/cli/commands/wave_review.py",
@@ -1922,12 +1972,14 @@
       "opened_at": "2026-05-10T21:46:41.350163Z",
       "outcome": "PR review automation: findings parser + verdict policy + wave review CLI (19 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B041 PR review automation",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P08-I01-W06-1778452198"
     },
     "P09-I01-W01": {
+      "agent_role": null,
       "blocks": [
         "P09-I01-W04"
       ],
@@ -1935,6 +1987,7 @@
       "closed_at": "2026-05-11T08:18:14.020785Z",
       "commit": "91c7e469e5121dd16b2f4e2d7f35f55dd2a8650d",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py",
         "src/eawf/worktree/wave_land.py",
@@ -1945,17 +1998,20 @@
       "opened_at": "2026-05-11T08:16:04.388462Z",
       "outcome": "Dedup _insort to bisect.insort; rename project_init→project_init_cmd",
       "status": "closed",
+      "success_criteria": [],
       "title": "DRY _insort to shared util; rename project_init→project_init_cmd",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P09-I01-W02": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:20:17.430900Z",
       "commit": "5571d1408148fc4d49e2f7f1f59d9661ab37949f",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
         "tests/state/test_models_blocks_invariant.py"
@@ -1965,17 +2021,20 @@
       "opened_at": "2026-05-11T08:16:10.471461Z",
       "outcome": "Add check_wave_blocks_invariant + INV.GRAPH.{BLOCKS,DEPS}_MISSING_REVERSE codes; ALL_INVARIANTS extended",
       "status": "closed",
+      "success_criteria": [],
       "title": "State-level validator for Wave.blocks reverse-index invariant",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P09-I01-W03": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:21:40.313753Z",
       "commit": "3b5b2fb927d9c27e981632c9e7f36a02cd184430",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/worktree.py",
         "tests/cli/test_worktree_path_fix.py"
@@ -1985,12 +2044,14 @@
       "opened_at": "2026-05-11T08:16:11.236826Z",
       "outcome": "Cross-platform abs-path detection in worktree path-fix via PurePosixPath/PureWindowsPath; helper extracted + tested",
       "status": "closed",
+      "success_criteria": [],
       "title": "Cross-platform absoluteness check in worktree path-fix",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P09-I01-W04": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:23:58.605660Z",
@@ -1998,6 +2059,7 @@
       "deps": [
         "P09-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py",
         "tests/cli/test_wave_budget_consume.py"
@@ -2007,12 +2069,14 @@
       "opened_at": "2026-05-11T08:16:12.495035Z",
       "outcome": "Surface discarded delta + pre-rollback consumed in budget-consume block error; rollback persistence documented + tested",
       "status": "closed",
+      "success_criteria": [],
       "title": "Surface discarded_delta in wave budget consume envelope on rollback",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P10-I01-W01": {
+      "agent_role": null,
       "blocks": [
         "P10-I01-W04"
       ],
@@ -2020,6 +2084,7 @@
       "closed_at": "2026-05-11T10:43:00.505929Z",
       "commit": "1a842fc",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/skill.py",
         "src/eawf/render/skills.py",
@@ -2031,12 +2096,14 @@
       "opened_at": "2026-05-11T10:19:48.876900Z",
       "outcome": "skill render command (B024): render_skill_md_from_spec helper, --format=skill-md|json, byte-equal to plugin_install render",
       "status": "closed",
+      "success_criteria": [],
       "title": "Skill render command",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P10-I01-W01-1778494889"
     },
     "P10-I01-W02": {
+      "agent_role": null,
       "blocks": [
         "P10-I01-W04"
       ],
@@ -2044,6 +2111,7 @@
       "closed_at": "2026-05-11T10:43:01.565652Z",
       "commit": "3fcdfa6",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
         "src/eawf/cli/commands/mcp.py",
@@ -2058,12 +2126,14 @@
       "opened_at": "2026-05-11T10:19:50.323650Z",
       "outcome": "mcp_grants table + grant/revoke CLI + INV.REF.MCP_GRANT_SERVER_MISSING invariant + schema regen (B035)",
       "status": "closed",
+      "success_criteria": [],
       "title": "MCP grants state table + CLI",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P10-I01-W02-1778494890"
     },
     "P10-I01-W03": {
+      "agent_role": null,
       "blocks": [
         "P10-I01-W04"
       ],
@@ -2071,6 +2141,7 @@
       "closed_at": "2026-05-11T10:43:02.296715Z",
       "commit": "6766d07",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/mcp/installer.py",
         "src/eawf/dispatch/renderer.py",
@@ -2083,12 +2154,14 @@
       "opened_at": "2026-05-11T10:19:51.534514Z",
       "outcome": "claude-agent-sdk dispatch adapter: render_dispatch_envelope pure-fn + --runtime CLI flag, no new runtime deps",
       "status": "closed",
+      "success_criteria": [],
       "title": "claude-agent-sdk dispatch adapter",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P10-I01-W03-1778494891"
     },
     "P10-I01-W04": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "p10-flow-w04",
       "closed_at": "2026-05-11T10:50:04.485389Z",
@@ -2098,6 +2171,7 @@
         "P10-I01-W02",
         "P10-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "tests/integration/test_dual_runtime_envelope.py",
         ".ea/artifacts/A11-P10-ship-gate.md"
@@ -2107,12 +2181,14 @@
       "opened_at": "2026-05-11T10:19:55.225521Z",
       "outcome": "ship-gate dual-runtime envelope equivalence verified (6 integration tests + A11-P10 audit pass)",
       "status": "closed",
+      "success_criteria": [],
       "title": "Ship-gate dual-runtime envelope demo",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P11-I01-W01": {
+      "agent_role": null,
       "blocks": [
         "P11-I01-W03"
       ],
@@ -2120,6 +2196,7 @@
       "closed_at": "2026-05-11T11:49:56.625542Z",
       "commit": "f951ea1",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/config/defaults.py",
         "tests/unit/test_config_layered.py"
@@ -2129,12 +2206,14 @@
       "opened_at": "2026-05-11T11:38:24.463815Z",
       "outcome": "Config defaults: planning.auto_plan + flow.auto_accept per-stage + flow.ask_on_decisions; _ConfigSchema extended",
       "status": "closed",
+      "success_criteria": [],
       "title": "Config defaults: planning.auto_plan + flow.auto_accept",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P11-I01-W02": {
+      "agent_role": null,
       "blocks": [
         "P11-I01-W03"
       ],
@@ -2142,6 +2221,7 @@
       "closed_at": "2026-05-11T11:49:57.680282Z",
       "commit": "def9dd2",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/skills.py"
       ],
@@ -2150,12 +2230,14 @@
       "opened_at": "2026-05-11T11:38:25.070841Z",
       "outcome": "SkillSpec body updates: _PREP_BODY plan-mode gate, _FLOW_BODY inter-stage gate, decision-surfaces in 5 remaining bodies; argument hints expose --auto-plan / --auto-accept",
       "status": "closed",
+      "success_criteria": [],
       "title": "SKILL.md bodies: plan-mode prep + AskUserQuestion flow",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P11-I01-W03": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T11:49:58.312420Z",
@@ -2164,6 +2246,7 @@
         "P11-I01-W01",
         "P11-I01-W02"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "build/eawf-plugin/skills/**",
         "tests/unit/test_skill_registry_p11.py"
@@ -2173,17 +2256,20 @@
       "opened_at": "2026-05-11T11:38:28.724159Z",
       "outcome": "Golden plugin tree regenerated byte-equal; tests/unit/test_skill_registry_p11.py pins 8 acceptance contracts",
       "status": "closed",
+      "success_criteria": [],
       "title": "Plugin tree re-emit + skill registry tests",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W01": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:05:27.792212Z",
       "commit": "062cb5d",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/decision_graph.py",
         "src/eawf/cli/commands/evidence.py",
@@ -2194,17 +2280,20 @@
       "opened_at": "2026-05-11T12:57:42.441739Z",
       "outcome": "Decision graph render (text/dot/mermaid) + 6 unit tests",
       "status": "closed",
+      "success_criteria": [],
       "title": "B029 decision graph render",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W02": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:09:07.015750Z",
       "commit": "518003b",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/memory/gc.py",
         "src/eawf/state/enums.py",
@@ -2218,17 +2307,20 @@
       "opened_at": "2026-05-11T12:57:42.852028Z",
       "outcome": "Memory GC + tiered memory (10 unit tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B030+B037 memory GC + tiered memory",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W03": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:13:40.278328Z",
       "commit": "ad45089",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/doctor/doc_verify.py",
         "src/eawf/cli/commands/doc.py",
@@ -2239,17 +2331,20 @@
       "opened_at": "2026-05-11T12:57:43.258193Z",
       "outcome": "Doc-drift linter (verify_docs + eawf doc verify CLI + 6 tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B031 doc-drift linter",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W04": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:16:03.556288Z",
       "commit": "f22b011",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/pr_body.py",
         "src/eawf/render/wiki.py",
@@ -2263,17 +2358,20 @@
       "opened_at": "2026-05-11T12:57:43.652488Z",
       "outcome": "PR body + project wiki render (5 unit tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B032+B038 PR body + wiki render",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W05": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:19:04.760498Z",
       "commit": "835437f",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "tests/eval/**",
         "pyproject.toml"
@@ -2283,17 +2381,20 @@
       "opened_at": "2026-05-11T12:57:44.040533Z",
       "outcome": "Skill eval harness (6 golden envelopes + pytest -m eval gate)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B033 skill eval harness",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W06": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:22:43.169235Z",
       "commit": "50a8a10",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/sandbox/**",
         "src/eawf/state/models.py",
@@ -2308,17 +2409,20 @@
       "opened_at": "2026-05-11T12:57:44.441254Z",
       "outcome": "Sandbox policy table + CLI + invariant (13 unit tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B034 sandbox policy",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P12-I01-W07": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:24:44.025187Z",
       "commit": "4b39414",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/impact.py",
         "src/eawf/cli/commands/impact.py",
@@ -2329,12 +2433,14 @@
       "opened_at": "2026-05-11T12:57:44.829037Z",
       "outcome": "File-impact graph render + impact CLI (6 unit tests)",
       "status": "closed",
+      "success_criteria": [],
       "title": "B039 file impact graph",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W01": {
+      "agent_role": null,
       "blocks": [
         "P13-I01-W02",
         "P13-I01-W04",
@@ -2345,6 +2451,7 @@
       "closed_at": "2026-05-11T14:14:04.500555Z",
       "commit": "4991af88ebe08ef678695606f8b5a5375a18b7a5",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         ".ea/state.json",
         ".ea/store/*.jsonl"
@@ -2354,12 +2461,14 @@
       "opened_at": "2026-05-11T14:12:53.989701Z",
       "outcome": "Closed 13 shipped backlog items (B025/B027/B029-B034/B037-B041) drifted since P08/P12",
       "status": "closed",
+      "success_criteria": [],
       "title": "Backlog hygiene — close 13 shipped items",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W02": {
+      "agent_role": null,
       "blocks": [
         "P13-I01-W03",
         "P13-I01-W06"
@@ -2370,6 +2479,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "tests/golden/scenarios/**",
         "pyproject.toml"
@@ -2379,12 +2489,14 @@
       "opened_at": "2026-05-11T14:12:57.733885Z",
       "outcome": "B009 golden scenarios — 4 cases (fresh_repo, byte-stable agents_md, enrich_existing, flow_full) under golden_scenarios marker",
       "status": "closed",
+      "success_criteria": [],
       "title": "B009 golden scenarios",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W03": {
+      "agent_role": null,
       "blocks": [
         "P13-I01-W06"
       ],
@@ -2394,6 +2506,7 @@
       "deps": [
         "P13-I01-W02"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/eval/**",
         "tests/eval/test_skill_eval.py",
@@ -2405,12 +2518,14 @@
       "opened_at": "2026-05-11T14:13:05.379970Z",
       "outcome": "B042 self-eval scoring — 6-dim weighted EvalScore + 0.85 threshold gate parametrised over 6 skills",
       "status": "closed",
+      "success_criteria": [],
       "title": "B042 self-eval scoring loop",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W04": {
+      "agent_role": null,
       "blocks": [
         "P13-I01-W06"
       ],
@@ -2420,6 +2535,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/audit_dsl/**",
         "src/eawf/cli/commands/evidence.py",
@@ -2433,12 +2549,14 @@
       "opened_at": "2026-05-11T14:12:59.217228Z",
       "outcome": "B019 audit-check DSL — 5 kinds + yaml runner + --checks CLI; D02 closed",
       "status": "closed",
+      "success_criteria": [],
       "title": "B019 audit-check DSL skeleton",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W05": {
+      "agent_role": null,
       "blocks": [
         "P13-I01-W06"
       ],
@@ -2448,6 +2566,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/claude/**",
         "build/eawf-plugin/**",
@@ -2461,12 +2580,14 @@
       "opened_at": "2026-05-11T14:13:00.581229Z",
       "outcome": "B015 plugin-mode hooks — 6 session-level events + hooks.json; eawf-internal lifecycle stays in state CLI",
       "status": "closed",
+      "success_criteria": [],
       "title": "B015 plugin-mode hooks",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W06": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:53:04.881059Z",
@@ -2478,6 +2599,7 @@
         "P13-I01-W05",
         "P13-I01-W07"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "pyproject.toml",
         "CHANGELOG.md",
@@ -2492,12 +2614,14 @@
       "opened_at": "2026-05-11T14:13:06.925391Z",
       "outcome": "Version bump 0.1.0→0.2.0; CHANGELOG mined P07..P13; doc scrub; B048+B049 v0.3 backlog filed",
       "status": "closed",
+      "success_criteria": [],
       "title": "Version bump 0.2.0 + CHANGELOG mine",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P13-I01-W07": {
+      "agent_role": null,
       "blocks": [
         "P13-I01-W06"
       ],
@@ -2507,6 +2631,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "docs/architecture/installation.md",
         "src/eawf/cli/commands/doctor.py",
@@ -2518,12 +2643,14 @@
       "opened_at": "2026-05-11T14:13:01.571308Z",
       "outcome": "B017 user-scope install — doctor --user-scope probe + update_plugin check=True",
       "status": "closed",
+      "success_criteria": [],
       "title": "B017 user-scope install",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W01": {
+      "agent_role": null,
       "blocks": [
         "P14-I01-W02"
       ],
@@ -2531,6 +2658,7 @@
       "closed_at": "2026-05-11T21:27:58.133113Z",
       "commit": "c343e2d",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/**",
         "src/eawf/cli/commands/phase.py",
@@ -2542,12 +2670,14 @@
       "opened_at": "2026-05-11T21:00:33.174379Z",
       "outcome": "hygiene preamble landed: phase prepare-close + D17 iter-bump hint + version-coupling test",
       "status": "closed",
+      "success_criteria": [],
       "title": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W02": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:31:58.495166Z",
@@ -2555,6 +2685,7 @@
       "deps": [
         "P14-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         ".pre-commit-config.yaml",
         "tools/commit_prefix_lint.py",
@@ -2566,12 +2697,14 @@
       "opened_at": "2026-05-11T21:28:10.662736Z",
       "outcome": "commit-prefix linter + detect-secrets baseline hash + doc verify pre-push wired",
       "status": "closed",
+      "success_criteria": [],
       "title": "Pre-commit hygiene + commit-prefix linter",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W03": {
+      "agent_role": null,
       "blocks": [
         "P14-I01-W04",
         "P14-I01-W06",
@@ -2581,6 +2714,7 @@
       "closed_at": "2026-05-11T21:39:06.329869Z",
       "commit": "3084191",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/install/wizard.py",
         "src/eawf/install/steps.py",
@@ -2594,12 +2728,14 @@
       "opened_at": "2026-05-11T21:32:18.747639Z",
       "outcome": "runtime.adapters list[str] + codex choice + legacy kind shim",
       "status": "closed",
+      "success_criteria": [],
       "title": "Profile-config schema bump: runtime.adapters list",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W04": {
+      "agent_role": null,
       "blocks": [
         "P14-I01-W05"
       ],
@@ -2609,6 +2745,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/profiles/loader.py",
         "src/eawf/profiles/discovery.py",
@@ -2619,12 +2756,14 @@
       "opened_at": "2026-05-11T21:39:25.044442Z",
       "outcome": "layered profile discovery + mtime cache; workspace > user > builtin",
       "status": "closed",
+      "success_criteria": [],
       "title": "Custom profile discovery roots + mtime cache",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W05": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:49:43.686353Z",
@@ -2632,6 +2771,7 @@
       "deps": [
         "P14-I01-W04"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/profile.py",
         "src/eawf/profiles/trust.py",
@@ -2644,12 +2784,14 @@
       "opened_at": "2026-05-11T21:44:21.784088Z",
       "outcome": "profile new --inherit + validate + TOFU trust ledger",
       "status": "closed",
+      "success_criteria": [],
       "title": "Profile new + validate + TOFU trust ledger",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W06": {
+      "agent_role": null,
       "blocks": [
         "P14-I01-W08"
       ],
@@ -2659,6 +2801,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/__init__.py",
         "src/eawf/runtimes/codex/hook_map.py",
@@ -2673,12 +2816,14 @@
       "opened_at": "2026-05-11T21:50:51.134918Z",
       "outcome": "Codex runtime adapter: install+doctor+TOML managed block",
       "status": "closed",
+      "success_criteria": [],
       "title": "Codex runtime adapter",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W07": {
+      "agent_role": null,
       "blocks": [
         "P14-I01-W08"
       ],
@@ -2688,6 +2833,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/opencode/__init__.py",
         "src/eawf/runtimes/opencode/plugin_install.py",
@@ -2701,12 +2847,14 @@
       "opened_at": "2026-05-11T21:57:51.148314Z",
       "outcome": "OpenCode plugin adapter: opencode.json + untyped plugin.js + doctor drift",
       "status": "closed",
+      "success_criteria": [],
       "title": "OpenCode plugin adapter (untyped js)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W08": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:24:14.309138Z",
@@ -2715,6 +2863,7 @@
         "P14-I01-W06",
         "P14-I01-W07"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/mcp/installer.py",
         "src/eawf/doctor/checks.py",
@@ -2725,17 +2874,20 @@
       "opened_at": "2026-05-11T22:15:48.229075Z",
       "outcome": "doctor check_mcp_drift + MCP installer runtime dispatch (claude+codex+opencode)",
       "status": "closed",
+      "success_criteria": [],
       "title": "MCP emit hardening + plugin doctor MCP drift",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W09": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:31:24.973405Z",
       "commit": "df190e3",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/skills/discovery.py",
         "src/eawf/cli/commands/skill.py",
@@ -2747,17 +2899,20 @@
       "opened_at": "2026-05-11T22:24:59.090192Z",
       "outcome": "layered skill discovery: workspace > user > builtin + --scope filter",
       "status": "closed",
+      "success_criteria": [],
       "title": "Skill registry + user catalogue",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W10": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:46:46.811276Z",
       "commit": "10377e4",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/tui/__init__.py",
         "src/eawf/tui/app.py",
@@ -2769,17 +2924,20 @@
       "opened_at": "2026-05-11T22:31:52.514972Z",
       "outcome": "rich-backed TUI scaffold + bare-eawf auto-launch + non-TTY status fallback",
       "status": "closed",
+      "success_criteria": [],
       "title": "TUI on rich + bare-eawf auto-launch",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I01-W11": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T23:01:22.700165Z",
       "commit": "54b9333",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
         "src/eawf/state/enums.py",
@@ -2794,17 +2952,20 @@
       "opened_at": "2026-05-11T22:47:23.381719Z",
       "outcome": "ArtifactKind enum + a11y profile stub + /blitz recursion guard",
       "status": "closed",
+      "success_criteria": [],
       "title": "Artifact-kind enum + a11y stub + /blitz skill scaffold",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I02-W01": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T18:28:41.232196Z",
       "commit": "21c6c0e",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/**",
         "src/eawf/runtimes/opencode/**",
@@ -2820,17 +2981,20 @@
       "opened_at": "2026-05-12T16:55:50.420692Z",
       "outcome": "Hotfix complete: codex marketplace package + display fixes. (1) Install/doctor text now derives real destination from result file paths instead of workspace pwd. (2) New `eawf plugin package codex` emits marketplace tree per Codex schema (name + interface.displayName + plugins[].{name,source,policy,category}); operator registers via `codex plugin marketplace add`. (3) Codex install command prints registration tip pointing at package command. 9 new unit tests + 2 integration tests pass; full suite (1851 unit + 380 integration) green; mypy clean.",
       "status": "closed",
+      "success_criteria": [],
       "title": "plugin install native layout + user scope",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I03-W01": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T18:58:48.589880Z",
       "commit": "2f716a3f76e90ea66761a57c0c1aa2ad85991048",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_doctor.py",
         "src/eawf/runtimes/codex/plugin_package.py",
@@ -2847,17 +3011,20 @@
       "opened_at": "2026-05-12T18:43:34.186139Z",
       "outcome": "B1+B3+B4 fixed: codex doctor plugin_root display, codex marketplace at .agents/plugins/marketplace.json, opencode emits 8 agents + 10 commands with $ARGUMENTS substitution. 2240 pytest pass, all three flows live-verified.",
       "status": "closed",
+      "success_criteria": [],
       "title": "codex doctor folder display + marketplace path + opencode agents/skills emission",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I04-W01": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:22.023040Z",
       "commit": "2b07ea9",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/lifecycle/transitions.py",
         "src/eawf/cli/commands/lifecycle.py"
@@ -2867,17 +3034,20 @@
       "opened_at": "2026-05-12T20:09:21.174742Z",
       "outcome": "shipped",
       "status": "closed",
+      "success_criteria": [],
       "title": "Add phase reopen CLI",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I04-W03": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:23.291579Z",
       "commit": "0305ece",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py",
         "src/eawf/runtimes/codex/plugin_package.py",
@@ -2888,17 +3058,20 @@
       "opened_at": "2026-05-12T20:09:22.438256Z",
       "outcome": "shipped",
       "status": "closed",
+      "success_criteria": [],
       "title": "Drop agents/ from codex plugin render",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I04-W04": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:24.561088Z",
       "commit": "e916bd4",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py",
         "src/eawf/runtimes/codex/plugin_package.py"
@@ -2908,17 +3081,20 @@
       "opened_at": "2026-05-12T20:09:23.704746Z",
       "outcome": "shipped",
       "status": "closed",
+      "success_criteria": [],
       "title": "Codex skill dir layout",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P14-I04-W05": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:25.802062Z",
       "commit": "2a7ac18",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py"
       ],
@@ -2927,12 +3103,14 @@
       "opened_at": "2026-05-12T20:09:24.983901Z",
       "outcome": "shipped",
       "status": "closed",
+      "success_criteria": [],
       "title": "Add interface block",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
     "P15-I01-W01": {
+      "agent_role": null,
       "blocks": [
         "P15-I01-W02",
         "P15-I01-W04"
@@ -2941,6 +3119,7 @@
       "closed_at": "2026-05-13T12:42:40.715867Z",
       "commit": "a018213",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/skills/research.py",
         "src/eawf/store/kinds/research.py",
@@ -2952,12 +3131,14 @@
       "opened_at": "2026-05-13T12:39:30.543548Z",
       "outcome": "Implemented /research args and final research-store persistence.",
       "status": "closed",
+      "success_criteria": [],
       "title": "/research args + final research-store persistence",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P15-I01-W01-1778676086"
     },
     "P15-I01-W02": {
+      "agent_role": null,
       "blocks": [
         "P15-I01-W04"
       ],
@@ -2967,6 +3148,7 @@
       "deps": [
         "P15-I01-W01"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/skills/blitz.py",
         "src/eawf/skills/research.py",
@@ -2981,12 +3163,14 @@
       "opened_at": "2026-05-13T12:39:31.512202Z",
       "outcome": "Registered /blitz and integrated /research auto-chain.",
       "status": "closed",
+      "success_criteria": [],
       "title": "Registered /blitz skill + /research auto-chain",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P15-I01-W02-1778676313"
     },
     "P15-I01-W03": {
+      "agent_role": null,
       "blocks": [
         "P15-I01-W04"
       ],
@@ -2994,6 +3178,7 @@
       "closed_at": "2026-05-13T12:44:45.255714Z",
       "commit": "a107780",
       "deps": [],
+      "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/skill.py",
         "src/eawf/skills/discovery.py",
@@ -3005,12 +3190,14 @@
       "opened_at": "2026-05-13T12:39:31.010828Z",
       "outcome": "Implemented executable workspace/user skill overlays.",
       "status": "closed",
+      "success_criteria": [],
       "title": "Executable workspace/user skill overlays",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P15-I01-W03-1778676197"
     },
     "P15-I01-W04": {
+      "agent_role": null,
       "blocks": [],
       "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": "2026-05-13T12:50:54.609631Z",
@@ -3020,6 +3207,7 @@
         "P15-I01-W02",
         "P15-I01-W03"
       ],
+      "effort_bucket": null,
       "file_scopes": [
         "tests/golden/**",
         "tests/integration/**",
@@ -3034,6 +3222,7 @@
       "opened_at": "2026-05-13T12:39:32.000777Z",
       "outcome": "Refreshed schemas, goldens, and P15 audit evidence.",
       "status": "closed",
+      "success_criteria": [],
       "title": "Docs, schemas, plugin goldens, audit evidence, and compatibility sweep",
       "token_budget": null,
       "tokens_consumed": 0,
