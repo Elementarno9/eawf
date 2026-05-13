@@ -109,12 +109,24 @@ def show_cmd(
             help="Emit JSON output (forces --format json).",
         ),
     ] = False,
+    md_output: Annotated[
+        bool,
+        typer.Option("--md", help="Emit markdown output (alias for --format markdown)."),
+    ] = False,
 ) -> None:
     """Print the active iter plan view (markdown or JSON)."""
     flags: GlobalFlags = ctx.obj
     parent_json = bool(flags.json_output)
     local_json = bool(json_output)
     json_requested = parent_json or local_json
+    if md_output:
+        fmt = _PlanFormat.MARKDOWN
+    if md_output and json_requested:
+        errors.emit_error(
+            errors.InvalidInput("--md and --json are contradictory"),
+            flags=flags,
+        )
+        return
 
     # Format conflict: --json plus an *explicit* --format markdown is
     # contradictory. We only fire when the user actually typed --format
