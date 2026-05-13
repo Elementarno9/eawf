@@ -289,3 +289,5 @@ class ArtifactKind(StrEnum):
     SCENE = "scene"
     PLAYTEST_SESSION = "playtest_session"
     CVE_REF = "cve_ref"
+    RESEARCH_BRIEF = "research_brief"
+    PLAN_SPEC = "plan_spec"

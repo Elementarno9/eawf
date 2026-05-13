@@ -28,6 +28,7 @@ from eawf.state.enums import (
 )
 from eawf.state.ids import parents_of
 from eawf.state.models import State
+from eawf.state.urn import parse as parse_urn
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +455,26 @@ def check_wave_blocks_invariant(state: State) -> Iterable[Violation]:
                 )
 
 
+def check_artifact_urns(state: State) -> Iterable[Violation]:
+    """Artifact URNs must be canonical artifact URNs."""
+    for artifact_id, artifact in state.artifacts.items():
+        try:
+            parsed = parse_urn(artifact.urn)
+        except ValueError as exc:
+            yield Violation(
+                code="INV.URN.ARTIFACT_INVALID",
+                path=f"/artifacts/{artifact_id}/urn",
+                message=str(exc),
+            )
+            continue
+        if parsed.kind != "artifact" or parsed.id != artifact.id:
+            yield Violation(
+                code="INV.URN.ARTIFACT_MISMATCH",
+                path=f"/artifacts/{artifact_id}/urn",
+                message=(f"artifact {artifact_id!r} urn targets {parsed.kind!r}/{parsed.id!r}"),
+            )
+
+
 def check_closure_timestamps(state: State) -> Iterable[Violation]:
     """Terminal-status entries must carry their closure timestamp (``INV.CLOSURE.*_NO_TIMESTAMP``).
 
@@ -558,4 +579,5 @@ ALL_INVARIANTS: tuple[Invariant, ...] = (
     check_scope_consistency,
     check_plugin_owners,
     check_wave_blocks_invariant,
+    check_artifact_urns,
 )
