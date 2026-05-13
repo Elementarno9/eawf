@@ -1765,7 +1765,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:39:32.945166Z",
+  "updated_at": "2026-05-13T12:41:26.143882Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2937,7 +2937,7 @@
       "title": "/research args + final research-store persistence",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P15-I01-W01-1778676086"
     },
     "P15-I01-W02": {
       "blocks": [
@@ -3122,6 +3122,17 @@
       "path": ".claude/worktrees/p10-w03",
       "status": "abandoned",
       "wave_id": "P10-I01-W03"
+    },
+    "WT-P15-I01-W01-1778676086": {
+      "base_branch": "feature/eawf-v0.3",
+      "branch": "feature/eawf-v0.3-p15-w01",
+      "created_at": "2026-05-13T12:41:26.143882Z",
+      "id": "WT-P15-I01-W01-1778676086",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260513T123700Z-codex",
+      "path": ".ea/local/worktrees/p15-w01",
+      "status": "active",
+      "wave_id": "P15-I01-W01"
     }
   }
 }
