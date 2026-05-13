@@ -62,7 +62,7 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert marketplace["plugins"][0]["source"] == "./"
     assert (target / "skills" / "research" / "SKILL.md").exists()
     assert (target / "skills" / "flow" / "SKILL.md").exists()
-    assert len(list((target / "skills").iterdir())) == 10
+    assert len(list((target / "skills").iterdir())) == 11
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
     # Session-level plugin hooks emitted by default (B015 — P13 W05).
@@ -135,7 +135,7 @@ def test_package_dry_run_writes_nothing(tmp_path: Path) -> None:
     result = package_plugin(target, dry_run=True)
     assert not target.exists()
     assert result.dry_run is True
-    assert len(result.skills) == 10
+    assert len(result.skills) == 11
     assert len(result.agents) == 8
     assert result.wrote_hooks is True
 
@@ -283,7 +283,7 @@ def test_package_cli_json_output(tmp_path: Path) -> None:
     assert payload["wrote_marketplace"] is True
     assert payload["wrote_readme"] is True
     assert payload["wrote_hooks"] is True
-    assert len(payload["skills"]) == 10
+    assert len(payload["skills"]) == 11
     assert len(payload["agents"]) == 8
     assert payload["target"].endswith("out")
 
