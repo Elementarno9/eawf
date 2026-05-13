@@ -10,9 +10,12 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LINT_PATH = _REPO_ROOT / "tools" / "commit_prefix_lint.py"
+_TOOL_DIR = _LINT_PATH.parent
 
 
 def _load_module():
+    if str(_TOOL_DIR) not in sys.path:
+        sys.path.insert(0, str(_TOOL_DIR))
     spec = importlib.util.spec_from_file_location("commit_prefix_lint", _LINT_PATH)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -26,18 +29,39 @@ def mod():
     return _load_module()
 
 
-_TRAILER = "\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"
+_CLAUDE_TRAILER = "\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"
+_CODEX_TRAILER = "\n\nCo-Authored-By: Codex <noreply@openai.com>\n"
 
 
 def _write_msg(tmp_path: Path, body: str, *, with_trailer: bool = True) -> Path:
     p = tmp_path / "COMMIT_EDITMSG"
-    payload = body if not with_trailer else body.rstrip() + _TRAILER
+    payload = body if not with_trailer else body.rstrip() + _CLAUDE_TRAILER
     p.write_text(payload, encoding="utf-8")
     return p
 
 
 def test_accepts_well_formed_wave_commit(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "[P14-W02] feat: add commit-prefix linter\n\nbody\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 0, diag
+
+
+def test_accepts_codex_coauthor_trailer(tmp_path: Path, mod) -> None:
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "[P14-W02] feat: add commit-prefix linter\n\nbody" + _CODEX_TRAILER,
+        encoding="utf-8",
+    )
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 0, diag
+
+
+def test_accepts_both_supported_coauthor_trailers(tmp_path: Path, mod) -> None:
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "[P14-W02] feat: add commit-prefix linter\n\nbody" + _CLAUDE_TRAILER + _CODEX_TRAILER,
+        encoding="utf-8",
+    )
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 0, diag
 
@@ -140,4 +164,15 @@ def test_rejects_missing_coauthor_trailer(tmp_path: Path, mod) -> None:
     )
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 1
-    assert "Co-Authored-By: Claude" in diag
+    assert "missing recognized co-author trailer" in diag
+
+
+def test_rejects_unrecognized_coauthor_trailer(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "[P14-W02] feat: add thing\n\nbody\n\nCo-Authored-By: Other <noreply@example.com>\n",
+        with_trailer=False,
+    )
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "missing recognized co-author trailer" in diag

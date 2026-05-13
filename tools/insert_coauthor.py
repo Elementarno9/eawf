@@ -1,9 +1,8 @@
-"""Prepare-commit-msg hook: append the canonical ``Co-Authored-By`` trailer.
+"""Prepare-commit-msg hook: append a recognized ``Co-Authored-By`` trailer.
 
-The trailer (``Co-Authored-By: Claude <noreply@anthropic.com>``) is
-appended whenever the commit message does not already carry it, so
-operator-authored, agent-authored, and tool-authored commits all share
-the same attribution surface.
+The active harness trailer is appended whenever the commit message does
+not already carry a recognized Claude or Codex trailer. If no harness is
+detected, the message is left unchanged.
 
 The hook deliberately stays silent on merge / squash / fixup / commit
 ``--amend -m`` invocations where the existing trailer set is what the
@@ -19,10 +18,13 @@ Exit codes:
 
 from __future__ import annotations
 
+import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
-_TRAILER: str = "Co-Authored-By: Claude <noreply@anthropic.com>"
+from coauthor_policy import has_supported_trailer, select_trailer
+
 _SKIP_SOURCES: frozenset[str] = frozenset({"merge", "squash", "commit"})
 
 
@@ -37,22 +39,25 @@ def _strip_comments(text: str) -> str:
 
 
 def _trailer_present(text: str) -> bool:
-    return "Co-Authored-By: Claude" in text
+    return has_supported_trailer(text)
 
 
-def append_trailer(message_path: Path) -> bool:
-    """Append the canonical trailer to *message_path* if absent.
+def append_trailer(message_path: Path, env: Mapping[str, str] | None = None) -> bool:
+    """Append the active harness trailer to *message_path* if absent.
 
     Returns ``True`` when the file was modified, ``False`` otherwise.
     """
     text = message_path.read_text(encoding="utf-8")
     if _trailer_present(text):
         return False
+    trailer = select_trailer(os.environ if env is None else env)
+    if trailer is None:
+        return False
     body = _strip_comments(text)
     if not body:
         return False
     sep = "\n" if body.endswith("\n") else "\n\n"
-    new_text = body + sep + _TRAILER + "\n"
+    new_text = body + sep + trailer + "\n"
     message_path.write_text(new_text, encoding="utf-8")
     return True
 
