@@ -23,6 +23,8 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.state.enums import (
+    AgentSessionRole,
+    EffortBucket,
     IterStatus,
     PhaseStatus,
     SubprojectStatus,
@@ -271,6 +273,9 @@ def plan_wave(
     title: str,
     file_scopes: list[str],
     deps: list[str] | None = None,
+    success_criteria: list[str] | None = None,
+    agent_role: AgentSessionRole | None = None,
+    effort_bucket: EffortBucket | None = None,
 ) -> Wave:
     """Insert a new wave with status ``pending``.
 
@@ -310,6 +315,9 @@ def plan_wave(
         deps=deps_list,
         blocks=[],
         file_scopes=list(file_scopes),
+        success_criteria=list(success_criteria or []),
+        agent_role=agent_role,
+        effort_bucket=effort_bucket,
         claim_session_id=None,
         worktree_id=None,
         commit=None,

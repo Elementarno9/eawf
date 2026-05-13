@@ -90,7 +90,9 @@ from eawf.lifecycle.transitions import (
 )
 from eawf.lock import portalock
 from eawf.state.enums import (
+    AgentSessionRole,
     AuditVerdict,
+    EffortBucket,
     IterStatus,
     ProjectStatus,
     ScopeKind,
@@ -912,6 +914,18 @@ def wave_plan_cmd(
         str | None,
         typer.Option("--deps", help="Comma-separated dep wave IDs (must already exist)."),
     ] = None,
+    success_criteria: Annotated[
+        str | None,
+        typer.Option("--success", help="Comma-separated success criteria."),
+    ] = None,
+    agent_role: Annotated[
+        AgentSessionRole | None,
+        typer.Option("--agent-role", help="Executor role expected for the wave."),
+    ] = None,
+    effort_bucket: Annotated[
+        EffortBucket | None,
+        typer.Option("--effort-bucket", help="XS/S/M/L/XL estimate bucket."),
+    ] = None,
 ) -> None:
     """Plan a new pending wave under an open iter."""
     flags: GlobalFlags = ctx.obj
@@ -935,6 +949,7 @@ def wave_plan_cmd(
         return
     file_list = [f.strip() for f in files.split(",") if f.strip()]
     deps_list = [d.strip() for d in (deps or "").split(",") if d.strip()]
+    criteria_list = [c.strip() for c in (success_criteria or "").split(",") if c.strip()]
     _run_mutation(
         ctx,
         command="wave plan",
@@ -944,6 +959,9 @@ def wave_plan_cmd(
             "title": title,
             "files": file_list,
             "deps": deps_list,
+            "success_criteria": criteria_list,
+            "agent_role": agent_role.value if agent_role else None,
+            "effort_bucket": effort_bucket.value if effort_bucket else None,
         },
         scope_id=wave_id,
         text=f"wave plan {wave_id} iter={iter_id} title={title!r}",
@@ -953,6 +971,9 @@ def wave_plan_cmd(
             "title": title,
             "files": file_list,
             "deps": deps_list,
+            "success_criteria": criteria_list,
+            "agent_role": agent_role.value if agent_role else None,
+            "effort_bucket": effort_bucket.value if effort_bucket else None,
         },
         mutate=lambda state: _wrap_no_return(
             plan_wave(
@@ -962,6 +983,9 @@ def wave_plan_cmd(
                 title=title,
                 file_scopes=file_list,
                 deps=deps_list,
+                success_criteria=criteria_list,
+                agent_role=agent_role,
+                effort_bucket=effort_bucket,
             )
         ),
     )

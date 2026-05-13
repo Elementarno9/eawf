@@ -225,6 +225,7 @@ def render_wave_prompt(
 
     sections: list[str] = []
     sections.append(_render_header(wave))
+    sections.append(_render_wave_tags(wave))
     sections.append(_render_scope(wave, scope_id=scope_id))
     sections.append(_render_dependencies(state, wave))
     sections.append(_render_decisions(state, scope_id=scope_id))
@@ -260,6 +261,18 @@ def _resolve_scope_for_wave(state: State, wave: Wave) -> str:
 
 def _render_header(wave: Wave) -> str:
     return f"# Wave {wave.id}: {wave.title}"
+
+
+def _render_wave_tags(wave: Wave) -> str:
+    role = wave.agent_role.value if wave.agent_role else "unspecified"
+    bucket = wave.effort_bucket.value if wave.effort_bucket else "unspecified"
+    lines = ["## Wave tags", "", f"- agent_role: {role}", f"- effort_bucket: {bucket}"]
+    if wave.success_criteria:
+        lines.append("- success_criteria:")
+        lines.extend(f"  - {criterion}" for criterion in wave.success_criteria)
+    else:
+        lines.append("- success_criteria: none")
+    return "\n".join(lines)
 
 
 def _render_scope(wave: Wave, *, scope_id: str) -> str:

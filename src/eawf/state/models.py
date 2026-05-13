@@ -24,6 +24,7 @@ from eawf.state.enums import (
     BacklogStatus,
     Confidence,
     DecisionStatus,
+    EffortBucket,
     FlowStatus,
     GoalStatus,
     Health,
@@ -216,6 +217,9 @@ class Wave(_StrictModel):
     deps: list[WaveIdStr] = Field(default_factory=list)
     blocks: list[WaveIdStr] = Field(default_factory=list)
     file_scopes: list[str] = Field(default_factory=list)
+    success_criteria: list[str] = Field(default_factory=list)
+    agent_role: AgentSessionRole | None = None
+    effort_bucket: EffortBucket | None = None
     claim_session_id: str | None = None
     worktree_id: str | None = None
     token_budget: Annotated[int | None, Field(ge=0)] = None
