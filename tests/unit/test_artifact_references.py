@@ -16,6 +16,37 @@ from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.scrub.scan import rewrite_text, scan_text
 
 
+def _artifact_body(
+    *,
+    summary: str = "Done.",
+    references: str = "(none)",
+    provenance: str = "- kind: plan",
+    scrub: str = "- status: clean",
+) -> str:
+    return "\n".join(
+        [
+            "# Plan",
+            "",
+            "## Summary",
+            "",
+            summary,
+            "",
+            "## References",
+            "",
+            references,
+            "",
+            "## Provenance",
+            "",
+            provenance,
+            "",
+            "## Scrub",
+            "",
+            scrub,
+            "",
+        ]
+    )
+
+
 def test_validate_dense_citations_accepts_repo_url_and_urn_refs() -> None:
     citations = [
         Citation(n=1, ref="src/eawf/state/models.py:1", kind="repo"),
@@ -65,25 +96,60 @@ def test_validate_markdown_artifact_accepts_sentinel_before_h1() -> None:
     body = "\n".join(
         [
             "<!-- eawf-template: plan -->",
-            "# Plan",
-            "",
-            "## Summary",
-            "",
-            "Done.",
-            "",
-            "## References",
-            "",
-            "(none)",
-            "",
-            "## Provenance",
-            "",
-            "- kind: plan",
-            "",
-            "## Scrub",
-            "",
-            "- status: clean",
-            "",
+            _artifact_body(),
         ]
     )
     report = validate_markdown_artifact(body, require_template_sentinel=True)
     assert report.ok
+
+
+def test_validate_markdown_artifact_requires_provenance_content() -> None:
+    report = validate_markdown_artifact(_artifact_body(provenance="(none)"))
+    assert "provenance section is empty" in report.errors
+
+
+def test_validate_markdown_artifact_requires_clean_scrub_status() -> None:
+    report = validate_markdown_artifact(_artifact_body(scrub="- status: dirty"))
+    assert "scrub status must be clean" in report.errors
+
+
+def test_validate_markdown_artifact_accepts_dense_markdown_reference_rows() -> None:
+    report = validate_markdown_artifact(
+        _artifact_body(
+            summary="Renderer uses typed rows [1].",
+            references="[1] src/eawf/render/research.py:1",
+        )
+    )
+    assert report.ok
+
+
+def test_validate_markdown_artifact_rejects_missing_markdown_reference_rows() -> None:
+    report = validate_markdown_artifact(_artifact_body(summary="Renderer uses typed rows [1]."))
+    assert "citation references missing rows: [1]" in report.errors
+
+
+def test_validate_markdown_artifact_rejects_unused_markdown_reference_rows() -> None:
+    report = validate_markdown_artifact(
+        _artifact_body(references="[1] src/eawf/render/research.py:1")
+    )
+    assert "citation rows unused by prose: [1]" in report.errors
+
+
+def test_validate_markdown_artifact_rejects_non_dense_markdown_reference_rows() -> None:
+    report = validate_markdown_artifact(
+        _artifact_body(
+            summary="Renderer uses typed rows [2].",
+            references="[2] src/eawf/render/research.py:1",
+        )
+    )
+    assert "citation numbers must be dense 1..1; got [2]" in report.errors
+
+
+def test_validate_markdown_artifact_rejects_unportable_markdown_reference_row() -> None:
+    absolute_ref = PurePosixPath("/", "tmp", "repo", "artifact.md").as_posix()
+    report = validate_markdown_artifact(
+        _artifact_body(
+            summary="Artifact uses an unportable row [1].", references=f"[1] {absolute_ref}"
+        )
+    )
+    assert any("repo-relative" in error for error in report.errors)
