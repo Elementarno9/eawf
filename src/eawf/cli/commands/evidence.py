@@ -641,6 +641,12 @@ def audit_show(
 
     audit = _run_read(flags, audit_evi.show_audit, state, audit_id)
     if md:
+        if flags.json_output:
+            cli_errors.emit_error(
+                cli_errors.InvalidInput("--md and --json are contradictory"),
+                flags=flags,
+            )
+            return
         typer.echo(render_audit_markdown(audit), nl=False)
         return
     payload = json.loads(audit.model_dump_json())

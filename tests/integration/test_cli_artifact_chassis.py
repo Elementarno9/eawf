@@ -9,6 +9,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.cli.app import app
 from eawf.state.enums import StoreKind
 from eawf.store.envelope import Envelope
@@ -58,6 +59,72 @@ def test_research_show_md_migrates_legacy_sources(
     assert result.exit_code == 0, result.output
     assert "# Research Brief: BR-001" in result.stdout
     assert "[1] src/eawf/render/research.py:1" in result.stdout
+
+
+def test_research_show_md_uses_all_references_when_findings_lack_markers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _seed(tmp_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    envelope = Envelope(
+        id="BR-001",
+        kind=StoreKind.RESEARCH,
+        scope_id="QR",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        summary="brief",
+        payload={
+            "topic": "artifact chassis",
+            "findings": ["Renderer uses typed references."],
+            "sources": ["src/eawf/render/research.py:1"],
+        },
+    )
+    store_path(state_path, StoreKind.RESEARCH).write_text(
+        envelope.model_dump_json() + "\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["research", "show", "BR-001", "--md"])
+    assert result.exit_code == 0, result.output
+    assert "- References: [1]" in result.stdout
+    assert validate_markdown_artifact(result.stdout).ok
+
+
+def test_research_show_md_rejects_global_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _seed(tmp_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    envelope = Envelope(
+        id="BR-001",
+        kind=StoreKind.RESEARCH,
+        scope_id="QR",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        summary="brief",
+        payload={
+            "topic": "artifact chassis",
+            "findings": ["Renderer uses typed references [1]."],
+            "sources": ["src/eawf/render/research.py:1"],
+        },
+    )
+    store_path(state_path, StoreKind.RESEARCH).write_text(
+        envelope.model_dump_json() + "\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["--json", "research", "show", "BR-001", "--md"])
+    assert result.exit_code != 0
+    assert "--md and --json are contradictory" in result.stdout
+
+
+def test_audit_show_md_rejects_global_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _seed(tmp_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    result = runner.invoke(app, ["--json", "audit", "show", "AU-1", "--md"])
+    assert result.exit_code != 0
+    assert "--md and --json are contradictory" in result.stdout
 
 
 def test_draft_new_validate_and_plan_promote(

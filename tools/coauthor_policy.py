@@ -42,4 +42,8 @@ def select_trailer(env: Mapping[str, str]) -> str | None:
 
 def has_supported_trailer(text: str) -> bool:
     """Return whether *text* contains a recognized co-author trailer."""
-    return any(trailer in text for trailer in SUPPORTED_TRAILERS)
+    return any(
+        line.strip() in SUPPORTED_TRAILERS
+        for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    )

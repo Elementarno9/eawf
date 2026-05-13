@@ -62,6 +62,12 @@ def research_show(
         )
         return
     if md:
+        if flags.json_output:
+            errors.emit_error(
+                errors.InvalidInput("--md and --json are contradictory"),
+                flags=flags,
+            )
+            return
         typer.echo(render_research_markdown(envelope, payload), nl=False)
         return
     body = {
