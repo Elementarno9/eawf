@@ -35,6 +35,7 @@ import typer
 from pydantic import ValidationError
 
 from eawf.cli import errors
+from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.render.plan_view import (
@@ -64,6 +65,8 @@ plan_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+install_promote_command(plan_app, "plan")
 
 
 @plan_app.command(name="show")
