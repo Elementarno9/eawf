@@ -1004,7 +1004,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P15-I01-W01",
       "P15-I01-W03"
     ],
     "iter_id": "P15-I01",
@@ -1765,7 +1764,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:41:26.143882Z",
+  "updated_at": "2026-05-13T12:42:40.154868Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2920,8 +2919,8 @@
         "P15-I01-W04"
       ],
       "claim_session_id": "SES-20260513T123700Z-codex",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-13T12:42:40.715867Z",
+      "commit": "a018213",
       "deps": [],
       "file_scopes": [
         "src/eawf/skills/research.py",
@@ -2932,8 +2931,8 @@
       "id": "P15-I01-W01",
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:30.543548Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Implemented /research args and final research-store persistence.",
+      "status": "closed",
       "title": "/research args + final research-store persistence",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -3128,10 +3127,10 @@
       "branch": "feature/eawf-v0.3-p15-w01",
       "created_at": "2026-05-13T12:41:26.143882Z",
       "id": "WT-P15-I01-W01-1778676086",
-      "merged_commit": null,
+      "merged_commit": "a018213",
       "owner_session_id": "SES-20260513T123700Z-codex",
       "path": ".ea/local/worktrees/p15-w01",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P15-I01-W01"
     }
   }
