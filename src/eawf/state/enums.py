@@ -65,6 +65,14 @@ class WaveStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class EffortBucket(StrEnum):
+    XS = "XS"
+    S = "S"
+    M = "M"
+    L = "L"
+    XL = "XL"
+
+
 class HypothesisStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"

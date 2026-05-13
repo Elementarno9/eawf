@@ -610,6 +610,17 @@
       "title": "DecisionStatus",
       "type": "string"
     },
+    "EffortBucket": {
+      "enum": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "title": "EffortBucket",
+      "type": "string"
+    },
     "EstimateSummary": {
       "additionalProperties": false,
       "description": "Latest estimate (full history in store).",
@@ -1748,6 +1759,17 @@
       "additionalProperties": false,
       "description": "Atomic execution unit under an iter.",
       "properties": {
+        "agent_role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentSessionRole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "blocks": {
           "items": {
             "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
@@ -1801,6 +1823,17 @@
           "title": "Deps",
           "type": "array"
         },
+        "effort_bucket": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffortBucket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "file_scopes": {
           "items": {
             "type": "string"
@@ -1837,6 +1870,13 @@
         },
         "status": {
           "$ref": "#/$defs/WaveStatus"
+        },
+        "success_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Success Criteria",
+          "type": "array"
         },
         "title": {
           "title": "Title",
