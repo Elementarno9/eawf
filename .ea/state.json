@@ -1003,7 +1003,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P15-I01-W04"
+    ],
     "iter_id": "P15-I01",
     "phase_id": "P15",
     "project_code": "EAWF",
@@ -1762,7 +1764,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:47:20.604081Z",
+  "updated_at": "2026-05-13T12:47:48.812195Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2991,7 +2993,7 @@
     },
     "P15-I01-W04": {
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -3012,11 +3014,11 @@
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:32.000777Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "Docs, schemas, plugin goldens, audit evidence, and compatibility sweep",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P15-I01-W04-1778676468"
     }
   },
   "workspace": null,
@@ -3152,6 +3154,17 @@
       "path": ".ea/local/worktrees/p15-w03",
       "status": "merged",
       "wave_id": "P15-I01-W03"
+    },
+    "WT-P15-I01-W04-1778676468": {
+      "base_branch": "feature/eawf-v0.3",
+      "branch": "feature/eawf-v0.3-p15-w04",
+      "created_at": "2026-05-13T12:47:48.812195Z",
+      "id": "WT-P15-I01-W04-1778676468",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260513T123700Z-codex",
+      "path": ".ea/local/worktrees/p15-w04",
+      "status": "active",
+      "wave_id": "P15-I01-W04"
     }
   }
 }
