@@ -95,18 +95,6 @@
           "type": "string"
         },
         "skill": {
-          "enum": [
-            "/research",
-            "/prep",
-            "/audit",
-            "/ship",
-            "/review",
-            "/polish",
-            "/init",
-            "/roadmap",
-            "/differentiate",
-            "/flow"
-          ],
           "title": "Skill",
           "type": "string"
         },

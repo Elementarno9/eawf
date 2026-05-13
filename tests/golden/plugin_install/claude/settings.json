@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "dc31ae99b82e6524",
+    "hash": "e7446ff7c7d6f351",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -133,6 +133,10 @@
       },
       {
         "name": "flow",
+        "version": "1.0"
+      },
+      {
+        "name": "blitz",
         "version": "1.0"
       }
     ],

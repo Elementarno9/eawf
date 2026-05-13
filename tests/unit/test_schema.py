@@ -110,3 +110,6 @@ def test_skill_output_schema_has_required_top_level_fields() -> None:
     # The five envelope statuses must be present in the schema.
     statuses = body["$defs"]["EnvelopeHeader"]["properties"]["status"]["enum"]
     assert set(statuses) == {"ok", "needs_user", "blocked", "failed", "partial"}
+    # Skill names are open so workspace/user overlays can emit envelopes.
+    skill_schema = body["$defs"]["EnvelopeHeader"]["properties"]["skill"]
+    assert skill_schema == {"title": "Skill", "type": "string"}
