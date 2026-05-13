@@ -1003,7 +1003,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P15-I01-W02"
+    ],
     "iter_id": "P15-I01",
     "phase_id": "P15",
     "project_code": "EAWF",
@@ -1762,7 +1764,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:44:44.698618Z",
+  "updated_at": "2026-05-13T12:45:13.887709Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2940,7 +2942,7 @@
       "blocks": [
         "P15-I01-W04"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -2959,11 +2961,11 @@
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:31.512202Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "title": "Registered /blitz skill + /research auto-chain",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P15-I01-W02-1778676313"
     },
     "P15-I01-W03": {
       "blocks": [
@@ -3130,6 +3132,17 @@
       "path": ".ea/local/worktrees/p15-w01",
       "status": "merged",
       "wave_id": "P15-I01-W01"
+    },
+    "WT-P15-I01-W02-1778676313": {
+      "base_branch": "feature/eawf-v0.3",
+      "branch": "feature/eawf-v0.3-p15-w02",
+      "created_at": "2026-05-13T12:45:13.887709Z",
+      "id": "WT-P15-I01-W02-1778676313",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260513T123700Z-codex",
+      "path": ".ea/local/worktrees/p15-w02",
+      "status": "active",
+      "wave_id": "P15-I01-W02"
     },
     "WT-P15-I01-W03-1778676197": {
       "base_branch": "feature/eawf-v0.3",
