@@ -87,12 +87,15 @@
   },
   "risks": [],
   "summary": {
+    "actual_elapsed_eu": 2.0,
     "blocked_waves": [
       "P05-I01-W03"
     ],
     "check_count": 3,
     "check_passed": 2,
+    "critical_path_eu": 0.0,
     "risk_count": 0,
+    "sum_wave_eu": 0.0,
     "wave_count": 4,
     "wave_status_counts": {
       "abandoned": 0,
@@ -105,58 +108,74 @@
   },
   "waves": [
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": "1111111aaaaaa",
       "deps": [],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cp/init.py"
       ],
       "id": "P05-I01-W00",
       "outcome": "ok",
       "status": "closed",
+      "success_criteria": [],
       "title": "Init"
     },
     {
+      "agent_role": null,
       "claim_session_id": "S-A",
       "commit": null,
       "deps": [
         "P05-I01-W00"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cp/a.py"
       ],
       "id": "P05-I01-W01",
       "outcome": null,
       "status": "claimed",
+      "success_criteria": [],
       "title": "Branch A"
     },
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": null,
       "deps": [
         "P05-I01-W00"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cp/b.py"
       ],
       "id": "P05-I01-W02",
       "outcome": null,
       "status": "pending",
+      "success_criteria": [],
       "title": "Branch B"
     },
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": null,
       "deps": [
         "P05-I01-W01",
         "P05-I01-W02"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cp/merge.py"
       ],
       "id": "P05-I01-W03",
       "outcome": null,
       "status": "pending",
+      "success_criteria": [],
       "title": "Merge"
     }
   ]

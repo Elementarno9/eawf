@@ -46,6 +46,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.estimation.buckets import (
+    critical_path_eu,
+    sum_wave_eu,
+    timestamp_actual_eu,
+    wave_estimate_eu,
+)
 from eawf.state.enums import (
     BacklogPriority,
     BacklogStatus,
@@ -119,6 +125,10 @@ class WaveView(_StrictModel):
     status: str
     deps: list[str]
     file_scopes: list[str]
+    success_criteria: list[str]
+    agent_role: str | None = None
+    effort_bucket: str | None = None
+    estimate_eu: float = 0.0
     claim_session_id: str | None = None
     commit: str | None = None
     outcome: str | None = None
@@ -179,6 +189,9 @@ class SummaryView(_StrictModel):
     check_passed: int
     risk_count: int
     blocked_waves: list[str]
+    sum_wave_eu: float = 0.0
+    critical_path_eu: float = 0.0
+    actual_elapsed_eu: float = 0.0
 
 
 class PlanView(_StrictModel):
@@ -557,6 +570,10 @@ def build_view(state: State, iter_id: str) -> PlanView:
             status=w.status.value,
             deps=list(w.deps),
             file_scopes=list(w.file_scopes),
+            success_criteria=list(w.success_criteria),
+            agent_role=w.agent_role.value if w.agent_role else None,
+            effort_bucket=w.effort_bucket.value if w.effort_bucket else None,
+            estimate_eu=wave_estimate_eu(w),
             claim_session_id=w.claim_session_id,
             commit=w.commit,
             outcome=w.outcome,
@@ -586,6 +603,9 @@ def build_view(state: State, iter_id: str) -> PlanView:
         check_passed=sum(1 for c in checks if c.passed),
         risk_count=len(risks),
         blocked_waves=blocked,
+        sum_wave_eu=sum_wave_eu(waves),
+        critical_path_eu=critical_path_eu(waves),
+        actual_elapsed_eu=timestamp_actual_eu(waves),
     )
 
     return PlanView(
@@ -691,6 +711,12 @@ def _format_summary(view: PlanView) -> list[str]:
 
     lines: list[str] = ["## Summary"]
     lines.append(f"- waves: {view.summary.wave_count} ({breakdown})")
+    lines.append(
+        "- effort: "
+        f"sum_wave_eu={view.summary.sum_wave_eu:g}, "
+        f"critical_path_eu={view.summary.critical_path_eu:g}, "
+        f"actual_elapsed_eu={view.summary.actual_elapsed_eu:g}"
+    )
     lines.append(f"- checks: {view.summary.check_passed}/{view.summary.check_count} passed")
     lines.append(f"- risks: {risk_total} open")
     if blocked:
@@ -778,6 +804,8 @@ def _format_waves(view: PlanView) -> list[str]:
     if not view.waves:
         lines.append("(none)")
         return lines
+    lines.append("| Wave | Status | Bucket | Role | Estimate EU | Success criteria | Files |")
+    lines.append("| --- | --- | --- | --- | ---: | --- | --- |")
     for w in view.waves:
         marker = "[x]" if w.status == "closed" else "[ ]"
         suffix_parts: list[str] = []
@@ -792,7 +820,14 @@ def _format_waves(view: PlanView) -> list[str]:
                 deps_short = ", ".join(d.split("-")[-1] for d in w.deps)
                 suffix_parts.append(f"deps: {deps_short}")
         suffix = "; ".join(suffix_parts)
-        lines.append(f"- {marker} **{w.id}** — {w.title} ({suffix})")
+        role = w.agent_role or "-"
+        bucket = w.effort_bucket or "-"
+        criteria = "<br>".join(w.success_criteria) if w.success_criteria else "-"
+        files = "<br>".join(w.file_scopes) if w.file_scopes else "-"
+        lines.append(
+            f"| {marker} **{w.id}** {w.title} | {suffix} | {bucket} | {role} | "
+            f"{w.estimate_eu:g} | {criteria} | {files} |"
+        )
     return lines
 
 
