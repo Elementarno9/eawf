@@ -54,6 +54,7 @@ render_blocks:
       15. **Secrets and PII hygiene.** See ``secrets-hygiene``.
       16. **Naming conventions for fields/params/log keys.** See
           ``naming-conventions``.
+      17. **Artifact chassis and citations.** See ``artifact-chassis``.
 
   - id: architecture-cli-dispatch
     target: AGENTS.md
@@ -245,6 +246,23 @@ render_blocks:
       SHA churn, broken PR refs) is much larger than the prevention cost.
       Scrub locally before ``git add``; let ``pre-commit``
       (``detect-secrets`` + custom path checks) catch the rest.
+
+  - id: artifact-chassis
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ### Artifact chassis and citations
+
+      Durable research, plan, audit, decision, hypothesis, and incident
+      markdown uses renderer-owned chassis sections: ``Summary``,
+      ``References``, ``Provenance``, and ``Scrub``. Local drafts under
+      ``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts
+      under ``.ea/artifacts/`` do not.
+
+      Citations use dense ``[N]`` markers backed by typed ``Citation`` rows.
+      References stay repo-relative, external URL, or Eawf URN. Absolute
+      local paths, host-local URLs, and PII must fail validation before
+      promotion or PR text ships.
 
   - id: workflow-lifecycle
     target: AGENTS.md

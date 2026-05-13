@@ -150,7 +150,7 @@ keys as `{}` during the next `eawf sync`.
 | Outcome | `id`, `scope_id`, `metric`, `threshold`, `direction`, `value`, `status`, `audit_id`, `updated_at` | state | status `pending` \| `met` \| `missed` \| `waived` |
 | Phase | `id`, `scope_id`, `title`, `status`, `iter_ids`, `outcome_ids`, `opened_at`, `closed_at`, `audit_id` | state | no close with open children |
 | Iter | `id`, `phase_id`, `title`, `status`, `wave_ids`, `estimate_id`, `audit_id`, `opened_at`, `closed_at` | state | parent inferred by ID |
-| Wave | `id`, `iter_id`, `title`, `status`, `deps`, `file_scopes`, `claim_session_id`, `worktree_id`, `commit`, `outcome`, `opened_at`, `closed_at` | state | atomic execution unit |
+| Wave | `id`, `iter_id`, `title`, `status`, `deps`, `file_scopes`, `success_criteria`, `agent_role`, `effort_bucket`, `claim_session_id`, `worktree_id`, `commit`, `outcome`, `opened_at`, `closed_at` | state | atomic execution unit |
 | Hypothesis | `id`, `scope_id`, `text`, `metric`, `confirm`, `reject`, `status`, `verdict`, `audit_id`, `source_artifact_id` | state + optional artifact | thresholds concrete |
 | Audit | `id`, `scope_id`, `kind`, `status`, `report_artifact_id`, `check_results`, `integrity_results`, `created_at`, `verdict` | state + `audit.jsonl` | evidence only |
 | Artifact | `id`, `kind`, `uri`, `local_path`, `urn`, `sha256`, `size_bytes`, `created_at`, `metadata` | state / index | hash for files / blobs |
@@ -253,15 +253,22 @@ interrupted, blocked, abandoned, failed, and superseded scopes feed
 risk / fallback statistics.
 
 Estimation by scope: wave (direct, highest quality) → iter (rollup of
-waves) → phase (rollup of iters). Roadmap-level shows directional
-envelopes only.
+waves) → phase (rollup of iters). Wave plans may carry an
+`effort_bucket` (`XS=0.25`, `S=0.5`, `M=1.0`, `L=2.0`, `XL=3.5` EU)
+so plan renderers can show both `sum_wave_eu` and `critical_path_eu`.
+Closed wave timestamps derive a provisional `actual_elapsed_eu` until
+richer actual-segment instrumentation is present. Roadmap-level shows
+directional envelopes only.
 
 ## Large entity handling
 
 `state.json` stores **index fields and summaries**, not full long-form
-documents. Long-form details (long hypothesis rationale, full audit
-metric tables, incident timelines) live as artifacts under
-`.ea/artifacts/` and are referenced by artifact ID + URN.
+documents. Long-form details (research briefs, plan specs, long
+hypothesis rationale, full audit metric tables, incident timelines) live
+as artifacts under `.ea/artifacts/` and are referenced by artifact ID +
+URN. Markdown artifacts use the standard chassis: `Summary`,
+`References`, `Provenance`, and `Scrub`. Local drafts under `.ea/local/`
+carry an `eawf-template` sentinel and lose it on promotion.
 
 Suggested thresholds:
 

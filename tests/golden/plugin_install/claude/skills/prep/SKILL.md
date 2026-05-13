@@ -16,20 +16,24 @@ disable-model-invocation: true
    (the default; check via `uv run eawf config get planning.auto_plan`)
    and `--auto-plan` was not passed, enter Claude Code plan mode
    (`EnterPlanMode`) and present the proposed wave DAG (IDs, deps,
-   file scopes, success criteria, estimated EU). Exit via
+   file scopes, success criteria, `agent_role`, `effort_bucket`).
+   Exit via
    `ExitPlanMode` only after operator approval. When `auto_plan` is
    `true` or `--auto-plan` is set, skip the proposal and dispatch
    inline.
 4. For each parallel wave, dispatch a worktree subagent.
 5. For each sequential wave, run inline; cherry-pick parallel-wave
    commits in between as they finish.
-6. Update plan checkboxes / state via `eawf state phase advance`.
+6. Validate the rendered plan with `eawf plan show --md`; wave tags and
+   bucket roll-ups must match state.
 
 ## Pre-flight checklist
 
 - [ ] Confirm current branch is the long-running phase branch.
 - [ ] Confirm `git status` is clean.
 - [ ] Confirm worktree subagents branch from the parent HEAD.
+- [ ] Every wave has success criteria, agent role, effort bucket, and
+      file scope.
 - [ ] Plan-mode proposal is the default; pass `--auto-plan` only when
       the wave DAG is trivial or pre-approved.
 

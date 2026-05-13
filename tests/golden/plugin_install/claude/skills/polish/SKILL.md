@@ -13,7 +13,7 @@ disable-model-invocation: true
 1. Resolve scope: default = entire `src/eawf/`; `--scope=<dir|file>`
    narrows.
 2. Sweep checks: naming, docstrings, log fields, error message
-   phrasing, dead code.
+   phrasing, dead code, citation density, draft sentinels, scrub status.
 3. Apply fixes inline. If a change touches public API, stop and ask.
 
 ## Pre-flight checklist

@@ -11,14 +11,17 @@ disable-model-invocation: true
 ## Canonical algorithm
 
 1. Resolve target: phase id, wave id, or commit range.
-2. Identify success criteria from the plan / phase spec.
+2. Identify success criteria from the plan / phase spec and cite evidence
+   with dense `[N]` references.
 3. Dispatch the auditor subagent with paths, line numbers, criteria.
 4. Parse the verdict; convert refutations into TODOs or new waves.
+5. Render audit evidence through `eawf audit show --md`.
 
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.
-- [ ] Every quantitative claim must include `Read`/`Grep` evidence.
+- [ ] Every quantitative claim must include source evidence and dense
+      citation refs.
 
 ## Decision surfaces
 
