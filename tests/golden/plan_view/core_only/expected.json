@@ -49,10 +49,13 @@
   },
   "risks": [],
   "summary": {
+    "actual_elapsed_eu": 2.0,
     "blocked_waves": [],
     "check_count": 1,
     "check_passed": 1,
+    "critical_path_eu": 0.0,
     "risk_count": 0,
+    "sum_wave_eu": 0.0,
     "wave_count": 2,
     "wave_status_counts": {
       "abandoned": 0,
@@ -65,29 +68,37 @@
   },
   "waves": [
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": "abcdef0123456",
       "deps": [],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/core/__init__.py"
       ],
       "id": "P05-I01-W00",
       "outcome": "ok",
       "status": "closed",
+      "success_criteria": [],
       "title": "Bootstrap"
     },
     {
+      "agent_role": null,
       "claim_session_id": "S-1",
       "commit": null,
       "deps": [
         "P05-I01-W00"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/core/run.py"
       ],
       "id": "P05-I01-W01",
       "outcome": null,
       "status": "in_progress",
+      "success_criteria": [],
       "title": "Implement core"
     }
   ]

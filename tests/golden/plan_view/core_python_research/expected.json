@@ -134,6 +134,7 @@
     }
   ],
   "summary": {
+    "actual_elapsed_eu": 2.0,
     "blocked_waves": [
       "P05-I01-W02",
       "P05-I01-W03",
@@ -141,7 +142,9 @@
     ],
     "check_count": 4,
     "check_passed": 3,
+    "critical_path_eu": 0.0,
     "risk_count": 4,
+    "sum_wave_eu": 0.0,
     "wave_count": 6,
     "wave_status_counts": {
       "abandoned": 0,
@@ -154,81 +157,105 @@
   },
   "waves": [
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": "1111111aaaa",
       "deps": [],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cpr/init.py"
       ],
       "id": "P05-I01-W00",
       "outcome": "ok",
       "status": "closed",
+      "success_criteria": [],
       "title": "Bootstrap"
     },
     {
+      "agent_role": null,
       "claim_session_id": "S-A",
       "commit": null,
       "deps": [
         "P05-I01-W00"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cpr/a.py"
       ],
       "id": "P05-I01-W01",
       "outcome": null,
       "status": "in_progress",
+      "success_criteria": [],
       "title": "Stage A"
     },
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": null,
       "deps": [
         "P05-I01-W03"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cpr/b.py"
       ],
       "id": "P05-I01-W02",
       "outcome": null,
       "status": "pending",
+      "success_criteria": [],
       "title": "Cycle node B"
     },
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": null,
       "deps": [
         "P05-I01-W02"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [
         "src/cpr/c.py"
       ],
       "id": "P05-I01-W03",
       "outcome": null,
       "status": "pending",
+      "success_criteria": [],
       "title": "Cycle node C"
     },
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": null,
       "deps": [
         "P05-I01-W01"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [],
       "id": "P05-I01-W04",
       "outcome": "failed_lock",
       "status": "failed",
+      "success_criteria": [],
       "title": "Failure"
     },
     {
+      "agent_role": null,
       "claim_session_id": null,
       "commit": null,
       "deps": [
         "P05-I01-W04"
       ],
+      "effort_bucket": null,
+      "estimate_eu": 0.0,
       "file_scopes": [],
       "id": "P05-I01-W05",
       "outcome": null,
       "status": "pending",
+      "success_criteria": [],
       "title": "Final"
     }
   ]

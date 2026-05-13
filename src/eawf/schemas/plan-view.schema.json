@@ -299,6 +299,11 @@
       "additionalProperties": false,
       "description": "High-level counts and blocked-wave list.",
       "properties": {
+        "actual_elapsed_eu": {
+          "default": 0.0,
+          "title": "Actual Elapsed Eu",
+          "type": "number"
+        },
         "blocked_waves": {
           "items": {
             "type": "string"
@@ -314,9 +319,19 @@
           "title": "Check Passed",
           "type": "integer"
         },
+        "critical_path_eu": {
+          "default": 0.0,
+          "title": "Critical Path Eu",
+          "type": "number"
+        },
         "risk_count": {
           "title": "Risk Count",
           "type": "integer"
+        },
+        "sum_wave_eu": {
+          "default": 0.0,
+          "title": "Sum Wave Eu",
+          "type": "number"
         },
         "wave_count": {
           "title": "Wave Count",
@@ -345,6 +360,18 @@
       "additionalProperties": false,
       "description": "Compact projection of :class:`~eawf.state.models.Wave`.",
       "properties": {
+        "agent_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Role"
+        },
         "claim_session_id": {
           "anyOf": [
             {
@@ -376,6 +403,23 @@
           "title": "Deps",
           "type": "array"
         },
+        "effort_bucket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effort Bucket"
+        },
+        "estimate_eu": {
+          "default": 0.0,
+          "title": "Estimate Eu",
+          "type": "number"
+        },
         "file_scopes": {
           "items": {
             "type": "string"
@@ -403,6 +447,13 @@
           "title": "Status",
           "type": "string"
         },
+        "success_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Success Criteria",
+          "type": "array"
+        },
         "title": {
           "title": "Title",
           "type": "string"
@@ -413,7 +464,8 @@
         "title",
         "status",
         "deps",
-        "file_scopes"
+        "file_scopes",
+        "success_criteria"
       ],
       "title": "WaveView",
       "type": "object"
