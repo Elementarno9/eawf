@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from pathlib import Path
 from typing import cast
 
 import orjson
@@ -351,6 +352,65 @@ def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> 
         registry.unregister("/polish")
         if previous is not None:
             registry.register(previous)
+
+
+def test_skill_run_executes_workspace_overlay_without_python_execution(
+    cli_runner: CliRunner, tmp_path: Path
+) -> None:
+    skill_path = tmp_path / ".ea" / "skills" / "demo" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text(
+        """---
+name: /demo
+description: Demo overlay
+---
+# Demo
+
+Body.
+""",
+        encoding="utf-8",
+    )
+    result = cli_runner.invoke(
+        app,
+        ["--json", "-w", str(tmp_path), "skill", "run", "/demo"],
+        input='{"x": 1}',
+    )
+    assert result.exit_code == 0, result.stdout
+    env = OutputEnvelope.model_validate_json(result.stdout)
+    assert env.header.skill == "/demo"
+    assert env.header.status == "ok"
+    assert isinstance(env.body, dict)
+    assert env.body["kind"] == "skill_overlay_dispatch"
+    assert env.body["source"] == "workspace"
+    assert env.body["args"] == {"x": 1}
+
+
+def test_skill_run_workspace_overlay_overrides_builtin_name(
+    cli_runner: CliRunner, tmp_path: Path
+) -> None:
+    skill_path = tmp_path / ".ea" / "skills" / "research" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text(
+        """---
+name: /research
+description: Research overlay
+---
+# Research overlay
+""",
+        encoding="utf-8",
+    )
+    result = cli_runner.invoke(
+        app,
+        ["--json", "-w", str(tmp_path), "skill", "run", "/research"],
+        input="",
+    )
+    assert result.exit_code == 0, result.stdout
+    env = OutputEnvelope.model_validate_json(result.stdout)
+    assert env.header.skill == "/research"
+    assert isinstance(env.body, dict)
+    assert env.body["kind"] == "skill_overlay_dispatch"
+    assert env.body["source"] == "workspace"
+    assert env.body["body"] == "# Research overlay\n"
 
 
 def test_skill_list_help_text_documents_purpose(cli_runner: CliRunner) -> None:
