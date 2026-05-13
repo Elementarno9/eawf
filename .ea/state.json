@@ -1764,7 +1764,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T12:42:40.154868Z",
+  "updated_at": "2026-05-13T12:43:17.423807Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2989,7 +2989,7 @@
       "title": "Executable workspace/user skill overlays",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P15-I01-W03-1778676197"
     },
     "P15-I01-W04": {
       "blocks": [],
@@ -3132,6 +3132,17 @@
       "path": ".ea/local/worktrees/p15-w01",
       "status": "merged",
       "wave_id": "P15-I01-W01"
+    },
+    "WT-P15-I01-W03-1778676197": {
+      "base_branch": "feature/eawf-v0.3",
+      "branch": "feature/eawf-v0.3-p15-w03",
+      "created_at": "2026-05-13T12:43:17.423807Z",
+      "id": "WT-P15-I01-W03-1778676197",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260513T123700Z-codex",
+      "path": ".ea/local/worktrees/p15-w03",
+      "status": "active",
+      "wave_id": "P15-I01-W03"
     }
   }
 }
