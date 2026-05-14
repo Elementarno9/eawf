@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:46:49.420922Z",
+  "updated_at": "2026-05-14T17:52:31.293770Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3803,9 +3803,9 @@
       "blocks": [
         "P18-I01-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w07",
+      "closed_at": "2026-05-14T17:52:31.293757Z",
+      "commit": "eadcb2e20a62",
       "deps": [
         "P18-I01-W06"
       ],
@@ -3818,8 +3818,8 @@
       "id": "P18-I01-W07",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:53.085854Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added deterministic markdown renderers and goldens for all typed agent report roles.",
+      "status": "closed",
       "success_criteria": [
         "all eight role reports render markdown",
         "rendering is deterministic",
