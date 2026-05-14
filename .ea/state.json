@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:43:03.644982Z",
+  "updated_at": "2026-05-14T17:46:49.420922Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3769,9 +3769,9 @@
         "P18-I01-W07",
         "P18-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w06",
+      "closed_at": "2026-05-14T17:46:49.420907Z",
+      "commit": "74ceceb5c6eb",
       "deps": [
         "P18-I01-W04"
       ],
@@ -3786,8 +3786,8 @@
       "id": "P18-I01-W06",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:52.668693Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added agent-report CLI surfaces and operator rollup over typed report stores.",
+      "status": "closed",
       "success_criteria": [
         "add show list commands work",
         "role aliases resolve",
