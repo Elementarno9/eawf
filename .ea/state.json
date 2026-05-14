@@ -1045,9 +1045,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_wave_ids": [
+      "P17-I01-W01"
+    ],
+    "iter_id": "P17-I01",
+    "phase_id": "P17",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1553,6 +1555,27 @@
         "P15-I01-W02",
         "P15-I01-W04"
       ]
+    },
+    "P17-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:37.287576Z",
+      "phase_id": "P17",
+      "status": "active",
+      "title": "P17 roadmap waves",
+      "wave_ids": [
+        "P17-I01-W01",
+        "P17-I01-W02",
+        "P17-I01-W03",
+        "P17-I01-W04",
+        "P17-I01-W05",
+        "P17-I01-W06",
+        "P17-I01-W07",
+        "P17-I01-W08",
+        "P17-I01-W09"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1782,6 +1805,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Artifact chassis and estimation"
+    },
+    "P17": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P17",
+      "iter_ids": [
+        "P17-I01"
+      ],
+      "opened_at": "2026-05-14T15:07:36.885061Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "PR, coauthor, and release-surface hardening"
     }
   },
   "plugins": {},
@@ -1816,7 +1853,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-13T23:35:47.345468Z",
+  "updated_at": "2026-05-14T15:07:41.256491Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3227,6 +3264,279 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P15-I01-W04-1778676468"
+    },
+    "P17-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W02"
+      ],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/vcs/**",
+        "src/eawf/config/**",
+        "src/eawf/cli/commands/config.py",
+        "tests/unit/test_vcs_coauthor.py"
+      ],
+      "id": "P17-I01-W01",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:37.689957Z",
+      "outcome": null,
+      "status": "claimed",
+      "success_criteria": [
+        "vcs.coauthor config validates strict modes"
+      ],
+      "title": "vcs.coauthor config model with strict disable mode and validation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W01"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/coauthor.py",
+        "src/eawf/cli/app.py",
+        "tools/**",
+        "tests/integration/test_cli_coauthor.py",
+        "tests/unit/test_commit_prefix_lint.py"
+      ],
+      "id": "P17-I01-W02",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:38.091640Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "coauthor resolve uses runtime registry"
+      ],
+      "title": "coauthor resolve registry and hook linter integration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/render/pr_body.py",
+        "src/eawf/cli/commands/pr.py",
+        "tests/unit/test_render_pr_body.py"
+      ],
+      "id": "P17-I01-W03",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:38.489895Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "PR kind inference covers roadmap kinds"
+      ],
+      "title": "infer PR kind for iter phase docs-research and incident-fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W05",
+        "P17-I01-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W03"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/render/pr_body.py",
+        "tests/unit/test_render_pr_body.py"
+      ],
+      "id": "P17-I01-W04",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:38.881107Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "PR body renders typed inputs and profile blocks"
+      ],
+      "title": "PR body renderers and profile render blocks",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W06",
+        "P17-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W04"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/pr.py",
+        "src/eawf/cli/commands/release.py",
+        "src/eawf/render/release_notes.py",
+        "src/eawf/cli/app.py",
+        "tests/unit/test_render_release_notes.py"
+      ],
+      "id": "P17-I01-W05",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:39.272722Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "PR and release prose render through CLI"
+      ],
+      "title": "PR CLI body surface and release notes drafts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W05"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/artifacts/**",
+        "src/eawf/scrub/**",
+        "src/eawf/skills/ship.py",
+        "src/eawf/cli/commands/pr.py",
+        "tests/unit/test_artifact_references.py",
+        "tests/unit/test_skill_ship.py"
+      ],
+      "id": "P17-I01-W06",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:39.660797Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "ship and pr helpers block invalid artifacts"
+      ],
+      "title": "ship and PR helpers block invalid artifacts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W04"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/render/pr_body.py",
+        "tests/unit/test_render_pr_body.py"
+      ],
+      "id": "P17-I01-W07",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:40.050612Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "citation rows render in docs and research PR sections"
+      ],
+      "title": "research and docs PR citation source rows",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P17-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W02",
+        "P17-I01-W05"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/**",
+        "tools/**",
+        "tests/**",
+        "src/eawf/cli/commands/lifecycle.py"
+      ],
+      "id": "P17-I01-W08",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:40.469572Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "docs and lint coverage describe coauthor and PR policy"
+      ],
+      "title": "coauthor and PR body docs plus lint coverage",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P17-I01-W09": {
+      "agent_role": "auditor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P17-I01-W06",
+        "P17-I01-W08"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/**",
+        ".ea/store/audit.jsonl",
+        ".ea/state.json"
+      ],
+      "id": "P17-I01-W09",
+      "iter_id": "P17-I01",
+      "opened_at": "2026-05-14T15:07:40.863358Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "P17 ship gate audit records verification"
+      ],
+      "title": "P17 ship-gate audit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
