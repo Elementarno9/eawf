@@ -26,7 +26,7 @@ flowchart LR
 ## Waves
 | Wave | Status | Bucket | Role | Estimate EU | Success criteria | Files |
 | --- | --- | --- | --- | ---: | --- | --- |
-| [x] **P05-I01-W00** Bootstrap | closed @ abcdef0 | - | - | 0 | - | src/core/__init__.py |
+| [x] **P05-I01-W00** Bootstrap | closed | - | - | 0 | - | src/core/__init__.py |
 | [ ] **P05-I01-W01** Implement core | in_progress; deps: W00 | - | - | 0 | - | src/core/run.py |
 
 ## Checks

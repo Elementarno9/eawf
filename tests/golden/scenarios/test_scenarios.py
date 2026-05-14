@@ -209,7 +209,9 @@ def test_lifecycle_flow_full(
     4. ``wave plan P01-I01 --id P01-I01-W01 --title Implement
        --files src/``.
     5. ``wave claim P01-I01-W01 --session SES-1``.
-    6. ``wave close P01-I01-W01 --commit deadbeef --outcome done``.
+    6. ``wave close P01-I01-W01 --outcome done`` (W04 dropped the
+       ``Wave.commit`` field; the SHA is now derived on demand from
+       ``git log --grep``).
     7. ``iter close P01-I01 --audit AUD-1``.
     8. ``decision add D001 --scope-id P01 ...`` records the explicit
        single-wave scope-collapse rationale required by phase close.
@@ -253,8 +255,6 @@ def test_lifecycle_flow_full(
             "wave",
             "close",
             "P01-I01-W01",
-            "--commit",
-            "deadbeef",
             "--outcome",
             "done",
         ),

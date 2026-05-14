@@ -31,7 +31,7 @@ flowchart LR
 ## Waves
 | Wave | Status | Bucket | Role | Estimate EU | Success criteria | Files |
 | --- | --- | --- | --- | ---: | --- | --- |
-| [x] **P05-I01-W00** Init | closed @ 1111111 | - | - | 0 | - | src/cp/init.py |
+| [x] **P05-I01-W00** Init | closed | - | - | 0 | - | src/cp/init.py |
 | [ ] **P05-I01-W01** Branch A | claimed by S-A | - | - | 0 | - | src/cp/a.py |
 | [ ] **P05-I01-W02** Branch B | pending; deps: W00 | - | - | 0 | - | src/cp/b.py |
 | [ ] **P05-I01-W03** Merge | pending; deps: W01, W02 | - | - | 0 | - | src/cp/merge.py |
