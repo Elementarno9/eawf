@@ -194,6 +194,12 @@ app.add_typer(_agent_report_app, name="agent-report")
 app.add_typer(_operator_app, name="operator")
 # --- end P18 W06 ---
 
+# --- P19 W06 roadmap planner registration ---
+from eawf.cli.commands.roadmap import roadmap_app  # noqa: E402
+
+app.add_typer(roadmap_app, name="roadmap")
+# --- end P19 W06 ---
+
 # --- P03 W01 doctor registration ---
 from eawf.cli.commands.doctor import doctor_app  # noqa: E402
 
