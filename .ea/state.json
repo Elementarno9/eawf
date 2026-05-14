@@ -1088,8 +1088,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P19-I01",
+    "phase_id": "P19",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1641,6 +1641,26 @@
         "P18-I01-W12",
         "P18-I01-W13"
       ]
+    },
+    "P19-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P19-I01",
+      "opened_at": "2026-05-14T19:20:41.264547Z",
+      "phase_id": "P19",
+      "status": "active",
+      "title": "Planning system + commit hygiene",
+      "wave_ids": [
+        "P19-I01-W01",
+        "P19-I01-W05",
+        "P19-I01-W02",
+        "P19-I01-W03",
+        "P19-I01-W04",
+        "P19-I01-W06",
+        "P19-I01-W07",
+        "P19-I01-W08"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1898,6 +1918,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Typed Agent Reports"
+    },
+    "P19": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P19",
+      "iter_ids": [
+        "P19-I01"
+      ],
+      "opened_at": "2026-05-14T19:20:08.748937Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "Roadmap-driven planning + commit hygiene"
     }
   },
   "plugins": {},
@@ -1932,7 +1966,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T18:37:19.013181Z",
+  "updated_at": "2026-05-14T19:21:09.950549Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4046,6 +4080,258 @@
         "phase ready for ship"
       ],
       "title": "P18 ship-gate audit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W02",
+        "P19-I01-W03",
+        "P19-I01-W04",
+        "P19-I01-W06",
+        "P19-I01-W07",
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/state/enums.py",
+        "src/eawf/lifecycle/transitions.py",
+        "tests/lifecycle/"
+      ],
+      "id": "P19-I01-W01",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:20:46.330116Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "plan_phase and plan_iter add PLANNED status; activate_phase and activate_iter transition PLANNED to ACTIVE; edit_wave_plan/remove_wave_plan/set_wave_deps mutate PENDING-only; Phase.depends_on field added; cyclic deps rejected"
+      ],
+      "title": "feat: lifecycle planned-scope transitions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P19-I01-W01"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/lifecycle/transitions.py",
+        "src/eawf/cli/wave.py",
+        "tests/lifecycle/"
+      ],
+      "id": "P19-I01-W02",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:20:52.876644Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "claim_wave rejects when any wave in .deps not CLOSED; rejects when a sibling lower-numbered ready wave is uncliamed; --out-of-order escape hatch supported"
+      ],
+      "title": "feat: claim_wave deps and W## monotonic gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P19-I01-W01"
+      ],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/lifecycle/transitions.py",
+        "tests/lifecycle/"
+      ],
+      "id": "P19-I01-W03",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:20:54.640441Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "close_phase rejects when no wave under the phase has status=CLOSED"
+      ],
+      "title": "feat: phase-close requires at least one closed wave",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P19-I01-W01"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/lifecycle/transitions.py",
+        "src/eawf/cli/wave.py",
+        "src/eawf/store/event.py",
+        "tools/migrate_drop_wave_commit.py",
+        "tests/"
+      ],
+      "id": "P19-I01-W04",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:20:56.885654Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "Wave.commit field removed; close_wave drops --commit arg; wave show --commit derives SHA via git log --grep; event envelope omits commit_sha; one-shot migration script lands"
+      ],
+      "title": "feat: drop Wave.commit field; derive via git-log grep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "tests/tools/"
+      ],
+      "id": "P19-I01-W05",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:20:47.935729Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "regex rejects bare [P##] subject; requires -W## or -CORE suffix; state type allowlist retained"
+      ],
+      "title": "feat: tighten commit-prefix lint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W07",
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P19-I01-W01"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/roadmap.py",
+        "src/eawf/render/roadmap.py",
+        "build/eawf-plugin/skills/roadmap/SKILL.md",
+        "tests/cli/test_roadmap.py"
+      ],
+      "id": "P19-I01-W06",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:21:04.944520Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "roadmap propose emits needs_user envelope with plan body; --apply atomically populates state with plan_phase + plan_iter + waves; --revise edits PENDING waves via structured flags or YAML; --drop archives PLANNED phase; roadmap show + diff renderers"
+      ],
+      "title": "feat: /roadmap --propose / --apply / --revise / --drop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P19-I01-W01",
+        "P19-I01-W06"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "build/eawf-plugin/skills/prep/SKILL.md",
+        "build/eawf-plugin/agents/planner.md"
+      ],
+      "id": "P19-I01-W07",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:21:07.763041Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "case A PLANNED with non-empty DAG: render via roadmap show + AUQ then activate_phase; case B PLANNED empty DAG: dispatch planner agent then AUQ approve + activate; case C no PLANNED phase: reject with hint"
+      ],
+      "title": "feat: /prep activates PLANNED scope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P19-I01-W01",
+        "P19-I01-W02",
+        "P19-I01-W03",
+        "P19-I01-W04",
+        "P19-I01-W05",
+        "P19-I01-W06",
+        "P19-I01-W07"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md",
+        "build/eawf-plugin/managed-blocks/"
+      ],
+      "id": "P19-I01-W08",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T19:21:09.950524Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "managed blocks updated: planned-scope-revisability",
+        "roadmap-procedure",
+        "commit-prefix (-W## or -CORE mandatory)",
+        "worktree-discipline (claim-order rule)",
+        "verify-before-claim (--commit arg removal note)"
+      ],
+      "title": "docs: AGENTS.md updates for planning system",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
