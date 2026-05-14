@@ -1932,7 +1932,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T18:33:12.515299Z",
+  "updated_at": "2026-05-14T18:34:44.040016Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4022,9 +4022,9 @@
     "P18-I01-W13": {
       "agent_role": "auditor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w13",
+      "closed_at": "2026-05-14T18:34:44.039998Z",
+      "commit": "f656d09dc148",
       "deps": [
         "P18-I01-W09",
         "P18-I01-W12"
@@ -4038,8 +4038,8 @@
       "id": "P18-I01-W13",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:55.574985Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Recorded P18 ship-gate audit A23-P18, validated artifact chassis, refreshed scenario golden, and verified ruff, mypy, and full pytest.",
+      "status": "closed",
       "success_criteria": [
         "ship-gate audit records P18 criteria",
         "audit artifact validates",
