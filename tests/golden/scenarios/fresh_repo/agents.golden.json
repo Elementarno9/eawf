@@ -1,5 +1,6 @@
 {
   "region_byte_lengths": {
+    "agent-report-contract": 660,
     "agent-tool-discipline": 579,
     "anti-patterns": 562,
     "architecture-cli-dispatch": 220,
@@ -10,7 +11,7 @@
     "deletion-rule": 699,
     "ea-directory-commit-policy": 216,
     "naming-conventions": 2057,
-    "non-negotiable-rules": 1790,
+    "non-negotiable-rules": 1850,
     "pr-template": 177,
     "secrets-hygiene": 916,
     "state-vs-specs": 131,
@@ -34,6 +35,7 @@
     "branch-naming",
     "secrets-hygiene",
     "artifact-chassis",
+    "agent-report-contract",
     "workflow-lifecycle",
     "pr-template",
     "agent-tool-discipline",
