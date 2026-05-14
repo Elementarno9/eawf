@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:56:34.498714Z",
+  "updated_at": "2026-05-14T18:02:25.477560Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3836,9 +3836,9 @@
         "P18-I01-W09",
         "P18-I01-W11"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w08",
+      "closed_at": "2026-05-14T18:02:25.477535Z",
+      "commit": "afc53fa4d9dd",
       "deps": [
         "P18-I01-W06"
       ],
@@ -3850,8 +3850,8 @@
       "id": "P18-I01-W08",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:53.509212Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added typed agent report invariant checks for session roles, attempts, scope resolution, executor commits, reviewer coverage, auditor criteria, and operator phase coverage.",
+      "status": "closed",
       "success_criteria": [
         "session role match",
         "attempt monotonicity",
