@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T18:05:23.687987Z",
+  "updated_at": "2026-05-14T18:08:58.311187Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3969,9 +3969,9 @@
       "blocks": [
         "P18-I01-W13"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w12",
+      "closed_at": "2026-05-14T18:08:58.311172Z",
+      "commit": "9a300103f490",
       "deps": [
         "P18-I01-W11"
       ],
@@ -3985,8 +3985,8 @@
       "id": "P18-I01-W12",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:55.160076Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added managed AGENTS rules requiring typed append-only agent reports with canonical verdict values and refreshed profile goldens.",
+      "status": "closed",
       "success_criteria": [
         "AGENTS rules require typed reports",
         "append-only attempts",
