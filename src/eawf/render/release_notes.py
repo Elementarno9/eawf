@@ -39,10 +39,34 @@ def mine_unreleased_changelog(changelog_text: str) -> list[str]:
     return mined
 
 
-def _artifact_rows(state: State) -> list[str]:
+def _artifact_ids_for_phases(state: State, phase_ids: set[str]) -> set[str]:
+    """Return artifact IDs tied to the selected phase range."""
+    artifact_ids: set[str] = set()
+    for audit in (state.audits or {}).values():
+        report_artifact_id = audit.report_artifact_id
+        if report_artifact_id is None:
+            continue
+        if audit.scope_id in phase_ids or any(phase_id in audit.id for phase_id in phase_ids):
+            artifact_ids.add(report_artifact_id)
+    return artifact_ids
+
+
+def _artifact_matches_phase(artifact_id: str, uri: str, phase_ids: set[str]) -> bool:
+    haystack = f"{artifact_id}\n{uri}"
+    return any(phase_id in haystack for phase_id in phase_ids)
+
+
+def _artifact_rows(state: State, phase_ids: set[str]) -> list[str]:
     rows: list[str] = []
+    audit_artifact_ids = _artifact_ids_for_phases(state, phase_ids)
     for artifact in sorted((state.artifacts or {}).values(), key=lambda a: a.id):
         if not artifact.uri.startswith("repo:.ea/artifacts/"):
+            continue
+        if artifact.id not in audit_artifact_ids and not _artifact_matches_phase(
+            artifact.id,
+            artifact.uri,
+            phase_ids,
+        ):
             continue
         rows.append(f"- `{artifact.id}` `{artifact.kind}` {artifact.uri}")
     return rows
@@ -61,13 +85,14 @@ def build_release_notes(
         for phase in sorted(state.phases.values(), key=lambda p: p.id)
         if _phase_in_range(phase.id, from_phase, to_phase)
     ]
+    phase_ids = {phase.id for phase in phases}
     changelog_lines = mine_unreleased_changelog(changelog_text or "")
     summary_rows = [
         f"- `{phase.id}` {phase.title} ({phase.status.value}) [1]" for phase in phases
     ] or ["- No phases matched the requested range [1]."]
     if changelog_lines:
         summary_rows.append("- Unreleased changelog entries mined from `CHANGELOG.md` [2].")
-    artifact_rows = _artifact_rows(state)
+    artifact_rows = _artifact_rows(state, phase_ids)
     references = ["[1] .ea/state.json"]
     if changelog_lines:
         references.append("[2] CHANGELOG.md")

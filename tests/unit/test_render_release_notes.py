@@ -33,6 +33,18 @@ def _state_payload() -> dict[str, Any]:
         },
         "workspace": None,
         "phases": {
+            "P16": {
+                "id": "P16",
+                "scope_id": "ZZ",
+                "subproject_id": None,
+                "title": "Previous phase",
+                "status": "closed",
+                "iter_ids": [],
+                "outcome_ids": [],
+                "opened_at": "2026-05-07T00:00:00Z",
+                "closed_at": "2026-05-07T00:01:00Z",
+                "audit_id": "A21-P16",
+            },
             "P17": {
                 "id": "P17",
                 "scope_id": "ZZ",
@@ -43,12 +55,57 @@ def _state_payload() -> dict[str, Any]:
                 "outcome_ids": [],
                 "opened_at": "2026-05-08T00:00:00Z",
                 "closed_at": "2026-05-08T00:01:00Z",
-                "audit_id": None,
-            }
+                "audit_id": "A22-P17",
+            },
         },
         "iters": {},
         "waves": {},
-        "artifacts": {},
+        "audits": {
+            "A21-P16": {
+                "id": "A21-P16",
+                "scope_id": "P16",
+                "kind": "ship-gate",
+                "status": "complete",
+                "report_artifact_id": "ART-A21-P16",
+                "check_results": [],
+                "integrity_results": [],
+                "created_at": "2026-05-07T00:01:00Z",
+                "verdict": "pass",
+            },
+            "A22-P17": {
+                "id": "A22-P17",
+                "scope_id": "P17",
+                "kind": "ship-gate",
+                "status": "complete",
+                "report_artifact_id": "ART-A22-P17",
+                "check_results": [],
+                "integrity_results": [],
+                "created_at": "2026-05-08T00:01:00Z",
+                "verdict": "pass",
+            },
+        },
+        "artifacts": {
+            "ART-A21-P16": {
+                "id": "ART-A21-P16",
+                "kind": "audit_report",
+                "uri": "repo:.ea/artifacts/A21-P16-ship-gate.md",
+                "urn": "urn:eawf:v1:artifact:ZZ/ART-A21-P16",
+                "sha256": None,
+                "size_bytes": None,
+                "created_at": "2026-05-07T00:01:00Z",
+                "metadata": {},
+            },
+            "ART-A22-P17": {
+                "id": "ART-A22-P17",
+                "kind": "audit_report",
+                "uri": "repo:.ea/artifacts/A22-P17-ship-gate.md",
+                "urn": "urn:eawf:v1:artifact:ZZ/ART-A22-P17",
+                "sha256": None,
+                "size_bytes": None,
+                "created_at": "2026-05-08T00:01:00Z",
+                "metadata": {},
+            },
+        },
         "agent_sessions": {},
         "plugins": {},
         "indexes": {},
@@ -69,4 +126,6 @@ def test_build_release_notes_validates_as_artifact() -> None:
         changelog_text="# Changelog\n\n## [Unreleased]\n\n- PR hardening\n",
     )
     assert "`P17` PR hardening" in body
+    assert "`ART-A22-P17`" in body
+    assert "`ART-A21-P16`" not in body
     assert validate_markdown_artifact(body).ok
