@@ -308,7 +308,6 @@ def test_render_terminal_wave_still_emits_prompt() -> None:
     state = _empty_state()
     _seed_chain(state)
     state.waves["P01-I01-W01"].status = WaveStatus.CLOSED
-    state.waves["P01-I01-W01"].commit = "abc1234"
     state.waves["P01-I01-W01"].outcome = "all green"
     out = render_wave_prompt(state, "P01-I01-W01")
     assert "# Wave P01-I01-W01: First wave" in out

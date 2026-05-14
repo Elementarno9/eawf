@@ -1818,18 +1818,6 @@
           "default": null,
           "title": "Closed At"
         },
-        "commit": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Commit"
-        },
         "deps": {
           "items": {
             "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",

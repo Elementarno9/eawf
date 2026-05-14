@@ -97,8 +97,6 @@ def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
             "wave",
             "close",
             "P01-I01-W01",
-            "--commit",
-            "abcd123",
             "--outcome",
             "ok",
         ],

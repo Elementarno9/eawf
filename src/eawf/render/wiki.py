@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 
+from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.state.enums import PhaseStatus
 from eawf.state.models import State
 
@@ -74,7 +75,9 @@ def _phase_section(state: State, phase_id: str) -> list[str]:
         for w in phase_waves:
             outcome = (w.outcome or "").replace("|", "\\|")
             title = w.title.replace("|", "\\|")
-            lines.append(f"| `{w.id}` | {title} | `{_short_sha(w.commit)}` | {outcome} |")
+            lines.append(
+                f"| `{w.id}` | {title} | `{_short_sha(derive_wave_sha(w.id))}` | {outcome} |"
+            )
         lines.append("")
     return lines
 

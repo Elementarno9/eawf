@@ -88,6 +88,7 @@ from eawf.lifecycle.transitions import (
     reopen_phase,
     switch_subproject,
 )
+from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.lock import portalock
 from eawf.state.enums import (
     AgentSessionRole,
@@ -638,13 +639,12 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
         for wid, w in state.waves.items()
         if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
     )
-    closed_waves_missing_commit = sorted(
-        wid
-        for wid, w in state.waves.items()
-        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED and not w.commit
-    )
     closed_wave_ids = [wid for wid, _wave in closed_waves]
-    unique_closed_wave_commits = sorted({w.commit for _wid, w in closed_waves if w.commit})
+    closed_wave_shas = [derive_wave_sha(wid) for wid in closed_wave_ids]
+    closed_waves_missing_commit = sorted(
+        wid for wid, sha in zip(closed_wave_ids, closed_wave_shas, strict=True) if not sha
+    )
+    unique_closed_wave_commits = sorted({sha for sha in closed_wave_shas if sha})
     scope_collapse_decision = _phase_has_scope_collapse_decision(state, phase_id=phase_id)
     single_wave_without_decision = bool(len(closed_wave_ids) == 1 and not scope_collapse_decision)
     iters_without_audit = sorted(
@@ -697,10 +697,6 @@ def _phase_close_blockers(checklist: dict[str, Any]) -> list[str]:
         blockers.append(f"open iters: {', '.join(checklist['open_iters'])}")
     if checklist["open_waves"]:
         blockers.append(f"open waves: {', '.join(checklist['open_waves'])}")
-    if checklist["closed_waves_missing_commit"]:
-        blockers.append(
-            f"closed waves missing commit: {', '.join(checklist['closed_waves_missing_commit'])}"
-        )
     if checklist["iters_without_audit"]:
         blockers.append(
             f"closed iters missing audit: {', '.join(checklist['iters_without_audit'])}"
@@ -1117,24 +1113,20 @@ def wave_claim_cmd(
 def wave_close_cmd(
     ctx: typer.Context,
     wave_id: Annotated[str, typer.Argument(help="Wave ID to close.")],
-    commit: Annotated[
-        str | None, typer.Option("--commit", help="Commit SHA evidence (required).")
-    ] = None,
     outcome: Annotated[
         str | None, typer.Option("--outcome", help="Outcome description (required).")
     ] = None,
 ) -> None:
-    """Close a claimed/in-progress wave. Both --commit and --outcome are required."""
+    """Close a claimed/in-progress wave with an outcome string.
+
+    The commit SHA is no longer stored on the wave; derive it on demand
+    with ``eawf wave show --commit <wave-id>`` which walks
+    ``git log --grep "[P##-W##]"``.
+    """
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
             cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
-            flags=flags,
-        )
-        return
-    if commit is None or commit == "":
-        cli_errors.emit_error(
-            cli_errors.InvalidInput("--commit is required for wave close"),
             flags=flags,
         )
         return
@@ -1147,23 +1139,54 @@ def wave_close_cmd(
     _run_mutation(
         ctx,
         command="wave close",
-        args={"id": wave_id, "commit": commit, "outcome": outcome},
+        args={"id": wave_id, "outcome": outcome},
         scope_id=wave_id,
-        text=f"wave close {wave_id} commit={commit}",
+        text=f"wave close {wave_id} outcome={outcome!r}",
         envelope=lambda: {
             "wave": wave_id,
-            "commit": commit,
             "outcome": outcome,
         },
         mutate=lambda state: _wrap_no_return(
             close_wave(
                 state,
                 wave_id=wave_id,
-                commit=commit,
                 outcome=outcome,
             )
         ),
     )
+
+
+@wave_app.command("show")
+def wave_show_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to inspect.")],
+    show_commit: Annotated[
+        bool,
+        typer.Option(
+            "--commit",
+            help="Print the wave's commit SHA derived via git log --grep '[P##-W##]'.",
+        ),
+    ] = False,
+) -> None:
+    """Inspect a wave. ``--commit`` derives the SHA from git history."""
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    if not show_commit:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput("wave show currently requires --commit"),
+            flags=flags,
+        )
+        return
+    sha = derive_wave_sha(wave_id)
+    if sha is None:
+        typer.echo("")
+        return
+    typer.echo(sha)
 
 
 @wave_app.command("fail")

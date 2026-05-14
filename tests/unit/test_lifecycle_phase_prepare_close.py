@@ -109,7 +109,13 @@ def test_prepare_close_flags_closed_iter_missing_audit() -> None:
     assert out["ok"] is False
 
 
-def test_prepare_close_flags_closed_wave_missing_commit() -> None:
+def test_prepare_close_flags_closed_wave_missing_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.cli.commands.lifecycle.derive_wave_sha",
+        lambda _wid: None,
+    )
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
@@ -117,13 +123,18 @@ def test_prepare_close_flags_closed_wave_missing_commit() -> None:
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
     w.closed_at = datetime.now(UTC)
-    w.commit = None
     out = _phase_prepare_close_checklist(state, phase_id="P03")
     assert out["closed_waves_missing_commit"] == ["P03-I01-W01"]
     assert out["ok"] is False
 
 
-def test_prepare_close_flags_single_wave_without_decision() -> None:
+def test_prepare_close_flags_single_wave_without_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.cli.commands.lifecycle.derive_wave_sha",
+        lambda _wid: "abc123",
+    )
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
@@ -131,7 +142,6 @@ def test_prepare_close_flags_single_wave_without_decision() -> None:
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
     w.closed_at = datetime.now(UTC)
-    w.commit = "abc123"
     it = state.iters["P03-I01"]
     it.status = IterStatus.CLOSED
     it.closed_at = datetime.now(UTC)
@@ -147,7 +157,13 @@ def test_prepare_close_flags_single_wave_without_decision() -> None:
     assert "single closed wave" in "; ".join(out["blockers"])
 
 
-def test_prepare_close_allows_single_wave_with_scope_collapse_decision() -> None:
+def test_prepare_close_allows_single_wave_with_scope_collapse_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.cli.commands.lifecycle.derive_wave_sha",
+        lambda _wid: "abc123",
+    )
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
@@ -155,7 +171,6 @@ def test_prepare_close_allows_single_wave_with_scope_collapse_decision() -> None
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
     w.closed_at = datetime.now(UTC)
-    w.commit = "abc123"
     it = state.iters["P03-I01"]
     it.status = IterStatus.CLOSED
     it.closed_at = datetime.now(UTC)

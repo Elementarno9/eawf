@@ -110,7 +110,6 @@ def _wave(
         file_scopes=["src/foo.py"],
         claim_session_id=claim_session_id,
         worktree_id=None,
-        commit="abc123" if status == WaveStatus.CLOSED else None,
         outcome="ok" if status == WaveStatus.CLOSED else None,
         opened_at=_DT,
         closed_at=closed_at,

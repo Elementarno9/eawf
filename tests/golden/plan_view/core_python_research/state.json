@@ -1,46 +1,122 @@
 {
-  "schema_version": "1.0",
-  "scope_kind": "repo",
-  "urn": "urn:eawf:v1:state:CPR",
-  "updated_at": "2026-05-08T00:00:00Z",
-  "project": {
-    "code": "CPR",
-    "slug": "core-python-research",
-    "title": "Core Python Research",
-    "description": "",
-    "domains": ["core", "python", "research"],
-    "default_branch": "main",
-    "status": "active",
-    "repo_urn": "urn:eawf:v1:repo:CPR"
-  },
-  "current": {
-    "project_code": "CPR",
-    "subproject_id": null,
-    "phase_id": "P05",
-    "iter_id": "P05-I01",
-    "active_wave_ids": [],
-    "active_session_ids": []
-  },
-  "workspace": null,
-  "phases": {
-    "P05": {
-      "id": "P05",
-      "scope_id": "CPR",
-      "title": "Phase Five",
+  "agent_sessions": {
+    "S-A": {
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P05-I01-W01"
+      ],
+      "ended_at": null,
+      "id": "S-A",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P05-I01-W01",
+      "started_at": "2026-05-08T01:00:00Z",
       "status": "active",
-      "iter_ids": ["P05-I01"],
-      "outcome_ids": [],
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null,
-      "audit_id": null
+      "summary": null,
+      "worktree_ids": []
     }
   },
+  "artifacts": {},
+  "audits": {
+    "AU-ITER": {
+      "check_results": [
+        {
+          "details": null,
+          "name": "ruff_clean",
+          "passed": true
+        },
+        {
+          "details": "errors in core",
+          "name": "mypy_strict",
+          "passed": false
+        },
+        {
+          "details": null,
+          "name": "tests_green",
+          "passed": true
+        }
+      ],
+      "created_at": "2026-05-08T03:00:00Z",
+      "id": "AU-ITER",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "P05-I01",
+      "status": "complete",
+      "verdict": "minor"
+    }
+  },
+  "backlog": {
+    "BL-1": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-08T01:00:00Z",
+      "id": "BL-1",
+      "priority": "P0",
+      "resolution": null,
+      "scope_id": "P05-I01",
+      "status": "open",
+      "title": "fix flake on W03"
+    },
+    "BL-2": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-08T01:00:00Z",
+      "id": "BL-2",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P05",
+      "status": "open",
+      "title": "improve audit driver"
+    }
+  },
+  "current": {
+    "active_session_ids": [],
+    "active_wave_ids": [],
+    "iter_id": "P05-I01",
+    "phase_id": "P05",
+    "project_code": "CPR",
+    "subproject_id": null
+  },
+  "hypotheses": {
+    "H05-01": {
+      "audit_id": null,
+      "confirm": ">1000",
+      "id": "H05-01",
+      "metric": "throughput",
+      "reject": "<500",
+      "scope_id": "P05-I01",
+      "source_artifact_id": null,
+      "status": "rejected",
+      "text": "approach X scales beyond 1k waves",
+      "verdict": "rejected"
+    }
+  },
+  "incidents": {
+    "INC-1": {
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "id": "INC-1",
+      "opened_at": "2026-05-08T02:30:00Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P05-I01",
+      "severity": "high",
+      "status": "open",
+      "title": "lock collision on W04"
+    }
+  },
+  "indexes": {},
   "iters": {
     "P05-I01": {
+      "audit_id": "AU-ITER",
+      "closed_at": null,
+      "estimate_id": null,
       "id": "P05-I01",
+      "opened_at": "2026-05-08T00:00:00Z",
       "phase_id": "P05",
-      "title": "Cycle plus risks",
       "status": "active",
+      "title": "Cycle plus risks",
       "wave_ids": [
         "P05-I01-W00",
         "P05-I01-W01",
@@ -48,184 +124,140 @@
         "P05-I01-W03",
         "P05-I01-W04",
         "P05-I01-W05"
-      ],
-      "estimate_id": null,
-      "audit_id": "AU-ITER",
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null
+      ]
     }
   },
-  "waves": {
-    "P05-I01-W00": {
-      "id": "P05-I01-W00",
-      "iter_id": "P05-I01",
-      "title": "Bootstrap",
-      "status": "closed",
-      "deps": [],
-      "file_scopes": ["src/cpr/init.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": "1111111aaaa",
-      "outcome": "ok",
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": "2026-05-08T01:00:00Z"
-    },
-    "P05-I01-W01": {
-      "id": "P05-I01-W01",
-      "iter_id": "P05-I01",
-      "title": "Stage A",
-      "status": "in_progress",
-      "deps": ["P05-I01-W00"],
-      "file_scopes": ["src/cpr/a.py"],
-      "claim_session_id": "S-A",
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    },
-    "P05-I01-W02": {
-      "id": "P05-I01-W02",
-      "iter_id": "P05-I01",
-      "title": "Cycle node B",
-      "status": "pending",
-      "deps": ["P05-I01-W03"],
-      "file_scopes": ["src/cpr/b.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    },
-    "P05-I01-W03": {
-      "id": "P05-I01-W03",
-      "iter_id": "P05-I01",
-      "title": "Cycle node C",
-      "status": "pending",
-      "deps": ["P05-I01-W02"],
-      "file_scopes": ["src/cpr/c.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    },
-    "P05-I01-W04": {
-      "id": "P05-I01-W04",
-      "iter_id": "P05-I01",
-      "title": "Failure",
-      "status": "failed",
-      "deps": ["P05-I01-W01"],
-      "file_scopes": [],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": "failed_lock",
-      "opened_at": "2026-05-08T02:00:00Z",
-      "closed_at": null
-    },
-    "P05-I01-W05": {
-      "id": "P05-I01-W05",
-      "iter_id": "P05-I01",
-      "title": "Final",
-      "status": "pending",
-      "deps": ["P05-I01-W04"],
-      "file_scopes": [],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T02:00:00Z",
-      "closed_at": null
-    }
-  },
-  "hypotheses": {
-    "H05-01": {
-      "id": "H05-01",
-      "scope_id": "P05-I01",
-      "text": "approach X scales beyond 1k waves",
-      "metric": "throughput",
-      "confirm": ">1000",
-      "reject": "<500",
-      "status": "rejected",
-      "verdict": "rejected",
+  "phases": {
+    "P05": {
       "audit_id": null,
-      "source_artifact_id": null
-    }
-  },
-  "audits": {
-    "AU-ITER": {
-      "id": "AU-ITER",
-      "scope_id": "P05-I01",
-      "kind": "evaluation",
-      "status": "complete",
-      "report_artifact_id": null,
-      "check_results": [
-        {"name": "ruff_clean", "passed": true, "details": null},
-        {"name": "mypy_strict", "passed": false, "details": "errors in core"},
-        {"name": "tests_green", "passed": true, "details": null}
+      "closed_at": null,
+      "id": "P05",
+      "iter_ids": [
+        "P05-I01"
       ],
-      "integrity_results": [],
-      "created_at": "2026-05-08T03:00:00Z",
-      "verdict": "minor"
-    }
-  },
-  "incidents": {
-    "INC-1": {
-      "id": "INC-1",
-      "scope_id": "P05-I01",
-      "severity": "high",
-      "title": "lock collision on W04",
-      "status": "open",
-      "opened_at": "2026-05-08T02:30:00Z",
-      "closed_at": null,
-      "root_cause": null,
-      "corrective_action_ids": [],
-      "report_artifact_id": null
-    }
-  },
-  "backlog": {
-    "BL-1": {
-      "id": "BL-1",
-      "scope_id": "P05-I01",
-      "title": "fix flake on W03",
-      "priority": "P0",
-      "status": "open",
-      "created_at": "2026-05-08T01:00:00Z",
-      "closed_at": null,
-      "resolution": null,
-      "commit": null
-    },
-    "BL-2": {
-      "id": "BL-2",
-      "scope_id": "P05",
-      "title": "improve audit driver",
-      "priority": "P1",
-      "status": "open",
-      "created_at": "2026-05-08T01:00:00Z",
-      "closed_at": null,
-      "resolution": null,
-      "commit": null
-    }
-  },
-  "artifacts": {},
-  "agent_sessions": {
-    "S-A": {
-      "id": "S-A",
-      "role": "executor",
-      "runtime": "claude",
-      "scope_id": "P05-I01-W01",
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome_ids": [],
+      "scope_id": "CPR",
       "status": "active",
-      "claimed_wave_ids": ["P05-I01-W01"],
-      "worktree_ids": [],
-      "artifact_ids": [],
-      "started_at": "2026-05-08T01:00:00Z",
-      "ended_at": null,
-      "summary": null
+      "title": "Phase Five"
     }
   },
   "plugins": {},
-  "indexes": {}
+  "project": {
+    "code": "CPR",
+    "default_branch": "main",
+    "description": "",
+    "domains": [
+      "core",
+      "python",
+      "research"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:CPR",
+    "slug": "core-python-research",
+    "status": "active",
+    "title": "Core Python Research"
+  },
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "urn": "urn:eawf:v1:state:CPR",
+  "waves": {
+    "P05-I01-W00": {
+      "claim_session_id": null,
+      "closed_at": "2026-05-08T01:00:00Z",
+      "deps": [],
+      "file_scopes": [
+        "src/cpr/init.py"
+      ],
+      "id": "P05-I01-W00",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome": "ok",
+      "status": "closed",
+      "title": "Bootstrap",
+      "worktree_id": null
+    },
+    "P05-I01-W01": {
+      "claim_session_id": "S-A",
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/cpr/a.py"
+      ],
+      "id": "P05-I01-W01",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "in_progress",
+      "title": "Stage A",
+      "worktree_id": null
+    },
+    "P05-I01-W02": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W03"
+      ],
+      "file_scopes": [
+        "src/cpr/b.py"
+      ],
+      "id": "P05-I01-W02",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Cycle node B",
+      "worktree_id": null
+    },
+    "P05-I01-W03": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W02"
+      ],
+      "file_scopes": [
+        "src/cpr/c.py"
+      ],
+      "id": "P05-I01-W03",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Cycle node C",
+      "worktree_id": null
+    },
+    "P05-I01-W04": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W01"
+      ],
+      "file_scopes": [],
+      "id": "P05-I01-W04",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T02:00:00Z",
+      "outcome": "failed_lock",
+      "status": "failed",
+      "title": "Failure",
+      "worktree_id": null
+    },
+    "P05-I01-W05": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W04"
+      ],
+      "file_scopes": [],
+      "id": "P05-I01-W05",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T02:00:00Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Final",
+      "worktree_id": null
+    }
+  },
+  "workspace": null
 }

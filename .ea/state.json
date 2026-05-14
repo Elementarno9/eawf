@@ -574,7 +574,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Other-harness support investigation (Codex, Cursor, Aider) — reuse runtimes/<name>/ pattern; main cost: hook-event mapping + settings schema"
+      "title": "Other-harness support investigation (Codex, Cursor, Aider) \u2014 reuse runtimes/<name>/ pattern; main cost: hook-event mapping + settings schema"
     },
     "B014": {
       "closed_at": null,
@@ -585,7 +585,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap show' (rich table — phases/iters/waves with collapsible done branches, in-progress + planned work, EU estimate vs actual), then build the bare-'eawf' multi-pane TUI on the same data model (state pane + roadmap pane + git pane + memory pane); per fixed-decisions.md the Textual-style dashboard is deferred beyond v0.1"
+      "title": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap show' (rich table \u2014 phases/iters/waves with collapsible done branches, in-progress + planned work, EU estimate vs actual), then build the bare-'eawf' multi-pane TUI on the same data model (state pane + roadmap pane + git pane + memory pane); per fixed-decisions.md the Textual-style dashboard is deferred beyond v0.1"
     },
     "B015": {
       "closed_at": null,
@@ -640,7 +640,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) — locks D02; target P09 evidence cluster"
+      "title": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) \u2014 locks D02; target P09 evidence cluster"
     },
     "B020": {
       "closed_at": null,
@@ -651,7 +651,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis set-verdict' requires --audit <AID> — locks D03; target P09"
+      "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis set-verdict' requires --audit <AID> \u2014 locks D03; target P09"
     },
     "B021": {
       "closed_at": null,
@@ -662,7 +662,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Artifact registry: sha256 mandatory for local files, optional for URL artifacts; 'eawf artifact verify' recomputes on demand — locks D04; target P09"
+      "title": "Artifact registry: sha256 mandatory for local files, optional for URL artifacts; 'eawf artifact verify' recomputes on demand \u2014 locks D04; target P09"
     },
     "B022": {
       "closed_at": null,
@@ -673,7 +673,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Integrity-check runner: auto-runs on 'eawf phase close'; 'eawf validate --integrity' opt-in manual; failures block close (--force requires audit reason) — locks D05; target P09"
+      "title": "Integrity-check runner: auto-runs on 'eawf phase close'; 'eawf validate --integrity' opt-in manual; failures block close (--force requires audit reason) \u2014 locks D05; target P09"
     },
     "B023": {
       "closed_at": null,
@@ -684,7 +684,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Cross-language profile bodies (rust, go, ts) — pytest_pass analogue per language; target P09 runtime cluster"
+      "title": "Cross-language profile bodies (rust, go, ts) \u2014 pytest_pass analogue per language; target P09 runtime cluster"
     },
     "B024": {
       "closed_at": null,
@@ -695,7 +695,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them — target P10 distribution cluster"
+      "title": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them \u2014 target P10 distribution cluster"
     },
     "B025": {
       "closed_at": "2026-05-11T14:13:36.067709Z",
@@ -706,7 +706,7 @@
       "resolution": "P08-W01 subagent prompt renderer landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block + relevant decisions/hypotheses/audits into self-contained prompt for the agent harness — target P08 orchestration"
+      "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block + relevant decisions/hypotheses/audits into self-contained prompt for the agent harness \u2014 target P08 orchestration"
     },
     "B026": {
       "closed_at": null,
@@ -717,7 +717,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch — target P08 orchestration"
+      "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch \u2014 target P08 orchestration"
     },
     "B027": {
       "closed_at": "2026-05-11T14:13:36.476093Z",
@@ -728,7 +728,7 @@
       "resolution": "P08-W03 wave land cherry-pick landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits back into parent feature branch, mark wave landed in state — target P08 orchestration"
+      "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits back into parent feature branch, mark wave landed in state \u2014 target P08 orchestration"
     },
     "B028": {
       "closed_at": null,
@@ -739,7 +739,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08 observability"
+      "title": "Per-wave token-budget cap (warn at 75%, block at 100%) \u2014 target P08 observability"
     },
     "B029": {
       "closed_at": "2026-05-11T14:13:36.892041Z",
@@ -750,7 +750,7 @@
       "resolution": "P12-W01 decision graph render landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Decision-graph viz (text + dot/mermaid): render decisions/hypotheses/audits/backlog as a graph for human review — target P11 observability"
+      "title": "Decision-graph viz (text + dot/mermaid): render decisions/hypotheses/audits/backlog as a graph for human review \u2014 target P11 observability"
     },
     "B030": {
       "closed_at": "2026-05-11T14:13:37.323985Z",
@@ -761,7 +761,7 @@
       "resolution": "P12-W02 memory GC + tiered memory landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Memory GC + summarisation: compact/decay project memory and event log past a threshold; surface canonical summaries to agents — target P11 observability"
+      "title": "Memory GC + summarisation: compact/decay project memory and event log past a threshold; surface canonical summaries to agents \u2014 target P11 observability"
     },
     "B031": {
       "closed_at": "2026-05-11T14:13:37.755671Z",
@@ -772,7 +772,7 @@
       "resolution": "P12-W03 doc-drift linter landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Doc-drift linter ('eawf doc verify'): detect when rendered docs disagree with state.json (closed phases referenced as active, missing audits, etc.) — target P11"
+      "title": "Doc-drift linter ('eawf doc verify'): detect when rendered docs disagree with state.json (closed phases referenced as active, missing audits, etc.) \u2014 target P11"
     },
     "B032": {
       "closed_at": "2026-05-11T14:13:38.224729Z",
@@ -783,7 +783,7 @@
       "resolution": "P12-W04 PR-body + wiki landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "PR-body generator from state: 'eawf pr render' produces phase PR body (Summary + Test plan + Phase deliverables) from state.json — target P11"
+      "title": "PR-body generator from state: 'eawf pr render' produces phase PR body (Summary + Test plan + Phase deliverables) from state.json \u2014 target P11"
     },
     "B033": {
       "closed_at": "2026-05-11T14:13:38.625668Z",
@@ -794,7 +794,7 @@
       "resolution": "P12-W05 skill eval harness landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Skill eval harness (golden envelopes): regression tests for the dispatcher itself; measure dispatch quality across model/version changes — target P11"
+      "title": "Skill eval harness (golden envelopes): regression tests for the dispatcher itself; measure dispatch quality across model/version changes \u2014 target P11"
     },
     "B034": {
       "closed_at": "2026-05-11T14:13:39.036641Z",
@@ -805,7 +805,7 @@
       "resolution": "P12-W06 sandbox/permission policy table landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Sandbox/permission policy module: TDAD-style bounded autonomy — explicit policy declares what an agent may do per wave/profile — target P11 runtime"
+      "title": "Sandbox/permission policy module: TDAD-style bounded autonomy \u2014 explicit policy declares what an agent may do per wave/profile \u2014 target P11 runtime"
     },
     "B035": {
       "closed_at": null,
@@ -816,7 +816,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Per-wave/profile MCP scoping: Composio-style capability narrowing — bind MCP tools to scopes — target P10 distribution"
+      "title": "Per-wave/profile MCP scoping: Composio-style capability narrowing \u2014 bind MCP tools to scopes \u2014 target P10 distribution"
     },
     "B036": {
       "closed_at": null,
@@ -827,7 +827,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Non-Eä migration helper: import a foreign repo into eawf (detect language, scaffold .ea/, seed phase plan) — target v0.4 migration"
+      "title": "Non-E\u00e4 migration helper: import a foreign repo into eawf (detect language, scaffold .ea/, seed phase plan) \u2014 target v0.4 migration"
     },
     "B037": {
       "closed_at": "2026-05-11T14:13:39.448781Z",
@@ -838,7 +838,7 @@
       "resolution": "P12-W02 tiered memory landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers; decay + summarisation hooks — target P11 observability"
+      "title": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers; decay + summarisation hooks \u2014 target P11 observability"
     },
     "B038": {
       "closed_at": "2026-05-11T14:13:39.861053Z",
@@ -849,7 +849,7 @@
       "resolution": "P12-W04 wiki render landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki pattern — distil state.json into a human-readable narrative project wiki — target P11"
+      "title": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki pattern \u2014 distil state.json into a human-readable narrative project wiki \u2014 target P11"
     },
     "B039": {
       "closed_at": "2026-05-11T14:13:40.266966Z",
@@ -860,7 +860,7 @@
       "resolution": "P12-W07 file-impact graph landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to source files; show what state-changes touch which files — target P11"
+      "title": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to source files; show what state-changes touch which files \u2014 target P11"
     },
     "B040": {
       "closed_at": "2026-05-11T14:13:40.695493Z",
@@ -871,7 +871,7 @@
       "resolution": "P08-W05 CI-fix loop landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up wave to address failures, repeat until green — target P08 orchestration"
+      "title": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up wave to address failures, repeat until green \u2014 target P08 orchestration"
     },
     "B041": {
       "closed_at": "2026-05-11T14:13:41.104676Z",
@@ -882,7 +882,7 @@
       "resolution": "P08-W06 wave review landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "PR review automation: dispatch reviewer subagent against the diff, attach findings as 'audit add --kind review' — target P08 orchestration"
+      "title": "PR review automation: dispatch reviewer subagent against the diff, attach findings as 'audit add --kind review' \u2014 target P08 orchestration"
     },
     "B042": {
       "closed_at": null,
@@ -893,7 +893,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Self-eval benchmark harness: score dispatcher's wave outputs against golden traces; CI-gates regression — target P12 observability"
+      "title": "Self-eval benchmark harness: score dispatcher's wave outputs against golden traces; CI-gates regression \u2014 target P12 observability"
     },
     "B043": {
       "closed_at": null,
@@ -904,7 +904,7 @@
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "User-skill registry: per-user skill catalogue independent of project's plugin tree — target P09 distribution"
+      "title": "User-skill registry: per-user skill catalogue independent of project's plugin tree \u2014 target P09 distribution"
     },
     "B044": {
       "closed_at": null,
@@ -1096,15 +1096,15 @@
   "decisions": {
     "D01": {
       "alternatives": [
-        "Keep plan §4 P06 scope verbatim; defer spec internalization to v0.1.1",
+        "Keep plan \u00a74 P06 scope verbatim; defer spec internalization to v0.1.1",
         "Split into P06=spec internalization + P07=hardening"
       ],
       "created_at": "2026-05-10T13:25:45.960934Z",
       "id": "D01",
-      "rationale": "Plan §4 lists P06 as Hardening + GA (Linux polish, golden scenarios, release tag). Phase 6 reframed to (a) internalize the v0.1 design spec into docs/, (b) dogfood eawf on its own repo, (c) ship the v0.1 PR. The displaced hardening work is captured in v0.2 backlog items B001 (Linux CI matrix), B009 (golden scenarios), B010 (v0.1.0 release tag).",
+      "rationale": "Plan \u00a74 lists P06 as Hardening + GA (Linux polish, golden scenarios, release tag). Phase 6 reframed to (a) internalize the v0.1 design spec into docs/, (b) dogfood eawf on its own repo, (c) ship the v0.1 PR. The displaced hardening work is captured in v0.2 backlog items B001 (Linux CI matrix), B009 (golden scenarios), B010 (v0.1.0 release tag).",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "P06 rescope: spec internalization + dogfood instead of plan §4 'Hardening + GA'",
+      "summary": "P06 rescope: spec internalization + dogfood instead of plan \u00a74 'Hardening + GA'",
       "superseded_by": null
     },
     "D02": {
@@ -1177,12 +1177,12 @@
     },
     "D07": {
       "alternatives": [
-        "squash-merge (collapses history; rejected — incident 2026-05-10 PR #3 squashed by ship skill, reverted via force-push, redone as rebase-merge in PR #4)",
+        "squash-merge (collapses history; rejected \u2014 incident 2026-05-10 PR #3 squashed by ship skill, reverted via force-push, redone as rebase-merge in PR #4)",
         "merge-commit (disabled at repo level)"
       ],
       "created_at": "2026-05-10T20:35:25.648863Z",
       "id": "D07",
-      "rationale": "Squash collapses per-wave/per-commit history into a single fat commit on main, losing the symbol-prefixed audit trail (e.g. [P06-W05] [P06-CORE]) that AGENTS.md commit-prefix rule and the wave/audit chain depend on for reconstructibility from git log. Rebase-merge preserves linear, individual commits with their original messages — matches the cherry-pick discipline that already feeds the long-running phase branch. Merge-commits forbidden by repo settings (mergeCommitAllowed=false). Default for all phase PRs unless explicitly overridden.",
+      "rationale": "Squash collapses per-wave/per-commit history into a single fat commit on main, losing the symbol-prefixed audit trail (e.g. [P06-W05] [P06-CORE]) that AGENTS.md commit-prefix rule and the wave/audit chain depend on for reconstructibility from git log. Rebase-merge preserves linear, individual commits with their original messages \u2014 matches the cherry-pick discipline that already feeds the long-running phase branch. Merge-commits forbidden by repo settings (mergeCommitAllowed=false). Default for all phase PRs unless explicitly overridden.",
       "scope_id": "EAWF",
       "status": "active",
       "summary": "PR merge strategy: rebase-and-merge; never squash, never merge-commit",
@@ -1222,7 +1222,7 @@
       "rationale": "D08 deferred the cadence policy revisit to v0.2.0 ship. Reviewed at P13 open: one-PR-per-phase produced clean rebase-merge history across P07..P12 and aligns with AGENTS.md phase lifecycle. Keep cadence; reopen for v0.3 only if multi-phase PRs become necessary.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Revisit D08 — keep one-PR-per-phase cadence through v0.2 close",
+      "summary": "Revisit D08 \u2014 keep one-PR-per-phase cadence through v0.2 close",
       "superseded_by": null
     },
     "D11": {
@@ -1364,7 +1364,7 @@
       "rationale": "Operator priority is harness coverage, not new server runtime; hardens existing emit path (Claude .mcp.json + Codex TOML + OpenCode opencode.json mcp block); plugin doctor verifies drift; own MCP server deferred to v0.4.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "MCP at v0.3: Eä emits MCP configs into harness trees (no own MCP server)",
+      "summary": "MCP at v0.3: E\u00e4 emits MCP configs into harness trees (no own MCP server)",
       "superseded_by": null
     },
     "D22": {
@@ -1947,7 +1947,7 @@
     "repo_urn": "urn:eawf:v1:repo:EAWF",
     "slug": "eawf",
     "status": "active",
-    "title": "Eä Workflow"
+    "title": "E\u00e4 Workflow"
   },
   "sandbox_policies": {
     "POL-1": {
@@ -1974,7 +1974,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:29:29.132215Z",
-      "commit": "5d29d97",
       "deps": [
         "P08-I01-W02"
       ],
@@ -2003,7 +2002,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:13:08.058437Z",
-      "commit": "149de74",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2031,7 +2029,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:29:29.549660Z",
-      "commit": "76f23e5",
       "deps": [
         "P08-I01-W02"
       ],
@@ -2057,7 +2054,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:13:08.501855Z",
-      "commit": "e80e35d",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2081,7 +2077,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:46:30.776412Z",
-      "commit": "9f135cd",
       "deps": [
         "P08-I01-W03"
       ],
@@ -2107,7 +2102,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-10T22:46:31.147208Z",
-      "commit": "c868068",
       "deps": [
         "P08-I01-W03"
       ],
@@ -2135,7 +2129,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:18:14.020785Z",
-      "commit": "91c7e469e5121dd16b2f4e2d7f35f55dd2a8650d",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2146,10 +2139,10 @@
       "id": "P09-I01-W01",
       "iter_id": "P09-I01",
       "opened_at": "2026-05-11T08:16:04.388462Z",
-      "outcome": "Dedup _insort to bisect.insort; rename project_init→project_init_cmd",
+      "outcome": "Dedup _insort to bisect.insort; rename project_init\u2192project_init_cmd",
       "status": "closed",
       "success_criteria": [],
-      "title": "DRY _insort to shared util; rename project_init→project_init_cmd",
+      "title": "DRY _insort to shared util; rename project_init\u2192project_init_cmd",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -2159,7 +2152,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:20:17.430900Z",
-      "commit": "5571d1408148fc4d49e2f7f1f59d9661ab37949f",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2182,7 +2174,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:21:40.313753Z",
-      "commit": "3b5b2fb927d9c27e981632c9e7f36a02cd184430",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2205,7 +2196,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T08:23:58.605660Z",
-      "commit": "268492749c6f601655357fe92ce92202e0da7d42",
       "deps": [
         "P09-I01-W01"
       ],
@@ -2232,7 +2222,6 @@
       ],
       "claim_session_id": "p10-flow-w01",
       "closed_at": "2026-05-11T10:43:00.505929Z",
-      "commit": "1a842fc",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2259,7 +2248,6 @@
       ],
       "claim_session_id": "p10-flow-w02",
       "closed_at": "2026-05-11T10:43:01.565652Z",
-      "commit": "3fcdfa6",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2289,7 +2277,6 @@
       ],
       "claim_session_id": "p10-flow-w03",
       "closed_at": "2026-05-11T10:43:02.296715Z",
-      "commit": "6766d07",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2315,7 +2302,6 @@
       "blocks": [],
       "claim_session_id": "p10-flow-w04",
       "closed_at": "2026-05-11T10:50:04.485389Z",
-      "commit": "44bc7c5",
       "deps": [
         "P10-I01-W01",
         "P10-I01-W02",
@@ -2344,7 +2330,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T11:49:56.625542Z",
-      "commit": "f951ea1",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2369,7 +2354,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T11:49:57.680282Z",
-      "commit": "def9dd2",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2391,7 +2375,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T11:49:58.312420Z",
-      "commit": "c062283",
       "deps": [
         "P11-I01-W01",
         "P11-I01-W02"
@@ -2417,7 +2400,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:05:27.792212Z",
-      "commit": "062cb5d",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2441,7 +2423,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:09:07.015750Z",
-      "commit": "518003b",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2468,7 +2449,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:13:40.278328Z",
-      "commit": "ad45089",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2492,7 +2472,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:16:03.556288Z",
-      "commit": "f22b011",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2519,7 +2498,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:19:04.760498Z",
-      "commit": "835437f",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2542,7 +2520,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:22:43.169235Z",
-      "commit": "50a8a10",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2570,7 +2547,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T13:24:44.025187Z",
-      "commit": "4b39414",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2599,7 +2575,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:14:04.500555Z",
-      "commit": "4991af88ebe08ef678695606f8b5a5375a18b7a5",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2612,7 +2587,7 @@
       "outcome": "Closed 13 shipped backlog items (B025/B027/B029-B034/B037-B041) drifted since P08/P12",
       "status": "closed",
       "success_criteria": [],
-      "title": "Backlog hygiene — close 13 shipped items",
+      "title": "Backlog hygiene \u2014 close 13 shipped items",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -2625,7 +2600,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:38:19.212561Z",
-      "commit": "8f288ed",
       "deps": [
         "P13-I01-W01"
       ],
@@ -2637,7 +2611,7 @@
       "id": "P13-I01-W02",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:57.733885Z",
-      "outcome": "B009 golden scenarios — 4 cases (fresh_repo, byte-stable agents_md, enrich_existing, flow_full) under golden_scenarios marker",
+      "outcome": "B009 golden scenarios \u2014 4 cases (fresh_repo, byte-stable agents_md, enrich_existing, flow_full) under golden_scenarios marker",
       "status": "closed",
       "success_criteria": [],
       "title": "B009 golden scenarios",
@@ -2652,7 +2626,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:50:23.253179Z",
-      "commit": "0392358",
       "deps": [
         "P13-I01-W02"
       ],
@@ -2666,7 +2639,7 @@
       "id": "P13-I01-W03",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:05.379970Z",
-      "outcome": "B042 self-eval scoring — 6-dim weighted EvalScore + 0.85 threshold gate parametrised over 6 skills",
+      "outcome": "B042 self-eval scoring \u2014 6-dim weighted EvalScore + 0.85 threshold gate parametrised over 6 skills",
       "status": "closed",
       "success_criteria": [],
       "title": "B042 self-eval scoring loop",
@@ -2681,7 +2654,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:38:19.569156Z",
-      "commit": "d2a5214",
       "deps": [
         "P13-I01-W01"
       ],
@@ -2697,7 +2669,7 @@
       "id": "P13-I01-W04",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:59.217228Z",
-      "outcome": "B019 audit-check DSL — 5 kinds + yaml runner + --checks CLI; D02 closed",
+      "outcome": "B019 audit-check DSL \u2014 5 kinds + yaml runner + --checks CLI; D02 closed",
       "status": "closed",
       "success_criteria": [],
       "title": "B019 audit-check DSL skeleton",
@@ -2712,7 +2684,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:38:19.919111Z",
-      "commit": "ec9775c",
       "deps": [
         "P13-I01-W01"
       ],
@@ -2728,7 +2699,7 @@
       "id": "P13-I01-W05",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:00.581229Z",
-      "outcome": "B015 plugin-mode hooks — 6 session-level events + hooks.json; eawf-internal lifecycle stays in state CLI",
+      "outcome": "B015 plugin-mode hooks \u2014 6 session-level events + hooks.json; eawf-internal lifecycle stays in state CLI",
       "status": "closed",
       "success_criteria": [],
       "title": "B015 plugin-mode hooks",
@@ -2741,7 +2712,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:53:04.881059Z",
-      "commit": "bea3cd0b89adacd1878d3dd45e9983e747c71be4",
       "deps": [
         "P13-I01-W02",
         "P13-I01-W03",
@@ -2762,7 +2732,7 @@
       "id": "P13-I01-W06",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:06.925391Z",
-      "outcome": "Version bump 0.1.0→0.2.0; CHANGELOG mined P07..P13; doc scrub; B048+B049 v0.3 backlog filed",
+      "outcome": "Version bump 0.1.0\u21920.2.0; CHANGELOG mined P07..P13; doc scrub; B048+B049 v0.3 backlog filed",
       "status": "closed",
       "success_criteria": [],
       "title": "Version bump 0.2.0 + CHANGELOG mine",
@@ -2777,7 +2747,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T14:38:20.272524Z",
-      "commit": "ad9bef3",
       "deps": [
         "P13-I01-W01"
       ],
@@ -2791,7 +2760,7 @@
       "id": "P13-I01-W07",
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:01.571308Z",
-      "outcome": "B017 user-scope install — doctor --user-scope probe + update_plugin check=True",
+      "outcome": "B017 user-scope install \u2014 doctor --user-scope probe + update_plugin check=True",
       "status": "closed",
       "success_criteria": [],
       "title": "B017 user-scope install",
@@ -2806,7 +2775,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:27:58.133113Z",
-      "commit": "c343e2d",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2831,7 +2799,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:31:58.495166Z",
-      "commit": "e8b5dcc",
       "deps": [
         "P14-I01-W01"
       ],
@@ -2862,7 +2829,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:39:06.329869Z",
-      "commit": "3084191",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -2891,7 +2857,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:43:39.087994Z",
-      "commit": "5ff81ad",
       "deps": [
         "P14-I01-W03"
       ],
@@ -2917,7 +2882,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:49:43.686353Z",
-      "commit": "22abb2f",
       "deps": [
         "P14-I01-W04"
       ],
@@ -2947,7 +2911,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T21:57:34.853049Z",
-      "commit": "af4e1d9",
       "deps": [
         "P14-I01-W03"
       ],
@@ -2979,7 +2942,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:14:44.738712Z",
-      "commit": "2ac9631",
       "deps": [
         "P14-I01-W03"
       ],
@@ -3008,7 +2970,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:24:14.309138Z",
-      "commit": "f45829d",
       "deps": [
         "P14-I01-W06",
         "P14-I01-W07"
@@ -3035,7 +2996,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:31:24.973405Z",
-      "commit": "df190e3",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3060,7 +3020,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T22:46:46.811276Z",
-      "commit": "10377e4",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3085,7 +3044,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-11T23:01:22.700165Z",
-      "commit": "54b9333",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3113,7 +3071,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T18:28:41.232196Z",
-      "commit": "21c6c0e",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3142,7 +3099,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T18:58:48.589880Z",
-      "commit": "2f716a3f76e90ea66761a57c0c1aa2ad85991048",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3172,7 +3128,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:22.023040Z",
-      "commit": "2b07ea9",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3195,7 +3150,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:23.291579Z",
-      "commit": "0305ece",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3219,7 +3173,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:24.561088Z",
-      "commit": "e916bd4",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3242,7 +3195,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-12T20:09:25.802062Z",
-      "commit": "2a7ac18",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3267,7 +3219,6 @@
       ],
       "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": "2026-05-13T12:42:40.715867Z",
-      "commit": "a018213",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3294,7 +3245,6 @@
       ],
       "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": "2026-05-13T12:47:21.161183Z",
-      "commit": "2d7089c",
       "deps": [
         "P15-I01-W01"
       ],
@@ -3326,7 +3276,6 @@
       ],
       "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": "2026-05-13T12:44:45.255714Z",
-      "commit": "a107780",
       "deps": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3351,7 +3300,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260513T123700Z-codex",
       "closed_at": "2026-05-13T12:50:54.609631Z",
-      "commit": "d8b8cfc",
       "deps": [
         "P15-I01-W01",
         "P15-I01-W02",
@@ -3385,7 +3333,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:46.780266Z",
-      "commit": "19fa0a348fcf8c481910641b1b6571ab596f1bfc",
       "deps": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -3414,7 +3361,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:47.592710Z",
-      "commit": "3f88efffc52db9c92c9ae7d4b9a73efb985454c9",
       "deps": [
         "P17-I01-W01"
       ],
@@ -3446,7 +3392,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:48.397007Z",
-      "commit": "5477c8924b7a409a43a261fbac235ae0876e7bc6",
       "deps": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -3475,7 +3420,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:49.184298Z",
-      "commit": "a1a776ac3e175381c9fb9a026bdfc8fdcaa79276",
       "deps": [
         "P17-I01-W03"
       ],
@@ -3505,7 +3449,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:49.971046Z",
-      "commit": "af5151df0e9a484909cd885356e708b2ce3438c1",
       "deps": [
         "P17-I01-W04"
       ],
@@ -3537,7 +3480,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:50.763454Z",
-      "commit": "42e31cf1febe2873d5533aa63e2485fc13198f5e",
       "deps": [
         "P17-I01-W05"
       ],
@@ -3568,7 +3510,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:51.561764Z",
-      "commit": "f3d7294baf072a60d5ade4e285b38f9e9dc1f1cb",
       "deps": [
         "P17-I01-W04"
       ],
@@ -3597,7 +3538,6 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:52.364708Z",
-      "commit": "0c8480cbe89d662c13b81cb9c7af815a38b92ac0",
       "deps": [
         "P17-I01-W02",
         "P17-I01-W05"
@@ -3627,7 +3567,6 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T15:43:53.949296Z",
-      "commit": "2ee6966bd38da49694ee5af397224a8ff0efb5c0",
       "deps": [
         "P17-I01-W06",
         "P17-I01-W08"
@@ -3658,7 +3597,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w01",
       "closed_at": "2026-05-14T17:27:53.626739Z",
-      "commit": "9d453f1e7f4e",
       "deps": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -3688,7 +3626,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w02",
       "closed_at": "2026-05-14T17:31:22.164705Z",
-      "commit": "6cf54d8ed982",
       "deps": [
         "P18-I01-W01"
       ],
@@ -3719,7 +3656,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w03",
       "closed_at": "2026-05-14T17:37:23.464056Z",
-      "commit": "6534370e25ae",
       "deps": [
         "P18-I01-W02"
       ],
@@ -3756,7 +3692,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w04",
       "closed_at": "2026-05-14T17:43:03.644964Z",
-      "commit": "e3c3b3497b3c",
       "deps": [
         "P18-I01-W03"
       ],
@@ -3788,7 +3723,6 @@
       "blocks": [],
       "claim_session_id": "SES-codex-p18-w05",
       "closed_at": "2026-05-14T18:23:03.412827Z",
-      "commit": "faf2edd20117",
       "deps": [
         "P18-I01-W04"
       ],
@@ -3826,7 +3760,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w06",
       "closed_at": "2026-05-14T17:46:49.420907Z",
-      "commit": "74ceceb5c6eb",
       "deps": [
         "P18-I01-W04"
       ],
@@ -3860,7 +3793,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w07",
       "closed_at": "2026-05-14T17:52:31.293757Z",
-      "commit": "eadcb2e20a62",
       "deps": [
         "P18-I01-W06"
       ],
@@ -3893,7 +3825,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w08",
       "closed_at": "2026-05-14T18:02:25.477535Z",
-      "commit": "afc53fa4d9dd",
       "deps": [
         "P18-I01-W06"
       ],
@@ -3928,7 +3859,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w09",
       "closed_at": "2026-05-14T18:15:19.189371Z",
-      "commit": "477284fa2508",
       "deps": [
         "P18-I01-W07",
         "P18-I01-W08"
@@ -3961,7 +3891,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w10",
       "closed_at": "2026-05-14T17:56:34.498700Z",
-      "commit": "c44a9d6108b9",
       "deps": [
         "P18-I01-W04"
       ],
@@ -3993,7 +3922,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w11",
       "closed_at": "2026-05-14T18:05:23.687970Z",
-      "commit": "39a873d8b2a4",
       "deps": [
         "P18-I01-W08",
         "P18-I01-W10"
@@ -4026,7 +3954,6 @@
       ],
       "claim_session_id": "SES-codex-p18-w12",
       "closed_at": "2026-05-14T18:08:58.311172Z",
-      "commit": "9a300103f490",
       "deps": [
         "P18-I01-W11"
       ],
@@ -4058,7 +3985,6 @@
       "blocks": [],
       "claim_session_id": "SES-codex-p18-w13",
       "closed_at": "2026-05-14T18:34:44.039998Z",
-      "commit": "f656d09dc148",
       "deps": [
         "P18-I01-W09",
         "P18-I01-W12"
@@ -4096,7 +4022,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -4125,7 +4050,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [
         "P19-I01-W01"
       ],
@@ -4155,7 +4079,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [
         "P19-I01-W01"
       ],
@@ -4184,7 +4107,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [
         "P19-I01-W01"
       ],
@@ -4217,7 +4139,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -4245,7 +4166,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [
         "P19-I01-W01"
       ],
@@ -4276,7 +4196,6 @@
       ],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [
         "P19-I01-W01",
         "P19-I01-W06"
@@ -4304,7 +4223,6 @@
       "blocks": [],
       "claim_session_id": null,
       "closed_at": null,
-      "commit": null,
       "deps": [
         "P19-I01-W01",
         "P19-I01-W02",

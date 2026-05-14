@@ -65,7 +65,7 @@ def test_wave_land_happy_path_envelope_shape(tmp_path: Path) -> None:
     # state.json reflects wave closed + worktree torn down.
     payload = orjson.loads(state_path.read_bytes())
     assert payload["waves"]["P05-I01-W01"]["status"] == "closed"
-    assert payload["waves"]["P05-I01-W01"]["commit"] is not None
+    assert "commit" not in payload["waves"]["P05-I01-W01"]
     # Parent branch should now have the file.
     assert (repo / "hello.txt").exists()
     # Worktree dir should be gone after cleanup.
@@ -95,7 +95,6 @@ def test_wave_land_already_closed_wave_exit_4(tmp_path: Path) -> None:
     repo, state_path = _seed_repo_with_state(tmp_path / "repo")
     payload = orjson.loads(state_path.read_bytes())
     payload["waves"]["P05-I01-W01"]["status"] = "closed"
-    payload["waves"]["P05-I01-W01"]["commit"] = "deadbeef"
     payload["waves"]["P05-I01-W01"]["outcome"] = "previously closed"
     payload["waves"]["P05-I01-W01"]["closed_at"] = datetime.now(UTC).isoformat()
     state_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
@@ -129,7 +128,6 @@ def test_wave_land_batch_stops_on_failure(tmp_path: Path) -> None:
         "file_scopes": ["src/eawf/dispatch/"],
         "claim_session_id": "SES-002",
         "worktree_id": None,
-        "commit": None,
         "outcome": None,
         "opened_at": datetime.now(UTC).isoformat(),
         "closed_at": None,

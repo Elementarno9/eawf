@@ -110,7 +110,7 @@
     {
       "agent_role": null,
       "claim_session_id": null,
-      "commit": "1111111aaaaaa",
+      "commit": null,
       "deps": [],
       "effort_bucket": null,
       "estimate_eu": 0.0,

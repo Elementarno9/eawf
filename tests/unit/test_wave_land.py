@@ -62,11 +62,7 @@ def test_wave_land_runs_cherry_pick_and_closes_wave(tmp_path: Path) -> None:
     result = wave_land(state, repo_root=repo, wave_id="P05-I01-W01")
 
     assert state.waves["P05-I01-W01"].status == WaveStatus.CLOSED
-    assert state.waves["P05-I01-W01"].commit is not None
     assert result.commits
-    # The original sha may differ from the cherry-picked sha (replay
-    # gets a new sha), but the wave's commit must match the landed sha.
-    assert state.waves["P05-I01-W01"].commit == result.commits[-1]
     assert sha != ""  # sanity: original commit existed
     assert state.worktrees is not None
     # merge_back marked the record MERGED on the success branch;
@@ -156,7 +152,6 @@ def test_wave_land_conflict_does_not_close_wave(tmp_path: Path) -> None:
     assert "wave land P05-I01-W01" in msg or "merge-back" in msg
     # The wave must remain in its pre-call status (CLAIMED in this fixture).
     assert state.waves["P05-I01-W01"].status == WaveStatus.CLAIMED
-    assert state.waves["P05-I01-W01"].commit is None
     # The worktree record must be CONFLICTED (preserved evidence).
     assert state.worktrees is not None
     assert state.worktrees[record.id].status == WorktreeStatus.CONFLICTED
@@ -256,7 +251,6 @@ def test_wave_land_already_closed_wave_raises_validation_failed(tmp_path: Path) 
     state = _claimed_state()
     # Synthesise a closed wave.
     state.waves["P05-I01-W01"].status = WaveStatus.CLOSED
-    state.waves["P05-I01-W01"].commit = "deadbeef"
     state.waves["P05-I01-W01"].outcome = "previously closed"
     with pytest.raises(cli_errors.ValidationFailed) as exc_info:
         wave_land(state, repo_root=repo, wave_id="P05-I01-W01")

@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict
 from eawf.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
 from eawf.artifacts.references import Citation
 from eawf.artifacts.validation import validate_text_surface
+from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.profiles.models import ComposedProfile
 from eawf.state.enums import AgentSessionRole
 from eawf.state.ids import is_iter_id, is_phase_id, is_wave_id
@@ -153,7 +154,7 @@ def _waves_for_phase(state: State, phase_id: str) -> list[tuple[str, str, str, s
             (
                 w.id,
                 w.title,
-                _short_sha(w.commit),
+                _short_sha(derive_wave_sha(w.id)),
                 w.outcome or "",
             )
         )

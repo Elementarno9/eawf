@@ -121,7 +121,7 @@ def test_wave_dispatch_closed_wave_warns_to_stderr_exit_0(workspace: Path) -> No
     assert (
         runner.invoke(
             app,
-            ["wave", "close", "P01-I01-W01", "--commit", "abc", "--outcome", "done"],
+            ["wave", "close", "P01-I01-W01", "--outcome", "done"],
         ).exit_code
         == 0
     )
@@ -165,7 +165,7 @@ def test_wave_dispatch_batch_ready_only_filters_to_ready(workspace: Path) -> Non
     assert (
         runner.invoke(
             app,
-            ["wave", "close", "P01-I01-W01", "--commit", "abc", "--outcome", "ok"],
+            ["wave", "close", "P01-I01-W01", "--outcome", "ok"],
         ).exit_code
         == 0
     )

@@ -226,7 +226,6 @@ class Wave(_StrictModel):
     worktree_id: str | None = None
     token_budget: Annotated[int | None, Field(ge=0)] = None
     tokens_consumed: Annotated[int, Field(ge=0)] = 0
-    commit: str | None = None
     outcome: str | None = None
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None

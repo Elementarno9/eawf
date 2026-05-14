@@ -46,6 +46,7 @@ from pydantic import ValidationError
 from eawf.cli import errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
+from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.state.enums import WaveStatus
 from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
@@ -173,7 +174,7 @@ def _active_waves(state: State) -> list[dict[str, Any]]:
                 "title": wave.title,
                 "status": wave.status.value,
                 "claim_session_id": wave.claim_session_id,
-                "commit": wave.commit,
+                "commit": derive_wave_sha(wave.id),
             }
         )
     return out

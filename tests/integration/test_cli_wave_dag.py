@@ -149,7 +149,7 @@ def test_wave_next_ready_when_dep_closed(workspace: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["wave", "close", "P01-I01-W01", "--commit", "abc", "--outcome", "done"],
+            ["wave", "close", "P01-I01-W01", "--outcome", "done"],
         ).exit_code
         == 0
     )

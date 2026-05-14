@@ -295,5 +295,5 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         deps=["P01-I01-W01"],
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    close_wave(state, wave_id="P01-I01-W01", commit="abc", outcome="ok")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
     assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02"]

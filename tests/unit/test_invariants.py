@@ -105,7 +105,6 @@ def _wave(wave_id: str, *, iter_id: str, status: str = "in_progress") -> dict[st
         "file_scopes": [],
         "claim_session_id": None,
         "worktree_id": None,
-        "commit": None,
         "outcome": None,
         "opened_at": "2026-05-08T00:00:00Z",
         "closed_at": None,
@@ -740,7 +739,6 @@ def test_check_closure_timestamps_flags_closed_backlog_without_closed_at() -> No
             "created_at": "2026-05-08T00:00:00Z",
             "closed_at": None,
             "resolution": None,
-            "commit": None,
         }
     }
     state = State.model_validate(payload)

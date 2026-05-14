@@ -110,7 +110,6 @@ def _seed_state(state_path: Path) -> None:
                 "file_scopes": ["src/"],
                 "claim_session_id": None,
                 "worktree_id": None,
-                "commit": None,
                 "outcome": None,
                 "opened_at": datetime.now(UTC).isoformat(),
                 "closed_at": None,

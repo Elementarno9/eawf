@@ -398,7 +398,7 @@ def test_close_wave_pending_rejected() -> None:
         file_scopes=["src/"],
     )
     with pytest.raises(LifecycleError, match="not claimed"):
-        close_wave(state, wave_id="P01-I01-W01", commit="abc", outcome="ok")
+        close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
 
 def test_close_wave_happy_clears_active() -> None:
@@ -411,9 +411,9 @@ def test_close_wave_happy_clears_active() -> None:
         file_scopes=["src/"],
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    w = close_wave(state, wave_id="P01-I01-W01", commit="abc", outcome="ok")
+    w = close_wave(state, wave_id="P01-I01-W01", outcome="ok")
     assert w.status == WaveStatus.CLOSED
-    assert w.commit == "abc"
+    assert w.outcome == "ok"
     assert "P01-I01-W01" not in state.current.active_wave_ids
 
 
@@ -427,7 +427,7 @@ def test_fail_wave_terminal_rejects() -> None:
         file_scopes=["src/"],
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    close_wave(state, wave_id="P01-I01-W01", commit="abc", outcome="ok")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
     with pytest.raises(LifecycleError, match="terminal"):
         fail_wave(state, wave_id="P01-I01-W01", reason="x")
 
@@ -567,7 +567,7 @@ def test_plan_iter_under_closed_phase_rejected() -> None:
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    close_wave(state, wave_id="P01-I01-W01", commit="abc", outcome="ok")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
     close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
     close_phase(state, phase_id="P01", audit_id="AUD-2")
     with pytest.raises(LifecycleError, match="not open"):

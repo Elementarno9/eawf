@@ -102,9 +102,7 @@ def _iter(iter_id: str, phase_id: str = "P00", title: str = "") -> dict[str, Any
     }
 
 
-def _wave(
-    wave_id: str, iter_id: str, *, commit: str | None = None, outcome: str = ""
-) -> dict[str, Any]:
+def _wave(wave_id: str, iter_id: str, *, outcome: str = "") -> dict[str, Any]:
     return {
         "id": wave_id,
         "iter_id": iter_id,
@@ -117,7 +115,6 @@ def _wave(
         "worktree_id": None,
         "token_budget": None,
         "tokens_consumed": 0,
-        "commit": commit,
         "outcome": outcome or None,
         "opened_at": "2026-05-08T00:00:00Z",
         "closed_at": "2026-05-08T00:01:00Z",
@@ -168,7 +165,6 @@ def _state_with_phase_iter() -> State:
         "P00-I01-W01": _wave(
             "P00-I01-W01",
             "P00-I01",
-            commit="abcdef0123",
             outcome="did stuff",
         ),
     }
@@ -181,7 +177,13 @@ def test_build_pr_body_unknown_phase_raises() -> None:
         build_pr_body(state, "P99")
 
 
-def test_build_pr_body_phase_with_iters_and_waves() -> None:
+def test_build_pr_body_phase_with_iters_and_waves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.render.pr_body.derive_wave_sha",
+        lambda _wid: "abcdef0123456",
+    )
     payload = _base_state()
     payload["phases"] = {"P00": _phase("P00", title="bootstrap")}
     payload["iters"] = {"P00-I01": _iter("P00-I01", title="first iter")}
@@ -189,7 +191,6 @@ def test_build_pr_body_phase_with_iters_and_waves() -> None:
         "P00-I01-W01": _wave(
             "P00-I01-W01",
             "P00-I01",
-            commit="abcdef0123",
             outcome="did stuff",
         ),
     }
