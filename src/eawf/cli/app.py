@@ -198,9 +198,11 @@ app.add_typer(doc_app, name="doc")
 
 # --- P12 W04 PR body + wiki render registration ---
 from eawf.cli.commands.pr import pr_app  # noqa: E402
+from eawf.cli.commands.release import release_app  # noqa: E402
 from eawf.cli.commands.wiki import wiki_app  # noqa: E402
 
 app.add_typer(pr_app, name="pr")
+app.add_typer(release_app, name="release")
 app.add_typer(wiki_app, name="wiki")
 # --- end P12 W04 ---
 
