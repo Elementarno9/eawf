@@ -717,6 +717,60 @@ def test_set_wave_deps_cycle_rolled_back() -> None:
     assert state.waves["P01-I01-W01"].deps == []
 
 
+def test_claim_wave_rejects_unmet_deps() -> None:
+    """P19-W02: claim is blocked when any dep wave is not CLOSED."""
+    state = _empty_state()
+    open_phase(state, phase_id="P20", title="t")
+    open_iter(state, iter_id="P20-I01", phase_id="P20", title="i")
+    plan_wave(state, wave_id="P20-I01-W01", iter_id="P20-I01", title="a", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P20-I01-W02",
+        iter_id="P20-I01",
+        title="b",
+        file_scopes=["x"],
+        deps=["P20-I01-W01"],
+    )
+    with pytest.raises(LifecycleError, match="un-closed dep waves"):
+        claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
+
+
+def test_claim_wave_rejects_skipping_lower_w_sibling() -> None:
+    """P19-W02: skipping a lower-W## ready sibling is rejected."""
+    state = _empty_state()
+    open_phase(state, phase_id="P20", title="t")
+    open_iter(state, iter_id="P20-I01", phase_id="P20", title="i")
+    plan_wave(state, wave_id="P20-I01-W01", iter_id="P20-I01", title="a", file_scopes=["x"])
+    plan_wave(state, wave_id="P20-I01-W02", iter_id="P20-I01", title="b", file_scopes=["x"])
+    with pytest.raises(LifecycleError, match="lower-numbered ready siblings"):
+        claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
+
+
+def test_claim_wave_out_of_order_overrides_monotonic_gate() -> None:
+    """P19-W02: --out-of-order bypasses the monotonic gate."""
+    state = _empty_state()
+    open_phase(state, phase_id="P20", title="t")
+    open_iter(state, iter_id="P20-I01", phase_id="P20", title="i")
+    plan_wave(state, wave_id="P20-I01-W01", iter_id="P20-I01", title="a", file_scopes=["x"])
+    plan_wave(state, wave_id="P20-I01-W02", iter_id="P20-I01", title="b", file_scopes=["x"])
+    w = claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2", out_of_order=True)
+    assert w.status == WaveStatus.CLAIMED
+
+
+def test_claim_wave_monotonic_gate_allows_after_w01_claimed() -> None:
+    """W02 may be claimed once W01 is CLAIMED/IN_PROGRESS/CLOSED."""
+    state = _empty_state()
+    open_phase(state, phase_id="P20", title="t")
+    open_iter(state, iter_id="P20-I01", phase_id="P20", title="i")
+    plan_wave(state, wave_id="P20-I01-W01", iter_id="P20-I01", title="a", file_scopes=["x"])
+    plan_wave(state, wave_id="P20-I01-W02", iter_id="P20-I01", title="b", file_scopes=["x"])
+    claim_wave(state, wave_id="P20-I01-W01", session_id="SES-1")
+    # W01 is CLAIMED so it is no longer PENDING; W02 may now claim
+    # even though W01 hasn't closed yet (only closed-dep waves block).
+    w = claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
+    assert w.status == WaveStatus.CLAIMED
+
+
 def test_close_phase_rejects_when_no_closed_wave() -> None:
     """P19-W03: phase close demands at least one CLOSED wave."""
     state = _empty_state()
