@@ -24,8 +24,10 @@ Honoured flags:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
+from eawf.artifacts.validation import validate_markdown_artifact, validate_text_surface
 from eawf.render.envelope import SkillName
 from eawf.skills._common import (
     emit_event,
@@ -71,6 +73,17 @@ def _resolve_pr_action(value: Any) -> str | None:
     return None
 
 
+def _coerce_path_list(value: Any) -> list[Path]:
+    """Coerce stdin JSON args into a list of artifact paths."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [Path(p.strip()) for p in value.split(",") if p.strip()]
+    if isinstance(value, list):
+        return [Path(str(p)) for p in value]
+    return [Path(str(value))]
+
+
 @register
 class ShipSkill(Skill):
     """Concrete ``/ship`` skill (Phase 4 W02)."""
@@ -88,10 +101,47 @@ class ShipSkill(Skill):
         do_commit = _coerce_bool(args.get("commit", False))
         do_push = _coerce_bool(args.get("push", False))
         pr_action = _resolve_pr_action(args.get("pr"))
+        artifact_paths = _coerce_path_list(args.get("artifact_paths") or args.get("artifacts"))
+        pr_body = args.get("pr_body")
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
         next_actions: list[str] = ["eawf wave close", "eawf audit"]
+
+        validation_errors: list[str] = []
+        for path in artifact_paths:
+            try:
+                artifact_report = validate_markdown_artifact(path.read_text(encoding="utf-8"))
+            except OSError as exc:
+                validation_errors.append(f"{path}: {exc}")
+                continue
+            validation_errors.extend(f"{path}: {error}" for error in artifact_report.errors)
+        if isinstance(pr_body, str):
+            text_report = validate_text_surface(pr_body, surface="pr")
+            validation_errors.extend(text_report.errors)
+        if validation_errors:
+            evt_id = emit_event(
+                state_path=state_path,
+                scope_id=scope_id,
+                event_type="ship.artifact_gate",
+                summary="ship: artifact validation failed",
+                payload={"errors": validation_errors},
+            )
+            persisted_records.append(evt_id)
+            return SkillResult(
+                status="failed",
+                body=ShipBody(
+                    commit_groups=[],
+                    push=None,
+                    pr=None,
+                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
+                    rollback_notes="artifact validation failed",
+                ).model_dump(mode="json"),
+                persisted_store_records=persisted_records,
+                state_mutations=state_mutations,
+                next_valid_actions=next_actions,
+                repair_commands=["fix artifact validation errors and rerun /ship"],
+            )
 
         # Step 1 — probe ran. Step 2: gate on audit.
         evt_id = emit_event(
