@@ -2006,7 +2006,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T20:44:43.535355Z",
+  "updated_at": "2026-05-14T20:45:37.183285Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4088,8 +4088,8 @@
       "blocks": [
         "P19-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:31.829194Z",
       "deps": [
         "P19-I01-W01"
       ],
@@ -4102,8 +4102,8 @@
       "id": "P19-I01-W02",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:52.876644Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W02 complete",
+      "status": "closed",
       "success_criteria": [
         "claim_wave rejects when any wave in .deps not CLOSED; rejects when a sibling lower-numbered ready wave is uncliamed; --out-of-order escape hatch supported"
       ],
@@ -4117,8 +4117,8 @@
       "blocks": [
         "P19-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:32.709985Z",
       "deps": [
         "P19-I01-W01"
       ],
@@ -4130,8 +4130,8 @@
       "id": "P19-I01-W03",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:54.640441Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W03 complete",
+      "status": "closed",
       "success_criteria": [
         "close_phase rejects when no wave under the phase has status=CLOSED"
       ],
@@ -4145,8 +4145,8 @@
       "blocks": [
         "P19-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:33.590476Z",
       "deps": [
         "P19-I01-W01"
       ],
@@ -4162,8 +4162,8 @@
       "id": "P19-I01-W04",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:56.885654Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W04 complete",
+      "status": "closed",
       "success_criteria": [
         "Wave.commit field removed; close_wave drops --commit arg; wave show --commit derives SHA via git log --grep; event envelope omits commit_sha; one-shot migration script lands"
       ],
@@ -4177,8 +4177,8 @@
       "blocks": [
         "P19-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:34.465923Z",
       "deps": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -4188,8 +4188,8 @@
       "id": "P19-I01-W05",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:47.935729Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W05 complete",
+      "status": "closed",
       "success_criteria": [
         "regex rejects bare [P##] subject; requires -W## or -CORE suffix; state type allowlist retained"
       ],
@@ -4204,8 +4204,8 @@
         "P19-I01-W07",
         "P19-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:35.369313Z",
       "deps": [
         "P19-I01-W01"
       ],
@@ -4219,8 +4219,8 @@
       "id": "P19-I01-W06",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:21:04.944520Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W06 complete",
+      "status": "closed",
       "success_criteria": [
         "roadmap propose emits needs_user envelope with plan body; --apply atomically populates state with plan_phase + plan_iter + waves; --revise edits PENDING waves via structured flags or YAML; --drop archives PLANNED phase; roadmap show + diff renderers"
       ],
@@ -4234,8 +4234,8 @@
       "blocks": [
         "P19-I01-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:36.301549Z",
       "deps": [
         "P19-I01-W01",
         "P19-I01-W06"
@@ -4248,8 +4248,8 @@
       "id": "P19-I01-W07",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:21:07.763041Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W07 complete",
+      "status": "closed",
       "success_criteria": [
         "case A PLANNED with non-empty DAG: render via roadmap show + AUQ then activate_phase; case B PLANNED empty DAG: dispatch planner agent then AUQ approve + activate; case C no PLANNED phase: reject with hint"
       ],
@@ -4261,8 +4261,8 @@
     "P19-I01-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-14T20:45:37.183270Z",
       "deps": [
         "P19-I01-W01",
         "P19-I01-W02",
@@ -4280,8 +4280,8 @@
       "id": "P19-I01-W08",
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:21:09.950524Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19 W08 complete",
+      "status": "closed",
       "success_criteria": [
         "managed blocks updated: planned-scope-revisability",
         "roadmap-procedure",
