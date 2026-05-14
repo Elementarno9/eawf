@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.2 hash=ccfe7c2c2d28697e -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.2 hash=1fac81ac6091b70a -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -33,6 +33,7 @@ non-trivial body has an expansion block immediately following.
 17. **Naming conventions for fields/params/log keys.** See
     ``naming-conventions``.
 18. **Artifact chassis and citations.** See ``artifact-chassis``.
+19. **Typed agent reports.** See ``agent-report-contract``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -334,3 +335,21 @@ the supporting artifact id. Decisions reference the audit that justifies
 them so the evidence chain is reconstructible from ``state.json`` alone.
 
 <!-- END EAWF:managed id=research-workflow -->
+<!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=4af66a5ed7687989 -->
+### Agent report contract
+
+Every agent session that reaches a terminal handoff MUST emit a typed
+``agent_end`` report body accepted by ``AgentReportBody``. Runtime hooks
+own ``AgentReportHeader`` fields (session, role, scope, runtime, attempt);
+agents provide the role-specific body only.
+
+Reports are append-only. Never overwrite or "fix" an earlier report
+attempt; retry by appending the next attempt for the same
+``(role, base_id)`` pair.
+
+Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``,
+``pass-with-followups``, ``fail``, or ``blocked``. Report store URNs use
+the role-specific ``StoreKind`` such as ``executor_report`` or
+``reviewer_report``.
+
+<!-- END EAWF:managed id=agent-report-contract -->

@@ -56,6 +56,7 @@ render_blocks:
       17. **Naming conventions for fields/params/log keys.** See
           ``naming-conventions``.
       18. **Artifact chassis and citations.** See ``artifact-chassis``.
+      19. **Typed agent reports.** See ``agent-report-contract``.
 
   - id: architecture-cli-dispatch
     target: AGENTS.md
@@ -281,6 +282,26 @@ render_blocks:
       References stay repo-relative, external URL, or Eawf URN. Absolute
       local paths, host-local URLs, and PII must fail validation before
       promotion or PR text ships.
+
+  - id: agent-report-contract
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ### Agent report contract
+
+      Every agent session that reaches a terminal handoff MUST emit a typed
+      ``agent_end`` report body accepted by ``AgentReportBody``. Runtime hooks
+      own ``AgentReportHeader`` fields (session, role, scope, runtime, attempt);
+      agents provide the role-specific body only.
+
+      Reports are append-only. Never overwrite or "fix" an earlier report
+      attempt; retry by appending the next attempt for the same
+      ``(role, base_id)`` pair.
+
+      Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``,
+      ``pass-with-followups``, ``fail``, or ``blocked``. Report store URNs use
+      the role-specific ``StoreKind`` such as ``executor_report`` or
+      ``reviewer_report``.
 
   - id: workflow-lifecycle
     target: AGENTS.md
