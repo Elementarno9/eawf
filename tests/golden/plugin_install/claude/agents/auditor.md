@@ -35,3 +35,27 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "auditor",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "target_id": "P00-I01-W01",
+  "criteria": [
+    {
+      "criterion": "success criterion",
+      "passed": true,
+      "evidence_refs": []
+    }
+  ],
+  "refutations": []
+}
+```

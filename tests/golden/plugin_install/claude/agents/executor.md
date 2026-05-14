@@ -34,3 +34,27 @@ claiming.
 - Spec is missing success criteria or file list.
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "executor",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "wave_id": "P00-I01-W01",
+  "files_changed": [
+    "repo/relative/path.py"
+  ],
+  "tests_run": [
+    "uv run pytest tests/path -q"
+  ],
+  "commit_sha": "abcdef1",
+  "outcome": "implementation outcome"
+}
+```

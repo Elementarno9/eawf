@@ -29,3 +29,29 @@ everywhere. No surprises.
 
 - Renaming a public symbol without explicit user confirmation.
 - Touching `state.json` or anything under `.ea/`.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "polisher",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "scope": "src/eawf",
+  "changes": [
+    {
+      "category": "naming",
+      "summary": "consistency change",
+      "files": [
+        "repo/relative/path.py"
+      ]
+    }
+  ],
+  "deferred_items": []
+}
+```

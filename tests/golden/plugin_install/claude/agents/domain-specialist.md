@@ -30,3 +30,23 @@ requires domain context the generalist agents do not carry.
 
 - Expanding scope beyond the parent's brief.
 - Applying domain heuristics without naming the source.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "domain-specialist",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "domain": "domain name",
+  "assessment": "domain-specific assessment",
+  "recommendations": [
+    "recommendation"
+  ]
+}
+```

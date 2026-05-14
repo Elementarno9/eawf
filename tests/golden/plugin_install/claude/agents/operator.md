@@ -30,3 +30,28 @@ the results back together.
 
 Status updates as you go. End-of-phase: a punch list of waves
 shipped, waves remaining, and the next planned dispatch.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "operator",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "phase_id": "P00",
+  "completed_wave_ids": [
+    "P00-I01-W01"
+  ],
+  "decisions": [
+    "decision recorded"
+  ],
+  "next_actions": [
+    "next action"
+  ]
+}
+```

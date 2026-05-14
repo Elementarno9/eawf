@@ -35,6 +35,16 @@ _EXPECTED_ROLES: set[str] = {
     "operator",
     "domain-specialist",
 }
+_ROLE_SPECIFIC_FIELDS: dict[str, str] = {
+    "researcher": '"question"',
+    "planner": '"waves"',
+    "executor": '"commit_sha"',
+    "auditor": '"criteria"',
+    "reviewer": '"findings"',
+    "polisher": '"changes"',
+    "operator": '"completed_wave_ids"',
+    "domain-specialist": '"assessment"',
+}
 
 
 def _ctx(role: str = "researcher") -> AgentTemplateContext:
@@ -117,6 +127,25 @@ def test_each_registry_role_renders_without_raising(role: str) -> None:
     assert f"name: {role}\n" in output
     # Sanity: at least one tool rendered.
     assert "tools: [" in output
+
+
+@pytest.mark.parametrize("role", sorted(_EXPECTED_ROLES))
+def test_each_registry_role_includes_typed_output_contract(role: str) -> None:
+    spec = next(s for s in AGENT_REGISTRY if s.role == role)
+    ctx = AgentTemplateContext(
+        role=spec.role,
+        description=spec.description,
+        tools=spec.tools,
+        model=spec.model,
+        color=spec.color,
+        memory=spec.memory,
+        body=spec.body,
+    )
+    output = render_agent_md(ctx)
+    assert "## Typed output envelope\n" in output
+    assert f'"role": "{role}"' in output
+    assert '"verdict": "pass"' in output
+    assert _ROLE_SPECIFIC_FIELDS[role] in output
 
 
 def test_render_agent_md_terminates_with_newline() -> None:

@@ -1,8 +1,8 @@
 {#- Claude Code agent (subagent) template. Variables: role, description,
-   tools (list[str]), model, color, memory (bool), body. Mirrors the
-   hand-written `.claude/agents/<role>.md` frontmatter shape. The tools
-   list emits inline (`[A, B]`) — that is the shape the existing
-   placeholder files use. -#}
+   tools (list[str]), model, color, memory (bool), body, output_contract.
+   Mirrors the hand-written `.claude/agents/<role>.md` frontmatter shape.
+   The tools list emits inline (`[A, B]`) — that is the shape the
+   existing placeholder files use. -#}
 ---
 name: {{ role }}
 description: {{ description }}
@@ -13,3 +13,5 @@ memory: {{ "true" if memory else "false" }}
 ---
 
 {{ body }}
+
+{{ output_contract }}
