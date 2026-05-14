@@ -178,6 +178,12 @@ from eawf.cli.commands.config import config_app  # noqa: E402
 app.add_typer(config_app, name="config")
 # --- end W06 ---
 
+# --- P17 W02 coauthor registration ---
+from eawf.cli.commands.coauthor import coauthor_app  # noqa: E402
+
+app.add_typer(coauthor_app, name="coauthor")
+# --- end P17 W02 ---
+
 # --- P03 W01 doctor registration ---
 from eawf.cli.commands.doctor import doctor_app  # noqa: E402
 
