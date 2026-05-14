@@ -27,6 +27,7 @@ This file is the canonical reference for all `StrEnum` classes defined in
 | flow | status | `FlowStatus` | `pending`, `in_progress`, `paused`, `blocked`, `done`, `abandoned`, `superseded` | Workflow / flow run state |
 | actual | status | `ActualStatus` | `planned`, `active`, `done`, `interrupted`, `blocked`, `abandoned`, `failed`, `superseded` | Actual segment lifecycle |
 | agent_session | role | `AgentSessionRole` | `researcher`, `planner`, `executor`, `auditor`, `reviewer`, `polisher`, `operator`, `domain-specialist` | Agent role within a session |
+| agent_report | verdict | `AgentReportVerdict` | `pass`, `pass-with-followups`, `fail`, `blocked` | Typed report outcome emitted by agent-end hooks |
 | agent_session | status | `AgentSessionStatus` | `active`, `checkpointed`, `closed`, `stale`, `failed` | Agent session lifecycle |
 | worktree | status | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` | Git worktree lifecycle |
 | mcp_server | risk | `McpRisk` | `read`, `read-write`, `admin` | MCP server permission tier |
@@ -37,5 +38,5 @@ This file is the canonical reference for all `StrEnum` classes defined in
 | skill_envelope | status | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` | Skill invocation result envelope |
 | health | — | `Health` | `ok`, `needs_setup`, `degraded` | Doctor / system health check result |
 | scope | kind | `ScopeKind` | `repo`, `workspace` | Scope of a config or profile |
-| store | kind | `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `flow` | Store / artifact category |
-| artifact | kind | `ArtifactKind` | `audit_report`, `notebook`, `dataset`, `model`, `backtest`, `strategy`, `binary`, `scene`, `playtest_session`, `cve_ref`, `research_brief`, `plan_spec` | Durable artifact vocabulary |
+| store | kind | `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report` | Store / artifact category |
+| artifact | kind | `ArtifactKind` | `audit_report`, `notebook`, `dataset`, `model`, `backtest`, `strategy`, `binary`, `scene`, `playtest_session`, `cve_ref`, `research_brief`, `plan_spec`, `agent_report` | Durable artifact vocabulary |
