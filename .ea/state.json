@@ -1067,8 +1067,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P18-I01",
+    "phase_id": "P18",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1595,6 +1595,31 @@
         "P17-I01-W08",
         "P17-I01-W09"
       ]
+    },
+    "P18-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:06.464348Z",
+      "phase_id": "P18",
+      "status": "active",
+      "title": "Typed agent report implementation",
+      "wave_ids": [
+        "P18-I01-W01",
+        "P18-I01-W02",
+        "P18-I01-W03",
+        "P18-I01-W04",
+        "P18-I01-W05",
+        "P18-I01-W06",
+        "P18-I01-W07",
+        "P18-I01-W08",
+        "P18-I01-W09",
+        "P18-I01-W10",
+        "P18-I01-W11",
+        "P18-I01-W12",
+        "P18-I01-W13"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1838,6 +1863,20 @@
       "status": "closed",
       "subproject_id": null,
       "title": "PR, coauthor, and release-surface hardening"
+    },
+    "P18": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P18",
+      "iter_ids": [
+        "P18-I01"
+      ],
+      "opened_at": "2026-05-14T17:24:06.053480Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "status": "active",
+      "subproject_id": null,
+      "title": "Typed Agent Reports"
     }
   },
   "plugins": {},
@@ -1872,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T15:44:44.900644Z",
+  "updated_at": "2026-05-14T17:24:55.575005Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3553,6 +3592,439 @@
         "P17 ship gate audit records verification"
       ],
       "title": "P17 ship-gate audit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W02"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/store/kinds/agent_report.py",
+        "src/eawf/state/enums.py",
+        "tests/unit/test_agent_report_payload.py"
+      ],
+      "id": "P18-I01-W01",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:50.578819Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "strict shared report models exist",
+        "report verdict enum exists",
+        "unit tests cover valid and invalid common payloads"
+      ],
+      "title": "Shared agent-report primitives",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W03"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W01"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/store/kinds/agent_report.py",
+        "tests/unit/test_agent_report_payload.py"
+      ],
+      "id": "P18-I01-W02",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:51.020569Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "all eight role bodies validate strictly",
+        "role/body mismatch is rejected",
+        "per-role boundary tests exist"
+      ],
+      "title": "Per-role report bodies",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/enums.py",
+        "src/eawf/store/kinds/__init__.py",
+        "src/eawf/state/urn.py",
+        "tests/unit/test_kinds.py",
+        "tests/unit/test_enums.py",
+        "tests/integration/test_store_paths_consistency.py"
+      ],
+      "id": "P18-I01-W03",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:51.443345Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "eight report StoreKind values registered",
+        "ArtifactKind includes agent_report",
+        "store URNs accept role-report ids"
+      ],
+      "title": "Store kinds and URN routing",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W05",
+        "P18-I01-W06",
+        "P18-I01-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W03"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/agent_report/store.py",
+        "src/eawf/cli/commands/hook.py",
+        "tests/unit/test_agent_report_store.py",
+        "tests/unit/test_cli_hook_run.py"
+      ],
+      "id": "P18-I01-W04",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:51.855832Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "agent-end payload writes through CLI writer",
+        "session role is authoritative",
+        "attempt numbers append monotonically",
+        "scrub rejects sensitive fields"
+      ],
+      "title": "Agent-end report writer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W04"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/hooks/event.py",
+        "src/eawf/render/hooks.py",
+        "src/eawf/runtimes/claude",
+        "src/eawf/runtimes/codex",
+        "src/eawf/runtimes/opencode",
+        "src/eawf/doctor/checks.py",
+        "tests/unit/test_hook_event.py",
+        "tests/unit/test_plugin_doctor_claude.py"
+      ],
+      "id": "P18-I01-W05",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:52.262791Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "Claude Codex and OpenCode wire agent-end hook",
+        "doctor surfaces missing report hook wiring",
+        "hook goldens update"
+      ],
+      "title": "Runtime hook wiring and doctor checks",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W07",
+        "P18-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W04"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/agent_report.py",
+        "src/eawf/agent_report/store.py",
+        "src/eawf/agent_report/rollup.py",
+        "src/eawf/cli/app.py",
+        "tests/integration/test_cli_agent_report.py"
+      ],
+      "id": "P18-I01-W06",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:52.668693Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "add show list commands work",
+        "role aliases resolve",
+        "operator rollup reads typed reports"
+      ],
+      "title": "Agent-report CLI and operator rollup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W06"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/render/agent_report.py",
+        "tests/unit/test_render_agent_report.py",
+        "tests/golden/agent_report"
+      ],
+      "id": "P18-I01-W07",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:53.085854Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "all eight role reports render markdown",
+        "rendering is deterministic",
+        "golden tests cover representative bodies"
+      ],
+      "title": "Markdown renderers and goldens",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W09",
+        "P18-I01-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W06"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/validate/invariants.py",
+        "tests/unit/test_validate_agent_report_invariants.py"
+      ],
+      "id": "P18-I01-W08",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:53.509212Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "session role match",
+        "attempt monotonicity",
+        "scope resolution",
+        "executor SHA",
+        "reviewer coverage",
+        "auditor criteria",
+        "operator phase coverage are checked"
+      ],
+      "title": "Cross-kind report invariants",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W07",
+        "P18-I01-W08"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/render/pr_body.py",
+        "src/eawf/cli/commands/pr.py",
+        "tests/unit/test_render_pr_body.py"
+      ],
+      "id": "P18-I01-W09",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:53.924814Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "phase PR reads operator rollup",
+        "iter PR reads executor and reviewer reports",
+        "docs-research reads researcher report"
+      ],
+      "title": "PR-body report integration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W04"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/render/agents.py",
+        "src/eawf/templates/claude/agent.md.j2",
+        "tests/unit/test_render_claude_agents.py",
+        "tests/golden/plugin_install"
+      ],
+      "id": "P18-I01-W10",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:54.333240Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "all eight agent manifests include typed output envelope blocks",
+        "plugin goldens update"
+      ],
+      "title": "Agent manifest output contracts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W08",
+        "P18-I01-W10"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/architecture/agent-reports.md",
+        "docs/reference/enums.md",
+        "docs/reference/urn-namespace.md"
+      ],
+      "id": "P18-I01-W11",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:54.732413Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "architecture doc explains store flow",
+        "reference docs list new enums and URNs",
+        "docs avoid local paths"
+      ],
+      "title": "Agent report architecture docs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P18-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W11"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md",
+        "src/eawf/profiles/data/core.yaml",
+        "tests/golden/agents_md",
+        "tests/unit/test_render_agents_md.py"
+      ],
+      "id": "P18-I01-W12",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:55.160076Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "AGENTS rules require typed reports",
+        "append-only attempts",
+        "canonical verdict enum",
+        "profile/goldens match"
+      ],
+      "title": "AGENTS typed-report rules",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P18-I01-W13": {
+      "agent_role": "auditor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P18-I01-W09",
+        "P18-I01-W12"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/A23-P18-ship-gate.md",
+        ".ea/store/audit.jsonl",
+        ".ea/state.json"
+      ],
+      "id": "P18-I01-W13",
+      "iter_id": "P18-I01",
+      "opened_at": "2026-05-14T17:24:55.574985Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "ship-gate audit records P18 criteria",
+        "audit artifact validates",
+        "phase ready for ship"
+      ],
+      "title": "P18 ship-gate audit",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
