@@ -17,6 +17,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from eawf.state.enums import (
+    AgentSessionRole,
     AgentSessionStatus,
     BacklogStatus,
     GoalStatus,
@@ -29,6 +30,15 @@ from eawf.state.enums import (
 from eawf.state.ids import parents_of
 from eawf.state.models import State
 from eawf.state.urn import parse as parse_urn
+from eawf.store.envelope import Envelope
+from eawf.store.kinds.agent_report import (
+    AgentReportPayload,
+    AuditorReportBody,
+    ExecutorReportBody,
+    OperatorReportBody,
+    ReviewerReportBody,
+    store_kind_for_role,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -472,6 +482,212 @@ def check_artifact_urns(state: State) -> Iterable[Violation]:
                 code="INV.URN.ARTIFACT_MISMATCH",
                 path=f"/artifacts/{artifact_id}/urn",
                 message=(f"artifact {artifact_id!r} urn targets {parsed.kind!r}/{parsed.id!r}"),
+            )
+
+
+def _report_path(report_id: str, field: str) -> str:
+    return f"/agent_reports/{report_id}/{field}"
+
+
+def _scope_exists(state: State, scope_id: str) -> bool:
+    if scope_id in state.phases or scope_id in state.iters or scope_id in state.waves:
+        return True
+    return state.project is not None and scope_id == state.project.code
+
+
+def _wave_phase_id(state: State, wave_id: str) -> str | None:
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return None
+    iter_record = state.iters.get(wave.iter_id)
+    if iter_record is None:
+        return None
+    return iter_record.phase_id
+
+
+def check_agent_report_invariants(state: State, reports: Iterable[Envelope]) -> Iterable[Violation]:
+    """Validate typed agent-report store envelopes against state context.
+
+    This helper is separate from :data:`ALL_INVARIANTS` because report rows
+    live in JSONL stores, not inside ``state.json``.
+    """
+    attempts: dict[tuple[AgentSessionRole, str], list[tuple[int, str]]] = {}
+    for envelope in reports:
+        payload = AgentReportPayload.model_validate(envelope.payload)
+        header = payload.header
+        body = payload.body
+        expected_kind = store_kind_for_role(header.role)
+
+        if envelope.kind != expected_kind:
+            yield Violation(
+                code="INV.AGENT_REPORT.STORE_KIND_MISMATCH",
+                path=_report_path(header.report_id, "kind"),
+                message=(
+                    f"agent report {header.report_id!r} has store kind "
+                    f"{envelope.kind.value!r}; expected {expected_kind.value!r}"
+                ),
+            )
+        if envelope.scope_id != header.scope_id:
+            yield Violation(
+                code="INV.AGENT_REPORT.ENVELOPE_SCOPE_MISMATCH",
+                path=_report_path(header.report_id, "scope_id"),
+                message=(
+                    f"agent report {header.report_id!r} envelope scope "
+                    f"{envelope.scope_id!r} does not match header scope {header.scope_id!r}"
+                ),
+            )
+
+        session = state.agent_sessions.get(header.session_id)
+        if session is None:
+            yield Violation(
+                code="INV.AGENT_REPORT.SESSION_MISSING",
+                path=_report_path(header.report_id, "header/session_id"),
+                message=(
+                    f"agent report {header.report_id!r} references missing "
+                    f"session {header.session_id!r}"
+                ),
+            )
+        else:
+            if session.role != header.role:
+                yield Violation(
+                    code="INV.AGENT_REPORT.SESSION_ROLE_MISMATCH",
+                    path=_report_path(header.report_id, "header/session_id"),
+                    message=(
+                        f"agent report {header.report_id!r} role {header.role.value!r} "
+                        f"does not match session {header.session_id!r} role "
+                        f"{session.role.value!r}"
+                    ),
+                )
+            if session.scope_id != header.scope_id:
+                yield Violation(
+                    code="INV.AGENT_REPORT.SESSION_SCOPE_MISMATCH",
+                    path=_report_path(header.report_id, "header/scope_id"),
+                    message=(
+                        f"agent report {header.report_id!r} scope {header.scope_id!r} "
+                        f"does not match session {header.session_id!r} scope "
+                        f"{session.scope_id!r}"
+                    ),
+                )
+
+        if not _scope_exists(state, header.scope_id):
+            yield Violation(
+                code="INV.AGENT_REPORT.SCOPE_MISSING",
+                path=_report_path(header.report_id, "header/scope_id"),
+                message=(
+                    f"agent report {header.report_id!r} references missing "
+                    f"scope {header.scope_id!r}"
+                ),
+            )
+
+        attempts.setdefault((header.role, header.base_id), []).append(
+            (header.attempt, header.report_id)
+        )
+
+        if isinstance(body, ExecutorReportBody):
+            if body.commit_sha is None:
+                yield Violation(
+                    code="INV.AGENT_REPORT.EXECUTOR_COMMIT_MISSING",
+                    path=_report_path(header.report_id, "body/commit_sha"),
+                    message=f"executor report {header.report_id!r} has no commit_sha",
+                )
+            else:
+                wave = state.waves.get(body.wave_id)
+                if wave is None:
+                    yield Violation(
+                        code="INV.AGENT_REPORT.EXECUTOR_WAVE_MISSING",
+                        path=_report_path(header.report_id, "body/wave_id"),
+                        message=(
+                            f"executor report {header.report_id!r} references "
+                            f"missing wave {body.wave_id!r}"
+                        ),
+                    )
+                elif wave.commit != body.commit_sha:
+                    yield Violation(
+                        code="INV.AGENT_REPORT.EXECUTOR_COMMIT_MISMATCH",
+                        path=_report_path(header.report_id, "body/commit_sha"),
+                        message=(
+                            f"executor report {header.report_id!r} commit "
+                            f"{body.commit_sha!r} does not match wave "
+                            f"{body.wave_id!r} commit {wave.commit!r}"
+                        ),
+                    )
+
+        if isinstance(body, ReviewerReportBody) and not body.coverage_refs:
+            yield Violation(
+                code="INV.AGENT_REPORT.REVIEWER_COVERAGE_MISSING",
+                path=_report_path(header.report_id, "body/coverage_refs"),
+                message=f"reviewer report {header.report_id!r} has no coverage_refs",
+            )
+
+        if isinstance(body, AuditorReportBody) and not body.criteria:
+            yield Violation(
+                code="INV.AGENT_REPORT.AUDITOR_CRITERIA_MISSING",
+                path=_report_path(header.report_id, "body/criteria"),
+                message=f"auditor report {header.report_id!r} has no criteria",
+            )
+
+        if isinstance(body, OperatorReportBody):
+            if body.phase_id not in state.phases:
+                yield Violation(
+                    code="INV.AGENT_REPORT.OPERATOR_PHASE_MISSING",
+                    path=_report_path(header.report_id, "body/phase_id"),
+                    message=(
+                        f"operator report {header.report_id!r} references "
+                        f"missing phase {body.phase_id!r}"
+                    ),
+                )
+            for wave_id in body.completed_wave_ids:
+                wave_phase_id = _wave_phase_id(state, wave_id)
+                if wave_phase_id is None:
+                    yield Violation(
+                        code="INV.AGENT_REPORT.OPERATOR_WAVE_MISSING",
+                        path=_report_path(header.report_id, "body/completed_wave_ids"),
+                        message=(
+                            f"operator report {header.report_id!r} references "
+                            f"missing completed wave {wave_id!r}"
+                        ),
+                    )
+                elif wave_phase_id != body.phase_id:
+                    yield Violation(
+                        code="INV.AGENT_REPORT.OPERATOR_WAVE_PHASE_MISMATCH",
+                        path=_report_path(header.report_id, "body/completed_wave_ids"),
+                        message=(
+                            f"operator report {header.report_id!r} lists wave "
+                            f"{wave_id!r} from phase {wave_phase_id!r}, not "
+                            f"{body.phase_id!r}"
+                        ),
+                    )
+
+    for (role, base_id), rows in attempts.items():
+        seen: set[int] = set()
+        duplicates: set[int] = set()
+        for attempt, _report_id in rows:
+            if attempt in seen:
+                duplicates.add(attempt)
+            seen.add(attempt)
+        if duplicates:
+            report_ids = [report_id for attempt, report_id in rows if attempt in duplicates]
+            yield Violation(
+                code="INV.AGENT_REPORT.ATTEMPT_DUPLICATE",
+                path="/agent_reports",
+                message=(
+                    f"agent report attempts for role={role.value!r} "
+                    f"base_id={base_id!r} duplicate attempts {sorted(duplicates)!r} "
+                    f"in reports {report_ids!r}"
+                ),
+            )
+            continue
+        expected = list(range(1, len(rows) + 1))
+        actual = sorted(seen)
+        if actual != expected:
+            report_ids = [report_id for _attempt, report_id in rows]
+            yield Violation(
+                code="INV.AGENT_REPORT.ATTEMPT_GAP",
+                path="/agent_reports",
+                message=(
+                    f"agent report attempts for role={role.value!r} base_id={base_id!r} "
+                    f"are {actual!r}; expected {expected!r} in reports {report_ids!r}"
+                ),
             )
 
 
