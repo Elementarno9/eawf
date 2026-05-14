@@ -25,9 +25,13 @@ the lifecycle transitions introduced in P19-W01:
 
 from __future__ import annotations
 
+import hashlib
+import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any
 
+import orjson
 import typer
 
 from eawf.cli import errors as cli_errors
@@ -49,15 +53,65 @@ from eawf.state.enums import (
     AgentSessionRole,
     EffortBucket,
     PhaseStatus,
+    StoreKind,
 )
 from eawf.state.ids import is_phase_id, is_wave_id
 from eawf.state.models import State
+from eawf.store.append import append_envelope
+from eawf.store.envelope import Envelope
+from eawf.store.kinds.event import EventPayload
+from eawf.store.paths import store_path
 
 roadmap_app = typer.Typer(
     name="roadmap",
     help="Roadmap planner (propose / revise / apply / drop / show).",
     no_args_is_help=True,
 )
+
+
+def _append_roadmap_event(
+    state_path: Path,
+    *,
+    command: str,
+    args: dict[str, Any],
+    scope_id: str,
+    summary: str,
+) -> None:
+    """Append one ``EVENT`` envelope to ``store/event.jsonl``.
+
+    Mirrors :func:`eawf.cli.commands.lifecycle._append_event` so every
+    ``/roadmap``-driven state mutation lands an audit row alongside the
+    state-side change. Callers invoke this inside the
+    :func:`state_transaction` block so the EVENT precedes the
+    ``state.json`` write under the same sibling-lock window.
+    """
+    args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
+    args_hash = hashlib.sha256(args_blob).hexdigest()[:16]
+    now = datetime.now(UTC)
+    events_path = store_path(state_path, StoreKind.EVENT)
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=EventPayload(
+            timestamp=now,
+            event_type=command,
+            actor="cli",
+            command=command,
+            args_hash=args_hash,
+            before_state_version="",
+            after_state_version="",
+            status="ok",
+            message=summary,
+        ).model_dump(mode="json"),
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(events_path, envelope)
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -169,6 +223,19 @@ def roadmap_propose_cmd(
                 raise cli_errors.InvalidInput(str(exc)) from exc
             state.updated_at = datetime.now(UTC)
             plan_text = _render_propose_plan_text(state, phase_id)
+            _append_roadmap_event(
+                state_path,
+                command="roadmap propose",
+                args={
+                    "phase_id": phase_id,
+                    "title": title,
+                    "iter_id": iter_id,
+                    "depends_on": depends_on_list,
+                    "source_brief_ids": source_brief_list,
+                },
+                scope_id=phase_id,
+                summary=f"roadmap propose {phase_id} title={title!r}",
+            )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -342,6 +409,19 @@ def roadmap_revise_cmd(
             except LifecycleError as exc:
                 raise cli_errors.InvalidInput(str(exc)) from exc
             state.updated_at = datetime.now(UTC)
+            _append_roadmap_event(
+                state_path,
+                command="roadmap revise",
+                args={
+                    "phase_id": phase_id,
+                    "add_wave": add_wave,
+                    "remove_wave": remove_wave,
+                    "set_deps": set_deps,
+                    "retitle": retitle,
+                },
+                scope_id=phase_id,
+                summary=f"roadmap revise {phase_id}: {action_summary}",
+            )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -404,6 +484,13 @@ def roadmap_apply_cmd(
                     f"phase {phase_id!r} has no waves; revise --add-wave before apply"
                 )
             state.updated_at = datetime.now(UTC)
+            _append_roadmap_event(
+                state_path,
+                command="roadmap apply",
+                args={"phase_id": phase_id, "wave_count": wave_count},
+                scope_id=phase_id,
+                summary=f"roadmap apply {phase_id} waves={wave_count}",
+            )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -444,6 +531,13 @@ def roadmap_drop_cmd(
             except LifecycleError as exc:
                 raise cli_errors.InvalidInput(str(exc)) from exc
             state.updated_at = datetime.now(UTC)
+            _append_roadmap_event(
+                state_path,
+                command="roadmap drop",
+                args={"phase_id": phase_id},
+                scope_id=phase_id,
+                summary=f"roadmap drop {phase_id}",
+            )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
