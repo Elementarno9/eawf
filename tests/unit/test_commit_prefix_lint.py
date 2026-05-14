@@ -66,10 +66,19 @@ def test_accepts_both_supported_coauthor_trailers(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
-def test_accepts_phase_commit_without_wave(tmp_path: Path, mod) -> None:
+def test_rejects_bare_phase_prefix(tmp_path: Path, mod) -> None:
+    """P19-W05: bare [P##] is rejected; -W## or -CORE suffix is mandatory."""
     msg = _write_msg(tmp_path, "[P14] docs: update phase narrative\n")
     code, diag = mod.lint(msg, ["docs/x.md"])
-    assert code == 0, diag
+    assert code == 1
+    assert "bare [P##] not allowed" in diag
+
+
+def test_rejects_bare_phase_iter_prefix(tmp_path: Path, mod) -> None:
+    """P19-W05: [P##-I##] without trailing -W## or -CORE is rejected."""
+    msg = _write_msg(tmp_path, "[P14-I02] docs: iter-scope note\n")
+    code, _diag = mod.lint(msg, ["docs/x.md"])
+    assert code == 1
 
 
 def test_accepts_core_state_only_paths(tmp_path: Path, mod) -> None:
