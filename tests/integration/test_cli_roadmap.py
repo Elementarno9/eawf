@@ -229,3 +229,58 @@ def test_roadmap_show_json_envelope(workspace: Path) -> None:
     assert res.exit_code == 0
     body = orjson.loads(res.stdout)
     assert any(row["id"] == "P21" for row in body["phases"])
+
+
+def test_phase_activate_planned_phase(workspace: Path) -> None:
+    """P19-W07: ``eawf phase activate`` flips PLANNED -> ACTIVE."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    res = runner.invoke(app, ["phase", "activate", "P21"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["status"] == "active"
+    assert state["current"]["phase_id"] == "P21"
+
+
+def test_phase_activate_without_waves_rejected(workspace: Path) -> None:
+    """activate_phase requires at least one wave."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(app, ["phase", "activate", "P21"])
+    assert res.exit_code != 0
+
+
+def test_iter_activate_planned_iter(workspace: Path) -> None:
+    """``eawf iter activate`` flips PLANNED -> ACTIVE on the iter."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    runner.invoke(app, ["phase", "activate", "P21"])
+    res = runner.invoke(app, ["iter", "activate", "P21-I01"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I01"]["status"] == "active"
