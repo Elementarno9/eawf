@@ -1659,7 +1659,8 @@
         "P19-I01-W04",
         "P19-I01-W06",
         "P19-I01-W07",
-        "P19-I01-W08"
+        "P19-I01-W08",
+        "P19-I01-W09"
       ]
     }
   },
@@ -2006,7 +2007,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T20:45:37.183285Z",
+  "updated_at": "2026-05-14T22:09:57.204766Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4143,7 +4144,8 @@
     "P19-I01-W04": {
       "agent_role": "executor",
       "blocks": [
-        "P19-I01-W08"
+        "P19-I01-W08",
+        "P19-I01-W09"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T20:45:33.590476Z",
@@ -4260,7 +4262,9 @@
     },
     "P19-I01-W08": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P19-I01-W09"
+      ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-14T20:45:37.183270Z",
       "deps": [
@@ -4290,6 +4294,32 @@
         "verify-before-claim (--commit arg removal note)"
       ],
       "title": "docs: AGENTS.md updates for planning system",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-P19-W09",
+      "closed_at": "2026-05-14T22:09:57.204744Z",
+      "deps": [
+        "P19-I01-W04",
+        "P19-I01-W08"
+      ],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/golden/"
+      ],
+      "id": "P19-I01-W09",
+      "iter_id": "P19-I01",
+      "opened_at": "2026-05-14T22:08:08.425793Z",
+      "outcome": "golden + lifecycle scenario sync after W04/W08; all golden tests green local",
+      "status": "closed",
+      "success_criteria": [
+        "all golden tests pass on py3.14 CI"
+      ],
+      "title": "test: post-W04 + W08 golden fixture + lifecycle scenario sync",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
