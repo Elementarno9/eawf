@@ -184,6 +184,16 @@ from eawf.cli.commands.coauthor import coauthor_app  # noqa: E402
 app.add_typer(coauthor_app, name="coauthor")
 # --- end P17 W02 ---
 
+# --- P18 W06 typed agent report registration ---
+from eawf.cli.commands.agent_report import (  # noqa: E402
+    agent_report_app as _agent_report_app,
+)
+from eawf.cli.commands.agent_report import operator_app as _operator_app  # noqa: E402
+
+app.add_typer(_agent_report_app, name="agent-report")
+app.add_typer(_operator_app, name="operator")
+# --- end P18 W06 ---
+
 # --- P03 W01 doctor registration ---
 from eawf.cli.commands.doctor import doctor_app  # noqa: E402
 
