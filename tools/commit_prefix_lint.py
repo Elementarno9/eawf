@@ -3,7 +3,10 @@
 Enforces:
 
 1. Subject line must match
-   ``^\\[P\\d{2}(-W\\d{2}|-CORE)?\\]\\s+(feat|fix|chore|docs|refactor|test|build|perf|ci|revert):``.
+   ``^\\[P\\d{2}(-W\\d{2}|-CORE)\\]\\s+(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):``.
+   The ``-W##`` or ``-CORE`` suffix is mandatory — bare ``[P##]`` is
+   rejected so every commit declares whether it advances a planned
+   wave or carries cross-wave bookkeeping (P19-W05).
 2. ``[P##-CORE]`` commits MUST touch only state-bookkeeping paths
    (``.ea/state.json``, ``.ea/store/event.jsonl``, and per-wave spec
    files under ``.ea/specs/``). Touching anything else is rejected.
@@ -38,7 +41,7 @@ from coauthor_policy import (
 )
 
 _SUBJECT_RE = re.compile(
-    r"^\[P\d{2}(-I\d{2})?(-W\d{2}|-CORE)?\]\s+"
+    r"^\[P\d{2}(-I\d{2})?(-W\d{2}|-CORE)\]\s+"
     r"(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\s+\S.*$"
 )
 _CORE_TAG_RE = re.compile(r"^\[P\d{2}(-I\d{2})?-CORE\]\s+")
@@ -104,8 +107,10 @@ def lint(
     if not _SUBJECT_RE.match(subject):
         return 1, (
             f"commit subject rejected: {subject!r}\n"
-            "expected '[P##[-W##|-CORE]] <type>: <summary>' "
-            "(type ∈ feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state)"
+            "expected '[P##-W##] <type>: <summary>' or "
+            "'[P##-CORE] <type>: <summary>' "
+            "(bare [P##] not allowed; -W## or -CORE suffix is mandatory; "
+            "type ∈ feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state)"
         )
     if _CORE_TAG_RE.match(subject):
         bad = [p for p in staged if not _is_state_only_path(p)]
