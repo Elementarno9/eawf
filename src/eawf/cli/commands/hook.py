@@ -24,15 +24,23 @@ from __future__ import annotations
 import logging
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, cast
 
 import orjson
 import typer
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.agent_report.store import (
+    AgentReportRoleMismatchError,
+    AgentReportScrubError,
+    append_agent_report,
+    parse_agent_report_body,
+)
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
+from eawf.cli.scope import resolve_state_path
 from eawf.hooks.event import HookEvent, HookEventType, HookRuntime
 from eawf.hooks.runner import HookResult, HookRunner
 from eawf.render.envelope import (
@@ -42,8 +50,22 @@ from eawf.render.envelope import (
     EnvelopeWarning,
     OutputEnvelope,
 )
+from eawf.state.models import State
+from eawf.validate.strict import validate_state
 
 logger = logging.getLogger(__name__)
+
+
+class AgentEndPayload(BaseModel):
+    """Payload accepted by ``eawf hook run agent_end``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    base_id: str
+    body: dict[str, Any]
+    artifact_ids: list[str] = Field(default_factory=list)
+    blob_refs: list[str] = Field(default_factory=list)
 
 
 hook_app = typer.Typer(
@@ -136,7 +158,7 @@ def _envelope_for(
     """
     blocked = any(r.block for r in results)
     status: EnvelopeStatus = "blocked" if blocked else "ok"
-    body = {
+    body: dict[str, object] = {
         "event_type": event.event_type.value,
         "scope_id": event.scope_id,
         "runtime": event.runtime,
@@ -169,6 +191,63 @@ def _envelope_for(
         next_valid_actions=[],
         warnings=warnings,
         repair_commands=repair_commands,
+    )
+    return OutputEnvelope(header=header, body=body, footer=footer)
+
+
+def _load_state(state_path: Path) -> State:
+    """Load and validate state from *state_path*."""
+    path = state_path
+    if not path.exists():
+        raise cli_errors.NotFound(f"state file not found: {path}")
+    payload = orjson.loads(path.read_bytes())
+    report = validate_state(payload, strict_optional=False)
+    if report.state is None:
+        raise cli_errors.ValidationFailed(
+            f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
+        )
+    return report.state
+
+
+def _envelope_for_agent_report(
+    *,
+    event: HookEvent,
+    report_id: str,
+    store_kind: str,
+    attempt: int,
+    store_urn: str,
+    started_at: datetime,
+    finished_at: datetime,
+) -> OutputEnvelope:
+    """Assemble the output envelope for an agent_end report append."""
+    body: dict[str, object] = {
+        "event_type": event.event_type.value,
+        "scope_id": event.scope_id,
+        "runtime": event.runtime,
+        "report_id": report_id,
+        "store_kind": store_kind,
+        "attempt": attempt,
+        "persisted_store_record": store_urn,
+        "blocked": False,
+        "results": [],
+    }
+    header = EnvelopeHeader(
+        skill="/audit",
+        scope_id=event.scope_id or "urn:eawf:v1:state:hook-run",
+        session="urn:eawf:v1:store:hook/sessions/SES-cli",
+        started_at=started_at,
+        finished_at=finished_at,
+        status="ok",
+        instrument_probe={},
+    )
+    footer = EnvelopeFooter(
+        persisted_artifacts=[],
+        persisted_store_records=[store_urn],
+        state_mutations=[],
+        evidence_refs=[store_urn],
+        next_valid_actions=[],
+        warnings=[],
+        repair_commands=None,
     )
     return OutputEnvelope(header=header, body=body, footer=footer)
 
@@ -227,10 +306,10 @@ def run(
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
 
-    if runtime.lower() not in {"claude", "opencode", "generic"}:
+    if runtime.lower() not in {"claude", "codex", "opencode", "generic"}:
         cli_errors.emit_error(
             cli_errors.InvalidInput(
-                f"--runtime must be one of claude/opencode/generic; got {runtime!r}"
+                f"--runtime must be one of claude/codex/opencode/generic; got {runtime!r}"
             ),
             flags=flags,
         )
@@ -258,6 +337,51 @@ def run(
             cli_errors.InvalidInput(f"event payload rejected: {err.errors()[0]['msg']}"),
             flags=flags,
         )
+        return
+
+    if event.event_type == HookEventType.AGENT_END:
+        try:
+            agent_payload = AgentEndPayload.model_validate(payload)
+            state_path = resolve_state_path(flags.workspace)
+            state = _load_state(state_path)
+            body = parse_agent_report_body(agent_payload.body)
+            result = append_agent_report(
+                state=state,
+                state_path=state_path,
+                session_id=agent_payload.session_id,
+                base_id=agent_payload.base_id,
+                body=body,
+                runtime=event.runtime,
+                generated_at=started_at,
+                artifact_ids=agent_payload.artifact_ids,
+                blob_refs=agent_payload.blob_refs,
+            )
+        except ValidationError as err:
+            cli_errors.emit_error(
+                cli_errors.InvalidInput(f"agent_end payload rejected: {err.errors()[0]['msg']}"),
+                flags=flags,
+            )
+            return
+        except KeyError as err:
+            cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+            return
+        except (AgentReportRoleMismatchError, AgentReportScrubError) as err:
+            cli_errors.emit_error(cli_errors.ValidationFailed(str(err)), flags=flags)
+            return
+        except cli_errors.CliError as err:
+            cli_errors.emit_error(err, flags=flags)
+            return
+        finished_at = datetime.now(UTC)
+        envelope = _envelope_for_agent_report(
+            event=event,
+            report_id=result.envelope.id,
+            store_kind=result.store_kind,
+            attempt=result.attempt,
+            store_urn=result.urn,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+        _emit_envelope(envelope)
         return
 
     runner = HookRunner()
