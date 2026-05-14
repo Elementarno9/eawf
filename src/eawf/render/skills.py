@@ -193,22 +193,38 @@ _PREP_BODY = """# /prep
 
 ## Canonical algorithm
 
-1. Resolve `<phase-id>` against the plan / state.
-2. Enumerate waves; mark each `parallel | sequential` per the plan.
-3. **Plan-mode proposal (default).** If `planning.auto_plan` is `false`
-   (the default; check via `uv run eawf config get planning.auto_plan`)
-   and `--auto-plan` was not passed, enter Claude Code plan mode
-   (`EnterPlanMode`) and present the proposed wave DAG (IDs, deps,
-   file scopes, success criteria, `agent_role`, `effort_bucket`).
-   Exit via
-   `ExitPlanMode` only after operator approval. When `auto_plan` is
-   `true` or `--auto-plan` is set, skip the proposal and dispatch
-   inline.
-4. For each parallel wave, dispatch a worktree subagent.
-5. For each sequential wave, run inline; cherry-pick parallel-wave
+P19-W07 turns `/prep` into an activator. The flow now branches on the
+phase's PLANNED-queue state:
+
+1. Resolve `<phase-id>` against `state.phases`.
+2. Branch on phase status + wave plan:
+
+   - **Case A — PLANNED phase with at least one PENDING wave.**
+     Render the plan via `eawf roadmap show --phase <id> --md`.
+     Enter Claude Code plan mode (`EnterPlanMode`) with the rendered
+     DAG, then surface an `AskUserQuestion` with the options
+     `use-as-is`, `revise`, `replace`, `cancel`. On `use-as-is`,
+     call `eawf phase activate <id>` (which runs the V11 hard
+     gate: ≥1 wave + deps phases CLOSED). On `revise`, hand back to
+     `/roadmap revise`. On `replace`, hand back to `/roadmap drop`
+     + `/roadmap propose`.
+   - **Case B — PLANNED phase with empty wave DAG.** Dispatch the
+     `planner` agent (`build/eawf-plugin/agents/planner.md`). The
+     planner returns either a sequence of `eawf roadmap revise
+     --add-wave` commands or a YAML payload. Surface `AskUserQuestion`
+     with `approve`, `edit`, `cancel`. On `approve`, apply the
+     planner's commands through the state CLI, then
+     `eawf phase activate <id>`.
+   - **Case C — no PLANNED phase by that id.** Reject with exit 4
+     and hint `Run \\`eawf roadmap propose --phase <id> --title ...\\`
+     first.` for the operator.
+
+3. For each parallel wave under the activated iter, dispatch a
+   worktree subagent.
+4. For each sequential wave, run inline; cherry-pick parallel-wave
    commits in between as they finish.
-6. Validate the rendered plan with `eawf plan show --md`; wave tags and
-   bucket roll-ups must match state.
+5. Validate the rendered plan with `eawf plan show --md`; wave tags
+   and bucket roll-ups must match state.
 
 ## Pre-flight checklist
 
@@ -217,23 +233,22 @@ _PREP_BODY = """# /prep
 - [ ] Confirm worktree subagents branch from the parent HEAD.
 - [ ] Every wave has success criteria, agent role, effort bucket, and
       file scope.
-- [ ] Plan-mode proposal is the default; pass `--auto-plan` only when
-      the wave DAG is trivial or pre-approved.
+- [ ] The target phase exists in `state.phases` with status `planned`
+      (otherwise hand back to `/roadmap propose`).
 
 ## Decision surfaces
 
-When the algorithm reaches a discrete choice (e.g. "split or merge
-waves W03+W04?", "use worktree per wave or run inline?"), surface
-the options via `AskUserQuestion` rather than free-text prompts —
-the operator's UI offers a faster confirm path and the answer is
-machine-parsable.
+`AskUserQuestion` is the canonical surface for the case-A
+`use-as-is/revise/replace/cancel` pick and the case-B
+`approve/edit/cancel` pick. Free-text prompts are forbidden per the
+project-wide approval policy.
 
 ## Output contract
 
-Skill envelope describing the dispatched waves and the expected
-cherry-pick order. When the operator approves a plan-mode proposal,
-the envelope's `body.plan_mode_approval` records the approval source
-(`config-auto-plan`, `arg-auto-plan`, or `operator-approved`).
+Skill envelope describing the activated phase + dispatched waves and
+the expected cherry-pick order. The envelope's
+`body.plan_mode_approval` records the approval source
+(`use-as-is`, `revise`, `replace`, `planner-approve`).
 """
 
 _AUDIT_BODY = """# /audit

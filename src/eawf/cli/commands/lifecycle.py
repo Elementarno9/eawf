@@ -76,6 +76,8 @@ from eawf.lifecycle.allocator import (
 )
 from eawf.lifecycle.transitions import (
     LifecycleError,
+    activate_iter,
+    activate_phase,
     add_subproject,
     claim_wave,
     close_iter,
@@ -585,6 +587,59 @@ def phase_close_cmd(
         },
         mutate=_mutator,
         closure_kind=True,
+    )
+
+
+@phase_app.command("activate")
+def phase_activate_cmd(
+    ctx: typer.Context,
+    phase_id: Annotated[str, typer.Argument(help="PLANNED phase id to activate.")],
+) -> None:
+    """Flip a PLANNED phase to ACTIVE (P19-W07).
+
+    Runs the V11 hard gate: the phase must already carry at least one
+    planned wave, and every phase listed in ``Phase.depends_on`` must
+    be CLOSED. Sets ``current.phase_id`` to *phase_id*.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_phase_id(phase_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            flags=flags,
+        )
+        return
+    _run_mutation(
+        ctx,
+        command="phase activate",
+        args={"id": phase_id},
+        scope_id=phase_id,
+        text=f"phase activate {phase_id}",
+        envelope=lambda: {"phase": phase_id, "status": "active"},
+        mutate=lambda state: _wrap_no_return(activate_phase(state, phase_id=phase_id)),
+    )
+
+
+@iter_app.command("activate")
+def iter_activate_cmd(
+    ctx: typer.Context,
+    iter_id: Annotated[str, typer.Argument(help="PLANNED iter id to activate.")],
+) -> None:
+    """Flip a PLANNED iter to ACTIVE."""
+    flags: GlobalFlags = ctx.obj
+    if not is_iter_id(iter_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid iter id: {iter_id!r}"),
+            flags=flags,
+        )
+        return
+    _run_mutation(
+        ctx,
+        command="iter activate",
+        args={"id": iter_id},
+        scope_id=iter_id,
+        text=f"iter activate {iter_id}",
+        envelope=lambda: {"iter": iter_id, "status": "active"},
+        mutate=lambda state: _wrap_no_return(activate_iter(state, iter_id=iter_id)),
     )
 
 
