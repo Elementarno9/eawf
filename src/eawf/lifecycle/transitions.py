@@ -709,12 +709,38 @@ def set_wave_deps(state: State, *, wave_id: str, deps: list[str]) -> Wave:
     return wave
 
 
-def claim_wave(state: State, *, wave_id: str, session_id: str) -> Wave:
+def claim_wave(
+    state: State,
+    *,
+    wave_id: str,
+    session_id: str,
+    out_of_order: bool = False,
+) -> Wave:
     """Move a pending wave to ``claimed`` and bind it to *session_id*.
 
     Re-claiming an already-claimed wave with the *same* session is a no-op
     (idempotent). Re-claiming with a *different* session is rejected so the
     sibling-lock + status check delivers exactly-once semantics.
+
+    P19-W02 dep + monotonic gates:
+
+    - Reject the claim when any wave in ``wave.deps`` is not in
+      :data:`WaveStatus.CLOSED`. Dependencies must land before a
+      downstream wave can start.
+    - Reject the claim when a sibling wave with a numerically lower
+      ``W##`` is still PENDING under the same iter AND its own deps
+      are already satisfied — this enforces the monotonic claim
+      order that prevents parallel runtimes from skipping ahead.
+    - ``out_of_order=True`` (CLI ``--out-of-order``) is the
+      operator-blessed escape hatch for parallel-worktree dispatch
+      where multiple waves of the same dep-frontier are intentionally
+      claimed at once.
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown, wave is not
+            PENDING, dep waves are not CLOSED, or a lower-numbered
+            sibling-ready wave is still PENDING (without
+            ``out_of_order``).
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -724,12 +750,59 @@ def claim_wave(state: State, *, wave_id: str, session_id: str) -> Wave:
         return wave
     if wave.status != WaveStatus.PENDING:
         raise LifecycleError(f"wave {wave_id!r} cannot be claimed (status={wave.status.value!r})")
+    unmet_deps = [
+        dep_id
+        for dep_id in wave.deps
+        if state.waves.get(dep_id) is None or state.waves[dep_id].status != WaveStatus.CLOSED
+    ]
+    if unmet_deps:
+        raise LifecycleError(
+            f"wave {wave_id!r} blocked on un-closed dep waves: {sorted(unmet_deps)}"
+        )
+    if not out_of_order:
+        skipped = _lower_w_sibling_pending(state, wave)
+        if skipped:
+            raise LifecycleError(
+                f"wave {wave_id!r} would skip lower-numbered ready siblings: "
+                f"{sorted(skipped)}; pass --out-of-order to claim regardless"
+            )
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
     if wave_id not in state.current.active_wave_ids:
         state.current.active_wave_ids.append(wave_id)
-    logger.info(f"claim_wave id={wave_id} session={session_id}")
+    logger.info(f"claim_wave id={wave_id} session={session_id} out_of_order={out_of_order}")
     return wave
+
+
+def _lower_w_sibling_pending(state: State, wave: Wave) -> list[str]:
+    """Return PENDING sibling wave ids with a lower ``W##`` whose deps are CLOSED.
+
+    A sibling shares ``wave.iter_id``. ``W##`` ordering uses the
+    trailing two digits of the wave id. Returns an empty list when no
+    such "ready and unclaimed" lower-numbered wave exists.
+    """
+    suffix = wave.id.split("-")[-1]
+    if not (suffix.startswith("W") and suffix[1:].isdigit()):
+        return []
+    my_index = int(suffix[1:])
+    skipped: list[str] = []
+    for other_id, other in state.waves.items():
+        if other.iter_id != wave.iter_id:
+            continue
+        other_suffix = other_id.split("-")[-1]
+        if not (other_suffix.startswith("W") and other_suffix[1:].isdigit()):
+            continue
+        if int(other_suffix[1:]) >= my_index:
+            continue
+        if other.status != WaveStatus.PENDING:
+            continue
+        deps_met = all(
+            state.waves.get(d) is not None and state.waves[d].status == WaveStatus.CLOSED
+            for d in other.deps
+        )
+        if deps_met:
+            skipped.append(other_id)
+    return skipped
 
 
 def close_wave(

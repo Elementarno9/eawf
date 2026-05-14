@@ -1058,6 +1058,17 @@ def wave_claim_cmd(
             help="One of current_branch|fresh_branch|inline.",
         ),
     ] = "current_branch",
+    out_of_order: Annotated[
+        bool,
+        typer.Option(
+            "--out-of-order",
+            help=(
+                "Bypass the W## monotonic gate (P19-W02). Use only for parallel-"
+                "worktree dispatch where multiple siblings of the same dep "
+                "frontier are claimed at once."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Claim a pending wave for *session*. Exactly-once across concurrent calls."""
     flags: GlobalFlags = ctx.obj
@@ -1088,7 +1099,12 @@ def wave_claim_cmd(
                 f"wave {wave_id!r} is over token budget "
                 f"({wave.tokens_consumed}/{wave.token_budget}); raise budget or split work"
             )
-        claim_wave(state, wave_id=wave_id, session_id=session)
+        claim_wave(
+            state,
+            wave_id=wave_id,
+            session_id=session,
+            out_of_order=out_of_order,
+        )
 
     _run_mutation(
         ctx,
@@ -1097,6 +1113,7 @@ def wave_claim_cmd(
             "id": wave_id,
             "session": session,
             "worktree_policy": worktree_policy,
+            "out_of_order": out_of_order,
         },
         scope_id=wave_id,
         text=f"wave claim {wave_id} session={session}",
@@ -1104,6 +1121,7 @@ def wave_claim_cmd(
             "wave": wave_id,
             "session": session,
             "worktree_policy": worktree_policy,
+            "out_of_order": out_of_order,
         },
         mutate=_claim_with_budget_gate,
     )
