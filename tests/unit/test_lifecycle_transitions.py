@@ -141,9 +141,27 @@ def test_close_phase_with_open_iter_raises() -> None:
         close_phase(state, phase_id="P01", audit_id="AUD-1")
 
 
+def _seed_closed_wave(state: State, phase_id: str, iter_id: str | None = None) -> None:
+    """Add an iter + closed wave under *phase_id* so close_phase can succeed.
+
+    P19-W03 requires at least one CLOSED wave under the phase. Tests
+    that exercise close_phase / reopen_phase paths use this helper to
+    satisfy the new gate without inflating each test body.
+    """
+    iter_id = iter_id or f"{phase_id}-I01"
+    wave_id = f"{phase_id}-I01-W01"
+    open_iter(state, iter_id=iter_id, phase_id=phase_id, title="i")
+    plan_wave(state, wave_id=wave_id, iter_id=iter_id, title="w", file_scopes=["x"])
+    claim_wave(state, wave_id=wave_id, session_id=f"SES-seed-{phase_id}")
+    close_wave(state, wave_id=wave_id, outcome="ok")
+    state.iters[iter_id].status = IterStatus.CLOSED
+    state.iters[iter_id].closed_at = datetime.now(UTC)
+
+
 def test_close_phase_happy_clears_current() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
     p = close_phase(state, phase_id="P01", audit_id="AUD-1", checkpoint="abc")
     assert p.status == PhaseStatus.CLOSED
     assert p.audit_id == "AUD-1"
@@ -159,6 +177,7 @@ def test_close_phase_unknown_raises() -> None:
 def test_close_phase_already_closed_raises() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
     close_phase(state, phase_id="P01", audit_id="AUD-1")
     with pytest.raises(LifecycleError, match="cannot close"):
         close_phase(state, phase_id="P01", audit_id="AUD-2")
@@ -180,6 +199,7 @@ def test_reopen_phase_active_raises() -> None:
 def test_reopen_phase_happy_restores_active_and_current() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
     close_phase(state, phase_id="P01", audit_id="AUD-1")
     assert state.current.phase_id is None
     p = reopen_phase(state, phase_id="P01")
@@ -192,6 +212,7 @@ def test_reopen_phase_happy_restores_active_and_current() -> None:
 def test_reopen_phase_does_not_steal_current_when_other_phase_active() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
     close_phase(state, phase_id="P01", audit_id="AUD-1")
     open_phase(state, phase_id="P02", title="y")
     reopen_phase(state, phase_id="P01")
@@ -201,9 +222,10 @@ def test_reopen_phase_does_not_steal_current_when_other_phase_active() -> None:
 def test_reopen_phase_then_open_iter_succeeds() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
     close_phase(state, phase_id="P01", audit_id="AUD-1")
     reopen_phase(state, phase_id="P01")
-    it = open_iter(state, iter_id="P01-I01", phase_id="P01", title="follow-up")
+    it = open_iter(state, iter_id="P01-I02", phase_id="P01", title="follow-up")
     assert it.status == IterStatus.ACTIVE
 
 
@@ -219,9 +241,10 @@ def test_open_iter_unknown_phase_raises() -> None:
 def test_open_iter_closed_phase_raises() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
     close_phase(state, phase_id="P01", audit_id="AUD-1")
     with pytest.raises(LifecycleError, match="not open"):
-        open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+        open_iter(state, iter_id="P01-I02", phase_id="P01", title="y")
 
 
 def test_open_iter_happy() -> None:
@@ -692,6 +715,36 @@ def test_set_wave_deps_cycle_rolled_back() -> None:
     with pytest.raises(LifecycleError, match="cycle"):
         set_wave_deps(state, wave_id="P01-I01-W01", deps=["P01-I01-W02"])
     assert state.waves["P01-I01-W01"].deps == []
+
+
+def test_close_phase_rejects_when_no_closed_wave() -> None:
+    """P19-W03: phase close demands at least one CLOSED wave."""
+    state = _empty_state()
+    open_phase(state, phase_id="P10", title="t")
+    open_iter(state, iter_id="P10-I01", phase_id="P10", title="i")
+    plan_wave(state, wave_id="P10-I01-W01", iter_id="P10-I01", title="w", file_scopes=["x"])
+    # iter and wave are still open — fail on open-children first
+    with pytest.raises(LifecycleError, match="open iters"):
+        close_phase(state, phase_id="P10", audit_id="AUD-1")
+    # close the iter without closing the wave (abandon path)
+    state.waves["P10-I01-W01"].status = WaveStatus.ABANDONED
+    state.iters["P10-I01"].status = IterStatus.CLOSED
+    state.iters["P10-I01"].closed_at = datetime.now(UTC)
+    with pytest.raises(LifecycleError, match="no closed waves"):
+        close_phase(state, phase_id="P10", audit_id="AUD-1")
+
+
+def test_close_phase_accepts_when_one_wave_closed() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P11", title="t")
+    open_iter(state, iter_id="P11-I01", phase_id="P11", title="i")
+    plan_wave(state, wave_id="P11-I01-W01", iter_id="P11-I01", title="w", file_scopes=["x"])
+    claim_wave(state, wave_id="P11-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P11-I01-W01", outcome="ok")
+    state.iters["P11-I01"].status = IterStatus.CLOSED
+    state.iters["P11-I01"].closed_at = datetime.now(UTC)
+    p = close_phase(state, phase_id="P11", audit_id="AUD-2")
+    assert p.status == PhaseStatus.CLOSED
 
 
 def test_set_wave_deps_non_pending_rejected() -> None:

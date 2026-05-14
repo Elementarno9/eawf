@@ -136,7 +136,12 @@ def close_phase(
     audit_id: str,
     checkpoint: str | None = None,
 ) -> Phase:
-    """Close an active phase. Rejects when child iters are still open.
+    """Close an active phase. Rejects when child iters are still open
+    or when the phase has zero waves in :data:`WaveStatus.CLOSED`.
+
+    The ≥1-closed-wave gate (P19-W03) catches the
+    "single-commit-per-phase" anti-pattern where a runtime ships the
+    entire phase as one commit without closing any waves first.
 
     The ``checkpoint`` argument is recorded in the lifecycle event but does
     not currently mutate the phase record — that field will land in Phase 3
@@ -154,6 +159,16 @@ def close_phase(
     ]
     if open_children:
         raise LifecycleError(f"phase {phase_id!r} has open iters: {sorted(open_children)}")
+    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    closed_wave_count = sum(
+        1
+        for w in state.waves.values()
+        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+    )
+    if closed_wave_count == 0:
+        raise LifecycleError(
+            f"phase {phase_id!r} has no closed waves; close_phase requires at least one closed wave"
+        )
     phase.status = PhaseStatus.CLOSED
     phase.closed_at = datetime.now(UTC)
     phase.audit_id = audit_id
