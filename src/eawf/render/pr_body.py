@@ -125,6 +125,31 @@ def _waves_for_phase(state: State, phase_id: str) -> list[tuple[str, str, str, s
     return rows
 
 
+def _escape_table_cell(value: str) -> str:
+    return value.replace("|", "\\|")
+
+
+def _render_source_rows(citations: list[Citation]) -> list[str]:
+    if not citations:
+        return []
+    rows = [
+        "Source rows:",
+        "",
+        "| Citation | Kind | Reference | Note |",
+        "|---|---|---|---|",
+    ]
+    for citation in citations:
+        note = citation.note or citation.title or ""
+        rows.append(
+            "| "
+            f"[{citation.n}] | "
+            f"{citation.kind} | "
+            f"`{_escape_table_cell(citation.ref)}` | "
+            f"{_escape_table_cell(note)} |"
+        )
+    return rows
+
+
 def _render_input_section(input_model: PrBodyInput, heading: str) -> str:
     lines = [
         f"## {heading}",
@@ -142,8 +167,7 @@ def _render_input_section(input_model: PrBodyInput, heading: str) -> str:
         lines.append(f"Artifacts: {artifact_list}")
     if input_model.citations:
         lines.append("")
-        lines.append("References:")
-        lines.extend(f"[{c.n}] {c.ref}" for c in input_model.citations)
+        lines.extend(_render_source_rows(input_model.citations))
     return "\n".join(lines)
 
 
@@ -192,6 +216,13 @@ def _render_profile_blocks(
         template = env.from_string(block.body_template)
         rendered.append(template.render(**context))
     return rendered
+
+
+def _citation_rows_for_inputs(inputs: list[PrBodyInput] | None) -> list[Citation] | None:
+    rows: list[Citation] = []
+    for input_model in inputs or []:
+        rows.extend(input_model.citations)
+    return rows or None
 
 
 def build_pr_body(
@@ -278,7 +309,11 @@ def build_pr_body(
         ]
     )
     body = "\n".join(lines) + "\n"
-    report = validate_text_surface(body, surface="pr")
+    report = validate_text_surface(
+        body,
+        surface="pr",
+        references=_citation_rows_for_inputs(inputs),
+    )
     if not report.ok:
         raise PrBodyValidationError("; ".join(report.errors))
     return body

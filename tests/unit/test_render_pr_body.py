@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.artifacts.references import Citation
 from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render.pr_body import PrBodyInput, PrBodyNotFound, build_pr_body, infer_pr_kind
 from eawf.state.models import State
@@ -186,3 +187,34 @@ def test_build_pr_body_includes_typed_inputs_and_profile_blocks() -> None:
     assert "- One" in body
     assert "Phase P00 from profile." in body
     assert "skip" not in body
+
+
+def test_build_pr_body_renders_docs_research_citation_source_rows() -> None:
+    payload = _base_state()
+    payload["phases"] = {"P00": _phase("P00", title="docs research")}
+    state = State.model_validate(payload)
+
+    body = build_pr_body(
+        state,
+        "P00",
+        inputs=[
+            PrBodyInput(
+                kind="docs_research",
+                title="Research",
+                summary="Docs source review.",
+                citations=[
+                    Citation(
+                        n=1,
+                        ref="docs/architecture/workflow.md",
+                        kind="repo",
+                        title="Workflow docs",
+                    )
+                ],
+            )
+        ],
+        kind="docs-research",
+    )
+
+    assert "## Docs And Research Report" in body
+    assert "Source rows:" in body
+    assert "| [1] | repo | `docs/architecture/workflow.md` | Workflow docs |" in body
