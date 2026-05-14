@@ -527,7 +527,6 @@ def plan_wave(
         effort_bucket=effort_bucket,
         claim_session_id=None,
         worktree_id=None,
-        commit=None,
         outcome=None,
         opened_at=datetime.now(UTC),
         closed_at=None,
@@ -722,10 +721,15 @@ def close_wave(
     state: State,
     *,
     wave_id: str,
-    commit: str,
     outcome: str,
 ) -> Wave:
-    """Close a claimed/in-progress wave with a commit + outcome string."""
+    """Close a claimed/in-progress wave with an outcome string.
+
+    The wave's commit SHA is derived at read time via
+    :func:`eawf.lifecycle.wave_sha.derive_wave_sha` from the
+    ``[P##-W##]`` commit-subject prefix; it is no longer persisted on
+    the wave record (P19-W04 removed ``Wave.commit``).
+    """
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
@@ -735,12 +739,11 @@ def close_wave(
             f"(status={wave.status.value!r}); cannot close"
         )
     wave.status = WaveStatus.CLOSED
-    wave.commit = commit
     wave.outcome = outcome
     wave.closed_at = datetime.now(UTC)
     if wave_id in state.current.active_wave_ids:
         state.current.active_wave_ids.remove(wave_id)
-    logger.info(f"close_wave id={wave_id} commit={commit}")
+    logger.info(f"close_wave id={wave_id} outcome={outcome!r}")
     return wave
 
 

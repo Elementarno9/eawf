@@ -183,17 +183,10 @@ def wave_land(
     commits = list(merge_result.picked_commits)
     chosen_outcome = outcome if outcome else _format_default_outcome(len(commits))
 
-    # close_wave needs a non-empty commit string. When the worktree had
-    # no commits beyond the merge-base, picked_commits is empty but
-    # merge_result.merged_commit reflects the current parent HEAD —
-    # that is the "evidence" SHA.
-    close_commit = commits[-1] if commits else merged_commit
-
     try:
         close_wave(
             state,
             wave_id=wave_id,
-            commit=close_commit,
             outcome=chosen_outcome,
         )
     except LifecycleError as exc:

@@ -1,143 +1,174 @@
 {
-  "schema_version": "1.0",
-  "scope_kind": "repo",
-  "urn": "urn:eawf:v1:state:CP",
-  "updated_at": "2026-05-08T00:00:00Z",
-  "project": {
-    "code": "CP",
-    "slug": "core-python",
-    "title": "Core Python",
-    "description": "",
-    "domains": ["core", "python"],
-    "default_branch": "main",
-    "status": "active",
-    "repo_urn": "urn:eawf:v1:repo:CP"
-  },
-  "current": {
-    "project_code": "CP",
-    "subproject_id": null,
-    "phase_id": "P05",
-    "iter_id": "P05-I01",
-    "active_wave_ids": [],
-    "active_session_ids": []
-  },
-  "workspace": null,
-  "phases": {
-    "P05": {
-      "id": "P05",
-      "scope_id": "CP",
-      "title": "Phase Five",
-      "status": "active",
-      "iter_ids": ["P05-I01"],
-      "outcome_ids": [],
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null,
-      "audit_id": null
-    }
-  },
-  "iters": {
-    "P05-I01": {
-      "id": "P05-I01",
-      "phase_id": "P05",
-      "title": "Branch and merge",
-      "status": "active",
-      "wave_ids": ["P05-I01-W00", "P05-I01-W01", "P05-I01-W02", "P05-I01-W03"],
-      "estimate_id": null,
-      "audit_id": null,
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null
-    }
-  },
-  "waves": {
-    "P05-I01-W00": {
-      "id": "P05-I01-W00",
-      "iter_id": "P05-I01",
-      "title": "Init",
-      "status": "closed",
-      "deps": [],
-      "file_scopes": ["src/cp/init.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": "1111111aaaaaa",
-      "outcome": "ok",
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": "2026-05-08T01:00:00Z"
-    },
-    "P05-I01-W01": {
-      "id": "P05-I01-W01",
-      "iter_id": "P05-I01",
-      "title": "Branch A",
-      "status": "claimed",
-      "deps": ["P05-I01-W00"],
-      "file_scopes": ["src/cp/a.py"],
-      "claim_session_id": "S-A",
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    },
-    "P05-I01-W02": {
-      "id": "P05-I01-W02",
-      "iter_id": "P05-I01",
-      "title": "Branch B",
-      "status": "pending",
-      "deps": ["P05-I01-W00"],
-      "file_scopes": ["src/cp/b.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    },
-    "P05-I01-W03": {
-      "id": "P05-I01-W03",
-      "iter_id": "P05-I01",
-      "title": "Merge",
-      "status": "pending",
-      "deps": ["P05-I01-W01", "P05-I01-W02"],
-      "file_scopes": ["src/cp/merge.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    }
-  },
-  "audits": {
-    "AU-W01": {
-      "id": "AU-W01",
-      "scope_id": "P05-I01-W01",
-      "kind": "review",
-      "status": "complete",
-      "report_artifact_id": null,
-      "check_results": [
-        {"name": "ruff_clean", "passed": true, "details": null},
-        {"name": "tests_green", "passed": false, "details": "two failures"}
-      ],
-      "integrity_results": [],
-      "created_at": "2026-05-08T02:00:00Z",
-      "verdict": "minor"
-    }
-  },
-  "artifacts": {},
   "agent_sessions": {
     "S-A": {
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P05-I01-W01"
+      ],
+      "ended_at": null,
       "id": "S-A",
       "role": "executor",
       "runtime": "claude",
       "scope_id": "P05-I01-W01",
-      "status": "active",
-      "claimed_wave_ids": ["P05-I01-W01"],
-      "worktree_ids": [],
-      "artifact_ids": [],
       "started_at": "2026-05-08T01:00:00Z",
-      "ended_at": null,
-      "summary": null
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    }
+  },
+  "artifacts": {},
+  "audits": {
+    "AU-W01": {
+      "check_results": [
+        {
+          "details": null,
+          "name": "ruff_clean",
+          "passed": true
+        },
+        {
+          "details": "two failures",
+          "name": "tests_green",
+          "passed": false
+        }
+      ],
+      "created_at": "2026-05-08T02:00:00Z",
+      "id": "AU-W01",
+      "integrity_results": [],
+      "kind": "review",
+      "report_artifact_id": null,
+      "scope_id": "P05-I01-W01",
+      "status": "complete",
+      "verdict": "minor"
+    }
+  },
+  "current": {
+    "active_session_ids": [],
+    "active_wave_ids": [],
+    "iter_id": "P05-I01",
+    "phase_id": "P05",
+    "project_code": "CP",
+    "subproject_id": null
+  },
+  "indexes": {},
+  "iters": {
+    "P05-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P05-I01",
+      "opened_at": "2026-05-08T00:00:00Z",
+      "phase_id": "P05",
+      "status": "active",
+      "title": "Branch and merge",
+      "wave_ids": [
+        "P05-I01-W00",
+        "P05-I01-W01",
+        "P05-I01-W02",
+        "P05-I01-W03"
+      ]
+    }
+  },
+  "phases": {
+    "P05": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P05",
+      "iter_ids": [
+        "P05-I01"
+      ],
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome_ids": [],
+      "scope_id": "CP",
+      "status": "active",
+      "title": "Phase Five"
     }
   },
   "plugins": {},
-  "indexes": {}
+  "project": {
+    "code": "CP",
+    "default_branch": "main",
+    "description": "",
+    "domains": [
+      "core",
+      "python"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:CP",
+    "slug": "core-python",
+    "status": "active",
+    "title": "Core Python"
+  },
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "urn": "urn:eawf:v1:state:CP",
+  "waves": {
+    "P05-I01-W00": {
+      "claim_session_id": null,
+      "closed_at": "2026-05-08T01:00:00Z",
+      "deps": [],
+      "file_scopes": [
+        "src/cp/init.py"
+      ],
+      "id": "P05-I01-W00",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome": "ok",
+      "status": "closed",
+      "title": "Init",
+      "worktree_id": null
+    },
+    "P05-I01-W01": {
+      "claim_session_id": "S-A",
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/cp/a.py"
+      ],
+      "id": "P05-I01-W01",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "claimed",
+      "title": "Branch A",
+      "worktree_id": null
+    },
+    "P05-I01-W02": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/cp/b.py"
+      ],
+      "id": "P05-I01-W02",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Branch B",
+      "worktree_id": null
+    },
+    "P05-I01-W03": {
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W01",
+        "P05-I01-W02"
+      ],
+      "file_scopes": [
+        "src/cp/merge.py"
+      ],
+      "id": "P05-I01-W03",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "pending",
+      "title": "Merge",
+      "worktree_id": null
+    }
+  },
+  "workspace": null
 }

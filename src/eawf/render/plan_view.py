@@ -52,6 +52,7 @@ from eawf.estimation.buckets import (
     timestamp_actual_eu,
     wave_estimate_eu,
 )
+from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.state.enums import (
     BacklogPriority,
     BacklogStatus,
@@ -575,7 +576,7 @@ def build_view(state: State, iter_id: str) -> PlanView:
             effort_bucket=w.effort_bucket.value if w.effort_bucket else None,
             estimate_eu=wave_estimate_eu(w),
             claim_session_id=w.claim_session_id,
-            commit=w.commit,
+            commit=derive_wave_sha(w.id),
             outcome=w.outcome,
         )
         for w in waves

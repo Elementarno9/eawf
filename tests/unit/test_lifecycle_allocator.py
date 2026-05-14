@@ -102,7 +102,6 @@ def _wave(state: State, wid: str, iid: str) -> None:
         file_scopes=["src/"],
         claim_session_id=None,
         worktree_id=None,
-        commit=None,
         outcome=None,
         opened_at=datetime.now(UTC),
         closed_at=None,

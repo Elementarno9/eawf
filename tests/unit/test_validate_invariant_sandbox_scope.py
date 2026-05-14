@@ -74,7 +74,6 @@ def test_wave_scope_resolved_no_violation() -> None:
             "worktree_id": None,
             "token_budget": None,
             "tokens_consumed": 0,
-            "commit": None,
             "outcome": None,
             "opened_at": "2026-05-08T00:00:00Z",
             "closed_at": None,

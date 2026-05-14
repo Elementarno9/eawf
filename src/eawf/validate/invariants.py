@@ -590,27 +590,15 @@ def check_agent_report_invariants(state: State, reports: Iterable[Envelope]) -> 
                     path=_report_path(header.report_id, "body/commit_sha"),
                     message=f"executor report {header.report_id!r} has no commit_sha",
                 )
-            else:
-                wave = state.waves.get(body.wave_id)
-                if wave is None:
-                    yield Violation(
-                        code="INV.AGENT_REPORT.EXECUTOR_WAVE_MISSING",
-                        path=_report_path(header.report_id, "body/wave_id"),
-                        message=(
-                            f"executor report {header.report_id!r} references "
-                            f"missing wave {body.wave_id!r}"
-                        ),
-                    )
-                elif wave.commit != body.commit_sha:
-                    yield Violation(
-                        code="INV.AGENT_REPORT.EXECUTOR_COMMIT_MISMATCH",
-                        path=_report_path(header.report_id, "body/commit_sha"),
-                        message=(
-                            f"executor report {header.report_id!r} commit "
-                            f"{body.commit_sha!r} does not match wave "
-                            f"{body.wave_id!r} commit {wave.commit!r}"
-                        ),
-                    )
+            elif body.wave_id not in state.waves:
+                yield Violation(
+                    code="INV.AGENT_REPORT.EXECUTOR_WAVE_MISSING",
+                    path=_report_path(header.report_id, "body/wave_id"),
+                    message=(
+                        f"executor report {header.report_id!r} references "
+                        f"missing wave {body.wave_id!r}"
+                    ),
+                )
 
         if isinstance(body, ReviewerReportBody) and not body.coverage_refs:
             yield Violation(

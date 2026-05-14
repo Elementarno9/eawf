@@ -210,7 +210,6 @@ def test_wave_deps_validation() -> None:
         file_scopes=["src/foo/"],
         claim_session_id=None,
         worktree_id=None,
-        commit=None,
         outcome=None,
         opened_at=now,
         closed_at=None,
@@ -230,7 +229,6 @@ def test_wave_rejects_bad_dep() -> None:
             file_scopes=[],
             claim_session_id=None,
             worktree_id=None,
-            commit=None,
             outcome=None,
             opened_at=now,
             closed_at=None,
@@ -667,7 +665,6 @@ def test_id_str_rejects_empty_and_whitespace_backlog_item(bad_id: str) -> None:
             created_at=now,
             closed_at=None,
             resolution=None,
-            commit=None,
         )
 
 

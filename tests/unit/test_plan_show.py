@@ -107,7 +107,6 @@ def _wave(
     deps: list[str] | None = None,
     title: str | None = None,
     claim_session_id: str | None = None,
-    commit: str | None = None,
     outcome: str | None = None,
     closed_at: str | None = None,
 ) -> dict[str, Any]:
@@ -120,7 +119,6 @@ def _wave(
         "file_scopes": [],
         "claim_session_id": claim_session_id,
         "worktree_id": None,
-        "commit": commit,
         "outcome": outcome,
         "opened_at": "2026-05-08T00:00:00Z",
         "closed_at": closed_at,
@@ -248,7 +246,6 @@ def test_build_view_synthesises_wave_outcome_check() -> None:
             status="closed",
             closed_at="2026-05-08T02:00:00Z",
             outcome="ok",
-            commit="deadbeef",
         ),
     )
     state = State.model_validate(s)
@@ -272,7 +269,6 @@ def test_collect_risks_p0_backlog() -> None:
             "created_at": "2026-05-08T00:00:00Z",
             "closed_at": None,
             "resolution": None,
-            "commit": None,
         }
     }
     state = State.model_validate(s)

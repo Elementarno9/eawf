@@ -236,8 +236,6 @@ def test_phase_close_single_closed_wave_without_decision_exits_4(workspace: Path
             "wave",
             "close",
             "P01-I01-W01",
-            "--commit",
-            "deadbeef",
             "--outcome",
             "done",
         ],
@@ -461,7 +459,7 @@ def test_wave_claim_invalid_policy_exits_3(workspace: Path) -> None:
     assert res.exit_code == 3
 
 
-def test_wave_close_without_commit_exits_3(workspace: Path) -> None:
+def test_wave_close_without_outcome_exits_3(workspace: Path) -> None:
     _bootstrap_to_iter(workspace)
     runner.invoke(
         app,
@@ -478,7 +476,7 @@ def test_wave_close_without_commit_exits_3(workspace: Path) -> None:
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
-    res = runner.invoke(app, ["wave", "close", "P01-I01-W01", "--outcome", "done"])
+    res = runner.invoke(app, ["wave", "close", "P01-I01-W01"])
     assert res.exit_code == 3
 
 
@@ -506,8 +504,6 @@ def test_wave_close_happy(workspace: Path) -> None:
             "wave",
             "close",
             "P01-I01-W01",
-            "--commit",
-            "abc123",
             "--outcome",
             "done",
         ],
@@ -603,8 +599,6 @@ def test_full_lifecycle_emits_events(workspace: Path) -> None:
             "wave",
             "close",
             "P01-I01-W01",
-            "--commit",
-            "deadbeef",
             "--outcome",
             "done",
         ],

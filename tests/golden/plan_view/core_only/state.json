@@ -1,99 +1,112 @@
 {
-  "schema_version": "1.0",
-  "scope_kind": "repo",
-  "urn": "urn:eawf:v1:state:CORE",
-  "updated_at": "2026-05-08T00:00:00Z",
-  "project": {
-    "code": "CORE",
-    "slug": "core",
-    "title": "Core",
-    "description": "",
-    "domains": ["core"],
-    "default_branch": "main",
-    "status": "active",
-    "repo_urn": "urn:eawf:v1:repo:CORE"
-  },
-  "current": {
-    "project_code": "CORE",
-    "subproject_id": null,
-    "phase_id": "P05",
-    "iter_id": "P05-I01",
-    "active_wave_ids": [],
-    "active_session_ids": []
-  },
-  "workspace": null,
-  "phases": {
-    "P05": {
-      "id": "P05",
-      "scope_id": "CORE",
-      "title": "Phase Five",
-      "status": "active",
-      "iter_ids": ["P05-I01"],
-      "outcome_ids": [],
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null,
-      "audit_id": null
-    }
-  },
-  "iters": {
-    "P05-I01": {
-      "id": "P05-I01",
-      "phase_id": "P05",
-      "title": "Iter One",
-      "status": "active",
-      "wave_ids": ["P05-I01-W00", "P05-I01-W01"],
-      "estimate_id": null,
-      "audit_id": null,
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null
-    }
-  },
-  "waves": {
-    "P05-I01-W00": {
-      "id": "P05-I01-W00",
-      "iter_id": "P05-I01",
-      "title": "Bootstrap",
-      "status": "closed",
-      "deps": [],
-      "file_scopes": ["src/core/__init__.py"],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": "abcdef0123456",
-      "outcome": "ok",
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": "2026-05-08T01:00:00Z"
-    },
-    "P05-I01-W01": {
-      "id": "P05-I01-W01",
-      "iter_id": "P05-I01",
-      "title": "Implement core",
-      "status": "in_progress",
-      "deps": ["P05-I01-W00"],
-      "file_scopes": ["src/core/run.py"],
-      "claim_session_id": "S-1",
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
-      "opened_at": "2026-05-08T01:00:00Z",
-      "closed_at": null
-    }
-  },
-  "artifacts": {},
   "agent_sessions": {
     "S-1": {
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P05-I01-W01"
+      ],
+      "ended_at": null,
       "id": "S-1",
       "role": "executor",
       "runtime": "claude",
       "scope_id": "P05-I01-W01",
-      "status": "active",
-      "claimed_wave_ids": ["P05-I01-W01"],
-      "worktree_ids": [],
-      "artifact_ids": [],
       "started_at": "2026-05-08T01:00:00Z",
-      "ended_at": null,
-      "summary": null
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    }
+  },
+  "artifacts": {},
+  "current": {
+    "active_session_ids": [],
+    "active_wave_ids": [],
+    "iter_id": "P05-I01",
+    "phase_id": "P05",
+    "project_code": "CORE",
+    "subproject_id": null
+  },
+  "indexes": {},
+  "iters": {
+    "P05-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P05-I01",
+      "opened_at": "2026-05-08T00:00:00Z",
+      "phase_id": "P05",
+      "status": "active",
+      "title": "Iter One",
+      "wave_ids": [
+        "P05-I01-W00",
+        "P05-I01-W01"
+      ]
+    }
+  },
+  "phases": {
+    "P05": {
+      "audit_id": null,
+      "closed_at": null,
+      "id": "P05",
+      "iter_ids": [
+        "P05-I01"
+      ],
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome_ids": [],
+      "scope_id": "CORE",
+      "status": "active",
+      "title": "Phase Five"
     }
   },
   "plugins": {},
-  "indexes": {}
+  "project": {
+    "code": "CORE",
+    "default_branch": "main",
+    "description": "",
+    "domains": [
+      "core"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:CORE",
+    "slug": "core",
+    "status": "active",
+    "title": "Core"
+  },
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "urn": "urn:eawf:v1:state:CORE",
+  "waves": {
+    "P05-I01-W00": {
+      "claim_session_id": null,
+      "closed_at": "2026-05-08T01:00:00Z",
+      "deps": [],
+      "file_scopes": [
+        "src/core/__init__.py"
+      ],
+      "id": "P05-I01-W00",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome": "ok",
+      "status": "closed",
+      "title": "Bootstrap",
+      "worktree_id": null
+    },
+    "P05-I01-W01": {
+      "claim_session_id": "S-1",
+      "closed_at": null,
+      "deps": [
+        "P05-I01-W00"
+      ],
+      "file_scopes": [
+        "src/core/run.py"
+      ],
+      "id": "P05-I01-W01",
+      "iter_id": "P05-I01",
+      "opened_at": "2026-05-08T01:00:00Z",
+      "outcome": null,
+      "status": "in_progress",
+      "title": "Implement core",
+      "worktree_id": null
+    }
+  },
+  "workspace": null
 }

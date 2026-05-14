@@ -1,71 +1,76 @@
 {
-  "schema_version": "1.0",
-  "scope_kind": "repo",
-  "urn": "urn:eawf:v1:state:QR",
-  "updated_at": "2026-05-08T00:00:00Z",
-  "project": {
-    "code": "QR",
-    "slug": "quant-research",
-    "title": "Quant Research",
-    "description": "",
-    "domains": ["quant"],
-    "default_branch": "main",
-    "status": "active",
-    "repo_urn": "urn:eawf:v1:repo:QR"
-  },
+  "agent_sessions": {},
+  "artifacts": {},
   "current": {
-    "project_code": "QR",
-    "subproject_id": null,
-    "phase_id": null,
-    "iter_id": null,
+    "active_session_ids": [],
     "active_wave_ids": [],
-    "active_session_ids": []
+    "iter_id": null,
+    "phase_id": null,
+    "project_code": "QR",
+    "subproject_id": null
   },
-  "workspace": null,
-  "phases": {
-    "P01": {
-      "id": "P01",
-      "scope_id": "QR",
-      "title": "Bootstrap",
-      "status": "closed",
-      "iter_ids": ["P01-I01"],
-      "outcome_ids": [],
-      "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": "2026-05-08T01:00:00Z",
-      "audit_id": null
-    }
-  },
+  "indexes": {},
   "iters": {
     "P01-I01": {
-      "id": "P01-I01",
-      "phase_id": "P01",
-      "title": "Bootstrap iter",
-      "status": "closed",
-      "wave_ids": ["P01-I01-W01"],
-      "estimate_id": null,
       "audit_id": null,
+      "closed_at": "2026-05-08T01:00:00Z",
+      "estimate_id": null,
+      "id": "P01-I01",
       "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": "2026-05-08T01:00:00Z"
+      "phase_id": "P01",
+      "status": "closed",
+      "title": "Bootstrap iter",
+      "wave_ids": [
+        "P01-I01-W01"
+      ]
     }
   },
+  "phases": {
+    "P01": {
+      "audit_id": null,
+      "closed_at": "2026-05-08T01:00:00Z",
+      "id": "P01",
+      "iter_ids": [
+        "P01-I01"
+      ],
+      "opened_at": "2026-05-08T00:00:00Z",
+      "outcome_ids": [],
+      "scope_id": "QR",
+      "status": "closed",
+      "title": "Bootstrap"
+    }
+  },
+  "plugins": {},
+  "project": {
+    "code": "QR",
+    "default_branch": "main",
+    "description": "",
+    "domains": [
+      "quant"
+    ],
+    "repo_urn": "urn:eawf:v1:repo:QR",
+    "slug": "quant-research",
+    "status": "active",
+    "title": "Quant Research"
+  },
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "urn": "urn:eawf:v1:state:QR",
   "waves": {
     "P01-I01-W01": {
-      "id": "P01-I01-W01",
-      "iter_id": "P01-I01",
-      "title": "Closed wave with no closed_at",
-      "status": "closed",
+      "claim_session_id": null,
+      "closed_at": null,
       "deps": [],
       "file_scopes": [],
-      "claim_session_id": null,
-      "worktree_id": null,
-      "commit": null,
-      "outcome": null,
+      "id": "P01-I01-W01",
+      "iter_id": "P01-I01",
       "opened_at": "2026-05-08T00:00:00Z",
-      "closed_at": null
+      "outcome": null,
+      "status": "closed",
+      "title": "Closed wave with no closed_at",
+      "worktree_id": null
     }
   },
-  "artifacts": {},
-  "agent_sessions": {},
-  "plugins": {},
-  "indexes": {}
+  "workspace": null
 }
