@@ -5,7 +5,7 @@ Phase 4 W04 freezes the v1 :class:`HookEventType` set and the
 pin:
 
 - the required-field set (``event_type``, ``occurred_at``);
-- the frozen :class:`HookEventType` enumeration (14 entries — the v1
+- the frozen :class:`HookEventType` enumeration (15 entries — the v1
   list per ``docs/hook-events.md``);
 - the ``runtime`` Literal (``claude``/``opencode``/``generic``);
 - the ``extra="forbid"`` rejection on unknown keys; and
@@ -56,6 +56,7 @@ def test_hook_event_v1_event_type_set_is_frozen() -> None:
         "iter_close",
         "phase_open",
         "phase_close",
+        "agent_end",
     }
     assert {member.value for member in HookEventType} == expected
 
