@@ -17,14 +17,41 @@ a validated :class:`State` and a phase id.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Literal
 
+from jinja2 import Environment, StrictUndefined
+from pydantic import BaseModel, ConfigDict
+
+from eawf.artifacts.references import Citation
+from eawf.artifacts.validation import validate_text_surface
+from eawf.profiles.models import ComposedProfile
 from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
+PrBodyInputKind = Literal["operator_rollup", "executor_report", "reviewer_report", "docs_research"]
+
 
 class PrBodyNotFound(LookupError):  # noqa: N818 — pairs with cli.errors.NotFound naming
     """Raised when the requested phase id is not present in ``state.phases``."""
+
+
+class PrBodyValidationError(ValueError):
+    """Raised when rendered PR text fails outbound validation."""
+
+
+class PrBodyInput(BaseModel):
+    """Typed input artifact used to render a PR body section."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: PrBodyInputKind
+    title: str
+    summary: str
+    bullets: list[str] = []
+    artifact_ids: list[str] = []
+    citations: list[Citation] = []
 
 
 def _short_sha(value: str | None) -> str:
@@ -77,7 +104,83 @@ def _waves_for_phase(state: State, phase_id: str) -> list[tuple[str, str, str, s
     return rows
 
 
-def build_pr_body(state: State, phase_id: str) -> str:
+def _render_input_section(input_model: PrBodyInput, heading: str) -> str:
+    lines = [
+        f"## {heading}",
+        "",
+        f"### {input_model.title}",
+        "",
+        input_model.summary,
+    ]
+    if input_model.bullets:
+        lines.append("")
+        lines.extend(f"- {bullet}" for bullet in input_model.bullets)
+    if input_model.artifact_ids:
+        lines.append("")
+        artifact_list = ", ".join(f"`{artifact_id}`" for artifact_id in input_model.artifact_ids)
+        lines.append(f"Artifacts: {artifact_list}")
+    if input_model.citations:
+        lines.append("")
+        lines.append("References:")
+        lines.extend(f"[{c.n}] {c.ref}" for c in input_model.citations)
+    return "\n".join(lines)
+
+
+def render_operator_rollup(input_model: PrBodyInput) -> str:
+    """Render the operator rollup section."""
+    return _render_input_section(input_model, "Operator Rollup")
+
+
+def render_executor_report(input_model: PrBodyInput) -> str:
+    """Render the executor report section."""
+    return _render_input_section(input_model, "Executor Report")
+
+
+def render_reviewer_report(input_model: PrBodyInput) -> str:
+    """Render the reviewer report section."""
+    return _render_input_section(input_model, "Reviewer Report")
+
+
+def render_docs_research_report(input_model: PrBodyInput) -> str:
+    """Render the docs/research report section."""
+    return _render_input_section(input_model, "Docs And Research Report")
+
+
+_INPUT_RENDERERS: dict[PrBodyInputKind, Callable[[PrBodyInput], str]] = {
+    "operator_rollup": render_operator_rollup,
+    "executor_report": render_executor_report,
+    "reviewer_report": render_reviewer_report,
+    "docs_research": render_docs_research_report,
+}
+
+
+def _render_profile_blocks(
+    composed: ComposedProfile | None,
+    *,
+    kind: str,
+    context: dict[str, object],
+) -> list[str]:
+    if composed is None:
+        return []
+    env = Environment(undefined=StrictUndefined, autoescape=False)
+    rendered: list[str] = []
+    target = f"pr.{kind}"
+    for block in composed.render_blocks:
+        if block.target != target:
+            continue
+        template = env.from_string(block.body_template)
+        rendered.append(template.render(**context))
+    return rendered
+
+
+def build_pr_body(
+    state: State,
+    phase_id: str,
+    *,
+    inputs: list[PrBodyInput] | None = None,
+    composed_profile: ComposedProfile | None = None,
+    kind: str = "phase",
+) -> str:
     """Render the Markdown PR body for *phase_id*.
 
     Args:
@@ -130,6 +233,19 @@ def build_pr_body(state: State, phase_id: str) -> str:
             lines.append(f"| `{wave_id}` | {title_cell} | `{short}` | {outcome_cell} |")
     else:
         lines.append("_(no waves recorded for this phase)_")
+    for input_model in inputs or []:
+        lines.extend(["", _INPUT_RENDERERS[input_model.kind](input_model)])
+
+    context = {
+        "phase_id": phase_id,
+        "phase": phase,
+        "decisions": decisions,
+        "iters": iters,
+        "waves": waves,
+    }
+    for block_body in _render_profile_blocks(composed_profile, kind=kind, context=context):
+        lines.extend(["", block_body])
+
     lines.extend(
         [
             "",
@@ -140,10 +256,20 @@ def build_pr_body(state: State, phase_id: str) -> str:
             "- [ ] `uv run mypy src/eawf`",
         ]
     )
-    return "\n".join(lines) + "\n"
+    body = "\n".join(lines) + "\n"
+    report = validate_text_surface(body, surface="pr")
+    if not report.ok:
+        raise PrBodyValidationError("; ".join(report.errors))
+    return body
 
 
 __all__ = [
+    "PrBodyInput",
     "PrBodyNotFound",
+    "PrBodyValidationError",
     "build_pr_body",
+    "render_docs_research_report",
+    "render_executor_report",
+    "render_operator_rollup",
+    "render_reviewer_report",
 ]
