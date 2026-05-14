@@ -156,6 +156,16 @@
       "uri": "repo:.ea/artifacts/A22-P17-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A22-P17"
     },
+    "ART-A23-P18": {
+      "created_at": "2026-05-14T18:33:08.377744Z",
+      "id": "ART-A23-P18",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "385803c441934881276abc52f296bcc8a37ec6f553b16df850708fc9456fc513",
+      "size_bytes": 1807,
+      "uri": "repo:.ea/artifacts/A23-P18-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:P18/ART-A23-P18"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -407,6 +417,17 @@
       "kind": "ship-gate",
       "report_artifact_id": "ART-A22-P17",
       "scope_id": "P17",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A23-P18": {
+      "check_results": [],
+      "created_at": "2026-05-14T18:33:12.515299Z",
+      "id": "A23-P18",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A23-P18",
+      "scope_id": "P18",
       "status": "complete",
       "verdict": "pass"
     }
@@ -1911,7 +1932,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T18:23:03.412842Z",
+  "updated_at": "2026-05-14T18:33:12.515299Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
