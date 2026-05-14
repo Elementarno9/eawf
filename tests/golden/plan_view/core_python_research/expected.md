@@ -35,7 +35,7 @@ flowchart LR
 ## Waves
 | Wave | Status | Bucket | Role | Estimate EU | Success criteria | Files |
 | --- | --- | --- | --- | ---: | --- | --- |
-| [x] **P05-I01-W00** Bootstrap | closed @ 1111111 | - | - | 0 | - | src/cpr/init.py |
+| [x] **P05-I01-W00** Bootstrap | closed | - | - | 0 | - | src/cpr/init.py |
 | [ ] **P05-I01-W01** Stage A | in_progress; deps: W00 | - | - | 0 | - | src/cpr/a.py |
 | [ ] **P05-I01-W02** Cycle node B | pending; deps: W03 | - | - | 0 | - | src/cpr/b.py |
 | [ ] **P05-I01-W03** Cycle node C | pending; deps: W02 | - | - | 0 | - | src/cpr/c.py |
