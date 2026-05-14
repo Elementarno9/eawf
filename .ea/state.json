@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:31:22.164716Z",
+  "updated_at": "2026-05-14T17:37:23.464065Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3662,9 +3662,9 @@
       "blocks": [
         "P18-I01-W04"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w03",
+      "closed_at": "2026-05-14T17:37:23.464056Z",
+      "commit": "6534370e25ae",
       "deps": [
         "P18-I01-W02"
       ],
@@ -3680,8 +3680,8 @@
       "id": "P18-I01-W03",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:51.443345Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Registered role-report store kinds, artifact kind, payload registry, and scoped store URNs.",
+      "status": "closed",
       "success_criteria": [
         "eight report StoreKind values registered",
         "ArtifactKind includes agent_report",
