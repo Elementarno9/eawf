@@ -55,6 +55,7 @@ from eawf.config.profile import enable_profile
 from eawf.lock import portalock
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
+from eawf.vcs.coauthor import VcsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class _ConfigSchema(BaseModel):
     polish: dict[str, Any]
     flow: dict[str, Any]
     memory: dict[str, Any]
-    vcs: dict[str, Any]
+    vcs: VcsConfig
     worktrees: dict[str, Any]
     acceptance: dict[str, Any]
     security: dict[str, Any]

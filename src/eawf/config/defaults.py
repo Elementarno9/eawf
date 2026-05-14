@@ -216,6 +216,22 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "require_ci_green": True,
         "require_review_before_merge": True,
         "force_push": "forbidden_protected",
+        "coauthor": {
+            "mode": "runtime",
+            "default_runtime": "claude",
+            "project": None,
+            "trailers": {
+                "claude": {
+                    "name": "Claude",
+                    "email": "noreply@anthropic.com",
+                },
+                "codex": {
+                    "name": "Codex",
+                    "email": "noreply@openai.com",
+                },
+            },
+            "require_trailer": True,
+        },
     },
     "worktrees": {
         "enabled": "auto",
