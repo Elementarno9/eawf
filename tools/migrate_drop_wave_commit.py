@@ -18,9 +18,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
-def migrate_payload(payload: dict) -> int:
+def migrate_payload(payload: dict[str, Any]) -> int:
     """Drop ``commit`` from each wave dict; return the number of entries touched."""
     waves = payload.get("waves") or {}
     touched = 0
@@ -32,7 +33,7 @@ def migrate_payload(payload: dict) -> int:
 
 
 def migrate_file(state_path: Path) -> int:
-    """Load *state_path*, run the migration, write back atomically if changed."""
+    """Load *state_path*, run the migration, write back if changed."""
     payload = json.loads(state_path.read_text())
     touched = migrate_payload(payload)
     if touched:

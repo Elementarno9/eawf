@@ -154,8 +154,8 @@ def _render_propose_plan_text(state: State, phase_id: str) -> str:
         lines.append(f"**Waves planned:** {summary['wave_count']}")
     lines.append("")
     lines.append(
-        "Approve with `eawf roadmap apply " + summary["id"] + "` "
-        "(emits ok envelope) or discard with `eawf roadmap drop " + summary["id"] + "`."
+        f"Approve with `eawf roadmap apply {summary['id']}` "
+        f"(emits ok envelope) or discard with `eawf roadmap drop {summary['id']}`."
     )
     return "\n".join(lines)
 

@@ -274,7 +274,7 @@ def activate_phase(state: State, *, phase_id: str) -> Phase:
 
 
 def archive_phase(state: State, *, phase_id: str) -> Phase:
-    """Move a planned phase to archived. Used by ``/roadmap --drop``.
+    """Move a planned phase to archived. Used by ``eawf roadmap drop``.
 
     Raises:
         LifecycleError: when *phase_id* is unknown or not in PLANNED state.
