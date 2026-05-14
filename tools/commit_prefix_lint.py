@@ -23,12 +23,19 @@ Exit codes:
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
-from coauthor_policy import SUPPORTED_TRAILERS, has_supported_trailer
+from coauthor_policy import (
+    SUPPORTED_TRAILERS,
+    coauthor_disabled,
+    has_any_coauthor_trailer,
+    has_supported_trailer,
+)
 
 _SUBJECT_RE = re.compile(
     r"^\[P\d{2}(-I\d{2})?(-W\d{2}|-CORE)?\]\s+"
@@ -74,7 +81,11 @@ def _is_state_only_path(path: str) -> bool:
     return any(path.startswith(p) for p in _STATE_ONLY_PREFIXES)
 
 
-def lint(message_path: Path, staged: list[str]) -> tuple[int, str]:
+def lint(
+    message_path: Path,
+    staged: list[str],
+    env: Mapping[str, str] | None = None,
+) -> tuple[int, str]:
     """Run both checks against *message_path* + *staged* paths.
 
     Returns ``(exit_code, diagnostic)``.
@@ -104,6 +115,11 @@ def lint(message_path: Path, staged: list[str]) -> tuple[int, str]:
                 "CORE commits must mutate only .ea/state.json, "
                 ".ea/store/event.jsonl, or .ea/specs/**"
             )
+    env_map = {} if env is None else env
+    if coauthor_disabled(env_map):
+        if has_any_coauthor_trailer(text):
+            return 1, "co-author trailers are disabled by vcs.coauthor policy"
+        return 0, ""
     if not has_supported_trailer(text):
         return 1, (
             f"missing recognized co-author trailer: {SUPPORTED_TRAILERS!r}\n"
@@ -121,7 +137,7 @@ def main(argv: list[str]) -> int:
     if not message_path.exists():
         print(f"commit message file missing: {message_path}", file=sys.stderr)
         return 1
-    exit_code, diag = lint(message_path, _staged_paths())
+    exit_code, diag = lint(message_path, _staged_paths(), env=os.environ)
     if exit_code != 0:
         print(diag, file=sys.stderr)
     return exit_code

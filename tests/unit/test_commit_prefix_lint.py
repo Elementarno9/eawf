@@ -190,3 +190,20 @@ def test_rejects_unrecognized_coauthor_trailer(tmp_path: Path, mod) -> None:
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 1
     assert "missing recognized co-author trailer" in diag
+
+
+def test_disabled_coauthor_policy_rejects_any_trailer(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "[P17-W02] feat: registry coauthor policy\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], env={"EAWF_COAUTHOR_MODE": "disabled"})
+    assert code == 1
+    assert "disabled" in diag
+
+
+def test_disabled_coauthor_policy_accepts_no_trailer(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "[P17-W02] feat: registry coauthor policy\n\nbody only\n",
+        with_trailer=False,
+    )
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], env={"EAWF_COAUTHOR_MODE": "disabled"})
+    assert code == 0, diag
