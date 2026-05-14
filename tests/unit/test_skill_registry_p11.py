@@ -63,15 +63,13 @@ def test_flow_ask_on_decisions_defaults_true() -> None:
     assert BUILT_IN_DEFAULTS["flow"]["ask_on_decisions"] is True
 
 
-def test_prep_body_documents_plan_mode_gate() -> None:
+def test_prep_body_documents_planned_scope_activation() -> None:
+    """P19-W07: prep body describes the PLANNED -> ACTIVE flow."""
     body = _spec("prep").body
-    assert "planning.auto_plan" in body
+    assert "PLANNED" in body
     assert "EnterPlanMode" in body
-    assert "ExitPlanMode" in body
-
-
-def test_prep_argument_hint_advertises_auto_plan_flag() -> None:
-    assert _spec("prep").argument_hint == "<phase-id> [wave-id] [--auto-plan]"
+    assert "eawf phase activate" in body
+    assert "/roadmap" in body
 
 
 def test_flow_body_documents_per_stage_gate_and_ask_user_question() -> None:

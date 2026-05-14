@@ -535,10 +535,11 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
         skill_name="prep",
         description=(
-            "Open the next phase or wave by writing a work plan and"
-            " dispatching subagents for execution."
+            "Activate the next PLANNED phase: surface its DAG for operator"
+            " approval, then run the activate_phase hard gate and dispatch"
+            " subagents per wave."
         ),
-        argument_hint="<phase-id> [wave-id] [--auto-plan]",
+        argument_hint="<phase-id>",
         user_invocable=True,
         disable_model_invocation=True,
         body=_PREP_BODY,
