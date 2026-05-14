@@ -166,7 +166,7 @@ class PolisherReportBody(AgentReportCommonBody):
     """Report body emitted by a polisher."""
 
     role: Literal["polisher"] = "polisher"
-    scope: Annotated[str, Field(min_length=1)]
+    scope_id: Annotated[str, Field(min_length=1)]
     changes: list[PolishChange] = Field(default_factory=list)
     deferred_items: list[str] = Field(default_factory=list)
 

@@ -32,7 +32,7 @@ everywhere. No surprises.
 
 ## Typed output envelope
 
-At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope_id, attempt, and store kind.
 
 ```json
 {
@@ -42,7 +42,7 @@ At completion, emit an `agent_end` body matching this JSON shape. Do not include
   "summary": "short role-specific result",
   "evidence_refs": [],
   "followups": [],
-  "scope": "src/eawf",
+  "scope_id": "src/eawf",
   "changes": [
     {
       "category": "naming",

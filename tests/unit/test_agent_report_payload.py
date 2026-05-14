@@ -187,7 +187,7 @@ def test_all_role_bodies_validate_through_payload() -> None:
             verdict=AgentReportVerdict.PASS,
             confidence=Confidence.LOW,
             summary="polished",
-            scope="src/eawf",
+            scope_id="src/eawf",
             changes=[PolishChange(category="naming", summary="aligned field names")],
         ),
         OperatorReportBody(

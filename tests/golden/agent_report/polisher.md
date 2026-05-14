@@ -2,7 +2,7 @@
 
 - report: `AR-polisher-P18-01`
 - role: `polisher`
-- scope: `P18-I01-W07`
+- scope_id: `P18-I01-W07`
 - base: `P18-I01-W07`
 - attempt: `1`
 - verdict: `pass`
@@ -15,7 +15,7 @@ polisher summary
 
 ## Polish
 
-- scope: `src/eawf`
+- scope_id: `src/eawf`
 
 Changes:
 - naming: aligned names files=[]

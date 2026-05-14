@@ -105,7 +105,7 @@ def _report(role: AgentSessionRole) -> AgentReportPayload:
                 verdict=AgentReportVerdict.PASS,
                 confidence=Confidence.HIGH,
                 summary=f"{role.value} summary",
-                scope="src/eawf",
+                scope_id="src/eawf",
                 changes=[PolishChange(category="naming", summary="aligned names")],
             )
         case AgentSessionRole.OPERATOR:

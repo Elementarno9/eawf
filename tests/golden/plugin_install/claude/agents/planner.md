@@ -37,7 +37,7 @@ Subagent / Files / Tests / Success criteria / Commit prefix).
 
 ## Typed output envelope
 
-At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope_id, attempt, and store kind.
 
 ```json
 {

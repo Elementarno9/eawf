@@ -167,7 +167,7 @@ _ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
     "polisher": {
         "role": "polisher",
         **_BASE_REPORT_BODY,
-        "scope": "src/eawf",
+        "scope_id": "src/eawf",
         "changes": [
             {
                 "category": "naming",
@@ -206,7 +206,7 @@ def _typed_output_contract(role: str) -> str:
         "## Typed output envelope\n\n"
         "At completion, emit an `agent_end` body matching this JSON shape. "
         "Do not include report metadata; the runtime hook derives session, "
-        "scope, attempt, and store kind.\n\n"
+        "scope_id, attempt, and store kind.\n\n"
         f"```json\n{body_json}\n```"
     )
 

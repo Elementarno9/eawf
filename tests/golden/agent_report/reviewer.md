@@ -2,7 +2,7 @@
 
 - report: `AR-reviewer-P18-01`
 - role: `reviewer`
-- scope: `P18-I01-W07`
+- scope_id: `P18-I01-W07`
 - base: `P18-I01-W07`
 - attempt: `1`
 - verdict: `pass`
