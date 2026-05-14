@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:37:23.464065Z",
+  "updated_at": "2026-05-14T17:43:03.644982Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3699,9 +3699,9 @@
         "P18-I01-W06",
         "P18-I01-W10"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w04",
+      "closed_at": "2026-05-14T17:43:03.644964Z",
+      "commit": "e3c3b3497b3c",
       "deps": [
         "P18-I01-W03"
       ],
@@ -3715,8 +3715,8 @@
       "id": "P18-I01-W04",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:51.855832Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added append-only agent report writer and agent_end hook persistence path.",
+      "status": "closed",
       "success_criteria": [
         "agent-end payload writes through CLI writer",
         "session role is authoritative",
