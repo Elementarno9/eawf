@@ -23,7 +23,7 @@ function dispatchHook(eventType, payload) {
     event_type: eventType,
     payload: payload || {},
   });
-  const result = spawnSync('eawf', ['hook', 'run', eventType], {
+  const result = spawnSync('eawf', ['hook', 'run', eventType, '--runtime', 'opencode'], {
     input: stdinJson,
     encoding: 'utf-8',
     timeout: EAWF_HOOK_TIMEOUT_MS,
@@ -42,6 +42,7 @@ module.exports = {
     onSessionEnd: (ctx) => dispatchHook('session_end', ctx),
     onPreCommit: (ctx) => dispatchHook('pre_commit', ctx),
     onPostCommit: (ctx) => dispatchHook('post_commit', ctx),
+    onAgentEnd: (ctx) => dispatchHook('agent_end', ctx),
   },
 };
 // ---- __eawf_managed end ----

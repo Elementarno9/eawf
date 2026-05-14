@@ -7,7 +7,7 @@ pin:
 - the required-field set (``event_type``, ``occurred_at``);
 - the frozen :class:`HookEventType` enumeration (15 entries — the v1
   list per ``docs/hook-events.md``);
-- the ``runtime`` Literal (``claude``/``opencode``/``generic``);
+- the ``runtime`` Literal (``claude``/``codex``/``opencode``/``generic``);
 - the ``extra="forbid"`` rejection on unknown keys; and
 - a JSON round-trip per event type so a future serializer change
   cannot regress one variant silently.
@@ -40,7 +40,7 @@ def _base_payload(**overrides: object) -> dict[str, object]:
 
 
 def test_hook_event_v1_event_type_set_is_frozen() -> None:
-    """The v1 :class:`HookEventType` enumeration carries exactly 14 entries."""
+    """The v1 :class:`HookEventType` enumeration carries exactly 15 entries."""
     expected: set[str] = {
         "pre_commit",
         "post_commit",
@@ -77,8 +77,15 @@ def test_hook_event_rejects_unknown_event_type_value() -> None:
         HookEvent(**_base_payload(event_type="not_a_real_event"))  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize("runtime", ["claude", "codex", "opencode", "generic"])
+def test_hook_event_accepts_known_runtime_literals(runtime: str) -> None:
+    """``runtime`` accepts each declared adapter literal."""
+    event = HookEvent(**_base_payload(runtime=runtime))  # type: ignore[arg-type]
+    assert event.runtime == runtime
+
+
 def test_hook_event_rejects_unknown_runtime_literal() -> None:
-    """``runtime`` is one of claude/opencode/generic."""
+    """``runtime`` rejects unknown adapter literals."""
     with pytest.raises(ValidationError, match="runtime"):
         HookEvent(**_base_payload(runtime="zsh"))  # type: ignore[arg-type]
 

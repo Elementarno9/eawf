@@ -23,7 +23,7 @@ def test_doctor_clean_after_install(tmp_path: Path) -> None:
     assert not report.drifted
     assert not report.missing
     # Total ok count = skills + agents + hooks + settings.
-    assert len(report.ok) == 11 + 8 + 14 + 1
+    assert len(report.ok) == 11 + 8 + 15 + 1
 
 
 def test_doctor_detects_skill_drift(tmp_path: Path) -> None:
@@ -49,6 +49,15 @@ def test_doctor_detects_hook_drift(tmp_path: Path) -> None:
     path.write_text(path.read_text() + "\n# drift\n")
     report = doctor_plugin(tmp_path)
     assert any(e.region_id == "plugin.claude.hook.post_commit" for e in report.drifted)
+
+
+def test_doctor_detects_missing_agent_end_hook(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    path = tmp_path / ".claude" / "hooks" / "agent_end.sh"
+    path.unlink()
+    report = doctor_plugin(tmp_path)
+    assert report.clean is False
+    assert any(e.region_id == "plugin.claude.hook.agent_end" for e in report.missing)
 
 
 def test_doctor_detects_missing_file(tmp_path: Path) -> None:

@@ -284,6 +284,12 @@ def test_expected_plugin_js_carries_version_stamp() -> None:
     assert "version: '1.0'" in body
 
 
+def test_expected_plugin_js_wires_runtime_and_agent_end_hook() -> None:
+    body = expected_plugin_js_bytes().decode("utf-8")
+    assert "['hook', 'run', eventType, '--runtime', 'opencode']" in body
+    assert "onAgentEnd: (ctx) => dispatchHook('agent_end', ctx)" in body
+
+
 @pytest.mark.parametrize("scope", ["project", "user"])
 def test_install_emits_agents_per_registry(
     tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str

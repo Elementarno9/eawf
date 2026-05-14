@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "e7446ff7c7d6f351",
+    "hash": "741fcbfb1e0f128a",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -92,6 +92,10 @@
       {
         "event_type": "phase_close",
         "path": ".claude/hooks/phase_close.sh"
+      },
+      {
+        "event_type": "agent_end",
+        "path": ".claude/hooks/agent_end.sh"
       }
     ],
     "skills": [
