@@ -38,3 +38,26 @@ parent specifies otherwise.
 
 - Recommending a path without naming what would change your mind.
 - Burying the recommendation in prose; lead with the verdict.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "researcher",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "question": "question investigated",
+  "findings": [
+    "finding with evidence"
+  ],
+  "alternatives": [
+    "alternative considered"
+  ],
+  "recommendation": "recommended next step"
+}
+```

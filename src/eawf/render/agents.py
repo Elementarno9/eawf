@@ -20,9 +20,11 @@ Public API::
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from importlib.resources import files
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -65,8 +67,10 @@ class AgentTemplateContext:
         color: Glyph colour (``"blue"``, ``"green"``, …).
         memory: Whether the subagent retains memory between
             invocations. Frontmatter ``memory: true|false``.
-        body: Agent body markdown (method, output contract,
+    body: Agent body markdown (method, output contract,
             anti-patterns). Inserted verbatim after the frontmatter.
+        output_contract: Optional explicit typed report-body contract.
+            When omitted, the renderer derives it from ``role``.
     """
 
     role: str
@@ -76,6 +80,7 @@ class AgentTemplateContext:
     color: str
     memory: bool
     body: str
+    output_contract: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,7 +94,121 @@ class AgentSpec:
     color: str
     memory: bool
     body: str
+    output_contract: str | None = None
     version: str = "1.0"
+
+
+_BASE_REPORT_BODY: dict[str, Any] = {
+    "verdict": "pass",
+    "confidence": "high",
+    "summary": "short role-specific result",
+    "evidence_refs": [],
+    "followups": [],
+}
+
+_ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
+    "researcher": {
+        "role": "researcher",
+        **_BASE_REPORT_BODY,
+        "question": "question investigated",
+        "findings": ["finding with evidence"],
+        "alternatives": ["alternative considered"],
+        "recommendation": "recommended next step",
+    },
+    "planner": {
+        "role": "planner",
+        **_BASE_REPORT_BODY,
+        "objective": "planning objective",
+        "waves": [
+            {
+                "wave_id": "P00-I01-W01",
+                "title": "wave title",
+                "depends_on": [],
+                "success_criteria": ["criterion"],
+            }
+        ],
+        "risks": ["risk to manage"],
+    },
+    "executor": {
+        "role": "executor",
+        **_BASE_REPORT_BODY,
+        "wave_id": "P00-I01-W01",
+        "files_changed": ["repo/relative/path.py"],
+        "tests_run": ["uv run pytest tests/path -q"],
+        "commit_sha": "abcdef1",
+        "outcome": "implementation outcome",
+    },
+    "auditor": {
+        "role": "auditor",
+        **_BASE_REPORT_BODY,
+        "target_id": "P00-I01-W01",
+        "criteria": [
+            {
+                "criterion": "success criterion",
+                "passed": True,
+                "evidence_refs": [],
+            }
+        ],
+        "refutations": [],
+    },
+    "reviewer": {
+        "role": "reviewer",
+        **_BASE_REPORT_BODY,
+        "target_id": "HEAD",
+        "findings": [
+            {
+                "severity": "should-fix",
+                "message": "actionable finding",
+                "evidence_refs": [],
+            }
+        ],
+        "coverage_refs": [],
+    },
+    "polisher": {
+        "role": "polisher",
+        **_BASE_REPORT_BODY,
+        "scope": "src/eawf",
+        "changes": [
+            {
+                "category": "naming",
+                "summary": "consistency change",
+                "files": ["repo/relative/path.py"],
+            }
+        ],
+        "deferred_items": [],
+    },
+    "operator": {
+        "role": "operator",
+        **_BASE_REPORT_BODY,
+        "phase_id": "P00",
+        "completed_wave_ids": ["P00-I01-W01"],
+        "decisions": ["decision recorded"],
+        "next_actions": ["next action"],
+    },
+    "domain-specialist": {
+        "role": "domain-specialist",
+        **_BASE_REPORT_BODY,
+        "domain": "domain name",
+        "assessment": "domain-specific assessment",
+        "recommendations": ["recommendation"],
+    },
+}
+
+
+def _typed_output_contract(role: str) -> str:
+    """Return the role-specific typed agent-report output contract."""
+    try:
+        body = _ROLE_REPORT_EXAMPLES[role]
+    except KeyError as exc:
+        raise ValueError(f"unknown agent role: {role!r}") from exc
+    body_json = json.dumps(body, indent=2)
+    return (
+        "## Typed output envelope\n\n"
+        "At completion, emit an `agent_end` body matching this JSON shape. "
+        "Do not include report metadata; the runtime hook derives session, "
+        "scope, attempt, and store kind.\n\n"
+        f"```json\n{body_json}\n```"
+    )
 
 
 def _load_environment() -> Environment:
@@ -127,6 +246,7 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
         color=ctx.color,
         memory=ctx.memory,
         body=ctx.body.rstrip("\n"),
+        output_contract=(ctx.output_contract or _typed_output_contract(ctx.role)).rstrip("\n"),
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"

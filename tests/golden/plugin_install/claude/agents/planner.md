@@ -34,3 +34,32 @@ Subagent / Files / Tests / Success criteria / Commit prefix).
 
 - A wave that touches >5 files without justification.
 - A success criterion phrased as "the code looks good".
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "planner",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "objective": "planning objective",
+  "waves": [
+    {
+      "wave_id": "P00-I01-W01",
+      "title": "wave title",
+      "depends_on": [],
+      "success_criteria": [
+        "criterion"
+      ]
+    }
+  ],
+  "risks": [
+    "risk to manage"
+  ]
+}
+```

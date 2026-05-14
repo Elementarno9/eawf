@@ -34,3 +34,27 @@ Flat findings list grouped by file and an aggregate verdict
 
 - "LGTM" with no evidence.
 - Praise without action.
+
+## Typed output envelope
+
+At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope, attempt, and store kind.
+
+```json
+{
+  "role": "reviewer",
+  "verdict": "pass",
+  "confidence": "high",
+  "summary": "short role-specific result",
+  "evidence_refs": [],
+  "followups": [],
+  "target_id": "HEAD",
+  "findings": [
+    {
+      "severity": "should-fix",
+      "message": "actionable finding",
+      "evidence_refs": []
+    }
+  ],
+  "coverage_refs": []
+}
+```
