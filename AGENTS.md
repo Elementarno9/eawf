@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.1 hash=2b8db29f849b47fa -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.2 hash=ccfe7c2c2d28697e -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -23,15 +23,16 @@ non-trivial body has an expansion block immediately following.
 10. **`uv run` for all Python invocations.** See the python profile for
     details.
 11. **Worktree discipline.** See ``worktree-discipline``.
-12. **Pre-commit before commit.** ``uv run pre-commit run --all-files``
+12. **Branch currency.** See ``branch-currency``.
+13. **Pre-commit before commit.** ``uv run pre-commit run --all-files``
     before every ``git commit``. Hook failures are root-caused, never
     ``--no-verify``'d.
-13. **Commit prefix.** See ``commit-prefix``.
-14. **Branch naming.** See ``branch-naming``.
-15. **Secrets and PII hygiene.** See ``secrets-hygiene``.
-16. **Naming conventions for fields/params/log keys.** See
+14. **Commit prefix.** See ``commit-prefix``.
+15. **Branch naming.** See ``branch-naming``.
+16. **Secrets and PII hygiene.** See ``secrets-hygiene``.
+17. **Naming conventions for fields/params/log keys.** See
     ``naming-conventions``.
-17. **Artifact chassis and citations.** See ``artifact-chassis``.
+18. **Artifact chassis and citations.** See ``artifact-chassis``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -159,6 +160,21 @@ Cherry-pick procedure: ``git -C <main-worktree> cherry-pick
 parent worktree. Worktree teardown only after cherry-pick lands.
 
 <!-- END EAWF:managed id=worktree-discipline -->
+<!-- BEGIN EAWF:managed id=branch-currency version=1.0 hash=3af31aa0e925c2fb -->
+### Branch currency
+
+Before opening or resuming a phase, iter, or wave, verify the current
+branch is based on the intended source branch (normally the repo default
+branch or the configured phase base). Fetch first, inspect divergence,
+and rebase or fast-forward the long-running feature branch when it is
+stale.
+
+If the working tree is dirty, preserve the dirty/untracked work before
+rebasing. If the branch intentionally remains behind or forked, record
+the reason in the plan or handoff before dispatching worktrees or
+starting new commits.
+
+<!-- END EAWF:managed id=branch-currency -->
 <!-- BEGIN EAWF:managed id=commit-prefix version=1.0 hash=8d880a9c124b84bf -->
 ### Commit prefix
 
@@ -203,7 +219,22 @@ Scrub locally before ``git add``; let ``pre-commit``
 (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.0 hash=6bdda55c129b2402 -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.0 hash=a5a6f9421f5f5d23 -->
+### Artifact chassis and citations
+
+Durable research, plan, audit, decision, hypothesis, and incident
+markdown uses renderer-owned chassis sections: ``Summary``,
+``References``, ``Provenance``, and ``Scrub``. Local drafts under
+``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts
+under ``.ea/artifacts/`` do not.
+
+Citations use dense ``[N]`` markers backed by typed ``Citation`` rows.
+References stay repo-relative, external URL, or Eawf URN. Absolute
+local paths, host-local URLs, and PII must fail validation before
+promotion or PR text ships.
+
+<!-- END EAWF:managed id=artifact-chassis -->
+<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.0 hash=e1e63ab1ed813a44 -->
 ## Workflow lifecycle
 
 Agent-driven lifecycle:
@@ -213,6 +244,9 @@ research → plan → execute waves → cherry-pick → ship phase
 ```
 
 - **Research** is unstructured exploration of the proposal/plan.
+- **Branch currency gate** = fetch and compare the current branch to the
+  intended source branch before opening or resuming a phase, iter, or
+  wave; rebase or fast-forward first when stale.
 - **Plan** = open the next phase, enumerate waves, write per-wave
   success criteria.
 - **Execute** = dispatch waves. Independent waves go in parallel via
@@ -244,7 +278,7 @@ the per-phase plan.
   ``Edit``, ``Write``); reserve ``Bash`` for shell-only operations.
 
 <!-- END EAWF:managed id=agent-tool-discipline -->
-<!-- BEGIN EAWF:managed id=anti-patterns version=1.0 hash=62752fcd572bcbcf -->
+<!-- BEGIN EAWF:managed id=anti-patterns version=1.0 hash=a81cd7886f51d8c9 -->
 ## Anti-patterns
 
 - Mutating ``state.json`` outside the state CLI.
@@ -253,6 +287,7 @@ the per-phase plan.
 - ``--no-verify`` on a failing pre-commit hook.
 - Quoting design-intent docs as authoritative for current behaviour
   (verify against the source tree).
+- Starting a phase, iter, or wave from a stale feature branch.
 - Adding a runtime dep without checking it's not already pulled in
   transitively.
 - Using ``Read`` to verify a file you just wrote with
@@ -299,18 +334,3 @@ the supporting artifact id. Decisions reference the audit that justifies
 them so the evidence chain is reconstructible from ``state.json`` alone.
 
 <!-- END EAWF:managed id=research-workflow -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.0 hash=a5a6f9421f5f5d23 -->
-### Artifact chassis and citations
-
-Durable research, plan, audit, decision, hypothesis, and incident
-markdown uses renderer-owned chassis sections: ``Summary``,
-``References``, ``Provenance``, and ``Scrub``. Local drafts under
-``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts
-under ``.ea/artifacts/`` do not.
-
-Citations use dense ``[N]`` markers backed by typed ``Citation`` rows.
-References stay repo-relative, external URL, or Eawf URN. Absolute
-local paths, host-local URLs, and PII must fail validation before
-promotion or PR text ships.
-
-<!-- END EAWF:managed id=artifact-chassis -->

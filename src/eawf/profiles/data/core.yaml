@@ -20,7 +20,7 @@ instrument_requirements:
 render_blocks:
   - id: non-negotiable-rules
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     body_template: |
       ## Non-negotiable rules (core)
 
@@ -46,15 +46,16 @@ render_blocks:
       10. **`uv run` for all Python invocations.** See the python profile for
           details.
       11. **Worktree discipline.** See ``worktree-discipline``.
-      12. **Pre-commit before commit.** ``uv run pre-commit run --all-files``
+      12. **Branch currency.** See ``branch-currency``.
+      13. **Pre-commit before commit.** ``uv run pre-commit run --all-files``
           before every ``git commit``. Hook failures are root-caused, never
           ``--no-verify``'d.
-      13. **Commit prefix.** See ``commit-prefix``.
-      14. **Branch naming.** See ``branch-naming``.
-      15. **Secrets and PII hygiene.** See ``secrets-hygiene``.
-      16. **Naming conventions for fields/params/log keys.** See
+      14. **Commit prefix.** See ``commit-prefix``.
+      15. **Branch naming.** See ``branch-naming``.
+      16. **Secrets and PII hygiene.** See ``secrets-hygiene``.
+      17. **Naming conventions for fields/params/log keys.** See
           ``naming-conventions``.
-      17. **Artifact chassis and citations.** See ``artifact-chassis``.
+      18. **Artifact chassis and citations.** See ``artifact-chassis``.
 
   - id: architecture-cli-dispatch
     target: AGENTS.md
@@ -197,6 +198,23 @@ render_blocks:
       <worktree-sha>`` per commit, in order. Resolve conflicts in the
       parent worktree. Worktree teardown only after cherry-pick lands.
 
+  - id: branch-currency
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ### Branch currency
+
+      Before opening or resuming a phase, iter, or wave, verify the current
+      branch is based on the intended source branch (normally the repo default
+      branch or the configured phase base). Fetch first, inspect divergence,
+      and rebase or fast-forward the long-running feature branch when it is
+      stale.
+
+      If the working tree is dirty, preserve the dirty/untracked work before
+      rebasing. If the branch intentionally remains behind or forked, record
+      the reason in the plan or handoff before dispatching worktrees or
+      starting new commits.
+
   - id: commit-prefix
     target: AGENTS.md
     version: "1.0"
@@ -277,6 +295,9 @@ render_blocks:
       ```
 
       - **Research** is unstructured exploration of the proposal/plan.
+      - **Branch currency gate** = fetch and compare the current branch to the
+        intended source branch before opening or resuming a phase, iter, or
+        wave; rebase or fast-forward first when stale.
       - **Plan** = open the next phase, enumerate waves, write per-wave
         success criteria.
       - **Execute** = dispatch waves. Independent waves go in parallel via
@@ -323,6 +344,7 @@ render_blocks:
       - ``--no-verify`` on a failing pre-commit hook.
       - Quoting design-intent docs as authoritative for current behaviour
         (verify against the source tree).
+      - Starting a phase, iter, or wave from a stale feature branch.
       - Adding a runtime dep without checking it's not already pulled in
         transitively.
       - Using ``Read`` to verify a file you just wrote with
