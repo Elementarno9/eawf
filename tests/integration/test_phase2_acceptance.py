@@ -108,6 +108,23 @@ def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     # 5. close iter + phase so all three closure timestamps are observable
     r = runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-IT-1"])
     assert r.exit_code == 0, r.output
+    r = runner.invoke(
+        app,
+        [
+            "decision",
+            "add",
+            "D001",
+            "--scope-id",
+            "P01",
+            "--summary",
+            "P01 scope collapse: finish as single-wave phase",
+            "--rationale",
+            "scope collapse accepted for minimal lifecycle scenario",
+            "--alternative",
+            "plan a second wave",
+        ],
+    )
+    assert r.exit_code == 0, r.output
     r = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-PH-1"])
     assert r.exit_code == 0, r.output
 

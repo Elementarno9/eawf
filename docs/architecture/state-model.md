@@ -153,7 +153,7 @@ keys as `{}` during the next `eawf sync`.
 | Wave | `id`, `iter_id`, `title`, `status`, `deps`, `file_scopes`, `success_criteria`, `agent_role`, `effort_bucket`, `claim_session_id`, `worktree_id`, `commit`, `outcome`, `opened_at`, `closed_at` | state | atomic execution unit |
 | Hypothesis | `id`, `scope_id`, `text`, `metric`, `confirm`, `reject`, `status`, `verdict`, `audit_id`, `source_artifact_id` | state + optional artifact | thresholds concrete |
 | Audit | `id`, `scope_id`, `kind`, `status`, `report_artifact_id`, `check_results`, `integrity_results`, `created_at`, `verdict` | state + `audit.jsonl` | evidence only |
-| Artifact | `id`, `kind`, `uri`, `local_path`, `urn`, `sha256`, `size_bytes`, `created_at`, `metadata` | state / index | hash for files / blobs |
+| Artifact | `id`, `kind`, `uri`, `urn`, `sha256`, `size_bytes`, `created_at`, `metadata` | state / index | hash for files / blobs |
 | Decision | `id`, `scope_id`, `summary`, `rationale`, `alternatives`, `status`, `created_at`, `superseded_by` | state + `decision.jsonl` | rationale required |
 | BacklogItem | `id`, `scope_id`, `title`, `priority`, `status`, `created_at`, `closed_at`, `resolution`, `commit` | state | priority enum |
 | EstimateSummary | `id`, `scope_id`, `expected_eu`, `pessimistic_eu`, `confidence`, `current_store_record_id`, `updated_at` | state + `estimate.jsonl` | history in store |

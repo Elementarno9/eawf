@@ -211,6 +211,45 @@ def test_phase_close_happy(workspace: Path) -> None:
     assert res.exit_code == 0, res.stdout
 
 
+def test_phase_close_single_closed_wave_without_decision_exits_4(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
+    runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W01",
+            "--title",
+            "w",
+            "--files",
+            "src/",
+        ],
+    )
+    runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
+    runner.invoke(
+        app,
+        [
+            "wave",
+            "close",
+            "P01-I01-W01",
+            "--commit",
+            "deadbeef",
+            "--outcome",
+            "done",
+        ],
+    )
+    runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-1"])
+
+    res = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
+
+    assert res.exit_code == 4, res.stdout
+    assert "single closed wave" in res.stdout
+
+
 def test_phase_reopen_happy_allows_followup_iter(workspace: Path) -> None:
     _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])

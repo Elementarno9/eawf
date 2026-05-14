@@ -40,11 +40,12 @@ code (see `docs/reference/exit-codes.md`).
 | `eawf validate` | `--strict`, `--workspace` | schema / ref / invariant report | no | schema / ref errors | `cli/commands/validate.py` |
 | `eawf sync` | `--check`, `--dry-run`, `--fix` | drift / update report | yes if fix | hash conflict / unmanaged overwrite | `cli/commands/sync.py` |
 | `eawf config get` / `set` / `validate` | key / value / scope | layered config | yes for `set` | invalid schema / secret value | `cli/commands/config.py` |
+| `eawf coauthor resolve` | runtime / message file | configured `Co-Authored-By` trailer | no | disabled policy / invalid registry | `cli/commands/coauthor.py` |
 | `eawf project init` | code / title / domains | project record | yes | duplicate project | `cli/commands/lifecycle.py` |
 | `eawf subproject add` / `switch` | code / kind / title | subproject record / pointer | yes | duplicate / unknown code | `cli/commands/lifecycle.py` |
 | `eawf goal define` | id / title / scope / outcomes | goal record | yes | duplicate / invalid scope | `cli/commands/evidence.py` |
 | `eawf outcome define` / `set` | id / scope / metric / threshold | outcome record / measurement | yes | invalid metric / missing audit | `cli/commands/evidence.py` |
-| `eawf phase open` / `close` | id, title, scope, audit, checkpoint | phase record | yes | duplicate / no audit / open children | `cli/commands/lifecycle.py` |
+| `eawf phase open` / `close` | id, title, scope, audit, checkpoint | phase record | yes | duplicate / no audit / open children / single-wave close without scope-collapse decision | `cli/commands/lifecycle.py` |
 | `eawf iter open` / `close` | phase or id, audit | iter record | yes | invalid parent / open waves | `cli/commands/lifecycle.py` |
 | `eawf wave plan` / `claim` / `close` / `fail` | wave fields, commit, outcome, reason | wave records | yes | overlap, dirty state, no evidence | `cli/commands/lifecycle.py` |
 | `eawf estimate` / `estimate update` | scope, source, confidence | estimate record / version | yes if create | invalid rollup | `cli/commands/estimation.py` |
@@ -72,6 +73,8 @@ code (see `docs/reference/exit-codes.md`).
 | `eawf skill list` / `skill run` | runtime / scope, skill, args | skill catalog / CI execution | yes maybe for `run` | unknown skill | `cli/commands/skill.py` |
 | `eawf flow` | goal / budgets / resume | full ADD pipeline result | yes | budget / gate / blocker | `cli/commands/flow.py` |
 | `eawf plan show` | scope | active generated plan / spec from state | no | no plan | `cli/commands/plan.py` |
+| `eawf pr render` | phase / artifact gates / profile blocks | scrubbed phase PR body | no | invalid artifact / invalid PR prose | `cli/commands/pr.py` |
+| `eawf release changelog` / `notes` | version / phase range / output path | changelog mine / release-notes draft | yes only for `--output` | invalid release prose | `cli/commands/release.py` |
 
 ## Global flags (every command)
 
