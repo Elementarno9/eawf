@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -9,8 +11,31 @@ from pydantic import ValidationError
 
 from eawf.artifacts.references import Citation
 from eawf.profiles.models import ComposedProfile, RenderBlock
-from eawf.render.pr_body import PrBodyInput, PrBodyNotFound, build_pr_body, infer_pr_kind
+from eawf.render.pr_body import (
+    PrBodyInput,
+    PrBodyNotFound,
+    build_pr_body,
+    collect_pr_report_inputs,
+    infer_pr_kind,
+    resolve_pr_phase_id,
+)
+from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
 from eawf.state.models import State
+from eawf.store.envelope import Envelope
+from eawf.store.kinds.agent_report import (
+    AgentReportBody,
+    AgentReportEvidenceRef,
+    AgentReportHeader,
+    AgentReportPayload,
+    ExecutorReportBody,
+    OperatorReportBody,
+    ResearcherReportBody,
+    ReviewerReportBody,
+    store_kind_for_role,
+)
+from eawf.store.paths import store_path
+
+NOW = datetime(2026, 5, 14, tzinfo=UTC)
 
 
 def _base_state() -> dict[str, Any]:
@@ -99,6 +124,57 @@ def _wave(
     }
 
 
+def _write_report(
+    state_path: Path,
+    *,
+    role: AgentSessionRole,
+    body: AgentReportBody,
+    scope_id: str,
+    base_id: str,
+    report_id: str,
+) -> None:
+    header = AgentReportHeader(
+        report_id=report_id,
+        role=role,
+        session_id=f"SES-{role.value}",
+        scope_id=scope_id,
+        base_id=base_id,
+        attempt=1,
+        runtime="codex",
+        generated_at=NOW,
+        summary=body.summary,
+    )
+    payload = AgentReportPayload(header=header, body=body)
+    envelope = Envelope(
+        id=report_id,
+        kind=store_kind_for_role(role),
+        scope_id=scope_id,
+        created_at=NOW,
+        updated_at=None,
+        summary=body.summary,
+        payload=payload.model_dump(mode="json"),
+    )
+    path = store_path(state_path, store_kind_for_role(role))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(envelope.model_dump_json() + "\n")
+
+
+def _state_with_phase_iter() -> State:
+    payload = _base_state()
+    payload["phases"] = {"P00": _phase("P00", title="bootstrap")}
+    payload["iters"] = {"P00-I01": _iter("P00-I01", title="first iter")}
+    payload["waves"] = {
+        "P00-I01-W01": _wave(
+            "P00-I01-W01",
+            "P00-I01",
+            commit="abcdef0123",
+            outcome="did stuff",
+        ),
+    }
+    return State.model_validate(payload)
+
+
 def test_build_pr_body_unknown_phase_raises() -> None:
     state = State.model_validate(_base_state())
     with pytest.raises(PrBodyNotFound):
@@ -153,6 +229,11 @@ def test_infer_pr_kind_recognizes_phase_iter_docs_research_and_incident() -> Non
     assert infer_pr_kind("P17-I01") == "iter"
     assert infer_pr_kind("P17", source="docs_research") == "docs-research"
     assert infer_pr_kind("P17", incident_id="INC-001") == "incident-fix"
+
+
+def test_resolve_pr_phase_id_resolves_iter_scope() -> None:
+    state = _state_with_phase_iter()
+    assert resolve_pr_phase_id(state, "P00-I01") == "P00"
 
 
 def test_build_pr_body_includes_typed_inputs_and_profile_blocks() -> None:
@@ -218,3 +299,112 @@ def test_build_pr_body_renders_docs_research_citation_source_rows() -> None:
     assert "## Docs And Research Report" in body
     assert "Source rows:" in body
     assert "| [1] | repo | `docs/architecture/workflow.md` | Workflow docs |" in body
+
+
+def test_collect_pr_report_inputs_phase_reads_operator_rollup(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    state = _state_with_phase_iter()
+    _write_report(
+        state_path,
+        role=AgentSessionRole.OPERATOR,
+        body=OperatorReportBody(
+            role="operator",
+            verdict=AgentReportVerdict.PASS,
+            confidence=Confidence.HIGH,
+            summary="operator summary",
+            phase_id="P00",
+            completed_wave_ids=["P00-I01-W01"],
+            decisions=[],
+            next_actions=[],
+        ),
+        scope_id="P00",
+        base_id="P00",
+        report_id="AR-operator-P00-01",
+    )
+
+    inputs = collect_pr_report_inputs(state_path, state, "P00", kind="phase")
+    body = build_pr_body(state, "P00", inputs=inputs)
+
+    assert [item.kind for item in inputs] == ["operator_rollup"]
+    assert "operator: 1" in inputs[0].bullets
+    assert "## Operator Rollup" in body
+
+
+def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    state = _state_with_phase_iter()
+    _write_report(
+        state_path,
+        role=AgentSessionRole.EXECUTOR,
+        body=ExecutorReportBody(
+            role="executor",
+            verdict=AgentReportVerdict.PASS,
+            confidence=Confidence.HIGH,
+            summary="executor summary",
+            wave_id="P00-I01-W01",
+            files_changed=["src/eawf/render/pr_body.py"],
+            tests_run=["uv run pytest tests/unit/test_render_pr_body.py -q"],
+            commit_sha="abcdef0123",
+            outcome="done",
+        ),
+        scope_id="P00-I01-W01",
+        base_id="P00-I01-W01",
+        report_id="AR-executor-P00-I01-W01-01",
+    )
+    _write_report(
+        state_path,
+        role=AgentSessionRole.REVIEWER,
+        body=ReviewerReportBody(
+            role="reviewer",
+            verdict=AgentReportVerdict.PASS,
+            confidence=Confidence.HIGH,
+            summary="reviewer summary",
+            target_id="HEAD",
+            findings=[],
+            coverage_refs=[AgentReportEvidenceRef(kind="repo", ref="src/eawf/render/pr_body.py:1")],
+        ),
+        scope_id="P00-I01",
+        base_id="P00-I01",
+        report_id="AR-reviewer-P00-I01-01",
+    )
+
+    inputs = collect_pr_report_inputs(state_path, state, "P00-I01", kind="iter")
+    body = build_pr_body(state, "P00", inputs=inputs, kind="iter")
+
+    assert {item.kind for item in inputs} == {"executor_report", "reviewer_report"}
+    assert "## Executor Report" in body
+    assert "## Reviewer Report" in body
+
+
+def test_collect_pr_report_inputs_docs_research_reads_researcher_report(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    state = _state_with_phase_iter()
+    _write_report(
+        state_path,
+        role=AgentSessionRole.RESEARCHER,
+        body=ResearcherReportBody(
+            role="researcher",
+            verdict=AgentReportVerdict.PASS,
+            confidence=Confidence.HIGH,
+            summary="research summary",
+            evidence_refs=[
+                AgentReportEvidenceRef(kind="repo", ref="docs/architecture/agent-reports.md")
+            ],
+            question="What changed?",
+            findings=["typed reports"],
+            alternatives=[],
+            recommendation="include report summary",
+        ),
+        scope_id="P00",
+        base_id="P00",
+        report_id="AR-researcher-P00-01",
+    )
+
+    inputs = collect_pr_report_inputs(state_path, state, "P00", kind="docs-research")
+    body = build_pr_body(state, "P00", inputs=inputs, kind="docs-research")
+
+    assert [item.kind for item in inputs] == ["docs_research"]
+    assert "## Docs And Research Report" in body
+    assert "docs/architecture/agent-reports.md" in body

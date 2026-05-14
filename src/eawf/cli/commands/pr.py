@@ -1,4 +1,4 @@
-"""``eawf pr render <phase-id>`` Typer sub-app.
+"""``eawf pr render <scope-id>`` Typer sub-app.
 
 Read-only renderer. Loads state, projects through
 :func:`eawf.render.pr_body.build_pr_body`, emits Markdown body (default) or
@@ -21,8 +21,15 @@ from eawf.cli.output import emit_json_or_text
 from eawf.config.layered import merge_config
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import load_profile
-from eawf.render.pr_body import PrBodyNotFound, PrBodyValidationError, build_pr_body
-from eawf.state.ids import is_phase_id
+from eawf.render.pr_body import (
+    PrBodyNotFound,
+    PrBodyValidationError,
+    build_pr_body,
+    collect_pr_report_inputs,
+    infer_pr_kind,
+    resolve_pr_phase_id,
+)
+from eawf.state.ids import is_iter_id, is_phase_id
 from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
 from eawf.validate.strict import validate_state
@@ -53,7 +60,7 @@ def _load_state(state_path: Path) -> State:
 @pr_app.command("render")
 def pr_render(
     ctx: typer.Context,
-    phase_id: Annotated[str, typer.Argument(help="Phase id (e.g. P11).")],
+    scope_id: Annotated[str, typer.Argument(help="Phase or iter id (e.g. P11 or P11-I01).")],
     artifact: Annotated[
         list[Path] | None,
         typer.Option(
@@ -63,14 +70,20 @@ def pr_render(
     ] = None,
     profile_blocks: Annotated[
         bool,
-        typer.Option("--profile-blocks/--no-profile-blocks", help="Include pr.phase blocks."),
+        typer.Option("--profile-blocks/--no-profile-blocks", help="Include pr.<kind> blocks."),
     ] = True,
+    source: Annotated[
+        str | None,
+        typer.Option("--source", help="Optional source kind, e.g. docs-research."),
+    ] = None,
 ) -> None:
-    """Render the PR body for a phase as Markdown (or JSON envelope)."""
+    """Render the PR body for a phase or iter as Markdown (or JSON envelope)."""
     flags: GlobalFlags = ctx.obj
     try:
-        if not is_phase_id(phase_id):
-            raise cli_errors.InvalidInput(f"invalid phase id: {phase_id!r} (expected P<NN>)")
+        if not (is_phase_id(scope_id) or is_iter_id(scope_id)):
+            raise cli_errors.InvalidInput(
+                f"invalid PR scope id: {scope_id!r} (expected P<NN> or P<NN>-I<NN>)"
+            )
         state_path, _reason = resolve_with_reason(flags.workspace)
         state = _load_state(state_path)
         for path in artifact or []:
@@ -83,13 +96,22 @@ def pr_render(
                     f"artifact validation failed for {path}: {'; '.join(report.errors)}"
                 )
         composed = None
+        pr_kind = infer_pr_kind(scope_id, source=source)
         if profile_blocks:
             repo = Path.cwd()
             merged, _sources = merge_config(workspace=flags.workspace, repo=repo)
             enabled = [str(p) for p in (merged.get("profiles", {}).get("enabled") or [])]
             composed = compose([load_profile(pid) for pid in enabled])
         try:
-            body = build_pr_body(state, phase_id, composed_profile=composed)
+            phase_id = resolve_pr_phase_id(state, scope_id)
+            inputs = collect_pr_report_inputs(state_path, state, scope_id, kind=pr_kind)
+            body = build_pr_body(
+                state,
+                phase_id,
+                inputs=inputs,
+                composed_profile=composed,
+                kind=pr_kind,
+            )
         except PrBodyNotFound as exc:
             raise cli_errors.NotFound(str(exc)) from exc
         except PrBodyValidationError as exc:
@@ -99,7 +121,9 @@ def pr_render(
         return
 
     payload = {
+        "scope": scope_id,
         "phase": phase_id,
+        "kind": pr_kind,
         "body": body,
     }
     emit_json_or_text(payload, body, flags=flags)
