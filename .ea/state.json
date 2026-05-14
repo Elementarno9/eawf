@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:27:53.626750Z",
+  "updated_at": "2026-05-14T17:31:22.164716Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3631,9 +3631,9 @@
       "blocks": [
         "P18-I01-W03"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w02",
+      "closed_at": "2026-05-14T17:31:22.164705Z",
+      "commit": "6cf54d8ed982",
       "deps": [
         "P18-I01-W01"
       ],
@@ -3645,8 +3645,8 @@
       "id": "P18-I01-W02",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:51.020569Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added strict per-role agent report bodies with header/body role validation.",
+      "status": "closed",
       "success_criteria": [
         "all eight role bodies validate strictly",
         "role/body mismatch is rejected",
