@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.profiles.models import ComposedProfile, RenderBlock
-from eawf.render.pr_body import PrBodyInput, PrBodyNotFound, build_pr_body
+from eawf.render.pr_body import PrBodyInput, PrBodyNotFound, build_pr_body, infer_pr_kind
 from eawf.state.models import State
 
 
@@ -145,6 +145,13 @@ def test_pr_body_input_rejects_extra_fields() -> None:
                 "unexpected": True,
             }
         )
+
+
+def test_infer_pr_kind_recognizes_phase_iter_docs_research_and_incident() -> None:
+    assert infer_pr_kind("P17") == "phase"
+    assert infer_pr_kind("P17-I01") == "iter"
+    assert infer_pr_kind("P17", source="docs_research") == "docs-research"
+    assert infer_pr_kind("P17", incident_id="INC-001") == "incident-fix"
 
 
 def test_build_pr_body_includes_typed_inputs_and_profile_blocks() -> None:

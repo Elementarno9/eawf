@@ -26,11 +26,13 @@ from pydantic import BaseModel, ConfigDict
 from eawf.artifacts.references import Citation
 from eawf.artifacts.validation import validate_text_surface
 from eawf.profiles.models import ComposedProfile
+from eawf.state.ids import is_iter_id, is_phase_id
 from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
 PrBodyInputKind = Literal["operator_rollup", "executor_report", "reviewer_report", "docs_research"]
+PrKind = Literal["phase", "iter", "docs-research", "incident-fix"]
 
 
 class PrBodyNotFound(LookupError):  # noqa: N818 — pairs with cli.errors.NotFound naming
@@ -52,6 +54,25 @@ class PrBodyInput(BaseModel):
     bullets: list[str] = []
     artifact_ids: list[str] = []
     citations: list[Citation] = []
+
+
+def infer_pr_kind(
+    scope_id: str,
+    *,
+    source: str | None = None,
+    incident_id: str | None = None,
+) -> PrKind:
+    """Infer the renderer kind for a PR surface."""
+    if incident_id is not None or scope_id.startswith("INC-"):
+        return "incident-fix"
+    source_key = (source or "").strip().casefold().replace("_", "-")
+    if source_key in {"docs-research", "docs", "research"}:
+        return "docs-research"
+    if is_iter_id(scope_id):
+        return "iter"
+    if is_phase_id(scope_id):
+        return "phase"
+    return "phase"
 
 
 def _short_sha(value: str | None) -> str:
@@ -179,7 +200,7 @@ def build_pr_body(
     *,
     inputs: list[PrBodyInput] | None = None,
     composed_profile: ComposedProfile | None = None,
-    kind: str = "phase",
+    kind: PrKind = "phase",
 ) -> str:
     """Render the Markdown PR body for *phase_id*.
 
@@ -267,7 +288,9 @@ __all__ = [
     "PrBodyInput",
     "PrBodyNotFound",
     "PrBodyValidationError",
+    "PrKind",
     "build_pr_body",
+    "infer_pr_kind",
     "render_docs_research_report",
     "render_executor_report",
     "render_operator_rollup",
