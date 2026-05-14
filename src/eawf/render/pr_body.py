@@ -18,16 +18,25 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Literal
+from pathlib import Path
+from typing import Literal, cast
 
 from jinja2 import Environment, StrictUndefined
 from pydantic import BaseModel, ConfigDict
 
+from eawf.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
 from eawf.artifacts.references import Citation
 from eawf.artifacts.validation import validate_text_surface
 from eawf.profiles.models import ComposedProfile
-from eawf.state.ids import is_iter_id, is_phase_id
+from eawf.state.enums import AgentSessionRole
+from eawf.state.ids import is_iter_id, is_phase_id, is_wave_id
 from eawf.state.models import State
+from eawf.store.kinds.agent_report import (
+    AgentReportEvidenceRef,
+    ExecutorReportBody,
+    ResearcherReportBody,
+    ReviewerReportBody,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +82,32 @@ def infer_pr_kind(
     if is_phase_id(scope_id):
         return "phase"
     return "phase"
+
+
+def resolve_pr_phase_id(state: State, scope_id: str) -> str:
+    """Resolve a phase/iter/wave PR scope to its owning phase id.
+
+    Raises:
+        PrBodyNotFound: When *scope_id* does not resolve to a known phase.
+    """
+    if is_phase_id(scope_id):
+        if scope_id not in state.phases:
+            raise PrBodyNotFound(f"phase not found: {scope_id!r}")
+        return scope_id
+    if is_iter_id(scope_id):
+        iter_record = state.iters.get(scope_id)
+        if iter_record is None:
+            raise PrBodyNotFound(f"iter not found: {scope_id!r}")
+        return iter_record.phase_id
+    if is_wave_id(scope_id):
+        wave = state.waves.get(scope_id)
+        if wave is None:
+            raise PrBodyNotFound(f"wave not found: {scope_id!r}")
+        iter_record = state.iters.get(wave.iter_id)
+        if iter_record is None:
+            raise PrBodyNotFound(f"iter not found: {wave.iter_id!r}")
+        return iter_record.phase_id
+    raise PrBodyNotFound(f"unsupported PR scope: {scope_id!r}")
 
 
 def _short_sha(value: str | None) -> str:
@@ -197,6 +232,121 @@ _INPUT_RENDERERS: dict[PrBodyInputKind, Callable[[PrBodyInput], str]] = {
     "reviewer_report": render_reviewer_report,
     "docs_research": render_docs_research_report,
 }
+
+
+def _report_scope_matches(row: AgentReportRow, scope_id: str) -> bool:
+    header = row.payload.header
+    return (
+        header.scope_id == scope_id
+        or header.scope_id.startswith(f"{scope_id}-")
+        or header.base_id == scope_id
+        or header.base_id.startswith(f"{scope_id}-")
+    )
+
+
+def _citations_for_evidence_refs(refs: list[AgentReportEvidenceRef]) -> list[Citation]:
+    citations: list[Citation] = []
+    for item in refs:
+        if item.kind == "commit":
+            continue
+        kind: Literal["repo", "url", "urn"] = item.kind
+        citations.append(
+            Citation(
+                n=len(citations) + 1,
+                ref=item.ref,
+                kind=kind,
+                title=item.note,
+            )
+        )
+    return citations
+
+
+def _summary_bullets(row: AgentReportRow) -> list[str]:
+    payload = row.payload
+    body = payload.body
+    bullets = [
+        (
+            f"`{payload.header.report_id}` verdict={body.verdict.value} "
+            f"confidence={body.confidence.value}"
+        )
+    ]
+    if isinstance(body, ExecutorReportBody):
+        bullets.append(f"wave `{body.wave_id}` commit `{body.commit_sha or '(none)'}`")
+        bullets.extend(f"test `{test}`" for test in body.tests_run)
+    elif isinstance(body, ReviewerReportBody):
+        bullets.append(f"target `{body.target_id}` findings={len(body.findings)}")
+    elif isinstance(body, ResearcherReportBody):
+        bullets.append(f"question: {body.question}")
+        bullets.append(f"recommendation: {body.recommendation}")
+    return bullets
+
+
+def _input_from_report(row: AgentReportRow, kind: PrBodyInputKind, title: str) -> PrBodyInput:
+    body = row.payload.body
+    return PrBodyInput(
+        kind=kind,
+        title=title,
+        summary=body.summary,
+        bullets=_summary_bullets(row),
+        artifact_ids=row.payload.header.artifact_ids,
+        citations=_citations_for_evidence_refs(body.evidence_refs),
+    )
+
+
+def collect_pr_report_inputs(
+    state_path: Path,
+    state: State,
+    scope_id: str,
+    *,
+    kind: PrKind,
+) -> list[PrBodyInput]:
+    """Collect typed agent reports that should be included in a PR body."""
+    del state
+    inputs: list[PrBodyInput] = []
+    if kind == "phase":
+        rollup = operator_rollup(state_path, scope_id)
+        report_count = cast(int, rollup["report_count"])
+        if report_count:
+            by_role = cast(dict[str, int], rollup["by_role"])
+            bullets = [f"{role}: {count}" for role, count in sorted(by_role.items())]
+            inputs.append(
+                PrBodyInput(
+                    kind="operator_rollup",
+                    title=f"Agent report rollup for {scope_id}",
+                    summary=f"{report_count} typed agent report(s) recorded for {scope_id}.",
+                    bullets=bullets,
+                )
+            )
+        return inputs
+
+    if kind == "iter":
+        role_inputs: tuple[tuple[AgentSessionRole, PrBodyInputKind], ...] = (
+            (AgentSessionRole.EXECUTOR, "executor_report"),
+            (AgentSessionRole.REVIEWER, "reviewer_report"),
+        )
+        for role, input_kind in role_inputs:
+            rows = [
+                row
+                for row in iter_agent_reports(state_path, role=role)
+                if _report_scope_matches(row, scope_id)
+            ]
+            inputs.extend(
+                _input_from_report(row, input_kind, f"{role.value} report for {scope_id}")
+                for row in rows
+            )
+        return inputs
+
+    if kind == "docs-research":
+        rows = [
+            row
+            for row in iter_agent_reports(state_path, role=AgentSessionRole.RESEARCHER)
+            if _report_scope_matches(row, scope_id)
+        ]
+        inputs.extend(
+            _input_from_report(row, "docs_research", f"Research report for {scope_id}")
+            for row in rows
+        )
+    return inputs
 
 
 def _render_profile_blocks(
@@ -325,9 +475,11 @@ __all__ = [
     "PrBodyValidationError",
     "PrKind",
     "build_pr_body",
+    "collect_pr_report_inputs",
     "infer_pr_kind",
     "render_docs_research_report",
     "render_executor_report",
     "render_operator_rollup",
     "render_reviewer_report",
+    "resolve_pr_phase_id",
 ]
