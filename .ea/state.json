@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T17:24:55.575005Z",
+  "updated_at": "2026-05-14T17:27:53.626750Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3601,9 +3601,9 @@
       "blocks": [
         "P18-I01-W02"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w01",
+      "closed_at": "2026-05-14T17:27:53.626739Z",
+      "commit": "9d453f1e7f4e",
       "deps": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -3614,8 +3614,8 @@
       "id": "P18-I01-W01",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:50.578819Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Added strict shared agent-report primitives and verdict enum.",
+      "status": "closed",
       "success_criteria": [
         "strict shared report models exist",
         "report verdict enum exists",
