@@ -92,6 +92,7 @@ from eawf.lock import portalock
 from eawf.state.enums import (
     AgentSessionRole,
     AuditVerdict,
+    DecisionStatus,
     EffortBucket,
     IterStatus,
     ProjectStatus,
@@ -557,6 +558,19 @@ def phase_close_cmd(
             flags=flags,
         )
         return
+
+    def _mutator(state: State) -> None:
+        checklist = _phase_prepare_close_checklist(state, phase_id=phase_id)
+        blockers = checklist["blockers"]
+        if blockers:
+            raise LifecycleError(f"phase close blocked: {'; '.join(blockers)}")
+        close_phase(
+            state,
+            phase_id=phase_id,
+            audit_id=audit,
+            checkpoint=checkpoint,
+        )
+
     _run_mutation(
         ctx,
         command="phase close",
@@ -568,14 +582,7 @@ def phase_close_cmd(
             "audit": audit,
             "checkpoint": checkpoint,
         },
-        mutate=lambda state: _wrap_no_return(
-            close_phase(
-                state,
-                phase_id=phase_id,
-                audit_id=audit,
-                checkpoint=checkpoint,
-            )
-        ),
+        mutate=_mutator,
         closure_kind=True,
     )
 
@@ -626,31 +633,83 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
         if w.iter_id in iter_ids_in_phase
         and w.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
     )
+    closed_waves = sorted(
+        (wid, w)
+        for wid, w in state.waves.items()
+        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+    )
     closed_waves_missing_commit = sorted(
         wid
         for wid, w in state.waves.items()
         if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED and not w.commit
     )
+    closed_wave_ids = [wid for wid, _wave in closed_waves]
+    unique_closed_wave_commits = sorted({w.commit for _wid, w in closed_waves if w.commit})
+    scope_collapse_decision = _phase_has_scope_collapse_decision(state, phase_id=phase_id)
+    single_wave_without_decision = bool(len(closed_wave_ids) == 1 and not scope_collapse_decision)
     iters_without_audit = sorted(
         iid
         for iid, it in state.iters.items()
         if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
     )
-    blockers = (
-        bool(open_iters)
-        or bool(open_waves)
-        or bool(closed_waves_missing_commit)
-        or bool(iters_without_audit)
-    )
-    return {
+    checklist = {
         "phase": phase_id,
         "phase_status": phase.status.value,
         "open_iters": open_iters,
         "open_waves": open_waves,
+        "closed_wave_count": len(closed_wave_ids),
+        "unique_closed_wave_commit_count": len(unique_closed_wave_commits),
         "closed_waves_missing_commit": closed_waves_missing_commit,
         "iters_without_audit": iters_without_audit,
-        "ok": not blockers,
+        "scope_collapse_decision": scope_collapse_decision,
+        "single_wave_without_decision": single_wave_without_decision,
     }
+    blockers = _phase_close_blockers(checklist)
+    checklist["blockers"] = blockers
+    checklist["ok"] = not blockers
+    return checklist
+
+
+def _phase_has_scope_collapse_decision(state: State, *, phase_id: str) -> bool:
+    """Return whether active decisions explicitly allow a single-wave close."""
+    phrases = (
+        "single-wave",
+        "single wave",
+        "scope collapse",
+        "scope collapsed",
+        "collapse scope",
+    )
+    for decision in (state.decisions or {}).values():
+        if decision.status != DecisionStatus.ACTIVE:
+            continue
+        if decision.scope_id != phase_id and phase_id not in decision.summary:
+            continue
+        haystack = f"{decision.summary}\n{decision.rationale}".lower()
+        if any(phrase in haystack for phrase in phrases):
+            return True
+    return False
+
+
+def _phase_close_blockers(checklist: dict[str, Any]) -> list[str]:
+    """Render actionable blocker strings from a phase-close checklist."""
+    blockers: list[str] = []
+    if checklist["open_iters"]:
+        blockers.append(f"open iters: {', '.join(checklist['open_iters'])}")
+    if checklist["open_waves"]:
+        blockers.append(f"open waves: {', '.join(checklist['open_waves'])}")
+    if checklist["closed_waves_missing_commit"]:
+        blockers.append(
+            f"closed waves missing commit: {', '.join(checklist['closed_waves_missing_commit'])}"
+        )
+    if checklist["iters_without_audit"]:
+        blockers.append(
+            f"closed iters missing audit: {', '.join(checklist['iters_without_audit'])}"
+        )
+    if checklist["single_wave_without_decision"]:
+        blockers.append(
+            "single closed wave requires an active phase decision documenting scope collapse"
+        )
+    return blockers
 
 
 @phase_app.command("prepare-close")

@@ -28,6 +28,12 @@ Parallel implementation is allowed only when:
 - the state write lock is respected,
 - acceptance checks are defined.
 
+Phase close has an explicit scope-collapse guard: when a phase has
+exactly one closed wave, `eawf phase close` fails unless an active
+decision tied to that phase records the single-wave / scope-collapse
+rationale. This keeps phase closeout from silently hiding an accidental
+all-in-one wave.
+
 ## Required workflow skills
 
 | Skill | Purpose | Default automation |
@@ -146,7 +152,8 @@ fallback ladder rather than fake completion.
    never CI.
 11. Record commits / PR / merge / audit artifacts and final
     estimate-vs-actual summary in state; close wave / iter / phase as
-    requested.
+    requested. Phase close rejects a single closed wave unless an active
+    phase decision documents a deliberate scope collapse.
 11. Remove clean worktrees if policy says; preserve on conflict /
     failure.
 
@@ -300,7 +307,7 @@ Recommended commit variants:
    bullets and evidence trailers. Default for state-first projects.
 3. **Minimal solo**: `<type>: <summary>` plus `Refs:` / `Evidence:`
    trailers.
-4. **Release / phase**: `release: <phase or version>` with outcome
+4. **Release / phase**: `[P##] docs:` or `[P##] chore:` with outcome
    summary and PR / release evidence.
 
 Required PR templates:

@@ -211,7 +211,9 @@ def test_lifecycle_flow_full(
     5. ``wave claim P01-I01-W01 --session SES-1``.
     6. ``wave close P01-I01-W01 --commit deadbeef --outcome done``.
     7. ``iter close P01-I01 --audit AUD-1``.
-    8. ``phase close P01 --audit AUD-1``.
+    8. ``decision add D001 --scope-id P01 ...`` records the explicit
+       single-wave scope-collapse rationale required by phase close.
+    9. ``phase close P01 --audit AUD-1``.
 
     Asserts the final state projection matches the committed
     ``flow_full/state.golden.json``. The projection encodes:
@@ -257,6 +259,19 @@ def test_lifecycle_flow_full(
             "done",
         ),
         ("iter", "close", "P01-I01", "--audit", "AUD-1"),
+        (
+            "decision",
+            "add",
+            "D001",
+            "--scope-id",
+            "P01",
+            "--summary",
+            "P01 scope collapse: finish as single-wave phase",
+            "--rationale",
+            "scope collapse accepted for minimal lifecycle scenario",
+            "--alternative",
+            "plan a second wave",
+        ),
         ("phase", "close", "P01", "--audit", "AUD-1"),
     ]
     for step_args in steps:
