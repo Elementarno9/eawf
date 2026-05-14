@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
 from eawf.state.types import UtcDatetime
@@ -57,8 +57,8 @@ class AgentReportHeader(_StrictModel):
         return list(dict.fromkeys(values))
 
 
-class AgentReportBody(_StrictModel):
-    """Common report body shared by role-specific models."""
+class AgentReportCommonBody(_StrictModel):
+    """Fields every role report body must carry."""
 
     verdict: AgentReportVerdict
     confidence: Confidence
@@ -67,11 +67,142 @@ class AgentReportBody(_StrictModel):
     followups: list[AgentReportFollowup] = Field(default_factory=list)
 
 
+class PlannedWaveSummary(_StrictModel):
+    """Planner summary for one proposed wave."""
+
+    wave_id: Annotated[str, Field(min_length=1)]
+    title: Annotated[str, Field(min_length=1, max_length=160)]
+    depends_on: list[str] = Field(default_factory=list)
+    success_criteria: list[str] = Field(default_factory=list)
+
+
+class CriterionVerdict(_StrictModel):
+    """Auditor verdict for one success criterion."""
+
+    criterion: Annotated[str, Field(min_length=1, max_length=500)]
+    passed: bool
+    evidence_refs: list[AgentReportEvidenceRef] = Field(default_factory=list)
+
+
+class ReviewFinding(_StrictModel):
+    """Reviewer finding with severity and evidence."""
+
+    severity: Literal["blocker", "must-fix", "should-fix", "nit"]
+    message: Annotated[str, Field(min_length=1, max_length=500)]
+    evidence_refs: list[AgentReportEvidenceRef] = Field(default_factory=list)
+
+
+class PolishChange(_StrictModel):
+    """Polisher change/defer row."""
+
+    category: Literal["naming", "docstring", "logging", "error", "dead-code", "format"]
+    summary: Annotated[str, Field(min_length=1, max_length=300)]
+    files: list[str] = Field(default_factory=list)
+
+
+class ResearcherReportBody(AgentReportCommonBody):
+    """Report body emitted by a researcher."""
+
+    role: Literal["researcher"] = "researcher"
+    question: Annotated[str, Field(min_length=1, max_length=500)]
+    findings: list[str] = Field(default_factory=list)
+    alternatives: list[str] = Field(default_factory=list)
+    recommendation: Annotated[str, Field(min_length=1, max_length=1000)]
+
+
+class PlannerReportBody(AgentReportCommonBody):
+    """Report body emitted by a planner."""
+
+    role: Literal["planner"] = "planner"
+    objective: Annotated[str, Field(min_length=1, max_length=500)]
+    waves: list[PlannedWaveSummary] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+
+
+class ExecutorReportBody(AgentReportCommonBody):
+    """Report body emitted by an executor."""
+
+    role: Literal["executor"] = "executor"
+    wave_id: Annotated[str, Field(min_length=1)]
+    files_changed: list[str] = Field(default_factory=list)
+    tests_run: list[str] = Field(default_factory=list)
+    commit_sha: Annotated[str, Field(min_length=7)] | None = None
+    outcome: Annotated[str, Field(min_length=1, max_length=1000)]
+
+
+class AuditorReportBody(AgentReportCommonBody):
+    """Report body emitted by an auditor."""
+
+    role: Literal["auditor"] = "auditor"
+    target_id: Annotated[str, Field(min_length=1)]
+    criteria: list[CriterionVerdict] = Field(default_factory=list)
+    refutations: list[str] = Field(default_factory=list)
+
+
+class ReviewerReportBody(AgentReportCommonBody):
+    """Report body emitted by a reviewer."""
+
+    role: Literal["reviewer"] = "reviewer"
+    target_id: Annotated[str, Field(min_length=1)]
+    findings: list[ReviewFinding] = Field(default_factory=list)
+    coverage_refs: list[AgentReportEvidenceRef] = Field(default_factory=list)
+
+
+class PolisherReportBody(AgentReportCommonBody):
+    """Report body emitted by a polisher."""
+
+    role: Literal["polisher"] = "polisher"
+    scope: Annotated[str, Field(min_length=1)]
+    changes: list[PolishChange] = Field(default_factory=list)
+    deferred_items: list[str] = Field(default_factory=list)
+
+
+class OperatorReportBody(AgentReportCommonBody):
+    """Report body emitted by an operator."""
+
+    role: Literal["operator"] = "operator"
+    phase_id: Annotated[str, Field(min_length=1)]
+    completed_wave_ids: list[str] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+
+
+class DomainSpecialistReportBody(AgentReportCommonBody):
+    """Report body emitted by a domain specialist."""
+
+    role: Literal["domain-specialist"] = "domain-specialist"
+    domain: Annotated[str, Field(min_length=1, max_length=120)]
+    assessment: Annotated[str, Field(min_length=1, max_length=2000)]
+    recommendations: list[str] = Field(default_factory=list)
+
+
+type AgentReportBody = Annotated[
+    ResearcherReportBody
+    | PlannerReportBody
+    | ExecutorReportBody
+    | AuditorReportBody
+    | ReviewerReportBody
+    | PolisherReportBody
+    | OperatorReportBody
+    | DomainSpecialistReportBody,
+    Field(discriminator="role"),
+]
+
+
 class AgentReportPayload(_StrictModel):
     """Store payload wrapper for a typed agent report."""
 
     header: AgentReportHeader
     body: AgentReportBody
+
+    @model_validator(mode="after")
+    def _body_role_matches_header(self) -> Self:
+        if self.body.role != self.header.role.value:
+            raise ValueError(
+                f"body role {self.body.role!r} does not match header role "
+                f"{self.header.role.value!r}"
+            )
+        return self
 
 
 def report_record_id(*, role: AgentSessionRole, base_id: str, attempt: int) -> str:
@@ -91,9 +222,22 @@ def report_record_id(*, role: AgentSessionRole, base_id: str, attempt: int) -> s
 
 __all__ = [
     "AgentReportBody",
+    "AgentReportCommonBody",
     "AgentReportEvidenceRef",
     "AgentReportFollowup",
     "AgentReportHeader",
     "AgentReportPayload",
+    "AuditorReportBody",
+    "CriterionVerdict",
+    "DomainSpecialistReportBody",
+    "ExecutorReportBody",
+    "OperatorReportBody",
+    "PlannedWaveSummary",
+    "PlannerReportBody",
+    "PolishChange",
+    "PolisherReportBody",
+    "ResearcherReportBody",
+    "ReviewFinding",
+    "ReviewerReportBody",
     "report_record_id",
 ]
