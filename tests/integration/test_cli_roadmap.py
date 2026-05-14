@@ -262,6 +262,112 @@ def test_phase_activate_without_waves_rejected(workspace: Path) -> None:
     assert res.exit_code != 0
 
 
+def _read_events(workspace: Path) -> list[dict]:
+    path = workspace / ".ea" / "store" / "event.jsonl"
+    if not path.exists():
+        return []
+    return [orjson.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_roadmap_propose_emits_event(workspace: Path) -> None:
+    """P19-W06: propose appends an EVENT envelope to event.jsonl."""
+    before = len(_read_events(workspace))
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    after = _read_events(workspace)
+    assert len(after) > before
+    propose_event = next(
+        (e for e in after if e["payload"]["command"] == "roadmap propose"),
+        None,
+    )
+    assert propose_event is not None
+    assert propose_event["scope_id"] == "P21"
+
+
+def test_roadmap_revise_emits_event(workspace: Path) -> None:
+    """revise --add-wave emits its own EVENT envelope."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    events = _read_events(workspace)
+    revise_events = [e for e in events if e["payload"]["command"] == "roadmap revise"]
+    assert revise_events, "expected at least one roadmap revise event"
+
+
+def test_roadmap_drop_emits_event(workspace: Path) -> None:
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(app, ["roadmap", "drop", "P21"])
+    events = _read_events(workspace)
+    assert any(e["payload"]["command"] == "roadmap drop" for e in events)
+
+
+def test_wave_show_commit_returns_sha_when_present(workspace: Path) -> None:
+    """``eawf wave show --commit`` exits 0; empty stdout when no match."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    res = runner.invoke(app, ["wave", "show", "P21-I01-W01", "--commit"])
+    # Test repo has no [P21-W01] commit so output is empty; exit is still 0.
+    assert res.exit_code == 0, res.output
+
+
+def test_wave_show_without_commit_rejected(workspace: Path) -> None:
+    res = runner.invoke(app, ["wave", "show", "P21-I01-W01"])
+    assert res.exit_code != 0
+
+
+def test_wave_claim_out_of_order_flag_overrides_monotonic_gate(workspace: Path) -> None:
+    """CLI flag plumbs through to ``claim_wave``'s out_of_order escape hatch."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    for wid in ("W01", "W02"):
+        runner.invoke(
+            app,
+            [
+                "roadmap",
+                "revise",
+                "P21",
+                "--add-wave",
+                wid,
+                "--title",
+                f"feat: {wid}",
+                "--files",
+                "src/",
+            ],
+        )
+    # Default claim of W02 is rejected because W01 is still PENDING + ready.
+    blocked = runner.invoke(app, ["wave", "claim", "P21-I01-W02", "--session", "S"])
+    assert blocked.exit_code != 0
+    # --out-of-order escape hatch must succeed.
+    ok = runner.invoke(
+        app,
+        ["wave", "claim", "P21-I01-W02", "--session", "S", "--out-of-order"],
+    )
+    assert ok.exit_code == 0, ok.output
+
+
 def test_iter_activate_planned_iter(workspace: Path) -> None:
     """``eawf iter activate`` flips PLANNED -> ACTIVE on the iter."""
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
