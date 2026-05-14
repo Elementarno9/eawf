@@ -38,6 +38,7 @@ urn:eawf:v1:state:QR/P13-I04-W01
 urn:eawf:v1:state:TM/XP01
 urn:eawf:v1:artifact:QR/ART-20260506-p13-i04-audit
 urn:eawf:v1:store:QR/memory/MEM-20260506-001
+urn:eawf:v1:store:QR/executor_report/AR-executor-P18-I01-W04-01
 urn:eawf:v1:blob:QR/sha256/2f1a...
 urn:eawf:v1:pr:QR/42
 urn:eawf:v1:commit:QR/abc1234
@@ -74,11 +75,14 @@ local/private:    <repo>/.ea/local/store/ or <workspace>/.ea/local/store/
 ## `store` vs `artifact` vs `blob`
 
 - **`store`** is structured record storage: memory, incident,
-  audit, research, decision, event. Example:
+  audit, research, decision, event, flow, and typed agent reports. Example:
   `urn:eawf:v1:store:QR/audit/AUD-P13-I04` resolves to one JSONL
-  record.
+  record. Agent report store URNs include the role-specific store kind
+  before the report id, for example
+  `urn:eawf:v1:store:QR/reviewer_report/AR-reviewer-P18-I01-W08-01`.
 - **`artifact`** is durable output / evidence metadata: report,
-  screenshot set, HTML, data manifest, generated markdown, PR body.
+  screenshot set, HTML, data manifest, generated markdown, PR body,
+  promoted agent report.
   Example: `urn:eawf:v1:artifact:QR/ART-audit-p13-i04` resolves
   through the artifact index.
 - **`blob`** is immutable content-addressed payload storage for large /
@@ -143,6 +147,8 @@ Use URNs for:
 
 - state scopes: phase / iter / wave / hypothesis / audit,
 - artifacts and JSONL store records,
+- typed agent report rows, for example
+  `urn:eawf:v1:store:QR/operator_report/AR-operator-P18-01`,
 - commits, branches, PRs,
 - evidence links in `/audit`, `/review`, `/ship`, `/polish`,
 - durable memory entries.
