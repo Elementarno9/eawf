@@ -32,7 +32,7 @@ _URN_RE = re.compile(
     r"^urn:eawf:(?P<version>v\d+):(?P<kind>[a-z]+):(?P<rest>[^?#]*)"
     r"(?:\?=(?P<query>[^#]*))?(?:#(?P<fragment>.*))?$"
 )
-_SLASH_KINDS = frozenset({"repo", "artifact"})
+_SLASH_KINDS = frozenset({"repo", "artifact", "store"})
 
 
 @dataclass(frozen=True)

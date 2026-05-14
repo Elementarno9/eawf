@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from eawf.state.enums import StoreKind
 from eawf.store.kinds.actual import ActualPayload
+from eawf.store.kinds.agent_report import AgentReportPayload
 from eawf.store.kinds.audit import AuditPayload
 from eawf.store.kinds.decision import DecisionPayload
 from eawf.store.kinds.estimate import EstimatePayload
@@ -25,4 +26,12 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.ACTUAL: ActualPayload,
     StoreKind.FLOW: FlowPayload,
     StoreKind.EVENT: EventPayload,
+    StoreKind.RESEARCHER_REPORT: AgentReportPayload,
+    StoreKind.PLANNER_REPORT: AgentReportPayload,
+    StoreKind.EXECUTOR_REPORT: AgentReportPayload,
+    StoreKind.AUDITOR_REPORT: AgentReportPayload,
+    StoreKind.REVIEWER_REPORT: AgentReportPayload,
+    StoreKind.POLISHER_REPORT: AgentReportPayload,
+    StoreKind.OPERATOR_REPORT: AgentReportPayload,
+    StoreKind.DOMAIN_SPECIALIST_REPORT: AgentReportPayload,
 }
