@@ -14,10 +14,14 @@ from typing import Annotated
 import orjson
 import typer
 
+from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.render.pr_body import PrBodyNotFound, build_pr_body
+from eawf.config.layered import merge_config
+from eawf.profiles.compose import compose
+from eawf.profiles.loader import load_profile
+from eawf.render.pr_body import PrBodyNotFound, PrBodyValidationError, build_pr_body
 from eawf.state.ids import is_phase_id
 from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
@@ -50,6 +54,17 @@ def _load_state(state_path: Path) -> State:
 def pr_render(
     ctx: typer.Context,
     phase_id: Annotated[str, typer.Argument(help="Phase id (e.g. P11).")],
+    artifact: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--artifact",
+            help="Artifact markdown path that must validate before rendering.",
+        ),
+    ] = None,
+    profile_blocks: Annotated[
+        bool,
+        typer.Option("--profile-blocks/--no-profile-blocks", help="Include pr.phase blocks."),
+    ] = True,
 ) -> None:
     """Render the PR body for a phase as Markdown (or JSON envelope)."""
     flags: GlobalFlags = ctx.obj
@@ -58,10 +73,27 @@ def pr_render(
             raise cli_errors.InvalidInput(f"invalid phase id: {phase_id!r} (expected P<NN>)")
         state_path, _reason = resolve_with_reason(flags.workspace)
         state = _load_state(state_path)
+        for path in artifact or []:
+            try:
+                report = validate_markdown_artifact(path.read_text(encoding="utf-8"))
+            except OSError as exc:
+                raise cli_errors.InvalidInput(f"cannot read artifact {path}: {exc}") from exc
+            if not report.ok:
+                raise cli_errors.ValidationFailed(
+                    f"artifact validation failed for {path}: {'; '.join(report.errors)}"
+                )
+        composed = None
+        if profile_blocks:
+            repo = Path.cwd()
+            merged, _sources = merge_config(workspace=flags.workspace, repo=repo)
+            enabled = [str(p) for p in (merged.get("profiles", {}).get("enabled") or [])]
+            composed = compose([load_profile(pid) for pid in enabled])
         try:
-            body = build_pr_body(state, phase_id)
+            body = build_pr_body(state, phase_id, composed_profile=composed)
         except PrBodyNotFound as exc:
             raise cli_errors.NotFound(str(exc)) from exc
+        except PrBodyValidationError as exc:
+            raise cli_errors.ValidationFailed(str(exc)) from exc
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

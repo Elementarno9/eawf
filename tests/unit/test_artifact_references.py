@@ -92,6 +92,24 @@ def test_scrub_scan_and_rewrite_local_tokens() -> None:
     assert "<local-url>" in rewrite_text(text)
 
 
+def test_scrub_scan_blocks_hostnames_and_non_allowlisted_email() -> None:
+    host = ".".join(["devbox", "local"])
+    email = "person" + "@" + "example" + ".com"
+    private_ip = ".".join(["192", "168", "1", "20"])
+    text = f"Host {host} sent mail to {email} from {private_ip}."
+    findings = scan_text(text)
+    assert {finding.kind for finding in findings} == {
+        "email",
+        "local_hostname",
+        "private_ip",
+    }
+
+
+def test_scrub_scan_allows_canonical_coauthor_noreply() -> None:
+    text = "Co-Authored-By: Codex <noreply@openai.com>"
+    assert scan_text(text) == []
+
+
 def test_validate_markdown_artifact_accepts_sentinel_before_h1() -> None:
     body = "\n".join(
         [

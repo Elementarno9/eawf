@@ -127,6 +127,17 @@ def test_ship_string_truthy_flag_accepted(state_dir: Path) -> None:
     assert body.push is not None
 
 
+def test_ship_blocks_invalid_artifact_path(state_dir: Path, tmp_path: Path) -> None:
+    artifact = tmp_path / "bad.md"
+    artifact.write_text("# Bad\n\nNo chassis.\n", encoding="utf-8")
+    skill = ShipSkill()
+    ctx = _ctx()
+    ctx.args = {"artifact_paths": [str(artifact)]}
+    env = run_skill(skill, ctx)
+    assert env.header.status == "failed"
+    assert env.footer.repair_commands == ["fix artifact validation errors and rerun /ship"]
+
+
 def test_ship_emits_one_event_per_step(state_dir: Path) -> None:
     skill = ShipSkill()
     env = run_skill(skill, _ctx())
