@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.2 hash=1fac81ac6091b70a -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.3 hash=43666054de901e66 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -34,6 +34,8 @@ non-trivial body has an expansion block immediately following.
     ``naming-conventions``.
 18. **Artifact chassis and citations.** See ``artifact-chassis``.
 19. **Typed agent reports.** See ``agent-report-contract``.
+20. **Planned-scope revisability.** See ``planned-scope-revisability``.
+21. **Roadmap procedure.** See ``roadmap-procedure``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -131,7 +133,7 @@ Specs describe intent; state reflects reality. ``uv run eawf state ...``
 is the only writer of ``state.json``.
 
 <!-- END EAWF:managed id=state-vs-specs -->
-<!-- BEGIN EAWF:managed id=verify-before-claim version=1.0 hash=654293f625317c78 -->
+<!-- BEGIN EAWF:managed id=verify-before-claim version=1.1 hash=da4d1a7a1791bb85 -->
 ### Verify before claiming
 
 Quantitative or behavioural claims about command I/O, schema fields,
@@ -148,8 +150,13 @@ Design-intent docs (command matrix, schema inventory, ADRs) are the
 drift, quote the implementation. Treat doc/memory citations as a
 hypothesis to verify, not as ground truth.
 
+Wave commit SHA (P19-W04): ``Wave.commit`` no longer exists on the
+state model. Quote the SHA via
+``eawf wave show --commit <wave-id>`` (which walks ``git log
+--grep '[P##-W##]'``) instead of reading the dropped field.
+
 <!-- END EAWF:managed id=verify-before-claim -->
-<!-- BEGIN EAWF:managed id=worktree-discipline version=1.0 hash=ce39ac42bf65075d -->
+<!-- BEGIN EAWF:managed id=worktree-discipline version=1.1 hash=36802bc751ac9da7 -->
 ### Worktree discipline
 
 Worktree subagents MUST branch from the current feature branch HEAD,
@@ -159,6 +166,14 @@ feature branch — never ``git merge``.
 Cherry-pick procedure: ``git -C <main-worktree> cherry-pick
 <worktree-sha>`` per commit, in order. Resolve conflicts in the
 parent worktree. Worktree teardown only after cherry-pick lands.
+
+Claim order (P19-W02): ``eawf wave claim`` enforces deps + W##
+monotonic ordering. Each claim rejects when (a) any wave in
+``.deps`` is not CLOSED, or (b) a lower-numbered sibling wave
+under the same iter is still PENDING with its own deps already
+satisfied. Parallel-worktree dispatch where multiple siblings of
+the same dep frontier are claimed at once MUST pass
+``--out-of-order`` on each claim to opt out of the gate.
 
 <!-- END EAWF:managed id=worktree-discipline -->
 <!-- BEGIN EAWF:managed id=branch-currency version=1.0 hash=3af31aa0e925c2fb -->
@@ -176,13 +191,21 @@ the reason in the plan or handoff before dispatching worktrees or
 starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.0 hash=8d880a9c124b84bf -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.1 hash=84f106dbb091ccc3 -->
 ### Commit prefix
 
-``[P<NN>[-W<NN>]] <type>: <summary>`` — types: ``feat``, ``fix``,
-``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``,
-``ci``, ``revert``. Use ``[CORE]`` for cross-phase work. ``-W<NN>``
-is mandatory when the commit is a planned wave deliverable.
+``[P<NN>(-W<NN>|-CORE)] <type>: <summary>`` — types: ``feat``,
+``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``,
+``perf``, ``ci``, ``revert``, ``state``. Every commit MUST carry
+either ``-W<NN>`` (planned wave deliverable) or ``-CORE`` (phase-
+scope state bookkeeping); bare ``[P<NN>]`` is rejected by the
+``commit-prefix`` lint (P19-W05).
+
+The ``state`` type is reserved for ``[P<NN>-CORE] state: ...``
+bookkeeping commits that touch only ``.ea/state.json``,
+``.ea/store/event.jsonl``, ``.ea/store/audit.jsonl``, and
+``.secrets.baseline``. Touching anything else under ``-CORE``
+is rejected by the lint.
 
 Body: 3-6 bullets on what changed and why. Trailer: a recognized
 Claude or Codex ``Co-Authored-By`` trailer.
@@ -353,3 +376,53 @@ the role-specific ``StoreKind`` such as ``executor_report`` or
 ``reviewer_report``.
 
 <!-- END EAWF:managed id=agent-report-contract -->
+<!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.0 hash=228755425c2e6cc1 -->
+### Planned-scope revisability
+
+Phases and iters are first-class state records that move through
+``PLANNED -> ACTIVE -> CLOSED`` (waves move through ``PENDING ->
+CLAIMED -> IN_PROGRESS -> CLOSED``). Mutability is status-tiered:
+
+- **PLANNED** scope is freely mutable. ``eawf roadmap revise
+  <phase-id> --add-wave / --remove-wave / --set-deps / --retitle``
+  edits the phase before it activates.
+- **ACTIVE** scope is append-only at the phase level — only
+  PENDING waves under it may still be mutated. The W01
+  ``edit_wave_plan`` / ``remove_wave_plan`` / ``set_wave_deps``
+  transitions enforce the PENDING-only invariant on their own.
+- **CLOSED** scope is immutable except via ``eawf phase reopen``
+  (which flips CLOSED back to ACTIVE; audit linkage is preserved
+  for traceability).
+
+Mid-flight reshapes go through ``eawf roadmap revise <active-phase>``
+too; the same PENDING-only invariant applies. Drop-and-redo
+(``eawf roadmap drop`` + ``eawf roadmap propose``) is the escape
+hatch when more than half the waves need to change.
+
+<!-- END EAWF:managed id=planned-scope-revisability -->
+<!-- BEGIN EAWF:managed id=roadmap-procedure version=1.0 hash=d1ab6d337cfe314f -->
+### Roadmap procedure
+
+The canonical flow for altering the roadmap (one phase at a time):
+
+::
+
+  1. /research <topic> [--final]
+  2. /research <topic2> --final            # optional more briefs
+  3. /roadmap propose --phase P<NN> [--from-briefs RES-...]
+                                            # status=needs_user envelope
+                                            # Claude: plan-mode + AUQ
+                                            # Codex: text-prompt + y/N
+  4. /roadmap revise P<NN> --add-wave ...   # add waves until DAG fits
+  5. /roadmap revise P<NN> --set-deps ...   # iterate on deps
+  6. /roadmap apply P<NN>                   # confirm PLANNED scope
+  7. /prep P<NN>                            # activate_phase
+                                            # runs V11 hard gate
+                                            # dispatches waves per DAG
+
+Bulk propose (``--bulk --from-briefs RES-12,RES-13,...``) is
+deferred to a follow-up phase; P19 ships phase-at-a-time only.
+``/roadmap reorder`` is also deferred — operator drops + re-
+proposes to swap order.
+
+<!-- END EAWF:managed id=roadmap-procedure -->
