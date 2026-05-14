@@ -343,6 +343,7 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
             verdict=AgentReportVerdict.PASS,
             confidence=Confidence.HIGH,
             summary="executor summary",
+            evidence_refs=[AgentReportEvidenceRef(kind="repo", ref="src/eawf/render/pr_body.py")],
             wave_id="P00-I01-W01",
             files_changed=["src/eawf/render/pr_body.py"],
             tests_run=["uv run pytest tests/unit/test_render_pr_body.py -q"],
@@ -361,6 +362,9 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
             verdict=AgentReportVerdict.PASS,
             confidence=Confidence.HIGH,
             summary="reviewer summary",
+            evidence_refs=[
+                AgentReportEvidenceRef(kind="repo", ref="tests/unit/test_render_pr_body.py")
+            ],
             target_id="HEAD",
             findings=[],
             coverage_refs=[AgentReportEvidenceRef(kind="repo", ref="src/eawf/render/pr_body.py:1")],
@@ -376,6 +380,8 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
     assert {item.kind for item in inputs} == {"executor_report", "reviewer_report"}
     assert "## Executor Report" in body
     assert "## Reviewer Report" in body
+    assert "| [1] | repo | `src/eawf/render/pr_body.py` |  |" in body
+    assert "| [2] | repo | `tests/unit/test_render_pr_body.py` |  |" in body
 
 
 def test_collect_pr_report_inputs_docs_research_reads_researcher_report(tmp_path: Path) -> None:
