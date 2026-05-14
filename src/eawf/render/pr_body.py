@@ -375,6 +375,19 @@ def _citation_rows_for_inputs(inputs: list[PrBodyInput] | None) -> list[Citation
     return rows or None
 
 
+def _with_dense_input_citations(inputs: list[PrBodyInput] | None) -> list[PrBodyInput]:
+    """Return input sections with citation numbers dense across the whole PR body."""
+    dense_inputs: list[PrBodyInput] = []
+    next_number = 1
+    for input_model in inputs or []:
+        citations: list[Citation] = []
+        for citation in input_model.citations:
+            citations.append(citation.model_copy(update={"n": next_number}))
+            next_number += 1
+        dense_inputs.append(input_model.model_copy(update={"citations": citations}))
+    return dense_inputs
+
+
 def build_pr_body(
     state: State,
     phase_id: str,
@@ -403,6 +416,7 @@ def build_pr_body(
     decisions = _decisions_for_phase(state, phase_id)
     iters = _iters_for_phase(state, phase_id)
     waves = _waves_for_phase(state, phase_id)
+    rendered_inputs = _with_dense_input_citations(inputs)
 
     audit_line = ""
     if phase.audit_id:
@@ -435,7 +449,7 @@ def build_pr_body(
             lines.append(f"| `{wave_id}` | {title_cell} | `{short}` | {outcome_cell} |")
     else:
         lines.append("_(no waves recorded for this phase)_")
-    for input_model in inputs or []:
+    for input_model in rendered_inputs:
         lines.extend(["", _INPUT_RENDERERS[input_model.kind](input_model)])
 
     context = {
@@ -462,7 +476,7 @@ def build_pr_body(
     report = validate_text_surface(
         body,
         surface="pr",
-        references=_citation_rows_for_inputs(inputs),
+        references=_citation_rows_for_inputs(rendered_inputs),
     )
     if not report.ok:
         raise PrBodyValidationError("; ".join(report.errors))
