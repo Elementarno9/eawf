@@ -13,16 +13,24 @@ import pytest
 
 from eawf.lifecycle.transitions import (
     LifecycleError,
+    activate_iter,
+    activate_phase,
     add_subproject,
+    archive_phase,
     claim_wave,
     close_iter,
     close_phase,
     close_wave,
+    edit_wave_plan,
     fail_wave,
     open_iter,
     open_phase,
+    plan_iter,
+    plan_phase,
     plan_wave,
+    remove_wave_plan,
     reopen_phase,
+    set_wave_deps,
     switch_subproject,
 )
 from eawf.state.enums import (
@@ -437,3 +445,263 @@ def test_fail_wave_happy() -> None:
     w = fail_wave(state, wave_id="P01-I01-W01", reason="tests broke")
     assert w.status == WaveStatus.FAILED
     assert w.outcome == "tests broke"
+
+
+# ---- Planned-scope transitions (W01) ----------------------------------------
+
+
+def test_plan_phase_creates_planned_phase() -> None:
+    state = _empty_state()
+    phase = plan_phase(
+        state,
+        phase_id="P01",
+        title="planning",
+        source_brief_ids=["RES-2026-05-14-001"],
+    )
+    assert phase.status == PhaseStatus.PLANNED
+    assert phase.source_brief_ids == ["RES-2026-05-14-001"]
+    assert phase.depends_on == []
+    assert state.current.phase_id is None
+
+
+def test_plan_phase_duplicate_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="p")
+    with pytest.raises(LifecycleError, match="already exists"):
+        plan_phase(state, phase_id="P01", title="dup")
+
+
+def test_plan_phase_self_dep_raises() -> None:
+    state = _empty_state()
+    with pytest.raises(LifecycleError, match="cannot depend on itself"):
+        plan_phase(state, phase_id="P01", title="x", depends_on=["P01"])
+
+
+def test_plan_phase_unknown_dep_raises() -> None:
+    state = _empty_state()
+    with pytest.raises(LifecycleError, match="unknown phase dep"):
+        plan_phase(state, phase_id="P02", title="x", depends_on=["P01"])
+
+
+def test_plan_phase_cycle_rejected() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="a")
+    plan_phase(state, phase_id="P02", title="b", depends_on=["P01"])
+    state.phases["P01"].depends_on.append("P02")
+    with pytest.raises(LifecycleError, match="cycle"):
+        plan_phase(state, phase_id="P03", title="c", depends_on=["P01"])
+
+
+def test_activate_phase_requires_planned_status() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    with pytest.raises(LifecycleError, match="only planned phases"):
+        activate_phase(state, phase_id="P01")
+
+
+def test_activate_phase_requires_one_wave() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="it")
+    with pytest.raises(LifecycleError, match="no planned waves"):
+        activate_phase(state, phase_id="P01")
+
+
+def test_activate_phase_blocks_on_unclosed_dep() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="a")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    plan_phase(state, phase_id="P02", title="b", depends_on=["P01"])
+    plan_iter(state, iter_id="P02-I01", phase_id="P02", title="i")
+    plan_wave(state, wave_id="P02-I01-W01", iter_id="P02-I01", title="w", file_scopes=["x"])
+    with pytest.raises(LifecycleError, match="blocked on un-closed dep phases"):
+        activate_phase(state, phase_id="P02")
+
+
+def test_activate_phase_happy_sets_current() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    phase = activate_phase(state, phase_id="P01")
+    assert phase.status == PhaseStatus.ACTIVE
+    assert state.current.phase_id == "P01"
+
+
+def test_archive_phase_happy() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    phase = archive_phase(state, phase_id="P01")
+    assert phase.status == PhaseStatus.ARCHIVED
+    assert phase.closed_at is not None
+
+
+def test_archive_phase_active_rejected() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    with pytest.raises(LifecycleError, match="only planned phases"):
+        archive_phase(state, phase_id="P01")
+
+
+def test_plan_iter_creates_planned_status() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    it = plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    assert it.status == IterStatus.PLANNED
+    assert state.current.iter_id is None
+
+
+def test_plan_iter_under_active_phase_ok() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    it = plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    assert it.status == IterStatus.PLANNED
+
+
+def test_plan_iter_under_closed_phase_rejected() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", commit="abc", outcome="ok")
+    close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    close_phase(state, phase_id="P01", audit_id="AUD-2")
+    with pytest.raises(LifecycleError, match="not open"):
+        plan_iter(state, iter_id="P01-I02", phase_id="P01", title="i2")
+
+
+def test_activate_iter_sets_current() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    it = activate_iter(state, iter_id="P01-I01")
+    assert it.status == IterStatus.ACTIVE
+    assert state.current.iter_id == "P01-I01"
+
+
+def test_activate_iter_non_planned_rejected() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    with pytest.raises(LifecycleError, match="only planned iters"):
+        activate_iter(state, iter_id="P01-I01")
+
+
+def test_edit_wave_plan_mutates_pending() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="orig",
+        file_scopes=["x"],
+    )
+    w = edit_wave_plan(
+        state,
+        wave_id="P01-I01-W01",
+        title="updated",
+        file_scopes=["src/y/"],
+        success_criteria=["criterion"],
+    )
+    assert w.title == "updated"
+    assert w.file_scopes == ["src/y/"]
+    assert w.success_criteria == ["criterion"]
+
+
+def test_edit_wave_plan_non_pending_rejected() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["x"],
+    )
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    with pytest.raises(LifecycleError, match="not pending"):
+        edit_wave_plan(state, wave_id="P01-I01-W01", title="late")
+
+
+def test_remove_wave_plan_deletes_pending() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    remove_wave_plan(state, wave_id="P01-I01-W01")
+    assert "P01-I01-W01" not in state.waves
+    assert state.iters["P01-I01"].wave_ids == []
+
+
+def test_remove_wave_plan_blocked_by_blocks_list_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="w2",
+        file_scopes=["x"],
+        deps=["P01-I01-W01"],
+    )
+    with pytest.raises(LifecycleError, match="blocks other waves"):
+        remove_wave_plan(state, wave_id="P01-I01-W01")
+
+
+def test_set_wave_deps_updates_blocks_index() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W03", iter_id="P01-I01", title="w3", file_scopes=["x"])
+    set_wave_deps(state, wave_id="P01-I01-W03", deps=["P01-I01-W01", "P01-I01-W02"])
+    assert state.waves["P01-I01-W03"].deps == ["P01-I01-W01", "P01-I01-W02"]
+    assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W03"]
+    assert state.waves["P01-I01-W02"].blocks == ["P01-I01-W03"]
+    set_wave_deps(state, wave_id="P01-I01-W03", deps=["P01-I01-W01"])
+    assert state.waves["P01-I01-W02"].blocks == []
+
+
+def test_set_wave_deps_cycle_rolled_back() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="w2",
+        file_scopes=["x"],
+        deps=["P01-I01-W01"],
+    )
+    with pytest.raises(LifecycleError, match="cycle"):
+        set_wave_deps(state, wave_id="P01-I01-W01", deps=["P01-I01-W02"])
+    assert state.waves["P01-I01-W01"].deps == []
+
+
+def test_set_wave_deps_non_pending_rejected() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    with pytest.raises(LifecycleError, match="not pending"):
+        set_wave_deps(state, wave_id="P01-I01-W01", deps=["P01-I01-W02"])

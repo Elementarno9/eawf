@@ -1407,6 +1407,14 @@
           "default": null,
           "title": "Closed At"
         },
+        "depends_on": {
+          "items": {
+            "pattern": "^P\\d{2}$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
         "id": {
           "pattern": "^P\\d{2}$",
           "title": "Id",
@@ -1435,6 +1443,13 @@
         "scope_id": {
           "title": "Scope Id",
           "type": "string"
+        },
+        "source_brief_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Brief Ids",
+          "type": "array"
         },
         "status": {
           "$ref": "#/$defs/PhaseStatus"

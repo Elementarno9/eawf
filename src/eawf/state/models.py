@@ -188,6 +188,8 @@ class Phase(_StrictModel):
     status: PhaseStatus
     iter_ids: list[IterIdStr] = Field(default_factory=list)
     outcome_ids: list[str] = Field(default_factory=list)
+    depends_on: list[PhaseIdStr] = Field(default_factory=list)
+    source_brief_ids: list[str] = Field(default_factory=list)
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
     audit_id: str | None = None
