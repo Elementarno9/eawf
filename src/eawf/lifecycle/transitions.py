@@ -165,6 +165,146 @@ def close_phase(
     return phase
 
 
+def plan_phase(
+    state: State,
+    *,
+    phase_id: str,
+    title: str,
+    scope_id: str | None = None,
+    depends_on: list[str] | None = None,
+    source_brief_ids: list[str] | None = None,
+) -> Phase:
+    """Insert a new phase into ``state.phases`` with status ``planned``.
+
+    Phases created via :func:`plan_phase` sit on the PLANNED queue until
+    :func:`activate_phase` flips them to ACTIVE. ``depends_on`` declares
+    phase-level prerequisites; cycles are rejected up-front.
+
+    Raises:
+        LifecycleError: if *phase_id* already exists, any declared
+            ``depends_on`` references a missing phase, or the resulting
+            phase DAG would contain a cycle.
+    """
+    if phase_id in state.phases:
+        raise LifecycleError(f"phase {phase_id!r} already exists")
+    deps_list = list(depends_on or [])
+    if phase_id in deps_list:
+        raise LifecycleError(f"phase {phase_id!r} cannot depend on itself")
+    for dep in deps_list:
+        if dep not in state.phases:
+            raise LifecycleError(f"unknown phase dep: {dep!r}")
+    if _would_create_phase_cycle(state, new_id=phase_id, new_deps=deps_list):
+        raise LifecycleError(
+            f"adding phase {phase_id!r} with depends_on={deps_list} would create a cycle"
+        )
+    project_code = state.project.code if state.project is not None else None
+    effective_scope = scope_id or project_code or "unknown"
+    phase = Phase(
+        id=phase_id,
+        scope_id=effective_scope,
+        subproject_id=state.current.subproject_id,
+        title=title,
+        status=PhaseStatus.PLANNED,
+        iter_ids=[],
+        outcome_ids=[],
+        depends_on=deps_list,
+        source_brief_ids=list(source_brief_ids or []),
+        opened_at=datetime.now(UTC),
+        closed_at=None,
+        audit_id=None,
+    )
+    state.phases[phase_id] = phase
+    logger.info(
+        f"plan_phase id={phase_id} title={title!r} depends_on={deps_list} "
+        f"source_briefs={list(source_brief_ids or [])}"
+    )
+    return phase
+
+
+def activate_phase(state: State, *, phase_id: str) -> Phase:
+    """Flip a planned phase to active. Sets ``current.phase_id``.
+
+    Hard gate (V11 in P19 brief): the phase must already have at least
+    one wave planned under it. Branch currency and clean-working-tree
+    checks live in the CLI handler since they need git access.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown, not in PLANNED state,
+            has no waves planned, or any phase in ``depends_on`` is not
+            yet CLOSED.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.PLANNED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; "
+            "only planned phases can activate"
+        )
+    unmet = [pid for pid in phase.depends_on if state.phases[pid].status != PhaseStatus.CLOSED]
+    if unmet:
+        raise LifecycleError(f"phase {phase_id!r} blocked on un-closed dep phases: {sorted(unmet)}")
+    iter_ids = phase.iter_ids
+    wave_count = sum(1 for w in state.waves.values() if w.iter_id in set(iter_ids))
+    if wave_count == 0:
+        raise LifecycleError(
+            f"phase {phase_id!r} has no planned waves; activate_phase requires at least one wave"
+        )
+    phase.status = PhaseStatus.ACTIVE
+    state.current.phase_id = phase_id
+    state.current.iter_id = None
+    state.current.active_wave_ids = []
+    logger.info(f"activate_phase id={phase_id} waves={wave_count}")
+    return phase
+
+
+def archive_phase(state: State, *, phase_id: str) -> Phase:
+    """Move a planned phase to archived. Used by ``/roadmap --drop``.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown or not in PLANNED state.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.PLANNED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; "
+            "only planned phases can be archived"
+        )
+    phase.status = PhaseStatus.ARCHIVED
+    phase.closed_at = datetime.now(UTC)
+    logger.info(f"archive_phase id={phase_id}")
+    return phase
+
+
+def _would_create_phase_cycle(
+    state: State,
+    *,
+    new_id: str,
+    new_deps: list[str],
+) -> bool:
+    """Return True iff inserting *new_id* with phase-level *new_deps* yields a cycle."""
+    deps_by_node: dict[str, set[str]] = {pid: set(p.depends_on) for pid, p in state.phases.items()}
+    deps_by_node[new_id] = set(new_deps)
+    in_degree: dict[str, int] = {node: len(parents) for node, parents in deps_by_node.items()}
+    children: dict[str, list[str]] = {node: [] for node in deps_by_node}
+    for node, parents in deps_by_node.items():
+        for parent in parents:
+            if parent in children:
+                children[parent].append(node)
+    ready = [node for node, count in in_degree.items() if count == 0]
+    visited = 0
+    while ready:
+        node = ready.pop()
+        visited += 1
+        for child in children[node]:
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                ready.append(child)
+    return visited != len(deps_by_node)
+
+
 def reopen_phase(state: State, *, phase_id: str) -> Phase:
     """Reopen a closed phase. Flips status closed→active, clears closed_at.
 
@@ -259,6 +399,73 @@ def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
         state.current.iter_id = None
         state.current.active_wave_ids = []
     logger.info(f"close_iter id={iter_id} audit={audit_id}")
+    return it
+
+
+def plan_iter(
+    state: State,
+    *,
+    iter_id: str,
+    phase_id: str,
+    title: str,
+) -> Iter:
+    """Insert a new iter under *phase_id* with status ``planned``.
+
+    Companion of :func:`plan_phase`. The iter sits in PLANNED until
+    :func:`activate_iter` (or :func:`activate_phase` when the parent
+    activates and the iter is the sole open child).
+
+    Raises:
+        LifecycleError: when the phase is missing, the phase is not
+            PLANNED or ACTIVE, or *iter_id* already exists.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status not in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}:
+        raise LifecycleError(f"phase {phase_id!r} is not open (status={phase.status.value!r})")
+    if iter_id in state.iters:
+        raise LifecycleError(f"iter {iter_id!r} already exists")
+    it = Iter(
+        id=iter_id,
+        phase_id=phase_id,
+        title=title,
+        status=IterStatus.PLANNED,
+        wave_ids=[],
+        estimate_id=None,
+        audit_id=None,
+        opened_at=datetime.now(UTC),
+        closed_at=None,
+    )
+    state.iters[iter_id] = it
+    if iter_id not in phase.iter_ids:
+        phase.iter_ids.append(iter_id)
+    logger.info(f"plan_iter id={iter_id} phase={phase_id} title={title!r}")
+    return it
+
+
+def activate_iter(state: State, *, iter_id: str) -> Iter:
+    """Flip a planned iter to active.
+
+    Updates ``current.iter_id``. The parent phase must already be ACTIVE
+    (or PLANNED but in the middle of a coordinated activate sequence —
+    callers responsible for ordering).
+
+    Raises:
+        LifecycleError: when *iter_id* is unknown or not in PLANNED state.
+    """
+    it = state.iters.get(iter_id)
+    if it is None:
+        raise LifecycleError(f"unknown iter {iter_id!r}")
+    if it.status != IterStatus.PLANNED:
+        raise LifecycleError(
+            f"iter {iter_id!r} has status {it.status.value!r}; only planned iters can activate"
+        )
+    it.status = IterStatus.ACTIVE
+    state.current.phase_id = it.phase_id
+    state.current.iter_id = iter_id
+    state.current.active_wave_ids = []
+    logger.info(f"activate_iter id={iter_id} phase={it.phase_id}")
     return it
 
 
@@ -374,6 +581,118 @@ def _would_create_cycle(
             if in_degree[child] == 0:
                 ready.append(child)
     return visited != len(deps_by_node)
+
+
+def edit_wave_plan(
+    state: State,
+    *,
+    wave_id: str,
+    title: str | None = None,
+    file_scopes: list[str] | None = None,
+    success_criteria: list[str] | None = None,
+    agent_role: AgentSessionRole | None = None,
+    effort_bucket: EffortBucket | None = None,
+) -> Wave:
+    """Mutate a PENDING wave's plan-time fields. Rejects non-PENDING waves.
+
+    Editable surface: title, file_scopes, success_criteria, agent_role,
+    effort_bucket. Dep mutations go through :func:`set_wave_deps` (it
+    maintains the reverse ``blocks`` index and re-runs the cycle check).
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown or not PENDING.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise LifecycleError(f"unknown wave {wave_id!r}")
+    if wave.status != WaveStatus.PENDING:
+        raise LifecycleError(
+            f"wave {wave_id!r} is not pending (status={wave.status.value!r}); cannot edit plan"
+        )
+    if title is not None:
+        wave.title = title
+    if file_scopes is not None:
+        wave.file_scopes = list(file_scopes)
+    if success_criteria is not None:
+        wave.success_criteria = list(success_criteria)
+    if agent_role is not None:
+        wave.agent_role = agent_role
+    if effort_bucket is not None:
+        wave.effort_bucket = effort_bucket
+    logger.info(
+        f"edit_wave_plan id={wave_id} title={title!r} file_scopes={file_scopes} "
+        f"agent_role={agent_role} effort_bucket={effort_bucket}"
+    )
+    return wave
+
+
+def remove_wave_plan(state: State, *, wave_id: str) -> None:
+    """Delete a PENDING wave from state. Also strips reverse-index entries.
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown or not PENDING.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise LifecycleError(f"unknown wave {wave_id!r}")
+    if wave.status != WaveStatus.PENDING:
+        raise LifecycleError(
+            f"wave {wave_id!r} is not pending (status={wave.status.value!r}); cannot remove"
+        )
+    if wave.blocks:
+        raise LifecycleError(
+            f"wave {wave_id!r} blocks other waves {sorted(wave.blocks)}; "
+            "remove those first or break the dep"
+        )
+    for dep_id in wave.deps:
+        dep_wave = state.waves.get(dep_id)
+        if dep_wave is not None and wave_id in dep_wave.blocks:
+            dep_wave.blocks.remove(wave_id)
+    parent_iter = state.iters.get(wave.iter_id)
+    if parent_iter is not None and wave_id in parent_iter.wave_ids:
+        parent_iter.wave_ids.remove(wave_id)
+    del state.waves[wave_id]
+    logger.info(f"remove_wave_plan id={wave_id}")
+
+
+def set_wave_deps(state: State, *, wave_id: str, deps: list[str]) -> Wave:
+    """Replace a PENDING wave's deps. Maintains the reverse ``blocks`` index.
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown, not PENDING, any dep
+            id is unknown, self-dep, or the new graph would cycle.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise LifecycleError(f"unknown wave {wave_id!r}")
+    if wave.status != WaveStatus.PENDING:
+        raise LifecycleError(
+            f"wave {wave_id!r} is not pending (status={wave.status.value!r}); cannot set deps"
+        )
+    new_deps = list(deps)
+    if wave_id in new_deps:
+        raise LifecycleError(f"wave {wave_id!r} cannot depend on itself")
+    for dep in new_deps:
+        if dep not in state.waves:
+            raise LifecycleError(f"unknown dep wave {dep!r}")
+    old_deps = list(wave.deps)
+    wave.deps = new_deps
+    try:
+        if _would_create_cycle(state, new_id=wave_id, new_deps=new_deps):
+            raise LifecycleError(f"set_wave_deps on {wave_id!r} with deps={new_deps} would cycle")
+    except LifecycleError:
+        wave.deps = old_deps
+        raise
+    for dep in old_deps:
+        dep_wave = state.waves.get(dep)
+        if dep_wave is not None and wave_id in dep_wave.blocks:
+            dep_wave.blocks.remove(wave_id)
+    for dep in new_deps:
+        dep_wave = state.waves[dep]
+        if wave_id not in dep_wave.blocks:
+            dep_wave.blocks.append(wave_id)
+    logger.info(f"set_wave_deps id={wave_id} deps={new_deps}")
+    return wave
 
 
 def claim_wave(state: State, *, wave_id: str, session_id: str) -> Wave:
