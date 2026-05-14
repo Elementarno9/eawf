@@ -60,7 +60,7 @@ def _common_lines(report: AgentReportPayload, body: AgentReportCommonBody) -> li
         "",
         f"- report: `{header.report_id}`",
         f"- role: `{header.role.value}`",
-        f"- scope: `{header.scope_id}`",
+        f"- scope_id: `{header.scope_id}`",
         f"- base: `{header.base_id}`",
         f"- attempt: `{header.attempt}`",
         f"- verdict: `{body.verdict.value}`",
@@ -130,7 +130,7 @@ def _role_details(body: AgentReportCommonBody) -> list[str]:
         lines.extend(["", "Coverage:", *_evidence_rows(body.coverage_refs)])
         return lines
     if isinstance(body, PolisherReportBody):
-        lines = ["## Polish", "", f"- scope: `{body.scope}`", "", "Changes:"]
+        lines = ["## Polish", "", f"- scope_id: `{body.scope_id}`", "", "Changes:"]
         lines.extend(
             f"- {change.category}: {change.summary} files={change.files or []}"
             for change in body.changes

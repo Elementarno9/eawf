@@ -2,7 +2,7 @@
 
 - report: `AR-operator-P18-01`
 - role: `operator`
-- scope: `P18-I01-W07`
+- scope_id: `P18-I01-W07`
 - base: `P18-I01-W07`
 - attempt: `1`
 - verdict: `pass`
