@@ -85,6 +85,59 @@ class ArtifactValidationReport:
     errors: list[str] = field(default_factory=list)
 
 
+TextSurfaceKind = str
+
+
+@dataclass(frozen=True)
+class TextSurfaceValidationReport:
+    """PR/coauthor/release text validation result."""
+
+    ok: bool
+    errors: list[str] = field(default_factory=list)
+
+
+def _citation_errors_for_text(
+    text: str,
+    references: list[Citation] | None,
+) -> list[str]:
+    errors: list[str] = []
+    citation_rows = references
+    if citation_rows is None:
+        sections = _sections(text)
+        try:
+            citation_rows = _reference_rows(sections.get("## References", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+            citation_rows = []
+    prose = _prose_without_references(text)
+    if citation_rows:
+        try:
+            validate_dense_citation_refs(prose, citation_rows)
+        except ValueError as exc:
+            errors.append(str(exc))
+    else:
+        missing_rows = sorted(set(citation_numbers_in_text(prose)))
+        if missing_rows:
+            errors.append(f"citation references missing rows: {missing_rows}")
+    return errors
+
+
+def validate_text_surface(
+    text: str,
+    *,
+    surface: TextSurfaceKind,
+    references: list[Citation] | None = None,
+) -> TextSurfaceValidationReport:
+    """Validate outbound PR/coauthor/release prose for scrub + citations."""
+    errors: list[str] = []
+    findings = scan_text(text)
+    if findings:
+        kinds = sorted({finding.kind for finding in findings})
+        errors.append(f"{surface} scrub findings present: {kinds}")
+    errors.extend(_citation_errors_for_text(text, references))
+    return TextSurfaceValidationReport(ok=not errors, errors=errors)
+
+
 def validate_markdown_artifact(
     text: str,
     *,
@@ -114,21 +167,5 @@ def validate_markdown_artifact(
     findings = scan_text(text)
     if findings:
         errors.append("scrub findings present")
-    prose = _prose_without_references(body)
-    citation_rows = references
-    if citation_rows is None:
-        try:
-            citation_rows = _reference_rows(references_section)
-        except ValueError as exc:
-            errors.append(str(exc))
-            citation_rows = []
-    if citation_rows:
-        try:
-            validate_dense_citation_refs(prose, citation_rows)
-        except ValueError as exc:
-            errors.append(str(exc))
-    else:
-        missing_rows = sorted(set(citation_numbers_in_text(prose)))
-        if missing_rows:
-            errors.append(f"citation references missing rows: {missing_rows}")
+    errors.extend(_citation_errors_for_text(body, references))
     return ArtifactValidationReport(ok=not errors, errors=errors)

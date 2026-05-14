@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
-from eawf.render.pr_body import PrBodyNotFound, build_pr_body
+from eawf.profiles.models import ComposedProfile, RenderBlock
+from eawf.render.pr_body import PrBodyInput, PrBodyNotFound, build_pr_body
 from eawf.state.models import State
 
 
@@ -131,3 +133,49 @@ def test_build_pr_body_phase_with_no_waves_shows_placeholder() -> None:
     state = State.model_validate(payload)
     body = build_pr_body(state, "P00")
     assert "_(no waves recorded for this phase)_" in body
+
+
+def test_pr_body_input_rejects_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        PrBodyInput.model_validate(
+            {
+                "kind": "operator_rollup",
+                "title": "rollup",
+                "summary": "done",
+                "unexpected": True,
+            }
+        )
+
+
+def test_build_pr_body_includes_typed_inputs_and_profile_blocks() -> None:
+    payload = _base_state()
+    payload["phases"] = {"P00": _phase("P00", title="bootstrap")}
+    state = State.model_validate(payload)
+    composed = ComposedProfile(
+        name="test",
+        render_blocks=[
+            RenderBlock(id="skip", target="AGENTS.md", body_template="skip"),
+            RenderBlock(
+                id="phase-extra",
+                target="pr.phase",
+                body_template="## Extra\n\nPhase {{ phase_id }} from profile.",
+            ),
+        ],
+    )
+    body = build_pr_body(
+        state,
+        "P00",
+        inputs=[
+            PrBodyInput(
+                kind="operator_rollup",
+                title="Operator",
+                summary="Operator summary.",
+                bullets=["One"],
+            )
+        ],
+        composed_profile=composed,
+    )
+    assert "## Operator Rollup" in body
+    assert "- One" in body
+    assert "Phase P00 from profile." in body
+    assert "skip" not in body
