@@ -275,6 +275,14 @@ class StoreKind(StrEnum):
     DECISION = "decision"
     EVENT = "event"
     FLOW = "flow"
+    RESEARCHER_REPORT = "researcher_report"
+    PLANNER_REPORT = "planner_report"
+    EXECUTOR_REPORT = "executor_report"
+    AUDITOR_REPORT = "auditor_report"
+    REVIEWER_REPORT = "reviewer_report"
+    POLISHER_REPORT = "polisher_report"
+    OPERATOR_REPORT = "operator_report"
+    DOMAIN_SPECIALIST_REPORT = "domain_specialist_report"
 
 
 class ArtifactKind(StrEnum):
@@ -298,3 +306,4 @@ class ArtifactKind(StrEnum):
     CVE_REF = "cve_ref"
     RESEARCH_BRIEF = "research_brief"
     PLAN_SPEC = "plan_spec"
+    AGENT_REPORT = "agent_report"

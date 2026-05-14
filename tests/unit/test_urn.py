@@ -105,3 +105,8 @@ def test_build_repo_id_with_slash_allowed() -> None:
 def test_build_artifact_id_with_slash_allowed() -> None:
     built = urn.build("artifact", owner="QR", id="dir/sub")
     assert built == "urn:eawf:v1:artifact:QR/dir/sub"
+
+
+def test_build_store_id_with_slash_allowed() -> None:
+    built = urn.build("store", owner="QR", id="executor_report/AR-001")
+    assert built == "urn:eawf:v1:store:QR/executor_report/AR-001"

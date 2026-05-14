@@ -7,10 +7,24 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence, StoreKind
 from eawf.state.types import UtcDatetime
+from eawf.state.urn import build as build_urn
 
 _REPORT_ID_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+_ROLE_TO_STORE_KIND: dict[AgentSessionRole, StoreKind] = {
+    AgentSessionRole.RESEARCHER: StoreKind.RESEARCHER_REPORT,
+    AgentSessionRole.PLANNER: StoreKind.PLANNER_REPORT,
+    AgentSessionRole.EXECUTOR: StoreKind.EXECUTOR_REPORT,
+    AgentSessionRole.AUDITOR: StoreKind.AUDITOR_REPORT,
+    AgentSessionRole.REVIEWER: StoreKind.REVIEWER_REPORT,
+    AgentSessionRole.POLISHER: StoreKind.POLISHER_REPORT,
+    AgentSessionRole.OPERATOR: StoreKind.OPERATOR_REPORT,
+    AgentSessionRole.DOMAIN_SPECIALIST: StoreKind.DOMAIN_SPECIALIST_REPORT,
+}
+_STORE_KIND_TO_ROLE: dict[StoreKind, AgentSessionRole] = {
+    store_kind: role for role, store_kind in _ROLE_TO_STORE_KIND.items()
+}
 
 
 class _StrictModel(BaseModel):
@@ -220,6 +234,29 @@ def report_record_id(*, role: AgentSessionRole, base_id: str, attempt: int) -> s
     return f"AR-{role_token}-{base_token}-{attempt:02d}"
 
 
+def store_kind_for_role(role: AgentSessionRole) -> StoreKind:
+    """Return the role-specific store kind for *role*."""
+    return _ROLE_TO_STORE_KIND[role]
+
+
+def role_for_store_kind(store_kind: StoreKind) -> AgentSessionRole:
+    """Return the agent role associated with a role-report store kind.
+
+    Raises:
+        ValueError: When *store_kind* is not an agent-report store kind.
+    """
+    try:
+        return _STORE_KIND_TO_ROLE[store_kind]
+    except KeyError as exc:
+        raise ValueError(f"store kind is not an agent report kind: {store_kind.value!r}") from exc
+
+
+def report_store_urn(*, scope_id: str, role: AgentSessionRole, report_id: str) -> str:
+    """Return the canonical store URN for a role report."""
+    store_kind = store_kind_for_role(role)
+    return build_urn("store", owner=scope_id, id=f"{store_kind.value}/{report_id}")
+
+
 __all__ = [
     "AgentReportBody",
     "AgentReportCommonBody",
@@ -240,4 +277,7 @@ __all__ = [
     "ReviewFinding",
     "ReviewerReportBody",
     "report_record_id",
+    "report_store_urn",
+    "role_for_store_kind",
+    "store_kind_for_role",
 ]

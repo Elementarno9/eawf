@@ -8,6 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
     AuditKind,
     AuditVerdict,
     Confidence,
@@ -17,6 +19,13 @@ from eawf.state.enums import (
 from eawf.store.envelope import Envelope
 from eawf.store.kinds import PAYLOAD_MODELS
 from eawf.store.kinds.actual import ActualPayload
+from eawf.store.kinds.agent_report import (
+    AgentReportPayload,
+    ExecutorReportBody,
+    report_store_urn,
+    role_for_store_kind,
+    store_kind_for_role,
+)
 from eawf.store.kinds.audit import AuditPayload
 from eawf.store.kinds.decision import DecisionPayload
 from eawf.store.kinds.estimate import EstimatePayload
@@ -384,6 +393,84 @@ def test_event_invalid_payload_missing_timestamp() -> None:
                 "message": "x",
             }
         )
+
+
+# ---------------------------------------------------------------------------
+# AgentReportPayload
+# ---------------------------------------------------------------------------
+
+
+def test_agent_report_valid_round_trip() -> None:
+    raw = {
+        "header": {
+            "report_id": "AR-executor-P18-I01-W01-01",
+            "role": "executor",
+            "session_id": "SES-001",
+            "scope_id": "P18-I01-W01",
+            "base_id": "P18-I01-W01",
+            "attempt": 1,
+            "runtime": "codex",
+            "generated_at": "2026-05-14T00:00:00+00:00",
+            "summary": "executor report",
+        },
+        "body": {
+            "role": "executor",
+            "verdict": "pass",
+            "confidence": "high",
+            "summary": "implemented",
+            "wave_id": "P18-I01-W01",
+            "outcome": "done",
+        },
+    }
+    env = _make_envelope(StoreKind.EXECUTOR_REPORT, raw)
+    loaded = Envelope.model_validate_json(env.model_dump_json())
+    payload = PAYLOAD_MODELS[StoreKind.EXECUTOR_REPORT].model_validate(loaded.payload)
+    assert isinstance(payload, AgentReportPayload)
+    assert isinstance(payload.body, ExecutorReportBody)
+    assert payload.header.role is AgentSessionRole.EXECUTOR
+    assert payload.body.verdict is AgentReportVerdict.PASS
+
+
+def test_agent_report_invalid_role_mismatch() -> None:
+    with pytest.raises(ValidationError, match="does not match header role"):
+        AgentReportPayload.model_validate(
+            {
+                "header": {
+                    "report_id": "AR-reviewer-P18-I01-W01-01",
+                    "role": "reviewer",
+                    "session_id": "SES-001",
+                    "scope_id": "P18-I01-W01",
+                    "base_id": "P18-I01-W01",
+                    "attempt": 1,
+                    "runtime": "codex",
+                    "generated_at": "2026-05-14T00:00:00+00:00",
+                    "summary": "reviewer report",
+                },
+                "body": {
+                    "role": "executor",
+                    "verdict": "pass",
+                    "confidence": "high",
+                    "summary": "implemented",
+                    "wave_id": "P18-I01-W01",
+                    "outcome": "done",
+                },
+            }
+        )
+
+
+def test_agent_report_store_kind_helpers() -> None:
+    assert store_kind_for_role(AgentSessionRole.EXECUTOR) is StoreKind.EXECUTOR_REPORT
+    assert role_for_store_kind(StoreKind.EXECUTOR_REPORT) is AgentSessionRole.EXECUTOR
+    assert (
+        report_store_urn(
+            scope_id="P18",
+            role=AgentSessionRole.EXECUTOR,
+            report_id="AR-executor-P18-I01-W01-01",
+        )
+        == "urn:eawf:v1:store:P18/executor_report/AR-executor-P18-I01-W01-01"
+    )
+    with pytest.raises(ValueError, match="not an agent report kind"):
+        role_for_store_kind(StoreKind.EVENT)
 
 
 # ---------------------------------------------------------------------------
