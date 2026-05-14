@@ -1911,7 +1911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T18:02:25.477560Z",
+  "updated_at": "2026-05-14T18:05:23.687987Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3936,9 +3936,9 @@
       "blocks": [
         "P18-I01-W12"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-codex-p18-w11",
+      "closed_at": "2026-05-14T18:05:23.687970Z",
+      "commit": "39a873d8b2a4",
       "deps": [
         "P18-I01-W08",
         "P18-I01-W10"
@@ -3952,8 +3952,8 @@
       "id": "P18-I01-W11",
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:54.732413Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Documented typed agent report store flow, report enums, role-specific store URNs, validation rules, and promotion path.",
+      "status": "closed",
       "success_criteria": [
         "architecture doc explains store flow",
         "reference docs list new enums and URNs",
