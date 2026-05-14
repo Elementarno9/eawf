@@ -173,6 +173,13 @@ class AgentSessionRole(StrEnum):
     DOMAIN_SPECIALIST = "domain-specialist"
 
 
+class AgentReportVerdict(StrEnum):
+    PASS = "pass"
+    PASS_WITH_FOLLOWUPS = "pass-with-followups"
+    FAIL = "fail"
+    BLOCKED = "blocked"
+
+
 class AgentSessionStatus(StrEnum):
     ACTIVE = "active"
     CHECKPOINTED = "checkpointed"
