@@ -1089,7 +1089,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": "P18",
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1886,8 +1886,8 @@
       "title": "PR, coauthor, and release-surface hardening"
     },
     "P18": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A23-P18",
+      "closed_at": "2026-05-14T18:37:19.013151Z",
       "id": "P18",
       "iter_ids": [
         "P18-I01"
@@ -1895,7 +1895,7 @@
       "opened_at": "2026-05-14T17:24:06.053480Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "Typed Agent Reports"
     }
@@ -1932,7 +1932,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T18:36:30.198940Z",
+  "updated_at": "2026-05-14T18:37:19.013181Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
