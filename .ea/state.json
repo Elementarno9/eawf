@@ -1215,9 +1215,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W14"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -1818,13 +1816,13 @@
       ]
     },
     "P20-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A27-P20",
+      "closed_at": "2026-05-15T19:46:11.396060Z",
       "estimate_id": null,
       "id": "P20-I01",
       "opened_at": "2026-05-15T14:43:38.289058Z",
       "phase_id": "P20",
-      "status": "planned",
+      "status": "closed",
       "title": "TUI + metrics",
       "wave_ids": [
         "P20-I01-W01",
@@ -2252,7 +2250,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T19:24:29.429930Z",
+  "updated_at": "2026-05-15T19:46:11.396079Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5408,8 +5406,8 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T19:45:46.363260Z",
+      "commit": "8a6b454a44e307ee2f5345219929fde0152a03b4",
       "deps": [
         "P20-I01-W13"
       ],
@@ -5421,8 +5419,8 @@
       "id": "P20-I01-W14",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:20.300974Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "spike-workflow AGENTS rule 22 + /prep + /research skill prompts + dispatch renderer auto-surfacing spike briefs; 9 new renderer tests; 3164 pass",
+      "status": "closed",
       "success_criteria": [
         "spike convention codified in AGENTS",
         "/prep + /research skill prompts updated",
