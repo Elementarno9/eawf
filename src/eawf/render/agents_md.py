@@ -21,10 +21,22 @@ Per ``docs/policy/agents-claude-md.md``:
   :func:`~eawf.render.manifest.save_atomic` — keeping the renderer pure means
   callers can batch multiple targets into a single manifest write.
 
+The optional ``state``/``decisions_scope_id`` kwargs on
+:func:`render_agents_md` plumb typed :class:`~eawf.state.models.Decision`
+records into a managed ``decisions`` region (id ``DECISIONS_REGION_ID``),
+so the on-disk Decisions section is driven by state.json rather than
+hardcoded prose in a YAML profile body. The body text is produced by
+:func:`render_decisions_section` — a pure function the caller can also
+invoke directly when it wants the markdown without the file-writing side
+effect (e.g. ``eawf decisions show``-style read-only renders).
+
 Public API::
 
     RenderResult                    # dataclass: target + per-region status
-    render_agents_md(composed, target, manifest, *, generator) -> tuple[RenderResult, Manifest]
+    render_decisions_section(decisions, *, scope_id) -> str
+    render_agents_md(
+        composed, target, manifest, *, generator, state, decisions_scope_id
+    ) -> tuple[RenderResult, Manifest]
 """
 
 from __future__ import annotations
@@ -41,6 +53,7 @@ from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render import regions
 from eawf.render._atomic import atomic_write_text
 from eawf.render.manifest import Manifest, ManifestEntry
+from eawf.state.models import Decision, State
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +61,17 @@ logger = logging.getLogger(__name__)
 _TARGET_FILENAME: str = "AGENTS.md"
 _TEMPLATE_NAME: str = "AGENTS.md.j2"
 _TEMPLATES_PACKAGE: str = "eawf.templates"
+
+#: Managed-region id under which the typed-Decisions section is rendered.
+#: Stable so re-renders update in place (and so hand-edits outside the BEGIN…END
+#: span round-trip byte-stably, per the same contract as profile render_blocks).
+DECISIONS_REGION_ID: str = "decisions"
+
+#: Version stamped on the ``decisions`` managed region's BEGIN marker. Bumped
+#: only when the rendered body format itself changes — content-only churn (a
+#: new D## row, an edited rationale) keeps the same version and surfaces in the
+#: marker's ``hash=`` field instead.
+DECISIONS_REGION_VERSION: str = "1.0"
 
 
 @dataclass(frozen=True)
@@ -116,6 +140,90 @@ def _extract_targeted_blocks(composed: ComposedProfile) -> list[RenderBlock]:
     return [b for b in composed.render_blocks if b.target == _TARGET_FILENAME]
 
 
+def render_decisions_section(
+    decisions: dict[str, Decision] | None,
+    *,
+    scope_id: str | None = None,
+) -> str:
+    """Render the AGENTS.md Decisions section body from typed Decision records.
+
+    The output is the *body* of the managed ``decisions`` region — caller is
+    responsible for wrapping it with ``BEGIN/END`` markers (or letting
+    :func:`render_agents_md` do that via the ``state`` kwarg).
+
+    Format::
+
+        ## Decisions
+
+        ### D01: <summary>
+
+        <rationale>
+
+        Alternatives considered:
+
+        - alt1
+        - alt2
+
+        ### D02: <summary>
+
+        <rationale>
+
+    Rows missing alternatives drop the "Alternatives considered:" line. Rows
+    marked ``status=superseded`` or ``status=reversed`` carry a leading status
+    badge on their heading so the reader knows the record is historical:
+
+        ### D03 [superseded]: <summary>
+
+    When *decisions* is empty (or after the optional ``scope_id`` filter
+    leaves nothing) the function returns a stable ``## Decisions\\n\\nNone.``
+    body so the rendered region stays in the file but signals emptiness.
+
+    Args:
+        decisions: Typed Decision records keyed by id (the
+            :attr:`~eawf.state.models.State.decisions` mapping). ``None`` is
+            treated as an empty dict for caller convenience (the state field
+            defaults to ``{}`` but optional-typed sister fields sometimes
+            arrive as ``None``).
+        scope_id: When supplied, only Decisions whose
+            :attr:`~eawf.state.models.Decision.scope_id` equals this value
+            render. ``None`` (default) means "include all decisions" — useful
+            for project-wide AGENTS.md emission where every Decision is in
+            scope by definition.
+
+    Returns:
+        Markdown body (no managed-region markers, no trailing newline).
+        Decisions are sorted lexicographically by id so the section is
+        deterministic across renders.
+    """
+    pool: dict[str, Decision] = decisions or {}
+    selected: list[Decision] = list(pool.values())
+    if scope_id is not None:
+        selected = [d for d in selected if d.scope_id == scope_id]
+    selected.sort(key=lambda d: d.id)
+
+    if not selected:
+        logger.info(f"render_decisions_section scope_id={scope_id!r} count=0 result=empty-section")
+        return "## Decisions\n\nNone."
+
+    parts: list[str] = ["## Decisions"]
+    for decision in selected:
+        badge = ""
+        if decision.status.value != "active":
+            badge = f" [{decision.status.value}]"
+        parts.append("")
+        parts.append(f"### {decision.id}{badge}: {decision.summary}")
+        parts.append("")
+        parts.append(decision.rationale.rstrip())
+        if decision.alternatives:
+            parts.append("")
+            parts.append("Alternatives considered:")
+            parts.append("")
+            for alt in decision.alternatives:
+                parts.append(f"- {alt}")
+    logger.info(f"render_decisions_section scope_id={scope_id!r} count={len(selected)} result=ok")
+    return "\n".join(parts)
+
+
 def _has_unmanaged_content(text: str) -> bool:
     """Return ``True`` when *text* has bytes outside any managed region.
 
@@ -145,6 +253,8 @@ def render_agents_md(
     manifest: Manifest,
     *,
     generator: str = "eawf-render",
+    state: State | None = None,
+    decisions_scope_id: str | None = None,
 ) -> tuple[RenderResult, Manifest]:
     """Render the AGENTS.md-targeted regions of *composed* into *target*.
 
@@ -155,9 +265,15 @@ def render_agents_md(
     3. For each block, render its body via Jinja2 + ``replace_region`` —
        insertions append, updates rewrite the BEGIN…END span, untouched
        regions are no-ops.
-    4. Acquire portalock on *target*, atomically write the new text via
+    4. When *state* is supplied, append/replace a managed
+       ``DECISIONS_REGION_ID`` region whose body is produced by
+       :func:`render_decisions_section` against the typed
+       :attr:`~eawf.state.models.State.decisions` map. This is how the
+       AGENTS.md "Decisions" section stays in sync with state.json
+       rather than carrying hardcoded prose in a YAML profile body.
+    5. Acquire portalock on *target*, atomically write the new text via
        tempfile + ``os.replace`` (parent-dir fsync included).
-    5. Build an updated :class:`Manifest` whose entries for *target* match
+    6. Build an updated :class:`Manifest` whose entries for *target* match
        the regions just emitted; entries for *other* targets are preserved
        verbatim. Hash recorded is :func:`~eawf.render.regions.compute_hash`
        of the rendered body text — same digest the BEGIN marker carries.
@@ -172,6 +288,17 @@ def render_agents_md(
         generator: Recorded on each :class:`ManifestEntry`. Defaults to
             ``"eawf-render"``; init / sync may pass profile-scoped names like
             ``"profile:python"``.
+        state: Optional typed :class:`~eawf.state.models.State`. When
+            supplied, a managed ``DECISIONS_REGION_ID`` region is emitted
+            with body computed from ``state.decisions`` via
+            :func:`render_decisions_section`. When ``None`` (current default)
+            the Decisions region is left untouched — existing on-disk
+            decisions content round-trips byte-stably and callers retain
+            today's behaviour. This keeps the wizard / sync default migration
+            opt-in until those callers are ready to hand State in.
+        decisions_scope_id: Optional scope filter forwarded to
+            :func:`render_decisions_section`. ``None`` (default) means
+            "render every decision". Ignored when *state* is ``None``.
 
     Returns:
         ``(result, updated_manifest)`` — :class:`RenderResult` summarises the
@@ -201,10 +328,15 @@ def render_agents_md(
     unchanged: list[str] = []
     timestamp = datetime.now(UTC).isoformat()
     rendered_bodies: dict[str, str] = {}
+    # Track per-region versions for manifest emission. Profile-driven blocks
+    # use ``block.version``; the typed Decisions injection uses the module
+    # constant ``DECISIONS_REGION_VERSION``.
+    rendered_versions: dict[str, str] = {}
 
     for block in blocks:
         body = _render_block_body(env, block, composed)
         rendered_bodies[block.id] = body
+        rendered_versions[block.id] = block.version
         prev = existing_regions.get(block.id)
         if prev is None:
             added.append(block.id)
@@ -217,6 +349,27 @@ def render_agents_md(
             id=block.id,
             version=block.version,
             body=body,
+        )
+
+    if state is not None:
+        decisions_body = render_decisions_section(
+            state.decisions,
+            scope_id=decisions_scope_id,
+        )
+        rendered_bodies[DECISIONS_REGION_ID] = decisions_body
+        rendered_versions[DECISIONS_REGION_ID] = DECISIONS_REGION_VERSION
+        prev = existing_regions.get(DECISIONS_REGION_ID)
+        if prev is None:
+            added.append(DECISIONS_REGION_ID)
+        elif prev.body == decisions_body and prev.version == DECISIONS_REGION_VERSION:
+            unchanged.append(DECISIONS_REGION_ID)
+        else:
+            updated.append(DECISIONS_REGION_ID)
+        new_text = regions.replace_region(
+            new_text,
+            id=DECISIONS_REGION_ID,
+            version=DECISIONS_REGION_VERSION,
+            body=decisions_body,
         )
 
     # Ensure POSIX-compliant single trailing newline so end-of-file-fixer is a
@@ -232,13 +385,12 @@ def render_agents_md(
     new_generated: dict[str, ManifestEntry] = {
         key: entry for key, entry in manifest.generated.items() if entry.target != target_str
     }
-    for block in blocks:
-        body = rendered_bodies[block.id]
-        composite_key = f"{target_str}::{block.id}"
+    for region_id, body in rendered_bodies.items():
+        composite_key = f"{target_str}::{region_id}"
         new_generated[composite_key] = ManifestEntry(
             target=target_str,
-            region_id=block.id,
-            version=block.version,
+            region_id=region_id,
+            version=rendered_versions[region_id],
             hash=regions.compute_hash(body),
             generator=generator,
             generated_at=timestamp,
@@ -255,6 +407,7 @@ def render_agents_md(
     logger.info(
         f"render_agents_md target={target} "
         f"added={len(added)} updated={len(updated)} unchanged={len(unchanged)} "
-        f"hand_edits_preserved={hand_edits_preserved}"
+        f"hand_edits_preserved={hand_edits_preserved} "
+        f"decisions_injected={state is not None}"
     )
     return result, updated_manifest
