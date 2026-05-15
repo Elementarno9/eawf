@@ -30,13 +30,17 @@ the lifecycle transitions introduced in P19-W01:
 from __future__ import annotations
 
 import hashlib
+import io
+import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
 import orjson
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
@@ -56,15 +60,25 @@ from eawf.lifecycle.transitions import (
 from eawf.state.enums import (
     AgentSessionRole,
     EffortBucket,
+    IterStatus,
     PhaseStatus,
     StoreKind,
+    WaveStatus,
 )
 from eawf.state.ids import is_phase_id, is_wave_id
-from eawf.state.models import State
+from eawf.state.models import Iter, Phase, State
 from eawf.store.append import append_envelope
 from eawf.store.envelope import Envelope
 from eawf.store.kinds.event import EventPayload
 from eawf.store.paths import store_path
+
+logger = logging.getLogger(__name__)
+
+# Freshness window for PLANNED phases / iters and dormant iters (D17
+# iter-bump triggers note repair-cycle thresholds, but the renderer is a
+# read-only diagnostic — 14 days mirrors the memory-staleness default in
+# :mod:`eawf.memory.staleness`).
+_STALE_AGE_DAYS = 14
 
 roadmap_app = typer.Typer(
     name="roadmap",
@@ -578,9 +592,13 @@ def roadmap_show_cmd(
 ) -> None:
     """Render the PLANNED queue plus the ACTIVE phase summary.
 
-    The default text renderer prints aligned columns; ``--md`` emits
-    a markdown table; ``--json`` (top-level flag) emits the JSON
-    envelope only.
+    The default text renderer builds a :class:`rich.table.Table` with
+    nested phases / iters / waves rows; stale items (PLANNED phases or
+    iters past the freshness window, dormant iters with no recent wave
+    activity) render in a dim style so they read as muted in a terminal.
+    ``--md`` emits a markdown table; ``--json`` (top-level flag) emits
+    the JSON envelope only. ``--plain`` (top-level flag) bypasses Rich
+    markup for terminals that cannot render ANSI.
     """
     flags: GlobalFlags = ctx.obj
     if phase is not None and not is_phase_id(phase):
@@ -600,20 +618,213 @@ def roadmap_show_cmd(
             if phase is not None:
                 phases = [p for p in phases if p.id == phase]
             rows = [_phase_summary(state, p.id) for p in phases]
+            nested = [_phase_node(state, p.id, now=datetime.now(UTC)) for p in phases]
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
 
-    text = _render_show_md(rows) if md else _render_show_text(rows)
+    text = _render_show_md(rows) if md else _render_show_rich(nested, plain=flags.plain_output)
     emit_json_or_text({"phases": rows}, text, flags=flags)
 
 
-def _render_show_text(rows: list[dict[str, Any]]) -> str:
-    if not rows:
+def _iter_summary(state: State, iter_id: str) -> dict[str, Any]:
+    """Return a JSON-friendly summary row for an iter."""
+    it = state.iters[iter_id]
+    wave_ids = [wid for wid in it.wave_ids if wid in state.waves]
+    return {
+        "id": it.id,
+        "phase_id": it.phase_id,
+        "status": it.status.value,
+        "title": it.title,
+        "wave_ids": wave_ids,
+        "opened_at": it.opened_at.isoformat(),
+    }
+
+
+def _wave_summary(state: State, wave_id: str) -> dict[str, Any]:
+    """Return a JSON-friendly summary row for a wave."""
+    w = state.waves[wave_id]
+    return {
+        "id": w.id,
+        "iter_id": w.iter_id,
+        "status": w.status.value,
+        "title": w.title,
+        "deps": list(w.deps),
+        "opened_at": w.opened_at.isoformat(),
+    }
+
+
+def _phase_node(state: State, phase_id: str, *, now: datetime) -> dict[str, Any]:
+    """Return a nested phase node with its iters and waves materialised.
+
+    The node is consumed by :func:`_render_show_rich` to build a single
+    rich table covering phases / iters / waves. Stale annotations are
+    pre-computed here so the renderer stays presentation-only.
+    """
+    phase = state.phases[phase_id]
+    iter_nodes: list[dict[str, Any]] = []
+    for iter_id in phase.iter_ids:
+        if iter_id not in state.iters:
+            continue
+        it = state.iters[iter_id]
+        wave_nodes: list[dict[str, Any]] = []
+        for wave_id in it.wave_ids:
+            if wave_id not in state.waves:
+                continue
+            wave_nodes.append(_wave_summary(state, wave_id))
+        iter_nodes.append(
+            {
+                **_iter_summary(state, iter_id),
+                "waves": wave_nodes,
+                "stale": _is_stale_iter(state, it, now=now),
+            }
+        )
+    return {
+        **_phase_summary(state, phase_id),
+        "iters": iter_nodes,
+        "opened_at": phase.opened_at.isoformat(),
+        "stale": _is_stale_phase(phase, now=now),
+    }
+
+
+def _is_stale_phase(phase: Phase, *, now: datetime) -> bool:
+    """Return True when *phase* is PLANNED past the freshness window.
+
+    ACTIVE phases never read as stale (they are the live workspace).
+    CLOSED / ARCHIVED phases are terminal so staleness is meaningless.
+    PLANNED phases stale at :data:`_STALE_AGE_DAYS` (default 14) since
+    ``opened_at``.
+    """
+    if phase.status != PhaseStatus.PLANNED:
+        return False
+    return (now - phase.opened_at) > timedelta(days=_STALE_AGE_DAYS)
+
+
+def _is_stale_iter(state: State, it: Iter, *, now: datetime) -> bool:
+    """Return True when *it* is past the freshness window or dormant.
+
+    Two staleness triggers:
+
+    - the iter itself is PLANNED past :data:`_STALE_AGE_DAYS`; or
+    - the iter is PLANNED or ACTIVE but every wave under it is still
+      ``PENDING`` and the iter opened more than :data:`_STALE_AGE_DAYS`
+      ago — no recent execution activity.
+
+    CLOSED / ABANDONED iters never read as stale (terminal status).
+    """
+    if it.status in {IterStatus.CLOSED, IterStatus.ABANDONED}:
+        return False
+    age = now - it.opened_at
+    if it.status == IterStatus.PLANNED and age > timedelta(days=_STALE_AGE_DAYS):
+        return True
+    if age <= timedelta(days=_STALE_AGE_DAYS):
+        return False
+    waves = [state.waves[wid] for wid in it.wave_ids if wid in state.waves]
+    if not waves:
+        # Iter older than the window with no waves at all reads as dormant.
+        return True
+    return all(w.status == WaveStatus.PENDING for w in waves)
+
+
+def _render_show_rich(nodes: list[dict[str, Any]], *, plain: bool) -> str:
+    """Render the nested phase/iter/wave queue.
+
+    The Rich branch builds a single :class:`Table` with a ``kind``
+    column distinguishing phases / iters / waves; stale rows render in
+    dim style. The plain branch emits the same shape without ANSI so
+    terminals without colour stay readable.
+
+    Args:
+        nodes: Phase nodes from :func:`_phase_node`, in render order.
+        plain: When True, bypass Rich markup entirely.
+    """
+    if not nodes:
         return "(no phases in state)"
-    lines = ["id     status     waves  title"]
-    for row in rows:
-        lines.append(f"{row['id']:6} {row['status']:10} {row['wave_count']:5}  {row['title']}")
+    if plain:
+        return _render_show_plain(nodes)
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=120, record=False)
+    table = Table(title="eawf roadmap", show_lines=False)
+    table.add_column("kind", style="bold")
+    table.add_column("id", style="cyan")
+    table.add_column("status")
+    table.add_column("waves", justify="right")
+    table.add_column("deps")
+    table.add_column("title")
+    for phase in nodes:
+        _add_phase_rows(table, phase)
+    console.print(table)
+    return buf.getvalue().rstrip()
+
+
+def _add_phase_rows(table: Table, phase: dict[str, Any]) -> None:
+    """Append a phase row plus its iter / wave descendants to *table*."""
+    p_style = "dim" if phase["stale"] else ""
+    deps = ", ".join(phase["depends_on"]) or "-"
+    table.add_row(
+        _styled("phase", p_style),
+        _styled(phase["id"], p_style),
+        _styled(phase["status"], p_style),
+        _styled(str(phase["wave_count"]), p_style),
+        _styled(deps, p_style),
+        _styled(phase["title"], p_style),
+    )
+    for it in phase["iters"]:
+        i_style = "dim" if it["stale"] else ""
+        table.add_row(
+            _styled("  iter", i_style),
+            _styled(it["id"], i_style),
+            _styled(it["status"], i_style),
+            _styled(str(len(it["waves"])), i_style),
+            _styled("-", i_style),
+            _styled(it["title"], i_style),
+        )
+        for w in it["waves"]:
+            # Wave staleness inherits from the parent iter — the wave model
+            # tracks status (PENDING/CLAIMED/...), and aging is captured at
+            # the iter level via _is_stale_iter (no recent activity).
+            w_style = "dim" if it["stale"] else ""
+            w_deps = ", ".join(w["deps"]) or "-"
+            table.add_row(
+                _styled("    wave", w_style),
+                _styled(w["id"], w_style),
+                _styled(w["status"], w_style),
+                _styled("", w_style),
+                _styled(w_deps, w_style),
+                _styled(w["title"], w_style),
+            )
+
+
+def _styled(text: str, style: str) -> str:
+    """Wrap *text* in a rich style marker when *style* is non-empty."""
+    if not style:
+        return text
+    return f"[{style}]{text}[/{style}]"
+
+
+def _render_show_plain(nodes: list[dict[str, Any]]) -> str:
+    """Plain-text fallback for :func:`_render_show_rich`.
+
+    Stale items are tagged with a trailing ``(stale)`` marker since
+    ANSI dimming is unavailable.
+    """
+    lines = ["kind   id              status       waves  title"]
+    for phase in nodes:
+        stale_tag = " (stale)" if phase["stale"] else ""
+        lines.append(
+            f"phase  {phase['id']:<15} {phase['status']:<12} "
+            f"{phase['wave_count']:>5}  {phase['title']}{stale_tag}"
+        )
+        for it in phase["iters"]:
+            i_tag = " (stale)" if it["stale"] else ""
+            lines.append(
+                f"  iter {it['id']:<15} {it['status']:<12} "
+                f"{len(it['waves']):>5}  {it['title']}{i_tag}"
+            )
+            for w in it["waves"]:
+                w_tag = " (stale)" if it["stale"] else ""
+                lines.append(f"    wave {w['id']:<13} {w['status']:<12}        {w['title']}{w_tag}")
     return "\n".join(lines)
 
 

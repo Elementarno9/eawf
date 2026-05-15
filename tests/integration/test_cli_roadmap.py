@@ -420,6 +420,153 @@ def test_roadmap_show_json_envelope(workspace: Path) -> None:
     assert any(row["id"] == "P21" for row in body["phases"])
 
 
+def test_roadmap_show_rich_renders_phases_iters_waves(workspace: Path) -> None:
+    """P20-W01: rich-table renderer surfaces phases, iters, and waves."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test phase"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: alpha",
+            "--files",
+            "src/",
+        ],
+    )
+    res = runner.invoke(app, ["roadmap", "show"])
+    assert res.exit_code == 0, res.output
+    # All three levels render in the table body.
+    assert "P21" in res.output
+    assert "P21-I01" in res.output
+    assert "P21-I01-W01" in res.output
+    # Row-kind markers present (Rich strips bold styling in non-TTY mode
+    # but the literal kind text remains).
+    assert "phase" in res.output
+    assert "iter" in res.output
+    assert "wave" in res.output
+
+
+def test_roadmap_show_plain_fallback(workspace: Path) -> None:
+    """``--plain`` bypasses Rich markup and emits the deterministic ASCII grid."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: alpha",
+            "--files",
+            "src/",
+        ],
+    )
+    res = runner.invoke(app, ["--plain", "roadmap", "show"])
+    assert res.exit_code == 0, res.output
+    # Header line is from the plain renderer (no Rich box-drawing chars).
+    assert "kind" in res.output
+    assert "P21" in res.output
+    assert "P21-I01-W01" in res.output
+
+
+def test_roadmap_show_stale_planned_phase_marked(workspace: Path) -> None:
+    """A PLANNED phase opened > freshness window ago renders as muted."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    # Hand-roll an older opened_at on the phase so the freshness gate trips.
+    state_path = workspace / ".ea" / "state.json"
+    blob = orjson.loads(state_path.read_bytes())
+    blob["phases"]["P21"]["opened_at"] = "2024-01-01T00:00:00Z"
+    blob["iters"]["P21-I01"]["opened_at"] = "2024-01-01T00:00:00Z"
+    state_path.write_bytes(orjson.dumps(blob))
+    res = runner.invoke(app, ["--plain", "roadmap", "show"])
+    assert res.exit_code == 0, res.output
+    # Plain renderer marks stale rows with a trailing "(stale)" tag.
+    assert "(stale)" in res.output
+
+
+def test_roadmap_show_active_phase_not_stale(workspace: Path) -> None:
+    """ACTIVE phases never read as stale regardless of opened_at age."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: alpha",
+            "--files",
+            "src/",
+        ],
+    )
+    # Backdate + flip to ACTIVE so the freshness check would trip if it
+    # weren't gated on PhaseStatus.PLANNED.
+    state_path = workspace / ".ea" / "state.json"
+    blob = orjson.loads(state_path.read_bytes())
+    blob["phases"]["P21"]["opened_at"] = "2024-01-01T00:00:00Z"
+    blob["phases"]["P21"]["status"] = "active"
+    blob["iters"]["P21-I01"]["status"] = "active"
+    state_path.write_bytes(orjson.dumps(blob))
+    res = runner.invoke(app, ["--plain", "roadmap", "show"])
+    assert res.exit_code == 0, res.output
+    # The phase line itself must not carry the (stale) tag.
+    phase_line = next(line for line in res.output.splitlines() if line.startswith("phase"))
+    assert "(stale)" not in phase_line
+
+
+def test_roadmap_show_dormant_iter_marked(workspace: Path) -> None:
+    """ACTIVE iter older than the window with only PENDING waves is dormant."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: alpha",
+            "--files",
+            "src/",
+        ],
+    )
+    state_path = workspace / ".ea" / "state.json"
+    blob = orjson.loads(state_path.read_bytes())
+    blob["phases"]["P21"]["status"] = "active"
+    blob["iters"]["P21-I01"]["status"] = "active"
+    blob["iters"]["P21-I01"]["opened_at"] = "2024-01-01T00:00:00Z"
+    state_path.write_bytes(orjson.dumps(blob))
+    res = runner.invoke(app, ["--plain", "roadmap", "show"])
+    assert res.exit_code == 0, res.output
+    iter_line = next(line for line in res.output.splitlines() if line.lstrip().startswith("iter"))
+    assert "(stale)" in iter_line
+
+
+def test_roadmap_show_empty_state(workspace: Path) -> None:
+    """No phases proposed -> renderer returns the empty-state literal."""
+    res = runner.invoke(app, ["roadmap", "show"])
+    assert res.exit_code == 0, res.output
+    assert "no phases" in res.output
+
+
+def test_roadmap_show_md_branch_unchanged(workspace: Path) -> None:
+    """``--md`` still emits the markdown table (regression guard)."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    res = runner.invoke(app, ["roadmap", "show", "--md"])
+    assert res.exit_code == 0, res.output
+    assert "| Phase |" in res.output
+    assert "P21" in res.output
+
+
 def test_phase_activate_planned_phase(workspace: Path) -> None:
     """P19-W07: ``eawf phase activate`` flips PLANNED -> ACTIVE."""
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
