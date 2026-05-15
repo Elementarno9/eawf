@@ -1194,9 +1194,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W15"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2230,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T17:17:24.158001Z",
+  "updated_at": "2026-05-15T17:29:39.964291Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5415,8 +5413,8 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T17:29:39.964276Z",
+      "commit": "1a9a20823218cddcd216914cf3752d264ffb1510",
       "deps": [
         "P20-I01-W01"
       ],
@@ -5428,8 +5426,8 @@
       "id": "P20-I01-W15",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:20.790753Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "typed DAG edges via eawf.state.wave_graph (deps/blocks/blocked_by/edges/edges_for_iter); blocks-rebuild primes typed view; derived design (no model field); 22 unit + 5 integration tests",
+      "status": "closed",
       "success_criteria": [
         "Wave.blocked_by derived OR typed field",
         "wave-board renders real DAG edges",
