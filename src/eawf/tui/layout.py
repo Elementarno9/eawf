@@ -124,9 +124,60 @@ def build_header_panel(state: dict[str, Any]) -> Panel:
     return Panel(build_brand_text(breadcrumb), title=None, border_style="dim")
 
 
-def build_footer_panel() -> Panel:
-    """Build the bottom-strip footer Panel with the keymap hint."""
-    return Panel(Text(FOOTER_KEYMAP), title=None, border_style="dim")
+def build_weekly_burn_line(state: dict[str, Any]) -> str | None:
+    """Return the ``weekly burn: <consumed> / <target>`` line, or None.
+
+    The line is emitted only when ``state.project.weekly_eu_target`` is a
+    non-None numeric value (per P20-I01-W09 success criterion 3 — render
+    nothing at all when the field is unset). Loading the typed
+    :class:`~eawf.state.models.State` is deferred until the field is
+    present so the offline fast-path stays cheap when the operator has
+    not opted in.
+
+    Args:
+        state: Loaded ``state.json`` dict (may be empty or missing
+            ``project``).
+
+    Returns:
+        Formatted weekly-burn string when the target is set, else
+        ``None`` so the footer composer can omit the line entirely.
+    """
+    project = state.get("project") or {}
+    target = project.get("weekly_eu_target")
+    if target is None:
+        return None
+    # Defer import so the offline fast-path doesn't pay the metrics-module
+    # cost when the operator has not opted into the weekly cadence.
+    from eawf.estimation.metrics import compute_weekly_burn
+    from eawf.state.models import State
+
+    try:
+        typed_state = State.model_validate(state)
+    except Exception:
+        # Render nothing rather than crash the frame when the loaded dict
+        # fails schema validation (e.g. partial state, stale fixture).
+        logger.debug("build_weekly_burn_line schema validation failed; suppressing line")
+        return None
+    metric = compute_weekly_burn(typed_state)
+    if metric.target_eu is None:  # defensive — target gated above
+        return None
+    return f"weekly burn: {metric.consumed_eu:g} / {metric.target_eu:g} EU"
+
+
+def build_footer_panel(state: dict[str, Any] | None = None) -> Panel:
+    """Build the bottom-strip footer Panel with the keymap hint.
+
+    When *state* carries a ``project.weekly_eu_target`` value the footer
+    appends a ``weekly burn: <consumed> / <target> EU`` line below the
+    keymap (per P20-I01-W09 success criterion 2). When the field is
+    unset the panel renders only the keymap — byte-clean (criterion 3).
+    """
+    body = Text(FOOTER_KEYMAP)
+    if state is not None:
+        burn_line = build_weekly_burn_line(state)
+        if burn_line is not None:
+            body.append(f"\n{burn_line}")
+    return Panel(body, title=None, border_style="dim")
 
 
 # ---------------------------------------------------------------------------
@@ -302,17 +353,24 @@ def build_frame(state: dict[str, Any]) -> Layout:
     The header row carries the ``Eä`` brand + scope breadcrumb; the
     body row holds the 2x2 quadrant produced by
     :func:`repo_quadrant_panes` and :func:`build_quadrant`; the
-    footer row carries :data:`FOOTER_KEYMAP`.
+    footer row carries :data:`FOOTER_KEYMAP` plus the optional weekly
+    burn divisor (P20-I01-W09) when ``state.project.weekly_eu_target``
+    is set.
     """
+    # Bump the footer row by one when the weekly burn line is present;
+    # otherwise the burn line and panel border collide on narrow
+    # terminals. Stays at 3 rows when the field is unset so the
+    # existing golden snapshot is byte-stable.
+    footer_size = 4 if build_weekly_burn_line(state) is not None else 3
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
         Layout(name="body", ratio=1),
-        Layout(name="footer", size=3),
+        Layout(name="footer", size=footer_size),
     )
     layout["header"].update(build_header_panel(state))
     layout["body"].update(build_quadrant(repo_quadrant_panes(state)))
-    layout["footer"].update(build_footer_panel())
+    layout["footer"].update(build_footer_panel(state))
     return layout
 
 
@@ -334,6 +392,7 @@ __all__ = [
     "build_quadrant",
     "build_roadmap_pane",
     "build_status_pane",
+    "build_weekly_burn_line",
     "repo_quadrant_panes",
     "summary_counts",
 ]

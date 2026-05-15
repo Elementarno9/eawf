@@ -8,6 +8,10 @@ CLI) read off the model in O(1) per wave from a single call site.
 The DAG persistence layer's mutation behaviour (``plan_wave``,
 ``set_wave_deps``, ``remove_wave_plan``) is exercised separately in
 :mod:`tests.unit.test_wave_dag`.
+
+Also covers :class:`~eawf.state.models.Project.weekly_eu_target` field
+contract (P20-I01-W09): None default, valid float accepted, invalid
+type rejected.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.lifecycle.transitions import (
     claim_wave,
@@ -372,3 +377,77 @@ def test_edges_for_iter_diamond_blocked_by_view() -> None:
     close_wave(state, wave_id="P01-I01-W02", outcome="ok")
     result = wave_graph.edges_for_iter("P01-I01", state)
     assert result["P01-I01-W04"].blocked_by == ("P01-I01-W03",)
+
+
+# ---- Project.weekly_eu_target (P20-I01-W09) ---------------------------------
+
+
+def _project_kwargs() -> dict[str, object]:
+    """Minimal required-only kwargs for :class:`Project` construction."""
+    return {
+        "code": "QR",
+        "slug": "qr",
+        "title": "QR",
+        "domains": ["x"],
+        "default_branch": "main",
+        "status": ProjectStatus.ACTIVE,
+        "repo_urn": "urn:eawf:v1:repo:QR",
+    }
+
+
+def test_project_weekly_eu_target_defaults_none() -> None:
+    """weekly_eu_target defaults to None when the field is omitted.
+
+    Constructing a Project with only the required fields leaves the new
+    P20-I01-W09 field unset; consumers (the TUI footer) treat that as
+    "no burn line".
+    """
+    project = Project(**_project_kwargs())  # type: ignore[arg-type]
+    assert project.weekly_eu_target is None
+
+
+def test_project_weekly_eu_target_accepts_positive_float() -> None:
+    """A positive float is accepted verbatim and round-trips through JSON."""
+    project = Project(**_project_kwargs(), weekly_eu_target=8.5)  # type: ignore[arg-type]
+    assert project.weekly_eu_target == pytest.approx(8.5)
+    # Round-trip preserves the field.
+    again = Project.model_validate_json(project.model_dump_json())
+    assert again.weekly_eu_target == pytest.approx(8.5)
+
+
+def test_project_weekly_eu_target_accepts_zero() -> None:
+    """Zero is a legal value (operator-pinned target, no burn allowed)."""
+    project = Project(**_project_kwargs(), weekly_eu_target=0.0)  # type: ignore[arg-type]
+    assert project.weekly_eu_target == 0.0
+
+
+def test_project_weekly_eu_target_rejects_string() -> None:
+    """A non-numeric value is rejected at validation time."""
+    with pytest.raises(ValidationError):
+        Project(**_project_kwargs(), weekly_eu_target="lots")  # type: ignore[arg-type]
+
+
+def test_project_weekly_eu_target_rejects_list() -> None:
+    """A list payload is rejected — the field is scalar float|None only."""
+    with pytest.raises(ValidationError):
+        Project(**_project_kwargs(), weekly_eu_target=[1.0, 2.0])  # type: ignore[arg-type]
+
+
+def test_project_extra_field_still_forbidden() -> None:
+    """ConfigDict(extra='forbid') stays intact after the new field added.
+
+    Regression: adding a field must not accidentally relax the strict
+    config — unknown keys must still be rejected.
+    """
+    with pytest.raises(ValidationError):
+        Project(**_project_kwargs(), bogus=1.0)  # type: ignore[arg-type,call-arg]
+
+
+def test_project_schema_version_pin_unchanged() -> None:
+    """Adding an optional field must NOT bump State.schema_version.
+
+    P20-I01-W09 spec: keep weekly_eu_target strictly optional (default
+    None) so the schema_version literal stays at "1.0".
+    """
+    state = _empty_state()
+    assert state.schema_version == "1.0"

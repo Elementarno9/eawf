@@ -1563,7 +1563,7 @@
     },
     "Project": {
       "additionalProperties": false,
-      "description": "Repo-level project record.",
+      "description": "Repo-level project record.\n\nThe ``weekly_eu_target`` field is the operator-set weekly EU budget; when\nset, the TUI footer renders a ``weekly burn: <consumed_eu> / <target_eu>``\nrollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.\nThe field is strictly optional (default ``None``) so adding it does not\nbump ``schema_version`` — projects without a target render no burn line.",
       "properties": {
         "code": {
           "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
@@ -1608,6 +1608,18 @@
         "title": {
           "title": "Title",
           "type": "string"
+        },
+        "weekly_eu_target": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weekly Eu Target"
         }
       },
       "required": [
