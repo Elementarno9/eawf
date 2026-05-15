@@ -40,6 +40,8 @@ import hashlib
 import logging
 import os
 import secrets
+import shutil
+import subprocess
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -590,16 +592,210 @@ def phase_close_cmd(
     )
 
 
+# Timeout for git invocations in the phase-activate gate. A clean
+# eawf checkout returns each of these subcommands in well under 5 s; the
+# 30 s headroom absorbs cold caches, slow file systems, and a small
+# ``git fetch`` of one branch from the configured remote.
+_PHASE_ACTIVATE_GIT_TIMEOUT: float = 30.0
+
+
+def _phase_activate_find_repo_root(state_path: Path) -> Path | None:
+    """Locate the enclosing git repo for *state_path*, or ``None`` when there is none.
+
+    Walks the ancestor chain looking for a ``.git`` directory or file (the
+    file variant covers worktrees). Returns ``None`` when no enclosing
+    repository is found — the git-touching gates then skip cleanly, which
+    keeps non-repo workspaces (e.g. tests under ``tmp_path``) working.
+    """
+    start = state_path.parent.resolve()
+    for candidate in (start, *start.parents):
+        git_marker = candidate / ".git"
+        if git_marker.exists():
+            return candidate
+    return None
+
+
+def _phase_activate_run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run ``git`` with the phase-activate timeout and captured stdio.
+
+    Maps the timeout into :class:`cli_errors.IntegrityViolation` so the
+    operator gets exit 8 (transient infrastructure failure) instead of a
+    surface-level rejection.
+    """
+    logger.info(f"_phase_activate_run_git args={args} cwd={cwd}")
+    try:
+        return subprocess.run(
+            args,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_PHASE_ACTIVATE_GIT_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise cli_errors.IntegrityViolation(
+            f"git command timed out after {_PHASE_ACTIVATE_GIT_TIMEOUT}s: {' '.join(args)}"
+        ) from exc
+
+
+def _phase_activate_dirty_lines(repo: Path) -> list[str]:
+    """Return ``git status --porcelain`` lines from *repo* (empty list when clean).
+
+    Surfaces an :class:`cli_errors.IntegrityViolation` when the porcelain
+    invocation itself fails (rc != 0); a clean tree returns ``[]`` and a
+    dirty tree returns one entry per dirty path.
+    """
+    res = _phase_activate_run_git(["git", "-C", str(repo), "status", "--porcelain"], cwd=repo)
+    if res.returncode != 0:
+        stderr = (res.stderr or "").strip()
+        raise cli_errors.IntegrityViolation(
+            f"git status failed (rc={res.returncode}): {stderr or 'unknown'}"
+        )
+    return [line for line in (res.stdout or "").splitlines() if line.strip()]
+
+
+def _phase_activate_base_behind_count(repo: Path, *, default_branch: str) -> int | None:
+    """Return commit count by which ``HEAD`` is behind ``origin/<default_branch>``.
+
+    Returns ``None`` when the currency check should be skipped: no
+    ``origin`` remote, no ``origin/<default_branch>`` ref, or the fetch
+    refused (e.g. offline / auth). A non-negative integer is the count
+    of commits in ``origin/<default_branch>..HEAD``'s reverse range —
+    i.e. the number of commits the local branch is behind.
+    """
+    remotes = _phase_activate_run_git(["git", "-C", str(repo), "remote"], cwd=repo)
+    if remotes.returncode != 0:
+        logger.info(f"_phase_activate_base_behind_count remote_rc={remotes.returncode}")
+        return None
+    remote_names = {line.strip() for line in (remotes.stdout or "").splitlines() if line.strip()}
+    if "origin" not in remote_names:
+        logger.info("_phase_activate_base_behind_count no_origin=True")
+        return None
+    fetched = _phase_activate_run_git(
+        ["git", "-C", str(repo), "fetch", "--quiet", "origin", default_branch],
+        cwd=repo,
+    )
+    if fetched.returncode != 0:
+        logger.warning(
+            f"_phase_activate_base_behind_count fetch_failed rc={fetched.returncode} "
+            f"stderr={(fetched.stderr or '').strip()!r}"
+        )
+        return None
+    ref = f"origin/{default_branch}"
+    verify = _phase_activate_run_git(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", ref],
+        cwd=repo,
+    )
+    if verify.returncode != 0:
+        logger.info(f"_phase_activate_base_behind_count missing_ref={ref!r}")
+        return None
+    count_res = _phase_activate_run_git(
+        ["git", "-C", str(repo), "rev-list", "--count", f"HEAD..{ref}"],
+        cwd=repo,
+    )
+    if count_res.returncode != 0:
+        stderr = (count_res.stderr or "").strip()
+        raise cli_errors.IntegrityViolation(
+            f"git rev-list --count failed (rc={count_res.returncode}): {stderr or 'unknown'}"
+        )
+    stdout = (count_res.stdout or "").strip()
+    try:
+        return int(stdout)
+    except ValueError as exc:
+        raise cli_errors.IntegrityViolation(
+            f"git rev-list --count returned non-int output: {stdout!r}"
+        ) from exc
+
+
+def _phase_activate_git_gates(state_path: Path, *, default_branch: str) -> None:
+    """Run the dirty-worktree + base-currency gates ahead of the mutation.
+
+    Skips silently when ``state_path`` is not inside a git repository or
+    when ``git`` is not installed on PATH — both are valid configurations
+    (tmp test workspaces, non-git Eä deployments).
+
+    Raises:
+        cli_errors.InvalidInput: when the worktree is dirty (gate 3) or
+            ``HEAD`` is behind ``origin/<default_branch>`` (gate 2).
+        cli_errors.IntegrityViolation: when an underlying ``git``
+            invocation fails or times out unexpectedly.
+    """
+    if shutil.which("git") is None:
+        logger.info("_phase_activate_git_gates skip=no_git_binary")
+        return
+    repo = _phase_activate_find_repo_root(state_path)
+    if repo is None:
+        logger.info(f"_phase_activate_git_gates skip=not_a_git_repo state_path={state_path}")
+        return
+    dirty = _phase_activate_dirty_lines(repo)
+    if dirty:
+        logger.info(f"_phase_activate_git_gates dirty=True entries={len(dirty)} repo={repo}")
+        raise cli_errors.InvalidInput(
+            f"refusing to activate phase: worktree is dirty ({len(dirty)} entries); "
+            "commit, stash, or discard local changes first"
+        )
+    behind = _phase_activate_base_behind_count(repo, default_branch=default_branch)
+    if behind is None:
+        logger.info(
+            f"_phase_activate_git_gates currency=skipped "
+            f"default_branch={default_branch!r} repo={repo}"
+        )
+        return
+    if behind > 0:
+        logger.info(
+            f"_phase_activate_git_gates behind={behind} "
+            f"default_branch={default_branch!r} repo={repo}"
+        )
+        raise cli_errors.InvalidInput(
+            f"refusing to activate phase: HEAD is {behind} commits behind "
+            f"origin/{default_branch}; rebase first"
+        )
+    logger.info(f"_phase_activate_git_gates ok behind=0 default_branch={default_branch!r}")
+
+
+def _phase_activate_project_default_branch(state_path: Path) -> str | None:
+    """Peek at ``state.project.default_branch`` without acquiring the sibling lock.
+
+    Returns ``None`` when the state file is missing, unreadable, or carries
+    no ``project.default_branch`` field (e.g. a partially-initialised state).
+    The currency gate is skipped when the default branch cannot be resolved.
+    """
+    if not state_path.exists():
+        return None
+    try:
+        payload = orjson.loads(state_path.read_bytes())
+    except orjson.JSONDecodeError:
+        return None
+    project = payload.get("project") if isinstance(payload, dict) else None
+    if not isinstance(project, dict):
+        return None
+    default_branch = project.get("default_branch")
+    if not isinstance(default_branch, str) or not default_branch.strip():
+        return None
+    return default_branch
+
+
 @phase_app.command("activate")
 def phase_activate_cmd(
     ctx: typer.Context,
     phase_id: Annotated[str, typer.Argument(help="PLANNED phase id to activate.")],
 ) -> None:
-    """Flip a PLANNED phase to ACTIVE (P19-W07).
+    """Flip a PLANNED phase to ACTIVE (P19-W07, P19-W11).
 
     Runs the V11 hard gate: the phase must already carry at least one
     planned wave, and every phase listed in ``Phase.depends_on`` must
     be CLOSED. Sets ``current.phase_id`` to *phase_id*.
+
+    P19-W11 extends the gate with two pre-mutation git checks:
+
+    - **Dirty worktree**: ``git status --porcelain`` must be empty.
+      Operator-owned local edits get committed/stashed/discarded before
+      a phase activates so the activation lands on a known tree.
+    - **Stale base branch**: when an ``origin`` remote is configured and
+      ``origin/<project.default_branch>`` resolves, ``git fetch`` then
+      compare; reject when ``HEAD`` is behind. Skipped when no remote,
+      no ref, or no git binary on PATH (the activation still falls
+      through to the library no-waves gate in those configurations).
     """
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
@@ -608,6 +804,20 @@ def phase_activate_cmd(
             flags=flags,
         )
         return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return
+    default_branch = _phase_activate_project_default_branch(state_path)
+    if default_branch is not None:
+        try:
+            _phase_activate_git_gates(state_path, default_branch=default_branch)
+        except cli_errors.CliError as err:
+            cli_errors.emit_error(err, flags=flags)
+            return
+    else:
+        logger.info(f"phase_activate_cmd skip_git_gates=no_default_branch state_path={state_path}")
     _run_mutation(
         ctx,
         command="phase activate",

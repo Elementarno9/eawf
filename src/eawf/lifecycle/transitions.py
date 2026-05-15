@@ -239,9 +239,16 @@ def plan_phase(
 def activate_phase(state: State, *, phase_id: str) -> Phase:
     """Flip a planned phase to active. Sets ``current.phase_id``.
 
-    Hard gate (V11 in P19 brief): the phase must already have at least
-    one wave planned under it. Branch currency and clean-working-tree
-    checks live in the CLI handler since they need git access.
+    Hard gate (V11 in P19 brief; tightened in P19-W11):
+
+    - The phase must exist and be in PLANNED status.
+    - Every phase in ``depends_on`` must be CLOSED.
+    - The phase must already have at least one wave planned under it.
+
+    The branch-currency and clean-working-tree gates live in the CLI
+    handler (:func:`eawf.cli.commands.lifecycle.phase_activate_cmd`)
+    because they need git access; together with the no-waves gate above
+    they form the complete P19-W11 V11 hard gate.
 
     Raises:
         LifecycleError: when *phase_id* is unknown, not in PLANNED state,
@@ -262,6 +269,7 @@ def activate_phase(state: State, *, phase_id: str) -> Phase:
     iter_ids = phase.iter_ids
     wave_count = sum(1 for w in state.waves.values() if w.iter_id in set(iter_ids))
     if wave_count == 0:
+        logger.info(f"activate_phase phase={phase_id!r} no_waves=True")
         raise LifecycleError(
             f"phase {phase_id!r} has no planned waves; activate_phase requires at least one wave"
         )

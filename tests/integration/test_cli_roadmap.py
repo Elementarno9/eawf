@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -12,6 +14,74 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 
 runner = CliRunner()
+
+
+_GIT_AVAILABLE = shutil.which("git") is not None
+
+
+def _commit_state_changes(root: Path, *, msg: str) -> None:
+    """Stage + commit any pending changes under *root* (no-op when clean)."""
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if not status.stdout.strip():
+        return
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=root, check=True)
+
+
+def _make_local_repo(root: Path) -> None:
+    """Initialise *root* as a clean git repo with one commit on ``main``.
+
+    Any pre-existing files in *root* (e.g. the workspace fixture's
+    ``.ea/state.json`` from ``project init``) are committed together
+    with the seed ``README.md`` so the porcelain check sees a clean
+    tree at the start of every gate test.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "ci@example.com"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "ci"], cwd=root, check=True)
+    (root / "README.md").write_text("hello\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=root, check=True)
+
+
+def _make_origin_remote(local: Path, *, remote: Path) -> None:
+    """Create a sibling bare repo at *remote* and wire ``origin`` to it.
+
+    Pushes the current ``main`` branch so ``origin/main`` exists for the
+    behind-count gate to inspect.
+    """
+    remote.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main"], cwd=remote, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(remote)],
+        cwd=local,
+        check=True,
+    )
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=local, check=True)
+
+
+def _bare_commit_on_origin_main(local: Path, *, remote: Path) -> None:
+    """Push an extra commit to ``origin/main`` from a throwaway clone.
+
+    Leaves *local* behind by one commit on its tracking base. The
+    throwaway clone lives under *remote*'s parent so the temp dir
+    fixture cleans it up automatically.
+    """
+    work = remote.parent / "_advance"
+    subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
+    subprocess.run(["git", "config", "user.email", "ci@example.com"], cwd=work, check=True)
+    subprocess.run(["git", "config", "user.name", "ci"], cwd=work, check=True)
+    (work / "NEW.txt").write_text("advance\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=work, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "advance"], cwd=work, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=work, check=True)
 
 
 @pytest.fixture
@@ -379,6 +449,93 @@ def test_phase_activate_without_waves_rejected(workspace: Path) -> None:
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
     res = runner.invoke(app, ["phase", "activate", "P21"])
     assert res.exit_code != 0
+
+
+@pytest.mark.skipif(not _GIT_AVAILABLE, reason="git is required for phase-activate gate tests")
+def test_phase_activate_dirty_worktree_rejected(workspace: Path) -> None:
+    """P19-W11 gate 3: ``git status --porcelain`` non-empty blocks activation."""
+    _make_local_repo(workspace)
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    # Leave an untracked file in the worktree so the porcelain check trips.
+    (workspace / "dirty.txt").write_text("scratch\n", encoding="utf-8")
+    res = runner.invoke(app, ["phase", "activate", "P21"])
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "dirty" in combined
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["status"] == "planned"
+
+
+@pytest.mark.skipif(not _GIT_AVAILABLE, reason="git is required for phase-activate gate tests")
+def test_phase_activate_behind_upstream_rejected(workspace: Path, tmp_path: Path) -> None:
+    """P19-W11 gate 2: HEAD behind ``origin/<default_branch>`` blocks activation."""
+    _make_local_repo(workspace)
+    remote = tmp_path / "origin.git"
+    _make_origin_remote(workspace, remote=remote)
+    _bare_commit_on_origin_main(workspace, remote=remote)
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    # Commit roadmap mutations so the dirty gate does not mask the currency gate.
+    _commit_state_changes(workspace, msg="seed roadmap")
+    res = runner.invoke(app, ["phase", "activate", "P21"])
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "rebase first" in combined
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["status"] == "planned"
+
+
+@pytest.mark.skipif(not _GIT_AVAILABLE, reason="git is required for phase-activate gate tests")
+def test_phase_activate_local_only_branch_skips_currency_check(workspace: Path) -> None:
+    """No ``origin`` remote skips the currency gate (clean tree still activates)."""
+    _make_local_repo(workspace)
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    _commit_state_changes(workspace, msg="seed roadmap")
+    res = runner.invoke(app, ["phase", "activate", "P21"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["status"] == "active"
 
 
 def _read_events(workspace: Path) -> list[dict]:
