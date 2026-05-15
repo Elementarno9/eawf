@@ -1194,10 +1194,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W08",
-      "P20-I01-W02"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2231,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T17:02:20.896477Z",
+  "updated_at": "2026-05-15T17:15:52.681470Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5028,8 +5025,8 @@
         "P20-I01-W11"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T17:15:52.187786Z",
+      "commit": "3dbf201b9ce8f0954b39a94b1105a8aa71503488",
       "deps": [
         "P20-I01-W01"
       ],
@@ -5041,8 +5038,8 @@
       "id": "P20-I01-W02",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:54.976913Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "rich.live + rich.layout quadrant TUI, brand+breadcrumb+keymap, offline+online tick modes; 65 new tests; gauntlet green (2632 passed)",
+      "status": "closed",
       "success_criteria": [
         "Eä brand outside-left of breadcrumb",
         "quadrant 2x2",
@@ -5207,8 +5204,8 @@
         "P20-I01-W09"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T17:15:52.681457Z",
+      "commit": "fc693de084948326c6c634338e14683ee5b9d0ed",
       "deps": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5218,8 +5215,8 @@
       "id": "P20-I01-W08",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:17.242264Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "eawf metrics CLI; shared rich/plain renderer; typed MetricsSummary schema_version=1; 22 unit + 4 integration tests",
+      "status": "closed",
       "success_criteria": [
         "rich-table CLI render",
         "JSON envelope schema_version=1",
