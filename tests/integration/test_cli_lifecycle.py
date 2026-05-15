@@ -636,6 +636,231 @@ def test_wave_fail_happy(workspace: Path) -> None:
     assert state["waves"]["P01-I01-W01"]["status"] == "failed"  # type: ignore[index]
 
 
+# ---- wave update --files / --add-file / --remove-file (B046) ---------------
+
+
+def _bootstrap_update_pending_wave(
+    workspace: Path,
+    wave_id: str = "P01-I01-W01",
+    files_csv: str = "src/a.py",
+) -> None:
+    """Bring the state up to one PENDING wave with *files_csv* as file_scopes."""
+    _bootstrap_to_iter(workspace)
+    assert (
+        runner.invoke(
+            app,
+            [
+                "wave",
+                "plan",
+                "P01-I01",
+                "--id",
+                wave_id,
+                "--title",
+                "w",
+                "--files",
+                files_csv,
+            ],
+        ).exit_code
+        == 0
+    )
+
+
+def test_wave_update_files_set_replaces_scope(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--files",
+            "src/b.py,src/c.py",
+        ],
+    )
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert payload["wave"] == "P01-I01-W01"
+    assert payload["mode"] == "set"
+    assert payload["file_scopes"] == ["src/b.py", "src/c.py"]
+    assert payload["added"] == ["src/b.py", "src/c.py"]
+    assert payload["removed"] == ["src/a.py"]
+    state = _read_state(workspace)
+    assert state["waves"]["P01-I01-W01"]["file_scopes"] == [  # type: ignore[index]
+        "src/b.py",
+        "src/c.py",
+    ]
+
+
+def test_wave_update_files_add_one_appends_and_dedups(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--add-file",
+            "src/b.py",
+        ],
+    )
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert payload["file_scopes"] == ["src/a.py", "src/b.py"]
+    assert payload["added"] == ["src/b.py"]
+    # Re-adding an existing path is a no-op (dedup).
+    res2 = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--add-file",
+            "src/b.py",
+        ],
+    )
+    assert res2.exit_code == 0, res2.stdout
+    payload2 = json.loads(res2.stdout)
+    assert payload2["file_scopes"] == ["src/a.py", "src/b.py"]
+    assert payload2["added"] == []
+
+
+def test_wave_update_files_add_many_preserves_order(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--add-file",
+            "src/b.py,src/c.py,src/d.py",
+        ],
+    )
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert payload["file_scopes"] == ["src/a.py", "src/b.py", "src/c.py", "src/d.py"]
+    assert payload["added"] == ["src/b.py", "src/c.py", "src/d.py"]
+
+
+def test_wave_update_files_remove_drops_entries(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py,src/b.py,src/c.py")
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--remove-file",
+            "src/b.py,src/missing.py",
+        ],
+    )
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    # ``src/missing.py`` is silently ignored — remove of a path not present
+    # is a no-op so reactive scripts can be idempotent.
+    assert payload["file_scopes"] == ["src/a.py", "src/c.py"]
+    assert payload["removed"] == ["src/b.py"]
+
+
+def test_wave_update_files_allowed_on_claimed_wave(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    assert runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"]).exit_code == 0
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--add-file",
+            "src/b.py",
+        ],
+    )
+    assert res.exit_code == 0, res.stdout
+    state = _read_state(workspace)
+    assert state["waves"]["P01-I01-W01"]["status"] == "claimed"  # type: ignore[index]
+    assert state["waves"]["P01-I01-W01"]["file_scopes"] == [  # type: ignore[index]
+        "src/a.py",
+        "src/b.py",
+    ]
+
+
+def test_wave_update_files_closed_wave_exits_4(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
+    assert (
+        runner.invoke(
+            app,
+            ["wave", "close", "P01-I01-W01", "--outcome", "done"],
+        ).exit_code
+        == 0
+    )
+    res = runner.invoke(
+        app,
+        ["wave", "update", "P01-I01-W01", "--files", "src/b.py"],
+    )
+    assert res.exit_code == 4, res.stdout
+    assert "closed" in res.stdout.lower() or "pending or claimed" in res.stdout.lower()
+
+
+def test_wave_update_files_unknown_wave_exits_2(workspace: Path) -> None:
+    _bootstrap_to_iter(workspace)
+    res = runner.invoke(
+        app,
+        ["wave", "update", "P01-I01-W99", "--files", "src/b.py"],
+    )
+    assert res.exit_code == 2, res.stdout
+    assert "unknown wave" in res.stdout.lower()
+
+
+def test_wave_update_files_invalid_wave_id_exits_3(workspace: Path) -> None:
+    _bootstrap_to_iter(workspace)
+    res = runner.invoke(
+        app,
+        ["wave", "update", "not-a-wave-id", "--files", "src/b.py"],
+    )
+    assert res.exit_code == 3, res.stdout
+
+
+def test_wave_update_files_no_mode_exits_3(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    res = runner.invoke(app, ["wave", "update", "P01-I01-W01"])
+    assert res.exit_code == 3, res.stdout
+
+
+def test_wave_update_files_multiple_modes_exits_3(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    res = runner.invoke(
+        app,
+        [
+            "wave",
+            "update",
+            "P01-I01-W01",
+            "--files",
+            "src/b.py",
+            "--add-file",
+            "src/c.py",
+        ],
+    )
+    assert res.exit_code == 3, res.stdout
+
+
+def test_wave_update_files_empty_files_list_exits_3(workspace: Path) -> None:
+    _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
+    # Pure whitespace / empty-after-strip CSV resolves to zero paths.
+    res = runner.invoke(
+        app,
+        ["wave", "update", "P01-I01-W01", "--files", "   ,  ,"],
+    )
+    assert res.exit_code == 3, res.stdout
+    assert "at least one path" in res.stdout.lower()
+
+
 # ---- end-to-end happy path + events.jsonl audit trail ----------------------
 
 

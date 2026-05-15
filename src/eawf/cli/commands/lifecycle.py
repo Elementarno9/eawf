@@ -1295,6 +1295,147 @@ def wave_fail_cmd(
     )
 
 
+_WAVE_UPDATE_FILES_ALLOWED_STATUSES: frozenset[WaveStatus] = frozenset(
+    {WaveStatus.PENDING, WaveStatus.CLAIMED}
+)
+
+
+@wave_app.command("update")
+def wave_update_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID whose file_scopes are being updated.")],
+    files: Annotated[
+        str | None,
+        typer.Option(
+            "--files",
+            help="Comma-separated file globs that REPLACE the wave's file_scopes.",
+        ),
+    ] = None,
+    add_file: Annotated[
+        str | None,
+        typer.Option(
+            "--add-file",
+            help="Comma-separated file globs to append to file_scopes (dedup, preserve order).",
+        ),
+    ] = None,
+    remove_file: Annotated[
+        str | None,
+        typer.Option(
+            "--remove-file",
+            help="Comma-separated file globs to drop from file_scopes (missing entries ignored).",
+        ),
+    ] = None,
+) -> None:
+    """Mutate a PENDING/CLAIMED wave's ``file_scopes``.
+
+    Reactive scope shifts ("we found we need to touch X too") flow through
+    this verb. Exactly one of ``--files`` / ``--add-file`` / ``--remove-file``
+    must be passed. CLOSED waves are rejected with ``VALIDATION_FAILED`` (4)
+    so historical scope cannot be rewritten.
+
+    Exit codes:
+        0: file_scopes updated.
+        2: wave id is unknown (``NOT_FOUND``).
+        3: invalid args — bad wave id, no mode selected, multiple modes, or
+           empty file list (``INVALID_INPUT``).
+        4: wave is not in {PENDING, CLAIMED} — typically CLOSED
+           (``VALIDATION_FAILED``).
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            flags=flags,
+        )
+        return
+    selected = [opt for opt in (files, add_file, remove_file) if opt is not None]
+    if len(selected) != 1:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                "exactly one of --files / --add-file / --remove-file must be passed"
+            ),
+            flags=flags,
+        )
+        return
+    if files is not None:
+        mode = "set"
+        raw = files
+    elif add_file is not None:
+        mode = "add"
+        raw = add_file
+    else:
+        assert remove_file is not None  # mutually-exclusive guard above
+        mode = "remove"
+        raw = remove_file
+    file_list = [tok.strip() for tok in raw.split(",") if tok.strip()]
+    if not file_list:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"--{'files' if mode == 'set' else f'{mode}-file'} requires at least one path"
+            ),
+            flags=flags,
+        )
+        return
+
+    result: dict[str, Any] = {}
+
+    def _mutator(state: State) -> None:
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            raise cli_errors.NotFound(f"unknown wave: {wave_id!r}")
+        if wave.status not in _WAVE_UPDATE_FILES_ALLOWED_STATUSES:
+            raise cli_errors.ValidationFailed(
+                f"wave {wave_id!r} is {wave.status.value!r}; "
+                f"update --files only allowed on PENDING or CLAIMED waves"
+            )
+        before = list(wave.file_scopes)
+        if mode == "set":
+            after = list(file_list)
+            added = [p for p in after if p not in before]
+            removed = [p for p in before if p not in after]
+        elif mode == "add":
+            after = list(before)
+            added = []
+            for path in file_list:
+                if path not in after:
+                    after.append(path)
+                    added.append(path)
+            removed = []
+        else:  # remove
+            drop = set(file_list)
+            after = [p for p in before if p not in drop]
+            added = []
+            removed = [p for p in before if p in drop]
+        wave.file_scopes = after
+        result["before"] = before
+        result["after"] = after
+        result["added"] = added
+        result["removed"] = removed
+        logger.info(
+            f"update_wave_files wave={wave_id} mode={mode!r} added={added} removed={removed}"
+        )
+
+    _run_mutation(
+        ctx,
+        command="wave update",
+        args={"id": wave_id, "mode": mode, "files": file_list},
+        scope_id=wave_id,
+        text_factory=lambda: (
+            f"wave update {wave_id} mode={mode} "
+            f"before={len(result['before'])} after={len(result['after'])} "
+            f"added={len(result['added'])} removed={len(result['removed'])}"
+        ),
+        envelope_factory=lambda: {
+            "wave": wave_id,
+            "mode": mode,
+            "file_scopes": result["after"],
+            "added": result["added"],
+            "removed": result["removed"],
+        },
+        mutate=_mutator,
+    )
+
+
 # ---- Wave DAG read-only verbs (B026) ---------------------------------------
 
 
