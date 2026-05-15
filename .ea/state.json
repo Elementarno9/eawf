@@ -181,8 +181,8 @@
       "id": "ART-A25-P19-I02-W16",
       "kind": "audit_report",
       "metadata": {},
-      "sha256": "bfd8fe0fecb20212055c06925338e0ede44f14c903867082e220ac297e5362e5",
-      "size_bytes": 1842,
+      "sha256": "5c6245786117016962f55313b34256f93da5ebd60e2c28697e4d3a037c1a3e3f",
+      "size_bytes": 1822,
       "uri": "repo:.ea/artifacts/A25-P19-I02-W16-backlog-bulk-close.md",
       "urn": "urn:eawf:v1:artifact:P19-I02-W16/ART-A25-P19-I02-W16"
     },
@@ -191,8 +191,8 @@
       "id": "ART-A26-P19-I02",
       "kind": "audit_report",
       "metadata": {},
-      "sha256": "195de7bd222ca8edd94e32ee2d1cc4bf09d9ae1bdd3368e2a85d9737ef9c0cfa",
-      "size_bytes": 3863,
+      "sha256": "ad1c3e078e19d08e3631b1b0d8118ff93cb1aee66cddbf0d0216205df8357bb9",
+      "size_bytes": 3892,
       "uri": "repo:.ea/artifacts/A26-P19-I02-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P19-I02/ART-A26-P19-I02"
     },
@@ -2228,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T15:38:49.300014Z",
+  "updated_at": "2026-05-15T16:04:35.626783Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
