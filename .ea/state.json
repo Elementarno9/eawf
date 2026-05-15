@@ -1194,7 +1194,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P20-I01-W15"
+    ],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2228,7 +2230,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T17:15:52.681470Z",
+  "updated_at": "2026-05-15T17:17:24.158001Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5412,7 +5414,7 @@
     "P20-I01-W15": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5427,7 +5429,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:20.790753Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Wave.blocked_by derived OR typed field",
         "wave-board renders real DAG edges",
