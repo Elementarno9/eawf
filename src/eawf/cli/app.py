@@ -354,6 +354,18 @@ def _tui_cmd(ctx: typer.Context) -> None:
 
 # --- end P14 W10 ---
 
+# --- P20 W08 metrics registration ---
+from eawf.cli.commands.metrics import metrics_cmd  # noqa: E402
+
+app.command(
+    name="metrics",
+    help=(
+        "Show rolling workflow metrics — EU variance, audit pass rate, "
+        "wave elapsed, and planned vs reactive split."
+    ),
+)(metrics_cmd)
+# --- end P20 W08 ---
+
 
 def main() -> None:
     app()
