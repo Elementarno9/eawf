@@ -1,4 +1,4 @@
-"""``eawf workspace`` — workspace-scoped state init + repo linkage.
+"""``eawf workspace`` — workspace-scoped state init + repo linkage + registry view.
 
 A workspace state is a parent-of-repos state document with
 ``scope_kind == "workspace"``, no embedded ``project``, and a
@@ -7,13 +7,26 @@ Each entry in ``workspace.repos`` is a
 :class:`~eawf.state.models.WorkspaceRepoRef` recording the on-disk path and
 canonical URN of a repo-scoped state that the workspace tracks.
 
-Subcommands:
+Subcommands (state-file path):
 
 - ``workspace init <code> --title <t>`` — create a workspace state document.
 - ``workspace add-repo <code> --path <p>`` — append a repo link.
 - ``workspace remove-repo <code>`` — drop a repo link.
 - ``workspace validate`` — verify each linked repo path resolves.
 - ``workspace status`` — print workspace + linked-repo summary.
+
+Subcommands (registry-reader path, P20-I01-W05):
+
+- ``workspace registry-list`` — enumerate the repos in
+  ``~/.eawf/registry.json``.
+- ``workspace registry-status`` — render the workspace dashboard
+  (top strip + active-repo W02 quadrant) as text.
+
+The registry subcommands are STRICTLY READ-ONLY — per the
+``feedback_explicit_registry_only`` memory note the registry grows
+only via explicit ``init`` / ``add-repo`` writes. Neither subcommand
+creates, mutates, or scans the registry; both fail gracefully when
+the file is absent.
 
 Exit-code mapping mirrors the rest of the CLI (see
 :mod:`eawf.cli.errors`): bad inputs map to ``InvalidInput`` (3), missing
@@ -499,6 +512,172 @@ def _peek_workspace_code(state_path: Path) -> str | None:
         return None
     code = workspace.get("code")
     return code if isinstance(code, str) else None
+
+
+# ---- workspace registry-list (P20-I01-W05) ----------------------------------
+
+
+@workspace_app.command(name="registry-list")
+def workspace_registry_list_cmd(
+    ctx: typer.Context,
+    registry_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--registry-path",
+            help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
+        ),
+    ] = None,
+) -> None:
+    """Enumerate repos in ``~/.eawf/registry.json``.
+
+    STRICTLY READ-ONLY — never grows the registry. When the file is
+    missing the command exits 2 (``NotFound``) with a hint pointing
+    at ``eawf init`` as the explicit-growth path. When the file is
+    present but malformed it exits 3 (``InvalidInput``) with the
+    Pydantic validation error so the operator can repair by hand.
+    """
+    from eawf.registry import (
+        Registry,
+        RegistryReadError,
+        is_stale,
+        read_registry,
+        registry_mtime,
+    )
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        registry: Registry = read_registry(path=registry_path)
+    except RegistryReadError as exc:
+        msg = str(exc)
+        if "not found" in msg:
+            cli_errors.emit_error(
+                cli_errors.NotFound(
+                    "registry not found; run `eawf init` or "
+                    f"`eawf workspace add-repo` first ({exc})"
+                ),
+                flags=flags,
+            )
+        else:
+            cli_errors.emit_error(cli_errors.InvalidInput(msg), flags=flags)
+        return
+    mtime = registry_mtime(path=registry_path)
+    rows: list[dict[str, Any]] = []
+    for entry in sorted(registry.repos.values(), key=lambda e: e.code):
+        rows.append(
+            {
+                "code": entry.code,
+                "path": entry.path,
+                "title": entry.title or entry.code,
+                "stale": is_stale(entry, registry_mtime_at=mtime),
+                "active": entry.code == registry.active_code,
+            }
+        )
+    text_lines = [
+        f"registry: {len(rows)} repo(s), active={registry.active_code!r}, "
+        f"version={registry.version!r}"
+    ]
+    for row in rows:
+        stale_marker = " (stale)" if row["stale"] else ""
+        active_marker = " (active)" if row["active"] else ""
+        text_lines.append(
+            f"  {row['code']:12s} {row['title']!r:30s} {row['path']}{active_marker}{stale_marker}"
+        )
+    emit_json_or_text(
+        {
+            "registry_version": registry.version,
+            "active_code": registry.active_code,
+            "count": len(rows),
+            "repos": rows,
+        },
+        "\n".join(text_lines),
+        flags=flags,
+    )
+
+
+# ---- workspace registry-status (P20-I01-W05) --------------------------------
+
+
+@workspace_app.command(name="registry-status")
+def workspace_registry_status_cmd(
+    ctx: typer.Context,
+    registry_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--registry-path",
+            help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
+        ),
+    ] = None,
+    width: Annotated[
+        int,
+        typer.Option(
+            "--width",
+            help="Console width passed to the offline renderer.",
+        ),
+    ] = 100,
+) -> None:
+    """Render the workspace dashboard as text (top strip + W02 quadrant).
+
+    STRICTLY READ-ONLY over the registry. The active repo's quadrant
+    pulls panes from the W02 layout helpers so this view stays
+    byte-identical to the single-repo TUI when only one entry is
+    registered.
+
+    JSON mode emits the same envelope shape as ``registry-list`` plus
+    a ``rendered`` field carrying the captured text frame, so a
+    downstream consumer can ingest either the structured payload or
+    the pre-rendered view.
+    """
+    from eawf.registry import (
+        Registry,
+        RegistryReadError,
+        is_stale,
+        read_registry,
+        registry_mtime,
+    )
+    from eawf.tui.workspace import offline_render
+
+    flags: GlobalFlags = ctx.obj
+    rendered = offline_render(registry_path=registry_path, width=width)
+    if flags.json_output:
+        try:
+            registry: Registry = read_registry(path=registry_path)
+            mtime = registry_mtime(path=registry_path)
+        except RegistryReadError as exc:
+            emit_json_or_text(
+                {
+                    "registry_available": False,
+                    "error": str(exc),
+                    "rendered": rendered,
+                },
+                rendered,
+                flags=flags,
+            )
+            return
+        rows: list[dict[str, Any]] = []
+        for entry in sorted(registry.repos.values(), key=lambda e: e.code):
+            rows.append(
+                {
+                    "code": entry.code,
+                    "path": entry.path,
+                    "title": entry.title or entry.code,
+                    "stale": is_stale(entry, registry_mtime_at=mtime),
+                    "active": entry.code == registry.active_code,
+                }
+            )
+        emit_json_or_text(
+            {
+                "registry_available": True,
+                "registry_version": registry.version,
+                "active_code": registry.active_code,
+                "count": len(rows),
+                "repos": rows,
+                "rendered": rendered,
+            },
+            rendered,
+            flags=flags,
+        )
+        return
+    emit_json_or_text({"rendered": rendered}, rendered, flags=flags)
 
 
 __all__ = [
