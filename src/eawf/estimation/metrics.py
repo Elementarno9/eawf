@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import math
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -123,6 +124,34 @@ class PlannedVsReactiveMetric(BaseModel):
     planned_count: int = Field(ge=0)
     reactive_count: int = Field(ge=0)
     reactive_share: float = Field(ge=0.0, le=1.0)
+
+
+#: Rolling window width for :func:`compute_weekly_burn`. Seven days lines up
+#: with the operator-set ``Project.weekly_eu_target`` cadence; bumping the
+#: window would mean re-cadencing the target value too, so keep it pinned.
+WEEKLY_BURN_WINDOW: timedelta = timedelta(days=7)
+
+
+class WeeklyBurnMetric(BaseModel):
+    """Rolling-7-day EU consumption rollup against ``Project.weekly_eu_target``.
+
+    ``consumed_eu`` sums :class:`~eawf.state.models.ActualSummary.elapsed_eu`
+    across actuals whose ``updated_at`` falls inside the trailing
+    :data:`WEEKLY_BURN_WINDOW`. ``target_eu`` mirrors
+    ``state.project.weekly_eu_target`` (``None`` when the field is unset, in
+    which case the TUI footer renders no burn line at all).
+
+    The metric is *not* part of :class:`MetricsSummary` — the CLI ``eawf
+    metrics`` envelope is wire-frozen at schema_version=1, and adding a
+    field would bump that version. The TUI consumes the rollup directly via
+    :func:`compute_weekly_burn`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    consumed_eu: float = Field(ge=0.0)
+    target_eu: float | None
+    window_days: int = Field(gt=0)
 
 
 class MetricsSummary(BaseModel):
@@ -331,6 +360,38 @@ def compute_planned_vs_reactive(state: State) -> PlannedVsReactiveMetric:
     )
 
 
+def compute_weekly_burn(state: State, *, now: datetime | None = None) -> WeeklyBurnMetric:
+    """Sum trailing-7-day actual-EU consumption versus the project target.
+
+    The rollup denominator is the rolling :data:`WEEKLY_BURN_WINDOW`; the
+    numerator is the sum of every :class:`ActualSummary.elapsed_eu` whose
+    ``updated_at`` falls inside ``[now - window, now]``. When
+    ``state.project`` is ``None`` or the operator has not set
+    ``weekly_eu_target``, ``target_eu`` is ``None`` and the TUI footer
+    short-circuits to "no burn line".
+
+    Args:
+        state: Loaded typed :class:`State` snapshot.
+        now: Optional clock injection for deterministic tests. Defaults to
+            :func:`datetime.now` (UTC).
+    """
+    anchor = now if now is not None else datetime.now(UTC)
+    window_start = anchor - WEEKLY_BURN_WINDOW
+    actuals = state.actuals or {}
+    consumed = 0.0
+    for actual in actuals.values():
+        if window_start <= actual.updated_at <= anchor:
+            consumed += actual.elapsed_eu
+    target: float | None = None
+    if state.project is not None:
+        target = state.project.weekly_eu_target
+    return WeeklyBurnMetric(
+        consumed_eu=consumed,
+        target_eu=target,
+        window_days=WEEKLY_BURN_WINDOW.days,
+    )
+
+
 def compute_metrics(state: State) -> MetricsSummary:
     """Aggregate the four wave-level metrics into a :class:`MetricsSummary`.
 
@@ -349,14 +410,17 @@ def compute_metrics(state: State) -> MetricsSummary:
 
 __all__ = [
     "METRICS_SCHEMA_VERSION",
+    "WEEKLY_BURN_WINDOW",
     "AuditPassRateMetric",
     "EuVarianceMetric",
     "MetricsSummary",
     "PlannedVsReactiveMetric",
     "WaveElapsedMetric",
+    "WeeklyBurnMetric",
     "compute_audit_pass_rate",
     "compute_eu_variance",
     "compute_metrics",
     "compute_planned_vs_reactive",
     "compute_wave_elapsed",
+    "compute_weekly_burn",
 ]

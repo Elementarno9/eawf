@@ -95,7 +95,14 @@ class _StrictModel(BaseModel):
 
 
 class Project(_StrictModel):
-    """Repo-level project record."""
+    """Repo-level project record.
+
+    The ``weekly_eu_target`` field is the operator-set weekly EU budget; when
+    set, the TUI footer renders a ``weekly burn: <consumed_eu> / <target_eu>``
+    rollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.
+    The field is strictly optional (default ``None``) so adding it does not
+    bump ``schema_version`` — projects without a target render no burn line.
+    """
 
     code: ProjectCodeStr
     slug: str
@@ -105,6 +112,7 @@ class Project(_StrictModel):
     default_branch: str
     status: ProjectStatus
     repo_urn: UrnStr
+    weekly_eu_target: float | None = None
 
 
 class WorkspaceRepoRef(_StrictModel):
