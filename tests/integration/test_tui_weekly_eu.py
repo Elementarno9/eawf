@@ -35,7 +35,6 @@ from eawf.state.models import (
     State,
 )
 from eawf.tui.layout import (
-    FOOTER_KEYMAP,
     build_footer_panel,
     build_frame,
     build_weekly_burn_line,
@@ -207,7 +206,9 @@ def test_build_weekly_burn_line_returns_none_on_validation_failure() -> None:
 def test_build_footer_panel_no_state_renders_keymap_only() -> None:
     """Calling build_footer_panel() with no state preserves prior behaviour."""
     rendered = _render(build_footer_panel())
-    assert "navigate" in rendered
+    # P20-I03-W01 rewrote the quadrant footer to advertise quadrant-
+    # level keys; ``board`` is the leading token.
+    assert "board" in rendered
     assert "weekly burn" not in rendered
 
 
@@ -219,7 +220,9 @@ def test_build_footer_panel_with_target_renders_burn_line() -> None:
     assert "3.5" in rendered
     assert "10" in rendered
     # The keymap hint stays alongside the burn line.
-    assert "navigate" in rendered
+    # P20-I03-W01 rewrote the quadrant footer to advertise quadrant-
+    # level keys; ``board`` is the leading token.
+    assert "board" in rendered
 
 
 def test_build_footer_panel_unset_renders_no_burn_line() -> None:
@@ -230,7 +233,9 @@ def test_build_footer_panel_unset_renders_no_burn_line() -> None:
     """
     state_dict = _state_dict(target=None, recent_eu=3.5, stale_eu=0.0)
     rendered = _render(build_footer_panel(state_dict))
-    assert "navigate" in rendered
+    # P20-I03-W01 rewrote the quadrant footer to advertise quadrant-
+    # level keys; ``board`` is the leading token.
+    assert "board" in rendered
     assert "weekly burn" not in rendered
     assert "burn" not in rendered  # no remnant text
 
@@ -245,7 +250,10 @@ def test_build_frame_with_target_carries_burn_line() -> None:
     state_dict = _state_dict(target=10.0, recent_eu=3.5, stale_eu=99.0)
     rendered = _render(build_frame(state_dict))
     assert "weekly burn:" in rendered
-    assert FOOTER_KEYMAP.split()[0] in rendered  # keymap leading token present
+    # P20-I03-W01: quadrant keymap leads with ``b board``; checking
+    # the full leading two-word phrase keeps the assertion meaningful
+    # (the bare ``b`` alone is too short to be a stable marker).
+    assert "b board" in rendered  # keymap leading fragment present
 
 
 def test_build_frame_without_target_omits_burn_line() -> None:
@@ -254,7 +262,9 @@ def test_build_frame_without_target_omits_burn_line() -> None:
     rendered = _render(build_frame(state_dict))
     assert "weekly burn" not in rendered
     # Existing footer text still present.
-    assert "navigate" in rendered
+    # P20-I03-W01 rewrote the quadrant footer to advertise quadrant-
+    # level keys; ``board`` is the leading token.
+    assert "board" in rendered
 
 
 def test_build_frame_empty_state_omits_burn_line() -> None:

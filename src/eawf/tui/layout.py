@@ -1,4 +1,4 @@
-"""Layout helpers for the Eä Rich TUI (P20-I01-W02).
+"""Layout helpers for the Eä Rich TUI (P20-I01-W02; refreshed P20-I03-W01).
 
 This module owns the structural primitives used by :mod:`eawf.tui.app`
 and any future TUI surface. It deliberately stays state-shape-agnostic
@@ -24,12 +24,25 @@ left), status (top right), git (bottom left), backlog (bottom right);
 Keymap conventions follow ``feedback_tui_keymap_conventions``: arrow
 keys + PageUp/PageDown/Home/End/Enter/Esc are the primary surface,
 vim aliases (``h/j/k/l/g/G``) appear in parentheses as secondary
-shorthand.
+shorthand. The quadrant footer carries quadrant-level keys (board /
+config / overlay verb-prefix / quit); the wave-board and overlay
+footers carry their own keymap.
+
+P20-I03-W01: the git pane reads live from ``git`` CLI rather than the
+unwritten ``state['git']`` snapshot (no producer existed for it). The
+shell-out result is cached for ~500ms so a 30Hz repaint loop only
+incurs one ``git status`` per cache window. The status pane now
+surfaces the most recent non-planned iter when no iter is active so
+phase activity stays visible after iter closeout.
 """
 
 from __future__ import annotations
 
 import logging
+import subprocess
+import threading
+import time
+from pathlib import Path
 from typing import Any
 
 from rich.layout import Layout
@@ -57,10 +70,20 @@ BREADCRUMB_STYLE: str = "cyan"
 #: Default project code used when ``state.json`` is missing or unreadable.
 DEFAULT_PROJECT_CODE: str = "EAWF"
 
-#: Footer keymap hint. Arrows lead; vim aliases trail. ``b`` opens
-#: the wave-board view (P20-I01-W03); Esc returns from the board.
-FOOTER_KEYMAP: str = (
-    "↑↓←→ navigate  PageUp/PageDown page  Home/End jump  Enter  b board  Esc/q  (vim: h j k l g G)"
+#: Quadrant footer keymap. The previous string was wave-board-shaped
+#: (arrows + PageUp/PageDown/Home/End/Enter), which leaked board keys
+#: into the quadrant. The quadrant only has quadrant-level keys: open
+#: wave board (``b``), open config modal (``c``), open overlays via
+#: the ``o<letter>`` verb-prefix, and quit (``Esc``/``q``). The wave
+#: board keeps its own keymap string in :mod:`eawf.tui.wave_board`.
+FOOTER_KEYMAP: str = "b board  c config  oH/oD/oM/oE/oR overlay  Esc/q quit"
+
+#: Footer keymap shown while the overlay verb-prefix is pending —
+#: i.e. the operator pressed ``o`` and is now picking the overlay
+#: object (Hypothesis / Decision / Memory / Events / Render). Esc
+#: cancels the pending state.
+FOOTER_KEYMAP_OVERLAY_PENDING: str = (
+    "H hypothesis  D decision  M memory  E events  R dispatch  Esc cancel"
 )
 
 #: Pane order in the 2x2 quadrant — top-left, top-right, bottom-left,
@@ -164,15 +187,20 @@ def build_weekly_burn_line(state: dict[str, Any]) -> str | None:
     return f"weekly burn: {metric.consumed_eu:g} / {metric.target_eu:g} EU"
 
 
-def build_footer_panel(state: dict[str, Any] | None = None) -> Panel:
+def build_footer_panel(state: dict[str, Any] | None = None, *, keymap: str | None = None) -> Panel:
     """Build the bottom-strip footer Panel with the keymap hint.
+
+    The default keymap is :data:`FOOTER_KEYMAP` (quadrant keys). The
+    caller may override via ``keymap=`` to render the overlay-pending
+    string :data:`FOOTER_KEYMAP_OVERLAY_PENDING` while the operator is
+    mid-verb-prefix.
 
     When *state* carries a ``project.weekly_eu_target`` value the footer
     appends a ``weekly burn: <consumed> / <target> EU`` line below the
     keymap (per P20-I01-W09 success criterion 2). When the field is
-    unset the panel renders only the keymap — byte-clean (criterion 3).
+    unset the panel renders only the keymap.
     """
-    body = Text(FOOTER_KEYMAP)
+    body = Text(keymap if keymap is not None else FOOTER_KEYMAP)
     if state is not None:
         burn_line = build_weekly_burn_line(state)
         if burn_line is not None:
@@ -189,15 +217,17 @@ def summary_counts(state: dict[str, Any]) -> dict[str, int]:
     """Count phases, iters, waves, audits visible in state.
 
     All keys are zero when the state dict is empty so panes can render
-    a deterministic frame even before any roadmap activity.
+    a deterministic frame even before any roadmap activity. The
+    ``iters_closed`` field (P20-I03-W01) lets the roadmap pane show
+    historical iter activity once the live iter closes.
     """
+    iters = (state.get("iters") or {}).values()
     return {
         "phases_open": sum(
             1 for p in (state.get("phases") or {}).values() if p.get("status") == "active"
         ),
-        "iters_open": sum(
-            1 for it in (state.get("iters") or {}).values() if it.get("status") == "active"
-        ),
+        "iters_open": sum(1 for it in iters if it.get("status") == "active"),
+        "iters_closed": sum(1 for it in iters if it.get("status") == "closed"),
         "waves_pending": sum(
             1 for w in (state.get("waves") or {}).values() if w.get("status") == "pending"
         ),
@@ -229,18 +259,80 @@ def backlog_counts(state: dict[str, Any]) -> dict[str, int]:
 
 
 # ---------------------------------------------------------------------------
+# Iter display helpers (status pane — P20-I03-W01 success criterion 4)
+# ---------------------------------------------------------------------------
+
+
+def _format_latest_iter_line(state: dict[str, Any]) -> str:
+    """Return the ``iter: ...`` line for the status pane.
+
+    Decision matrix:
+
+    * Active iter → ``iter:    <id> (<status>)``.
+    * No active iter but at least one non-planned iter exists → show
+      the most recent one as ``iter:    <id> (closed <YYYY-MM-DD>)``
+      where the date is :class:`~eawf.state.models.Iter.closed_at`
+      truncated to ``YYYY-MM-DD``. When ``closed_at`` is unset the
+      date suffix is omitted.
+    * Otherwise → ``iter:    — (no iter started)`` so the operator
+      sees a deliberate placeholder rather than a bare dash.
+    """
+    current = state.get("current") or {}
+    iter_id = current.get("iter_id")
+    iters = state.get("iters") or {}
+    if iter_id:
+        record = iters.get(iter_id) if isinstance(iters, dict) else None
+        status = record.get("status") if isinstance(record, dict) else None
+        if status:
+            return f"iter:    {iter_id} ({status})"
+        return f"iter:    {iter_id}"
+    # No active iter — find the most recent non-planned iter.
+    non_planned: list[tuple[str, dict[str, Any]]] = [
+        (key, value)
+        for key, value in iters.items()
+        if isinstance(value, dict) and value.get("status") != "planned"
+    ]
+    if not non_planned:
+        return "iter:    — (no iter started)"
+
+    # Prefer iters with a ``closed_at`` for ordering; fall back to id
+    # descending so the surfaced iter is the highest W## under the
+    # phase. ``closed_at`` may be missing on abandoned iters.
+    def _sort_key(item: tuple[str, dict[str, Any]]) -> tuple[str, str]:
+        key, value = item
+        closed_at = value.get("closed_at") or ""
+        return (closed_at, key)
+
+    non_planned.sort(key=_sort_key, reverse=True)
+    surfaced_id, surfaced = non_planned[0]
+    status = surfaced.get("status") or "closed"
+    closed_at = surfaced.get("closed_at")
+    if isinstance(closed_at, str) and closed_at:
+        date_part = closed_at[:10]
+        return f"iter:    {surfaced_id} ({status} {date_part})"
+    return f"iter:    {surfaced_id} ({status})"
+
+
+# ---------------------------------------------------------------------------
 # Pane builders (the four quadrant panels)
 # ---------------------------------------------------------------------------
 
 
 def build_roadmap_pane(state: dict[str, Any]) -> Panel:
-    """Top-left pane: phases / iters / waves overview."""
+    """Top-left pane: phases / iters / waves overview.
+
+    P20-I03-W01: surface ``iters (closed)`` alongside ``iters (active)``
+    so the operator sees historical iter activity even after the live
+    iter closes. Aggregate counts only — per-iter detail belongs in a
+    wave-board / phase-tree wave.
+    """
     counts = summary_counts(state)
     body = Text(
         "\n".join(
             [
                 f"phases (active):  {counts['phases_open']}",
                 f"iters  (active):  {counts['iters_open']}",
+                f"iters  (closed):  {counts['iters_closed']}",
                 f"waves  (pending): {counts['waves_pending']}",
                 f"waves  (in-prog): {counts['waves_in_progress']}",
             ]
@@ -250,36 +342,183 @@ def build_roadmap_pane(state: dict[str, Any]) -> Panel:
 
 
 def build_status_pane(state: dict[str, Any]) -> Panel:
-    """Top-right pane: current scope + audit count."""
+    """Top-right pane: current scope + audit count.
+
+    P20-I03-W01: when no iter is active, surface the most recent
+    non-planned iter so the operator sees phase activity rather than
+    a bare ``iter: —``.
+    """
     current = state.get("current") or {}
     counts = summary_counts(state)
     project = (state.get("project") or {}).get("code") or DEFAULT_PROJECT_CODE
     lines = [
         f"project: {project}",
         f"phase:   {current.get('phase_id') or '-'}",
-        f"iter:    {current.get('iter_id') or '-'}",
+        _format_latest_iter_line(state),
         f"audits:  {counts['audits']}",
     ]
     return Panel(Text("\n".join(lines)), title="status", border_style="cyan")
 
 
-def build_git_pane(state: dict[str, Any]) -> Panel:
-    """Bottom-left pane: git context from the state-resident snapshot.
+# ---------------------------------------------------------------------------
+# Git pane — live shell-outs with a small monotonic cache
+# ---------------------------------------------------------------------------
 
-    The TUI does not shell out to git from inside the layout helpers
-    (panes are pure functions of the passed state). The wave-08 thread
-    owns live git polling; this pane reads whatever ``state['git']``
-    snapshot is present and falls back to a placeholder otherwise.
+
+#: Cache TTL for the git-pane shell-outs (seconds). At 30Hz that's
+#: ~15 frames per refresh — comfortably hides the ``git status`` cost
+#: even when the operator presses keys back-to-back.
+GIT_PANE_CACHE_TTL: float = 0.5
+
+#: Per-call timeout for each ``git`` subprocess (seconds). Set short
+#: enough that a stuck command can't freeze the render loop.
+GIT_PANE_SUBPROCESS_TIMEOUT: float = 1.0
+
+
+_GIT_CACHE_LOCK: threading.Lock = threading.Lock()
+_GIT_CACHE: dict[Path, tuple[float, dict[str, str]]] = {}
+
+
+def _resolve_repo_root(workspace: Path | None = None) -> Path:
+    """Return the workspace root for the git-pane shell-outs.
+
+    Prefers the *workspace* argument when supplied (matches the
+    ``--workspace`` knob threaded through :func:`eawf.tui.app.run_tui`).
+    Otherwise walks upward from :func:`Path.cwd` until a ``.ea``
+    directory is found; if none is found, returns ``Path.cwd()``. The
+    walk is bounded so a CWD outside any workspace returns deterministic
+    results without scanning the entire filesystem.
     """
-    git = state.get("git") or {}
-    branch = git.get("branch") or "-"
-    dirty = git.get("dirty")
-    head = git.get("head") or "-"
-    dirty_str = ("dirty" if dirty else "clean") if isinstance(dirty, bool) else "-"
+    if workspace is not None:
+        return Path(workspace)
+    cwd = Path.cwd()
+    for candidate in [cwd, *cwd.parents]:
+        if (candidate / ".ea").is_dir():
+            return candidate
+    return cwd
+
+
+def _git_run(args: list[str], *, cwd: Path) -> str | None:
+    """Run a git subprocess and return stripped stdout, or ``None`` on failure.
+
+    Failures we treat as "render a dash" rather than raising:
+
+    * ``FileNotFoundError`` — no ``git`` on PATH.
+    * ``subprocess.TimeoutExpired`` — git hung past
+      :data:`GIT_PANE_SUBPROCESS_TIMEOUT`.
+    * Non-zero exit (e.g. not a git repo, no upstream).
+
+    The function never raises out of the pane builder — the render
+    loop must stay alive even when the workspace is on a non-git path.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=GIT_PANE_SUBPROCESS_TIMEOUT,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug(f"_git_run args={args!r} cwd={cwd!r} failed: {exc!r}")
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
+
+
+def _gather_git_fields(cwd: Path) -> dict[str, str]:
+    """Shell out to ``git`` and return branch/head/status/upstream fields.
+
+    All values are strings. Missing data renders as ``-`` so the pane
+    composer never has to handle ``None``.
+    """
+    branch = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd) or "-"
+    head = _git_run(["rev-parse", "--short", "HEAD"], cwd=cwd) or "-"
+    porcelain = _git_run(["status", "--porcelain"], cwd=cwd)
+    if porcelain is None:
+        status = "-"
+    elif not porcelain:
+        status = "clean"
+    else:
+        modified_count = sum(1 for line in porcelain.splitlines() if line)
+        status = f"{modified_count} modified"
+    ahead = _git_run(["rev-list", "--count", "@{u}..HEAD"], cwd=cwd)
+    behind = _git_run(["rev-list", "--count", "HEAD..@{u}"], cwd=cwd)
+    if ahead is None or behind is None:
+        # No upstream configured (or git missing); render a single dash.
+        upstream = "-"
+    elif ahead == "0" and behind == "0":
+        upstream = "up-to-date"
+    else:
+        upstream = f"+{ahead} / -{behind}"
+    return {"branch": branch, "head": head, "status": status, "upstream": upstream}
+
+
+def _git_pane_fields(cwd: Path, *, now: float | None = None) -> dict[str, str]:
+    """Return cached git fields for *cwd*, refreshing past the TTL.
+
+    The cache key is the resolved workspace path so concurrent TUI
+    instances pointing at different workspaces don't collide. We hold
+    a small global :class:`threading.Lock` so the rare race between
+    the render thread and a future background poll stays consistent.
+    """
+    timestamp = time.monotonic() if now is None else now
+    with _GIT_CACHE_LOCK:
+        cached = _GIT_CACHE.get(cwd)
+        if cached is not None:
+            cached_at, cached_fields = cached
+            if timestamp - cached_at < GIT_PANE_CACHE_TTL:
+                return cached_fields
+    fresh = _gather_git_fields(cwd)
+    with _GIT_CACHE_LOCK:
+        _GIT_CACHE[cwd] = (timestamp, fresh)
+    return fresh
+
+
+def _reset_git_pane_cache() -> None:
+    """Test seam: clear the cache between assertions.
+
+    Production callers never need this — the TTL handles eviction.
+    """
+    with _GIT_CACHE_LOCK:
+        _GIT_CACHE.clear()
+
+
+def build_git_pane(state: dict[str, Any], *, workspace: Path | None = None) -> Panel:
+    """Bottom-left pane: git context from a cached ``git`` CLI poll.
+
+    Reads live from ``git`` rather than the unwritten ``state['git']``
+    snapshot (no producer existed for it, so the pane previously
+    always showed dashes). Each render either hits the
+    :data:`GIT_PANE_CACHE_TTL` cache or runs three short
+    :func:`subprocess.run` calls (rev-parse + rev-parse + status).
+    On any failure (no git on PATH, non-git cwd, timeout) the relevant
+    field renders ``-`` — the pane builder is total.
+
+    Args:
+        state: Ignored — kept in the signature so callers that wire the
+            pane via :func:`repo_quadrant_panes` don't need to change.
+            The ``state['git']`` slot is no longer consulted; if your
+            project still emits one it is silently overridden by the
+            live read.
+        workspace: Optional workspace root override. When ``None``, the
+            helper walks upward from :func:`Path.cwd` looking for a
+            ``.ea`` directory.
+
+    Returns:
+        :class:`Panel` titled ``git`` with branch / head / status /
+        upstream rows.
+    """
+    del state  # the live shell-out supersedes any stale snapshot
+    cwd = _resolve_repo_root(workspace)
+    fields = _git_pane_fields(cwd)
     lines = [
-        f"branch: {branch}",
-        f"head:   {head}",
-        f"status: {dirty_str}",
+        f"branch:   {fields['branch']}",
+        f"head:     {fields['head']}",
+        f"status:   {fields['status']}",
+        f"upstream: {fields['upstream']}",
     ]
     return Panel(Text("\n".join(lines)), title="git", border_style="cyan")
 
@@ -295,7 +534,9 @@ def build_backlog_pane(state: dict[str, Any]) -> Panel:
     return Panel(Text("\n".join(lines)), title="backlog", border_style="cyan")
 
 
-def repo_quadrant_panes(state: dict[str, Any]) -> tuple[Panel, Panel, Panel, Panel]:
+def repo_quadrant_panes(
+    state: dict[str, Any], *, workspace: Path | None = None
+) -> tuple[Panel, Panel, Panel, Panel]:
     """Build the four panes for the repo-scope quadrant in canonical order.
 
     Order matches :data:`QUADRANT_PANE_NAMES`: roadmap (top-left),
@@ -304,7 +545,7 @@ def repo_quadrant_panes(state: dict[str, Any]) -> tuple[Panel, Panel, Panel, Pan
     return (
         build_roadmap_pane(state),
         build_status_pane(state),
-        build_git_pane(state),
+        build_git_pane(state, workspace=workspace),
         build_backlog_pane(state),
     )
 
@@ -347,7 +588,12 @@ def build_quadrant(panes: tuple[Panel, Panel, Panel, Panel]) -> Layout:
     return quadrant
 
 
-def build_frame(state: dict[str, Any]) -> Layout:
+def build_frame(
+    state: dict[str, Any],
+    *,
+    workspace: Path | None = None,
+    footer_keymap: str | None = None,
+) -> Layout:
     """Assemble header + body (quadrant) + footer into one Layout.
 
     The header row carries the ``Eä`` brand + scope breadcrumb; the
@@ -356,6 +602,14 @@ def build_frame(state: dict[str, Any]) -> Layout:
     footer row carries :data:`FOOTER_KEYMAP` plus the optional weekly
     burn divisor (P20-I01-W09) when ``state.project.weekly_eu_target``
     is set.
+
+    Args:
+        state: Loaded ``state.json`` dict.
+        workspace: Optional workspace root forwarded to the git pane.
+            When ``None`` the git pane resolves the root via cwd.
+        footer_keymap: Optional override for the footer keymap string
+            — set to :data:`FOOTER_KEYMAP_OVERLAY_PENDING` while the
+            operator is mid-``o<letter>`` verb prefix.
     """
     # Bump the footer row by one when the weekly burn line is present;
     # otherwise the burn line and panel border collide on narrow
@@ -369,8 +623,8 @@ def build_frame(state: dict[str, Any]) -> Layout:
         Layout(name="footer", size=footer_size),
     )
     layout["header"].update(build_header_panel(state))
-    layout["body"].update(build_quadrant(repo_quadrant_panes(state)))
-    layout["footer"].update(build_footer_panel(state))
+    layout["body"].update(build_quadrant(repo_quadrant_panes(state, workspace=workspace)))
+    layout["footer"].update(build_footer_panel(state, keymap=footer_keymap))
     return layout
 
 
@@ -380,6 +634,9 @@ __all__ = [
     "BREADCRUMB_STYLE",
     "DEFAULT_PROJECT_CODE",
     "FOOTER_KEYMAP",
+    "FOOTER_KEYMAP_OVERLAY_PENDING",
+    "GIT_PANE_CACHE_TTL",
+    "GIT_PANE_SUBPROCESS_TIMEOUT",
     "QUADRANT_PANE_NAMES",
     "backlog_counts",
     "build_backlog_pane",
