@@ -1215,8 +1215,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
+    "active_wave_ids": [
+      "P20-I02-W01"
+    ],
+    "iter_id": "P20-I02",
     "phase_id": "P20",
     "project_code": "EAWF",
     "subproject_id": null
@@ -1842,6 +1844,19 @@
         "P20-I01-W15"
       ]
     },
+    "P20-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P20-I02",
+      "opened_at": "2026-05-15T20:03:15.757941Z",
+      "phase_id": "P20",
+      "status": "active",
+      "title": "audit-followups",
+      "wave_ids": [
+        "P20-I02-W01"
+      ]
+    },
     "P21-I01": {
       "audit_id": null,
       "closed_at": null,
@@ -2188,7 +2203,8 @@
       "depends_on": [],
       "id": "P20",
       "iter_ids": [
-        "P20-I01"
+        "P20-I01",
+        "P20-I02"
       ],
       "opened_at": "2026-05-15T14:43:38.289036Z",
       "outcome_ids": [],
@@ -2250,7 +2266,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T19:46:11.396079Z",
+  "updated_at": "2026-05-15T20:03:36.416597Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5456,6 +5472,34 @@
         "blocks-rebuild updated"
       ],
       "title": "feat: B026 Wave DAG persistence edges (typed Wave.blocked_by)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I02-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "prep-p20-flow-20260515-1844",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md",
+        "src/eawf/profiles/data/core.yaml",
+        "tests/golden/agents_md"
+      ],
+      "id": "P20-I02-W01",
+      "iter_id": "P20-I02",
+      "opened_at": "2026-05-15T20:03:24.727866Z",
+      "outcome": null,
+      "status": "claimed",
+      "success_criteria": [
+        "naming-conventions block carries mutator-path precision rule",
+        "both AGENTS.md and core.yaml managed regions regenerate consistently",
+        "golden agents_md fixtures regenerate clean"
+      ],
+      "title": "docs: clarify mutator-path terminology in AGENTS naming-conventions",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
