@@ -1195,9 +1195,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P20-I01-W01",
-      "P20-I01-W08",
-      "P20-I01-W10"
+      "P20-I01-W08"
     ],
     "iter_id": null,
     "phase_id": "P20",
@@ -2232,7 +2230,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T16:44:11.385992Z",
+  "updated_at": "2026-05-15T16:59:41.139640Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4999,8 +4997,8 @@
         "P20-I01-W15"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T16:59:40.385437Z",
+      "commit": "7a8e0b1dba25a6db592940fa57501f0c1b50438e",
       "deps": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5009,8 +5007,8 @@
       "id": "P20-I01-W01",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:54.485894Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "rich.table.Table renderer for eawf roadmap show with stale-row annotation; 7 new integration tests; gauntlet clean",
+      "status": "closed",
       "success_criteria": [
         "rich-table render covers phases iters waves",
         "stale items annotated muted"
@@ -5267,8 +5265,8 @@
         "P20-I01-W12"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T16:59:41.139622Z",
+      "commit": "541da25cd0744a82b4c19cbfec41f9b15cd7ce34",
       "deps": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -5278,8 +5276,8 @@
       "id": "P20-I01-W10",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:18.270476Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "questionary menu + ConfigKey metadata registry (498 LoC); 30 unit + 12 integration tests; subagent leak salvaged inline",
+      "status": "closed",
       "success_criteria": [
         "menu lists tabs alphabetical",
         "fields alphabetical inside tab",
