@@ -19,7 +19,7 @@ from typing import Annotated, Any
 
 import typer
 
-from eawf.artifacts.validation import validate_markdown_artifact
+from eawf.artifacts.validation import sha256_file, validate_markdown_artifact
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
 from eawf.cli.commands.draft import install_promote_command
@@ -963,7 +963,7 @@ def decision_graph(
 
 artifact_app = typer.Typer(
     name="artifact",
-    help="Manage artifacts (add / show).",
+    help="Manage artifacts (add / show / verify).",
     no_args_is_help=True,
 )
 
@@ -1054,6 +1054,144 @@ def artifact_validate(
         _emit(payload, "\n".join(report.errors), flags)
         raise typer.Exit(code=4)
     _emit(payload, "artifact validate: ok", flags)
+
+
+# ---- artifact verify -------------------------------------------------------
+
+
+def _verify_one_artifact(
+    artifact: Any,
+    repo_root: Path,
+    *,
+    refresh: bool,
+) -> dict[str, Any]:
+    """Verify one artifact body against its registered sha256.
+
+    Returns a result row of the shape used by :func:`artifact_verify`. The
+    ``status`` field is one of:
+
+    - ``"ok"`` — sha256 recomputed and matched the registered value.
+    - ``"no_hash"`` — no registered sha256 to compare against.
+    - ``"missing_file"`` — repo-relative uri did not resolve to a file.
+    - ``"skipped_remote"`` — non-``repo:`` uri with ``--refresh`` not set.
+    - ``"mismatch"`` — recomputed sha256 did not match the registered value.
+    """
+    uri = artifact.uri
+    registered = artifact.sha256
+    row: dict[str, Any] = {
+        "artifact_id": artifact.id,
+        "uri": uri,
+        "registered_sha256": registered,
+        "computed_sha256": None,
+        "status": "ok",
+    }
+    if not uri.startswith("repo:"):
+        if not refresh:
+            row["status"] = "skipped_remote"
+            return row
+        # --refresh is not implemented for remote URIs (no network in v0.3).
+        row["status"] = "skipped_remote"
+        row["message"] = "refresh not supported for remote uris yet"
+        return row
+    relpath = uri[len("repo:") :]
+    if not relpath:
+        row["status"] = "missing_file"
+        row["message"] = "empty repo-relative path in uri"
+        return row
+    body_path = repo_root / relpath
+    if not body_path.is_file():
+        row["status"] = "missing_file"
+        row["message"] = f"artifact body not found: {relpath}"
+        return row
+    computed = sha256_file(body_path)
+    row["computed_sha256"] = computed
+    if registered is None:
+        row["status"] = "no_hash"
+        return row
+    if registered.lower() != computed.lower():
+        row["status"] = "mismatch"
+        row["message"] = f"sha256 mismatch: registered={registered!r} computed={computed!r}"
+    return row
+
+
+@artifact_app.command("verify")
+def artifact_verify(
+    ctx: typer.Context,
+    artifact_id: Annotated[
+        str | None,
+        typer.Argument(help="Artifact id to verify; omit with --all."),
+    ] = None,
+    verify_all: Annotated[
+        bool,
+        typer.Option("--all", help="Verify every registered artifact."),
+    ] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option(
+            "--refresh",
+            help="Re-fetch remote URIs (no-op in v0.3; remote always skipped).",
+        ),
+    ] = False,
+) -> None:
+    """Recompute artifact sha256 and compare to the registered hash.
+
+    Exit codes:
+
+    - ``0`` — every checked artifact matched (or had no registered hash).
+    - ``2`` (``NOT_FOUND``) — single-id mode with unknown artifact id.
+    - ``8`` (``INTEGRITY_VIOLATION``) — at least one artifact mismatched.
+    """
+    flags = _flags(ctx)
+    if (artifact_id is None) == (not verify_all):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput("exactly one of <artifact-id> or --all must be provided"),
+            flags=flags,
+        )
+        return
+    state_path = _state_path(flags)
+    state = _run_read(flags, load_state, state_path)
+    repo_root = state_path.parent.parent
+
+    if verify_all:
+        artifacts_to_check = sorted(state.artifacts.values(), key=lambda a: a.id)
+    else:
+        assert artifact_id is not None
+        if artifact_id not in state.artifacts:
+            cli_errors.emit_error(
+                cli_errors.NotFound(f"artifact not found: {artifact_id!r}"),
+                flags=flags,
+            )
+            return
+        artifacts_to_check = [state.artifacts[artifact_id]]
+
+    results: list[dict[str, Any]] = [
+        _verify_one_artifact(art, repo_root, refresh=refresh) for art in artifacts_to_check
+    ]
+    mismatches = [r for r in results if r["status"] == "mismatch"]
+    missing = [r for r in results if r["status"] == "missing_file"]
+    payload: dict[str, Any] = {
+        "checked": len(results),
+        "ok": len(results) - len(mismatches) - len(missing),
+        "mismatches": len(mismatches),
+        "missing": len(missing),
+        "results": results,
+    }
+    if mismatches:
+        text = (
+            f"artifact verify: mismatch ({len(mismatches)}/{len(results)} "
+            f"artifacts failed sha256 check)"
+        )
+        _emit(payload, text, flags)
+        raise typer.Exit(code=cli_errors.IntegrityViolation.exit_code)
+    if missing:
+        text = (
+            f"artifact verify: missing files ({len(missing)}/{len(results)} "
+            f"artifacts had no resolvable body)"
+        )
+        _emit(payload, text, flags)
+        raise typer.Exit(code=cli_errors.IntegrityViolation.exit_code)
+    text = f"artifact verify: ok ({len(results)} checked)"
+    _emit(payload, text, flags)
 
 
 # ---- backlog ---------------------------------------------------------------
