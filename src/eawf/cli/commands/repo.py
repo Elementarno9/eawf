@@ -1,6 +1,6 @@
-"""``eawf repo`` — repo-scoped init + workspace linkage.
+"""``eawf repo`` — repo-scoped init + workspace linkage + registry mutators.
 
-Two subcommands:
+Subcommands:
 
 - ``repo init`` — for v0.1 this is a thin alias of :func:`eawf.cli.commands.init.init_cmd`.
   The "real divergence" between repo init and the top-level ``eawf init``
@@ -11,11 +11,32 @@ Two subcommands:
   ``--target``) repo to a workspace state document, optionally recording
   the workspace code on the repo's ``state.indexes.workspace_code`` so a
   future ``workspace validate`` can cross-check.
+- ``repo add <path>`` (P20-I01-W06) — explicitly add a repo to the
+  user-scope registry (``~/.eawf/registry.json``). Idempotent on the
+  ``(code, path)`` pair; TOFU prompt when the operator passes a path
+  whose parent dir is not a recognised "Workspace" / "Repos" parent
+  (mockup-style ``~/Repos``, ``~/Workspaces``, ``/repos``, ...). The
+  TOFU gate confirms intent so the user does not register an unrelated
+  directory by typo. Honours ``--no-input`` + ``--yes``.
+- ``repo remove <code>`` (P20-I01-W06) — drop the entry whose
+  ``code == <code>`` from the registry. Explicit-only: never auto-prunes;
+  exits 2 (NotFound) when the code is absent.
+- ``repo prune`` (P20-I01-W06) — drop registry entries whose on-disk
+  paths no longer exist. Requires ``--yes`` (or ``--no-input``) so the
+  pruner never deletes silently. Reports each dropped entry in the
+  envelope so a wrapping audit picks up the trail.
 
-Workspace pointer attachment: rather than introduce a new
-``workspace_code`` field on the :class:`Project` model (which would alter
-the schema for every repo-scoped state, including ones that are not part
-of any workspace), the link is recorded under
+Registry-growth invariant: per the ``feedback_explicit_registry_only``
+memory note the registry grows ONLY via explicit ``add`` / ``init``
+writes. There is no scan, no walk, no import-from-discovery. Each
+mutator below validates the path argument was supplied explicitly by
+the operator (Typer enforces this — no defaults expand from cwd) and
+the body never enumerates parent dirs to bulk-register.
+
+Workspace pointer attachment (legacy from ``repo link``): rather than
+introduce a new ``workspace_code`` field on the :class:`Project` model
+(which would alter the schema for every repo-scoped state, including
+ones that are not part of any workspace), the link is recorded under
 ``state.indexes['workspace_code']`` — the model already declares
 ``indexes: dict[str, Any]`` for exactly this kind of "soft" linkage.
 """
@@ -23,18 +44,27 @@ of any workspace), the link is recorded under
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
 import orjson
 import typer
+from pydantic import ValidationError as PydValidationError
 
 from eawf.cli import errors as cli_errors
 from eawf.cli.commands.init import init_cmd as _init_cmd
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.lock import portalock
+from eawf.registry import (
+    Registry,
+    RegistryReadError,
+    RegistryRepoEntry,
+    default_registry_path,
+    read_registry,
+)
 from eawf.state.enums import ProjectStatus
 from eawf.state.ids import is_project_code
 from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
@@ -43,6 +73,31 @@ from eawf.state.writer import atomic_write_json_locked
 from eawf.validate.strict import validate_state
 
 logger = logging.getLogger(__name__)
+
+
+#: Parent-dir names that are recognised "workspace homes" for the
+#: TOFU prompt on ``repo add``. When the operator passes a path
+#: whose parent dir name is in this set we treat it as expected and
+#: skip the confirm. The values are intentionally generic names
+#: rather than absolute paths so the comparison stays machine-
+#: agnostic. Operators with non-standard layouts can bypass the
+#: confirm via ``--yes`` / ``--no-input``.
+_RECOGNISED_PARENT_DIR_NAMES: frozenset[str] = frozenset(
+    {
+        "Repos",
+        "Workspaces",
+        "repos",
+        "workspaces",
+        "Workspace",
+        "workspace",
+        "Code",
+        "code",
+        "src",
+        "Source",
+        "Projects",
+        "projects",
+    }
+)
 
 repo_app = typer.Typer(
     name="repo",
@@ -381,6 +436,576 @@ def repo_link_cmd(
         },
         f"repo link {repo_code} -> workspace {workspace_code} "
         f"(workspace_state={workspace_path}, repo_state={repo_state_path})",
+        flags=flags,
+    )
+
+
+# ---- registry mutators (P20-I01-W06) ---------------------------------------
+
+
+def _resolve_registry_path(registry_path: Path | None) -> Path:
+    """Return the registry path, falling back to the user default.
+
+    Tests pass an explicit ``tmp_path``-rooted ``--registry-path``;
+    runtime callers leave it unset and pick up
+    :func:`eawf.registry.default_registry_path`.
+    """
+    return registry_path if registry_path is not None else default_registry_path()
+
+
+def _read_registry_for_write(registry_path: Path) -> Registry:
+    """Load *registry_path* into a typed Registry for mutation.
+
+    When the file is missing returns a fresh :class:`Registry` with
+    version 1 and an empty repos mapping. Other read errors
+    (validation failure, corrupted JSON) raise :class:`InvalidInput`
+    so the operator can repair by hand before mutating.
+
+    Raises:
+        InvalidInput: When the file exists but cannot be parsed /
+            validated.
+    """
+    try:
+        return read_registry(path=registry_path)
+    except RegistryReadError as exc:
+        msg = str(exc)
+        if "not found" in msg:
+            # Bootstrap path: first ``repo add`` creates the registry.
+            return Registry()
+        raise cli_errors.InvalidInput(msg) from exc
+
+
+def _persist_registry(registry: Registry, registry_path: Path) -> None:
+    """Write *registry* to *registry_path* atomically under a sibling lock.
+
+    Validates the candidate via :class:`Registry` before persisting
+    so a programmer-error (manual dict mutation that drops a
+    required field) fails before the write hits disk.
+
+    Raises:
+        ValidationFailed: When the candidate payload does not
+            round-trip through the :class:`Registry` schema.
+        LockConflict: When the sibling lock is held past the timeout.
+    """
+    try:
+        validated = Registry.model_validate(registry.model_dump(mode="json"))
+    except PydValidationError as exc:
+        raise cli_errors.ValidationFailed(f"registry post-mutation payload invalid: {exc}") from exc
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = validated.model_dump(mode="json")
+    try:
+        with portalock.acquire(registry_path, timeout=5.0):
+            atomic_write_json_locked(registry_path, payload)
+    except portalock.LockTimeout as exc:
+        raise cli_errors.LockConflict(str(exc)) from exc
+
+
+def _derive_code_from_state(repo_path: Path) -> str | None:
+    """Return the project code from ``<repo_path>/.ea/state.json``.
+
+    Best-effort — a missing / unreadable / mis-shaped state file
+    yields ``None`` so the caller can fall through to the
+    ``--code`` operator override.
+    """
+    candidate = repo_path / ".ea" / "state.json"
+    if not candidate.is_file():
+        return None
+    try:
+        payload: dict[str, Any] = orjson.loads(candidate.read_bytes())
+    except (orjson.JSONDecodeError, OSError) as exc:
+        logger.debug(f"_derive_code_from_state path={candidate!r} unreadable: {exc!r}")
+        return None
+    project = payload.get("project")
+    if not isinstance(project, dict):
+        return None
+    code = project.get("code")
+    return code if isinstance(code, str) and code else None
+
+
+def _derive_title_from_state(repo_path: Path) -> str | None:
+    """Return the project title from ``<repo_path>/.ea/state.json`` if present."""
+    candidate = repo_path / ".ea" / "state.json"
+    if not candidate.is_file():
+        return None
+    try:
+        payload: dict[str, Any] = orjson.loads(candidate.read_bytes())
+    except orjson.JSONDecodeError, OSError:
+        return None
+    project = payload.get("project")
+    if isinstance(project, dict):
+        title = project.get("title")
+        if isinstance(title, str) and title:
+            return title
+    indexes = payload.get("indexes")
+    if isinstance(indexes, dict):
+        title = indexes.get("project_title")
+        if isinstance(title, str) and title:
+            return title
+    return None
+
+
+def _parent_dir_is_recognised(repo_path: Path) -> bool:
+    """Return ``True`` when *repo_path*'s parent dir name is in the
+    recognised-workspace allowlist.
+
+    The TOFU prompt fires only when the parent dir name is NOT in
+    :data:`_RECOGNISED_PARENT_DIR_NAMES`. Operators who keep their
+    repos in non-standard layouts can always opt out of the
+    prompt via ``--yes`` / ``--no-input``.
+    """
+    parent = repo_path.parent
+    if parent == repo_path:
+        # Root path — no recognisable parent.
+        return False
+    return parent.name in _RECOGNISED_PARENT_DIR_NAMES
+
+
+def _confirm_unrecognised_parent(
+    *,
+    repo_path: Path,
+    no_input: bool,
+    yes: bool,
+) -> None:
+    """TOFU gate for ``repo add`` when the parent dir is unrecognised.
+
+    Behaviour:
+
+    - ``--yes`` → skip prompt and proceed. Operator explicit opt-in.
+    - ``--no-input`` (and no ``--yes``) → fail closed with
+      :class:`UserDeclined`. CI / scripts must pass ``--yes``.
+    - stdin is not a TTY → also fail closed.
+    - Otherwise prompt; a "no" answer raises :class:`UserDeclined`.
+
+    Raises:
+        UserDeclined: When the operator declines or the policy
+            forbids silent confirmation.
+    """
+    if yes:
+        return
+    if no_input:
+        raise cli_errors.UserDeclined(
+            f"parent dir of {repo_path} is not a recognised workspace home "
+            "and --no-input was passed without --yes; refusing to register"
+        )
+    if not sys.stdin.isatty():
+        raise cli_errors.UserDeclined(
+            f"parent dir of {repo_path} is not a recognised workspace home "
+            "and stdin is not a TTY; pass --yes to confirm"
+        )
+    prompt = (
+        f"Path parent {repo_path.parent} is not a recognised workspace home "
+        f"(expected one of {sorted(_RECOGNISED_PARENT_DIR_NAMES)}). "
+        f"Add {repo_path} to the registry anyway? [y/N] "
+    )
+    answer = input(prompt).strip().lower()
+    if answer not in {"y", "yes"}:
+        raise cli_errors.UserDeclined(f"user declined to register path {repo_path}")
+
+
+@repo_app.command(name="add")
+def repo_add_cmd(
+    ctx: typer.Context,
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="Absolute path to the repo's working tree (must exist).",
+        ),
+    ],
+    code: Annotated[
+        str | None,
+        typer.Option(
+            "--code",
+            help=(
+                "Repo code override. Defaults to the project code in "
+                "<path>/.ea/state.json; required when the state file is absent."
+            ),
+        ),
+    ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option(
+            "--title",
+            help="Display title override. Defaults to the project title or code.",
+        ),
+    ] = None,
+    set_active: Annotated[
+        bool,
+        typer.Option(
+            "--set-active/--no-set-active",
+            help="Mark the added repo as the registry's active entry.",
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Skip the TOFU prompt for unrecognised parent dirs.",
+        ),
+    ] = False,
+    registry_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--registry-path",
+            help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
+        ),
+    ] = None,
+) -> None:
+    """Explicitly add a repo to the user-scope registry.
+
+    Behaviour:
+
+    1. Resolve *path* (must exist as a directory).
+    2. Derive the repo code from ``<path>/.ea/state.json`` when
+       ``--code`` is not supplied.
+    3. TOFU confirm when the parent dir name is not in the
+       recognised-workspace allowlist (unless ``--yes`` /
+       ``--no-input`` opt out).
+    4. Idempotent insert: if ``(code, path)`` already matches a
+       registry entry, succeed without writing.
+    5. Persist atomically via :func:`_persist_registry`.
+
+    Exit codes:
+
+    - 0 — success (idempotent re-add included).
+    - 2 (NotFound) — *path* does not exist.
+    - 3 (InvalidInput) — missing/invalid code, registry corrupted.
+    - 6 (UserDeclined) — TOFU gate declined.
+    """
+    flags: GlobalFlags = ctx.obj
+    resolved_path = path.resolve()
+    if not resolved_path.exists():
+        cli_errors.emit_error(
+            cli_errors.NotFound(f"path does not exist: {resolved_path}"),
+            flags=flags,
+        )
+        return
+    if not resolved_path.is_dir():
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"path is not a directory: {resolved_path}"),
+            flags=flags,
+        )
+        return
+
+    derived_code = code or _derive_code_from_state(resolved_path)
+    if not derived_code:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"cannot derive repo code from {resolved_path}; "
+                "pass --code explicitly or run `eawf init` in the target dir"
+            ),
+            flags=flags,
+        )
+        return
+    if not is_project_code(derived_code):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid repo code: {derived_code!r}"),
+            flags=flags,
+        )
+        return
+    effective_title = title or _derive_title_from_state(resolved_path) or derived_code
+
+    try:
+        if not _parent_dir_is_recognised(resolved_path):
+            _confirm_unrecognised_parent(
+                repo_path=resolved_path,
+                no_input=flags.no_input,
+                yes=yes,
+            )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    target = _resolve_registry_path(registry_path)
+    try:
+        registry = _read_registry_for_write(target)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    existing = registry.repos.get(derived_code)
+    if existing is not None and existing.path == str(resolved_path):
+        # Idempotent: same code + same path means no-op.
+        if set_active and registry.active_code != derived_code:
+            new_repos = dict(registry.repos)
+            updated = Registry(
+                version=registry.version,
+                updated_at=datetime.now(UTC),
+                active_code=derived_code,
+                repos=new_repos,
+            )
+            try:
+                _persist_registry(updated, target)
+            except cli_errors.CliError as err:
+                cli_errors.emit_error(err, flags=flags)
+                return
+        emit_json_or_text(
+            {
+                "code": derived_code,
+                "path": str(resolved_path),
+                "title": existing.title or derived_code,
+                "registry_path": str(target),
+                "added": False,
+                "active": (set_active or registry.active_code == derived_code),
+            },
+            f"repo add {derived_code} (idempotent — already registered at {resolved_path})",
+            flags=flags,
+        )
+        return
+    if existing is not None and existing.path != str(resolved_path):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"repo code {derived_code!r} already registered at {existing.path}; "
+                f"refusing to overwrite with {resolved_path}"
+            ),
+            flags=flags,
+        )
+        return
+
+    new_entry = RegistryRepoEntry(
+        code=derived_code,
+        path=str(resolved_path),
+        title=effective_title,
+        last_seen=datetime.now(UTC),
+    )
+    new_repos = dict(registry.repos)
+    new_repos[derived_code] = new_entry
+    new_active = derived_code if set_active else registry.active_code
+    updated = Registry(
+        version=registry.version,
+        updated_at=datetime.now(UTC),
+        active_code=new_active,
+        repos=new_repos,
+    )
+    try:
+        _persist_registry(updated, target)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    emit_json_or_text(
+        {
+            "code": derived_code,
+            "path": str(resolved_path),
+            "title": effective_title,
+            "registry_path": str(target),
+            "added": True,
+            "active": (set_active or registry.active_code == derived_code),
+        },
+        f"repo add {derived_code} path={resolved_path} title={effective_title!r}",
+        flags=flags,
+    )
+
+
+@repo_app.command(name="remove")
+def repo_remove_cmd(
+    ctx: typer.Context,
+    code: Annotated[
+        str,
+        typer.Argument(
+            help="Repo code to drop from the registry (explicit; no implicit auto-resolve).",
+        ),
+    ],
+    registry_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--registry-path",
+            help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
+        ),
+    ] = None,
+) -> None:
+    """Drop the entry whose ``code == <code>`` from the registry.
+
+    Strictly explicit: this command never resolves *code* from the
+    current working directory and never bulk-removes. Exits 2
+    (NotFound) when the registry has no such entry so a typo cannot
+    silently drop the wrong row.
+
+    Exit codes:
+
+    - 0 — success.
+    - 2 (NotFound) — registry missing OR no entry with *code*.
+    - 3 (InvalidInput) — invalid code shape, registry corrupted.
+    """
+    flags: GlobalFlags = ctx.obj
+    if not is_project_code(code):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid repo code: {code!r}"),
+            flags=flags,
+        )
+        return
+    target = _resolve_registry_path(registry_path)
+    try:
+        registry = read_registry(path=target)
+    except RegistryReadError as exc:
+        msg = str(exc)
+        if "not found" in msg:
+            cli_errors.emit_error(
+                cli_errors.NotFound(f"registry not found at {target}; nothing to remove"),
+                flags=flags,
+            )
+        else:
+            cli_errors.emit_error(cli_errors.InvalidInput(msg), flags=flags)
+        return
+    if code not in registry.repos:
+        cli_errors.emit_error(
+            cli_errors.NotFound(f"repo {code!r} not registered in {target}"),
+            flags=flags,
+        )
+        return
+    dropped = registry.repos[code]
+    new_repos = {k: v for k, v in registry.repos.items() if k != code}
+    new_active = None if registry.active_code == code else registry.active_code
+    updated = Registry(
+        version=registry.version,
+        updated_at=datetime.now(UTC),
+        active_code=new_active,
+        repos=new_repos,
+    )
+    try:
+        _persist_registry(updated, target)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    emit_json_or_text(
+        {
+            "code": code,
+            "removed": True,
+            "path": dropped.path,
+            "registry_path": str(target),
+            "remaining": len(new_repos),
+        },
+        f"repo remove {code} (was at {dropped.path})",
+        flags=flags,
+    )
+
+
+@repo_app.command(name="prune")
+def repo_prune_cmd(
+    ctx: typer.Context,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Confirm the prune. Required when stdin is a TTY without --no-input.",
+        ),
+    ] = False,
+    registry_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--registry-path",
+            help="Override the default ``~/.eawf/registry.json`` (mostly for tests).",
+        ),
+    ] = None,
+) -> None:
+    """Drop registry entries whose on-disk paths no longer exist.
+
+    Walks ``registry.repos`` and reports each entry whose ``path``
+    fails ``Path.exists()``. The prune is staged: nothing writes
+    until either ``--yes`` or ``--no-input`` confirms the intent.
+    The TTY-without-confirm branch fails closed with
+    :class:`UserDeclined` so the operator never deletes silently.
+
+    When ``--yes`` is passed alongside ``--no-input`` the command
+    completes silently (suitable for CI cleanup hooks).
+
+    Exit codes:
+
+    - 0 — success (zero or more entries pruned).
+    - 2 (NotFound) — registry file is missing.
+    - 3 (InvalidInput) — registry corrupted / invalid schema.
+    - 6 (UserDeclined) — confirmation gate declined.
+    """
+    flags: GlobalFlags = ctx.obj
+    target = _resolve_registry_path(registry_path)
+    try:
+        registry = read_registry(path=target)
+    except RegistryReadError as exc:
+        msg = str(exc)
+        if "not found" in msg:
+            cli_errors.emit_error(
+                cli_errors.NotFound(f"registry not found at {target}; nothing to prune"),
+                flags=flags,
+            )
+        else:
+            cli_errors.emit_error(cli_errors.InvalidInput(msg), flags=flags)
+        return
+    dropped: list[dict[str, str]] = []
+    survivors: dict[str, RegistryRepoEntry] = {}
+    for entry_code in sorted(registry.repos):
+        entry = registry.repos[entry_code]
+        if Path(entry.path).exists():
+            survivors[entry_code] = entry
+        else:
+            dropped.append({"code": entry_code, "path": entry.path})
+    if not dropped:
+        emit_json_or_text(
+            {
+                "pruned": [],
+                "count": 0,
+                "registry_path": str(target),
+                "remaining": len(survivors),
+            },
+            f"repo prune: no missing paths (registry has {len(survivors)} entries)",
+            flags=flags,
+        )
+        return
+    if not yes:
+        if flags.no_input:
+            cli_errors.emit_error(
+                cli_errors.UserDeclined(
+                    f"--no-input passed without --yes; refusing to prune "
+                    f"{len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}"
+                ),
+                flags=flags,
+            )
+            return
+        if not sys.stdin.isatty():
+            cli_errors.emit_error(
+                cli_errors.UserDeclined(
+                    f"stdin is not a TTY and --yes was not passed; refusing to prune "
+                    f"{len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}"
+                ),
+                flags=flags,
+            )
+            return
+        codes = ", ".join(d["code"] for d in dropped)
+        answer = (
+            input(
+                f"Prune {len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'} "
+                f"({codes}) whose paths are missing? [y/N] "
+            )
+            .strip()
+            .lower()
+        )
+        if answer not in {"y", "yes"}:
+            cli_errors.emit_error(
+                cli_errors.UserDeclined("user declined prune"),
+                flags=flags,
+            )
+            return
+    new_active = registry.active_code if registry.active_code in survivors else None
+    updated = Registry(
+        version=registry.version,
+        updated_at=datetime.now(UTC),
+        active_code=new_active,
+        repos=survivors,
+    )
+    try:
+        _persist_registry(updated, target)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    emit_json_or_text(
+        {
+            "pruned": dropped,
+            "count": len(dropped),
+            "registry_path": str(target),
+            "remaining": len(survivors),
+        },
+        (
+            f"repo prune: dropped {len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'} "
+            f"({', '.join(d['code'] for d in dropped)}); "
+            f"{len(survivors)} remaining"
+        ),
         flags=flags,
     )
 
