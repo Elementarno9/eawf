@@ -1215,10 +1215,8 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I03-W01"
-    ],
-    "iter_id": "P20-I03",
+    "active_wave_ids": [],
+    "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
     "subproject_id": null
@@ -1858,13 +1856,13 @@
       ]
     },
     "P20-I03": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A27-P20",
+      "closed_at": "2026-05-15T21:05:54.106140Z",
       "estimate_id": null,
       "id": "P20-I03",
       "opened_at": "2026-05-15T20:30:59.787544Z",
       "phase_id": "P20",
-      "status": "active",
+      "status": "closed",
       "title": "TUI usability hotfix",
       "wave_ids": [
         "P20-I03-W01"
@@ -2280,7 +2278,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T20:31:40.752970Z",
+  "updated_at": "2026-05-15T21:05:54.106170Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5522,8 +5520,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T21:05:53.553442Z",
+      "commit": "193a2debc4622bed0883f0417b5f6b8aab843066",
       "deps": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5537,8 +5535,8 @@
       "id": "P20-I03-W01",
       "iter_id": "P20-I03",
       "opened_at": "2026-05-15T20:31:00.338534Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "live git CLI pane + 30Hz refresh + daemon-thread input queue + verb-prefix overlay state machine + latest-iter surface + rewritten footer keymap; 920 fps offline; 3210 pass",
+      "status": "closed",
       "success_criteria": [
         "git pane reads live from git CLI (rev-parse + status --porcelain)",
         "DEFAULT_REFRESH_HZ raised to 20+ with non-blocking input poll",
