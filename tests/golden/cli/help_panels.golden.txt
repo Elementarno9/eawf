@@ -1,0 +1,8 @@
+audit: audit, doc, doctor, validate
+estimation: actual, estimate, impact, metrics
+planning: agent-report, artifact, backlog, decision, draft, goal, hypothesis, incident, iter, memory, operator, outcome, phase, plan, project, research, roadmap, session, subproject, wave
+runtime: cc, config, hook, mcp, plugin, profile, skill
+ship: pr, release, sync, wiki
+ui: render-output, status, tui, version
+vcs: clone-repo, coauthor, init, repo, state, store, workspace
+worktrees: flow, worktree
