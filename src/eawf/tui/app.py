@@ -1,32 +1,51 @@
-"""Rich-backed TUI for ``eawf tui`` (P14-W10 / D15 + D23).
+"""Rich-backed TUI for ``eawf tui`` (P14-W10 / D15 + D23; P20-W02 quadrant).
 
 Layout sketch (rich.Layout):
 
 ::
 
     +----------------------------------------------------------+
-    | Eä  EAWF / P14 / P14-I01                          v0.3   |  ← header
-    +----------------------------------------------------------+
-    | state.json: 1 phase open · 0 waves pending · 0 audits   |
-    | hypothesis pane · audit pane · ship pane (placeholders) |
-    +----------------------------------------------------------+
-    | ↑↓ navigate · Enter select · Esc quit                    |  ← footer
+    | Eä  EAWF / P20 / P20-I01                                 |  ← header
+    +-------------------------------+--------------------------+
+    | roadmap                       | status                   |
+    | phases (active):  1           | project: EAWF            |
+    | iters  (active):  1           | phase:   P20             |
+    | waves  (pending): 2           | iter:    P20-I01         |
+    | waves  (in-prog): 1           | audits:  21             |
+    +-------------------------------+--------------------------+   ← body
+    | git                           | backlog                  |     (2x2)
+    | branch: feature/...           | open:   3                |
+    | head:   abcd123               | closed: 18               |
+    | status: clean                 | total:  21               |
+    +-------------------------------+--------------------------+
+    | ↑↓←→ navigate  PageUp/... ... Esc/q quit (vim: h j k l)  |  ← footer
     +----------------------------------------------------------+
 
 Per ``feedback_tui_branding`` memory the header brand is literal ``Eä``
 (capital E + a-umlaut), bold-accent, *outside-left* of the scope
 breadcrumb. Per ``feedback_tui_keymap_conventions`` the keymap lists
-arrow keys first with full-name aliases, never vim-only shortcuts.
+arrow keys first with full-name aliases; vim keys appear as secondary
+aliases only.
 
-The v0.3 deliverable is the scaffold — :func:`run_tui` opens a
-``rich.Live`` view and blocks on raw-mode keypresses until ``Esc`` /
-``q`` / ``Ctrl-C``. No state mutation; the view re-renders on every
-keystroke from the current ``state.json``.
+P20-I01-W02 promotes the body from a single state-summary panel to a
+2x2 quadrant of repo-scope panes (roadmap / status / git / backlog).
+Layout primitives live in :mod:`eawf.tui.layout`; this module owns the
+:func:`run_tui` entry point, the state loader, the offline /online
+tick modes, and the raw-mode keypress reader.
 
-For non-TTY callers (``--plain``, ``--no-input``, or stdout is not a
-tty) :func:`run_tui` falls back to :func:`build_status_text` — a
-deterministic single-shot text summary the bare ``eawf`` invocation
-routes through when the operator has no terminal.
+**Tick modes (P20-W02 success criterion 4):**
+
+* *Offline* (``no_input=True`` / ``plain=True`` / non-TTY): render
+  exactly one frame to stdout (via :func:`build_status_text` for the
+  text fallback, or :func:`render_layout` when a console is supplied)
+  and exit. Suitable for golden snapshot tests and bare-``eawf`` calls
+  on non-TTY hosts.
+* *Online* (TTY default): open a :class:`rich.live.Live` view with a
+  fixed refresh interval (``DEFAULT_REFRESH_HZ`` ticks per second) and
+  block on raw-mode keypresses until ``Esc`` / ``q`` / ``Ctrl-C`` /
+  EOF. The frame is rebuilt from a fresh :func:`_load_state` read on
+  every keystroke so external state CLI writes are reflected without
+  a manual refresh.
 """
 
 from __future__ import annotations
@@ -42,15 +61,29 @@ from typing import Any
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
-from rich.panel import Panel
-from rich.text import Text
+
+from eawf.tui.layout import (
+    BRAND,
+    DEFAULT_PROJECT_CODE,
+    FOOTER_KEYMAP,
+    build_breadcrumb,
+    build_frame,
+    summary_counts,
+)
 
 logger = logging.getLogger(__name__)
 
 
-_HEADER_BRAND: str = "Eä"
-_FOOTER_KEYMAP: str = "↑↓ navigate · Enter select · Esc quit"
+#: Exit keystrokes recognised by the online tick loop. Bare ``\\x1b``
+#: is Esc; ``q``/``Q`` are the operator-facing exits; ``\\x03`` and
+#: ``\\x04`` are ``Ctrl-C`` and ``Ctrl-D`` from cbreak mode.
 _EXIT_KEYS: frozenset[str] = frozenset({"\x1b", "q", "Q", "\x03", "\x04"})
+
+#: Default refresh rate for the online :class:`Live` loop. Picked low
+#: enough that the rebuild-on-keypress remains the dominant tick path
+#: while still letting time-based panes (e.g. the wave-08 git status
+#: snapshot) repaint at ~1Hz.
+DEFAULT_REFRESH_HZ: int = 1
 
 
 def _load_state(workspace: Path | None) -> dict[str, Any]:
@@ -73,84 +106,69 @@ def _load_state(workspace: Path | None) -> dict[str, Any]:
 
 
 def _breadcrumb(state: dict[str, Any]) -> str:
-    """Build the ``scope/phase/iter`` breadcrumb from state."""
-    project = (state.get("project") or {}).get("code") or "EAWF"
-    current = state.get("current") or {}
-    phase = current.get("phase_id")
-    iter_id = current.get("iter_id")
-    parts = [project]
-    if phase:
-        parts.append(phase)
-    if iter_id:
-        parts.append(iter_id)
-    return " / ".join(parts)
+    """Backward-compatible wrapper around :func:`build_breadcrumb`.
+
+    Pre-W02 tests imported this private helper directly; the layout
+    module owns the implementation now but the symbol is preserved so
+    the existing smoke test stays green without churn.
+    """
+    return build_breadcrumb(state)
 
 
 def _summary_counts(state: dict[str, Any]) -> dict[str, int]:
-    """Count phases, iters, waves, audits visible in state."""
-    return {
-        "phases_open": sum(
-            1 for p in (state.get("phases") or {}).values() if p.get("status") == "active"
-        ),
-        "iters_open": sum(
-            1 for it in (state.get("iters") or {}).values() if it.get("status") == "active"
-        ),
-        "waves_pending": sum(
-            1 for w in (state.get("waves") or {}).values() if w.get("status") == "pending"
-        ),
-        "audits": len(state.get("audits") or {}),
-    }
+    """Backward-compatible wrapper around :func:`summary_counts`."""
+    return summary_counts(state)
 
 
 def build_status_text(state: dict[str, Any]) -> str:
-    """Deterministic single-shot status — used by the non-TTY fallback."""
-    breadcrumb = _breadcrumb(state)
-    counts = _summary_counts(state)
+    """Deterministic single-shot status — used by the non-TTY fallback.
+
+    Offline tick mode (the ``no_input`` / ``plain`` / non-TTY branch
+    of :func:`run_tui`) prints this string and exits without entering
+    the :class:`rich.live.Live` loop.
+    """
+    breadcrumb = build_breadcrumb(state)
+    counts = summary_counts(state)
+    project = (state.get("project") or {}).get("code") or DEFAULT_PROJECT_CODE
     return (
-        f"{_HEADER_BRAND}  {breadcrumb}\n"
-        f"  phases_open={counts['phases_open']} "
+        f"{BRAND}  {breadcrumb}\n"
+        f"  project={project} "
+        f"phases_open={counts['phases_open']} "
         f"iters_open={counts['iters_open']} "
         f"waves_pending={counts['waves_pending']} "
         f"audits={counts['audits']}\n"
-        f"keymap: {_FOOTER_KEYMAP}"
+        f"keymap: {FOOTER_KEYMAP}"
     )
 
 
 def _build_layout(state: dict[str, Any]) -> Layout:
-    """Compose the three-row Layout used by the live TUI."""
-    layout = Layout()
-    layout.split_column(
-        Layout(name="header", size=3),
-        Layout(name="body", ratio=1),
-        Layout(name="footer", size=3),
-    )
-    breadcrumb = _breadcrumb(state)
-    header_text = Text()
-    header_text.append(f"{_HEADER_BRAND}  ", style="bold white")
-    header_text.append(breadcrumb, style="cyan")
-    layout["header"].update(Panel(header_text, title=None, border_style="dim"))
-    counts = _summary_counts(state)
-    body_text = Text(
-        "\n".join(
-            [
-                f"phases open: {counts['phases_open']}",
-                f"iters open:  {counts['iters_open']}",
-                f"waves pending: {counts['waves_pending']}",
-                f"audits: {counts['audits']}",
-            ]
-        )
-    )
-    layout["body"].update(Panel(body_text, title="state.json"))
-    layout["footer"].update(Panel(Text(_FOOTER_KEYMAP), title=None, border_style="dim"))
-    return layout
+    """Compose the header/body/footer frame with the 2x2 body quadrant.
+
+    Delegates to :func:`eawf.tui.layout.build_frame` so the layout
+    primitives stay reusable across future TUI surfaces.
+    """
+    return build_frame(state)
 
 
 def render_layout(state: dict[str, Any], *, console: Console | None = None) -> str:
     """Render the live Layout into a string buffer.
 
-    The smoke test consumes this so we never block on an interactive
-    ``rich.Live`` loop; production callers wire :func:`run_tui` to the
-    real terminal.
+    Offline callers (golden snapshot tests, the wave-02 dispatch
+    fixture) consume this so they never block on an interactive
+    :class:`rich.live.Live` loop; production callers wire
+    :func:`run_tui` to the real terminal.
+
+    Args:
+        state: Loaded ``state.json`` dict.
+        console: Optional pre-built console to render into. When
+            supplied the function writes into the caller's console and
+            returns an empty string; otherwise a fresh non-terminal
+            console renders into an in-process :class:`io.StringIO`
+            buffer and the captured text is returned.
+
+    Returns:
+        The captured render output when ``console`` is ``None``,
+        otherwise an empty string.
     """
     buf = io.StringIO()
     real_console = console or Console(file=buf, force_terminal=False, width=100, record=False)
@@ -205,7 +223,7 @@ def _read_key_raw() -> str:
     ``eawf`` is run from a wrapper that pipes its own stdin). Uses
     :func:`tty.setcbreak` rather than :func:`tty.setraw` so the
     output discipline (``OPOST``/``ONLCR``) stays intact for the
-    concurrent ``rich.Live`` renderer thread.
+    concurrent :class:`rich.live.Live` renderer thread.
 
     Returns the single character read, or empty string on EOF
     (closed tty, ``Ctrl-D`` under cbreak), or empty string when no
@@ -231,8 +249,20 @@ def run_tui(
     no_input: bool = False,
     plain: bool = False,
     read_key: Callable[[], str] | None = None,
+    refresh_per_second: int = DEFAULT_REFRESH_HZ,
 ) -> int:
-    """Open the live Rich TUI or emit a single-shot status fallback.
+    """Open the live Rich TUI or emit a single-shot offline frame.
+
+    Tick modes:
+
+    * **Offline** — when ``no_input`` or ``plain`` is true, or stdout
+      is not a tty: render exactly one frame via
+      :func:`build_status_text` and exit (no :class:`rich.live.Live`,
+      no keypress loop). Golden tests pin this mode.
+    * **Online** — TTY default: open :class:`rich.live.Live` with
+      ``refresh_per_second`` ticks/sec and block on raw-mode
+      keypresses until ``Esc``/``q``/``Ctrl-C``/EOF. State is
+      reloaded on every keystroke.
 
     Args:
         workspace: Project root containing ``.ea/state.json``. Defaults
@@ -241,6 +271,9 @@ def run_tui(
         plain: Same as ``no_input`` — caller chose plain output.
         read_key: Test seam for the raw-mode keypress reader. Defaults
             to :func:`_read_key_raw`.
+        refresh_per_second: Online-mode tick rate for
+            :class:`rich.live.Live`. Defaults to
+            :data:`DEFAULT_REFRESH_HZ`.
 
     Returns:
         Exit code (``0`` on clean shutdown).
@@ -257,7 +290,7 @@ def run_tui(
             _build_layout(state),
             console=console,
             screen=True,
-            refresh_per_second=4,
+            refresh_per_second=refresh_per_second,
             transient=False,
         ) as live:
             while True:
