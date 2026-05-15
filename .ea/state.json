@@ -1194,7 +1194,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P20-I01-W03"
+    ],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2228,7 +2230,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T17:45:57.407822Z",
+  "updated_at": "2026-05-15T17:46:49.957921Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5056,7 +5058,7 @@
       "blocks": [
         "P20-I01-W07"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5070,7 +5072,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:55.537642Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "list view sorted by status priority then wave_id",
         "detail view with deps/tests/budget/criteria",
