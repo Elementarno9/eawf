@@ -185,6 +185,125 @@ def test_roadmap_revise_rejects_non_planned(workspace: Path) -> None:
     assert res.exit_code != 0
 
 
+def _set_phase_status(workspace: Path, phase_id: str, status: str) -> None:
+    """Test helper: rewrite ``.ea/state.json`` to flip *phase_id*'s status.
+
+    Used by the P19-W12 revise-on-ACTIVE tests so the integration suite
+    doesn't have to drive the full activate/close lifecycle just to reach
+    a particular phase status. The file is the only persistent state so
+    a direct rewrite is equivalent for the read-side behaviour the CLI
+    gate is testing.
+    """
+    state_path = workspace / ".ea" / "state.json"
+    state_blob = orjson.loads(state_path.read_bytes())
+    state_blob["phases"][phase_id]["status"] = status
+    state_path.write_bytes(orjson.dumps(state_blob))
+
+
+def _propose_with_wave(workspace: Path) -> None:
+    """Reusable fixture: propose P21 + W01 then leave PLANNED."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+
+
+def test_roadmap_revise_planned_phase_still_allows_pending_wave(workspace: Path) -> None:
+    """P19-W12: PLANNED parent + PENDING wave path is unchanged."""
+    _propose_with_wave(workspace)
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "W01=feat: updated"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P21-I01-W01"]["title"] == "feat: updated"
+    assert state["phases"]["P21"]["status"] == "planned"
+
+
+def test_roadmap_revise_active_phase_allows_pending_wave(workspace: Path) -> None:
+    """P19-W12: ACTIVE parent + PENDING wave is the new escape hatch."""
+    _propose_with_wave(workspace)
+    _set_phase_status(workspace, "P21", "active")
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "W01=feat: revised in flight"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P21-I01-W01"]["title"] == "feat: revised in flight"
+    assert state["phases"]["P21"]["status"] == "active"
+
+
+def test_roadmap_revise_active_phase_add_wave_allowed(workspace: Path) -> None:
+    """P19-W12: --add-wave under an ACTIVE phase plans a new PENDING wave."""
+    _propose_with_wave(workspace)
+    _set_phase_status(workspace, "P21", "active")
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W02",
+            "--title",
+            "feat: extra",
+            "--files",
+            "src/",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert "P21-I01-W02" in state["waves"]
+    assert state["waves"]["P21-I01-W02"]["status"] == "pending"
+
+
+def test_roadmap_revise_active_phase_rejects_closed_wave(workspace: Path) -> None:
+    """P19-W12: a CLOSED wave under an ACTIVE phase stays immutable."""
+    _propose_with_wave(workspace)
+    # Bypass the full activate/claim/close pipeline by flipping statuses
+    # directly. The CLI gate routes through the lifecycle transitions
+    # which check wave.status; we only need the wave's status field to
+    # be CLOSED to exercise that guard.
+    state_path = workspace / ".ea" / "state.json"
+    state_blob = orjson.loads(state_path.read_bytes())
+    state_blob["phases"]["P21"]["status"] = "active"
+    state_blob["waves"]["P21-I01-W01"]["status"] = "closed"
+    state_path.write_bytes(orjson.dumps(state_blob))
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "W01=feat: too late"],
+    )
+    assert res.exit_code != 0
+    combined = f"{res.stdout}{res.stderr}"
+    assert "not pending" in combined
+
+
+def test_roadmap_revise_closed_phase_rejected(workspace: Path) -> None:
+    """P19-W12: CLOSED phase is immutable via revise."""
+    _propose_with_wave(workspace)
+    _set_phase_status(workspace, "P21", "closed")
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "W01=feat: no"],
+    )
+    assert res.exit_code != 0
+    combined = f"{res.stdout}{res.stderr}"
+    assert "closed" in combined
+
+
 def test_roadmap_apply_requires_wave(workspace: Path) -> None:
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
     res = runner.invoke(app, ["roadmap", "apply", "P21"])

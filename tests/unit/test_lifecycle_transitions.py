@@ -812,3 +812,63 @@ def test_set_wave_deps_non_pending_rejected() -> None:
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     with pytest.raises(LifecycleError, match="not pending"):
         set_wave_deps(state, wave_id="P01-I01-W01", deps=["P01-I01-W02"])
+
+
+# ---- P19-W12: ACTIVE-phase revise on PENDING waves --------------------------
+
+
+def test_edit_wave_plan_under_active_phase_ok_when_pending() -> None:
+    """P19-W12: PENDING waves remain editable after the parent phase
+    flips ACTIVE — the load-bearing invariant is the wave-level PENDING
+    check, not the phase status."""
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    w = edit_wave_plan(state, wave_id="P01-I01-W01", title="revised mid-flight")
+    assert w.title == "revised mid-flight"
+    assert state.phases["P01"].status == PhaseStatus.ACTIVE
+
+
+def test_remove_wave_plan_under_active_phase_ok_when_pending() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    remove_wave_plan(state, wave_id="P01-I01-W02")
+    assert "P01-I01-W02" not in state.waves
+    assert state.phases["P01"].status == PhaseStatus.ACTIVE
+
+
+def test_set_wave_deps_under_active_phase_ok_when_pending() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    set_wave_deps(state, wave_id="P01-I01-W02", deps=["P01-I01-W01"])
+    assert state.waves["P01-I01-W02"].deps == ["P01-I01-W01"]
+    assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02"]
+
+
+def test_edit_wave_plan_under_active_phase_rejects_closed_wave() -> None:
+    """Even with an ACTIVE parent phase the wave-level PENDING guard
+    keeps CLOSED waves frozen."""
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", outcome="done")
+    with pytest.raises(LifecycleError, match="not pending"):
+        edit_wave_plan(state, wave_id="P01-I01-W01", title="late edit")
