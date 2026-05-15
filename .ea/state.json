@@ -1195,7 +1195,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P20-I01-W08"
+      "P20-I01-W08",
+      "P20-I01-W02"
     ],
     "iter_id": null,
     "phase_id": "P20",
@@ -2230,7 +2231,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T16:59:41.139640Z",
+  "updated_at": "2026-05-15T17:02:20.896477Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5026,7 +5027,7 @@
         "P20-I01-W05",
         "P20-I01-W11"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5041,7 +5042,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:54.976913Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Eä brand outside-left of breadcrumb",
         "quadrant 2x2",
