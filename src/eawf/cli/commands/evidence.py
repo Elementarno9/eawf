@@ -1022,6 +1022,60 @@ def artifact_add(
     )
 
 
+@artifact_app.command("update")
+def artifact_update(
+    ctx: typer.Context,
+    artifact_id: Annotated[str, typer.Argument(help="Artifact id to update")],
+    sha256: Annotated[
+        str | None,
+        typer.Option("--sha256", help="New SHA-256 hash for the artifact body."),
+    ] = None,
+    size: Annotated[
+        int | None,
+        typer.Option("--size", help="New body size in bytes."),
+    ] = None,
+    uri: Annotated[
+        str | None,
+        typer.Option("--uri", help="New URI (repo:... or remote URI)."),
+    ] = None,
+) -> None:
+    """Update mutable fields on a registered artifact.
+
+    Re-pins ``sha256`` / ``size_bytes`` / ``uri`` when the underlying
+    body content changed (typically after a pre-commit auto-fix). At
+    least one of ``--sha256`` / ``--size`` / ``--uri`` must be supplied.
+    Identity fields (``id``, ``kind``, ``urn``, ``scope_id``,
+    ``created_at``) stay fixed.
+    """
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        with state_transaction(state_path) as state:
+            event = artifact_evi.update_artifact(
+                state,
+                artifact_id=artifact_id,
+                sha256=sha256,
+                size_bytes=size,
+                uri=uri,
+            )
+            append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "artifact_id": artifact_id,
+            "sha256": sha256,
+            "size_bytes": size,
+            "uri": uri,
+        },
+        f"artifact {artifact_id} updated",
+        flags,
+    )
+
+
 @artifact_app.command("show")
 def artifact_show(
     ctx: typer.Context,

@@ -835,10 +835,13 @@ def close_wave(
 ) -> Wave:
     """Close a claimed/in-progress wave with an outcome string.
 
-    The wave's commit SHA is derived at read time via
-    :func:`eawf.lifecycle.wave_sha.derive_wave_sha` from the
-    ``[P##-W##]`` commit-subject prefix; it is no longer persisted on
-    the wave record (P19-W04 removed ``Wave.commit``).
+    Pure status flip + outcome stamp; the wave's commit SHA stays on
+    ``Wave.commit`` when it was pinned via ``eawf wave close --commit
+    <ref>`` (P19-W17 re-introduced the field as ``ShaStr | None`` and
+    normalises any ref shape via ``git rev-parse``). When ``commit`` is
+    left ``None``, callers fall back to
+    :func:`eawf.lifecycle.wave_sha.derive_wave_sha`, which walks
+    ``git log --grep '[P##-W##]'`` against the active branch.
     """
     wave = state.waves.get(wave_id)
     if wave is None:

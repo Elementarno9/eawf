@@ -75,6 +75,7 @@ of the named changes.
 
 ## Scrub
 
-Repo-relative paths only; no absolute paths, no host-local URLs, no
-PII beyond the canonical `Claude <noreply@anthropic.com>` co-author
-trailer (allowlisted under the secrets-hygiene policy).
+- status: clean
+- notes: repo-relative paths only; no absolute paths, no host-local
+  URLs, no PII beyond the canonical `Claude <noreply@anthropic.com>`
+  co-author trailer (allowlisted under the secrets-hygiene policy).

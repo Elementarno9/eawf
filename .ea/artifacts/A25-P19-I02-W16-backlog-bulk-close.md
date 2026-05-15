@@ -48,5 +48,3 @@
 ## Scrub
 
 - status: clean
-</content>
-</invoke>
