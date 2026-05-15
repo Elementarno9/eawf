@@ -1194,9 +1194,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W12"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2230,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T17:30:14.322054Z",
+  "updated_at": "2026-05-15T17:45:57.407822Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5325,8 +5323,8 @@
         "P20-I01-W13"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T17:45:57.407802Z",
+      "commit": "03ae041372dcfdc88fddc86527e4983f5dd537ad",
       "deps": [
         "P20-I01-W10"
       ],
@@ -5337,8 +5335,8 @@
       "id": "P20-I01-W12",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:19.308779Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "RegistryOrderedTyperGroup drives help panel order from CONFIG_REGISTRY.tabs_sorted(); stale v0.1 banner scrubbed; golden + unit + integration tests",
+      "status": "closed",
       "success_criteria": [
         "help groups follow metadata registry order",
         "stale references removed",
