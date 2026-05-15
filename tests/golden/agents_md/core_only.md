@@ -63,7 +63,7 @@ IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN>``
 (zero-padded, e.g., ``P00``, ``P03``). Wave IDs: ``W<NN>`` likewise.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.0 hash=684e66ab6089ae5c -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.1 hash=35dba115d9f2702b -->
 ### Naming conventions
 
 To prevent drift across state models, envelopes, parameters, and
@@ -106,6 +106,22 @@ input so quoting is visible. Example:
 with one ``ExceptionType: explanation`` line per case. Do NOT
 use inline prose like ``Raises ValueError if ...`` in the
 summary; reserve the ``Raises:`` block for that.
+
+**Mutator-path precision in wave success criteria** — when a
+wave's success criterion text references a "save through" or
+"persist via" path, name the actual canonical writer rather
+than the generic phrase ``state-CLI``. Three distinct mutator
+surfaces live in this repo: (a) **state-CLI** mutates
+``.ea/state.json`` via ``uv run eawf state ...`` and the
+``portalocker``-backed writer in :mod:`eawf.state.writer`;
+(b) **layered-config writer** mutates the per-layer YAML files
+(``.ea/config.yaml``, ``~/.eawf/config.yaml``, etc.) via
+:func:`eawf.cli.commands.config._save_value_to_layer`;
+(c) **registry writer** mutates ``~/.eawf/registry.json`` via
+:func:`eawf.cli.commands.repo._persist_registry`. Each obeys
+AGENTS rule 4's single-canonical-mutator invariant for *its*
+file; conflating them in criterion prose makes audits flag
+false-positive nits even when the implementation is correct.
 
 <!-- END EAWF:managed id=naming-conventions -->
 <!-- BEGIN EAWF:managed id=deletion-rule version=1.0 hash=bd0cf5251c37fe42 -->

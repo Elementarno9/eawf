@@ -93,7 +93,7 @@ render_blocks:
 
   - id: naming-conventions
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### Naming conventions
 
@@ -137,6 +137,22 @@ render_blocks:
       with one ``ExceptionType: explanation`` line per case. Do NOT
       use inline prose like ``Raises ValueError if ...`` in the
       summary; reserve the ``Raises:`` block for that.
+
+      **Mutator-path precision in wave success criteria** — when a
+      wave's success criterion text references a "save through" or
+      "persist via" path, name the actual canonical writer rather
+      than the generic phrase ``state-CLI``. Three distinct mutator
+      surfaces live in this repo: (a) **state-CLI** mutates
+      ``.ea/state.json`` via ``uv run eawf state ...`` and the
+      ``portalocker``-backed writer in :mod:`eawf.state.writer`;
+      (b) **layered-config writer** mutates the per-layer YAML files
+      (``.ea/config.yaml``, ``~/.eawf/config.yaml``, etc.) via
+      :func:`eawf.cli.commands.config._save_value_to_layer`;
+      (c) **registry writer** mutates ``~/.eawf/registry.json`` via
+      :func:`eawf.cli.commands.repo._persist_registry`. Each obeys
+      AGENTS rule 4's single-canonical-mutator invariant for *its*
+      file; conflating them in criterion prose makes audits flag
+      false-positive nits even when the implementation is correct.
 
   - id: deletion-rule
     target: AGENTS.md
