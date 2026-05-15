@@ -1818,6 +1818,19 @@
           "default": null,
           "title": "Closed At"
         },
+        "commit": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit"
+        },
         "deps": {
           "items": {
             "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",

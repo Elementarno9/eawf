@@ -79,6 +79,7 @@ HypothesisIdStr = Annotated[
     Field(pattern=f"^(?:{RE_HYPOTHESIS.pattern[1:-1]}|{RE_HYPOTHESIS_SCOPED.pattern[1:-1]})$"),
 ]
 IdStr = Annotated[str, Field(min_length=1, pattern=r"^\S+$")]
+ShaStr = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 
 McpGrantScopeKind = Literal["wave", "profile", "global"]
 GRANT_SCOPE_KINDS: tuple[McpGrantScopeKind, ...] = get_args(McpGrantScopeKind)
@@ -227,6 +228,7 @@ class Wave(_StrictModel):
     token_budget: Annotated[int | None, Field(ge=0)] = None
     tokens_consumed: Annotated[int, Field(ge=0)] = 0
     outcome: str | None = None
+    commit: ShaStr | None = None
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
 
