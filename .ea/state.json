@@ -1215,10 +1215,8 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I02-W01"
-    ],
-    "iter_id": "P20-I02",
+    "active_wave_ids": [],
+    "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
     "subproject_id": null
@@ -1845,13 +1843,13 @@
       ]
     },
     "P20-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A27-P20",
+      "closed_at": "2026-05-15T20:10:05.115290Z",
       "estimate_id": null,
       "id": "P20-I02",
       "opened_at": "2026-05-15T20:03:15.757941Z",
       "phase_id": "P20",
-      "status": "active",
+      "status": "closed",
       "title": "audit-followups",
       "wave_ids": [
         "P20-I02-W01"
@@ -2266,7 +2264,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T20:03:36.416597Z",
+  "updated_at": "2026-05-15T20:10:05.115316Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5480,8 +5478,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T20:10:04.578780Z",
+      "commit": "f4eda19eedaae697f41df7e9eb88676898a2e94c",
       "deps": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5492,8 +5490,8 @@
       "id": "P20-I02-W01",
       "iter_id": "P20-I02",
       "opened_at": "2026-05-15T20:03:24.727866Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "mutator-path precision rule landed in AGENTS naming-conventions block (1.0 -> 1.1); 3 audit nits prevented at source; goldens regenerated; gauntlet 3164 pass",
+      "status": "closed",
       "success_criteria": [
         "naming-conventions block carries mutator-path precision rule",
         "both AGENTS.md and core.yaml managed regions regenerate consistently",
