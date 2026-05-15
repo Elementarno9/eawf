@@ -176,6 +176,16 @@
       "uri": "repo:.ea/artifacts/A24-P19-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P19/ART-A24-P19"
     },
+    "ART-A25-P19-I02-W16": {
+      "created_at": "2026-05-15T15:07:56.955980Z",
+      "id": "ART-A25-P19-I02-W16",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "bfd8fe0fecb20212055c06925338e0ede44f14c903867082e220ac297e5362e5",
+      "size_bytes": 1842,
+      "uri": "repo:.ea/artifacts/A25-P19-I02-W16-backlog-bulk-close.md",
+      "urn": "urn:eawf:v1:artifact:P19-I02-W16/ART-A25-P19-I02-W16"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -451,6 +461,17 @@
       "scope_id": "P19",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A25-P19-I02-W16": {
+      "check_results": [],
+      "created_at": "2026-05-15T15:08:01.060937Z",
+      "id": "A25-P19-I02-W16",
+      "integrity_results": [],
+      "kind": "review",
+      "report_artifact_id": "ART-A25-P19-I02-W16",
+      "scope_id": "P19-I02-W16",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -459,7 +480,7 @@
       "commit": null,
       "created_at": "2026-05-10T12:50:34.695399Z",
       "id": "B001",
-      "priority": "P1",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -470,7 +491,7 @@
       "commit": null,
       "created_at": "2026-05-10T12:50:35.036761Z",
       "id": "B002",
-      "priority": "P1",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -492,7 +513,7 @@
       "commit": null,
       "created_at": "2026-05-10T12:50:35.733145Z",
       "id": "B004",
-      "priority": "P1",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -503,7 +524,7 @@
       "commit": null,
       "created_at": "2026-05-10T12:50:36.132398Z",
       "id": "B005",
-      "priority": "P1",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -558,7 +579,7 @@
       "commit": null,
       "created_at": "2026-05-10T12:50:37.904560Z",
       "id": "B010",
-      "priority": "P1",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -635,7 +656,7 @@
       "commit": null,
       "created_at": "2026-05-10T18:50:46.575905Z",
       "id": "B017",
-      "priority": "P1",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -653,25 +674,25 @@
       "title": "Statusline parity with hand-rolled wrapper: rows: rich (multi-line), ctx/5h/7d progress bars, async stale-while-revalidate cache + prewarm wiring, glyph_mode/color_mode/rows config, module toggles + 'eawf global install' wizard per docs/architecture/statusline.md"
     },
     "B019": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:07.915816Z",
+      "commit": "9391b8b",
       "created_at": "2026-05-10T19:49:40.083539Z",
       "id": "B019",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "delivered by P13-W04 audit-check DSL skeleton",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) — locks D02; target P09 evidence cluster"
     },
     "B020": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:25.945626Z",
+      "commit": "3172aa6",
       "created_at": "2026-05-10T19:49:40.490366Z",
       "id": "B020",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "delivered by P16-W10 evidence + hypothesis lifecycle CLI",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis set-verdict' requires --audit <AID> — locks D03; target P09"
     },
     "B021": {
@@ -708,14 +729,14 @@
       "title": "Cross-language profile bodies (rust, go, ts) — pytest_pass analogue per language; target P09 runtime cluster"
     },
     "B024": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:54.140596Z",
+      "commit": "4e83f8a",
       "created_at": "2026-05-10T19:49:55.658260Z",
       "id": "B024",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "superseded by B061 (layered skill registry + user catalogue)",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them — target P10 distribution cluster"
     },
     "B025": {
@@ -917,14 +938,14 @@
       "title": "Self-eval benchmark harness: score dispatcher's wave outputs against golden traces; CI-gates regression — target P12 observability"
     },
     "B043": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:54.614842Z",
+      "commit": "4e83f8a",
       "created_at": "2026-05-10T19:50:32.427338Z",
       "id": "B043",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "superseded by B061 (layered skill registry + user catalogue)",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "User-skill registry: per-user skill catalogue independent of project's plugin tree — target P09 distribution"
     },
     "B044": {
@@ -961,14 +982,14 @@
       "title": "wave update --files verb (allow editing Wave.file_scopes post-plan to reflect implementation reality)"
     },
     "B047": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:26.424287Z",
+      "commit": "5252c6a",
       "created_at": "2026-05-11T08:42:27.602406Z",
       "id": "B047",
       "priority": "P3",
-      "resolution": null,
+      "resolution": "delivered by P09-W03 /Users scrub",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix docstring (worktree.py:393)"
     },
     "B048": {
@@ -976,7 +997,7 @@
       "commit": null,
       "created_at": "2026-05-11T14:52:28.239930Z",
       "id": "B048",
-      "priority": "P2",
+      "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
@@ -1005,25 +1026,25 @@
       "title": "Add weekly_eu_target field to state.project for TUI cross-repo totals divisor"
     },
     "B054": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:26.875358Z",
+      "commit": "96affde",
       "created_at": "2026-05-11T20:47:23.928223Z",
       "id": "B054",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "delivered by P14-W01 phase prepare-close + version-coupling",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "P14 W01-W02 hygiene preamble: state-writer EOL fix + version-coupling lint + phase prepare-close mutator + iter-bump hint"
     },
     "B055": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:27.359834Z",
+      "commit": "2e3ed20",
       "created_at": "2026-05-11T20:47:24.571000Z",
       "id": "B055",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "delivered by P14-W02 pre-commit hygiene + commit-prefix linter",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Pre-commit hygiene: secrets-baseline content-hash + commit-prefix linter ([P##-CORE] state-only) + doc verify --strict gate"
     },
     "B056": {
@@ -1060,14 +1081,14 @@
       "title": "eawf profile new --inherit scaffold + profile validate CLI + TOFU content-hash trust ledger in .ea/config.yaml profiles.trusted"
     },
     "B059": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:27.785224Z",
+      "commit": "5412d9b",
       "created_at": "2026-05-11T20:47:28.717784Z",
       "id": "B059",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "delivered by P14-W11 artifact-kind enum expansion",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Artifact-kind enum expansion: notebook/dataset/model/backtest/strategy/binary/scene/playtest_session/cve_ref + URN routing + sha256 policy"
     },
     "B060": {
@@ -1082,14 +1103,14 @@
       "title": "uiux/web/mobile/a11y profile bodies + visual_artifacts state extension + PR-body visual evidence conditional render block"
     },
     "B061": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T15:08:28.622258Z",
+      "commit": "4e83f8a",
       "created_at": "2026-05-11T20:47:30.661752Z",
       "id": "B061",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "delivered by P14-W09 layered skill registry + user catalogue",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Skill registry / discovery API across runtimes + user-skill catalogue (~/.eawf/skills); supersedes B024+B043"
     },
     "B062": {
@@ -1152,7 +1173,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P19-I02-W16"
+    ],
     "iter_id": "P19-I02",
     "phase_id": "P19",
     "project_code": "EAWF",
@@ -2186,7 +2209,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T14:45:05.829127Z",
+  "updated_at": "2026-05-15T15:09:05.780948Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4681,7 +4704,7 @@
       "blocks": [
         "P19-I02-W21"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "executor-p19-w16",
       "closed_at": null,
       "deps": [],
       "effort_bucket": "M",
@@ -4693,7 +4716,7 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:26.536663Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "stale items closed via audit",
         "supersession links recorded",
