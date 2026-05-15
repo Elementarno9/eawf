@@ -1194,7 +1194,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P20-I01-W04",
+      "P20-I01-W05",
+      "P20-I01-W11"
+    ],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2228,7 +2232,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T18:11:57.928307Z",
+  "updated_at": "2026-05-15T18:14:16.646636Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5084,7 +5088,7 @@
     "P20-I01-W04": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5098,7 +5102,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:56.024559Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "five overlays",
         "verb-prefixed shortcuts",
@@ -5114,7 +5118,7 @@
       "blocks": [
         "P20-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5129,7 +5133,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:56.512048Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "top strip multi-repo",
         "active-repo quadrant below",
@@ -5291,7 +5295,7 @@
       "blocks": [
         "P20-I01-W13"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5306,7 +5310,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:18.771208Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "c hotkey opens tabbed full-screen modal",
         "inline modal sized per type",
