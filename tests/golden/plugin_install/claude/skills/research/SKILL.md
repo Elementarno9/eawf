@@ -18,12 +18,29 @@ disable-model-invocation: true
 5. If `--final`: persist a research brief with `references` and render
    it through `eawf research show --md`.
 
+## Spike convention
+
+A *spike* — a short read-only investigation done before claiming a
+real wave — is run via `/research` and produces a brief under
+`.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional
+`.ea/local/research/` sub-directory). The filename follows the
+`<date>-<slug>.md` stem so it sorts chronologically and slug-matches
+the wave, iter, or phase it informs. Briefs stay local-only —
+`.ea/local/` is gitignored — and are promoted to `.ea/artifacts/`
+only when they inform a decision recorded in `state.json` (the
+artifact-chassis rule then applies). See `spike-workflow` in
+AGENTS.md for the full convention.
+
 ## Pre-flight checklist
 
 - [ ] No state mutations — read-only.
 - [ ] Cite sources as dense `[N]` references backed by `Citation` rows.
 - [ ] Keep promoted artifact prose scrub-clean and repo-relative.
 - [ ] Distinguish "what the code does" from "what the doc claims".
+- [ ] If this run is a spike, name the brief
+      `<YYYY-MM-DD>-<slug>.md` and place it under `.ea/local/` (or
+      `.ea/local/research/`) so the dispatch renderer can surface it
+      to the next wave's executor.
 
 ## Decision surfaces
 

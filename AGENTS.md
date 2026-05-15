@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.3 hash=43666054de901e66 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.4 hash=0be30571cc69434f -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -36,6 +36,7 @@ non-trivial body has an expansion block immediately following.
 19. **Typed agent reports.** See ``agent-report-contract``.
 20. **Planned-scope revisability.** See ``planned-scope-revisability``.
 21. **Roadmap procedure.** See ``roadmap-procedure``.
+22. **Spike workflow.** See ``spike-workflow``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -426,3 +427,40 @@ deferred to a follow-up phase; P19 ships phase-at-a-time only.
 proposes to swap order.
 
 <!-- END EAWF:managed id=roadmap-procedure -->
+<!-- BEGIN EAWF:managed id=spike-workflow version=1.0 hash=671a40eebbf0ffd1 -->
+### Spike workflow
+
+A *spike* is a short, time-boxed, read-only investigation run
+before claiming a real wave — used when the next move is unclear
+and the operator needs a brief or experimental verdict to write
+the wave's success criteria. Spikes are convention-only in v0.3
+(no dedicated CLI verb); they ride the existing ``/research``
+surface and produce a brief artifact, not a state mutation.
+
+**When to spike.** Reach for a spike when (a) the wave's success
+criteria cannot yet be written without first reading code or
+running a probe, (b) two or more design alternatives need a
+verdict before ``/roadmap propose`` can commit to a DAG, or
+(c) an audit hypothesis needs an evidence sweep before
+``set-verdict``. Skip the spike when the next move is obvious —
+go straight to ``/roadmap propose`` or ``/prep`` claim.
+
+**Where the output lives.** Spike output is a research brief
+under ``.ea/local/<YYYY-MM-DD>-<slug>.md`` (or the conventional
+``.ea/local/research/`` sub-directory). Filenames follow the
+``<date>-<slug>.md`` stem so the brief sorts chronologically and
+slug-matches against the wave or phase it informs. Briefs stay
+local-only — ``.ea/local/`` is gitignored — and are promoted to
+``.ea/artifacts/`` only when they inform a decision that lives
+in ``state.json`` (artifact-chassis rule applies on promotion).
+
+**How the verdict feeds the workflow.** The spike's verdict is
+the input to the next ``/roadmap propose --phase P<NN>`` or
+``/prep`` claim. Reference the brief by repo-relative path in
+the roadmap proposal, the wave's plan body, or the dispatch
+prompt — the wave dispatch renderer surfaces spike briefs whose
+filename matches the wave / iter / phase id under a
+``## References`` section so the subagent reads them before
+starting work.
+
+<!-- END EAWF:managed id=spike-workflow -->

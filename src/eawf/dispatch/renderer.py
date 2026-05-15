@@ -23,6 +23,16 @@ either the ``claude-code`` runtime (single-string prompt) or the
 ``claude-agent-sdk`` runtime (SDK invocation block with ``mcp_servers``
 and ``allowed_tools`` projected from :attr:`State.mcp_grants`). No new
 runtime dependency on the SDK package — render-only.
+
+P20 W14 adds spike-brief surfacing: when ``repo_root`` is supplied, the
+renderer scans ``<repo_root>/.ea/local/`` and
+``<repo_root>/.ea/local/research/`` for ``*.md`` files whose filename
+references the wave id, iter id, or phase id (case-insensitive
+substring match). Matched briefs render under a ``## References``
+section so the dispatched subagent reads them before starting work.
+``.ea/local/`` is gitignored — briefs stay local-only per the
+``spike-workflow`` AGENTS.md rule. When no brief exists (or
+``repo_root`` is ``None``) the section is omitted.
 """
 
 from __future__ import annotations
@@ -202,10 +212,16 @@ def render_wave_prompt(
     Args:
         state: Validated, read-only state snapshot.
         wave_id: Target wave id (must exist in ``state.waves``).
-        repo_root: Optional repo root. Reserved for future expansions
-            that read git refs; the v0.1 surface ignores it but accepts
-            it so the call signature stays stable for callers that
-            already plumb the repo path through.
+        repo_root: Optional repo root. When supplied, the renderer
+            scans ``<repo_root>/.ea/local/`` and
+            ``<repo_root>/.ea/local/research/`` for spike briefs
+            (``*.md`` files whose filename mentions the wave id,
+            iter id, or phase id) and emits them under a
+            ``## References`` section. ``None`` (default) skips the
+            scan and omits the section — preserves the v0.1 surface
+            for callers that have not yet plumbed the repo path
+            through. ``.ea/local/`` is gitignored, so the briefs
+            stay local-only per the ``spike-workflow`` rule.
 
     Returns:
         A single string containing the full Markdown prompt. The
@@ -216,7 +232,6 @@ def render_wave_prompt(
         KeyError: When the wave id is missing or the
             wave → iter → phase → scope chain has a broken link.
     """
-    _ = repo_root  # accepted for API symmetry; not consumed in v0.1
     wave = state.waves.get(wave_id)
     if wave is None:
         raise KeyError(f"unknown wave: {wave_id!r}")
@@ -231,6 +246,9 @@ def render_wave_prompt(
     sections.append(_render_decisions(state, scope_id=scope_id))
     sections.append(_render_hypotheses(state, scope_id=scope_id))
     sections.append(_render_recent_audits(state, scope_id=scope_id))
+    references_section = _render_spike_references(wave, repo_root=repo_root)
+    if references_section is not None:
+        sections.append(references_section)
     sections.append(_render_working_tree(state, wave))
     sections.append(_render_workflow(wave))
     sections.append(_render_out_of_scope())
@@ -339,6 +357,89 @@ def _render_recent_audits(state: State, *, scope_id: str) -> str:
         verdict = audit.verdict.value if audit.verdict is not None else "pending"
         lines.append(f"- {audit.id}: {audit.kind.value} verdict={verdict}")
     return "\n".join(lines)
+
+
+def _render_spike_references(wave: Wave, *, repo_root: Path | None) -> str | None:
+    """Return the ``## References`` section listing spike briefs, or ``None``.
+
+    A spike brief is any ``*.md`` file directly under
+    ``<repo_root>/.ea/local/`` or
+    ``<repo_root>/.ea/local/research/`` whose filename mentions the
+    wave's id, its iter id, or its phase id (case-insensitive
+    substring match). The match is filename-only so the scan stays
+    cheap and predictable; richer matching (content scan, slug
+    overlap with ``wave.file_scopes``) is a deferred follow-up.
+
+    Args:
+        wave: The dispatched wave — supplies the id tokens scanned for.
+        repo_root: When ``None`` the scan is skipped and the function
+            returns ``None`` so the renderer omits the section. When a
+            real path, ``<repo_root>/.ea/local/`` is opened (best-effort
+            — missing directory is treated as "no briefs").
+
+    Returns:
+        Rendered ``## References`` block (no trailing newline) when at
+        least one brief matches; ``None`` otherwise. The renderer
+        skips the section entirely on ``None`` rather than emitting an
+        empty ``None.`` placeholder — keeps the prompt terse when no
+        spike preceded the wave.
+    """
+    if repo_root is None:
+        return None
+    briefs = _find_spike_briefs(wave, repo_root=repo_root)
+    if not briefs:
+        return None
+    lines = ["## References", ""]
+    lines.append(
+        "Spike briefs whose filename references this wave / iter / phase. "
+        "Read these before starting work — they capture the read-only "
+        "investigation that motivated the wave's success criteria."
+    )
+    lines.append("")
+    for rel_path in briefs:
+        lines.append(f"- {rel_path}")
+    return "\n".join(lines)
+
+
+def _find_spike_briefs(wave: Wave, *, repo_root: Path) -> list[str]:
+    """Return repo-relative paths to spike briefs matching the wave.
+
+    Scans ``<repo_root>/.ea/local/`` (non-recursive) and
+    ``<repo_root>/.ea/local/research/`` (non-recursive). Match is a
+    case-insensitive substring test of the filename stem against the
+    wave id, iter id, and phase id. The returned list is sorted
+    lexicographically for deterministic output across runs.
+
+    Returns ``[]`` when ``.ea/local/`` does not exist or no file
+    matches — callers treat that as "skip the section".
+    """
+    local_root = repo_root / ".ea" / "local"
+    if not local_root.is_dir():
+        logger.debug(f"_find_spike_briefs wave={wave.id!r} reason=local-dir-absent")
+        return []
+
+    phase_segment, _ = _phase_wave_commit_prefix(wave.id)
+    tokens = {wave.id.lower(), wave.iter_id.lower(), phase_segment.lower()}
+
+    candidates: list[Path] = []
+    for sub in (local_root, local_root / "research"):
+        if not sub.is_dir():
+            continue
+        for entry in sub.iterdir():
+            if entry.is_file() and entry.suffix == ".md":
+                candidates.append(entry)
+
+    matched: list[str] = []
+    for path in candidates:
+        name_lower = path.name.lower()
+        if any(tok in name_lower for tok in tokens):
+            rel = path.relative_to(repo_root).as_posix()
+            matched.append(rel)
+    matched.sort()
+    logger.debug(
+        f"_find_spike_briefs wave={wave.id!r} matched={len(matched)} candidates={len(candidates)}"
+    )
+    return matched
 
 
 def _render_working_tree(state: State, wave: Wave) -> str:
