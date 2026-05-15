@@ -1216,7 +1216,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P20-I01-W13"
+      "P20-I01-W14"
     ],
     "iter_id": null,
     "phase_id": "P20",
@@ -2252,7 +2252,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T19:18:33.698898Z",
+  "updated_at": "2026-05-15T19:24:29.429930Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5377,8 +5377,8 @@
         "P20-I01-W14"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T19:24:16.140805Z",
+      "commit": "83a30d4dacf9e29aff88645abfdfbf9fd33c3ee1",
       "deps": [
         "P20-I01-W07",
         "P20-I01-W11",
@@ -5392,8 +5392,8 @@
       "id": "P20-I01-W13",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:19.806798Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "TUI surface docs (docs/architecture/tui.md, 326 LoC) + P20 ship-gate audit A27 verdict=pass; chassis-validated; 3154 pass",
+      "status": "closed",
       "success_criteria": [
         "TUI surface documented",
         "asciinema notes recorded",
@@ -5407,7 +5407,7 @@
     "P20-I01-W14": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "prep-p20-flow-20260515-1844",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -5422,7 +5422,7 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:20.300974Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "spike convention codified in AGENTS",
         "/prep + /research skill prompts updated",
