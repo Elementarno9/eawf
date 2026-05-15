@@ -707,33 +707,58 @@ def _phase_activate_dirty_lines(repo: Path) -> list[str]:
     return [line for line in (res.stdout or "").splitlines() if line.strip()]
 
 
-def _phase_activate_base_behind_count(repo: Path, *, default_branch: str) -> int | None:
-    """Return commit count by which ``HEAD`` is behind ``origin/<default_branch>``.
+def _phase_activate_fetch_base(repo: Path, *, default_branch: str, remote: str = "origin") -> bool:
+    """Fetch ``<remote>/<default_branch>`` so the currency gate sees fresh tips.
 
-    Returns ``None`` when the currency check should be skipped: no
-    ``origin`` remote, no ``origin/<default_branch>`` ref, or the fetch
-    refused (e.g. offline / auth). A non-negative integer is the count
-    of commits in ``origin/<default_branch>..HEAD``'s reverse range —
-    i.e. the number of commits the local branch is behind.
+    Safe-degrades when the configured remote is missing or the fetch
+    fails (offline, auth refused, branch not on remote). The currency
+    gate downstream will then either find no ``<remote>/<default_branch>``
+    ref and skip cleanly, or compare against the previously-cached tip.
+
+    Args:
+        repo: Repository root containing ``.git``.
+        default_branch: Branch name on the remote to refresh.
+        remote: Remote alias to fetch from (defaults to ``origin``).
+
+    Returns:
+        ``True`` when the fetch ran and exited zero; ``False`` when the
+        remote is absent or the fetch failed. The boolean is logged but
+        never raised — failure must not block activation on its own.
     """
     remotes = _phase_activate_run_git(["git", "-C", str(repo), "remote"], cwd=repo)
     if remotes.returncode != 0:
-        logger.info(f"_phase_activate_base_behind_count remote_rc={remotes.returncode}")
-        return None
+        logger.info(f"_phase_activate_fetch_base remote_list_rc={remotes.returncode}")
+        return False
     remote_names = {line.strip() for line in (remotes.stdout or "").splitlines() if line.strip()}
-    if "origin" not in remote_names:
-        logger.info("_phase_activate_base_behind_count no_origin=True")
-        return None
+    if remote not in remote_names:
+        logger.info(f"_phase_activate_fetch_base no_remote remote={remote!r}")
+        return False
     fetched = _phase_activate_run_git(
-        ["git", "-C", str(repo), "fetch", "--quiet", "origin", default_branch],
+        ["git", "-C", str(repo), "fetch", "--quiet", remote, default_branch],
         cwd=repo,
     )
     if fetched.returncode != 0:
         logger.warning(
-            f"_phase_activate_base_behind_count fetch_failed rc={fetched.returncode} "
+            f"_phase_activate_fetch_base fetch_failed remote={remote!r} "
+            f"base={default_branch!r} rc={fetched.returncode} "
             f"stderr={(fetched.stderr or '').strip()!r}"
         )
-        return None
+        return False
+    logger.info(f"_phase_activate_fetch_base ok remote={remote!r} base={default_branch!r}")
+    return True
+
+
+def _phase_activate_base_behind_count(repo: Path, *, default_branch: str) -> int | None:
+    """Return commit count by which ``HEAD`` is behind ``origin/<default_branch>``.
+
+    Returns ``None`` when the currency check should be skipped: no
+    ``origin/<default_branch>`` ref is present locally. A non-negative
+    integer is the count of commits in ``origin/<default_branch>..HEAD``'s
+    reverse range — i.e. the number of commits the local branch is behind.
+
+    Callers should invoke :func:`_phase_activate_fetch_base` first so the
+    remote ref is fresh; this helper itself does not network.
+    """
     ref = f"origin/{default_branch}"
     verify = _phase_activate_run_git(
         ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", ref],
@@ -760,12 +785,29 @@ def _phase_activate_base_behind_count(repo: Path, *, default_branch: str) -> int
         ) from exc
 
 
-def _phase_activate_git_gates(state_path: Path, *, default_branch: str) -> None:
+def _phase_activate_git_gates(
+    state_path: Path,
+    *,
+    default_branch: str,
+    allow_stale: bool = False,
+) -> None:
     """Run the dirty-worktree + base-currency gates ahead of the mutation.
 
     Skips silently when ``state_path`` is not inside a git repository or
     when ``git`` is not installed on PATH — both are valid configurations
     (tmp test workspaces, non-git Eä deployments).
+
+    Before the currency comparison runs, a best-effort
+    :func:`_phase_activate_fetch_base` refreshes ``origin/<default_branch>``
+    so the local cached tip cannot mask remote advances. Fetch failures
+    (offline, missing remote, auth) are logged and skipped — the count
+    step then either finds no remote ref and skips or compares against
+    the stale-but-cached tip.
+
+    When *allow_stale* is true, the currency gate is bypassed entirely
+    (dirty-worktree gate still runs). The operator opted into landing
+    on a behind base; the bypass is logged so audit reconstruction can
+    see the decision.
 
     Raises:
         cli_errors.InvalidInput: when the worktree is dirty (gate 3) or
@@ -787,6 +829,14 @@ def _phase_activate_git_gates(state_path: Path, *, default_branch: str) -> None:
             f"refusing to activate phase: worktree is dirty ({len(dirty)} entries); "
             "commit, stash, or discard local changes first"
         )
+    if allow_stale:
+        logger.info(
+            f"_phase_activate_git_gates currency=bypassed allow_stale=True "
+            f"default_branch={default_branch!r} repo={repo}"
+        )
+        return
+    fetched = _phase_activate_fetch_base(repo, default_branch=default_branch)
+    logger.info(f"_phase_activate_git_gates fetched={fetched} default_branch={default_branch!r}")
     behind = _phase_activate_base_behind_count(repo, default_branch=default_branch)
     if behind is None:
         logger.info(
@@ -801,7 +851,7 @@ def _phase_activate_git_gates(state_path: Path, *, default_branch: str) -> None:
         )
         raise cli_errors.InvalidInput(
             f"refusing to activate phase: HEAD is {behind} commits behind "
-            f"origin/{default_branch}; rebase first"
+            f"origin/{default_branch}; rebase first (or pass --allow-stale to override)"
         )
     logger.info(f"_phase_activate_git_gates ok behind=0 default_branch={default_branch!r}")
 
@@ -832,8 +882,19 @@ def _phase_activate_project_default_branch(state_path: Path) -> str | None:
 def phase_activate_cmd(
     ctx: typer.Context,
     phase_id: Annotated[str, typer.Argument(help="PLANNED phase id to activate.")],
+    allow_stale: Annotated[
+        bool,
+        typer.Option(
+            "--allow-stale",
+            help=(
+                "Bypass the base-currency gate (P19-W13). Operator opts into "
+                "activating the phase even when HEAD is behind "
+                "origin/<default_branch>. The dirty-worktree gate still runs."
+            ),
+        ),
+    ] = False,
 ) -> None:
-    """Flip a PLANNED phase to ACTIVE (P19-W07, P19-W11).
+    """Flip a PLANNED phase to ACTIVE (P19-W07, P19-W11, P19-W13).
 
     Runs the V11 hard gate: the phase must already carry at least one
     planned wave, and every phase listed in ``Phase.depends_on`` must
@@ -849,6 +910,14 @@ def phase_activate_cmd(
       compare; reject when ``HEAD`` is behind. Skipped when no remote,
       no ref, or no git binary on PATH (the activation still falls
       through to the library no-waves gate in those configurations).
+
+    P19-W13 wires an explicit ``git fetch origin <default_branch>`` step
+    in front of the behind-count so the comparison sees fresh tips, and
+    exposes an ``--allow-stale`` override that lets the operator
+    deliberately bypass the currency gate (dirty-worktree gate still
+    runs). Fetch failures degrade safely — a missing or unreachable
+    remote logs and falls through to the count step, which then skips
+    when the local cache also lacks the ref.
     """
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
@@ -865,7 +934,11 @@ def phase_activate_cmd(
     default_branch = _phase_activate_project_default_branch(state_path)
     if default_branch is not None:
         try:
-            _phase_activate_git_gates(state_path, default_branch=default_branch)
+            _phase_activate_git_gates(
+                state_path,
+                default_branch=default_branch,
+                allow_stale=allow_stale,
+            )
         except cli_errors.CliError as err:
             cli_errors.emit_error(err, flags=flags)
             return

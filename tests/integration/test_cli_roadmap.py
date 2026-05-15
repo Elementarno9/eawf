@@ -513,6 +513,35 @@ def test_phase_activate_behind_upstream_rejected(workspace: Path, tmp_path: Path
 
 
 @pytest.mark.skipif(not _GIT_AVAILABLE, reason="git is required for phase-activate gate tests")
+def test_phase_activate_allow_stale_bypasses_currency_gate(workspace: Path, tmp_path: Path) -> None:
+    """P19-W13: ``--allow-stale`` bypasses currency gate even when HEAD is behind."""
+    _make_local_repo(workspace)
+    remote = tmp_path / "origin.git"
+    _make_origin_remote(workspace, remote=remote)
+    _bare_commit_on_origin_main(workspace, remote=remote)
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+        ],
+    )
+    _commit_state_changes(workspace, msg="seed roadmap")
+    res = runner.invoke(app, ["phase", "activate", "P21", "--allow-stale"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["status"] == "active"
+
+
+@pytest.mark.skipif(not _GIT_AVAILABLE, reason="git is required for phase-activate gate tests")
 def test_phase_activate_local_only_branch_skips_currency_check(workspace: Path) -> None:
     """No ``origin`` remote skips the currency gate (clean tree still activates)."""
     _make_local_repo(workspace)
