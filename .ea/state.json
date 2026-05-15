@@ -1196,7 +1196,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P20",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2173,7 +2173,7 @@
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "TUI + metrics + operator UX"
     },
@@ -2228,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T16:04:35.626783Z",
+  "updated_at": "2026-05-15T16:42:59.852988Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
