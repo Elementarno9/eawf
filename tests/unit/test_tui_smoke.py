@@ -44,10 +44,13 @@ def test_breadcrumb_handles_minimal_state() -> None:
 
 def test_summary_counts_extract_open_pending_audits() -> None:
     counts = _summary_counts(_state())
+    # P20-I01-W02 expanded the counter set to include in-progress waves
+    # for the quadrant roadmap pane. Sample state has none of that kind.
     assert counts == {
         "phases_open": 1,
         "iters_open": 1,
         "waves_pending": 1,
+        "waves_in_progress": 0,
         "audits": 1,
     }
 
@@ -55,7 +58,9 @@ def test_summary_counts_extract_open_pending_audits() -> None:
 def test_build_status_text_carries_brand_and_keymap() -> None:
     text = build_status_text(_state())
     assert text.startswith("Eä")
-    assert "↑↓ navigate" in text
+    # Keymap now lists the full arrow set per
+    # ``feedback_tui_keymap_conventions`` (P20-I01-W02).
+    assert "↑↓←→ navigate" in text
     assert "waves_pending=1" in text
 
 
@@ -63,7 +68,9 @@ def test_render_layout_writes_into_buffer() -> None:
     output = render_layout(_state())
     assert "Eä" in output
     assert "DEMO" in output
-    assert "↑↓ navigate" in output
+    # Quadrant keymap (P20-I01-W02) lists arrows + Esc + vim aliases.
+    assert "navigate" in output
+    assert "Esc" in output
 
 
 def test_render_layout_accepts_external_console() -> None:

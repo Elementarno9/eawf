@@ -1,0 +1,30 @@
+{
+  "project": {"code": "EAWF"},
+  "current": {"phase_id": "P20", "iter_id": "P20-I01"},
+  "phases": {
+    "P19": {"status": "closed"},
+    "P20": {"status": "active"}
+  },
+  "iters": {
+    "P20-I01": {"status": "active"}
+  },
+  "waves": {
+    "P20-I01-W01": {"status": "closed"},
+    "P20-I01-W02": {"status": "in_progress"},
+    "P20-I01-W08": {"status": "in_progress"},
+    "P20-I01-W10": {"status": "closed"}
+  },
+  "audits": {
+    "A01-P20": {"status": "complete"}
+  },
+  "backlog": {
+    "B001": {"status": "open"},
+    "B002": {"status": "open"},
+    "B003": {"status": "closed"}
+  },
+  "git": {
+    "branch": "feature/eawf-v0.3-p20",
+    "head": "abc1234",
+    "dirty": false
+  }
+}
