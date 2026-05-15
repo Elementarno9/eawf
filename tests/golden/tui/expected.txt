@@ -4,22 +4,22 @@
 ╭─────────────────── roadmap ────────────────────╮╭──────────────────── status ────────────────────╮
 │ phases (active):  1                            ││ project: EAWF                                  │
 │ iters  (active):  1                            ││ phase:   P20                                   │
-│ waves  (pending): 0                            ││ iter:    P20-I01                               │
-│ waves  (in-prog): 2                            ││ audits:  1                                     │
-│                                                ││                                                │
+│ iters  (closed):  0                            ││ iter:    P20-I01 (active)                      │
+│ waves  (pending): 0                            ││ audits:  1                                     │
+│ waves  (in-prog): 2                            ││                                                │
 │                                                ││                                                │
 │                                                ││                                                │
 ╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
 ╭───────────────────── git ──────────────────────╮╭─────────────────── backlog ────────────────────╮
-│ branch: feature/eawf-v0.3-p20                  ││ open:   2                                      │
-│ head:   abc1234                                ││ closed: 1                                      │
-│ status: clean                                  ││ total:  3                                      │
-│                                                ││                                                │
+│ branch:   feature/eawf-v0.3-p20                ││ open:   2                                      │
+│ head:     abc1234                              ││ closed: 1                                      │
+│ status:   clean                                ││ total:  3                                      │
+│ upstream: up-to-date                           ││                                                │
 │                                                ││                                                │
 │                                                ││                                                │
 │                                                ││                                                │
 │                                                ││                                                │
 ╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ↑↓←→ navigate  PageUp/PageDown page  Home/End jump  Enter  b board  Esc/q  (vim: h j k l g G)    │
+│ b board  c config  oH/oD/oM/oE/oR overlay  Esc/q quit                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

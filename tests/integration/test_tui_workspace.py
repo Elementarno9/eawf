@@ -27,15 +27,18 @@ from __future__ import annotations
 import io
 import json
 import os
+import subprocess
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import orjson
 import pytest
 from rich.console import Console
 
 from eawf.registry import Registry, RegistryRepoEntry
+from eawf.tui import layout as layout_mod
 from eawf.tui.layout import BRAND, QUADRANT_PANE_NAMES
 from eawf.tui.workspace import (
     WorkspaceViewState,
@@ -44,6 +47,23 @@ from eawf.tui.workspace import (
 )
 
 _GOLDEN_DIR: Path = Path(__file__).parent.parent / "golden" / "tui"
+
+
+@pytest.fixture(autouse=True)
+def _stub_git_for_workspace_goldens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P20-I03-W01: the git pane reads live; goldens need a deterministic stub.
+
+    The workspace dashboard reuses :func:`eawf.tui.layout.build_quadrant`
+    which now shells out via the live ``git`` CLI. To keep these
+    machine-agnostic goldens stable, force every ``git`` call to return
+    non-zero — the pane renders the four-dash placeholder.
+    """
+
+    def fake_run(*_: Any, **__: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["git"], returncode=128, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    layout_mod._reset_git_pane_cache()
 
 
 # ---------------------------------------------------------------------------
