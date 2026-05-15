@@ -88,6 +88,12 @@ _EXIT_KEYS: frozenset[str] = frozenset({"\x1b", "q", "Q", "\x03", "\x04"})
 #: from any vim-alias the keymap convention reserves.
 _WAVE_BOARD_OPEN_KEY: str = "b"
 
+#: Key that opens the tabbed config modal from the repo-scope quadrant
+#: (P20-I01-W11). The modal is a full-screen Layout swap that replaces
+#: the quadrant; Esc / q returns. Picked ``c`` for "config" — distinct
+#: from ``b`` (wave-board) and the exit keys.
+_CONFIG_MODAL_OPEN_KEY: str = "c"
+
 #: Default refresh rate for the online :class:`Live` loop. Picked low
 #: enough that the rebuild-on-keypress remains the dominant tick path
 #: while still letting time-based panes (e.g. the wave-08 git status
@@ -319,6 +325,17 @@ def run_tui(
                         wave_view = wave_board_mod.WaveBoardState()
                         live.update(_build_wave_board_or_quadrant(workspace, wave_view))
                         continue
+                    if ch == _CONFIG_MODAL_OPEN_KEY:
+                        # Suspend the parent Live: the modal opens its
+                        # own Live context with full screen takeover.
+                        # On return, fall back to the quadrant frame.
+                        live.stop()
+                        try:
+                            _open_config_modal(workspace, reader)
+                        finally:
+                            live.start()
+                        live.update(_build_layout(_load_state(workspace)))
+                        continue
                     live.update(_build_layout(_load_state(workspace)))
                 else:  # view == "wave_board"
                     if ch in _EXIT_KEYS:
@@ -349,6 +366,26 @@ def _load_typed_state(workspace: Path | None) -> State | None:
     except Exception as exc:  # pragma: no cover — defensive log
         logger.warning(f"_load_typed_state workspace={workspace!r} schema mismatch: {exc!r}")
         return None
+
+
+def _open_config_modal(workspace: Path | None, reader: Callable[[], str]) -> None:
+    """Open the W11 tabbed config modal as a full-screen Layout swap.
+
+    The modal owns its own :class:`rich.live.Live` context; the parent
+    Live in :func:`run_tui` is suspended around the call so the screen
+    state is exclusive. ``repo`` defaults to ``Path.cwd()`` (matches
+    the layered-config CLI's ``_resolve_anchors``).
+    """
+    from eawf.tui import config_modal as config_modal_mod
+
+    repo = Path.cwd()
+    state = _load_state(workspace)
+    config_modal_mod.run_config_modal(
+        state=state,
+        workspace=workspace,
+        repo=repo,
+        read_key=reader,
+    )
 
 
 def _build_wave_board_or_quadrant(
