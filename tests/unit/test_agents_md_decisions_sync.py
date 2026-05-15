@@ -316,9 +316,7 @@ def test_render_agents_md_re_render_with_unchanged_state_is_unchanged(
     composed = _composed_with_blocks()
     state = _state_with_decisions({"D11": _decision("D11")})
 
-    _, manifest = render_agents_md(
-        composed, target, Manifest(version=1, generated={}), state=state
-    )
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}), state=state)
     result, _ = render_agents_md(composed, target, manifest, state=state)
 
     assert DECISIONS_REGION_ID in result.regions_unchanged
@@ -419,9 +417,7 @@ def test_render_agents_md_decisions_region_preserves_hand_edits(
     composed = _composed_with_blocks()
     state = _state_with_decisions({"D13": _decision("D13")})
 
-    _, manifest = render_agents_md(
-        composed, target, Manifest(version=1, generated={}), state=state
-    )
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}), state=state)
 
     hand_edit = "\n\n## Hand-written addendum\n\nNot managed by the renderer.\n"
     with target.open("a", encoding="utf-8") as fh:
