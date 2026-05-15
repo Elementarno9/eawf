@@ -9,6 +9,7 @@ string.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -311,3 +312,131 @@ def test_render_terminal_wave_still_emits_prompt() -> None:
     state.waves["P01-I01-W01"].outcome = "all green"
     out = render_wave_prompt(state, "P01-I01-W01")
     assert "# Wave P01-I01-W01: First wave" in out
+
+
+# ---- Spike-brief surfacing (P20-W14) ---------------------------------------
+
+
+def _seed_spike_brief(repo_root: Path, *, name: str, body: str = "stub") -> Path:
+    """Write a spike-brief markdown file under ``.ea/local/research/``.
+
+    Returns the absolute path so the test can assert on the rendered
+    repo-relative form.
+    """
+    research_dir = repo_root / ".ea" / "local" / "research"
+    research_dir.mkdir(parents=True, exist_ok=True)
+    target = research_dir / name
+    target.write_text(body, encoding="utf-8")
+    return target
+
+
+def test_render_no_repo_root_omits_references_section(tmp_path: Path) -> None:
+    """When ``repo_root`` is ``None`` the spike-brief scan is skipped."""
+    state = _empty_state()
+    _seed_chain(state)
+    # Even with a brief on disk, repo_root=None must skip the scan.
+    _seed_spike_brief(tmp_path, name="2026-05-15-P01-spike-foo.md")
+    out = render_wave_prompt(state, "P01-I01-W01")
+    assert "## References" not in out
+
+
+def test_render_with_repo_root_but_no_briefs_omits_references_section(
+    tmp_path: Path,
+) -> None:
+    """An empty ``.ea/local/`` produces no ``## References`` section."""
+    state = _empty_state()
+    _seed_chain(state)
+    # No briefs on disk — the scan walks an empty directory.
+    (tmp_path / ".ea" / "local").mkdir(parents=True, exist_ok=True)
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    assert "## References" not in out
+
+
+def test_render_with_repo_root_missing_local_dir_omits_references_section(
+    tmp_path: Path,
+) -> None:
+    """A repo without ``.ea/local/`` at all is treated as "no briefs"."""
+    state = _empty_state()
+    _seed_chain(state)
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    assert "## References" not in out
+
+
+def test_render_surfaces_spike_brief_matching_phase_id(tmp_path: Path) -> None:
+    """A brief whose filename contains the phase id appears under References."""
+    state = _empty_state()
+    _seed_chain(state)
+    _seed_spike_brief(tmp_path, name="2026-05-15-p01-spike-naming.md")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    assert "## References" in out
+    assert ".ea/local/research/2026-05-15-p01-spike-naming.md" in out
+    assert "Spike briefs whose filename references this wave / iter / phase." in out
+
+
+def test_render_surfaces_spike_brief_matching_wave_id(tmp_path: Path) -> None:
+    """A brief whose filename contains the wave id is also surfaced."""
+    state = _empty_state()
+    _seed_chain(state)
+    _seed_spike_brief(tmp_path, name="2026-05-15-P01-I01-W01-prep.md")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    assert "## References" in out
+    assert ".ea/local/research/2026-05-15-P01-I01-W01-prep.md" in out
+
+
+def test_render_surfaces_spike_brief_directly_under_local_dir(tmp_path: Path) -> None:
+    """Briefs at ``.ea/local/*.md`` (not the research subdir) also match."""
+    state = _empty_state()
+    _seed_chain(state)
+    local_dir = tmp_path / ".ea" / "local"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    (local_dir / "2026-05-15-p01-quickspike.md").write_text("stub", encoding="utf-8")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    assert "## References" in out
+    assert ".ea/local/2026-05-15-p01-quickspike.md" in out
+
+
+def test_render_skips_unrelated_briefs(tmp_path: Path) -> None:
+    """Briefs whose filename does NOT mention the wave/iter/phase are dropped."""
+    state = _empty_state()
+    _seed_chain(state)
+    _seed_spike_brief(tmp_path, name="2026-05-15-p99-unrelated.md")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    # No match ⇒ no section emitted.
+    assert "## References" not in out
+    assert "p99-unrelated" not in out
+
+
+def test_render_lists_multiple_spike_briefs_sorted(tmp_path: Path) -> None:
+    """Multiple matching briefs sort lexicographically in the rendered list."""
+    state = _empty_state()
+    _seed_chain(state)
+    _seed_spike_brief(tmp_path, name="2026-05-15-p01-b-second.md")
+    _seed_spike_brief(tmp_path, name="2026-05-15-p01-a-first.md")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    block = out.split("## References", 1)[1].split("## ", 1)[0]
+    assert "p01-a-first" in block
+    assert "p01-b-second" in block
+    assert block.index("p01-a-first") < block.index("p01-b-second")
+
+
+def test_render_spike_brief_match_is_case_insensitive(tmp_path: Path) -> None:
+    """Filename casing does not affect the substring match against ids."""
+    state = _empty_state()
+    _seed_chain(state)
+    # Uppercase phase ref in filename; wave.id segment is "P01" (already upper).
+    _seed_spike_brief(tmp_path, name="2026-05-15-P01-MixedCase-spike.md")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    assert "## References" in out
+    assert "2026-05-15-P01-MixedCase-spike.md" in out
+
+
+def test_render_spike_briefs_section_lands_before_working_tree(tmp_path: Path) -> None:
+    """``## References`` is placed between ``## Recent audits`` and ``## Working tree``."""
+    state = _empty_state()
+    _seed_chain(state)
+    _seed_spike_brief(tmp_path, name="2026-05-15-p01-spike-order.md")
+    out = render_wave_prompt(state, "P01-I01-W01", repo_root=tmp_path)
+    audits_idx = out.index("## Recent audits")
+    refs_idx = out.index("## References")
+    working_idx = out.index("## Working tree")
+    assert audits_idx < refs_idx < working_idx

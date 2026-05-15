@@ -169,12 +169,29 @@ _RESEARCH_BODY = """# /research
 5. If `--final`: persist a research brief with `references` and render
    it through `eawf research show --md`.
 
+## Spike convention
+
+A *spike* — a short read-only investigation done before claiming a
+real wave — is run via `/research` and produces a brief under
+`.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional
+`.ea/local/research/` sub-directory). The filename follows the
+`<date>-<slug>.md` stem so it sorts chronologically and slug-matches
+the wave, iter, or phase it informs. Briefs stay local-only —
+`.ea/local/` is gitignored — and are promoted to `.ea/artifacts/`
+only when they inform a decision recorded in `state.json` (the
+artifact-chassis rule then applies). See `spike-workflow` in
+AGENTS.md for the full convention.
+
 ## Pre-flight checklist
 
 - [ ] No state mutations — read-only.
 - [ ] Cite sources as dense `[N]` references backed by `Citation` rows.
 - [ ] Keep promoted artifact prose scrub-clean and repo-relative.
 - [ ] Distinguish "what the code does" from "what the doc claims".
+- [ ] If this run is a spike, name the brief
+      `<YYYY-MM-DD>-<slug>.md` and place it under `.ea/local/` (or
+      `.ea/local/research/`) so the dispatch renderer can surface it
+      to the next wave's executor.
 
 ## Decision surfaces
 
@@ -219,11 +236,21 @@ phase's PLANNED-queue state:
      and hint `Run \\`eawf roadmap propose --phase <id> --title ...\\`
      first.` for the operator.
 
-3. For each parallel wave under the activated iter, dispatch a
+3. **Optional spike first.** Before claiming a wave whose success
+   criteria are not yet writable, run `/research <topic>` as a *spike*
+   (read-only) per the `spike-workflow` rule in AGENTS.md. The spike
+   produces a brief under `.ea/local/<YYYY-MM-DD>-<slug>.md` (or the
+   conventional `.ea/local/research/` sub-directory). When a matching
+   spike brief exists, the plan-mode proposal in case A MUST reference
+   it by repo-relative path so the operator and the dispatched executor
+   read the same source-of-truth artifact — the wave dispatch renderer
+   surfaces matching briefs under a `## References` section
+   automatically.
+4. For each parallel wave under the activated iter, dispatch a
    worktree subagent.
-4. For each sequential wave, run inline; cherry-pick parallel-wave
+5. For each sequential wave, run inline; cherry-pick parallel-wave
    commits in between as they finish.
-5. Validate the rendered plan with `eawf plan show --md`; wave tags
+6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.
 
 ## Pre-flight checklist
@@ -235,6 +262,8 @@ phase's PLANNED-queue state:
       file scope.
 - [ ] The target phase exists in `state.phases` with status `planned`
       (otherwise hand back to `/roadmap propose`).
+- [ ] If a spike preceded the claim, its brief path is cited in the
+      plan-mode proposal (case A) so the dispatched subagent reads it.
 
 ## Decision surfaces
 
