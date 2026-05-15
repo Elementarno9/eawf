@@ -22,13 +22,15 @@ import typer
 from eawf import __version__
 from eawf.cli.commands.validate import validate as validate_cmd
 from eawf.cli.flags import GlobalFlags
+from eawf.cli.help_panels import RegistryOrderedTyperGroup, panel_for
 from eawf.cli.output import emit_json_or_text
 
 app = typer.Typer(
     name="eawf",
-    help="Eä Workflow — agent-driven development framework (v0.1 in development).",
+    help="Eä Workflow — agent-driven development framework.",
     no_args_is_help=False,
     add_completion=False,
+    cls=RegistryOrderedTyperGroup,
 )
 
 
@@ -84,7 +86,7 @@ def _root(
         raise typer.Exit(code=rc)
 
 
-@app.command(name="version")
+@app.command(name="version", rich_help_panel=panel_for("version"))
 def version_cmd(ctx: typer.Context) -> None:
     """Show the eawf version (text or JSON envelope)."""
     flags: GlobalFlags = ctx.obj
@@ -108,7 +110,7 @@ def scope_debug(ctx: typer.Context) -> None:
     typer.echo(text)
 
 
-app.command(name="validate")(validate_cmd)
+app.command(name="validate", rich_help_panel=panel_for("validate"))(validate_cmd)
 
 
 # --- P02 wave registrations (each wave appends here in wave order) ---
@@ -119,11 +121,11 @@ from eawf.cli.commands.lifecycle import project_app as _project_app  # noqa: E40
 from eawf.cli.commands.lifecycle import subproject_app as _subproject_app  # noqa: E402
 from eawf.cli.commands.lifecycle import wave_app as _wave_app  # noqa: E402
 
-app.add_typer(_project_app, name="project")
-app.add_typer(_subproject_app, name="subproject")
-app.add_typer(_phase_app, name="phase")
-app.add_typer(_iter_app, name="iter")
-app.add_typer(_wave_app, name="wave")
+app.add_typer(_project_app, name="project", rich_help_panel=panel_for("project"))
+app.add_typer(_subproject_app, name="subproject", rich_help_panel=panel_for("subproject"))
+app.add_typer(_phase_app, name="phase", rich_help_panel=panel_for("phase"))
+app.add_typer(_iter_app, name="iter", rich_help_panel=panel_for("iter"))
+app.add_typer(_wave_app, name="wave", rich_help_panel=panel_for("wave"))
 
 # --- W02 evidence registrations ---
 from eawf.cli.commands.evidence import (  # noqa: E402
@@ -137,29 +139,29 @@ from eawf.cli.commands.evidence import (  # noqa: E402
     outcome_app,
 )
 
-app.add_typer(goal_app, name="goal")
-app.add_typer(outcome_app, name="outcome")
-app.add_typer(hypothesis_app, name="hypothesis")
-app.add_typer(audit_app, name="audit")
-app.add_typer(incident_app, name="incident")
-app.add_typer(decision_app, name="decision")
-app.add_typer(artifact_app, name="artifact")
-app.add_typer(backlog_app, name="backlog")
+app.add_typer(goal_app, name="goal", rich_help_panel=panel_for("goal"))
+app.add_typer(outcome_app, name="outcome", rich_help_panel=panel_for("outcome"))
+app.add_typer(hypothesis_app, name="hypothesis", rich_help_panel=panel_for("hypothesis"))
+app.add_typer(audit_app, name="audit", rich_help_panel=panel_for("audit"))
+app.add_typer(incident_app, name="incident", rich_help_panel=panel_for("incident"))
+app.add_typer(decision_app, name="decision", rich_help_panel=panel_for("decision"))
+app.add_typer(artifact_app, name="artifact", rich_help_panel=panel_for("artifact"))
+app.add_typer(backlog_app, name="backlog", rich_help_panel=panel_for("backlog"))
 # --- end W02 ---
 
 # --- W03 estimation registrations ---
 from eawf.cli.commands.estimation import actual_app, estimate_app  # noqa: E402
 
-app.add_typer(estimate_app, name="estimate")
-app.add_typer(actual_app, name="actual")
+app.add_typer(estimate_app, name="estimate", rich_help_panel=panel_for("estimate"))
+app.add_typer(actual_app, name="actual", rich_help_panel=panel_for("actual"))
 # --- end W03 ---
 
 # --- W04 memory+session registrations ---
 from eawf.cli.commands.memory import memory_app  # noqa: E402
 from eawf.cli.commands.session import session_app  # noqa: E402
 
-app.add_typer(memory_app, name="memory")
-app.add_typer(session_app, name="session")
+app.add_typer(memory_app, name="memory", rich_help_panel=panel_for("memory"))
+app.add_typer(session_app, name="session", rich_help_panel=panel_for("session"))
 # --- end W04 ---
 
 # --- W05 status+state+store registrations ---
@@ -167,21 +169,25 @@ from eawf.cli.commands.state import state_app  # noqa: E402
 from eawf.cli.commands.status import status as status_cmd  # noqa: E402
 from eawf.cli.commands.store import store_app  # noqa: E402
 
-app.command(name="status", help="Show active pointers, blockers, and git head.")(status_cmd)
-app.add_typer(state_app, name="state")
-app.add_typer(store_app, name="store")
+app.command(
+    name="status",
+    help="Show active pointers, blockers, and git head.",
+    rich_help_panel=panel_for("status"),
+)(status_cmd)
+app.add_typer(state_app, name="state", rich_help_panel=panel_for("state"))
+app.add_typer(store_app, name="store", rich_help_panel=panel_for("store"))
 # --- end W05 ---
 
 # --- W06 config registrations ---
 from eawf.cli.commands.config import config_app  # noqa: E402
 
-app.add_typer(config_app, name="config")
+app.add_typer(config_app, name="config", rich_help_panel=panel_for("config"))
 # --- end W06 ---
 
 # --- P17 W02 coauthor registration ---
 from eawf.cli.commands.coauthor import coauthor_app  # noqa: E402
 
-app.add_typer(coauthor_app, name="coauthor")
+app.add_typer(coauthor_app, name="coauthor", rich_help_panel=panel_for("coauthor"))
 # --- end P17 W02 ---
 
 # --- P18 W06 typed agent report registration ---
@@ -190,26 +196,26 @@ from eawf.cli.commands.agent_report import (  # noqa: E402
 )
 from eawf.cli.commands.agent_report import operator_app as _operator_app  # noqa: E402
 
-app.add_typer(_agent_report_app, name="agent-report")
-app.add_typer(_operator_app, name="operator")
+app.add_typer(_agent_report_app, name="agent-report", rich_help_panel=panel_for("agent-report"))
+app.add_typer(_operator_app, name="operator", rich_help_panel=panel_for("operator"))
 # --- end P18 W06 ---
 
 # --- P19 W06 roadmap planner registration ---
 from eawf.cli.commands.roadmap import roadmap_app  # noqa: E402
 
-app.add_typer(roadmap_app, name="roadmap")
+app.add_typer(roadmap_app, name="roadmap", rich_help_panel=panel_for("roadmap"))
 # --- end P19 W06 ---
 
 # --- P03 W01 doctor registration ---
 from eawf.cli.commands.doctor import doctor_app  # noqa: E402
 
-app.add_typer(doctor_app, name="doctor")
+app.add_typer(doctor_app, name="doctor", rich_help_panel=panel_for("doctor"))
 # --- end P03 W01 ---
 
 # --- P12 W03 doc-drift linter registration ---
 from eawf.cli.commands.doc import doc_app  # noqa: E402
 
-app.add_typer(doc_app, name="doc")
+app.add_typer(doc_app, name="doc", rich_help_panel=panel_for("doc"))
 # --- end P12 W03 ---
 
 # --- P12 W04 PR body + wiki render registration ---
@@ -217,15 +223,19 @@ from eawf.cli.commands.pr import pr_app  # noqa: E402
 from eawf.cli.commands.release import release_app  # noqa: E402
 from eawf.cli.commands.wiki import wiki_app  # noqa: E402
 
-app.add_typer(pr_app, name="pr")
-app.add_typer(release_app, name="release")
-app.add_typer(wiki_app, name="wiki")
+app.add_typer(pr_app, name="pr", rich_help_panel=panel_for("pr"))
+app.add_typer(release_app, name="release", rich_help_panel=panel_for("release"))
+app.add_typer(wiki_app, name="wiki", rich_help_panel=panel_for("wiki"))
 # --- end P12 W04 ---
 
 # --- P03 W05 init registration ---
 from eawf.cli.commands.init import init_cmd  # noqa: E402
 
-app.command(name="init", help="Initialise a new Eä Workflow workspace.")(init_cmd)
+app.command(
+    name="init",
+    help="Initialise a new Eä Workflow workspace.",
+    rich_help_panel=panel_for("init"),
+)(init_cmd)
 # --- end P03 W05 ---
 
 # --- P03 W06 workspace + repo + clone-repo registrations ---
@@ -233,9 +243,9 @@ from eawf.cli.commands.clone_repo import clone_repo_cmd  # noqa: E402
 from eawf.cli.commands.repo import repo_app  # noqa: E402
 from eawf.cli.commands.workspace import workspace_app  # noqa: E402
 
-app.add_typer(workspace_app, name="workspace")
-app.add_typer(repo_app, name="repo")
-app.command(name="clone-repo")(clone_repo_cmd)
+app.add_typer(workspace_app, name="workspace", rich_help_panel=panel_for("workspace"))
+app.add_typer(repo_app, name="repo", rich_help_panel=panel_for("repo"))
+app.command(name="clone-repo", rich_help_panel=panel_for("clone-repo"))(clone_repo_cmd)
 # --- end P03 W06 ---
 
 # --- P03 W07 render-output registration ---
@@ -248,73 +258,74 @@ app.command(
         "(reads JSON or markdown from stdin). At a TTY with no piped data "
         "the command exits 2 with a hint instead of hanging."
     ),
+    rich_help_panel=panel_for("render-output"),
 )(render_output_cmd)
 # --- end W07 ---
 
 # --- P03 W08 sync registration ---
 from eawf.cli.commands.sync import sync_cmd  # noqa: E402
 
-app.command(name="sync")(sync_cmd)
+app.command(name="sync", rich_help_panel=panel_for("sync"))(sync_cmd)
 # --- end W08 ---
 
 # --- P04 W04 hook registration ---
 from eawf.cli.commands.hook import hook_app  # noqa: E402
 
-app.add_typer(hook_app, name="hook")
+app.add_typer(hook_app, name="hook", rich_help_panel=panel_for("hook"))
 # --- end P04 W04 ---
 
 # --- P04 W05 plugin registration ---
 from eawf.cli.commands.plugin import plugin_app  # noqa: E402
 
-app.add_typer(plugin_app, name="plugin")
+app.add_typer(plugin_app, name="plugin", rich_help_panel=panel_for("plugin"))
 # --- end P04 W05 ---
 
 # --- P04 W06 cc (Claude Code adapter) registration ---
 from eawf.cli.commands.cc import cc_app  # noqa: E402
 
-app.add_typer(cc_app, name="cc")
+app.add_typer(cc_app, name="cc", rich_help_panel=panel_for("cc"))
 # --- end P04 W06 ---
 
 # --- P04 W07 skill registration ---
 from eawf.cli.commands.skill import skill_app  # noqa: E402
 
-app.add_typer(skill_app, name="skill")
+app.add_typer(skill_app, name="skill", rich_help_panel=panel_for("skill"))
 # --- end P04 W07 ---
 
 # --- P05 W01 worktree registration ---
 from eawf.cli.commands.worktree import worktree_app  # noqa: E402
 
-app.add_typer(worktree_app, name="worktree")
+app.add_typer(worktree_app, name="worktree", rich_help_panel=panel_for("worktree"))
 # --- end P05 W01 ---
 
 # --- P05 W02 flow registration ---
 from eawf.cli.commands.flow import flow_app  # noqa: E402
 
-app.add_typer(flow_app, name="flow")
+app.add_typer(flow_app, name="flow", rich_help_panel=panel_for("flow"))
 # --- end P05 W02 ---
 
 # --- P05 W04 mcp registration ---
 from eawf.cli.commands.mcp import mcp_app  # noqa: E402
 
-app.add_typer(mcp_app, name="mcp")
+app.add_typer(mcp_app, name="mcp", rich_help_panel=panel_for("mcp"))
 # --- end P05 W04 ---
 
 # --- P05 W05 plan registration ---
 from eawf.cli.commands.plan import plan_app  # noqa: E402
 
-app.add_typer(plan_app, name="plan")
+app.add_typer(plan_app, name="plan", rich_help_panel=panel_for("plan"))
 # --- end P05 W05 ---
 
 # --- P16 W06 research show registration ---
 from eawf.cli.commands.research import research_app  # noqa: E402
 
-app.add_typer(research_app, name="research")
+app.add_typer(research_app, name="research", rich_help_panel=panel_for("research"))
 # --- end P16 W06 ---
 
 # --- P16 W10 draft registration ---
 from eawf.cli.commands.draft import draft_app  # noqa: E402
 
-app.add_typer(draft_app, name="draft")
+app.add_typer(draft_app, name="draft", rich_help_panel=panel_for("draft"))
 # --- end P16 W10 ---
 
 # --- P08 W05 wave fix-ci registration (commands attach to wave_app on import) ---
@@ -332,20 +343,28 @@ from eawf.cli.commands import wave_policy as _wave_policy  # noqa: E402, F401
 # --- P12 W07 file impact graph registration ---
 from eawf.cli.commands.impact import impact_cmd  # noqa: E402
 
-app.command(name="impact", help="Render decision → wave → file-glob impact graph.")(impact_cmd)
+app.command(
+    name="impact",
+    help="Render decision → wave → file-glob impact graph.",
+    rich_help_panel=panel_for("impact"),
+)(impact_cmd)
 # --- end P12 W07 ---
 
 # --- P14 W05 profile registration (new + validate + TOFU trust ledger) ---
 from eawf.cli.commands.profile import profile_app  # noqa: E402
 
-app.add_typer(profile_app, name="profile")
+app.add_typer(profile_app, name="profile", rich_help_panel=panel_for("profile"))
 # --- end P14 W05 ---
 
 # --- P14 W10 TUI registration ---
 from eawf.tui.app import run_tui as _run_tui  # noqa: E402
 
 
-@app.command(name="tui", help="Open the Rich-backed Eä TUI (or text fallback off-TTY).")
+@app.command(
+    name="tui",
+    help="Open the Rich-backed Eä TUI (or text fallback off-TTY).",
+    rich_help_panel=panel_for("tui"),
+)
 def _tui_cmd(ctx: typer.Context) -> None:
     flags: GlobalFlags = ctx.obj
     rc = _run_tui(workspace=flags.workspace, no_input=flags.no_input, plain=flags.plain_output)
@@ -363,6 +382,7 @@ app.command(
         "Show rolling workflow metrics — EU variance, audit pass rate, "
         "wave elapsed, and planned vs reactive split."
     ),
+    rich_help_panel=panel_for("metrics"),
 )(metrics_cmd)
 # --- end P20 W08 ---
 
