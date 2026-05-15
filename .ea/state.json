@@ -1102,6 +1102,50 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML) / OpenCode (opencode.json) + plugin doctor MCP drift check + idempotence goldens"
+    },
+    "B063": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-15T14:33:42.834123Z",
+      "id": "B063",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "AGENTS.md markdown-style rule: no manual line-wrap in generated/rendered .md (prose one-line-per-paragraph; commit messages exempt). Codify under style section + extend research/render skill output contracts so wrap habit doesn't leak into briefs, manifestos, audit reports."
+    },
+    "B064": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-15T14:42:24.153590Z",
+      "id": "B064",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Commit-msg hook normalize-coauthor.py: dedupe Co-Authored-By by email + collapse 'Claude <model variant> <email>' → 'Claude <email>' (and Codex symmetrically); idempotent; ships under ~/.claude/git-hooks/ via global hooks bundle. Defense-in-depth alongside operator's .claude/settings.json includeCoAuthoredBy=false change."
+    },
+    "B065": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-15T14:42:24.687836Z",
+      "id": "B065",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Backlog defer:publication tag marker — applied to B001/B002/B004/B005/B010/B016/B017/B048 indicating publication-deferred per D34. Tag is documentation only; backlog rows stay open and explicitly do not block any release until operator un-defers."
+    },
+    "B066": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-15T14:42:25.200839Z",
+      "id": "B066",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Per-wave token-budget cap enforcement (warn 75% / block 100%). Wave.token_budget field already present (B028); only enforcement layer remains. Targets v0.4 KERNEL budget governor scope."
     }
   },
   "current": {
@@ -1109,8 +1153,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P19-I02",
+    "phase_id": "P19",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1684,6 +1728,84 @@
         "P19-I01-W09",
         "P19-I01-W10"
       ]
+    },
+    "P19-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P19-I02",
+      "opened_at": "2026-05-15T14:42:39.662926Z",
+      "phase_id": "P19",
+      "status": "active",
+      "title": "drift fix + commit hygiene + backlog audit",
+      "wave_ids": [
+        "P19-I02-W11",
+        "P19-I02-W12",
+        "P19-I02-W13",
+        "P19-I02-W14",
+        "P19-I02-W15",
+        "P19-I02-W16",
+        "P19-I02-W17",
+        "P19-I02-W18",
+        "P19-I02-W19",
+        "P19-I02-W20",
+        "P19-I02-W21"
+      ]
+    },
+    "P20-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:38.289058Z",
+      "phase_id": "P20",
+      "status": "planned",
+      "title": "TUI + metrics",
+      "wave_ids": [
+        "P20-I01-W01",
+        "P20-I01-W02",
+        "P20-I01-W03",
+        "P20-I01-W04",
+        "P20-I01-W05",
+        "P20-I01-W06",
+        "P20-I01-W07",
+        "P20-I01-W08",
+        "P20-I01-W09",
+        "P20-I01-W10",
+        "P20-I01-W11",
+        "P20-I01-W12",
+        "P20-I01-W13",
+        "P20-I01-W14",
+        "P20-I01-W15"
+      ]
+    },
+    "P21-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:37.910326Z",
+      "phase_id": "P21",
+      "status": "planned",
+      "title": "Profiles + MCP/sandbox + domain bodies",
+      "wave_ids": [
+        "P21-I01-W01",
+        "P21-I01-W02",
+        "P21-I01-W03",
+        "P21-I01-W04",
+        "P21-I01-W05",
+        "P21-I01-W06",
+        "P21-I01-W07",
+        "P21-I01-W08",
+        "P21-I01-W09",
+        "P21-I01-W10",
+        "P21-I01-W11",
+        "P21-I01-W12",
+        "P21-I01-W13",
+        "P21-I01-W14",
+        "P21-I01-W15",
+        "P21-I01-W16"
+      ]
     }
   },
   "mcp_grants": null,
@@ -1982,19 +2104,54 @@
     },
     "P19": {
       "audit_id": "A24-P19",
-      "closed_at": "2026-05-14T22:22:50.627380Z",
+      "closed_at": null,
       "depends_on": [],
       "id": "P19",
       "iter_ids": [
-        "P19-I01"
+        "P19-I01",
+        "P19-I02"
       ],
       "opened_at": "2026-05-14T19:20:08.748937Z",
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "closed",
+      "status": "active",
       "subproject_id": null,
       "title": "Roadmap-driven planning + commit hygiene"
+    },
+    "P20": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [],
+      "id": "P20",
+      "iter_ids": [
+        "P20-I01"
+      ],
+      "opened_at": "2026-05-15T14:43:38.289036Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "TUI + metrics + operator UX"
+    },
+    "P21": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P20"
+      ],
+      "id": "P21",
+      "iter_ids": [
+        "P21-I01"
+      ],
+      "opened_at": "2026-05-15T14:44:37.910296Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "Profiles + MCP/sandbox + domain bodies"
     }
   },
   "plugins": {},
@@ -2029,7 +2186,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-14T22:22:50.627467Z",
+  "updated_at": "2026-05-15T14:45:05.829127Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4369,6 +4526,1243 @@
         "phase + iter closed; A24-P19 ship-gate registered"
       ],
       "title": "ship-gate: P19 audit + close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W13",
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/lifecycle/transitions.py",
+        "src/eawf/cli/commands/lifecycle.py"
+      ],
+      "id": "P19-I02-W11",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:02.591688Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "activate_phase rejects phase without waves",
+        "activate_phase rejects stale branch",
+        "activate_phase rejects dirty worktree"
+      ],
+      "title": "fix: activate-gate completeness (wave count + branch currency + clean worktree)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/roadmap.py",
+        "src/eawf/lifecycle/transitions.py"
+      ],
+      "id": "P19-I02-W12",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:24.595415Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "roadmap revise accepts ACTIVE phase for PENDING-only mutations",
+        "non-PENDING wave mutation rejected",
+        "golden coverage"
+      ],
+      "title": "feat: ACTIVE-phase revise for PENDING waves",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P19-I02-W11"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py"
+      ],
+      "id": "P19-I02-W13",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:25.078401Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "phase activate fetches + compares to source branch",
+        "refuses activation when stale",
+        "override flag documented"
+      ],
+      "title": "feat: currency-gate check in phase activate CLI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W15",
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/architecture/coauthor.md",
+        "tests/integration"
+      ],
+      "id": "P19-I02-W14",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:25.563232Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "test commit lands single Co-Authored-By line",
+        "docs note added",
+        "no AGENTS.md change"
+      ],
+      "title": "chore: coauthor verification (CC settings change test commit + docs note)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P19-I02-W14"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "git-hooks",
+        "tests/unit"
+      ],
+      "id": "P19-I02-W15",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:26.051188Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "hook collapses Claude variant to Claude generic",
+        "hook dedupes by email",
+        "idempotent",
+        "unit tests cover both runtimes"
+      ],
+      "title": "feat: B064 commit-msg hook normalize-coauthor.py (variant collapse + dedupe)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W16": {
+      "agent_role": "operator",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/store/event.jsonl"
+      ],
+      "id": "P19-I02-W16",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:26.536663Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "stale items closed via audit",
+        "supersession links recorded",
+        "publication-cluster items tagged"
+      ],
+      "title": "chore: backlog audit + bulk close stale (B019/B020/B047/B054/B055/B059/B061 delivered; B024/B043 superseded by B061; tag B001/B002/B004/B005/B010/B016/B017/B048 defer-publication)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py",
+        "src/eawf/state/models.py"
+      ],
+      "id": "P19-I02-W17",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:27.077055Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "wave close --commit accepts full SHA",
+        "stores 7-char form OR excludes commit-keys from detect-secrets baseline pattern"
+      ],
+      "title": "feat: B045 wave close --commit SHA normalisation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py",
+        "src/eawf/cli/commands/wave_policy.py"
+      ],
+      "id": "P19-I02-W18",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:27.563420Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "wave update --files mutates Wave.file_scopes on PENDING/CLAIMED/IN_PROGRESS",
+        "rejects CLOSED"
+      ],
+      "title": "feat: B046 wave update --files verb",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/render/agents_md.py",
+        "tests/unit"
+      ],
+      "id": "P19-I02-W19",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:28.059798Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "render_agents_md consumes typed Decision rows",
+        "manual drift detected via hash compare",
+        "golden coverage"
+      ],
+      "title": "feat: B044 AGENTS.md sync-from-typed-Decisions render path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P19-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/state.py",
+        "src/eawf/artifacts/validation.py"
+      ],
+      "id": "P19-I02-W20",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:28.548189Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "eawf artifact verify recomputes sha256 on demand",
+        "exits non-zero on mismatch",
+        "supports --all and per-id forms"
+      ],
+      "title": "feat: B021 eawf artifact verify CLI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P19-I02-W21": {
+      "agent_role": "auditor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P19-I02-W11",
+        "P19-I02-W12",
+        "P19-I02-W13",
+        "P19-I02-W14",
+        "P19-I02-W15",
+        "P19-I02-W16",
+        "P19-I02-W17",
+        "P19-I02-W18",
+        "P19-I02-W19",
+        "P19-I02-W20"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts",
+        ".ea/state.json"
+      ],
+      "id": "P19-I02-W21",
+      "iter_id": "P19-I02",
+      "opened_at": "2026-05-15T14:43:29.048857Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "ship-gate audit verdict=pass",
+        "all I02 waves closed",
+        "iter close cleanly"
+      ],
+      "title": "audit: P19-I02 ship-gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W02",
+        "P20-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/roadmap.py"
+      ],
+      "id": "P20-I01-W01",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:54.485894Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "rich-table render covers phases iters waves",
+        "stale items annotated muted"
+      ],
+      "title": "feat: eawf roadmap show rich-table renderer (phases/iters/waves/stale items)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W03",
+        "P20-I01-W04",
+        "P20-I01-W05",
+        "P20-I01-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W01"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui/app.py",
+        "src/eawf/tui/layout.py"
+      ],
+      "id": "P20-I01-W02",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:54.976913Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "Eä brand outside-left of breadcrumb",
+        "quadrant 2x2",
+        "header+body+footer frame",
+        "offline + online tick modes"
+      ],
+      "title": "feat: repo-scope quadrant TUI (roadmap/status/git/backlog panes)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W02"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui/wave_board.py"
+      ],
+      "id": "P20-I01-W03",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:55.537642Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "list view sorted by status priority then wave_id",
+        "detail view with deps/tests/budget/criteria",
+        "filter cycle"
+      ],
+      "title": "feat: wave board (full-screen list + drill detail)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W04": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/overlays.py"
+      ],
+      "id": "P20-I01-W04",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:56.024559Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "five overlays",
+        "verb-prefixed shortcuts",
+        "golden coverage per overlay"
+      ],
+      "title": "feat: detail overlays (hypothesis/decision/memory/events/dispatch)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/workspace.py",
+        "src/eawf/cli/commands/workspace.py"
+      ],
+      "id": "P20-I01-W05",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:56.512048Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "top strip multi-repo",
+        "active-repo quadrant below",
+        "registry stale triggers surface as chips"
+      ],
+      "title": "feat: workspace-scope dashboard + registry reader",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W06": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W05"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/portfolio.py",
+        "src/eawf/cli/commands/repo.py"
+      ],
+      "id": "P20-I01-W06",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:57.026026Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "portfolio view across registered repos",
+        "explicit registry add/remove via CLI only"
+      ],
+      "title": "feat: user-scope portfolio dashboard + explicit registry writers/pruner",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W07": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W03"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/audit_overlay.py"
+      ],
+      "id": "P20-I01-W07",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:43:57.519989Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "remediation hints surface",
+        "attached-runtime PID display",
+        "mutating actions deferred to v0.4"
+      ],
+      "title": "feat: audit-running overlay + failure action menu (read-only)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W08": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/metrics.py",
+        "src/eawf/estimation"
+      ],
+      "id": "P20-I01-W08",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:17.242264Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "rich-table CLI render",
+        "JSON envelope schema_version=1",
+        "shared renderer feeds CLI + TUI overlay + release notes"
+      ],
+      "title": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed, planned vs reactive split)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W09": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W08"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/tui"
+      ],
+      "id": "P20-I01-W09",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:17.727196Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "field defaults None",
+        "TUI renders weekly burn when set",
+        "no render when unset"
+      ],
+      "title": "feat: weekly_eu_target field on state.project + TUI divisor rendering",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W10": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W11",
+        "P20-I01-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/commands/config.py",
+        "src/eawf/config"
+      ],
+      "id": "P20-I01-W10",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:18.270476Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "menu lists tabs alphabetical",
+        "fields alphabetical inside tab",
+        "save flushes via state-CLI mutator"
+      ],
+      "title": "feat: eawf config questionary menu from metadata registry",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W11": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W02",
+        "P20-I01-W10"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/config_modal.py"
+      ],
+      "id": "P20-I01-W11",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:18.771208Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "c hotkey opens tabbed full-screen modal",
+        "inline modal sized per type",
+        "s save persists via state-CLI"
+      ],
+      "title": "feat: TUI config hotkey backed by same metadata/mutation API",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W12": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W10"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli"
+      ],
+      "id": "P20-I01-W12",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:19.308779Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "help groups follow metadata registry order",
+        "stale references removed",
+        "golden coverage"
+      ],
+      "title": "chore: CLI help regrouping + stale string scrub",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W13": {
+      "agent_role": null,
+      "blocks": [
+        "P20-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W07",
+        "P20-I01-W11",
+        "P20-I01-W12"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "docs/architecture/tui.md",
+        ".ea/artifacts"
+      ],
+      "id": "P20-I01-W13",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:19.806798Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "TUI surface documented",
+        "asciinema notes recorded",
+        "ship-gate audit verdict=pass"
+      ],
+      "title": "docs: TUI screenshots/asciinema + P20 ship-gate audit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W14": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W13"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md",
+        "build/eawf-plugin/skills"
+      ],
+      "id": "P20-I01-W14",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:20.300974Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "spike convention codified in AGENTS",
+        "/prep + /research skill prompts updated",
+        "dispatch renderer hint"
+      ],
+      "title": "docs: spike-workflow convention sweep (AGENTS.md addendum + skill prompt updates)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P20-I01-W15": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P20-I01-W01"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/cli/commands/wave_policy.py"
+      ],
+      "id": "P20-I01-W15",
+      "iter_id": "P20-I01",
+      "opened_at": "2026-05-15T14:44:20.790753Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "Wave.blocked_by derived OR typed field",
+        "wave-board renders real DAG edges",
+        "blocks-rebuild updated"
+      ],
+      "title": "feat: B026 Wave DAG persistence edges (typed Wave.blocked_by)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W02"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/state.json",
+        "src/eawf/profiles"
+      ],
+      "id": "P21-I01-W01",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:38.402622Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "P14 leftovers closed or reopened with rationale",
+        "backlog rows aligned"
+      ],
+      "title": "chore: reconcile P14 profile work against backlog (B057/B058/B056/B060)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W03",
+        "P21-I01-W04",
+        "P21-I01-W05",
+        "P21-I01-W06",
+        "P21-I01-W10",
+        "P21-I01-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W01"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles",
+        "src/eawf/install"
+      ],
+      "id": "P21-I01-W02",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:38.893043Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "instruments resolved through composed profile",
+        "hardcoded defaults removed",
+        "golden coverage"
+      ],
+      "title": "feat: wire instrument_requirements to composed-profile probe pipeline",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W03": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W02"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/profiles"
+      ],
+      "id": "P21-I01-W03",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:39.467429Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "stub warnings surface at install",
+        "collision warnings annotate render output"
+      ],
+      "title": "feat: profile stub warnings + render-block collision warnings",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W04": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W07",
+        "P21-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/quant.yaml"
+      ],
+      "id": "P21-I01-W04",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:39.975202Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "quant body complete",
+        "golden render",
+        "reproducibility gates documented"
+      ],
+      "title": "feat: B006 quant.yaml body (instruments, backtest/strategy artefacts, reproducibility gates)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W07",
+        "P21-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/ml.yaml"
+      ],
+      "id": "P21-I01-W05",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:40.462095Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "ml body complete",
+        "golden render",
+        "smoke-check audit-DSL hooks"
+      ],
+      "title": "feat: B007 ml.yaml body (notebooks/datasets/models, sha256 policy, smoke checks)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W06": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles"
+      ],
+      "id": "P21-I01-W06",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:40.947997Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "six minimal bodies registered",
+        "goldens cover render path",
+        "docs cross-link"
+      ],
+      "title": "feat: B008 minimal bodies for apps/infra/docs/game/re/robotics",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W07": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W04",
+        "P21-I01-W05"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/enums.py",
+        "src/eawf/store"
+      ],
+      "id": "P21-I01-W07",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:44:41.501249Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "URN routing covers domain artefact kinds",
+        "sha256 policy enforced per kind"
+      ],
+      "title": "feat: artifact-kind expansion + URN routing + sha256 policy (closes B059 if not closed in W16-audit)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W08": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W09",
+        "P21-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W07"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/profiles/uiux.yaml",
+        "src/eawf/profiles/web.yaml",
+        "src/eawf/state"
+      ],
+      "id": "P21-I01-W08",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:01.316805Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "uiux + web bodies complete",
+        "visual_artifacts state extension",
+        "PR-body visual evidence render block"
+      ],
+      "title": "feat: uiux.yaml + web.yaml bodies (visual evidence + targets model)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W09": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W08"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/profiles"
+      ],
+      "id": "P21-I01-W09",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:01.857006Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "six stub bodies registered",
+        "doctor surfaces stub status",
+        "deferred-body audit clean"
+      ],
+      "title": "feat: stub registrations for mobile/a11y/cli/tui/game-gui/slides",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W10": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W02"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/profiles"
+      ],
+      "id": "P21-I01-W10",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:02.354304Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "rust go typescript bodies complete",
+        "language probes registered",
+        "golden coverage"
+      ],
+      "title": "feat: B023 cross-language profile bodies (rust/go/typescript) — pytest_pass analogue per language",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W11": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W02"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/install",
+        "src/eawf/skills",
+        "build/eawf-plugin"
+      ],
+      "id": "P21-I01-W11",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:02.840366Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "manifests record skill + hook refs",
+        "install wizard validates references",
+        "goldens updated"
+      ],
+      "title": "feat: wire skills_referenced + hooks_referenced into plugin/skill install manifests",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W12": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W13",
+        "P21-I01-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W11"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/mcp",
+        "src/eawf/render"
+      ],
+      "id": "P21-I01-W12",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:03.333345Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "mcp_grants typed field",
+        "render hooks emit per-wave scope",
+        "goldens cover Claude + Codex + OpenCode"
+      ],
+      "title": "feat: B035 per-wave/per-profile MCP scoping (state.waves[*].mcp_grants + render hooks)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W13": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W12"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/sandbox",
+        "src/eawf/audit_dsl"
+      ],
+      "id": "P21-I01-W13",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:03.878718Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "sandbox policy cannot weaken audit-check execution",
+        "command_exit_zero respects policy",
+        "goldens cover deny + allow paths"
+      ],
+      "title": "feat: B049 sandbox policy module + command_exit_zero audit-DSL enforcement",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W14": {
+      "agent_role": null,
+      "blocks": [
+        "P21-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W04",
+        "P21-I01-W05",
+        "P21-I01-W06",
+        "P21-I01-W08",
+        "P21-I01-W10",
+        "P21-I01-W13"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "docs/architecture/profiles.md",
+        "tests/golden/profiles"
+      ],
+      "id": "P21-I01-W14",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:04.360212Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "profile docs cover quant/ml/uiux/web/cross-lang",
+        "golden snapshots stable across runs"
+      ],
+      "title": "docs: profile docs + golden snapshots for shipped combinations",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W15": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W14"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts",
+        ".ea/state.json"
+      ],
+      "id": "P21-I01-W15",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:04.849217Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "ship-gate verdict=pass",
+        "P14/P15/P16 leftovers closed",
+        "D34-D45 decisions recorded",
+        "backlog rows current"
+      ],
+      "title": "audit: P21 ship-gate + state/backlog reconciliation (absorbs former P22 W01)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P21-I01-W16": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "deps": [
+        "P21-I01-W12"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/mcp",
+        "src/eawf/doctor",
+        "build/eawf-plugin",
+        "build/eawf-codex-marketplace"
+      ],
+      "id": "P21-I01-W16",
+      "iter_id": "P21-I01",
+      "opened_at": "2026-05-15T14:45:05.335291Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "Claude .mcp.json + Codex TOML + OpenCode opencode.json emit consistent",
+        "plugin doctor surfaces drift",
+        "idempotence goldens stable"
+      ],
+      "title": "feat: B062 MCP emit-and-verify hardening cross-runtime + idempotence goldens + plugin doctor MCP drift check",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
