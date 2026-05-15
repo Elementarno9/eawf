@@ -613,6 +613,11 @@ def edit_wave_plan(
     effort_bucket. Dep mutations go through :func:`set_wave_deps` (it
     maintains the reverse ``blocks`` index and re-runs the cycle check).
 
+    The PENDING gate is also the load-bearing invariant for the
+    ACTIVE-phase revise path (P19-W12): the CLI gate accepts an ACTIVE
+    parent phase, and this guard ensures only PENDING waves under it
+    actually mutate while CLOSED/CLAIMED/IN_PROGRESS waves stay frozen.
+
     Raises:
         LifecycleError: when *wave_id* is unknown or not PENDING.
     """
@@ -643,6 +648,11 @@ def edit_wave_plan(
 def remove_wave_plan(state: State, *, wave_id: str) -> None:
     """Delete a PENDING wave from state. Also strips reverse-index entries.
 
+    Like :func:`edit_wave_plan`, the PENDING guard here is what makes
+    ``eawf roadmap revise --remove-wave`` safe under an ACTIVE parent
+    phase (P19-W12): CLOSED/CLAIMED/IN_PROGRESS waves never get
+    removed regardless of the parent phase's status.
+
     Raises:
         LifecycleError: when *wave_id* is unknown or not PENDING.
     """
@@ -671,6 +681,10 @@ def remove_wave_plan(state: State, *, wave_id: str) -> None:
 
 def set_wave_deps(state: State, *, wave_id: str, deps: list[str]) -> Wave:
     """Replace a PENDING wave's deps. Maintains the reverse ``blocks`` index.
+
+    Like the other ``*_wave_plan`` helpers, the PENDING guard is what
+    keeps the ACTIVE-phase revise path (P19-W12) safe — only PENDING
+    waves under an ACTIVE parent can have their dep set rewritten.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, not PENDING, any dep

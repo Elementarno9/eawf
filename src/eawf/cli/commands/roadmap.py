@@ -14,7 +14,11 @@ the lifecycle transitions introduced in P19-W01:
   PENDING waves: ``--add-wave`` plans, ``--remove-wave`` removes,
   ``--set-deps`` reshapes the dep set, ``--retitle`` rewrites the
   title. All mutations route through the P19-W01 transitions which
-  enforce the PENDING-only invariant on their own.
+  enforce the PENDING-only invariant on their own. The phase-status
+  gate (P19-W12) accepts PLANNED or ACTIVE parents; for an ACTIVE
+  parent the wave-level PENDING check is the load-bearing invariant
+  so CLOSED/CLAIMED/IN_PROGRESS waves under the same phase stay
+  immutable.
 - ``roadmap apply PXX`` is informational once propose has run — the
   PLANNED scope is already persisted. It validates that the phase
   exists in PLANNED and emits an ``ok`` envelope so flow orchestrators
@@ -267,14 +271,21 @@ def roadmap_propose_cmd(
     emit_json_or_text(envelope, plan_text, flags=flags)
 
 
-def _resolve_planned_phase(state: State, phase_id: str) -> None:
+def _resolve_revisable_phase(state: State, phase_id: str) -> None:
+    """Reject the revise call when *phase_id* is not PLANNED or ACTIVE.
+
+    PLANNED phases are freely revisable. ACTIVE phases are revisable too
+    (P19-W12) but only for PENDING waves under them — the wave-level
+    PENDING check inside the lifecycle transitions enforces that
+    invariant on its own. CLOSED and ARCHIVED phases are immutable.
+    """
     if phase_id not in state.phases:
         raise cli_errors.NotFound(f"unknown phase {phase_id!r}")
     phase = state.phases[phase_id]
-    if phase.status != PhaseStatus.PLANNED:
+    if phase.status not in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}:
         raise cli_errors.InvalidInput(
             f"phase {phase_id!r} has status {phase.status.value!r}; "
-            "revise only works on PLANNED phases (use /prep to activate first)"
+            "revise only works on PLANNED or ACTIVE phases"
         )
 
 
@@ -290,7 +301,10 @@ def _iter_id_for_phase(state: State, phase_id: str) -> str:
 @roadmap_app.command("revise")
 def roadmap_revise_cmd(
     ctx: typer.Context,
-    phase_id: Annotated[str, typer.Argument(help="Phase id to revise (must be PLANNED).")],
+    phase_id: Annotated[
+        str,
+        typer.Argument(help="Phase id to revise (PLANNED, or ACTIVE for PENDING waves)."),
+    ],
     add_wave: Annotated[
         str | None,
         typer.Option("--add-wave", help="Add a wave under the phase's I01 iter; pass the wave id."),
@@ -341,7 +355,12 @@ def roadmap_revise_cmd(
         typer.Option("--effort-bucket", help="One of XS|S|M|L|XL (only with --add-wave)."),
     ] = None,
 ) -> None:
-    """Edit a PLANNED phase's wave plan via structured flags."""
+    """Edit a PLANNED or ACTIVE phase's wave plan via structured flags.
+
+    For an ACTIVE parent only PENDING waves are mutable — the wave-level
+    PENDING check inside the lifecycle transitions rejects edits aimed
+    at CLOSED/CLAIMED/IN_PROGRESS waves.
+    """
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -369,7 +388,7 @@ def roadmap_revise_cmd(
     try:
         with state_transaction(state_path) as state:
             try:
-                _resolve_planned_phase(state, phase_id)
+                _resolve_revisable_phase(state, phase_id)
                 if add_wave:
                     if not wave_title or not files:
                         raise cli_errors.InvalidInput("--add-wave requires --title and --files")
