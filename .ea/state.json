@@ -1194,11 +1194,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W04",
-      "P20-I01-W05",
-      "P20-I01-W11"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2232,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T18:14:16.646636Z",
+  "updated_at": "2026-05-15T18:37:45.457427Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5089,8 +5085,8 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T18:29:46.664544Z",
+      "commit": "67fd0332fc52cb01760a6944d88ab02b4244bb49",
       "deps": [
         "P20-I01-W02"
       ],
@@ -5101,8 +5097,8 @@
       "id": "P20-I01-W04",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:56.024559Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "5 detail overlays (hypothesis/decision/memory/events/dispatch); single open_overlay dispatch; verb-prefixed keymap oH/oD/oM/oE/oR; 5 golden snapshots; 45 wave-specific tests",
+      "status": "closed",
       "success_criteria": [
         "five overlays",
         "verb-prefixed shortcuts",
@@ -5119,8 +5115,8 @@
         "P20-I01-W06"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T18:37:45.457413Z",
+      "commit": "30abfa0e30cf34927b38dc088bda6e7842e306fc",
       "deps": [
         "P20-I01-W02"
       ],
@@ -5132,8 +5128,8 @@
       "id": "P20-I01-W05",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:56.512048Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "workspace dashboard: read-only registry helper + typed Registry, top-strip multi-repo, active-repo quadrant reuse, stale chips on 3 signals; 85 wave tests; 2845 pass",
+      "status": "closed",
       "success_criteria": [
         "top strip multi-repo",
         "active-repo quadrant below",
@@ -5296,8 +5292,8 @@
         "P20-I01-W13"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T18:37:20.047402Z",
+      "commit": "321847bc8bb8eb42610d8ca3abcc4f10f78a30b9",
       "deps": [
         "P20-I01-W02",
         "P20-I01-W10"
@@ -5309,8 +5305,8 @@
       "id": "P20-I01-W11",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:18.771208Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "TUI config modal with c hotkey, tabbed metadata-driven form, type-sized inputs, s save through W10 _save_value_to_layer helper; 69 wave-specific tests; 2829 pass",
+      "status": "closed",
       "success_criteria": [
         "c hotkey opens tabbed full-screen modal",
         "inline modal sized per type",
