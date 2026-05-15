@@ -241,7 +241,9 @@ def test_run_tui_online_loop_iterates_until_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
-    keys = iter(["a", "b", "\x1b"])
+    # P20-W03 reserved ``b`` for the wave-board view; pick inert keys
+    # so the iteration test still validates the loop-until-exit contract.
+    keys = iter(["a", "c", "\x1b"])
     rc = run_tui(workspace=tmp_path, read_key=lambda: next(keys))
     assert rc == 0
 

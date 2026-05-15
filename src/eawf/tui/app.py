@@ -62,6 +62,8 @@ from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 
+from eawf.state.models import State
+from eawf.tui import wave_board as wave_board_mod
 from eawf.tui.layout import (
     BRAND,
     DEFAULT_PROJECT_CODE,
@@ -78,6 +80,13 @@ logger = logging.getLogger(__name__)
 #: is Esc; ``q``/``Q`` are the operator-facing exits; ``\\x03`` and
 #: ``\\x04`` are ``Ctrl-C`` and ``Ctrl-D`` from cbreak mode.
 _EXIT_KEYS: frozenset[str] = frozenset({"\x1b", "q", "Q", "\x03", "\x04"})
+
+#: Key that opens the wave-board view from the repo-scope quadrant.
+#: Pressing ``b`` enters the wave-board sub-loop; Esc / q exits back to
+#: the quadrant (matching the wave-board's own exit keys). Picked
+#: ``b`` for "board" — distinct from the existing quadrant exits and
+#: from any vim-alias the keymap convention reserves.
+_WAVE_BOARD_OPEN_KEY: str = "b"
 
 #: Default refresh rate for the online :class:`Live` loop. Picked low
 #: enough that the rebuild-on-keypress remains the dominant tick path
@@ -285,6 +294,8 @@ def run_tui(
         return 0
     reader = read_key or _read_key_raw
     console = Console(force_terminal=True)
+    view = "quadrant"
+    wave_view = wave_board_mod.WaveBoardState()
     try:
         with Live(
             _build_layout(state),
@@ -300,12 +311,62 @@ def run_tui(
                     break
                 if not ch:
                     break
-                if ch in _EXIT_KEYS:
-                    break
-                live.update(_build_layout(_load_state(workspace)))
+                if view == "quadrant":
+                    if ch in _EXIT_KEYS:
+                        break
+                    if ch == _WAVE_BOARD_OPEN_KEY:
+                        view = "wave_board"
+                        wave_view = wave_board_mod.WaveBoardState()
+                        live.update(_build_wave_board_or_quadrant(workspace, wave_view))
+                        continue
+                    live.update(_build_layout(_load_state(workspace)))
+                else:  # view == "wave_board"
+                    if ch in _EXIT_KEYS:
+                        view = "quadrant"
+                        live.update(_build_layout(_load_state(workspace)))
+                        continue
+                    typed_state = _load_typed_state(workspace)
+                    if typed_state is not None:
+                        wave_view = wave_board_mod.apply_key(wave_view, ch, state=typed_state)
+                    live.update(_build_wave_board_or_quadrant(workspace, wave_view))
     except KeyboardInterrupt:
         pass
     return 0
+
+
+def _load_typed_state(workspace: Path | None) -> State | None:
+    """Load + validate ``state.json`` into a typed :class:`State`.
+
+    Returns ``None`` when the state file is missing or fails schema
+    validation — the wave-board sub-loop degrades to an empty-plan
+    placeholder in that case rather than crashing the live loop.
+    """
+    raw = _load_state(workspace)
+    if not raw:
+        return None
+    try:
+        return State.model_validate(raw)
+    except Exception as exc:  # pragma: no cover — defensive log
+        logger.warning(f"_load_typed_state workspace={workspace!r} schema mismatch: {exc!r}")
+        return None
+
+
+def _build_wave_board_or_quadrant(
+    workspace: Path | None, wave_view: wave_board_mod.WaveBoardState
+) -> Layout:
+    """Render the wave-board frame, falling back to the quadrant on bad state.
+
+    When the workspace has no ``state.json`` or the file is unreadable
+    the typed wave-board cannot resolve DAG edges, so we degrade to
+    the dict-shaped quadrant frame which is robust to a missing
+    state file. The sub-loop keeps the operator on the wave-board
+    view name; the rendered surface just looks like the quadrant
+    until state is repaired.
+    """
+    typed_state = _load_typed_state(workspace)
+    if typed_state is None:
+        return _build_layout(_load_state(workspace))
+    return wave_board_mod.build_wave_board_frame(typed_state, view=wave_view)
 
 
 __all__ = [
