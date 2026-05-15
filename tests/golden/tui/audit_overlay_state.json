@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "urn": "urn:eawf:v1:state:EAWF",
+  "updated_at": "2026-05-15T00:00:00+00:00",
+  "project": {
+    "code": "EAWF",
+    "slug": "eawf",
+    "title": "EAWF",
+    "description": null,
+    "domains": [
+      "dev-platform"
+    ],
+    "default_branch": "main",
+    "status": "active",
+    "repo_urn": "urn:eawf:v1:repo:EAWF"
+  },
+  "current": {
+    "project_code": "EAWF",
+    "phase_id": "P20",
+    "iter_id": "P20-I01",
+    "active_wave_ids": [],
+    "active_session_ids": []
+  },
+  "workspace": null,
+  "phases": {},
+  "iters": {},
+  "waves": {},
+  "audits": {
+    "A20-RUN": {
+      "id": "A20-RUN",
+      "scope_id": "P20",
+      "kind": "ship-gate",
+      "status": "running",
+      "report_artifact_id": null,
+      "check_results": [],
+      "integrity_results": [],
+      "created_at": "2026-05-15T00:00:00+00:00",
+      "verdict": null
+    },
+    "A21-FAIL": {
+      "id": "A21-FAIL",
+      "scope_id": "P20",
+      "kind": "ship-gate",
+      "status": "failed",
+      "report_artifact_id": "ART-AUD-21",
+      "check_results": [],
+      "integrity_results": [],
+      "created_at": "2026-05-15T00:00:00+00:00",
+      "verdict": "major"
+    },
+    "A22-PASS": {
+      "id": "A22-PASS",
+      "scope_id": "P20",
+      "kind": "review",
+      "status": "complete",
+      "report_artifact_id": "ART-AUD-22",
+      "check_results": [],
+      "integrity_results": [],
+      "created_at": "2026-05-15T00:00:00+00:00",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {},
+  "agent_sessions": {},
+  "plugins": {},
+  "indexes": {}
+}
