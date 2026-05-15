@@ -1194,9 +1194,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W03"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2230,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T17:46:49.957921Z",
+  "updated_at": "2026-05-15T18:11:57.928307Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5059,8 +5057,8 @@
         "P20-I01-W07"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T18:11:57.928287Z",
+      "commit": "39bc45e50ff091899c2cadf30701e51d10be3e28",
       "deps": [
         "P20-I01-W02"
       ],
@@ -5071,8 +5069,8 @@
       "id": "P20-I01-W03",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:55.537642Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "TUI wave-board view: typed DAG-edge consumer, operator-priority sort, 5-mode filter cycle, b-key dispatch; 62 new tests; 2760 passed",
+      "status": "closed",
       "success_criteria": [
         "list view sorted by status priority then wave_id",
         "detail view with deps/tests/budget/criteria",
