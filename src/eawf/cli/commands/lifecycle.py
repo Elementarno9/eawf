@@ -2044,7 +2044,16 @@ def wave_blocks_rebuild_cmd(
     ``state.waves`` and rewrites each wave's ``blocks`` to ``[
     child_id for child in state.waves.values() if wave_id in child.deps
     ]``, sorted.
+
+    After the rewrite, primes the typed :class:`WaveDagEdges` cache
+    (P20-W15 / B026) by validating every wave's DAG edges through
+    :func:`eawf.state.wave_graph.edges`. The validation exposes the
+    typed deps/blocks/blocked_by triple on the payload so downstream
+    consumers (the TUI wave-board in W03) can confirm the rebuild
+    landed against the canonical typed surface, not the inline list.
     """
+    from eawf.state import wave_graph
+
     flags: GlobalFlags = ctx.obj
     if not apply_all:
         cli_errors.emit_error(
@@ -2059,6 +2068,7 @@ def wave_blocks_rebuild_cmd(
         return
 
     rewritten: list[dict[str, Any]] = []
+    edge_summary: list[dict[str, Any]] = []
     with portalock.acquire(state_path, timeout=5.0):
         raw = state_path.read_bytes()
         payload = orjson.loads(raw)
@@ -2073,9 +2083,30 @@ def wave_blocks_rebuild_cmd(
         if rewritten:
             new_payload = state.model_dump(mode="json")
             _write_state_unlocked(state_path, new_payload)
+        # Prime the typed-edges cache view post-rewrite. We rebuild
+        # the State document from the on-disk payload (if we wrote)
+        # so the typed view is exactly what readers will load.
+        if rewritten:
+            raw = state_path.read_bytes()
+            payload = orjson.loads(raw)
+            state = State.model_validate(payload)
+        for wave_id in sorted(state.waves):
+            view = wave_graph.edges(wave_id, state)
+            edge_summary.append(
+                {
+                    "id": view.wave_id,
+                    "deps": list(view.deps),
+                    "blocks": list(view.blocks),
+                    "blocked_by": list(view.blocked_by),
+                }
+            )
 
     emit_json_or_text(
-        {"rewritten": rewritten, "count": len(rewritten)},
+        {
+            "rewritten": rewritten,
+            "count": len(rewritten),
+            "edges": edge_summary,
+        },
         f"wave blocks-rebuild: rewrote {len(rewritten)} wave(s)",
         flags=flags,
     )

@@ -1,0 +1,374 @@
+"""Unit tests for state-model derived accessors (P20-W15 / B026).
+
+Covers :mod:`eawf.state.wave_graph` — the typed Wave DAG edge views
+(``deps``, ``blocks``, ``blocked_by``, ``edges``, ``edges_for_iter``)
+that consumers (the TUI wave-board in W03, the ``eawf wave graph``
+CLI) read off the model in O(1) per wave from a single call site.
+
+The DAG persistence layer's mutation behaviour (``plan_wave``,
+``set_wave_deps``, ``remove_wave_plan``) is exercised separately in
+:mod:`tests.unit.test_wave_dag`.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+
+from eawf.lifecycle.transitions import (
+    claim_wave,
+    close_wave,
+    open_iter,
+    open_phase,
+    plan_wave,
+)
+from eawf.state import wave_graph
+from eawf.state.enums import ProjectStatus, ScopeKind, WaveStatus
+from eawf.state.models import CurrentPointers, Project, State
+
+
+def _empty_state() -> State:
+    return State.model_validate(
+        {
+            "schema_version": "1.0",
+            "scope_kind": ScopeKind.REPO.value,
+            "urn": "urn:eawf:v1:state:QR",
+            "updated_at": datetime.now(UTC).isoformat(),
+            "project": Project(
+                code="QR",
+                slug="qr",
+                title="QR",
+                description=None,
+                domains=["x"],
+                default_branch="main",
+                status=ProjectStatus.ACTIVE,
+                repo_urn="urn:eawf:v1:repo:QR",
+            ).model_dump(mode="json"),
+            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
+            "workspace": None,
+            "phases": {},
+            "iters": {},
+            "waves": {},
+            "artifacts": {},
+            "agent_sessions": {},
+            "plugins": {},
+            "indexes": {},
+        }
+    )
+
+
+def _seed_chain() -> State:
+    """Seed a linear chain W01 -> W02 -> W03 under P01-I01."""
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="Bootstrap")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="A",
+        file_scopes=["src/"],
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="B",
+        file_scopes=["src/"],
+        deps=["P01-I01-W01"],
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W03",
+        iter_id="P01-I01",
+        title="C",
+        file_scopes=["src/"],
+        deps=["P01-I01-W02"],
+    )
+    return state
+
+
+def _seed_diamond() -> State:
+    """Seed a diamond W01 -> {W02, W03} -> W04 under P01-I01."""
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="Bootstrap")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="A",
+        file_scopes=["src/"],
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="B",
+        file_scopes=["src/"],
+        deps=["P01-I01-W01"],
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W03",
+        iter_id="P01-I01",
+        title="C",
+        file_scopes=["src/"],
+        deps=["P01-I01-W01"],
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W04",
+        iter_id="P01-I01",
+        title="D",
+        file_scopes=["src/"],
+        deps=["P01-I01-W02", "P01-I01-W03"],
+    )
+    return state
+
+
+# ---- deps -------------------------------------------------------------------
+
+
+def test_deps_returns_sorted_tuple() -> None:
+    """deps() returns the static predecessor set as a sorted tuple."""
+    state = _seed_chain()
+    assert wave_graph.deps("P01-I01-W01", state) == ()
+    assert wave_graph.deps("P01-I01-W02", state) == ("P01-I01-W01",)
+    assert wave_graph.deps("P01-I01-W03", state) == ("P01-I01-W02",)
+
+
+def test_deps_diamond_sorted() -> None:
+    """deps() on the diamond sink lists both parents in id order."""
+    state = _seed_diamond()
+    assert wave_graph.deps("P01-I01-W04", state) == (
+        "P01-I01-W02",
+        "P01-I01-W03",
+    )
+
+
+def test_deps_unknown_wave_raises_key_error() -> None:
+    """deps() raises KeyError when the wave is not in state.waves."""
+    state = _seed_chain()
+    with pytest.raises(KeyError, match="unknown wave"):
+        wave_graph.deps("P99-I99-W99", state)
+
+
+# ---- blocks -----------------------------------------------------------------
+
+
+def test_blocks_returns_sorted_tuple() -> None:
+    """blocks() returns the persisted forward index as a sorted tuple."""
+    state = _seed_chain()
+    assert wave_graph.blocks("P01-I01-W01", state) == ("P01-I01-W02",)
+    assert wave_graph.blocks("P01-I01-W02", state) == ("P01-I01-W03",)
+    assert wave_graph.blocks("P01-I01-W03", state) == ()
+
+
+def test_blocks_diamond_root_sorted() -> None:
+    """blocks() on the diamond root lists both immediate children sorted."""
+    state = _seed_diamond()
+    assert wave_graph.blocks("P01-I01-W01", state) == (
+        "P01-I01-W02",
+        "P01-I01-W03",
+    )
+
+
+def test_blocks_unknown_wave_raises_key_error() -> None:
+    """blocks() raises KeyError when the wave is not in state.waves."""
+    state = _seed_chain()
+    with pytest.raises(KeyError, match="unknown wave"):
+        wave_graph.blocks("P99-I99-W99", state)
+
+
+# ---- blocked_by (live runtime view) ----------------------------------------
+
+
+def test_blocked_by_pending_chain_starts_full() -> None:
+    """blocked_by() reflects every dep when no dep has closed yet."""
+    state = _seed_chain()
+    # W01 has no deps -> empty.
+    assert wave_graph.blocked_by("P01-I01-W01", state) == ()
+    # W02 depends on W01 which is PENDING -> blocked by W01.
+    assert wave_graph.blocked_by("P01-I01-W02", state) == ("P01-I01-W01",)
+    # W03 depends on W02 which is PENDING -> blocked by W02.
+    assert wave_graph.blocked_by("P01-I01-W03", state) == ("P01-I01-W02",)
+
+
+def test_blocked_by_shrinks_as_deps_close() -> None:
+    """Closing a dep removes it from the live blocked_by view."""
+    state = _seed_chain()
+    # Close W01.
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    assert state.waves["P01-I01-W01"].status == WaveStatus.CLOSED
+    # W02 was blocked by W01 — now nothing blocks it.
+    assert wave_graph.blocked_by("P01-I01-W02", state) == ()
+    # W03's only dep (W02) is still PENDING.
+    assert wave_graph.blocked_by("P01-I01-W03", state) == ("P01-I01-W02",)
+
+
+def test_blocked_by_diamond_partial_close() -> None:
+    """Closing one of two parents in a diamond leaves only the other live."""
+    state = _seed_diamond()
+    # W04 depends on W02 and W03 — both PENDING.
+    assert wave_graph.blocked_by("P01-I01-W04", state) == (
+        "P01-I01-W02",
+        "P01-I01-W03",
+    )
+    # Close W01 so W02/W03 can be claimed/closed.
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    claim_wave(state, wave_id="P01-I01-W02", session_id="SES-2")
+    close_wave(state, wave_id="P01-I01-W02", outcome="ok")
+    # W04 still blocked by W03.
+    assert wave_graph.blocked_by("P01-I01-W04", state) == ("P01-I01-W03",)
+
+
+def test_blocked_by_excludes_failed_dep_only_if_closed_check() -> None:
+    """A FAILED dep is non-CLOSED so it still appears in blocked_by.
+
+    The next-ready surface excludes children of FAILED deps; blocked_by
+    surfaces the raw runtime view (anything not CLOSED still blocks).
+    """
+    from eawf.lifecycle.transitions import fail_wave
+
+    state = _seed_chain()
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    fail_wave(state, wave_id="P01-I01-W01", reason="boom")
+    assert state.waves["P01-I01-W01"].status == WaveStatus.FAILED
+    assert wave_graph.blocked_by("P01-I01-W02", state) == ("P01-I01-W01",)
+
+
+def test_blocked_by_unknown_wave_raises_key_error() -> None:
+    """blocked_by() raises KeyError when the wave is not in state.waves."""
+    state = _seed_chain()
+    with pytest.raises(KeyError, match="unknown wave"):
+        wave_graph.blocked_by("P99-I99-W99", state)
+
+
+def test_blocked_by_skips_dangling_dep_silently() -> None:
+    """A dep id that is not in state.waves is skipped without erroring.
+
+    Referential drift is reported by ``check_parent_ids``; this
+    accessor stays defensive so callers can iterate every wave even
+    when the graph is mid-rebuild.
+    """
+    state = _seed_chain()
+    # Forge a dangling dep on W02.
+    state.waves["P01-I01-W02"].deps = ["P01-I01-W01", "P01-I01-WGHOST"]
+    # Still reports the real dep, skips the ghost.
+    assert wave_graph.blocked_by("P01-I01-W02", state) == ("P01-I01-W01",)
+
+
+# ---- edges (typed single-call accessor) -------------------------------------
+
+
+def test_edges_returns_typed_view() -> None:
+    """edges() bundles deps + blocks + blocked_by into one immutable record."""
+    state = _seed_chain()
+    view = wave_graph.edges("P01-I01-W02", state)
+    assert view.wave_id == "P01-I01-W02"
+    assert view.deps == ("P01-I01-W01",)
+    assert view.blocks == ("P01-I01-W03",)
+    assert view.blocked_by == ("P01-I01-W01",)
+
+
+def test_edges_root_no_predecessors() -> None:
+    """edges() on a root wave reports empty deps + blocked_by."""
+    state = _seed_chain()
+    view = wave_graph.edges("P01-I01-W01", state)
+    assert view.deps == ()
+    assert view.blocked_by == ()
+    assert view.blocks == ("P01-I01-W02",)
+
+
+def test_edges_leaf_no_successors() -> None:
+    """edges() on a leaf wave reports empty blocks."""
+    state = _seed_chain()
+    view = wave_graph.edges("P01-I01-W03", state)
+    assert view.blocks == ()
+
+
+def test_edges_is_frozen() -> None:
+    """WaveDagEdges is frozen — mutation is rejected by Pydantic."""
+    from pydantic import ValidationError
+
+    state = _seed_chain()
+    view = wave_graph.edges("P01-I01-W02", state)
+    with pytest.raises(ValidationError):
+        view.wave_id = "P99-I99-W99"  # type: ignore[misc]
+
+
+def test_edges_extra_forbid() -> None:
+    """WaveDagEdges rejects unknown keys at construction (extra='forbid')."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        wave_graph.WaveDagEdges(
+            wave_id="P01-I01-W01",
+            deps=(),
+            blocks=(),
+            blocked_by=(),
+            bogus="oops",  # type: ignore[call-arg]
+        )
+
+
+def test_edges_unknown_wave_raises_key_error() -> None:
+    """edges() raises KeyError when the wave is not in state.waves."""
+    state = _seed_chain()
+    with pytest.raises(KeyError, match="unknown wave"):
+        wave_graph.edges("P99-I99-W99", state)
+
+
+# ---- edges_for_iter ---------------------------------------------------------
+
+
+def test_edges_for_iter_returns_every_wave() -> None:
+    """edges_for_iter() returns one WaveDagEdges per wave under the iter."""
+    state = _seed_chain()
+    result = wave_graph.edges_for_iter("P01-I01", state)
+    assert set(result) == {"P01-I01-W01", "P01-I01-W02", "P01-I01-W03"}
+    assert result["P01-I01-W01"].deps == ()
+    assert result["P01-I01-W02"].deps == ("P01-I01-W01",)
+    assert result["P01-I01-W03"].deps == ("P01-I01-W02",)
+
+
+def test_edges_for_iter_empty_for_unknown_iter() -> None:
+    """edges_for_iter() returns {} for an iter that has no waves."""
+    state = _seed_chain()
+    assert wave_graph.edges_for_iter("P99-I99", state) == {}
+
+
+def test_edges_for_iter_filters_by_iter_id() -> None:
+    """edges_for_iter() excludes waves whose iter_id does not match."""
+    state = _seed_chain()
+    # Open a second iter with one wave.
+    open_iter(state, iter_id="P01-I02", phase_id="P01", title="Iter2")
+    plan_wave(
+        state,
+        wave_id="P01-I02-W01",
+        iter_id="P01-I02",
+        title="X",
+        file_scopes=["src/"],
+    )
+    result = wave_graph.edges_for_iter("P01-I01", state)
+    assert "P01-I02-W01" not in result
+    other = wave_graph.edges_for_iter("P01-I02", state)
+    assert set(other) == {"P01-I02-W01"}
+
+
+def test_edges_for_iter_diamond_blocked_by_view() -> None:
+    """edges_for_iter() on a diamond surfaces the runtime blocked_by view."""
+    state = _seed_diamond()
+    result = wave_graph.edges_for_iter("P01-I01", state)
+    # W04 is blocked by W02 + W03 (both still pending).
+    assert result["P01-I01-W04"].blocked_by == ("P01-I01-W02", "P01-I01-W03")
+    # Close W01, W02 — W04 should now be blocked by W03 only.
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    claim_wave(state, wave_id="P01-I01-W02", session_id="SES-2")
+    close_wave(state, wave_id="P01-I01-W02", outcome="ok")
+    result = wave_graph.edges_for_iter("P01-I01", state)
+    assert result["P01-I01-W04"].blocked_by == ("P01-I01-W03",)
