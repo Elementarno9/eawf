@@ -40,7 +40,7 @@ import typer
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.cli.errors import InvalidInput, NotFound, ValidationFailed, emit_error
+from eawf.cli.errors import InvalidInput, NotFound, UserDeclined, ValidationFailed, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.config.layered import (
@@ -52,6 +52,14 @@ from eawf.config.layered import (
 )
 from eawf.config.loader import load_yaml_layer
 from eawf.config.profile import enable_profile
+from eawf.config.registry import (
+    CONFIG_REGISTRY,
+    ConfigKey,
+    coerce_and_validate,
+    keys_for_tab,
+    registry_lookup,
+    tabs_sorted,
+)
 from eawf.lock import portalock
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
@@ -203,6 +211,35 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             tmp.unlink(missing_ok=True)
 
 
+def _save_value_to_layer(*, target_path: Path, key: str, value: Any) -> None:
+    """Persist ``key=value`` into the YAML layer at *target_path*.
+
+    Loads the layer, deep-sets the dotted ``key``, and rewrites the file
+    atomically under the same sibling lock the rest of the config CLI
+    honours. Centralising the read-modify-write loop here means every
+    writer — ``eawf config set`` and the interactive ``eawf config menu``
+    alike — converges on a single mutator path: the config CLI continues
+    to be the only writer of layered YAML, and ``state.json`` is never
+    touched from this helper.
+
+    Args:
+        target_path: Absolute path of the layer's ``config.yaml`` (resolved
+            by :func:`eawf.config.layered.layer_path`).
+        key: Dotted config key (e.g. ``"vcs.auto_commit"``).
+        value: Typed value to write. Caller is responsible for type
+            coercion (the registry helper or the legacy ``_coerce_value``).
+
+    Raises:
+        ValidationFailed: Underlying YAML is malformed.
+        OSError: Filesystem failure during read or write.
+        yaml.YAMLError: Dump failure when serialising the merged payload.
+    """
+    with portalock.acquire(target_path):
+        existing = load_yaml_layer(target_path)
+        _set_dotted_in_yaml(existing, key, value)
+        _atomic_write_yaml(target_path, existing)
+
+
 # --- Subcommands ------------------------------------------------------------
 
 
@@ -283,10 +320,7 @@ def config_set(
 
     coerced = _coerce_value(value)
     try:
-        with portalock.acquire(target_path):
-            existing = load_yaml_layer(target_path)
-            _set_dotted_in_yaml(existing, key, coerced)
-            _atomic_write_yaml(target_path, existing)
+        _save_value_to_layer(target_path=target_path, key=key, value=coerced)
     except ValidationFailed as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
@@ -464,7 +498,313 @@ def profile_enable(
     emit_json_or_text(result, text, flags=flags)
 
 
+# --- Interactive menu (questionary, P20-W10) --------------------------------
+
+
+# Pinned questionary style — mirrors the init wizard's palette so the two
+# surfaces feel consistent. Imported lazily inside :func:`_build_menu_style`
+# so non-interactive callers do not pay the prompt_toolkit import tax.
+_MENU_STYLE: tuple[tuple[str, str], ...] = (
+    ("qmark", "fg:#5fafff bold"),
+    ("question", "bold"),
+    ("answer", "fg:#87ff87 bold"),
+    ("pointer", "fg:#5fafff bold"),
+    ("highlighted", "fg:#5fafff bold"),
+    ("selected", "fg:#87ff87"),
+    ("instruction", "fg:#666666 italic"),
+)
+
+
+def _build_menu_style() -> Any:
+    """Lazily build the questionary :class:`Style` for the menu.
+
+    Defers the prompt_toolkit import so callers that only invoke
+    ``eawf config get/set/validate`` never pay the menu's import tax.
+    """
+    from questionary import Style
+
+    return Style(list(_MENU_STYLE))
+
+
+def _ensure_menu_answer(value: Any, *, step: str) -> Any:
+    """Map a ``None`` questionary answer to :class:`UserDeclined`.
+
+    questionary returns ``None`` from ``.ask()`` whenever the operator hits
+    Ctrl-C / Esc / EOF. The menu treats that as a user-declined cancellation
+    — exit code ``USER_DECLINED`` — so the operator's intent is recorded
+    distinctly from validation failures.
+    """
+    if value is None:
+        raise UserDeclined(f"menu cancelled at step {step!r}")
+    return value
+
+
+def _prompt_for_value(entry: ConfigKey, current: Any) -> Any:
+    """Dispatch *entry* to the matching questionary widget and return the answer.
+
+    Args:
+        entry: Registry entry describing the key.
+        current: Current value pulled from the merged config (used as the
+            default in the prompt). Pulled from the merged map so the menu
+            surfaces "what would happen if I press Enter" exactly.
+
+    Returns:
+        The raw answer — typed by questionary for ``bool`` / ``choice`` /
+        ``multichoice``; string for ``text`` / ``int`` / ``float`` (caller
+        coerces via :func:`coerce_and_validate`).
+
+    Raises:
+        UserDeclined: Operator aborted with Ctrl-C / Esc / EOF.
+    """
+    import questionary
+    from questionary import Choice
+
+    style = _build_menu_style()
+    prompt = entry.label
+    instruction = entry.description if entry.description else None
+
+    if entry.type == "bool":
+        default_bool = bool(current) if current is not None else bool(entry.default)
+        return _ensure_menu_answer(
+            questionary.confirm(
+                prompt, default=default_bool, style=style, instruction=instruction
+            ).ask(),
+            step=entry.key,
+        )
+    if entry.type in ("int", "float", "str"):
+        default_text = "" if current is None else str(current)
+        return _ensure_menu_answer(
+            questionary.text(
+                prompt, default=default_text, style=style, instruction=instruction
+            ).ask(),
+            step=entry.key,
+        )
+    if entry.type == "choice":
+        choices = list(entry.choices or ())
+        default_choice: str | None
+        if current is not None and str(current) in choices:
+            default_choice = str(current)
+        else:
+            default_choice = str(entry.default) if str(entry.default) in choices else None
+        return _ensure_menu_answer(
+            questionary.select(
+                prompt,
+                choices=choices,
+                default=default_choice,
+                style=style,
+                instruction=instruction,
+                use_search_filter=True,
+                use_jk_keys=False,
+                use_emacs_keys=False,
+            ).ask(),
+            step=entry.key,
+        )
+    if entry.type == "multichoice":
+        choices_list = list(entry.choices or ())
+        preselected: set[str] = set()
+        if isinstance(current, (list, tuple)):
+            preselected = {str(item) for item in current}
+        opts = [Choice(name, checked=(name in preselected)) for name in choices_list]
+        return _ensure_menu_answer(
+            questionary.checkbox(
+                prompt,
+                choices=opts,
+                style=style,
+                instruction=instruction,
+                use_search_filter=True,
+                use_jk_keys=False,
+                use_emacs_keys=False,
+            ).ask(),
+            step=entry.key,
+        )
+    raise InvalidInput(f"unknown registry type: {entry.type}")
+
+
+def _menu_get_current_value(merged: dict[str, Any], entry: ConfigKey) -> Any:
+    """Return the merged value for *entry*, falling back to the entry default.
+
+    Surface contract: the menu always has something to pre-fill, even on a
+    fresh repo with no overlays.
+    """
+    try:
+        return get_dotted(merged, entry.key)
+    except KeyError:
+        return entry.default
+
+
+@config_app.command("menu")
+def config_menu(
+    ctx: typer.Context,
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help=("Layer to write to (global | workspace | repo | local); built-in is read-only."),
+        ),
+    ] = "repo",
+) -> None:
+    """Open an interactive ``questionary`` menu for tunable config keys.
+
+    Workflow:
+
+    1. Pick a tab (alphabetical, drawn from the metadata registry).
+    2. Pick a field inside the tab (alphabetical by dotted key).
+    3. Edit the value with a widget matched to the registered type
+       (``bool`` → confirm, ``choice`` / ``multichoice`` → select /
+       checkbox, ``int`` / ``float`` / ``str`` → text).
+    4. The coerced value is persisted through :func:`_save_value_to_layer`
+       — the same mutator path :command:`eawf config set` uses, which means
+       ``state.json`` is never touched here and the layered YAML write
+       sequence (lock → load → set → atomic-write) stays the single
+       writer.
+
+    Operator UX:
+
+    - Hitting Ctrl-C / Esc at any prompt exits with the canonical
+      ``USER_DECLINED`` exit code (4xx) — distinct from a validation
+      failure, so scripts can branch on the difference.
+    - The shell that hosts the menu must be a TTY; questionary refuses to
+      prompt against a piped stdin. CI callers should continue to use
+      ``eawf config set`` directly.
+    """
+    flags: GlobalFlags = ctx.obj
+    repo, workspace = _resolve_anchors(flags)
+
+    if scope == "built-in":
+        emit_error(
+            InvalidInput("layer 'built-in' is read-only; choose global|workspace|repo|local"),
+            flags=flags,
+        )
+        return  # pragma: no cover
+    if scope not in WRITABLE_LAYERS:
+        emit_error(
+            InvalidInput(
+                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}"
+            ),
+            flags=flags,
+        )
+        return  # pragma: no cover
+
+    try:
+        target_path = layer_path(scope, workspace=workspace, repo=repo)
+    except ValueError as exc:
+        emit_error(InvalidInput(str(exc)), flags=flags)
+        return  # pragma: no cover
+
+    try:
+        merged, _sources = merge_config(workspace=workspace, repo=repo)
+    except ValidationFailed as exc:
+        emit_error(exc, flags=flags)
+        return  # pragma: no cover
+
+    if not CONFIG_REGISTRY:  # pragma: no cover  defensive — module asserts non-empty
+        emit_error(
+            InvalidInput("config metadata registry is empty; cannot open menu"),
+            flags=flags,
+        )
+        return
+
+    import questionary
+
+    style = _build_menu_style()
+    tabs = tabs_sorted()
+    try:
+        tab = _ensure_menu_answer(
+            questionary.select(
+                "Select a config tab:",
+                choices=list(tabs),
+                style=style,
+                use_search_filter=True,
+                use_jk_keys=False,
+                use_emacs_keys=False,
+            ).ask(),
+            step="tab",
+        )
+        fields = keys_for_tab(tab)
+        if not fields:  # pragma: no cover  registry invariants assert non-empty per tab
+            emit_error(
+                InvalidInput(f"no fields registered under tab {tab!r}"),
+                flags=flags,
+            )
+            return
+
+        # Render each field as "key — label", keep a parallel map to the entry.
+        field_labels = [f"{entry.key} — {entry.label}" for entry in fields]
+        label_to_entry: dict[str, ConfigKey] = dict(zip(field_labels, fields, strict=True))
+        chosen_label = _ensure_menu_answer(
+            questionary.select(
+                f"[{tab}] Select a key to edit:",
+                choices=field_labels,
+                style=style,
+                use_search_filter=True,
+                use_jk_keys=False,
+                use_emacs_keys=False,
+            ).ask(),
+            step="field",
+        )
+        entry = label_to_entry[chosen_label]
+
+        current_value = _menu_get_current_value(merged, entry)
+        raw_answer = _prompt_for_value(entry, current_value)
+        coerced = coerce_and_validate(entry, raw_answer)
+    except UserDeclined as exc:
+        emit_error(exc, flags=flags)
+        return  # pragma: no cover
+    except InvalidInput as exc:
+        emit_error(exc, flags=flags)
+        return  # pragma: no cover
+
+    try:
+        _save_value_to_layer(target_path=target_path, key=entry.key, value=coerced)
+    except ValidationFailed as exc:
+        emit_error(exc, flags=flags)
+        return  # pragma: no cover
+    except yaml.YAMLError as exc:
+        emit_error(
+            ValidationFailed(f"config layer is not valid YAML: {exc}"),
+            flags=flags,
+        )
+        return  # pragma: no cover
+    except OSError as exc:
+        emit_error(
+            InvalidInput(f"cannot read or write {target_path}: {exc}"),
+            flags=flags,
+        )
+        return  # pragma: no cover
+
+    payload = {
+        "key": entry.key,
+        "value": coerced,
+        "scope": scope,
+        "path": str(target_path),
+        "tab": entry.tab,
+    }
+    text = (
+        f"menu: saved {entry.key} = {coerced!r}  "
+        f"(tab: {entry.tab}, scope: {scope}, path: {target_path})"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
 # Re-export the orjson dependency to keep import surface explicit when callers
 # need the exact serialiser used by the CLI envelope. (Some tests stub stdout
 # decoders against this.)
-__all__ = ["config_app", "orjson"]
+__all__ = [
+    "_save_value_to_layer",
+    "config_app",
+    "orjson",
+]
+
+
+def _menu_registry_check() -> None:
+    """Module-load contract: every registry entry's lookup round-trips by key.
+
+    Cheap sanity check that the registry import + lookup helpers are wired.
+    A KeyError here means the registry got out of sync with the menu's
+    expectations and the module fails to import — loud, deterministic.
+    """
+    for entry in CONFIG_REGISTRY:
+        assert registry_lookup(entry.key) is entry, f"registry_lookup mismatch for {entry.key!r}"
+
+
+_menu_registry_check()
