@@ -205,6 +205,59 @@ def _state_version(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
+_GIT_REV_PARSE_TIMEOUT_SECONDS: float = 5.0
+
+
+def _resolve_commit_sha(ref: str) -> str:
+    """Resolve *ref* to a canonical 40-char hex commit SHA via ``git rev-parse``.
+
+    Accepts any ref ``git rev-parse`` understands: full SHA, short SHA,
+    branch tip, tag, ``HEAD``-relative ref. The ``^{commit}`` suffix
+    forces resolution to a commit object rather than a tag or tree.
+
+    Args:
+        ref: User-supplied ref to normalise.
+
+    Returns:
+        The 40-char lowercase hex commit SHA.
+
+    Raises:
+        cli_errors.InvalidInput: If git is not on ``PATH``, the
+            subprocess times out, or the ref does not resolve to a
+            commit on any branch.
+    """
+    cmd = ["git", "rev-parse", f"{ref}^{{commit}}"]
+    try:
+        out = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_GIT_REV_PARSE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.debug(f"resolve_commit_sha ref={ref!r} status=timeout")
+        raise cli_errors.InvalidInput(
+            f"cannot resolve commit ref: {ref!r} (git rev-parse timed out)"
+        ) from exc
+    except (FileNotFoundError, OSError) as exc:
+        logger.debug(f"resolve_commit_sha ref={ref!r} status=os-error err={exc!s}")
+        raise cli_errors.InvalidInput(
+            f"cannot resolve commit ref: {ref!r} (git unavailable: {exc!s})"
+        ) from exc
+    if out.returncode != 0:
+        logger.debug(f"resolve_commit_sha ref={ref!r} status=non-zero rc={out.returncode}")
+        raise cli_errors.InvalidInput(f"cannot resolve commit ref: {ref!r}")
+    sha = out.stdout.strip()
+    if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha):
+        logger.debug(f"resolve_commit_sha ref={ref!r} status=non-canonical sha={sha!r}")
+        raise cli_errors.InvalidInput(
+            f"cannot resolve commit ref: {ref!r} (got non-canonical sha: {sha!r})"
+        )
+    logger.info(f"resolve_commit_sha ref={ref!r} sha={sha}")
+    return sha
+
+
 def _append_event(
     events_path: Path,
     *,
@@ -1399,11 +1452,25 @@ def wave_close_cmd(
     outcome: Annotated[
         str | None, typer.Option("--outcome", help="Outcome description (required).")
     ] = None,
+    commit_ref: Annotated[
+        str | None,
+        typer.Option(
+            "--commit",
+            help=(
+                "Optional commit ref to pin on the wave. Accepts full/short "
+                "SHA, branch tip, tag, or HEAD-relative ref; normalised via "
+                "``git rev-parse <ref>^{commit}`` to a 40-char hex SHA."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Close a claimed/in-progress wave with an outcome string.
 
-    The commit SHA is no longer stored on the wave; derive it on demand
-    with ``eawf wave show --commit <wave-id>`` which walks
+    When ``--commit`` is supplied the ref is resolved via
+    ``git rev-parse <ref>^{commit}`` to a canonical 40-char hex SHA and
+    persisted on the wave. ``eawf wave show --commit <wave-id>``
+    prefers this stored value; absent it falls back to
+    :func:`~eawf.lifecycle.wave_sha.derive_wave_sha` walking
     ``git log --grep "[P##-W##]"``.
     """
     flags: GlobalFlags = ctx.obj
@@ -1419,23 +1486,33 @@ def wave_close_cmd(
             flags=flags,
         )
         return
+    # Resolve the commit ref BEFORE any state mutation so a bad ref
+    # fails the precondition without touching state.json.
+    resolved_sha: str | None = None
+    if commit_ref is not None:
+        try:
+            resolved_sha = _resolve_commit_sha(commit_ref)
+        except cli_errors.CliError as err:
+            cli_errors.emit_error(err, flags=flags)
+            return
+
+    def _close_and_pin(state: State) -> None:
+        wave = close_wave(state, wave_id=wave_id, outcome=outcome)
+        if resolved_sha is not None:
+            wave.commit = resolved_sha
+
     _run_mutation(
         ctx,
         command="wave close",
-        args={"id": wave_id, "outcome": outcome},
+        args={"id": wave_id, "outcome": outcome, "commit": resolved_sha},
         scope_id=wave_id,
         text=f"wave close {wave_id} outcome={outcome!r}",
         envelope=lambda: {
             "wave": wave_id,
             "outcome": outcome,
+            "commit": resolved_sha,
         },
-        mutate=lambda state: _wrap_no_return(
-            close_wave(
-                state,
-                wave_id=wave_id,
-                outcome=outcome,
-            )
-        ),
+        mutate=_close_and_pin,
     )
 
 
@@ -1447,11 +1524,15 @@ def wave_show_cmd(
         bool,
         typer.Option(
             "--commit",
-            help="Print the wave's commit SHA derived via git log --grep '[P##-W##]'.",
+            help=(
+                "Print the wave's commit SHA. Prefers ``Wave.commit`` set "
+                "by ``wave close --commit``; falls back to deriving via "
+                "git log --grep '[P##-W##]'."
+            ),
         ),
     ] = False,
 ) -> None:
-    """Inspect a wave. ``--commit`` derives the SHA from git history."""
+    """Inspect a wave. ``--commit`` prints the pinned-or-derived SHA."""
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -1465,7 +1546,17 @@ def wave_show_cmd(
             flags=flags,
         )
         return
-    sha = derive_wave_sha(wave_id)
+    # Prefer the pinned SHA (set by ``wave close --commit``) over the
+    # derive-from-git-log fallback so closed waves round-trip the value
+    # the operator provided rather than re-querying git on every read.
+    loaded = _load_state_readonly(ctx)
+    pinned_sha: str | None = None
+    if loaded is not None:
+        state, _ = loaded
+        wave = state.waves.get(wave_id)
+        if wave is not None:
+            pinned_sha = wave.commit
+    sha = pinned_sha if pinned_sha is not None else derive_wave_sha(wave_id)
     if sha is None:
         typer.echo("")
         return

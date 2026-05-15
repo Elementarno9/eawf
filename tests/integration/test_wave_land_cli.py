@@ -65,7 +65,9 @@ def test_wave_land_happy_path_envelope_shape(tmp_path: Path) -> None:
     # state.json reflects wave closed + worktree torn down.
     payload = orjson.loads(state_path.read_bytes())
     assert payload["waves"]["P05-I01-W01"]["status"] == "closed"
-    assert "commit" not in payload["waves"]["P05-I01-W01"]
+    # ``wave land`` does not pin a commit (B045 wires ``wave close --commit``
+    # only); the field is present-but-null on the persisted wave.
+    assert payload["waves"]["P05-I01-W01"]["commit"] is None
     # Parent branch should now have the file.
     assert (repo / "hello.txt").exists()
     # Worktree dir should be gone after cleanup.
