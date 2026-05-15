@@ -142,10 +142,11 @@ def test_run_tui_loop_iterates_until_exit(tmp_path: Path, monkeypatch: pytest.Mo
     from eawf.tui import app as tui_app
 
     monkeypatch.setattr(tui_app, "_is_tty", lambda: True)
-    # P20-W03 reserved ``b`` for "open wave-board view"; the loop test
-    # picks neutral inert keys (``a``/``c``) so the exit semantics stay
-    # the assertion target.
-    keys = iter(["a", "c", "\x1b"])
+    # P20-W03 reserved ``b`` for "open wave-board view"; P20-W11
+    # reserved ``c`` for "open config modal". The loop test picks
+    # neutral inert keys (``a``/``z``) so the exit semantics stay the
+    # assertion target.
+    keys = iter(["a", "z", "\x1b"])
 
     def feeder() -> str:
         return next(keys)
