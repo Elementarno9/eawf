@@ -57,10 +57,10 @@ BREADCRUMB_STYLE: str = "cyan"
 #: Default project code used when ``state.json`` is missing or unreadable.
 DEFAULT_PROJECT_CODE: str = "EAWF"
 
-#: Footer keymap hint. Arrows lead; vim aliases trail.
+#: Footer keymap hint. Arrows lead; vim aliases trail. ``b`` opens
+#: the wave-board view (P20-I01-W03); Esc returns from the board.
 FOOTER_KEYMAP: str = (
-    "↑↓←→ navigate  PageUp/PageDown page  Home/End jump  "
-    "Enter select  Esc/q quit  (vim: h j k l g G)"
+    "↑↓←→ navigate  PageUp/PageDown page  Home/End jump  Enter  b board  Esc/q  (vim: h j k l g G)"
 )
 
 #: Pane order in the 2x2 quadrant — top-left, top-right, bottom-left,
