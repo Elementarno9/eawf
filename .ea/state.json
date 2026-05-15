@@ -1194,11 +1194,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P20-I01-W06",
-      "P20-I01-W07",
-      "P20-I01-W09"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P20",
     "project_code": "EAWF",
@@ -2213,7 +2209,8 @@
     "repo_urn": "urn:eawf:v1:repo:EAWF",
     "slug": "eawf",
     "status": "active",
-    "title": "Eä Workflow"
+    "title": "Eä Workflow",
+    "weekly_eu_target": null
   },
   "sandbox_policies": {
     "POL-1": {
@@ -2232,7 +2229,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T18:38:40.879094Z",
+  "updated_at": "2026-05-15T19:07:19.617842Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -5148,8 +5145,8 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T19:07:19.617822Z",
+      "commit": "3820a048e233bb21aafd6970a3a5aade854b0210",
       "deps": [
         "P20-I01-W05"
       ],
@@ -5161,8 +5158,8 @@
       "id": "P20-I01-W06",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:57.026026Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "portfolio dashboard rich-table + explicit repo add/remove/prune CLI verbs (no scan/walk); 3 goldens; 111 wave tests; 3070 pass",
+      "status": "closed",
       "success_criteria": [
         "portfolio view across registered repos",
         "explicit registry add/remove via CLI only"
@@ -5178,8 +5175,8 @@
         "P20-I01-W13"
       ],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T18:52:19.308774Z",
+      "commit": "18d2162bdb8ac846fced4a2a3068f9bfd24516eb",
       "deps": [
         "P20-I01-W03"
       ],
@@ -5190,8 +5187,8 @@
       "id": "P20-I01-W07",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:57.519989Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "audit-running overlay: remediation hints, read-only AuditAttachment (pid + harness_adapter + session), v0.4-deferred action menu; 63 wave tests; 3022 pass",
+      "status": "closed",
       "success_criteria": [
         "remediation hints surface",
         "attached-runtime PID display",
@@ -5235,8 +5232,8 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "prep-p20-flow-20260515-1844",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-15T18:56:29.632686Z",
+      "commit": "318553d1bcbee130951f349598a0c75328069970",
       "deps": [
         "P20-I01-W08"
       ],
@@ -5248,8 +5245,8 @@
       "id": "P20-I01-W09",
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:17.727196Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "weekly_eu_target field on Project (default None), WeeklyBurnMetric + compute_weekly_burn helper, TUI footer divisor when set; 20 tests; 2980 pass",
+      "status": "closed",
       "success_criteria": [
         "field defaults None",
         "TUI renders weekly burn when set",
