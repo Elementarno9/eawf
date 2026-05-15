@@ -186,6 +186,16 @@
       "uri": "repo:.ea/artifacts/A25-P19-I02-W16-backlog-bulk-close.md",
       "urn": "urn:eawf:v1:artifact:P19-I02-W16/ART-A25-P19-I02-W16"
     },
+    "ART-A26-P19-I02": {
+      "created_at": "2026-05-15T15:38:11.224091Z",
+      "id": "ART-A26-P19-I02",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "195de7bd222ca8edd94e32ee2d1cc4bf09d9ae1bdd3368e2a85d9737ef9c0cfa",
+      "size_bytes": 3863,
+      "uri": "repo:.ea/artifacts/A26-P19-I02-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:P19-I02/ART-A26-P19-I02"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -470,6 +480,17 @@
       "kind": "review",
       "report_artifact_id": "ART-A25-P19-I02-W16",
       "scope_id": "P19-I02-W16",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A26-P19-I02": {
+      "check_results": [],
+      "created_at": "2026-05-15T15:38:16.381999Z",
+      "id": "A26-P19-I02",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A26-P19-I02",
+      "scope_id": "P19-I02",
       "status": "complete",
       "verdict": "pass"
     }
@@ -1174,8 +1195,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P19-I02",
-    "phase_id": "P19",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -1751,13 +1772,13 @@
       ]
     },
     "P19-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A26-P19-I02",
+      "closed_at": "2026-05-15T15:38:36.719285Z",
       "estimate_id": null,
       "id": "P19-I02",
       "opened_at": "2026-05-15T14:42:39.662926Z",
       "phase_id": "P19",
-      "status": "active",
+      "status": "closed",
       "title": "drift fix + commit hygiene + backlog audit",
       "wave_ids": [
         "P19-I02-W11",
@@ -2124,8 +2145,8 @@
       "title": "Typed Agent Reports"
     },
     "P19": {
-      "audit_id": "A24-P19",
-      "closed_at": null,
+      "audit_id": "A26-P19-I02",
+      "closed_at": "2026-05-15T15:38:49.299920Z",
       "depends_on": [],
       "id": "P19",
       "iter_ids": [
@@ -2136,7 +2157,7 @@
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "Roadmap-driven planning + commit hygiene"
     },
@@ -2207,7 +2228,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T15:33:07.228272Z",
+  "updated_at": "2026-05-15T15:38:49.300014Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -4932,8 +4953,8 @@
     "P19-I02-W21": {
       "agent_role": "auditor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
+      "closed_at": "2026-05-15T15:38:23.417868Z",
       "commit": null,
       "deps": [
         "P19-I02-W11",
@@ -4955,8 +4976,8 @@
       "id": "P19-I02-W21",
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:29.048857Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "P19-I02 ship-gate audit A26-P19-I02 verdict=pass; report ART-A26-P19-I02",
+      "status": "closed",
       "success_criteria": [
         "ship-gate audit verdict=pass",
         "all I02 waves closed",
