@@ -43,6 +43,11 @@ repos:
         entry: python3 tools/insert_coauthor.py
         language: system
         stages: [prepare-commit-msg]
+      - id: normalize-coauthor
+        name: normalize-coauthor
+        entry: python3 tools/normalize_coauthor.py
+        language: system
+        stages: [commit-msg]
       - id: commit-prefix-lint
         name: commit-prefix-lint
         entry: python3 tools/commit_prefix_lint.py
