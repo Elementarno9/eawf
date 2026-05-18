@@ -206,6 +206,16 @@
       "uri": "repo:.ea/artifacts/A27-P20-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P20/ART-A27-P20"
     },
+    "ART-A28-P22": {
+      "created_at": "2026-05-18T19:34:29.119091Z",
+      "id": "ART-A28-P22",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/A28-P22-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:P22/ART-A28-P22"
+    },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
       "created_at": "2026-05-18T19:17:46.268887Z",
       "id": "ART-research-long-term-2026-05-16-c00-spec-index",
@@ -732,6 +742,17 @@
       "kind": "ship-gate",
       "report_artifact_id": "ART-A27-P20",
       "scope_id": "P20",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A28-P22-ship-gate": {
+      "check_results": [],
+      "created_at": "2026-05-18T19:34:34.539246Z",
+      "id": "A28-P22-ship-gate",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A28-P22",
+      "scope_id": "P22",
       "status": "complete",
       "verdict": "pass"
     }
@@ -1435,11 +1456,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W07"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": "P22",
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2179,13 +2198,13 @@
       ]
     },
     "P22-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A28-P22-ship-gate",
+      "closed_at": "2026-05-18T19:35:31.845484Z",
       "estimate_id": null,
       "id": "P22-I01",
       "opened_at": "2026-05-18T18:50:26.968206Z",
       "phase_id": "P22",
-      "status": "planned",
+      "status": "closed",
       "title": "P22-I01: stage-0 closure waves",
       "wave_ids": [
         "P22-I01-W01",
@@ -2546,8 +2565,8 @@
       "title": "Profiles + MCP/sandbox + domain bodies"
     },
     "P22": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A28-P22-ship-gate",
+      "closed_at": "2026-05-18T19:35:32.531095Z",
       "depends_on": [
         "P20"
       ],
@@ -2559,7 +2578,7 @@
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "Stage-0 closure: AGENTS amendments + D-SUP rows + brief promotion"
     }
@@ -2597,7 +2616,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:23:02.841452Z",
+  "updated_at": "2026-05-18T19:35:32.531177Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6552,8 +6571,8 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "p22-w07-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:34:40.697192Z",
+      "commit": "ff60dc6b1f1889847837b866b01c813c19b1c1b2",
       "deps": [
         "P22-I01-W06"
       ],
@@ -6565,8 +6584,8 @@
       "id": "P22-I01-W07",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:04.504767Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "ship-gate audit A28-P22 verdict=pass; pre-commit + pytest 3214/3214 pass; PR ready",
+      "status": "closed",
       "success_criteria": [
         "ship-gate audit row with verdict=pass",
         "all P22 waves closed",
