@@ -206,6 +206,226 @@
       "uri": "repo:.ea/artifacts/A27-P20-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P20/ART-A27-P20"
     },
+    "ART-research-long-term-2026-05-16-c00-spec-index": {
+      "created_at": "2026-05-18T19:17:46.268887Z",
+      "id": "ART-research-long-term-2026-05-16-c00-spec-index",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c00-spec-index.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c00-spec-index"
+    },
+    "ART-research-long-term-2026-05-16-c01-foundations": {
+      "created_at": "2026-05-18T19:18:05.347164Z",
+      "id": "ART-research-long-term-2026-05-16-c01-foundations",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c01-foundations.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c01-foundations"
+    },
+    "ART-research-long-term-2026-05-16-c02-daemon-topology": {
+      "created_at": "2026-05-18T19:18:05.875691Z",
+      "id": "ART-research-long-term-2026-05-16-c02-daemon-topology",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c02-daemon-topology.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c02-daemon-topology"
+    },
+    "ART-research-long-term-2026-05-16-c03-spec-infrastructure": {
+      "created_at": "2026-05-18T19:18:06.424907Z",
+      "id": "ART-research-long-term-2026-05-16-c03-spec-infrastructure",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c03-spec-infrastructure.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c03-spec-infrastructure"
+    },
+    "ART-research-long-term-2026-05-16-c04-workflow-skills": {
+      "created_at": "2026-05-18T19:18:07.024953Z",
+      "id": "ART-research-long-term-2026-05-16-c04-workflow-skills",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c04-workflow-skills.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c04-workflow-skills"
+    },
+    "ART-research-long-term-2026-05-16-c05-cli-surface": {
+      "created_at": "2026-05-18T19:18:07.535619Z",
+      "id": "ART-research-long-term-2026-05-16-c05-cli-surface",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c05-cli-surface.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c05-cli-surface"
+    },
+    "ART-research-long-term-2026-05-16-c07a-runtime-skill-dispatch": {
+      "created_at": "2026-05-18T19:18:08.044630Z",
+      "id": "ART-research-long-term-2026-05-16-c07a-runtime-skill-dispatch",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c07a-runtime-skill-dispatch.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c07a-runtime-skill-dispatch"
+    },
+    "ART-research-long-term-2026-05-16-c07b-vcs-worktree-events": {
+      "created_at": "2026-05-18T19:18:08.547110Z",
+      "id": "ART-research-long-term-2026-05-16-c07b-vcs-worktree-events",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c07b-vcs-worktree-events.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c07b-vcs-worktree-events"
+    },
+    "ART-research-long-term-2026-05-16-c08-configurability-profiles": {
+      "created_at": "2026-05-18T19:18:09.051102Z",
+      "id": "ART-research-long-term-2026-05-16-c08-configurability-profiles",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-16-c08-configurability-profiles.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-16-c08-configurability-profiles"
+    },
+    "ART-research-long-term-2026-05-17-c06-operator-surface": {
+      "created_at": "2026-05-18T19:18:09.557957Z",
+      "id": "ART-research-long-term-2026-05-17-c06-operator-surface",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-17-c06-operator-surface.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-17-c06-operator-surface"
+    },
+    "ART-research-long-term-2026-05-17-c09-quality-observability": {
+      "created_at": "2026-05-18T19:19:37.530362Z",
+      "id": "ART-research-long-term-2026-05-17-c09-quality-observability",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-17-c09-quality-observability.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-17-c09-quality-observability"
+    },
+    "ART-research-long-term-2026-05-17-c10-operations": {
+      "created_at": "2026-05-18T19:18:10.639211Z",
+      "id": "ART-research-long-term-2026-05-17-c10-operations",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-17-c10-operations.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-17-c10-operations"
+    },
+    "ART-research-long-term-2026-05-17-c11-external-integrations": {
+      "created_at": "2026-05-18T19:18:11.140908Z",
+      "id": "ART-research-long-term-2026-05-17-c11-external-integrations",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-17-c11-external-integrations.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-17-c11-external-integrations"
+    },
+    "ART-research-long-term-2026-05-17-spec-series-combined-audit": {
+      "created_at": "2026-05-18T19:18:15.543611Z",
+      "id": "ART-research-long-term-2026-05-17-spec-series-combined-audit",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-17-spec-series-combined-audit.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-17-spec-series-combined-audit"
+    },
+    "ART-research-long-term-2026-05-18-authority-map": {
+      "created_at": "2026-05-18T19:18:13.551621Z",
+      "id": "ART-research-long-term-2026-05-18-authority-map",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-18-authority-map.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-18-authority-map"
+    },
+    "ART-research-long-term-2026-05-18-c12-implementation-rollup": {
+      "created_at": "2026-05-18T19:18:14.043475Z",
+      "id": "ART-research-long-term-2026-05-18-c12-implementation-rollup",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-18-c12-implementation-rollup.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-18-c12-implementation-rollup"
+    },
+    "ART-research-long-term-2026-05-18-future-ideas": {
+      "created_at": "2026-05-18T19:18:15.026480Z",
+      "id": "ART-research-long-term-2026-05-18-future-ideas",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-18-future-ideas.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-18-future-ideas"
+    },
+    "ART-research-long-term-2026-05-18-migration-dag": {
+      "created_at": "2026-05-18T19:18:14.526356Z",
+      "id": "ART-research-long-term-2026-05-18-migration-dag",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/2026-05-18-migration-dag.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-2026-05-18-migration-dag"
+    },
+    "ART-research-long-term-c04a-workflow": {
+      "created_at": "2026-05-18T19:18:11.624210Z",
+      "id": "ART-research-long-term-c04a-workflow",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/c04a-workflow.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-c04a-workflow"
+    },
+    "ART-research-long-term-c04b-skills": {
+      "created_at": "2026-05-18T19:18:12.101328Z",
+      "id": "ART-research-long-term-c04b-skills",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/c04b-skills.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-c04b-skills"
+    },
+    "ART-research-long-term-c04c-agent": {
+      "created_at": "2026-05-18T19:18:12.592242Z",
+      "id": "ART-research-long-term-c04c-agent",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/c04c-agent.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-c04c-agent"
+    },
+    "ART-research-long-term-c04d-runtime": {
+      "created_at": "2026-05-18T19:18:13.067481Z",
+      "id": "ART-research-long-term-c04d-runtime",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research/long-term/c04d-runtime.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-c04d-runtime"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -2377,7 +2597,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:13:23.241290Z",
+  "updated_at": "2026-05-18T19:19:37.530362Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {

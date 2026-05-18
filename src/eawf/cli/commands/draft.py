@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -26,7 +27,7 @@ draft_app = typer.Typer(
     no_args_is_help=True,
 )
 
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)?$")
 _PROMOTABLE_KINDS = {"research", "audit", "plan", "hypothesis", "decision", "incident"}
 
 
@@ -44,7 +45,13 @@ def _draft_path(root: Path, kind: str, slug: str) -> Path:
 
 
 def _artifact_path(root: Path, kind: str, slug: str) -> Path:
+    if "/" in slug:
+        return root / ".ea" / "artifacts" / kind / f"{slug}.md"
     return root / ".ea" / "artifacts" / f"{kind}-{slug}.md"
+
+
+def _artifact_id(kind: str, slug: str) -> str:
+    return f"ART-{kind}-{slug.replace('/', '-')}"
 
 
 def _validate_kind_slug(kind: str, slug: str) -> None:
@@ -102,6 +109,48 @@ def _strip_sentinel(text: str) -> str:
     return stripped[end + 3 :].lstrip()
 
 
+def _validate_legacy_brief(text: str) -> _LegacyChassisReport:
+    """Minimal validation for legacy long-form briefs.
+
+    Enforces: sentinel present, scrub-status clean (if section present), no
+    scrub findings. Skips chassis-heading and dense-citation checks.
+    """
+    from eawf.artifacts.validation import _SCRUB_CLEAN_RE, _sections
+
+    errors: list[str] = []
+    if not text.lstrip().startswith("<!-- eawf-template:"):
+        errors.append("missing draft sentinel")
+    sections = _sections(text)
+    scrub_section = sections.get("## Scrub")
+    if scrub_section is not None and not _SCRUB_CLEAN_RE.search(scrub_section):
+        errors.append("scrub status must be clean")
+    findings = scan_text(text)
+    if findings:
+        kinds = sorted({finding.kind for finding in findings})
+        count = len(findings)
+        errors.append(f"scrub findings present: {count} ({kinds})")
+    return _LegacyChassisReport(ok=not errors, errors=errors)
+
+
+@dataclass(frozen=True)
+class _LegacyChassisReport:
+    ok: bool
+    errors: list[str] = field(default_factory=list)
+
+
+def _strip_yaml_frontmatter(text: str) -> str:
+    stripped = text.lstrip()
+    if not stripped.startswith("---"):
+        return text
+    lines = stripped.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return text
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return "\n".join(lines[index + 1 :]).lstrip()
+    return text
+
+
 @draft_app.command("new")
 def draft_new(
     ctx: typer.Context,
@@ -154,8 +203,15 @@ def promote_draft(
     slug: str,
     scrub: bool,
     force: bool,
+    legacy_chassis: bool = False,
 ) -> None:
-    """Promote one local draft into ``.ea/artifacts`` and state."""
+    """Promote one local draft into ``.ea/artifacts`` and state.
+
+    When *legacy_chassis* is True the chassis-heading + dense-citation
+    checks are skipped — used for long-form research briefs ratified
+    before the renderer-owned chassis convention landed. Scrub-status +
+    PII-scan + sentinel-presence are still enforced.
+    """
     flags = _flags(ctx)
     try:
         _validate_kind_slug(kind, slug)
@@ -167,17 +223,23 @@ def promote_draft(
         text = src.read_text(encoding="utf-8")
         if scrub:
             text = rewrite_text(text)
-        report = validate_markdown_artifact(text, require_template_sentinel=True)
+        if legacy_chassis:
+            report = _validate_legacy_brief(text)
+        else:
+            report = validate_markdown_artifact(text, require_template_sentinel=True)
         if not report.ok:
             raise cli_errors.ValidationFailed("; ".join(report.errors))
         text = _strip_sentinel(text)
+        if legacy_chassis:
+            text = _strip_yaml_frontmatter(text)
         dest = _artifact_path(root, kind, slug)
         if dest.exists() and not force:
             raise cli_errors.InvalidInput(f"artifact file already exists: {dest.name}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(text, encoding="utf-8")
-        artifact_id = f"ART-{kind}-{slug}"
-        uri = f"repo:.ea/artifacts/{dest.name}"
+        artifact_id = _artifact_id(kind, slug)
+        rel_dest = dest.relative_to(root)
+        uri = f"repo:{rel_dest.as_posix()}"
         artifact_kind = _artifact_kind_for(kind)
         with state_transaction(state_path) as state:
             scope_id = state.project.code if state.project is not None else kind
@@ -231,8 +293,18 @@ def install_promote_command(app: typer.Typer, kind: str) -> None:
         slug: Annotated[str, typer.Argument(help="Draft slug under .ea/local.")],
         scrub: Annotated[bool, typer.Option("--scrub", help="Scrub before promotion.")] = False,
         force: Annotated[bool, typer.Option("--force", help="Overwrite promoted file.")] = False,
+        legacy_chassis: Annotated[
+            bool,
+            typer.Option(
+                "--legacy-chassis",
+                help="Skip chassis-heading + dense-citation checks (for long-form "
+                "research briefs ratified before the chassis convention).",
+            ),
+        ] = False,
     ) -> None:
-        promote_draft(ctx, kind=kind, slug=slug, scrub=scrub, force=force)
+        promote_draft(
+            ctx, kind=kind, slug=slug, scrub=scrub, force=force, legacy_chassis=legacy_chassis
+        )
 
     _promote.__name__ = f"{kind}_promote"
     app.command("promote")(_promote)
