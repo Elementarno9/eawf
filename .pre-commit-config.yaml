@@ -19,13 +19,20 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/Yelp/detect-secrets
-    # Baseline-hash: a4bda3b35cc4a766 (.secrets.baseline; recompute and bump
+    # Baseline-hash: f60c8484323f5339 (.secrets.baseline; recompute and bump
     # this comment when the baseline is edited so the change is re-acknowledged).
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: [--baseline, .secrets.baseline]
-        exclude: 'uv\.lock|\.gitignore'
+        # Exclude state-bookkeeping files: state.json + store/*.jsonl carry
+        # canonical 40-char hex wave-commit SHAs + URNs that trigger the
+        # Hex-High-Entropy plugin as false positives, and their line offsets
+        # shift on every state mutation — refreshing the baseline per commit
+        # became loop noise. AGENTS rule 4 guarantees these files do not
+        # carry user secrets by design; the daemon (sole canonical mutator)
+        # owns their content.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^\.ea/store/.*\.jsonl$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0
