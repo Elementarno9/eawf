@@ -1435,9 +1435,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W06"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2597,7 +2595,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:19:37.530362Z",
+  "updated_at": "2026-05-18T19:22:35.508674Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6518,8 +6516,8 @@
         "P22-I01-W07"
       ],
       "claim_session_id": "p22-w06-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:22:35.508658Z",
+      "commit": "ac84c6d7babd711372124fe25581b4079dda68a4",
       "deps": [
         "P22-I01-W01",
         "P22-I01-W02",
@@ -6535,8 +6533,8 @@
       "id": "P22-I01-W06",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:03.967313Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "22 briefs promoted to .ea/artifacts/research/long-term/; promote_draft patched for subdir slugs + --legacy-chassis flag for long-form briefs",
+      "status": "closed",
       "success_criteria": [
         "promote_draft accepts long-term/<slug> subdirectory form",
         "22 briefs promoted under .ea/artifacts/research/long-term/",
