@@ -8,10 +8,10 @@ Grammar::
 
 The 26 canonical URN kinds are catalogued in
 ``.ea/artifacts/research/long-term/2026-05-16-c01-foundations.md`` §5.2.2.
-Single-word tokens only (per operator decision D1 2026-05-16). The legacy
-underscored ``agent_report`` form is replaced by the single-word ``report``
-kind — callers MUST emit ``report``; ``agent_report`` was never a URN kind
-and is rejected with the canonical ``unknown URN kind`` error.
+Single-word tokens only. The legacy underscored ``agent_report`` form is
+replaced by the single-word ``report`` kind — callers MUST emit ``report``;
+``agent_report`` was never a URN kind and is rejected with the canonical
+``unknown URN kind`` error.
 """
 
 from __future__ import annotations
