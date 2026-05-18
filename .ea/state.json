@@ -1215,9 +1215,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W03"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2317,7 +2315,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:04:52.117330Z",
+  "updated_at": "2026-05-18T19:08:41.219598Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6148,8 +6146,8 @@
         "P22-I01-W06"
       ],
       "claim_session_id": "p22-w03-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:08:41.219577Z",
+      "commit": "99f1dfa043dcfbdfab895bce83a470dc18cc30b2",
       "deps": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6160,8 +6158,8 @@
       "id": "P22-I01-W03",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:56.684148Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "decision add --supersedes flag wired; atomic parent SUPERSEDED + superseded_by flip; 4 unit tests pass",
+      "status": "closed",
       "success_criteria": [
         "--supersedes flag accepted by typer",
         "add_decision flips parent SUPERSEDED + sets superseded_by atomically",
