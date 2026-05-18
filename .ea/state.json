@@ -1215,7 +1215,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P22-I01-W01"
+    ],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2315,7 +2317,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T18:51:57.786774Z",
+  "updated_at": "2026-05-18T18:53:12.593116Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6086,7 +6088,7 @@
       "blocks": [
         "P22-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p22-w01-inline",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -6098,7 +6100,7 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:38.848493Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "rule 4 renamed to daemon canonical mutator",
         "rule 17 mutator-path block rewritten",
