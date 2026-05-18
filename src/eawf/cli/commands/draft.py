@@ -223,12 +223,16 @@ def promote_draft(
         text = src.read_text(encoding="utf-8")
         if scrub:
             text = rewrite_text(text)
+        report_ok: bool
+        report_errors: list[str]
         if legacy_chassis:
-            report = _validate_legacy_brief(text)
+            legacy_report = _validate_legacy_brief(text)
+            report_ok, report_errors = legacy_report.ok, legacy_report.errors
         else:
-            report = validate_markdown_artifact(text, require_template_sentinel=True)
-        if not report.ok:
-            raise cli_errors.ValidationFailed("; ".join(report.errors))
+            chassis_report = validate_markdown_artifact(text, require_template_sentinel=True)
+            report_ok, report_errors = chassis_report.ok, chassis_report.errors
+        if not report_ok:
+            raise cli_errors.ValidationFailed("; ".join(report_errors))
         text = _strip_sentinel(text)
         if legacy_chassis:
             text = _strip_yaml_frontmatter(text)
