@@ -2215,6 +2215,61 @@
         "P22-I01-W06",
         "P22-I01-W07"
       ]
+    },
+    "P23-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P23-I01",
+      "opened_at": "2026-05-18T19:44:49.107239Z",
+      "phase_id": "P23",
+      "status": "planned",
+      "title": "P23-I01: C01-IMPL kernel waves",
+      "wave_ids": []
+    },
+    "P24-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P24-I01",
+      "opened_at": "2026-05-18T19:45:10.042950Z",
+      "phase_id": "P24",
+      "status": "planned",
+      "title": "P24-I01: C02-IMPL daemon waves",
+      "wave_ids": []
+    },
+    "P25-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P25-I01",
+      "opened_at": "2026-05-18T19:45:10.543231Z",
+      "phase_id": "P25",
+      "status": "planned",
+      "title": "P25-I01: contracts waves (4-way parallel)",
+      "wave_ids": []
+    },
+    "P26-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P26-I01",
+      "opened_at": "2026-05-18T19:45:11.036158Z",
+      "phase_id": "P26",
+      "status": "planned",
+      "title": "P26-I01: surfaces waves",
+      "wave_ids": []
+    },
+    "P27-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P27-I01",
+      "opened_at": "2026-05-18T19:45:11.534616Z",
+      "phase_id": "P27",
+      "status": "planned",
+      "title": "P27-I01: observ + ops waves",
+      "wave_ids": []
     }
   },
   "mcp_grants": null,
@@ -2581,6 +2636,123 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Stage-0 closure: AGENTS amendments + D-SUP rows + brief promotion"
+    },
+    "P23": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P22"
+      ],
+      "id": "P23",
+      "iter_ids": [
+        "P23-I01"
+      ],
+      "opened_at": "2026-05-18T19:44:49.107213Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "ART-research-long-term-2026-05-16-c01-foundations",
+        "ART-research-long-term-2026-05-18-c12-implementation-rollup"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "C01-IMPL kernel: bootstrap + state + config + URN + IDs + validate"
+    },
+    "P24": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P23"
+      ],
+      "id": "P24",
+      "iter_ids": [
+        "P24-I01"
+      ],
+      "opened_at": "2026-05-18T19:45:10.042911Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "ART-research-long-term-2026-05-16-c02-daemon-topology",
+        "ART-research-long-term-2026-05-18-authority-map",
+        "ART-research-long-term-2026-05-18-migration-dag",
+        "ART-research-long-term-2026-05-18-c12-implementation-rollup"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock writer"
+    },
+    "P25": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P24"
+      ],
+      "id": "P25",
+      "iter_ids": [
+        "P25-I01"
+      ],
+      "opened_at": "2026-05-18T19:45:10.543213Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "ART-research-long-term-2026-05-16-c03-spec-infrastructure",
+        "ART-research-long-term-2026-05-16-c07a-runtime-skill-dispatch",
+        "ART-research-long-term-2026-05-16-c07b-vcs-worktree-events",
+        "ART-research-long-term-2026-05-16-c08-configurability-profiles",
+        "ART-research-long-term-2026-05-18-c12-implementation-rollup"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS events + profiles"
+    },
+    "P26": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P25"
+      ],
+      "id": "P26",
+      "iter_ids": [
+        "P26-I01"
+      ],
+      "opened_at": "2026-05-18T19:45:11.036134Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "ART-research-long-term-2026-05-16-c05-cli-surface",
+        "ART-research-long-term-2026-05-16-c04-workflow-skills",
+        "ART-research-long-term-c04a-workflow",
+        "ART-research-long-term-c04b-skills",
+        "ART-research-long-term-c04c-agent",
+        "ART-research-long-term-c04d-runtime",
+        "ART-research-long-term-2026-05-17-c06-operator-surface",
+        "ART-research-long-term-2026-05-18-c12-implementation-rollup"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime + operator TUI"
+    },
+    "P27": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P26"
+      ],
+      "id": "P27",
+      "iter_ids": [
+        "P27-I01"
+      ],
+      "opened_at": "2026-05-18T19:45:11.534597Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "ART-research-long-term-2026-05-17-c09-quality-observability",
+        "ART-research-long-term-2026-05-17-c10-operations",
+        "ART-research-long-term-2026-05-18-c12-implementation-rollup"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "C09+C10 observability + operations: quality DSL + telemetry + release/migration ops"
     }
   },
   "plugins": {},
@@ -2616,7 +2788,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:35:32.531177Z",
+  "updated_at": "2026-05-18T19:45:11.534622Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
