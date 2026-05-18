@@ -20,7 +20,7 @@ instrument_requirements:
 render_blocks:
   - id: non-negotiable-rules
     target: AGENTS.md
-    version: "1.4"
+    version: "1.5"
     body_template: |
       ## Non-negotiable rules (core)
 
@@ -33,10 +33,17 @@ render_blocks:
          lives in the loader; downstream functions accept already-validated typed
          objects only.
       3. **`.ea/` is committed.** See ``ea-directory-commit-policy``.
-      4. **State CLI is the only mutator of `state.json`.** Read access is free;
-         mutations go through the state CLI which uses ``portalocker``-backed
-         file locking. No direct file writes from skills, agents, or ad-hoc
-         scripts.
+      4. **Daemon is the sole canonical mutator** for ``state.json``, layered
+         config YAML, registry JSON, event/audit stores, and telemetry DB
+         (per Decision D-SUP-01 + the per-file authority map at
+         ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``).
+         Read access stays free. During v0.3-v0.5 the state CLI
+         (``uv run eawf state ...``) remains the operator-facing surface; it
+         proxies mutations to the daemon via JSON-RPC and falls back to direct
+         ``portalocker`` writes only when the daemon is unavailable
+         (CI / one-shot / recovery shell per V1). The three legacy writers
+         (state-CLI direct, layered-config writer, registry writer) migrate
+         into daemon internals during the v0.4 hygiene wave.
       5. **Symbol conventions.** See ``symbol-conventions``.
       6. **Deletion rule.** See ``deletion-rule``.
       7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
@@ -60,6 +67,27 @@ render_blocks:
       20. **Planned-scope revisability.** See ``planned-scope-revisability``.
       21. **Roadmap procedure.** See ``roadmap-procedure``.
       22. **Spike workflow.** See ``spike-workflow``.
+      23. **Engineering principles (DRY/KISS/YAGNI).** Apply DRY (don't
+          repeat yourself), KISS (keep it simple, stupid), and YAGNI (you
+          aren't gonna need it) when shaping new code. Reach for the simplest
+          design that solves the immediate need; avoid premature abstraction
+          or speculative flexibility. Three similar lines is better than a
+          half-fitted helper. Don't add error handling, fallbacks, or
+          validation for scenarios that can't happen.
+      24. **Other engineering practice.** Default to: fail-fast (raise at the
+          boundary, not deep in a call stack), single-responsibility (each
+          function or class has one reason to change), principle of least
+          surprise (behaviour matches the name), separation of concerns
+          (parsing ≠ validation ≠ execution), pure functions where viable
+          (no hidden state), and explicit-over-implicit (named args over
+          positional when arity ≥ 3; explicit returns over None-as-success).
+      25. **Source code stays clean of design-decision references.** No
+          inline ``# per Q<N>``, ``# per audit XB##``, ``# per Codex``, or
+          roundtable / operator-decision-id comments in committed source
+          files. Decision provenance lives in the commit body and the typed
+          Decision URN in ``state.json``; source comments are reserved for
+          WHY-the-code-does-X explanations that aid future readers
+          irrespective of provenance.
 
   - id: architecture-cli-dispatch
     target: AGENTS.md
@@ -93,7 +121,7 @@ render_blocks:
 
   - id: naming-conventions
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     body_template: |
       ### Naming conventions
 
@@ -140,19 +168,17 @@ render_blocks:
 
       **Mutator-path precision in wave success criteria** — when a
       wave's success criterion text references a "save through" or
-      "persist via" path, name the actual canonical writer rather
-      than the generic phrase ``state-CLI``. Three distinct mutator
-      surfaces live in this repo: (a) **state-CLI** mutates
-      ``.ea/state.json`` via ``uv run eawf state ...`` and the
-      ``portalocker``-backed writer in :mod:`eawf.state.writer`;
-      (b) **layered-config writer** mutates the per-layer YAML files
-      (``.ea/config.yaml``, ``~/.eawf/config.yaml``, etc.) via
-      :func:`eawf.cli.commands.config._save_value_to_layer`;
-      (c) **registry writer** mutates ``~/.eawf/registry.json`` via
-      :func:`eawf.cli.commands.repo._persist_registry`. Each obeys
-      AGENTS rule 4's single-canonical-mutator invariant for *its*
-      file; conflating them in criterion prose makes audits flag
-      false-positive nits even when the implementation is correct.
+      "persist via" path, name the **canonical writer** rather than
+      the generic phrase ``state-CLI``. Per D-SUP-01 (2026-05-18),
+      the canonical writer for every stateful surface is the
+      **daemon** (``eawfd``); during v0.3-v0.5 the daemon proxies
+      through legacy internal subsystems (state writer, config
+      writer, registry writer, telemetry projector). Authority map
+      ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``
+      names the canonical writer per file. Conflating the
+      operator-facing surface (``uv run eawf state ...``) with the
+      daemon-internal subsystem in criterion prose makes audits flag
+      false positives.
 
   - id: deletion-rule
     target: AGENTS.md
@@ -379,7 +405,7 @@ render_blocks:
 
   - id: spike-workflow
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### Spike workflow
 
@@ -415,6 +441,14 @@ render_blocks:
       filename matches the wave / iter / phase id under a
       ``## References`` section so the subagent reads them before
       starting work.
+
+      **Spike outputs that ratify a verdict promote on commit.** A
+      spike brief that informs a Decision row + ``set-verdict`` MUST
+      promote from ``.ea/local/research/<date>-<slug>.md`` to
+      ``.ea/artifacts/research/<date>-<slug>.md`` in the same commit
+      that lands the Decision. The promotion runs the
+      artifact-chassis validator + scrub gate. Spikes that do NOT
+      inform a typed verdict stay local.
 
   - id: agent-report-contract
     target: AGENTS.md
@@ -488,7 +522,7 @@ render_blocks:
 
   - id: anti-patterns
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ## Anti-patterns
 
@@ -503,6 +537,9 @@ render_blocks:
         transitively.
       - Using ``Read`` to verify a file you just wrote with
         ``Write``/``Edit``.
+      - Carrying audit citations or decision-round IDs into source
+        comments (rule 25 violation; provenance lives in commit body
+        + ``state.json`` Decision URN).
 
 skills_referenced: []
 hooks_referenced: []

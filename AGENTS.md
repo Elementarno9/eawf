@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.4 hash=0be30571cc69434f -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.5 hash=cba988ccaf44e0ec -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -10,10 +10,17 @@ non-trivial body has an expansion block immediately following.
    lives in the loader; downstream functions accept already-validated typed
    objects only.
 3. **`.ea/` is committed.** See ``ea-directory-commit-policy``.
-4. **State CLI is the only mutator of `state.json`.** Read access is free;
-   mutations go through the state CLI which uses ``portalocker``-backed
-   file locking. No direct file writes from skills, agents, or ad-hoc
-   scripts.
+4. **Daemon is the sole canonical mutator** for ``state.json``, layered
+   config YAML, registry JSON, event/audit stores, and telemetry DB
+   (per Decision D-SUP-01 + the per-file authority map at
+   ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``).
+   Read access stays free. During v0.3-v0.5 the state CLI
+   (``uv run eawf state ...``) remains the operator-facing surface; it
+   proxies mutations to the daemon via JSON-RPC and falls back to direct
+   ``portalocker`` writes only when the daemon is unavailable
+   (CI / one-shot / recovery shell per V1). The three legacy writers
+   (state-CLI direct, layered-config writer, registry writer) migrate
+   into daemon internals during the v0.4 hygiene wave.
 5. **Symbol conventions.** See ``symbol-conventions``.
 6. **Deletion rule.** See ``deletion-rule``.
 7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
@@ -37,6 +44,27 @@ non-trivial body has an expansion block immediately following.
 20. **Planned-scope revisability.** See ``planned-scope-revisability``.
 21. **Roadmap procedure.** See ``roadmap-procedure``.
 22. **Spike workflow.** See ``spike-workflow``.
+23. **Engineering principles (DRY/KISS/YAGNI).** Apply DRY (don't
+    repeat yourself), KISS (keep it simple, stupid), and YAGNI (you
+    aren't gonna need it) when shaping new code. Reach for the simplest
+    design that solves the immediate need; avoid premature abstraction
+    or speculative flexibility. Three similar lines is better than a
+    half-fitted helper. Don't add error handling, fallbacks, or
+    validation for scenarios that can't happen.
+24. **Other engineering practice.** Default to: fail-fast (raise at the
+    boundary, not deep in a call stack), single-responsibility (each
+    function or class has one reason to change), principle of least
+    surprise (behaviour matches the name), separation of concerns
+    (parsing ≠ validation ≠ execution), pure functions where viable
+    (no hidden state), and explicit-over-implicit (named args over
+    positional when arity ≥ 3; explicit returns over None-as-success).
+25. **Source code stays clean of design-decision references.** No
+    inline ``# per Q<N>``, ``# per audit XB##``, ``# per Codex``, or
+    roundtable / operator-decision-id comments in committed source
+    files. Decision provenance lives in the commit body and the typed
+    Decision URN in ``state.json``; source comments are reserved for
+    WHY-the-code-does-X explanations that aid future readers
+    irrespective of provenance.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -63,7 +91,7 @@ IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN>``
 (zero-padded, e.g., ``P00``, ``P03``). Wave IDs: ``W<NN>`` likewise.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.1 hash=35dba115d9f2702b -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.2 hash=152512babd439ccf -->
 ### Naming conventions
 
 To prevent drift across state models, envelopes, parameters, and
@@ -109,19 +137,17 @@ summary; reserve the ``Raises:`` block for that.
 
 **Mutator-path precision in wave success criteria** — when a
 wave's success criterion text references a "save through" or
-"persist via" path, name the actual canonical writer rather
-than the generic phrase ``state-CLI``. Three distinct mutator
-surfaces live in this repo: (a) **state-CLI** mutates
-``.ea/state.json`` via ``uv run eawf state ...`` and the
-``portalocker``-backed writer in :mod:`eawf.state.writer`;
-(b) **layered-config writer** mutates the per-layer YAML files
-(``.ea/config.yaml``, ``~/.eawf/config.yaml``, etc.) via
-:func:`eawf.cli.commands.config._save_value_to_layer`;
-(c) **registry writer** mutates ``~/.eawf/registry.json`` via
-:func:`eawf.cli.commands.repo._persist_registry`. Each obeys
-AGENTS rule 4's single-canonical-mutator invariant for *its*
-file; conflating them in criterion prose makes audits flag
-false-positive nits even when the implementation is correct.
+"persist via" path, name the **canonical writer** rather than
+the generic phrase ``state-CLI``. Per D-SUP-01 (2026-05-18),
+the canonical writer for every stateful surface is the
+**daemon** (``eawfd``); during v0.3-v0.5 the daemon proxies
+through legacy internal subsystems (state writer, config
+writer, registry writer, telemetry projector). Authority map
+``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``
+names the canonical writer per file. Conflating the
+operator-facing surface (``uv run eawf state ...``) with the
+daemon-internal subsystem in criterion prose makes audits flag
+false positives.
 
 <!-- END EAWF:managed id=naming-conventions -->
 <!-- BEGIN EAWF:managed id=deletion-rule version=1.0 hash=bd0cf5251c37fe42 -->
@@ -319,7 +345,7 @@ the per-phase plan.
   ``Edit``, ``Write``); reserve ``Bash`` for shell-only operations.
 
 <!-- END EAWF:managed id=agent-tool-discipline -->
-<!-- BEGIN EAWF:managed id=anti-patterns version=1.0 hash=a81cd7886f51d8c9 -->
+<!-- BEGIN EAWF:managed id=anti-patterns version=1.1 hash=570e2a60c01ad540 -->
 ## Anti-patterns
 
 - Mutating ``state.json`` outside the state CLI.
@@ -333,6 +359,9 @@ the per-phase plan.
   transitively.
 - Using ``Read`` to verify a file you just wrote with
   ``Write``/``Edit``.
+- Carrying audit citations or decision-round IDs into source
+  comments (rule 25 violation; provenance lives in commit body
+  + ``state.json`` Decision URN).
 
 <!-- END EAWF:managed id=anti-patterns -->
 <!-- BEGIN EAWF:managed id=python-style version=1.1 hash=ab17daa64d2cfa01 -->
@@ -443,7 +472,7 @@ deferred to a follow-up phase; P19 ships phase-at-a-time only.
 proposes to swap order.
 
 <!-- END EAWF:managed id=roadmap-procedure -->
-<!-- BEGIN EAWF:managed id=spike-workflow version=1.0 hash=671a40eebbf0ffd1 -->
+<!-- BEGIN EAWF:managed id=spike-workflow version=1.1 hash=2e32fb783dd93583 -->
 ### Spike workflow
 
 A *spike* is a short, time-boxed, read-only investigation run
@@ -478,5 +507,13 @@ prompt — the wave dispatch renderer surfaces spike briefs whose
 filename matches the wave / iter / phase id under a
 ``## References`` section so the subagent reads them before
 starting work.
+
+**Spike outputs that ratify a verdict promote on commit.** A
+spike brief that informs a Decision row + ``set-verdict`` MUST
+promote from ``.ea/local/research/<date>-<slug>.md`` to
+``.ea/artifacts/research/<date>-<slug>.md`` in the same commit
+that lands the Decision. The promotion runs the
+artifact-chassis validator + scrub gate. Spikes that do NOT
+inform a typed verdict stay local.
 
 <!-- END EAWF:managed id=spike-workflow -->
