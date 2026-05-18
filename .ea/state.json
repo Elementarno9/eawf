@@ -1478,7 +1478,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P23-I02",
     "phase_id": "P23",
     "project_code": "EAWF",
     "subproject_id": null
@@ -2252,6 +2252,19 @@
         "P23-I01-W03"
       ]
     },
+    "P23-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P23-I02",
+      "opened_at": "2026-05-18T21:30:39.222928Z",
+      "phase_id": "P23",
+      "status": "active",
+      "title": "P23-I02: criterion drift detector (F1..F4 cleanup mechanism)",
+      "wave_ids": [
+        "P23-I02-W01"
+      ]
+    },
     "P24-I01": {
       "audit_id": null,
       "closed_at": null,
@@ -2670,7 +2683,8 @@
       ],
       "id": "P23",
       "iter_ids": [
-        "P23-I01"
+        "P23-I01",
+        "P23-I02"
       ],
       "opened_at": "2026-05-18T19:44:49.107213Z",
       "outcome_ids": [],
@@ -2813,7 +2827,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T21:27:21.137378Z",
+  "updated_at": "2026-05-18T21:38:27.202963Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6889,6 +6903,38 @@
         "brief .ea/local/research/2026-05-18-p23-c01-kernel-waves.md cited"
       ],
       "title": "feat: lifecycle DAG migration helpers for downstream entities",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P23-I02-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "eawf-flow-p23-i02-w01-inline",
+      "closed_at": "2026-05-18T21:38:27.201933Z",
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/lifecycle/criterion_drift.py",
+        "src/eawf/lifecycle/transitions.py",
+        "tests/unit/test_criterion_drift.py"
+      ],
+      "id": "P23-I02-W01",
+      "iter_id": "P23-I02",
+      "opened_at": "2026-05-18T21:30:52.994417Z",
+      "outcome": "criterion drift detector module + wave_close_cmd hook + 19 unit tests + 3304 full-suite green; advisory warning surfaces unresolved path globs at close time",
+      "status": "closed",
+      "success_criteria": [
+        "extract_path_globs(criteria) pure function returns the set of path-shaped tokens (matching r'tests/[\\S]+\\.py|src/[\\S]+\\.py') from a wave's success_criteria list",
+        "unresolved_globs(repo_root globs) returns globs that resolve to zero files on disk",
+        "close_wave hook emits a stderr warning listing unresolved globs when drift detected; close itself proceeds (advisory not blocking)",
+        "helpers are library-private (no CLI surface)",
+        "uv run pytest tests/unit/test_criterion_drift -q green",
+        "uv run mypy src/eawf/lifecycle/criterion_drift.py src/eawf/lifecycle/transitions.py green",
+        "Audit A29-P23-ship-gate followups F1..F4 are the worked example: lint MUST flag tests/unit/test_state_urn*.py + tests/unit/test_lifecycle*.py as unresolved if those success_criteria were re-validated"
+      ],
+      "title": "feat: criterion drift detector — wave success_criteria path-glob resolver + close-time warning",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
