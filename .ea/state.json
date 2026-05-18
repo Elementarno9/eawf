@@ -2792,7 +2792,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T20:39:26.124912Z",
+  "updated_at": "2026-05-18T21:01:02.531502Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6779,8 +6779,8 @@
         "P23-I01-W02",
         "P23-I01-W03"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "eawf-flow-p23-w01-inline",
+      "closed_at": "2026-05-18T21:01:02.531487Z",
       "commit": null,
       "deps": [],
       "effort_bucket": "M",
@@ -6791,8 +6791,8 @@
       "id": "P23-I01-W01",
       "iter_id": "P23-I01",
       "opened_at": "2026-05-18T20:39:13.032574Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "URN_KINDS extended 10->26 per c01-foundations; _SLASH_KINDS extended with 7 new slash-friendly kinds; 63 unit tests green; full suite 3252 passed; state schema regenerated",
+      "status": "closed",
       "success_criteria": [
         "URN_KINDS extended from 10 to 26 kinds per c01-foundations §7.1 item 1",
         "_SLASH_KINDS extended to {repo artifact store spec report event memory session plugin mcp} per c01-foundations §7.1 item 2",
