@@ -1217,7 +1217,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": "P20",
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2209,8 +2209,8 @@
       "title": "Roadmap-driven planning + commit hygiene"
     },
     "P20": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A27-P20",
+      "closed_at": "2026-05-18T18:10:54.070468Z",
       "depends_on": [],
       "id": "P20",
       "iter_ids": [
@@ -2222,7 +2222,7 @@
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "TUI + metrics + operator UX"
     },
@@ -2278,7 +2278,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-15T21:05:54.106170Z",
+  "updated_at": "2026-05-18T18:10:54.070568Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
