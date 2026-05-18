@@ -853,6 +853,14 @@ def decision_add(
         list[str] | None,
         typer.Option("--alternative", help="Alternative considered (repeatable)"),
     ] = None,
+    supersedes: Annotated[
+        str | None,
+        typer.Option(
+            "--supersedes",
+            help="ID of the ACTIVE decision this row supersedes; flips parent "
+            "status to SUPERSEDED and sets parent.superseded_by atomically.",
+        ),
+    ] = None,
 ) -> None:
     """Record a durable decision."""
     flags = _flags(ctx)
@@ -867,6 +875,7 @@ def decision_add(
                 summary=summary,
                 rationale=rationale,
                 alternatives=list(alternative or []),
+                supersedes=supersedes,
             )
             paths = store_paths(state_path)
             append_jsonl(paths[StoreKind.DECISION], record)
@@ -875,16 +884,16 @@ def decision_add(
         cli_errors.emit_error(err, flags=flags)
         return
 
-    _emit(
-        {
-            "decision_id": decision_id,
-            "scope_id": scope_id,
-            "summary": summary,
-            "status": "active",
-        },
-        f"decision {decision_id} added",
-        flags,
-    )
+    payload: dict[str, str] = {
+        "decision_id": decision_id,
+        "scope_id": scope_id,
+        "summary": summary,
+        "status": "active",
+    }
+    if supersedes is not None:
+        payload["supersedes"] = supersedes
+    text = f"decision {decision_id} added" + (f" (supersedes {supersedes})" if supersedes else "")
+    _emit(payload, text, flags)
 
 
 @decision_app.command("list")
