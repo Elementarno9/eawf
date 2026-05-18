@@ -209,6 +209,43 @@ def _state_version(payload: dict[str, Any]) -> str:
 _GIT_REV_PARSE_TIMEOUT_SECONDS: float = 5.0
 
 
+def _resolve_repo_root_for_drift(workspace: Path | None) -> Path | None:
+    """Return the repo root for the criterion-drift advisory, or ``None``.
+
+    The drift check needs a path on disk to glob against. Two cases:
+
+    1. Canonical layout — ``.ea/state.json`` sits at ``<repo>/.ea/state.json``;
+       ``state_path.parent.parent`` is the repo root and contains ``.git``.
+    2. ``EA_STATE`` override — state file lives outside any repo (test
+       fixture, scratch dir, etc.); ``parent.parent`` is not the repo root.
+       Falls back to ``git rev-parse --show-toplevel``; returns ``None`` when
+       that also fails (no git context at all).
+    """
+    try:
+        state_path = resolve_state_path(workspace)
+    except OSError, ValueError:
+        return None
+    candidate = state_path.parent.parent
+    if (candidate / ".git").exists():
+        return candidate
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=_GIT_REV_PARSE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired, OSError:
+        return None
+    if out.returncode != 0:
+        return None
+    top = out.stdout.strip()
+    if not top:
+        return None
+    return Path(top)
+
+
 def _resolve_commit_sha(ref: str) -> str:
     """Resolve *ref* to a canonical 40-char hex commit SHA via ``git rev-parse``.
 
@@ -1571,17 +1608,16 @@ def wave_close_cmd(
             return
 
     drift_warnings: list[str] = []
+    close_succeeded = [False]
 
     def _close_and_pin(state: State) -> None:
         wave = close_wave(state, wave_id=wave_id, outcome=outcome)
         if resolved_sha is not None:
             wave.commit = resolved_sha
-        try:
-            state_path = resolve_state_path(flags.workspace)
-            repo_root = state_path.parent.parent
+        repo_root = _resolve_repo_root_for_drift(flags.workspace)
+        if repo_root is not None:
             drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
-        except OSError, FileNotFoundError:
-            pass
+        close_succeeded[0] = True
 
     _run_mutation(
         ctx,
@@ -1596,12 +1632,13 @@ def wave_close_cmd(
         },
         mutate=_close_and_pin,
     )
-    for glob in drift_warnings:
-        print(
-            f"warning: wave {wave_id} success_criteria reference path glob "
-            f"that resolves to zero files: {glob!r}",
-            file=sys.stderr,
-        )
+    if close_succeeded[0]:
+        for glob in drift_warnings:
+            print(
+                f"warning: wave {wave_id} success_criteria reference path glob "
+                f"that resolves to zero files: {glob!r}",
+                file=sys.stderr,
+            )
 
 
 @wave_app.command("show")

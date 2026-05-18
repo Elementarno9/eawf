@@ -28,8 +28,15 @@ logger = logging.getLogger(__name__)
 
 _PATH_PREFIXES = ("src", "tests", "build", "scripts", "docs")
 _PATH_GLOB_RE = re.compile(
-    r"(?:" + r"|".join(_PATH_PREFIXES) + r")/[^\s,()`'\"]+",
+    r"(?:" + r"|".join(_PATH_PREFIXES) + r")/[^\s,()`'\":;#]+",
 )
+_TRAILING_PUNCT = ".!?"
+
+
+def _strip_trailing_punct(token: str) -> str:
+    while token and token[-1] in _TRAILING_PUNCT:
+        token = token[:-1]
+    return token
 
 
 def extract_path_globs(criteria: list[str]) -> list[str]:
@@ -44,8 +51,9 @@ def extract_path_globs(criteria: list[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for line in criteria:
-        for match in _PATH_GLOB_RE.findall(line):
-            if match not in seen:
+        for raw in _PATH_GLOB_RE.findall(line):
+            match = _strip_trailing_punct(raw)
+            if match and match not in seen:
                 seen.add(match)
                 out.append(match)
     return out
