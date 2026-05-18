@@ -2792,7 +2792,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T21:01:02.531502Z",
+  "updated_at": "2026-05-18T21:08:06.966047Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6810,8 +6810,8 @@
     "P23-I01-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "eawf-flow-p23-w02-inline",
+      "closed_at": "2026-05-18T21:08:06.966026Z",
       "commit": null,
       "deps": [
         "P23-I01-W01"
@@ -6824,8 +6824,8 @@
       "id": "P23-I01-W02",
       "iter_id": "P23-I01",
       "opened_at": "2026-05-18T20:39:19.350372Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "Principal model added (id/kind/display_name) + EventPayload.actor_principal_id placeholder; 70 unit tests + 3266 full suite green; Cost.attributed_to deferred (no class exists yet)",
+      "status": "closed",
       "success_criteria": [
         "Cost.attributed_to: Literal['cli'] = 'cli' added to State Cost model per c01-foundations Q3",
         "EventPayload.actor_principal_id: str | None = None placeholder added per XB08",
