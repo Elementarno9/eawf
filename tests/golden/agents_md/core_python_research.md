@@ -169,11 +169,15 @@ Agents MUST NOT delete: schema files, golden fixtures, MIT
 propose the list and wait for explicit confirmation.
 
 <!-- END EAWF:managed id=deletion-rule -->
-<!-- BEGIN EAWF:managed id=state-vs-specs version=1.0 hash=d693976daac13b8a -->
+<!-- BEGIN EAWF:managed id=state-vs-specs version=1.1 hash=60be0bd4c876e901 -->
 ### State vs specs
 
-Specs describe intent; state reflects reality. ``uv run eawf state ...``
-is the only writer of ``state.json``.
+Specs describe intent; state reflects reality. Per rule 4 + D-SUP-01
+(2026-05-18), the **daemon** (``eawfd``) is the sole canonical writer
+of ``state.json``; during v0.3-v0.5 the state CLI
+(``uv run eawf state ...``) is the operator-facing surface that
+proxies mutations to the daemon (with a ``portalocker`` direct-write
+fallback when the daemon is unavailable).
 
 <!-- END EAWF:managed id=state-vs-specs -->
 <!-- BEGIN EAWF:managed id=verify-before-claim version=1.1 hash=da4d1a7a1791bb85 -->
@@ -458,10 +462,11 @@ the per-phase plan.
   ``Edit``, ``Write``); reserve ``Bash`` for shell-only operations.
 
 <!-- END EAWF:managed id=agent-tool-discipline -->
-<!-- BEGIN EAWF:managed id=anti-patterns version=1.1 hash=570e2a60c01ad540 -->
+<!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=e7dec10ef5d0076a -->
 ## Anti-patterns
 
-- Mutating ``state.json`` outside the state CLI.
+- Mutating ``state.json`` outside the daemon (or its state-CLI
+  proxy / portalocker direct-write fallback) — see rule 4.
 - Skipping ``extra="forbid"`` on a Pydantic model "just for now".
 - Merging worktree branches instead of cherry-picking.
 - ``--no-verify`` on a failing pre-commit hook.
