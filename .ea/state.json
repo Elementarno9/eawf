@@ -1217,7 +1217,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P22",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2277,7 +2277,7 @@
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "Stage-0 closure: AGENTS amendments + D-SUP rows + brief promotion"
     }
@@ -2315,7 +2315,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T18:51:09.013197Z",
+  "updated_at": "2026-05-18T18:51:57.786774Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
