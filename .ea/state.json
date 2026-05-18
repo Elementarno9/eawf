@@ -1215,9 +1215,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W04"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2377,7 +2375,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:09:32.534673Z",
+  "updated_at": "2026-05-18T19:11:00.735819Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6238,8 +6236,8 @@
         "P22-I01-W06"
       ],
       "claim_session_id": "p22-w04-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:11:00.735800Z",
+      "commit": "c13e56bb73f79a56fc675d1ff8d161afffe8163e",
       "deps": [
         "P22-I01-W03"
       ],
@@ -6251,8 +6249,8 @@
       "id": "P22-I01-W04",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:57.208785Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "6 D-SUP rows landed (D-SUP-01..05 + D-SUP-TUI-01) all ACTIVE, scope=urn:eawf:v1:repo:eawf",
+      "status": "closed",
       "success_criteria": [
         "D-SUP-01..05 + D-SUP-TUI-01 in state.decisions",
         "grep '\"D-SUP' .ea/state.json | wc -l == 6",
