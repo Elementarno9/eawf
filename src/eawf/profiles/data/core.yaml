@@ -203,12 +203,16 @@ render_blocks:
 
   - id: state-vs-specs
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
     body_template: |
       ### State vs specs
 
-      Specs describe intent; state reflects reality. ``uv run eawf state ...``
-      is the only writer of ``state.json``.
+      Specs describe intent; state reflects reality. Per rule 4 + D-SUP-01
+      (2026-05-18), the **daemon** (``eawfd``) is the sole canonical writer
+      of ``state.json``; during v0.3-v0.5 the state CLI
+      (``uv run eawf state ...``) is the operator-facing surface that
+      proxies mutations to the daemon (with a ``portalocker`` direct-write
+      fallback when the daemon is unavailable).
 
   - id: verify-before-claim
     target: AGENTS.md
@@ -522,11 +526,12 @@ render_blocks:
 
   - id: anti-patterns
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
     body_template: |
       ## Anti-patterns
 
-      - Mutating ``state.json`` outside the state CLI.
+      - Mutating ``state.json`` outside the daemon (or its state-CLI
+        proxy / portalocker direct-write fallback) — see rule 4.
       - Skipping ``extra="forbid"`` on a Pydantic model "just for now".
       - Merging worktree branches instead of cherry-picking.
       - ``--no-verify`` on a failing pre-commit hook.

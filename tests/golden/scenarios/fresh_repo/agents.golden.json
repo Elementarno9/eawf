@@ -2,7 +2,7 @@
   "region_byte_lengths": {
     "agent-report-contract": 660,
     "agent-tool-discipline": 579,
-    "anti-patterns": 720,
+    "anti-patterns": 795,
     "architecture-cli-dispatch": 220,
     "artifact-chassis": 565,
     "branch-currency": 543,
@@ -17,7 +17,7 @@
     "roadmap-procedure": 1078,
     "secrets-hygiene": 916,
     "spike-workflow": 2159,
-    "state-vs-specs": 131,
+    "state-vs-specs": 384,
     "symbol-conventions": 238,
     "verify-before-claim": 862,
     "workflow-lifecycle": 755,

@@ -21,7 +21,7 @@
 [3] commit `7133c0f [P22-W02] chore: .gitignore` + `.gitignore`
 [4] commit `99f1dfa [P22-W03] feat: extend eawf decision add --supersedes` + `src/eawf/evidence/decision.py` + `src/eawf/cli/commands/evidence.py` + `tests/unit/test_decision_supersede.py`
 [5] commit `c13e56b [P22-W04] feat: land 6 D-SUP rows` + `.ea/state.json` `state.decisions["D-SUP-*"]` rows
-[6] external memory dir `/Users/user/.claude/projects/-Users-user-Workspace-TM-eawf/memory/` — 3 new feedback/project files + updated `MEMORY.md`
+[6] external auto-memory directory (Claude Code per-project memory store; repo-relative paths intentionally omitted per AGENTS rule 16) — 3 new feedback/project files + updated `MEMORY.md`
 [7] commit `ac84c6d [P22-W06] feat: promote 22 v0.3-v0.5 spec series briefs` + `src/eawf/cli/commands/draft.py` + `.ea/artifacts/research/long-term/` (22 files)
 [8] commit `ff60dc6 [P22-W07] fix: DecisionPayload accepts supersedes; regen fresh_repo agents.golden` + `src/eawf/store/kinds/decision.py` + `tests/golden/scenarios/fresh_repo/agents.golden.json`
 [9] local `uv run pre-commit run --all-files` + `uv run pytest tests/ -q` invocations during W07 ship-gate sweep
