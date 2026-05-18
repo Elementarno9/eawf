@@ -13,3 +13,4 @@ class DecisionPayload(BaseModel):
     summary: str
     rationale: str
     alternatives: list[str] = Field(default_factory=list)
+    supersedes: str | None = None
