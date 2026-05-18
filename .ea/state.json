@@ -1215,9 +1215,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W05"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2377,7 +2375,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:11:29.232583Z",
+  "updated_at": "2026-05-18T19:12:58.010507Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6269,8 +6267,8 @@
         "P22-I01-W06"
       ],
       "claim_session_id": "p22-w05-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:12:58.010493Z",
+      "commit": "131b469339b4354624e9c0a635aa5b851df096d7",
       "deps": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -6279,8 +6277,8 @@
       "id": "P22-I01-W05",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:03.319449Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "3 new memory entries written: feedback_no_design_comments_in_source, feedback_eu_calibration, project_v03_v05_spec_series; MEMORY.md index updated",
+      "status": "closed",
       "success_criteria": [
         "feedback_no_design_comments_in_source.md written",
         "feedback_eu_calibration.md written",
