@@ -76,6 +76,7 @@ from eawf.lifecycle.allocator import (
     allocate_iter_id,
     allocate_phase_id,
 )
+from eawf.lifecycle.criterion_drift import check_wave_criteria_drift
 from eawf.lifecycle.transitions import (
     LifecycleError,
     activate_iter,
@@ -1569,10 +1570,18 @@ def wave_close_cmd(
             cli_errors.emit_error(err, flags=flags)
             return
 
+    drift_warnings: list[str] = []
+
     def _close_and_pin(state: State) -> None:
         wave = close_wave(state, wave_id=wave_id, outcome=outcome)
         if resolved_sha is not None:
             wave.commit = resolved_sha
+        try:
+            state_path = resolve_state_path(flags.workspace)
+            repo_root = state_path.parent.parent
+            drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
+        except OSError, FileNotFoundError:
+            pass
 
     _run_mutation(
         ctx,
@@ -1587,6 +1596,12 @@ def wave_close_cmd(
         },
         mutate=_close_and_pin,
     )
+    for glob in drift_warnings:
+        print(
+            f"warning: wave {wave_id} success_criteria reference path glob "
+            f"that resolves to zero files: {glob!r}",
+            file=sys.stderr,
+        )
 
 
 @wave_app.command("show")
