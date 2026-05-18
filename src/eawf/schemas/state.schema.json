@@ -246,7 +246,7 @@
           "type": "string"
         },
         "urn": {
-          "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
           "title": "Urn",
           "type": "string"
         }
@@ -1594,7 +1594,7 @@
           "type": "array"
         },
         "repo_urn": {
-          "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
           "title": "Repo Urn",
           "type": "string"
         },
@@ -2024,7 +2024,7 @@
           "type": "string"
         },
         "state_urn": {
-          "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
           "title": "State Urn",
           "type": "string"
         },
@@ -2414,7 +2414,7 @@
       "type": "string"
     },
     "urn": {
-      "pattern": "^urn:eawf:v1:(artifact|blob|branch|commit|pr|repo|secret|state|store|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+      "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
       "title": "Urn",
       "type": "string"
     },

@@ -5,6 +5,13 @@ Grammar::
     urn:eawf:v1:<kind>:<owner>[/<id>][?=k=v&...][#fragment]
 
 ``identity()`` strips the query/fragment so equality reflects "same target".
+
+The 26 canonical URN kinds are catalogued in
+``.ea/artifacts/research/long-term/2026-05-16-c01-foundations.md`` §5.2.2.
+Single-word tokens only (per operator decision D1 2026-05-16). The legacy
+underscored ``agent_report`` form is replaced by the single-word ``report``
+kind — callers MUST emit ``report``; ``agent_report`` was never a URN kind
+and is rejected with the canonical ``unknown URN kind`` error.
 """
 
 from __future__ import annotations
@@ -18,9 +25,25 @@ URN_KINDS = frozenset(
         "workspace",
         "repo",
         "state",
+        "phase",
+        "iter",
+        "wave",
+        "hypothesis",
+        "decision",
+        "audit",
         "artifact",
         "store",
         "blob",
+        "memory",
+        "report",
+        "spec",
+        "profile",
+        "runtime",
+        "session",
+        "event",
+        "principal",
+        "plugin",
+        "mcp",
         "pr",
         "commit",
         "branch",
@@ -32,7 +55,20 @@ _URN_RE = re.compile(
     r"^urn:eawf:(?P<version>v\d+):(?P<kind>[a-z]+):(?P<rest>[^?#]*)"
     r"(?:\?=(?P<query>[^#]*))?(?:#(?P<fragment>.*))?$"
 )
-_SLASH_KINDS = frozenset({"repo", "artifact", "store"})
+_SLASH_KINDS = frozenset(
+    {
+        "repo",
+        "artifact",
+        "store",
+        "spec",
+        "report",
+        "event",
+        "memory",
+        "session",
+        "plugin",
+        "mcp",
+    }
+)
 
 
 @dataclass(frozen=True)
