@@ -1435,7 +1435,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P22-I01-W07"
+    ],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2595,7 +2597,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:22:35.508674Z",
+  "updated_at": "2026-05-18T19:23:02.841452Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6549,7 +6551,7 @@
     "P22-I01-W07": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p22-w07-inline",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -6564,7 +6566,7 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:04.504767Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "ship-gate audit row with verdict=pass",
         "all P22 waves closed",
