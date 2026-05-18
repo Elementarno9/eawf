@@ -30,7 +30,7 @@ from eawf.lifecycle.transitions import (
 )
 from eawf.state import wave_graph
 from eawf.state.enums import ProjectStatus, ScopeKind, WaveStatus
-from eawf.state.models import CurrentPointers, Project, State
+from eawf.state.models import CurrentPointers, Principal, Project, State
 
 
 def _empty_state() -> State:
@@ -448,6 +448,64 @@ def test_project_schema_version_pin_unchanged() -> None:
 
     P20-I01-W09 spec: keep weekly_eu_target strictly optional (default
     None) so the schema_version literal stays at "1.0".
+    """
+    state = _empty_state()
+    assert state.schema_version == "1.0"
+
+
+# ---------------------------------------------------------------------------
+# Principal (C01-IMPL W02 placeholder — c01-foundations §5.3.19 + Q3 2026-05-18)
+# ---------------------------------------------------------------------------
+
+
+def test_principal_operator_kind_valid() -> None:
+    p = Principal(id="u-abc12345", kind="operator", display_name="Alice")
+    assert p.id == "u-abc12345"
+    assert p.kind == "operator"
+    assert p.display_name == "Alice"
+
+
+def test_principal_agent_kind_valid() -> None:
+    p = Principal(id="u-12345678", kind="agent", display_name="executor-bot")
+    assert p.kind == "agent"
+
+
+def test_principal_cli_kind_valid() -> None:
+    """The 'cli' kind is the legacy CLI-dispatch sentinel per c01-foundations §5.3.19."""
+    p = Principal(id="u-00000000", kind="cli", display_name="cli")
+    assert p.kind == "cli"
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    ["abc12345", "u-ABC12345", "u-abc1234", "u-abc123456", "u-xyz12345", ""],
+)
+def test_principal_rejects_invalid_id_pattern(bad_id: str) -> None:
+    """Principal.id MUST match ``^u-[0-9a-f]{8}$`` per c01-foundations §5.3.19."""
+    with pytest.raises(ValidationError):
+        Principal(id=bad_id, kind="operator", display_name="x")
+
+
+def test_principal_rejects_unknown_kind() -> None:
+    with pytest.raises(ValidationError):
+        Principal(id="u-abc12345", kind="admin", display_name="x")  # type: ignore[arg-type]
+
+
+def test_principal_strict_forbids_extra_field() -> None:
+    with pytest.raises(ValidationError):
+        Principal(
+            id="u-abc12345",
+            kind="operator",
+            display_name="x",
+            email="x@example.com",  # type: ignore[call-arg]
+        )
+
+
+def test_principal_state_schema_version_unchanged() -> None:
+    """Adding the Principal class must NOT bump State.schema_version.
+
+    Principal is a placeholder model — not yet referenced from State —
+    so the schema literal stays at "1.0" per c01-foundations §5.3.19.
     """
     state = _empty_state()
     assert state.schema_version == "1.0"

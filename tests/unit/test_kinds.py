@@ -395,6 +395,43 @@ def test_event_invalid_payload_missing_timestamp() -> None:
         )
 
 
+def test_event_actor_principal_id_optional_default_none() -> None:
+    """C01-IMPL W02 placeholder: actor_principal_id defaults to None.
+
+    Per c01-foundations §5.3.19 + Q3 2026-05-18 the field is optional so
+    every existing row stays valid without backfill; v0.5+ governance owns
+    the populated path.
+    """
+    payload = EventPayload.model_validate(
+        {
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "event_type": "commit",
+            "actor": "cli",
+            "command": "git",
+            "args_hash": "abc",
+            "status": "ok",
+            "message": "x",
+        }
+    )
+    assert payload.actor_principal_id is None
+
+
+def test_event_actor_principal_id_accepts_string() -> None:
+    payload = EventPayload.model_validate(
+        {
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "event_type": "commit",
+            "actor": "cli",
+            "actor_principal_id": "u-abc12345",
+            "command": "git",
+            "args_hash": "abc",
+            "status": "ok",
+            "message": "x",
+        }
+    )
+    assert payload.actor_principal_id == "u-abc12345"
+
+
 # ---------------------------------------------------------------------------
 # AgentReportPayload
 # ---------------------------------------------------------------------------

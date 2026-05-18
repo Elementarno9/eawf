@@ -483,6 +483,28 @@ class Flow(_StrictModel):
     updated_at: UtcDatetime
 
 
+PrincipalIdStr = Annotated[str, Field(pattern=r"^u-[0-9a-f]{8}$")]
+
+
+class Principal(_StrictModel):
+    """Minimum Principal identity record (v0.3-v0.5 placeholder; full enforcement v0.5+).
+
+    Per c01-foundations §5.3.19 + Q3 (2026-05-18): the field shape stabilises
+    now so query-side code + telemetry projection can be typed today, even
+    though the v0.5+ governance phase owns full enforcement (capabilities,
+    ed25519 signatures, per-repo principal database).
+
+    The ``cli`` kind is the legacy CLI-dispatch sentinel — every
+    ``EventPayload.actor == "cli"`` row maps onto a synthetic
+    ``Principal(kind="cli")`` until v0.5+ migration assigns operator/agent
+    principal ids.
+    """
+
+    id: PrincipalIdStr
+    kind: Literal["operator", "agent", "cli"]
+    display_name: str
+
+
 # ---- State root -------------------------------------------------------------
 
 
