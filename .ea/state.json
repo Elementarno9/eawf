@@ -1215,7 +1215,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P22-I01-W02"
+    ],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2315,7 +2317,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:01:58.119232Z",
+  "updated_at": "2026-05-18T19:03:11.092045Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6117,7 +6119,7 @@
       "blocks": [
         "P22-I01-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p22-w02-inline",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -6129,7 +6131,7 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:56.147139Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         ".ea/worktrees/ entry present",
         ".ea/state.json.bak.* entry present"
