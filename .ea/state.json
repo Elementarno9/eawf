@@ -1895,6 +1895,25 @@
         "P21-I01-W15",
         "P21-I01-W16"
       ]
+    },
+    "P22-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P22-I01",
+      "opened_at": "2026-05-18T18:50:26.968206Z",
+      "phase_id": "P22",
+      "status": "planned",
+      "title": "P22-I01: stage-0 closure waves",
+      "wave_ids": [
+        "P22-I01-W01",
+        "P22-I01-W02",
+        "P22-I01-W03",
+        "P22-I01-W04",
+        "P22-I01-W05",
+        "P22-I01-W06",
+        "P22-I01-W07"
+      ]
     }
   },
   "mcp_grants": null,
@@ -2228,7 +2247,7 @@
     },
     "P21": {
       "audit_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-18T18:49:08.000259Z",
       "depends_on": [
         "P20"
       ],
@@ -2240,9 +2259,27 @@
       "outcome_ids": [],
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "planned",
+      "status": "archived",
       "subproject_id": null,
       "title": "Profiles + MCP/sandbox + domain bodies"
+    },
+    "P22": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P20"
+      ],
+      "id": "P22",
+      "iter_ids": [
+        "P22-I01"
+      ],
+      "opened_at": "2026-05-18T18:50:26.968184Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "Stage-0 closure: AGENTS amendments + D-SUP rows + brief promotion"
     }
   },
   "plugins": {},
@@ -2278,7 +2315,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T18:10:54.070568Z",
+  "updated_at": "2026-05-18T18:51:09.013197Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6040,6 +6077,221 @@
         "idempotence goldens stable"
       ],
       "title": "feat: B062 MCP emit-and-verify hardening cross-runtime + idempotence goldens + plugin doctor MCP drift check",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P22-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md"
+      ],
+      "id": "P22-I01-W01",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:50:38.848493Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "rule 4 renamed to daemon canonical mutator",
+        "rule 17 mutator-path block rewritten",
+        "rule 22 spike clarification appended",
+        "rules 23/24/25 added",
+        "header count bumped 22 to 25",
+        "anti-pattern bullet for rule 25 added"
+      ],
+      "title": "chore: AGENTS.md amendments (rules 4/17/22 rewrite + 23/24/25 add)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P22-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".gitignore"
+      ],
+      "id": "P22-I01-W02",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:50:56.147139Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        ".ea/worktrees/ entry present",
+        ".ea/state.json.bak.* entry present"
+      ],
+      "title": "chore: .gitignore add .ea/worktrees + state.json.bak.* lines",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P22-I01-W04",
+        "P22-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/evidence.py",
+        "src/eawf/evidence/decision.py",
+        "tests/unit/test_decision_supersede.py"
+      ],
+      "id": "P22-I01-W03",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:50:56.684148Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "--supersedes flag accepted by typer",
+        "add_decision flips parent SUPERSEDED + sets superseded_by atomically",
+        "test_decision_supersede.py covers happy path + parent-not-found + circular-chain + parent-already-superseded"
+      ],
+      "title": "feat: extend eawf decision add with --supersedes flag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W04": {
+      "agent_role": null,
+      "blocks": [
+        "P22-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P22-I01-W03"
+      ],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/store/event.jsonl"
+      ],
+      "id": "P22-I01-W04",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:50:57.208785Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "D-SUP-01..05 + D-SUP-TUI-01 in state.decisions",
+        "grep '\"D-SUP' .ea/state.json | wc -l == 6",
+        "event stream records 6 decision.add envelopes"
+      ],
+      "title": "state: land 6 D-SUP decision rows",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P22-I01-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "/dev/null"
+      ],
+      "id": "P22-I01-W05",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:51:03.319449Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "feedback_no_design_comments_in_source.md written",
+        "feedback_eu_calibration.md written",
+        "project_v03_v05_spec_series.md written",
+        "MEMORY.md index updated with 3 new lines"
+      ],
+      "title": "docs: memory updates (3 new entries + MEMORY.md index)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W06": {
+      "agent_role": null,
+      "blocks": [
+        "P22-I01-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P22-I01-W01",
+        "P22-I01-W02",
+        "P22-I01-W03",
+        "P22-I01-W04",
+        "P22-I01-W05"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/draft.py",
+        ".ea/artifacts/research/long-term/"
+      ],
+      "id": "P22-I01-W06",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:51:03.967313Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "promote_draft accepts long-term/<slug> subdirectory form",
+        "22 briefs promoted under .ea/artifacts/research/long-term/",
+        "sentinel stripped + chassis valid + scrub clean for each",
+        "state.artifacts records 22 RESEARCH_BRIEF entries"
+      ],
+      "title": "feat: patch promote for long-term subdir + promote 22 briefs to artifacts/research/long-term/",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P22-I01-W07": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P22-I01-W06"
+      ],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/A28-P22-ship-gate.md",
+        ".ea/state.json"
+      ],
+      "id": "P22-I01-W07",
+      "iter_id": "P22-I01",
+      "opened_at": "2026-05-18T18:51:04.504767Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [
+        "ship-gate audit row with verdict=pass",
+        "all P22 waves closed",
+        "P22 phase closed",
+        "PR opened against main with rebase merge intent"
+      ],
+      "title": "audit: P22 ship-gate + PR open",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
