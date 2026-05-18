@@ -2792,7 +2792,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T21:08:06.966047Z",
+  "updated_at": "2026-05-18T21:14:49.754871Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6842,8 +6842,8 @@
     "P23-I01-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "eawf-flow-p23-w03-inline",
+      "closed_at": "2026-05-18T21:14:49.754850Z",
       "commit": null,
       "deps": [
         "P23-I01-W01"
@@ -6857,8 +6857,8 @@
       "id": "P23-I01-W03",
       "iter_id": "P23-I01",
       "opened_at": "2026-05-18T20:39:26.124879Z",
-      "outcome": null,
-      "status": "pending",
+      "outcome": "SpecStatus enum + lifecycle DAG helpers in src/eawf/lifecycle/spec.py; library-private; 19 unit tests + 3285 full-suite green; C02/C03 ready to consume",
+      "status": "closed",
       "success_criteria": [
         "Shared lifecycle DAG helpers for downstream phase/iter/wave/spec transitions live under src/eawf/lifecycle/",
         "helpers stay library-private (no CLI surface) per c01-foundations §7.3",
