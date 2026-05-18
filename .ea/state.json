@@ -216,6 +216,16 @@
       "uri": "repo:.ea/artifacts/A28-P22-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P22/ART-A28-P22"
     },
+    "ART-A29-P23": {
+      "created_at": "2026-05-18T21:27:09.801260Z",
+      "id": "ART-A29-P23",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/A29-P23-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:P23/ART-A29-P23"
+    },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
       "created_at": "2026-05-18T19:17:46.268887Z",
       "id": "ART-research-long-term-2026-05-16-c00-spec-index",
@@ -755,6 +765,17 @@
       "scope_id": "P22",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A29-P23-ship-gate": {
+      "check_results": [],
+      "created_at": "2026-05-18T21:27:13.817133Z",
+      "id": "A29-P23-ship-gate",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A29-P23",
+      "scope_id": "P23",
+      "status": "complete",
+      "verdict": "minor"
     }
   },
   "backlog": {
@@ -1457,7 +1478,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P23-I01",
+    "iter_id": null,
     "phase_id": "P23",
     "project_code": "EAWF",
     "subproject_id": null
@@ -2217,13 +2238,13 @@
       ]
     },
     "P23-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A29-P23-ship-gate",
+      "closed_at": "2026-05-18T21:27:21.137353Z",
       "estimate_id": null,
       "id": "P23-I01",
       "opened_at": "2026-05-18T19:44:49.107239Z",
       "phase_id": "P23",
-      "status": "active",
+      "status": "closed",
       "title": "P23-I01: C01-IMPL kernel waves",
       "wave_ids": [
         "P23-I01-W01",
@@ -2792,7 +2813,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T21:14:49.754871Z",
+  "updated_at": "2026-05-18T21:27:21.137378Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
