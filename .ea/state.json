@@ -1457,8 +1457,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P23-I01",
+    "phase_id": "P23",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2223,7 +2223,7 @@
       "id": "P23-I01",
       "opened_at": "2026-05-18T19:44:49.107239Z",
       "phase_id": "P23",
-      "status": "planned",
+      "status": "active",
       "title": "P23-I01: C01-IMPL kernel waves",
       "wave_ids": [
         "P23-I01-W01",
@@ -2658,7 +2658,7 @@
         "ART-research-long-term-2026-05-16-c01-foundations",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "C01-IMPL kernel: bootstrap + state + config + URN + IDs + validate"
     },
@@ -2792,7 +2792,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T20:35:14.235608Z",
+  "updated_at": "2026-05-18T20:36:43.181080Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
