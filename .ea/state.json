@@ -2225,7 +2225,11 @@
       "phase_id": "P23",
       "status": "planned",
       "title": "P23-I01: C01-IMPL kernel waves",
-      "wave_ids": []
+      "wave_ids": [
+        "P23-I01-W01",
+        "P23-I01-W02",
+        "P23-I01-W03"
+      ]
     },
     "P24-I01": {
       "audit_id": null,
@@ -2788,7 +2792,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:45:11.534622Z",
+  "updated_at": "2026-05-18T20:35:14.235608Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6765,6 +6769,83 @@
         "PR opened against main with rebase merge intent"
       ],
       "title": "audit: P22 ship-gate + PR open",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P23-I01-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P23-I01-W02",
+        "P23-I01-W03"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/urn.py",
+        "tests/unit/test_state_urn*.py"
+      ],
+      "id": "P23-I01-W01",
+      "iter_id": "P23-I01",
+      "opened_at": "2026-05-18T20:34:56.805345Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: URN_KINDS expansion to 26 + golden fixture + backward-compat aliases",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P23-I01-W02": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P23-I01-W01"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "tests/unit/test_state_models.py"
+      ],
+      "id": "P23-I01-W02",
+      "iter_id": "P23-I01",
+      "opened_at": "2026-05-18T20:35:01.333517Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: minimum Principal model + Cost.attributed_to + EventPayload.actor_principal_id placeholders",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P23-I01-W03": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P23-I01-W01"
+      ],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/lifecycle/transitions.py",
+        "src/eawf/lifecycle/allocator.py",
+        "tests/unit/test_lifecycle*.py"
+      ],
+      "id": "P23-I01-W03",
+      "iter_id": "P23-I01",
+      "opened_at": "2026-05-18T20:35:10.509145Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: lifecycle DAG migration helpers for downstream entities",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
