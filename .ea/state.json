@@ -1215,9 +1215,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W02"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2317,7 +2315,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T19:03:11.092045Z",
+  "updated_at": "2026-05-18T19:04:17.649146Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6120,8 +6118,8 @@
         "P22-I01-W06"
       ],
       "claim_session_id": "p22-w02-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:04:17.649123Z",
+      "commit": "7133c0fccf553116746f022b909a84600911cd58",
       "deps": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -6130,8 +6128,8 @@
       "id": "P22-I01-W02",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:56.147139Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": ".gitignore extended with .ea/worktrees/ + .ea/state.json.bak.* (per Q13 + C10 §5.5)",
+      "status": "closed",
       "success_criteria": [
         ".ea/worktrees/ entry present",
         ".ea/state.json.bak.* entry present"
