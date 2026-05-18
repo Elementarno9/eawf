@@ -1478,8 +1478,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P23-I02",
-    "phase_id": "P23",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2253,13 +2253,13 @@
       ]
     },
     "P23-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A29-P23-ship-gate",
+      "closed_at": "2026-05-18T21:39:00.693202Z",
       "estimate_id": null,
       "id": "P23-I02",
       "opened_at": "2026-05-18T21:30:39.222928Z",
       "phase_id": "P23",
-      "status": "active",
+      "status": "closed",
       "title": "P23-I02: criterion drift detector (F1..F4 cleanup mechanism)",
       "wave_ids": [
         "P23-I02-W01"
@@ -2676,8 +2676,8 @@
       "title": "Stage-0 closure: AGENTS amendments + D-SUP rows + brief promotion"
     },
     "P23": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A29-P23-ship-gate",
+      "closed_at": "2026-05-18T21:39:06.691537Z",
       "depends_on": [
         "P22"
       ],
@@ -2693,7 +2693,7 @@
         "ART-research-long-term-2026-05-16-c01-foundations",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "C01-IMPL kernel: bootstrap + state + config + URN + IDs + validate"
     },
@@ -2827,7 +2827,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T21:38:27.202963Z",
+  "updated_at": "2026-05-18T21:39:06.691628Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
