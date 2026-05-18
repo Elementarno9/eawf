@@ -11,6 +11,7 @@
 - Local pre-commit gauntlet (`uv run pre-commit run --all-files`) ✅ pass on every commit (ruff, ruff-format, trim-whitespace, eof-fixer, yaml, toml, large-files, merge-conflict, debug-statements, detect-secrets) [6].
 - Full test suite (`uv run pytest tests/ -q`) ✅ 3285 passed, 12 deselected in 220s (35 new tests across W01..W03 + 1 schema-regen-driven test_state_schema_committed_matches_generated reset) [6].
 - Schema regeneration ✅ exactly 4 URN-pattern alternation occurrences expanded; no other field touched [7].
+- Spike brief at `.ea/local/research/2026-05-18-p23-c01-kernel-waves.md` informed the I01 wave plan + the I02 followup scope [8].
 
 ## Followups (deferred to P23-I02)
 
