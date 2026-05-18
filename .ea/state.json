@@ -1215,9 +1215,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P22-I01-W01"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P22",
     "project_code": "EAWF",
@@ -2317,7 +2315,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T18:53:12.593116Z",
+  "updated_at": "2026-05-18T19:01:58.119232Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6089,8 +6087,8 @@
         "P22-I01-W06"
       ],
       "claim_session_id": "p22-w01-inline",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-18T19:01:58.119217Z",
+      "commit": "cf16d84d6a75a93f430bc939f7d4b0366493a728",
       "deps": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6099,8 +6097,8 @@
       "id": "P22-I01-W01",
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:38.848493Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "AGENTS amendments landed: rule 4 daemon canonical mutator, rules 23/24/25 added, rule 17 mutator-path rewritten, spike-workflow + anti-patterns appended, goldens regen, header count 22→25",
+      "status": "closed",
       "success_criteria": [
         "rule 4 renamed to daemon canonical mutator",
         "rule 17 mutator-path block rewritten",
