@@ -1509,15 +1509,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P25-I01-W01",
-      "P25-I01-W06",
-      "P25-I01-W07",
-      "P25-I01-W08",
-      "P25-I01-W09",
-      "P25-I01-W14",
-      "P25-I01-W18"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P25-I01",
     "phase_id": "P25",
     "project_code": "EAWF",
@@ -2911,7 +2903,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T20:06:31.452259Z",
+  "updated_at": "2026-05-19T20:39:22.684632Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7793,7 +7785,7 @@
         "P25-I01-W05"
       ],
       "claim_session_id": "p25-w01-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:38:36.980436Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -7809,10 +7801,10 @@
       "id": "P25-I01-W01",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:48.657212Z",
-      "outcome": null,
+      "outcome": "C03 spec schemas: VerdictCitation/TestRef/FileScopeRef/EvidenceRef + Phase/Iter/WaveSpec with schema_version 1.0 lock; 118 boundary/error tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "from eawf.spec.common import VerdictCitation/TestRef/FileScopeRef/EvidenceRef imports clean",
         "PhaseSpec/IterSpec/WaveSpec reject extra keys via ConfigDict(extra='forbid')",
@@ -7977,7 +7969,7 @@
         "P25-I01-W10"
       ],
       "claim_session_id": "p25-w06-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:38:43.514078Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -7994,10 +7986,10 @@
       "id": "P25-I01-W06",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:51.426607Z",
-      "outcome": null,
+      "outcome": "C07b canonical Event + EventPayload + EventKind + 10-kind JSONL layout pinned; reused existing envelope/paths/append; 31 new tests + 2595 unit suite green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "canonical Event + EventPayload defined per [5] §5.4 + Q14/D14",
         "10 per-kind JSONL kinds (event/audit/decision/incident/estimate/actual/memory/research/flow/<role>_report) open on first append",
@@ -8013,7 +8005,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w07-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:38:50.123265Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8029,10 +8021,10 @@
       "id": "P25-I01-W07",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:51.981881Z",
-      "outcome": null,
+      "outcome": "C07b commit-prefix lint hardened (W00/I00 rejected via negative-lookahead) + worktree home flipped to .ea/worktrees/ + KISS-007 cycle break (direct submodule imports); 109 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "worktree home resolved to .ea/worktrees/ per D15 (memory feedback_worktree_location)",
         "commit-prefix lint regex enforces ^\\[P\\d{2}(-I\\d{2})?(-W\\d{2}|-CORE)\\]\\s+(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\\s+\\S.*$",
@@ -8047,7 +8039,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w08-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:38:56.527213Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8063,10 +8055,10 @@
       "id": "P25-I01-W08",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:52.536735Z",
-      "outcome": null,
+      "outcome": "C07b registry split (models/staleness/__init__) + scope dispatch ladder cwd→workspace>repo>user + explicit-growth guard; 33 new + 3601 existing tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "registry growth surface = explicit init / add-repo only per memory feedback_explicit_registry_only",
         "scope dispatch ladder resolves cwd -> workspace > repo > user",
@@ -8082,7 +8074,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w09-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:39:04.765920Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8098,10 +8090,10 @@
       "id": "P25-I01-W09",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:53.089527Z",
-      "outcome": null,
+      "outcome": "C07b brand.py + Eä literal + Nerd-Font/ASCII glyph switcher (TTY-gated) + envelope/footer drift-guards; 25 new + 2579 unit + 668 integration tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "OutputEnvelope 3-part shape (header/body/footer) + 5-status enum (ok/needs_user/blocked/failed/partial)",
         "Eä logotype literal (capital E + a-umlaut bold accent) outside-left of breadcrumb per memory feedback_tui_branding",
@@ -8268,7 +8260,7 @@
         "P25-I01-W16"
       ],
       "claim_session_id": "p25-w14-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:39:15.669200Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8285,10 +8277,10 @@
       "id": "P25-I01-W14",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:48:52.126991Z",
-      "outcome": null,
+      "outcome": "C08 layered config (6 durable + 2 runtime + wave layer) + 171-key field registry + 1.1/2→1.0 migration; daemon-sole writer; 57 new tests + 3634 full suite green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "six durable layers (built-in < global < workspace < repo < branch < local < env < cli) + transient daemon-resident wave layer + two runtime overlays per [6] §5.1 precedence table",
         "branch layer at .ea/branches/<branch>.yaml with subdirectory form on /",
@@ -8423,7 +8415,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w18-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:39:21.992815Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8436,10 +8428,10 @@
       "id": "P25-I01-W18",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:48:54.244657Z",
-      "outcome": null,
+      "outcome": "C07a SDK pre-release probe baseline (claude 2.1.144 / codex 0.130.0 / opencode 1.14.33); probe script + JSON snapshot + artifact + 10 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "snapshot wave captures pre-2026-06-15 baseline of claude -p + codex + opencode capabilities (subprocess primary surface + advertised SDK feature flags)",
         "probe script lands under src/eawf/runtimes/probes/ + emits machine-readable JSON snapshot",
@@ -8624,10 +8616,10 @@
       "branch": "feature/eawf-v0.3-p25-w01",
       "created_at": "2026-05-19T20:06:26.301271Z",
       "id": "WT-P25-I01-W01-1779221186",
-      "merged_commit": null,
+      "merged_commit": "d2e400d",
       "owner_session_id": "p25-w01-exec",
       "path": ".ea/worktrees/p25-w01",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W01"
     },
     "WT-P25-I01-W06-1779221187": {
@@ -8635,10 +8627,10 @@
       "branch": "feature/eawf-v0.3-p25-w06",
       "created_at": "2026-05-19T20:06:27.151704Z",
       "id": "WT-P25-I01-W06-1779221187",
-      "merged_commit": null,
+      "merged_commit": "dfd7d26",
       "owner_session_id": "p25-w06-exec",
       "path": ".ea/worktrees/p25-w06",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W06"
     },
     "WT-P25-I01-W07-1779221187": {
@@ -8646,10 +8638,10 @@
       "branch": "feature/eawf-v0.3-p25-w07",
       "created_at": "2026-05-19T20:06:27.981296Z",
       "id": "WT-P25-I01-W07-1779221187",
-      "merged_commit": null,
+      "merged_commit": "6d82607",
       "owner_session_id": "p25-w07-exec",
       "path": ".ea/worktrees/p25-w07",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W07"
     },
     "WT-P25-I01-W08-1779221188": {
@@ -8657,10 +8649,10 @@
       "branch": "feature/eawf-v0.3-p25-w08",
       "created_at": "2026-05-19T20:06:28.812925Z",
       "id": "WT-P25-I01-W08-1779221188",
-      "merged_commit": null,
+      "merged_commit": "a00b0d7",
       "owner_session_id": "p25-w08-exec",
       "path": ".ea/worktrees/p25-w08",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W08"
     },
     "WT-P25-I01-W09-1779221189": {
@@ -8668,10 +8660,10 @@
       "branch": "feature/eawf-v0.3-p25-w09",
       "created_at": "2026-05-19T20:06:29.691663Z",
       "id": "WT-P25-I01-W09-1779221189",
-      "merged_commit": null,
+      "merged_commit": "c6dde9c",
       "owner_session_id": "p25-w09-exec",
       "path": ".ea/worktrees/p25-w09",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W09"
     },
     "WT-P25-I01-W14-1779221190": {
@@ -8679,10 +8671,10 @@
       "branch": "feature/eawf-v0.3-p25-w14",
       "created_at": "2026-05-19T20:06:30.584953Z",
       "id": "WT-P25-I01-W14-1779221190",
-      "merged_commit": null,
+      "merged_commit": "10c258e",
       "owner_session_id": "p25-w14-exec",
       "path": ".ea/worktrees/p25-w14",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W14"
     },
     "WT-P25-I01-W17-1779220281": {
@@ -8701,10 +8693,10 @@
       "branch": "feature/eawf-v0.3-p25-w18",
       "created_at": "2026-05-19T20:06:31.452259Z",
       "id": "WT-P25-I01-W18-1779221191",
-      "merged_commit": null,
+      "merged_commit": "541d4f3",
       "owner_session_id": "p25-w18-exec",
       "path": ".ea/worktrees/p25-w18",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W18"
     }
   }
