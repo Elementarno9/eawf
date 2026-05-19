@@ -188,6 +188,25 @@ class AgentSessionStatus(StrEnum):
     FAILED = "failed"
 
 
+class DispatchNote(StrEnum):
+    """Reason annotating a dispatch transition on a wave's session table.
+
+    Attached to :class:`~eawf.state.models.DispatchAnnotation` rows in
+    ``Wave.dispatch_history``. The values are stable wire identifiers; the
+    fresh-dispatch path emits :attr:`FRESH_DISPATCH`, the V8 ``--continue``
+    happy path emits :attr:`CONTINUE_FROM_SESSION`, V8 fallback emits
+    :attr:`CONTINUE_FAILED_FELL_BACK_TO_FRESH`, V5 runtime fallback emits
+    :attr:`SWITCH_ON_ERROR`, and operator-driven manual swaps emit
+    :attr:`SWITCH_MANUAL`.
+    """
+
+    FRESH_DISPATCH = "fresh_dispatch"
+    CONTINUE_FROM_SESSION = "continue_from_session"
+    CONTINUE_FAILED_FELL_BACK_TO_FRESH = "continue_failed_fell_back_to_fresh"
+    SWITCH_ON_ERROR = "switch_on_error"
+    SWITCH_MANUAL = "switch_manual"
+
+
 class WorktreeStatus(StrEnum):
     ACTIVE = "active"
     CONFLICTED = "conflicted"
