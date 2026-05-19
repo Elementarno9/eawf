@@ -1209,7 +1209,7 @@ def phase_prepare_close_cmd(
 
 
 def _compute_iter_bump_hints(state: State, *, phase_id: str) -> list[str]:
-    """Heuristic D17 trigger detection. Returns a list of hint tags.
+    """Heuristic iter-bump trigger detection. Returns a list of hint tags.
 
     Triggers:
     - ``previous_iter_audit_failed``: any closed iter in *phase_id* whose
@@ -1706,7 +1706,7 @@ def _wave_close_via_daemon(
     except DaemonRpcError as exc:
         if exc.code == -32601 or "NotImplementedError" in (exc.message or ""):
             logger.debug(
-                f"_wave_close_via_daemon falling back kind={mutation.kind.value} "
+                f"_wave_close_via_daemon falling back mutation_kind={mutation.kind.value} "
                 f"code={exc.code} message={exc.message!r}"
             )
             return False

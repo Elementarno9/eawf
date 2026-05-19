@@ -64,10 +64,10 @@ class MethodContext:
             ``state.mutate`` algorithm (W09). ``None`` when the daemon
             runs without an on-disk WAL (unit tests; daemonless paths).
         idempotency_cache: In-memory cache for ``state.mutate``
-            idempotency replay (TTL 60 s per Q11). The cache is
-            attached lazily by the mutator on first access; legacy
-            contexts without the field get one added on demand. The
-            durable replay guarantee lives in the WAL (C02 §5.6).
+            idempotency replay (TTL 60 s). The cache is attached
+            lazily by the mutator on first access; legacy contexts
+            without the field get one added on demand. The durable
+            replay guarantee lives in the WAL.
         last_activity: ``time.monotonic()`` value of the most recent
             non-subscribe RPC dispatch. Refreshed by the server in
             :func:`eawf.daemon.server._process_frame` and consumed by

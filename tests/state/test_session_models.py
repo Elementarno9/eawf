@@ -5,12 +5,11 @@ Covers :class:`~eawf.state.models.SessionAttempt`,
 ``Wave.sessions`` / ``Wave.runtime_preference`` / ``Wave.dispatch_history``
 fields wired in W07.
 
-Per audit XB05 (2026-05-18) + C02-I007: ``session_log_handle`` is an
-**opaque** string (blob-URN or daemon-side index key) — the model
-accepts any non-empty string and the daemon's in-process registry
-owns the canonical format. Tests assert the field rejects empty
-strings and non-string types so the boundary is enforced at the
-schema layer.
+``session_log_handle`` is an **opaque** string (blob-URN or daemon-side
+index key) — the model accepts any non-empty string and the daemon's
+in-process registry owns the canonical format. Tests assert the field
+rejects empty strings and non-string types so the boundary is enforced
+at the schema layer.
 """
 
 from __future__ import annotations

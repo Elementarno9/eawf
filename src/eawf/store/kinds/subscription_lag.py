@@ -5,10 +5,9 @@ behind the producer and the per-subscriber sliding window
 (``maxlen=1024``) drops the oldest envelope to make room.
 
 Subscribers reconnect with ``since_event_id=last_event_id`` to backfill
-the gap from the persistent ``event.jsonl``. Per C02 §5.7 (drop-oldest
-sliding window, revised 2026-05-18 per audit C02.F50): producer never
-blocks; ordering preserved in the persistent log; only the live stream
-is lossy under sustained backpressure.
+the gap from the persistent ``event.jsonl``. Drop-oldest sliding window
+semantics: producer never blocks; ordering preserved in the persistent
+log; only the live stream is lossy under sustained backpressure.
 """
 
 from __future__ import annotations

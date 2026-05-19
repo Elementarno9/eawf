@@ -9,9 +9,8 @@ handler invokes once the JSON-RPC framing has dispatched the
 ``event.list`` and ``event.show`` are bounded one-shot reads from
 ``event.jsonl`` and follow the regular request/response pattern.
 
-Per C02 §5.7 (revised 2026-05-18 per audit C02.F50), backpressure is
-**drop-oldest sliding window** — the bus owns that policy, not these
-handlers.
+Backpressure is **drop-oldest sliding window** — the bus owns that
+policy, not these handlers.
 """
 
 from __future__ import annotations

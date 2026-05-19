@@ -5,9 +5,9 @@ meaningful verification of the SCM-asyncio bridge requires the real
 pywin32 framework to be importable. On macOS / Linux the suite
 reports SKIPPED for each case.
 
-Coverage focus is the XB14 fix (C02 §5.13) — SCM thread invokes
-:meth:`EawfdService.SvcStop`, asyncio loop runs on a different thread,
-:func:`loop.call_soon_threadsafe` is the only safe bridge.
+Coverage focus is the SCM-asyncio thread-affinity bridge: SCM thread
+invokes :meth:`EawfdService.SvcStop`, asyncio loop runs on a different
+thread, :func:`loop.call_soon_threadsafe` is the only safe bridge.
 """
 
 from __future__ import annotations

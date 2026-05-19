@@ -79,7 +79,8 @@ def _root(
     if ctx.invoked_subcommand is None:
         # Bare ``eawf`` on a TTY routes to the TUI (config.ui.bare_command
         # default: "tui"); plain / no-input / non-TTY falls back to the
-        # deterministic status emission per D15 + D23.
+        # deterministic status emission so headless callers stay
+        # script-stable.
         from eawf.tui.app import run_tui
 
         rc = run_tui(workspace=workspace, no_input=no_input, plain=plain_output)

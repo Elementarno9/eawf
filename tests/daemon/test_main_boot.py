@@ -306,7 +306,7 @@ def test_schedule_session_ttl_sweep_prunes_expired_attempt(
 
 
 def test_resolve_session_ttl_seconds_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Missing env var → DEFAULT_TTL_SECONDS (86_400 per C02 D13)."""
+    """Missing env var → DEFAULT_TTL_SECONDS (86_400, one day)."""
     monkeypatch.delenv("EAWF_DAEMON_SESSION_TTL", raising=False)
     assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
 

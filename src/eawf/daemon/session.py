@@ -1,6 +1,5 @@
-"""Opaque session-log handle registry for the daemon (XB05 / C02-I007).
+"""Opaque session-log handle registry for the daemon.
 
-Per audit XB05 (2026-05-18) and C02-I007:
 :class:`~eawf.state.models.SessionAttempt.session_log_handle` is an
 **opaque** string — never an absolute filesystem path. The path
 itself stays out of ``state.json`` + ``event.jsonl`` to satisfy AGENTS
@@ -43,7 +42,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-#: Opaque handle prefix per C02 §5.13 + XB05.
+#: URN prefix for the opaque session-log handle.
 HANDLE_PREFIX: str = "urn:eawf:v1:session-log:"
 
 
@@ -68,8 +67,8 @@ class _Entry:
 
 
 # In-process map. Module-global because the daemon runs as a single
-# process per OS user (D6 short-lived subprocess pool); a class-level
-# instance would only add ceremony for the same end-state.
+# process per OS user; a class-level instance would only add ceremony
+# for the same end-state.
 _REGISTRY: dict[str, _Entry] = {}
 _LOCK = threading.Lock()
 
@@ -101,7 +100,7 @@ def register_session_log(
         raw_path: Absolute path to the runtime-managed session log.
             The path is held only in-process; it is never serialised
             into ``state.json``, ``event.jsonl``, or any error
-            envelope (AGENTS rule 16 + XB05).
+            envelope (AGENTS rule 16 — secrets / PII hygiene).
         wave_id: Owning wave id when the registration is wave-scoped;
             pass ``None`` for test-only or synthetic registrations.
 
@@ -147,8 +146,9 @@ def prune_handles_for_wave(wave_id: str) -> int:
     """Evict every registry entry that belongs to *wave_id*.
 
     Called by the TTL sweep when the parent wave's TTL has elapsed
-    (per D13 — default 86_400 s). Idempotent — pruning an unknown
-    wave id is a no-op.
+    (default 86_400 s, configurable via
+    ``daemon.session_handle_ttl_seconds``). Idempotent — pruning an
+    unknown wave id is a no-op.
 
     Args:
         wave_id: Wave id whose handles should be dropped.

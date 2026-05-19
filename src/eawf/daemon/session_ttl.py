@@ -1,21 +1,21 @@
-"""Background TTL sweep for session-handle bookkeeping (V8 / D13).
+"""Background TTL sweep for session-handle bookkeeping.
 
 The TTL sweep scans ``state.waves[*].sessions[*]`` once an hour for
 attempts whose ``ended_at + ttl < now`` and emits a
 ``session_handle_pruned`` event per evicted attempt, plus a mutation
-plan W09 will turn into a real ``state.mutate`` call. The
+plan the mutator turns into a real ``state.mutate`` call. The
 :func:`prune_handles_for_wave` shim delegates to
 :mod:`eawf.daemon.session` so the in-process registry stays bounded.
 
-Per D13 (2026-05-18): 1-day default (``86_400`` seconds). The TTL is
-configurable via ``daemon.session_handle_ttl_seconds`` once W08 wires
-the config plumbing; W07 hard-codes the default.
+The TTL defaults to one day (``86_400`` seconds) and is configurable
+via ``daemon.session_handle_ttl_seconds`` once the config plumbing is
+wired; until then the default applies.
 
-Per AGENTS rule 16 + XB05: the eviction *event* carries only the
-opaque handle + wave id + attempt — never the raw path. The path
-itself is dropped from the in-process registry on prune; readers that
-need it after eviction must re-spawn (the runtime adapter resolves a
-new path on the next dispatch).
+Per AGENTS rule 16 (secrets / PII hygiene): the eviction *event*
+carries only the opaque handle + wave id + attempt — never the raw
+path. The path itself is dropped from the in-process registry on
+prune; readers that need it after eviction must re-spawn (the runtime
+adapter resolves a new path on the next dispatch).
 """
 
 from __future__ import annotations
@@ -37,7 +37,8 @@ from eawf.store.envelope import Envelope
 logger = logging.getLogger(__name__)
 
 
-#: Default TTL per D13.
+#: Default session-handle TTL (one day) — keeps inactive sessions on
+#: short-running operator boxes from accumulating indefinitely.
 DEFAULT_TTL_SECONDS: Final[int] = 86_400
 
 #: Default sweep interval — hourly is granular enough for a 1-day TTL.
@@ -91,7 +92,7 @@ def plan_evictions(
     Args:
         state: Validated state document.
         ttl_seconds: TTL threshold; defaults to
-            :data:`DEFAULT_TTL_SECONDS` per D13.
+            :data:`DEFAULT_TTL_SECONDS`.
         now: Reference time. Defaults to ``datetime.now(UTC)`` —
             tests override it to drive the boundary.
 

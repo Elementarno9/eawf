@@ -6,7 +6,7 @@ build_pruned_envelope). The registry is process-local in-memory; each
 test resets it via :func:`eawf.daemon.session.reset_registry` so the
 order of execution does not leak.
 
-Per AGENTS rule 16 + audit XB05 (2026-05-18): the handle is the only
+Per AGENTS rule 16 (secrets / PII hygiene): the handle is the only
 identifier serialised into ``state.json`` / ``event.jsonl``. Tests
 assert the handle format follows the URN-shaped convention so the
 opaque-handle invariant has a regression seat.
