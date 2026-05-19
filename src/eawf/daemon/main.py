@@ -26,8 +26,10 @@ from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.bus import EventBus
 from eawf.daemon.idle import IdleTimeoutWatchdog
 from eawf.daemon.methods import MethodContext
+from eawf.daemon.recovery import replay_wal
 from eawf.daemon.runtime_dir import log_path, pid_path, runtime_dir, socket_path
 from eawf.daemon.server import process_frame_bytes, serve_unix
+from eawf.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
 from eawf.state.enums import StoreKind
 from eawf.state.resolve import resolve_with_reason
 from eawf.store.paths import store_path
@@ -63,6 +65,29 @@ def _resolve_idle_timeout() -> float:
     return value
 
 
+def _resolve_session_ttl_seconds() -> int:
+    """Return the configured session-handle TTL in seconds.
+
+    The env var ``EAWF_DAEMON_SESSION_TTL`` lets the operator override
+    the default for testing + tuning; the canonical layered-config
+    surface (``config.daemon.session_handle_ttl_seconds``) lands when
+    the daemon main reads merged config. A non-positive override falls
+    back to the default and logs a warning.
+    """
+    raw = os.environ.get("EAWF_DAEMON_SESSION_TTL")
+    if not raw:
+        return DEFAULT_TTL_SECONDS
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"_resolve_session_ttl_seconds unparseable raw={raw!r}; using default")
+        return DEFAULT_TTL_SECONDS
+    if value <= 0:
+        logger.warning(f"_resolve_session_ttl_seconds non-positive raw={raw!r}; using default")
+        return DEFAULT_TTL_SECONDS
+    return value
+
+
 def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTimeoutWatchdog:
     """Construct an :class:`IdleTimeoutWatchdog` wired to *ctx*.
 
@@ -91,6 +116,38 @@ def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTime
         last_activity=_last_activity,
         has_subscribers=_has_subscribers,
         in_flight=_in_flight,
+    )
+
+
+def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
+    """Schedule the session-handle TTL sweep loop on the running loop.
+
+    The sweep walks ``state.json`` once per interval, plans evictions
+    for attempts whose ``ended_at + ttl < now``, and publishes a
+    ``session_handle_pruned`` envelope per eviction. Returns ``None``
+    when the context lacks a state path (unit-test daemonless paths)
+    so the caller can elide the teardown step.
+
+    Args:
+        ctx: Live :class:`MethodContext` with a wired ``shutdown_event``
+            and (optionally) ``bus`` + ``state_path``.
+
+    Returns:
+        The scheduled task, or ``None`` when no state path is available
+        for sweeping.
+    """
+    if ctx.state_path is None:
+        return None
+    ttl_seconds = _resolve_session_ttl_seconds()
+    publish = ctx.bus.publish if ctx.bus is not None else None
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    return asyncio.create_task(
+        run_sweep_loop(
+            state_path=ctx.state_path,
+            ttl_seconds=ttl_seconds,
+            publish=publish,
+            stop_event=ctx.shutdown_event,
+        )
     )
 
 
@@ -151,12 +208,17 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     idle_timeout = _resolve_idle_timeout()
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
+    ttl_task = _schedule_session_ttl_sweep(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
+        if ttl_task is not None:
+            ttl_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ttl_task
         server.close()
         await server.wait_closed()
 
@@ -191,12 +253,17 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     idle_timeout = _resolve_idle_timeout()
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
+    ttl_task = _schedule_session_ttl_sweep(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
+        if ttl_task is not None:
+            ttl_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ttl_task
         pipe_server.stop()
 
 
@@ -234,6 +301,30 @@ def run(*, foreground: bool = True) -> int:
     project_event_path = store_path(project_state_path, StoreKind.EVENT)
     daemon_wal_dir = rt_dir / "wal"
     daemon_wal_dir.mkdir(parents=True, exist_ok=True)
+
+    # Startup WAL replay: walk the WAL once before the listener starts
+    # accepting connections so any post-apply outcome record from a
+    # prior unclean exit (SIGKILL between event-append and fsync-rename)
+    # gets reconciled against the event log. Idempotent on subsequent
+    # boots — fully-replayed records rename to ``.fsynced.json`` and
+    # the next pass is a no-op.
+    replay_report = replay_wal(
+        daemon_wal_dir,
+        state_path=project_state_path,
+        event_path=project_event_path,
+    )
+    logger.info(
+        f"run wal-replay pending={replay_report.pending_count} "
+        f"applied={replay_report.applied_count} "
+        f"fsynced={replay_report.fsynced_count} "
+        f"poisoned={replay_report.poisoned_count} "
+        f"replayed={replay_report.replayed_event_count}"
+    )
+    if replay_report.poisoned_count > 0:
+        logger.warning(
+            f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
+            f"operator should run 'eawf daemon replay-wal --inspect'"
+        )
 
     ctx = MethodContext(
         started_at=started_at,
