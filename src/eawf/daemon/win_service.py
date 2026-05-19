@@ -2,7 +2,7 @@
 
 A ``win32serviceutil.ServiceFramework`` subclass that hosts the asyncio
 event loop and bridges Service Control Manager (SCM) callbacks into
-the loop. The XB14 fix (C02 §5.13) addresses the thread-affinity
+the loop. The cross-thread bridge addresses the thread-affinity
 mismatch: ``SvcStop`` callbacks fire on the SCM thread while the
 asyncio loop owns its own thread; without :func:`loop.call_soon_threadsafe`
 the stop signal never crosses thread boundaries and the daemon hangs.
@@ -45,7 +45,7 @@ class EawfdService(win32serviceutil.ServiceFramework):
     The SCM owns process lifecycle; ``SvcDoRun`` launches the asyncio
     loop and blocks until the loop returns. ``SvcStop`` runs on the
     SCM thread and must bridge into the loop via
-    :func:`loop.call_soon_threadsafe` per the XB14 fix.
+    :func:`loop.call_soon_threadsafe` to cross the thread boundary.
 
     Attributes:
         _svc_name_: Internal service name registered with the SCM
@@ -80,7 +80,7 @@ class EawfdService(win32serviceutil.ServiceFramework):
         self._stop_event: asyncio.Event | None = None
 
     def SvcStop(self) -> None:  # noqa: N802 — pywin32 framework API
-        """Cross-thread shutdown bridge — XB14 fix.
+        """Cross-thread shutdown bridge.
 
         The SCM invokes this callback on its own worker thread; the
         asyncio loop runs on a different thread. Setting an

@@ -1,12 +1,11 @@
 """Subscription bus + drop-oldest backpressure for the daemon event stream.
 
-Per C02 §5.7 (revised 2026-05-18 per audit C02.F50) the bus implements a
-**drop-oldest sliding window** per subscriber. Each subscriber owns a
-bounded :class:`collections.deque` (``maxlen=1024`` by default); when a
-new envelope arrives and the queue is full, the oldest envelope is
-evicted and a :class:`StoreKind.SUBSCRIPTION_LAG` envelope is appended
-to the same queue *behind* the incoming envelope. The subscriber sees
-the lag notice on its next poll and may reconnect with
+The bus implements a **drop-oldest sliding window** per subscriber. Each
+subscriber owns a bounded :class:`collections.deque` (``maxlen=1024`` by
+default); when a new envelope arrives and the queue is full, the oldest
+envelope is evicted and a :class:`StoreKind.SUBSCRIPTION_LAG` envelope is
+appended to the same queue *behind* the incoming envelope. The subscriber
+sees the lag notice on its next poll and may reconnect with
 ``since_event_id=<last dropped id>`` to backfill the gap from the
 persistent ``event.jsonl``.
 

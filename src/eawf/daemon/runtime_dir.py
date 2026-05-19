@@ -4,7 +4,7 @@ Locates per-user storage for the daemon's PID file, Unix domain socket, log
 file, and write-ahead log entries. Pure helpers — no filesystem side effects;
 callers materialise the directory when they need it.
 
-Resolution rules (per C02 §5.5 D5):
+Resolution rules:
 
 - Linux: ``$XDG_RUNTIME_DIR/eawfd/`` when ``XDG_RUNTIME_DIR`` is set;
   otherwise ``~/.eawfd/``.

@@ -245,7 +245,7 @@ _LEGACY_RUNTIME_WARN_EMITTED = False
 
 
 def _normalise_runtime_adapters(overlay: dict[str, Any]) -> None:
-    """In-place D14 shim: synthesise ``runtime.adapters`` from legacy ``runtime.kind``.
+    """In-place legacy-kind shim: synthesise ``runtime.adapters`` from ``runtime.kind``.
 
     Applied per-overlay BEFORE the deep-merge so that a legacy overlay
     ``{runtime: {kind: <id>}}`` projects to
@@ -275,11 +275,10 @@ def _normalise_runtime_adapters(overlay: dict[str, Any]) -> None:
         runtime["adapters"] = [kind]
         if not _LEGACY_RUNTIME_WARN_EMITTED:
             logger.warning(
-                "deprecated_runtime_kind config still uses 'runtime.kind' "
-                "without 'runtime.adapters'; synthesising adapters=[%r]. "
-                "Bump config schema_version to 1.1 and emit "
-                "'runtime.adapters: [<id>]' to silence this warning.",
-                kind,
+                f"deprecated_runtime_kind config still uses 'runtime.kind' "
+                f"without 'runtime.adapters'; synthesising adapters=[{kind!r}]. "
+                f"Bump config schema_version to 1.1 and emit "
+                f"'runtime.adapters: [<id>]' to silence this warning."
             )
             _LEGACY_RUNTIME_WARN_EMITTED = True
 

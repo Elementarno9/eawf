@@ -1,16 +1,16 @@
 """Idle-timeout watchdog for the daemon.
 
-Per C02 §5.5 the daemon self-shuts-down after a configurable idle
-window when (a) no subscribers are attached, (b) no mutations are in
-flight, and (c) no non-subscribe RPC has been dispatched for
+The daemon self-shuts-down after a configurable idle window when
+(a) no subscribers are attached, (b) no mutations are in flight, and
+(c) no non-subscribe RPC has been dispatched for
 ``idle_timeout_seconds``. The watchdog runs as an asyncio task and
 checks every 30 s (a tighter cadence wastes wakeups; a looser cadence
 delays shutdown).
 
 The default idle timeout of 300 s is aligned with the Anthropic
-prompt-cache TTL (C02 §4 D11) — a CLI that consults the daemon every
-five minutes keeps it warm, while truly idle sessions release the
-runtime resources.
+prompt-cache TTL — a CLI that consults the daemon every five minutes
+keeps it warm, while truly idle sessions release the runtime
+resources.
 
 The watchdog does NOT block on the activity gate — it polls. Per-call
 activity refresh is owned by the dispatcher

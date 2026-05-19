@@ -6,9 +6,9 @@ over the UDS / named pipe surface. Used by W09 to wire ``state.mutate``
 through the daemon and by every later wave that needs typed
 JSON-RPC. W08 ships only the transport — wiring lives downstream.
 
-Per D15 the cold-spawn is silent: stdout/stderr stay clean unless the
-operator opts in with ``EAWF_VERBOSE=1``. The client itself never
-prints; only the spawn helper does.
+The cold-spawn is silent: stdout/stderr stay clean unless the operator
+opts in with ``EAWF_VERBOSE=1``. The client itself never prints; only
+the spawn helper does.
 
 The client is intentionally synchronous — every CLI call site is
 single-shot ``open → send → receive → close`` and there is no
@@ -71,11 +71,11 @@ class DaemonClient:
         with DaemonClient() as client:
             info = client.call("daemon.ping")
 
-    The context-manager spawns the daemon on enter (silent per D15)
-    and tears down the connection cleanly on exit. The connection is
-    a single socket; multiple ``client.call`` invocations multiplex
-    over it sequentially (one in-flight request at a time per the
-    JSON-RPC 2.0 ordering contract).
+    The context-manager spawns the daemon on enter (silent unless
+    ``EAWF_VERBOSE=1``) and tears down the connection cleanly on exit.
+    The connection is a single socket; multiple ``client.call``
+    invocations multiplex over it sequentially (one in-flight request
+    at a time per the JSON-RPC 2.0 ordering contract).
     """
 
     def __init__(
@@ -109,7 +109,7 @@ class DaemonClient:
             # is owned by the windows_pipe bridge in a later wave.
             # W08 ships the POSIX path + the spawn contract; W09
             # wires the windows-pipe client side.
-            raise NotImplementedError("DaemonClient windows-pipe transport pending W09 wiring")
+            raise NotImplementedError("windows-pipe transport pending W09 wiring")
         sock_path = self._runtime_dir / "eawfd.sock"
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self._call_timeout_seconds)
@@ -164,7 +164,7 @@ class DaemonClient:
                 ``call_timeout_seconds``.
         """
         if self._sock is None or self._reader is None:
-            raise RuntimeError("DaemonClient is not connected; use as a context manager")
+            raise RuntimeError("daemon client not connected; use as a context manager")
         payload_params = dict(params) if params is not None else {}
         if idempotency_key is not None and "idempotency_key" not in payload_params:
             payload_params["idempotency_key"] = idempotency_key

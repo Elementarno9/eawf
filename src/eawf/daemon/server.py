@@ -52,7 +52,8 @@ from eawf.store.envelope import Envelope
 logger = logging.getLogger(__name__)
 
 
-# Error codes per C02 §5.2.2.
+# JSON-RPC 2.0 error codes (reserved range -32768..-32000) plus the
+# daemon-specific extensions in the -32000..-32099 server-error band.
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601

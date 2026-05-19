@@ -1,10 +1,10 @@
 """``state.*`` JSON-RPC methods: read / mutate / digest.
 
 Wires the canonical mutator path for the daemon (P24-W09). The
-``state.mutate`` handler is the **sole post-Q1 writer** for ``state.json``
-+ ``event.jsonl`` (authority-map rows 1-4); every state-mutating CLI
-verb routes through this RPC once ``daemon.proxy_enabled`` flips to
-``true`` (W10 closes that gate).
+``state.mutate`` handler is the **sole canonical writer** for
+``state.json`` + ``event.jsonl`` (authority-map rows 1-4); every
+state-mutating CLI verb routes through this RPC once
+``daemon.proxy_enabled`` flips to ``true`` (W10 closes that gate).
 
 Algorithm — implements C02 §5.6 transaction lifecycle verbatim:
 
@@ -86,7 +86,7 @@ logger = logging.getLogger(__name__)
 #: lifecycle guard). C02 §5.2.2 reserves this code for ``validation_failed``.
 VALIDATION_FAILED: Final[int] = -32002
 
-#: TTL for cached idempotency results (seconds). Per Q11 a repeat
+#: TTL for cached idempotency results (seconds). A repeat
 #: ``state.mutate`` with the same ``idempotency_key`` inside this
 #: window replays the cached envelope verbatim. Outside the window
 #: the daemon treats the call as new (the WAL record carries the
@@ -233,7 +233,7 @@ def _read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
             The handler maps this to ``-32002 validation_failed``.
     """
     if not state_path.exists():
-        raise FileNotFoundError(f"state file not found: {state_path}")
+        raise FileNotFoundError(f"state file not found: {state_path!r}")
     raw = state_path.read_bytes()
     payload = orjson.loads(raw)
     report = validate_state(payload, strict_optional=False)

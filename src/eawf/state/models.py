@@ -228,8 +228,7 @@ class SessionAttempt(_StrictModel):
     filesystem path. The daemon's in-process map (see
     :func:`eawf.daemon.session.register_session_log` /
     :func:`eawf.daemon.session.resolve_session_log`) is the only place
-    real paths live, satisfying AGENTS rule 16 + audit XB05 /
-    C02-I007.
+    real paths live, satisfying AGENTS rule 16 (secrets / PII hygiene).
 
     Attributes:
         attempt: 1-based attempt counter under the parent wave.

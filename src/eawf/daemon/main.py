@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 
 
 #: Default idle window before the watchdog signals shutdown. Aligned
-#: with the Anthropic prompt-cache TTL (C02 §4 D11) so a CLI that
-#: consults the daemon every five minutes keeps it warm.
+#: with the Anthropic prompt-cache TTL so a CLI that consults the
+#: daemon every five minutes keeps it warm.
 DEFAULT_IDLE_TIMEOUT_SECONDS: float = 300.0
 
 

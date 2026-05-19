@@ -1,7 +1,7 @@
 """On-demand auto-spawn of the eawfd daemon for the CLI.
 
-Per C02 §5.5 the CLI auto-starts the daemon when no live process is
-attached to the runtime dir. Procedure:
+The CLI auto-starts the daemon when no live process is attached to
+the runtime dir. Procedure:
 
 1. Read ``<runtime_dir>/eawfd.pid``; when the file exists, the holder
    PID is alive, and the holder UID matches the calling UID, return
@@ -11,8 +11,8 @@ attached to the runtime dir. Procedure:
    with ``DETACHED_PROCESS`` + ``CREATE_NEW_PROCESS_GROUP``. The
    parent CLI then polls the socket/pipe for up to 5 s for liveness.
 
-The cold-spawn is **silent** per D15 — no stdout/stderr noise unless
-the operator opts in with ``EAWF_VERBOSE=1``. The :mod:`eawf.cli`
+The cold-spawn is **silent** — no stdout/stderr noise unless the
+operator opts in with ``EAWF_VERBOSE=1``. The :mod:`eawf.cli`
 verbose-flag plumbing reads the same env var.
 
 The spawn helper is the only piece that imports
