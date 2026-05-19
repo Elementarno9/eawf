@@ -1477,9 +1477,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I01-W09"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2840,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T15:22:39.668154Z",
+  "updated_at": "2026-05-19T15:55:52.376484Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7630,7 +7628,7 @@
         "P24-I01-W10"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T15:55:52.376324Z",
       "commit": null,
       "deps": [
         "P24-I01-W03",
@@ -7647,10 +7645,10 @@
       "id": "P24-I01-W09",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:36:00.328252Z",
-      "outcome": null,
+      "outcome": "state.mutate RPC + WAL integration + Mutation typed union + wave_close canary proxy; both daemon-proxy=true/false modes pass 195 daemon + 22 cli + full unit/integration; 21 callsite rewires + per-variant typing deferred",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: state-CLI direct writer migrated to daemon state.mutate RPC proxy + event/audit/per-kind JSONL emitters daemon-internal (authority map rows 1-4)",
       "token_budget": null,
