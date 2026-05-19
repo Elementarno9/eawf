@@ -230,6 +230,11 @@ dependencies = [
     { name = "typer" },
 ]
 
+[package.optional-dependencies]
+windows = [
+    { name = "pywin32" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "detect-secrets" },
@@ -252,11 +257,13 @@ requires-dist = [
     { name = "portalocker", specifier = ">=3.2.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
+    { name = "pywin32", marker = "extra == 'windows'", specifier = ">=306" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "typer", specifier = ">=0.25.1" },
 ]
+provides-extras = ["windows"]
 
 [package.metadata.requires-dev]
 dev = [

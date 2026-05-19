@@ -22,6 +22,14 @@ dependencies = [
     "typer>=0.25.1",
 ]
 
+[project.optional-dependencies]
+# Windows-only: pywin32 backs the named-pipe transport in
+# ``eawf.daemon.windows_pipe`` + ``windows_security`` and the
+# pywin32 ServiceFramework wiring landing in P24-W04. The package
+# is not installable from PyPI on POSIX; bundle it in this extras
+# group so ``pip install eawf[windows]`` is the operator path.
+windows = ["pywin32>=306"]
+
 [project.scripts]
 eawf = "eawf.cli.app:main"
 ea = "eawf.cli.app:main"
@@ -60,6 +68,15 @@ markers = [
 strict = true
 python_version = "3.14"
 packages = ["eawf"]
+
+[[tool.mypy.overrides]]
+# Windows-only transport: pywin32 stubs are not installable on the
+# POSIX dev/CI hosts where mypy runs. The module is import-guarded
+# (``raise ImportError`` on non-win32) so non-Windows builds never
+# resolve these symbols; lifting the stub requirement keeps the
+# rest of the tree under strict checking.
+module = ["eawf.daemon.windows_pipe", "eawf.daemon.windows_security"]
+ignore_errors = true
 
 [tool.ruff]
 line-length = 100

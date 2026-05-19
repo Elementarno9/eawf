@@ -1,13 +1,13 @@
 """eawfd entry point.
 
 Resolves :func:`eawf.daemon.runtime_dir.runtime_dir`, materialises the
-PID file + Unix socket, builds the asyncio loop, and serves JSON-RPC
-until ``daemon.shutdown`` is received or SIGTERM lands.
+PID file, builds the asyncio loop, and serves JSON-RPC until
+``daemon.shutdown`` is received or the OS signals graceful stop.
 
-Windows path is deferred to W02 (named-pipe listener via pywin32). When
-called on Windows today the entry point raises
-:class:`NotImplementedError` so callers fail closed rather than launch
-a half-configured daemon.
+POSIX listens on a Unix domain socket. Windows listens on the
+per-user named pipe ``\\\\.\\pipe\\eawfd-<username>`` via
+:class:`eawf.daemon.windows_pipe.WindowsPipeServer`, bridged into the
+shared JSON-RPC dispatcher.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from eawf import __version__
 from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.runtime_dir import log_path, pid_path, runtime_dir, socket_path
-from eawf.daemon.server import serve_unix
+from eawf.daemon.server import process_frame_bytes, serve_unix
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def _configure_logging(foreground: bool) -> None:
 
 
 async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | None) -> None:
-    """Start the JSON-RPC server and wait for shutdown.
+    """Start the JSON-RPC server and wait for shutdown (POSIX).
 
     Args:
         sock_path: UDS bind path.
@@ -101,6 +101,45 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
         await server.wait_closed()
 
 
+async def _run_windows_server(ctx: MethodContext) -> None:
+    """Start the named-pipe listener and wait for shutdown (Windows).
+
+    The :class:`eawf.daemon.windows_pipe.WindowsPipeServer` owns a
+    dedicated listener thread + an asyncio dispatch task. Shutdown
+    flows from ``daemon.shutdown`` (sets ``ctx.shutdown_event``) or
+    from the parent harness setting it directly; the pipe server's
+    ``stop()`` then unblocks the listener thread.
+
+    Args:
+        ctx: Server context (with wired ``shutdown_event``).
+    """
+    # The Windows transport lives behind the import-guarded module so
+    # the POSIX dev loop is not contaminated. The outer ``run()``
+    # already gates on ``sys.platform`` before reaching here.
+    from eawf.daemon.windows_pipe import WindowsPipeServer
+
+    loop = asyncio.get_running_loop()
+
+    async def _handler(payload: bytes) -> bytes:
+        return await process_frame_bytes(payload, ctx)
+
+    pipe_server = WindowsPipeServer(loop, _handler)
+    pipe_server.start()
+    logger.info(f"_run_windows_server bound pipe={pipe_server.pipe_path!r}")
+
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    try:
+        try:
+            await asyncio.wait_for(
+                ctx.shutdown_event.wait(),
+                timeout=_IDLE_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            logger.info(f"_run_windows_server idle-timeout seconds={_IDLE_TIMEOUT_SECONDS}")
+    finally:
+        pipe_server.stop()
+
+
 def run(*, foreground: bool = True) -> int:
     """Run the daemon to completion.
 
@@ -113,23 +152,14 @@ def run(*, foreground: bool = True) -> int:
         Process exit code — ``0`` on clean shutdown.
 
     Raises:
-        NotImplementedError: When invoked on Windows. W02 wires the
-            named-pipe listener; until then the entry point refuses to
-            run rather than start a half-configured daemon.
+        ImportError: When invoked on Windows without the optional
+            ``windows`` extras installed (``pip install eawf[windows]``
+            or equivalent). The named-pipe transport requires pywin32.
     """
-    if sys.platform.startswith("win"):
-        # W02 wires the pywin32 named-pipe listener + DACL gating.
-        raise NotImplementedError("daemon on windows lands in W02")
-
     _configure_logging(foreground)
     rt_dir = runtime_dir()
     rt_dir.mkdir(parents=True, exist_ok=True)
-    sock_path = socket_path()
     pid_file = pid_path()
-
-    if sock_path.exists():
-        # Stale socket from a prior unclean exit — unlink before bind.
-        sock_path.unlink()
 
     started_at = datetime.now(UTC).isoformat()
     pid = os.getpid()
@@ -144,11 +174,20 @@ def run(*, foreground: bool = True) -> int:
     )
 
     logger.info(f"run boot pid={pid} version={__version__!r} protocol={PROTOCOL_VERSION!r}")
+    sock_path = socket_path() if sys.platform != "win32" else None
     try:
-        asyncio.run(_run_server(sock_path, ctx, expected_uid=os.geteuid()))
+        if sys.platform == "win32":
+            asyncio.run(_run_windows_server(ctx))
+        else:
+            assert sock_path is not None
+            if sock_path.exists():
+                # Stale socket from a prior unclean exit — unlink before bind.
+                sock_path.unlink()
+            asyncio.run(_run_server(sock_path, ctx, expected_uid=os.geteuid()))
     finally:
-        with contextlib.suppress(FileNotFoundError):
-            sock_path.unlink()
+        if sock_path is not None:
+            with contextlib.suppress(FileNotFoundError):
+                sock_path.unlink()
         with contextlib.suppress(FileNotFoundError):
             pid_file.unlink()
         logger.info("run exit")
