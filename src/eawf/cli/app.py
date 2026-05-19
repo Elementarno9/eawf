@@ -386,6 +386,12 @@ app.command(
 )(metrics_cmd)
 # --- end P20 W08 ---
 
+# --- P24 W01 daemon registration ---
+from eawf.cli.commands.daemon import daemon_app  # noqa: E402
+
+app.add_typer(daemon_app, name="daemon", rich_help_panel=panel_for("daemon"))
+# --- end P24 W01 ---
+
 
 def main() -> None:
     app()
