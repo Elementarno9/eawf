@@ -1,0 +1,32 @@
+# Reverse-engineering bootstrap template (C08 D7 — 3 v0.3 templates).
+#
+# Consumed by ``eawf init --template reverse-engineering``. Merged with
+# operator answers (project_code, project_title) to produce
+# ``.ea/config.yaml``.
+#
+# Per C08 D10: reverse-engineering profile inherits research's evidence-
+# driven character; dispatch.session_policy_default = ``continue`` so the
+# decompilation context (working hypotheses about symbol meanings,
+# datatypes, control-flow shape) survives across wave dispatches.
+#
+# Note: the ``re`` profile body is a name-only stub today (src/eawf/
+# profiles/data/re.yaml); operator may extend by writing
+# ``<repo>/.ea/profiles/re.yaml`` to override the built-in.
+schema_version: "1.0"
+profiles:
+  enabled: [core, research, re]
+runtime:
+  preference: [claude, codex]
+dispatch:
+  session_policy_default: continue
+planning:
+  approval: ask
+  max_parallel_waves: 1
+audit:
+  default_checks: [state, hypothesis_evidence]
+ship:
+  require_audit_pass: true
+  require_memory_review: true
+project:
+  goals: []
+  success_metrics: {}

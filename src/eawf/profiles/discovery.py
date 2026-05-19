@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 _DATA_PACKAGE: str = "eawf.profiles.data"
+_INIT_TEMPLATE_PACKAGE: str = "eawf.templates.init"
 _YAML_SUFFIX: str = ".yaml"
 
 
@@ -213,3 +214,82 @@ def load_profile_with_discovery(
 def _clear_cache_for_tests() -> None:
     """Drop the entire cache. Used only by the test suite."""
     _PROFILE_CACHE.clear()
+
+
+# ---- init bootstrap templates (C08 — P25-W16) ------------------------------
+#
+# Three YAML templates ship in v0.3 per C08 D7 / D10. Each is a
+# ``.ea/config.yaml`` seed consumed by ``eawf init --template <name>``;
+# the loader merges template values with operator answers (project_code,
+# project_title) before the wizard writes the canonical config.
+#
+# Discovery is wheel-bundle-only (no workspace/user overlay): operators
+# fork the YAML in their repo if they need to customise. Discovery never
+# scans the disk for ad-hoc templates — explicit-only growth, matching
+# the registry conventions for built-in profile bodies.
+
+
+def list_init_templates() -> tuple[str, ...]:
+    """Return the names of bundled init templates, sorted.
+
+    Reads from the :mod:`eawf.templates.init` package via
+    :func:`importlib.resources.files` so the templates work from a
+    wheel install, an editable install, and the source tree alike.
+
+    Returns:
+        Sorted tuple of template names (YAML stems; e.g.
+        ``("engineering", "research", "reverse-engineering")``).
+    """
+    data = files(_INIT_TEMPLATE_PACKAGE)
+    names: list[str] = []
+    for entry in data.iterdir():
+        if not entry.is_file():
+            continue
+        name = entry.name
+        if not name.endswith(_YAML_SUFFIX):
+            continue
+        names.append(name.removesuffix(_YAML_SUFFIX))
+    return tuple(sorted(names))
+
+
+def load_init_template(template_name: str) -> dict[str, Any]:
+    """Read + parse the bundled init template named *template_name*.
+
+    Returns the raw parsed YAML mapping; the caller merges it with
+    operator-supplied answers (project_code, project_title) before
+    writing ``.ea/config.yaml``. The returned dict is freshly parsed on
+    every call — templates are small (a few keys) and immutable on disk
+    so caching gives no measurable benefit.
+
+    Args:
+        template_name: YAML stem (e.g. ``"research"``). Must be one of
+            the values returned by :func:`list_init_templates`.
+
+    Returns:
+        Parsed YAML mapping (always a ``dict[str, Any]``).
+
+    Raises:
+        InvalidInput: ``template_name`` is not in the bundled set.
+        ValidationFailed: Template YAML is malformed or non-mapping.
+    """
+    known = list_init_templates()
+    if template_name not in known:
+        raise InvalidInput(f"unknown init template: {template_name!r}; choose from {list(known)}")
+    raw = (
+        files(_INIT_TEMPLATE_PACKAGE)
+        .joinpath(f"{template_name}{_YAML_SUFFIX}")
+        .read_text(encoding="utf-8")
+    )
+    try:
+        parsed: Any = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise ValidationFailed(f"init template {template_name!r}: malformed YAML: {exc}") from exc
+    if parsed is None:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        raise ValidationFailed(
+            f"init template {template_name!r}: top-level must be a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+    logger.debug(f"load_init_template template={template_name!r} keys={sorted(parsed)}")
+    return parsed

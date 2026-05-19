@@ -1,0 +1,31 @@
+# Engineering bootstrap template (C08 D7 — 3 v0.3 templates).
+#
+# Consumed by ``eawf init --template engineering``. Merged with operator
+# answers (project_code, project_title) to produce ``.ea/config.yaml``.
+#
+# Per C08 D10: engineering profile defaults dispatch.session_policy_default
+# to ``fresh`` — engineering waves are PR-driven and each dispatch starts
+# from a clean slate; cross-wave session contamination is avoided.
+schema_version: "1.0"
+profiles:
+  enabled: [core, python]
+runtime:
+  preference: [claude, codex]
+dispatch:
+  session_policy_default: fresh
+planning:
+  approval: ask
+  max_parallel_waves: 4
+audit:
+  default_checks: [state, tests, lint, typecheck, docs]
+ship:
+  require_audit_pass: true
+  require_memory_review: false
+acceptance:
+  commands:
+    tests: "uv run pytest"
+    lint: "uv run ruff check ."
+    typecheck: "uv run mypy ."
+project:
+  goals: []
+  success_metrics: {}
