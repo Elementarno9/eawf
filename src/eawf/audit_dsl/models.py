@@ -6,7 +6,7 @@ dispatches into per-kind callables. Each callable returns a
 :class:`CheckResult` recording pass/fail plus a one-line ``details``
 note.
 
-The check kinds frozen for v0.2:
+The check kinds frozen for v0.3:
 
 * ``file_exists`` — ``args = {path: str}``.
 * ``path_glob_nonempty`` — ``args = {pattern: str}``.
@@ -14,6 +14,12 @@ The check kinds frozen for v0.2:
 * ``state_field_equals`` — ``args = {field: str, value: Any,
   state_path: str = ".ea/state.json"}``.
 * ``command_exit_zero`` — ``args = {argv: list[str]}``.
+* ``verify_implements`` — ``args = {phase_id: str, diff_base: str,
+  cadence: str, current_trigger: str}``. Walks closed WaveSpecs
+  under ``.ea/specs/<phase_id>/`` and greps the diff against
+  ``diff_base`` for verdict-id markers under each wave's
+  ``file_scopes``; short-circuits when ``cadence`` does not match
+  ``current_trigger``.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -35,6 +41,7 @@ CheckKind = Literal[
     "regex_in_file",
     "state_field_equals",
     "command_exit_zero",
+    "verify_implements",
 ]
 
 

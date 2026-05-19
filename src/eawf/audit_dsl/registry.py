@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from eawf.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,7 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "regex_in_file": _check_regex_in_file,
     "state_field_equals": _check_state_field_equals,
     "command_exit_zero": _check_command_exit_zero,
+    "verify_implements": check_verify_implements,
 }
 
 

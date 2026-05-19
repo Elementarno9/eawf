@@ -1,4 +1,4 @@
-"""Typed spec models for phases, iters, and waves.
+"""Typed spec models for phases, iters, waves, and audits.
 
 This package owns the durable intent documents for the eawf scope
 hierarchy. Each spec is a Pydantic v2 :class:`pydantic.BaseModel` with
@@ -10,6 +10,8 @@ Public surface:
 - :class:`~eawf.spec.phase.PhaseSpec` — phase charter
 - :class:`~eawf.spec.iter.IterSpec` — iter intent
 - :class:`~eawf.spec.wave.WaveSpec` — wave deliverable
+- :class:`~eawf.spec.audit.AuditSpec` — declarative audit doc
+  consumed by the audit-DSL runner
 - :class:`~eawf.spec.common.VerdictCitation` — citation tying a spec
   to the verdict (V/D/R/H) it implements
 - :class:`~eawf.spec.common.EvidenceRef` — one row of a hypothesis
@@ -23,6 +25,7 @@ not built or populated here.
 
 from __future__ import annotations
 
+from eawf.spec.audit import AUDIT_CADENCE_VALUES, AuditCadence, AuditSpec
 from eawf.spec.common import (
     BriefPathStr,
     EvidenceRef,
@@ -41,6 +44,9 @@ from eawf.spec.phase import (
 from eawf.spec.wave import WaveBehavior, WaveMockup, WaveSpec
 
 __all__ = [
+    "AUDIT_CADENCE_VALUES",
+    "AuditCadence",
+    "AuditSpec",
     "BriefPathStr",
     "EvidenceRef",
     "FileScopeRef",
