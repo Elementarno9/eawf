@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import os
 import socket
 import sys
 import time
@@ -298,16 +297,6 @@ class DaemonClient:
         if idempotency_key is not None:
             params["idempotency_key"] = idempotency_key
         return self.call("registry.update", params)
-
-
-def _is_verbose() -> bool:
-    """Return True when ``EAWF_VERBOSE=1`` is set.
-
-    Mirrors :func:`eawf.daemon.spawn._is_verbose` but lives in the
-    CLI module so callers do not reach across packages for a single
-    environment lookup.
-    """
-    return os.environ.get("EAWF_VERBOSE", "") == "1"
 
 
 __all__ = [
