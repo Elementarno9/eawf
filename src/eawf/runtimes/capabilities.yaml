@@ -1,0 +1,117 @@
+# Cross-runtime capability matrix — 8 rows x 3 runtimes (C07a §G9 + D8).
+#
+# Each cell value is one of:
+#   - supported    — runtime fully exposes the capability per its primary
+#                    subprocess surface or first-party plugin layout
+#   - unsupported  — runtime does not expose the capability; daemon must
+#                    degrade or refuse
+#   - partial      — the capability is reachable but with caveats (vendor
+#                    auto-injects, no caller-side knob, etc.)
+#   - unknown      — capability state not yet established (probe pending
+#                    or upstream contract in flux)
+#
+# Sources: C07a brief §5 (Plugin/runtime architecture, V8 hybrid session
+# reuse, V5 reactive fallback) + W18 SDK pre-release baseline probe.
+#
+# Bumped per cluster cadence (C07a D8 — per-minor bump). Drift between
+# the declared cell and the live probe is surfaced by
+# ``eawf doctor --runtime <id>`` (see runtimes/capabilities.py).
+schema_version: "1.0"
+
+# Canonical runtime identifiers — match ``SessionAttempt.runtime`` +
+# ``RuntimeAdapter.id`` exactly. Three-tuple locked for v0.3-v0.5
+# (C07a NG5).
+runtimes:
+  - claude-code
+  - codex
+  - opencode
+
+# Eight capability rows x 3 runtimes = 24 cells. Row order matches the
+# C07a brief §1 enumeration (skills, plan-mode, tool-use, sub-agents,
+# streaming, session-resume, cache-control, error-class surface).
+capabilities:
+  skills:
+    description: >-
+      Runtime exposes a per-skill artifact directory the eawf plugin
+      renderer materialises (e.g. ``.claude/skills/<name>/SKILL.md``).
+      Drives B6 skill-model boundary (C07a §5.3).
+    claude-code: supported    # .claude/skills/<name>/SKILL.md (C07a §5.7)
+    codex: supported          # .codex/plugins/eawf/skills/<name>/SKILL.md
+    opencode: supported       # .opencode/command/<name>.md (renamed surface)
+
+  plan_mode:
+    description: >-
+      Runtime supports plan-mode dispatch — read-only investigation
+      without edit / shell. Claude Code surfaces this natively; Codex
+      and OpenCode treat plan-mode as "tool-allowlist without write
+      tools" (achievable but not first-class).
+    claude-code: supported    # `claude --plan` natively
+    codex: partial            # achievable via tool-allowlist restriction
+    opencode: partial         # `permission:` frontmatter + agent gating
+
+  tool_use:
+    description: >-
+      Runtime supports caller-driven tool / function-call invocation
+      (filesystem, shell, MCP servers). Subprocess CLI surface in
+      every adapter today (C07a §5.2 wire-form row).
+    claude-code: supported    # --allowedTools + .claude/settings.json
+    codex: supported          # --allowed-tool + .codex/config.toml [tools]
+    opencode: supported       # permission: frontmatter + opencode.json MCP
+
+  sub_agents:
+    description: >-
+      Runtime supports sub-agent dispatch — a parent agent spawning a
+      typed sub-agent in the same process (Claude Task tool / Codex
+      agent / OpenCode agent file). Eawf executor + reviewer + auditor
+      roles ride this surface.
+    claude-code: supported    # .claude/agents/<role>.md + Task tool
+    codex: supported          # .codex/plugins/eawf/skills nests agents
+    opencode: supported       # .opencode/agent/<role>.md
+
+  streaming:
+    description: >-
+      Runtime supports stream-JSON output the daemon parses
+      incrementally. Backs the dispatch progress surface (C09 telemetry
+      tail). All three runtimes ship stream-JSON in their primary
+      subprocess form (W18 probe baseline).
+    claude-code: supported    # --output-format=stream-json
+    codex: supported          # codex exec --json --stream
+    opencode: supported       # opencode run --format json (line-delim)
+
+  session_resume:
+    description: >-
+      Runtime supports session resume — re-attach to a prior session
+      handle and continue the turn history. Backs V8 hybrid session
+      reuse (C07a §5.4 + §5.8). OpenCode v0.3 marks this ``unsupported``
+      per F12 — the runtime ships ``--continue``/``--session``/``--fork``
+      surfaces but the eawf adapter holds the gate at ``False`` until
+      §8 Q1 lands the documented session-log path catalog; the matrix
+      flips to ``supported`` in v0.4.
+    claude-code: supported    # claude --continue <session-id>
+    codex: supported          # codex resume <id> / codex exec resume <id>
+    opencode: unsupported     # adapter gates at False per F12 until v0.4
+
+  cache_control:
+    description: >-
+      Runtime accepts caller-side ``cache_control`` markers in the
+      dispatch prefix (V8 cache interplay). Claude has native support;
+      Codex / OpenCode rely on prefix-stability + session resume to
+      hit cache, with no caller-side marker knob (C07a §5.6, §4 D4).
+      OpenCode auto-injects internally via ``@ai-sdk/anthropic`` but
+      has no caller-side surface (and the OAuth path strips markers
+      per upstream #17910), so the eawf adapter cannot pass cache
+      control through — ``unsupported`` reflects the adapter contract.
+    claude-code: supported    # <cache_control type="ephemeral" />
+    codex: unsupported        # OpenAI caching is automatic; no caller knob
+    opencode: unsupported     # no caller-side knob; vendor auto-injects
+
+  error_class_surface:
+    description: >-
+      Runtime surfaces parseable error context (HTTP code substrings,
+      keyword markers) the adapter maps onto the closed 5-class set
+      (RUNTIME_RATE_LIMIT / SERVER_ERROR / TIMEOUT / API_ERROR /
+      AUTH_ERROR per C07a §5.5). All three adapters emit the full
+      5-class set today.
+    claude-code: supported    # full 5-class parse coverage
+    codex: supported          # full 5-class parse coverage
+    opencode: supported       # full 5-class parse coverage

@@ -25,6 +25,7 @@ from eawf.runtimes.adapter import (
     RuntimeAdapter,
     SessionResumeFailedError,
 )
+from eawf.runtimes.selector import runtime_supports
 from eawf.state.models import SessionAttempt, Wave
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate[_ -]?limit)\b", re.IGNORECASE)
@@ -50,8 +51,12 @@ class OpenCodeAdapter:
 
     id: str = "opencode"
     cli_binary: str = "opencode"
-    accepts_continue: bool = False
-    supports_cache_control: bool = False
+    # ``accepts_continue`` + ``supports_cache_control`` derive from the
+    # YAML-backed capability matrix (C07a §G9 + D8) via
+    # :func:`eawf.runtimes.selector.runtime_supports` — no parallel
+    # hard-coded table per W13 success criterion 3.
+    accepts_continue: bool = runtime_supports("opencode", "session_resume")
+    supports_cache_control: bool = runtime_supports("opencode", "cache_control")
     error_classes_emitted: tuple[ErrorClass, ...] = (
         "RUNTIME_RATE_LIMIT",
         "RUNTIME_SERVER_ERROR",
