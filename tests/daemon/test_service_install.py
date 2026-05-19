@@ -164,7 +164,8 @@ def test_enable_service_linux_renders_unit_and_invokes_systemctl(
     assert stub_systemd_unit.exists()
     body = stub_systemd_unit.read_text(encoding="utf-8")
     assert str(stub_runtime_dir) in body
-    assert "ExecStart=/usr/bin/env uv tool run eawf daemon run --foreground" in body
+    assert "ExecStart=" in body
+    assert "--foreground" in body
 
     assert recorder.calls == [
         ["systemctl", "--user", "daemon-reload"],

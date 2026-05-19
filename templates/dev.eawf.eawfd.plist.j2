@@ -6,14 +6,8 @@
     <string>dev.eawf.eawfd</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/env</string>
-        <string>uv</string>
-        <string>tool</string>
-        <string>run</string>
-        <string>eawf</string>
-        <string>daemon</string>
-        <string>run</string>
-        <string>--foreground</string>
+        {% for arg in eawfd_argv %}<string>{{ arg }}</string>
+        {% endfor %}
     </array>
     <key>KeepAlive</key>
     <true/>

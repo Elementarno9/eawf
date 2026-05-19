@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -111,8 +112,38 @@ class ServiceInstallError(RuntimeError):
     """
 
 
+def _resolve_eawfd_binary() -> list[str]:
+    """Resolve the argv to invoke the eawfd daemon entry point.
+
+    Prefers the installed ``eawfd`` console script (``[project.scripts]``
+    entry) so the OS supervisor shows ``eawfd`` as the process name in
+    macOS App Background Activity / Linux ``systemctl`` / Windows
+    Services. Falls back to ``<python> -m eawf.daemon.main`` when the
+    console script is not on ``PATH`` (uncommon, but possible in
+    bare-checkout dev shells).
+
+    Returns:
+        Argv list ready to be embedded in a service template's
+        ``ProgramArguments`` / ``ExecStart``. Always at least one
+        element; the first element is the program name the supervisor
+        will display.
+    """
+    binary = shutil.which("eawfd")
+    if binary is not None:
+        return [binary]
+    return [sys.executable, "-m", "eawf.daemon.main"]
+
+
 def _render_template(name: str, *, runtime_dir_value: Path) -> str:
-    """Render *name* with ``{{ runtime_dir }}`` substituted.
+    """Render *name* with template variables substituted.
+
+    Variables exposed to the template:
+
+    - ``runtime_dir``: Resolved runtime directory path.
+    - ``eawfd_argv``: Argv list for the daemon entry point; the first
+      element is the program name the supervisor displays.
+    - ``eawfd_program``: First element of ``eawfd_argv`` for plist
+      ``Program`` keys that take a single string.
 
     Args:
         name: Template filename under :data:`_TEMPLATE_DIR`.
@@ -134,7 +165,12 @@ def _render_template(name: str, *, runtime_dir_value: Path) -> str:
         autoescape=False,  # systemd / launchd templates are not HTML
     )
     template = env.get_template(name)
-    return template.render(runtime_dir=str(runtime_dir_value))
+    eawfd_argv = _resolve_eawfd_binary()
+    return template.render(
+        runtime_dir=str(runtime_dir_value),
+        eawfd_argv=eawfd_argv,
+        eawfd_program=eawfd_argv[0],
+    )
 
 
 def _systemd_unit_path() -> Path:

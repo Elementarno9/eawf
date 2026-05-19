@@ -361,8 +361,16 @@ def run(*, foreground: bool = True) -> int:
 
 
 def main() -> None:
-    """CLI script entry: ``python -m eawf.daemon.main`` calls this."""
-    sys.exit(run(foreground=True))
+    """CLI script entry: ``python -m eawf.daemon.main`` calls this.
+
+    Defaults to non-foreground so auto-spawned daemons write to the
+    runtime log file (``<runtime_dir>/eawfd.log``). Pass
+    ``--foreground`` to keep logs on stderr instead — used by
+    ``eawf daemon run --foreground`` and the per-OS service templates
+    (systemd/launchd both pipe stdout/stderr to the same log path).
+    """
+    foreground = "--foreground" in sys.argv[1:]
+    sys.exit(run(foreground=foreground))
 
 
 if __name__ == "__main__":

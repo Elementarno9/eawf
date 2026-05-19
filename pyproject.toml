@@ -33,6 +33,7 @@ windows = ["pywin32>=306"]
 [project.scripts]
 eawf = "eawf.cli.app:main"
 ea = "eawf.cli.app:main"
+eawfd = "eawf.daemon.main:main"
 
 [tool.uv]
 package = true

@@ -3,8 +3,8 @@ Description=eawf coordinator daemon (eawfd)
 After=default.target
 
 [Service]
-Type=notify
-ExecStart=/usr/bin/env uv tool run eawf daemon run --foreground
+Type=simple
+ExecStart={{ eawfd_argv | join(' ') }} --foreground
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
