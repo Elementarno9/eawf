@@ -187,6 +187,7 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_REGISTRY_PATH",
         "EAWF_STATE",
         "EAWF_DAEMON_IDLE_TIMEOUT",
+        "EAWF_DAEMON_SESSION_TTL",
         "EAWF_LOCK_TIMEOUT",
         "EAWF_SKIP_GLOBAL_HOOKS",
     }
