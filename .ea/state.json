@@ -1492,6 +1492,17 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Per-wave token-budget cap enforcement (warn 75% / block 100%). Wave.token_budget field already present (B028); only enforcement layer remains. Targets v0.4 KERNEL budget governor scope."
+    },
+    "B067": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-19T19:07:20.948384Z",
+      "id": "B067",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Native eawfd launcher binary so macOS Activity Monitor shows 'eawfd' instead of 'python3'"
     }
   },
   "current": {
@@ -2873,7 +2884,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T17:18:50.528069Z",
+  "updated_at": "2026-05-19T19:07:20.948384Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
