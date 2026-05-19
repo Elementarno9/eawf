@@ -1498,8 +1498,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
+    "active_wave_ids": [
+      "P24-I02-W01"
+    ],
+    "iter_id": "P24-I02",
     "phase_id": "P24",
     "project_code": "EAWF",
     "subproject_id": null
@@ -2308,6 +2310,19 @@
         "P24-I01-W10"
       ]
     },
+    "P24-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P24-I02",
+      "opened_at": "2026-05-19T17:03:00.543589Z",
+      "phase_id": "P24",
+      "status": "active",
+      "title": "P24-I02: replay_wal + session_ttl wiring (reactive followup)",
+      "wave_ids": [
+        "P24-I02-W01"
+      ]
+    },
     "P25-I01": {
       "audit_id": null,
       "closed_at": null,
@@ -2737,7 +2752,8 @@
       ],
       "id": "P24",
       "iter_ids": [
-        "P24-I01"
+        "P24-I01",
+        "P24-I02"
       ],
       "opened_at": "2026-05-18T19:45:10.042911Z",
       "outcome_ids": [],
@@ -2859,7 +2875,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T17:01:24.301617Z",
+  "updated_at": "2026-05-19T17:03:33.757134Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7702,6 +7718,32 @@
       "status": "closed",
       "success_criteria": [],
       "title": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I02-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/daemon/main.py",
+        "tests/daemon/test_main_boot.py"
+      ],
+      "id": "P24-I02-W01",
+      "iter_id": "P24-I02",
+      "opened_at": "2026-05-19T17:03:27.619519Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [],
+      "title": "fix: wire replay_wal + session_ttl into daemon.main.run() (audit F1+F2)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
