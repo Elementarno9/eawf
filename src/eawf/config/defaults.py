@@ -308,6 +308,20 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "strictness": "full_strict_schema_before_code",
         "id_padding": 2,
     },
+    "daemon": {
+        # When True, state mutations route through the daemon's
+        # ``state.mutate`` RPC. Default False until P24 W10 closes;
+        # will flip default True thereafter (per authority-map §3 + the
+        # V1 carve-out window for daemonless readers).
+        "proxy_enabled": False,
+        # Idle window after which the daemon self-shuts-down when no
+        # subscribers or in-flight mutations are live (seconds).
+        # Aligned with the Anthropic prompt-cache TTL (C02 §4 D11).
+        "idle_timeout_seconds": 300,
+        # Per-handle TTL for the session table sweep (seconds);
+        # W07 wires the sweep.
+        "session_handle_ttl_seconds": 86400,
+    },
 }
 
 

@@ -55,9 +55,19 @@ class MethodContext:
             catch-up + bounded reads. ``None`` when the daemon runs in
             a context without an on-disk store (unit tests only).
         state_path: Filesystem path to ``state.json`` used by the
-            ``agent.*`` methods to inspect wave / session rows.
-            ``None`` when the daemon runs without an on-disk state
-            (unit tests; daemonless paths).
+            ``agent.*`` + ``state.*`` methods to inspect wave / session
+            rows + mutate state. ``None`` when the daemon runs without
+            an on-disk state (unit tests; daemonless paths).
+        wal_dir: Filesystem path to the daemon's outcome-WAL directory
+            (typically ``<runtime_dir>/wal/``). Owned by
+            :mod:`eawf.daemon.methods.state` for the
+            ``state.mutate`` algorithm (W09). ``None`` when the daemon
+            runs without an on-disk WAL (unit tests; daemonless paths).
+        idempotency_cache: In-memory cache for ``state.mutate``
+            idempotency replay (TTL 60 s per Q11). The cache is
+            attached lazily by the mutator on first access; legacy
+            contexts without the field get one added on demand. The
+            durable replay guarantee lives in the WAL (C02 §5.6).
         last_activity: ``time.monotonic()`` value of the most recent
             non-subscribe RPC dispatch. Refreshed by the server in
             :func:`eawf.daemon.server._process_frame` and consumed by
@@ -76,6 +86,8 @@ class MethodContext:
     bus: Any = field(default=None)
     event_path: Any = field(default=None)
     state_path: Any = field(default=None)
+    wal_dir: Any = field(default=None)
+    idempotency_cache: Any = field(default=None)
     last_activity: float = field(default_factory=time.monotonic)
 
     def touch_activity(self) -> None:

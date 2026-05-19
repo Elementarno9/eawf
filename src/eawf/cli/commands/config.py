@@ -129,6 +129,10 @@ class _ConfigSchema(BaseModel):
     docs: dict[str, Any]
     commands: dict[str, Any]
     state_schema: dict[str, Any]
+    # ``daemon`` section landed in P24-W09 alongside the ``state.mutate`` RPC.
+    # Treated as ``dict[str, Any]`` until C03-IMPL hardens the per-key
+    # contract (see :mod:`eawf.config.defaults` for the shipped schema).
+    daemon: dict[str, Any]
 
 
 # --- Sub-app construction ---------------------------------------------------

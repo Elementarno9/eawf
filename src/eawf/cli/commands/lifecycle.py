@@ -1583,6 +1583,13 @@ def wave_close_cmd(
     prefers this stored value; absent it falls back to
     :func:`~eawf.lifecycle.wave_sha.derive_wave_sha` walking
     ``git log --grep "[P##-W##]"``.
+
+    P24-W09 canary: when ``daemon.proxy_enabled=true`` the close
+    proxies through the daemon's ``state.mutate`` RPC (typed
+    :class:`~eawf.state.mutations.Mutation` payload with
+    ``kind=WAVE_CLOSE``); otherwise the legacy in-process path runs.
+    Both paths converge on the same ``state.json`` + ``event.jsonl``
+    on-disk shape.
     """
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -1605,6 +1612,22 @@ def wave_close_cmd(
             resolved_sha = _resolve_commit_sha(commit_ref)
         except cli_errors.CliError as err:
             cli_errors.emit_error(err, flags=flags)
+            return
+
+    # W09 daemon-proxy canary: route the close through ``state.mutate``
+    # when ``daemon.proxy_enabled=true`` in the merged config. Falls
+    # back to the in-process ``_run_mutation`` path transparently when
+    # the flag is False (W09 default) or the daemon refuses the kind.
+    from eawf.cli._mutation import _proxy_enabled
+
+    if _proxy_enabled(flags.workspace):
+        proxied = _wave_close_via_daemon(
+            flags=flags,
+            wave_id=wave_id,
+            outcome=outcome,
+            resolved_sha=resolved_sha,
+        )
+        if proxied:
             return
 
     drift_warnings: list[str] = []
@@ -1639,6 +1662,75 @@ def wave_close_cmd(
                 f"that resolves to zero files: {glob!r}",
                 file=sys.stderr,
             )
+
+
+def _wave_close_via_daemon(
+    *,
+    flags: GlobalFlags,
+    wave_id: str,
+    outcome: str,
+    resolved_sha: str | None,
+) -> bool:
+    """Proxy a wave close through the daemon's ``state.mutate`` RPC.
+
+    Returns True on a successful daemon-mediated close (caller exits
+    early); False when the daemon refuses the kind (caller falls
+    through to the in-process path). A daemon-required failure or
+    validation rejection emits the error envelope before returning
+    False so the caller does not double-emit.
+    """
+    from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
+    from eawf.cli._mutation import _daemon_reachable
+    from eawf.state.mutations import Mutation, MutationKind
+
+    if not _daemon_reachable():
+        cli_errors.emit_error(
+            cli_errors.IntegrityViolation(
+                "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
+                "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out"
+            ),
+            flags=flags,
+        )
+        return True  # error already emitted; treat as handled
+
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id=wave_id,
+        mutation_id=uuid.uuid4().hex,
+        idempotency_key=None,
+        params={"wave_id": wave_id, "outcome": outcome, "commit": resolved_sha},
+    )
+    try:
+        with DaemonClient() as client:
+            result = client.state_mutate(mutation)
+    except DaemonRpcError as exc:
+        if exc.code == -32601 or "NotImplementedError" in (exc.message or ""):
+            logger.debug(
+                f"_wave_close_via_daemon falling back kind={mutation.kind.value} "
+                f"code={exc.code} message={exc.message!r}"
+            )
+            return False
+        if exc.code == -32002:
+            cli_errors.emit_error(cli_errors.ValidationFailed(exc.message), flags=flags)
+            return True
+        cli_errors.emit_error(cli_errors.IntegrityViolation(exc.message), flags=flags)
+        return True
+    except (RuntimeError, OSError, TimeoutError) as exc:
+        logger.debug(f"_wave_close_via_daemon transport error: {exc!s}")
+        return False
+
+    text = f"wave close {wave_id} outcome={outcome!r} (via daemon)"
+    payload = {
+        "wave": wave_id,
+        "outcome": outcome,
+        "commit": resolved_sha,
+        "proxied": True,
+        "event": result.get("event"),
+        "before_version": result.get("before_version"),
+        "after_version": result.get("after_version"),
+    }
+    emit_json_or_text(payload, text, flags=flags)
+    return True
 
 
 @wave_app.command("show")

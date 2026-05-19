@@ -1,11 +1,23 @@
 """Transactional wrapper for state-mutating CLI handlers.
 
-Acquires the sibling lock for ``state.json``, yields the typed
-:class:`~eawf.state.models.State` for the caller to mutate in place,
-then validates and atomically writes it back — all under one lock
-acquisition so concurrent writers serialise.
+Two entry points coexist in this module:
 
-Library mutators consumed by this wrapper must:
+* :func:`state_transaction` — the legacy in-process context manager.
+  Acquires the sibling lock for ``state.json``, yields the typed
+  :class:`~eawf.state.models.State` for the caller to mutate in place,
+  then validates and atomically writes it back. The full read-modify-
+  write runs under one lock acquisition so concurrent writers serialise.
+
+* :func:`state_mutate` (P24-W09) — the daemon-proxy entry point. Builds
+  a typed :class:`~eawf.state.mutations.Mutation` payload and proxies it
+  through the daemon's ``state.mutate`` RPC when ``daemon.proxy_enabled``
+  is ``true`` in the merged config and the daemon is reachable. When
+  proxy mode is off (W09 default) or the daemon is unavailable on a
+  carve-out (reads only), the helper falls back to ``state_transaction``
+  with the caller-supplied apply function (V1 carve-out per
+  authority-map §3).
+
+Library mutators consumed by :func:`state_transaction` must:
 
 1. Take the typed ``State`` and mutate it in place (e.g.
    ``state.goals = goals``; ``state.updated_at = now``).
@@ -20,17 +32,22 @@ helper holds ``portalock(state.json)`` only; sibling locks for
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import orjson
 
 from eawf.cli import errors as cli_errors
 from eawf.lock import portalock
 from eawf.state.models import State
+from eawf.state.mutations import Mutation
 from eawf.state.writer import atomic_write_json_locked
 from eawf.validate.strict import validate_state
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -100,3 +117,146 @@ def state_transaction(
             atomic_write_json_locked(state_path, new_payload)
     except portalock.LockTimeout as exc:
         raise cli_errors.LockConflict(str(exc)) from exc
+
+
+# ---- W09 daemon-proxy entry point ------------------------------------------
+
+
+def _proxy_enabled(workspace: Path | None) -> bool:
+    """Return True when the merged config enables daemon proxying.
+
+    Resolves ``daemon.proxy_enabled`` through the layered-config merge
+    (built-in → global → workspace → repo → local → env). A missing or
+    ill-typed value defaults to ``False`` — the V1 carve-out window
+    is the active state until W10 flips the default.
+    """
+    from eawf.config.layered import merge_config
+
+    repo = workspace if workspace is not None else Path.cwd()
+    try:
+        merged, _ = merge_config(workspace=workspace, repo=repo)
+    except (OSError, ValueError, KeyError) as exc:
+        logger.debug(f"_proxy_enabled merge_config failed: {exc!s}; default proxy_enabled=False")
+        return False
+    daemon_cfg = merged.get("daemon")
+    if not isinstance(daemon_cfg, dict):
+        return False
+    value = daemon_cfg.get("proxy_enabled", False)
+    return bool(value)
+
+
+def _daemon_reachable(runtime_dir: Path | None = None) -> bool:
+    """Return True when the daemon is up and answering ``daemon.ping``.
+
+    Used by :func:`state_mutate` to decide between the proxy path and
+    the daemonless fallback (per V1 carve-out: reads + recovery shell
+    + CI). Probes via :class:`~eawf.cli._daemon_client.DaemonClient`
+    so the helper exercises the same wire format as the production
+    path; transport errors map to a False return without raising so
+    the caller can fall through to the in-process path on a clean
+    "daemon down" verdict.
+    """
+    from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        with DaemonClient(runtime_dir=runtime_dir) as client:
+            client.call("daemon.ping")
+    except (DaemonRpcError, RuntimeError, OSError, TimeoutError, NotImplementedError) as exc:
+        logger.debug(f"_daemon_reachable False reason={exc!s}")
+        return False
+    return True
+
+
+def state_mutate(
+    state_path: Path,
+    mutation: Mutation,
+    *,
+    apply: Any,
+    idempotency_key: str | None = None,
+    workspace: Path | None = None,
+) -> dict[str, Any]:
+    """Apply *mutation* via the daemon proxy or the in-process fallback.
+
+    The dispatch policy follows AGENTS rule 4 + the W09 spike brief:
+
+    * When ``daemon.proxy_enabled`` is ``true`` AND the daemon is
+      reachable: marshal the mutation across the daemon ``state.mutate``
+      RPC. The daemon owns the WAL + event-append + bus-publish
+      ordering; the CLI gets back the event envelope verbatim.
+    * When ``daemon.proxy_enabled`` is ``true`` AND the daemon is
+      **not** reachable AND the mutation is a writer: refuse with
+      :class:`cli_errors.IntegrityViolation` — per F20 the daemon-
+      required envelope keeps the daemonless-write path closed.
+    * When ``daemon.proxy_enabled`` is ``false`` (W09 default) OR the
+      daemon refuses the kind with ``NotImplementedError``: fall back
+      to the in-process path. The *apply* callable receives the typed
+      :class:`State` under :func:`state_transaction`; the caller is
+      responsible for invoking the lifecycle helper + appending the
+      event row exactly as the pre-W09 surface did.
+
+    Args:
+        state_path: Absolute path to ``state.json``.
+        mutation: Typed :class:`Mutation` payload. ``mutation.kind`` is
+            the dispatch discriminator; ``mutation.params`` carries the
+            kind-specific args.
+        apply: Callable taking the typed :class:`State` for the in-
+            process fallback. Receives the same arguments the legacy
+            ``state_transaction`` user code did (state → mutation in
+            place). The callable is invoked only on the fallback path;
+            the daemon path ignores it.
+        idempotency_key: Optional retry key for the daemon path; shadows
+            :attr:`Mutation.idempotency_key` when both are set.
+        workspace: Workspace anchor for config-merge resolution
+            (typically ``flags.workspace``).
+
+    Returns:
+        Dict with at least ``proxied: bool`` (True when the daemon
+        owned the write) plus the result returned by the daemon (when
+        proxied) or an empty dict (in-process fallback path; the
+        caller's apply function already appended its own envelope).
+
+    Raises:
+        IntegrityViolation: When ``daemon.proxy_enabled=true`` AND the
+            daemon is unreachable AND the mutation is a writer (F20).
+        ValidationFailed: When the daemon rejects the mutation with
+            ``-32002 validation_failed`` or the in-process post-
+            mutation validation fails.
+        LockConflict: When the in-process fallback cannot acquire the
+            sibling lock within the timeout.
+    """
+    from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    proxy_enabled = _proxy_enabled(workspace)
+    if proxy_enabled:
+        if not _daemon_reachable():
+            raise cli_errors.IntegrityViolation(
+                "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
+                "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out"
+            )
+        try:
+            with DaemonClient() as client:
+                result = client.state_mutate(mutation, idempotency_key=idempotency_key)
+        except DaemonRpcError as exc:
+            if exc.code == -32601:  # method not found — daemon predates W09
+                logger.debug(f"state_mutate daemon-rpc method-not-found kind={mutation.kind.value}")
+                # Fall through to the in-process path so the CLI still
+                # works against pre-W09 daemons; the V1 read-bypass set
+                # treats this as a clean fallback.
+            elif "NotImplementedError" in (exc.message or ""):
+                logger.debug(
+                    f"state_mutate daemon-rpc not-implemented kind={mutation.kind.value}; "
+                    "falling back to in-process"
+                )
+            elif exc.code == -32002:
+                raise cli_errors.ValidationFailed(exc.message) from exc
+            else:
+                raise
+        else:
+            return {"proxied": True, "result": result}
+
+    # In-process fallback path (W09 default; also reached when the
+    # daemon refuses the kind with NotImplementedError per the apply
+    # registry's reserved-for-C03-IMPL stub).
+    with state_transaction(state_path) as state:
+        apply(state)
+    return {"proxied": False, "result": {}}
