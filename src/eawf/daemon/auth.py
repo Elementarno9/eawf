@@ -149,7 +149,7 @@ def _verify_linux(sock: socket.socket) -> PeerCredential:
     fmt = "3i"
     raw = sock.getsockopt(
         socket.SOL_SOCKET,
-        socket.SO_PEERCRED,  # type: ignore[attr-defined]
+        socket.SO_PEERCRED,  # type: ignore[attr-defined,unused-ignore]
         struct.calcsize(fmt),
     )
     pid, uid, gid = struct.unpack(fmt, raw)
@@ -173,7 +173,7 @@ def _verify_darwin(sock: socket.socket) -> PeerCredential:
     Raises:
         OSError: When the kernel rejects ``getsockopt``.
     """
-    raw = sock.getsockopt(_SOL_LOCAL, socket.LOCAL_PEERCRED, _DARWIN_XUCRED_BYTES)
+    raw = sock.getsockopt(_SOL_LOCAL, socket.LOCAL_PEERCRED, _DARWIN_XUCRED_BYTES)  # type: ignore[attr-defined,unused-ignore]
     _version, uid = struct.unpack("II", raw[:8])
     # macOS xucred lacks a usable GID for the connecting peer (the
     # cr_groups array is the *daemon's* groups from the bind side, not
