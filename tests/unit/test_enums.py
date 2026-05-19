@@ -462,6 +462,7 @@ def test_store_kind_values() -> None:
         "polisher_report",
         "operator_report",
         "domain_specialist_report",
+        "subscription_lag",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

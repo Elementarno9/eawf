@@ -10,6 +10,13 @@ binds the Unix domain socket and wires the :class:`MethodContext`.
 Tests that exercise the framing layer drive
 :func:`handle_connection` directly with paired ``asyncio.StreamReader`` /
 ``asyncio.StreamWriter`` halves.
+
+W06 adds the subscription bus: every accepted connection participates
+in fan-out via :class:`eawf.daemon.bus.EventBus` carried on
+``ctx.bus``. The connection handler intercepts ``event.subscribe`` /
+``state.subscribe`` frames before normal dispatch and switches into a
+streaming loop that pushes ``event.push`` notifications down the wire
+until the peer disconnects or the subscriber is unregistered.
 """
 
 from __future__ import annotations
@@ -18,18 +25,25 @@ import asyncio
 import contextlib
 import logging
 import socket
+import uuid
 from typing import Any, cast
 
 import orjson
 
 # Import to ensure handlers register before dispatch runs.
-import eawf.daemon.methods.daemon  # noqa: F401
+import eawf.daemon.methods.daemon
+import eawf.daemon.methods.event
+import eawf.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
 from eawf.daemon.auth import UnauthorizedError, verify_peer_credential
+from eawf.daemon.bus import CatchUpTooLargeError, EventBus, Subscriber
 from eawf.daemon.methods import (
     MethodContext,
     MethodNotFoundError,
     dispatch,
 )
+from eawf.daemon.methods.event import subscribe as run_subscribe
+from eawf.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
+from eawf.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +55,7 @@ METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 UNAUTHORIZED = -32000
+CATCH_UP_TOO_LARGE = -32008
 DAEMON_SHUTTING_DOWN = -32009
 
 
@@ -101,6 +116,52 @@ def _success(req_id: str | int | None, result: dict[str, Any]) -> dict[str, Any]
     return {"jsonrpc": "2.0", "id": req_id, "result": result}
 
 
+def _push_frame(envelope: Envelope) -> bytes:
+    """Build a single ``event.push`` notification frame.
+
+    Args:
+        envelope: Envelope to wrap into the notification.
+
+    Returns:
+        Newline-terminated JSON-RPC notification frame.
+    """
+    notification = {
+        "jsonrpc": "2.0",
+        "method": "event.push",
+        "params": {"event": envelope.model_dump(mode="json")},
+    }
+    return _frame(notification)
+
+
+def _parse_frame(line: bytes) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Decode and validate a single JSON-RPC request frame.
+
+    Args:
+        line: Raw bytes for one frame (no trailing newline).
+
+    Returns:
+        Tuple ``(payload, error)``. Exactly one entry is non-None; on
+        decode/validation failure the error dict is a ready-to-send
+        JSON-RPC error envelope.
+    """
+    try:
+        payload = orjson.loads(line)
+    except orjson.JSONDecodeError:
+        return None, _error(None, PARSE_ERROR, "parse error")
+    if not isinstance(payload, dict):
+        return None, _error(None, INVALID_REQUEST, "frame is not a JSON object")
+    req_id = payload.get("id")
+    if payload.get("jsonrpc") != "2.0":
+        return None, _error(req_id, INVALID_REQUEST, "missing jsonrpc=2.0")
+    method = payload.get("method")
+    if not isinstance(method, str) or not method:
+        return None, _error(req_id, INVALID_REQUEST, "missing method")
+    params = payload.get("params", {})
+    if not isinstance(params, dict):
+        return None, _error(req_id, INVALID_PARAMS, "params must be an object")
+    return payload, None
+
+
 async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     """Decode + dispatch a single JSON-RPC frame.
 
@@ -111,21 +172,13 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     Returns:
         JSON-RPC response envelope (success or error).
     """
-    try:
-        payload = orjson.loads(line)
-    except orjson.JSONDecodeError:
-        return _error(None, PARSE_ERROR, "parse error")
-    if not isinstance(payload, dict):
-        return _error(None, INVALID_REQUEST, "frame is not a JSON object")
+    payload, error = _parse_frame(line)
+    if error is not None:
+        return error
+    assert payload is not None
     req_id = payload.get("id")
-    if payload.get("jsonrpc") != "2.0":
-        return _error(req_id, INVALID_REQUEST, "missing jsonrpc=2.0")
-    method = payload.get("method")
-    if not isinstance(method, str) or not method:
-        return _error(req_id, INVALID_REQUEST, "missing method")
-    params = payload.get("params", {})
-    if not isinstance(params, dict):
-        return _error(req_id, INVALID_PARAMS, "params must be an object")
+    method = payload["method"]
+    params = payload.get("params", {}) or {}
     try:
         result = await dispatch(method, ctx, params)
     except MethodNotFoundError:
@@ -156,6 +209,129 @@ async def process_frame_bytes(payload: bytes, ctx: MethodContext) -> bytes:
     """
     response = await _process_frame(payload.rstrip(b"\n"), ctx)
     return _frame(response)
+
+
+async def _watch_reader_eof(
+    reader: asyncio.StreamReader,
+    subscriber: Subscriber,
+    bus: EventBus,
+    connection_id: str,
+) -> None:
+    """Watch *reader* for EOF and close the subscriber when the peer leaves.
+
+    The subscribe path stops reading frames after the initial request,
+    so peer-disconnect must be observed independently. This coroutine
+    runs in parallel with :func:`_stream_subscriber`; when
+    ``reader.readline()`` returns empty (EOF) the subscriber is
+    unregistered, which sets its ``event`` so the streamer loop exits.
+
+    Args:
+        reader: Reader half of the connection.
+        subscriber: Live subscriber.
+        bus: Event bus owning *subscriber*.
+        connection_id: Connection id registered with the bus.
+    """
+    try:
+        while True:
+            line = await reader.readline()
+            if not line:
+                break
+            # Extra frames after subscribe are not part of the W06
+            # contract; ignore them quietly rather than fault the
+            # connection.
+            logger.debug(f"_watch_reader_eof unexpected-frame connection={connection_id!r}")
+    finally:
+        bus.unregister(connection_id)
+
+
+async def _stream_subscriber(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    bus: EventBus,
+    subscriber: Subscriber,
+    backlog: list[Envelope],
+    connection_id: str,
+) -> None:
+    """Flush *backlog* then live-stream pushes until the subscriber closes.
+
+    Args:
+        reader: Reader half of the connection (used to watch for EOF).
+        writer: Writer half of the connection.
+        bus: Event bus owning *subscriber*.
+        subscriber: Subscriber returned by
+            :func:`eawf.daemon.methods.event.subscribe`.
+        backlog: Catch-up envelopes the subscriber missed; flushed in
+            order before live push begins.
+        connection_id: Connection id registered with the bus.
+    """
+    eof_task = asyncio.create_task(_watch_reader_eof(reader, subscriber, bus, connection_id))
+    try:
+        for env in backlog:
+            writer.write(_push_frame(env))
+            try:
+                await writer.drain()
+            except ConnectionResetError, BrokenPipeError:
+                return
+        async for env in bus.iter_subscriber_pushes(subscriber):
+            writer.write(_push_frame(env))
+            try:
+                await writer.drain()
+            except ConnectionResetError, BrokenPipeError:
+                return
+    finally:
+        eof_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await eof_task
+
+
+async def _handle_subscribe(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    ctx: MethodContext,
+    payload: dict[str, Any],
+    connection_id: str,
+) -> Subscriber | None:
+    """Register a subscriber and stream pushes for the rest of the connection.
+
+    Args:
+        reader: Reader half of the connection (used to watch for EOF
+            so the streamer exits when the peer disconnects).
+        writer: Writer half of the connection.
+        ctx: Server context; ``ctx.bus`` MUST be a live
+            :class:`EventBus`.
+        payload: Parsed JSON-RPC request payload.
+        connection_id: Stable identifier for the owning connection.
+
+    Returns:
+        The registered subscriber on success (caller unregisters on
+        teardown) or ``None`` when subscribe failed and an error was
+        already written to *writer*.
+    """
+    req_id = payload.get("id")
+    params = payload.get("params", {}) or {}
+    if not isinstance(ctx.bus, EventBus):
+        writer.write(_frame(_error(req_id, INTERNAL_ERROR, "event bus not configured")))
+        await writer.drain()
+        return None
+    try:
+        sub, backlog = run_subscribe(
+            ctx.bus,
+            connection_id=connection_id,
+            params=params,
+            event_path=ctx.event_path,
+        )
+    except CatchUpTooLargeError as exc:
+        writer.write(_frame(_error(req_id, CATCH_UP_TOO_LARGE, str(exc))))
+        await writer.drain()
+        return None
+    except ValueError as exc:
+        writer.write(_frame(_error(req_id, INVALID_PARAMS, str(exc))))
+        await writer.drain()
+        return None
+    writer.write(_frame(_success(req_id, {"ok": True, "backlog_count": len(backlog)})))
+    await writer.drain()
+    await _stream_subscriber(reader, writer, ctx.bus, sub, backlog, connection_id)
+    return sub
 
 
 async def handle_connection(
@@ -196,10 +372,25 @@ async def handle_connection(
             # UDS path). Fall through to accept; the upper layer must
             # already gate access via DACL / SID.
             logger.debug("handle_connection skip peer-cred unsupported-platform")
+    connection_id = uuid.uuid4().hex
+    subscriber: Subscriber | None = None
     try:
         while True:
             line = await reader.readline()
             if not line:
+                return
+            payload, error = _parse_frame(line.rstrip(b"\n"))
+            if error is not None:
+                writer.write(_frame(error))
+                await writer.drain()
+                continue
+            assert payload is not None
+            method = payload["method"]
+            if method in SUBSCRIBE_METHODS:
+                subscriber = await _handle_subscribe(reader, writer, ctx, payload, connection_id)
+                # Subscribe streams until the peer disconnects, so we
+                # fall through to the cleanup block; further frames on
+                # this connection are not expected.
                 return
             response = await _process_frame(line.rstrip(b"\n"), ctx)
             writer.write(_frame(response))
@@ -207,6 +398,8 @@ async def handle_connection(
     except ConnectionResetError, BrokenPipeError:
         logger.debug("handle_connection peer-disconnect")
     finally:
+        if subscriber is not None and isinstance(ctx.bus, EventBus):
+            ctx.bus.unregister(connection_id)
         writer.close()
         with contextlib.suppress(ConnectionResetError, BrokenPipeError):
             await writer.wait_closed()

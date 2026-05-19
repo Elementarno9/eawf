@@ -119,13 +119,20 @@ async def status(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         Dict matching :class:`StatusResult`.
     """
     StatusParams.model_validate(params)
+    # W06 wires the live subscriber counter via ``ctx.bus``; older
+    # contexts (legacy tests, daemonless paths) fall through to the
+    # static field which stays at its default ``0``.
+    if ctx.bus is not None and hasattr(ctx.bus, "active_subscriptions"):
+        active_subs = int(ctx.bus.active_subscriptions)
+    else:
+        active_subs = ctx.active_subscriptions
     result = StatusResult(
         pid=ctx.pid,
         version=ctx.version,
         protocol_version=ctx.protocol_version,
         started_at=ctx.started_at,
         uptime_seconds=_uptime_seconds(),
-        active_subscriptions=ctx.active_subscriptions,
+        active_subscriptions=active_subs,
         in_flight_mutations=ctx.in_flight_mutations,
         last_event_id=ctx.last_event_id,
     )

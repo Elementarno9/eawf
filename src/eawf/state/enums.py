@@ -283,6 +283,7 @@ class StoreKind(StrEnum):
     POLISHER_REPORT = "polisher_report"
     OPERATOR_REPORT = "operator_report"
     DOMAIN_SPECIALIST_REPORT = "domain_specialist_report"
+    SUBSCRIPTION_LAG = "subscription_lag"
 
 
 class ArtifactKind(StrEnum):
