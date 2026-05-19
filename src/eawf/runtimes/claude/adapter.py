@@ -23,6 +23,7 @@ from eawf.runtimes.adapter import (
     RuntimeAdapter,
     SessionResumeFailedError,
 )
+from eawf.runtimes.selector import runtime_supports
 from eawf.state.models import SessionAttempt, Wave
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate_limit_error|rate[_ -]?limit)\b", re.IGNORECASE)
@@ -45,8 +46,12 @@ class ClaudeAdapter:
 
     id: str = "claude-code"
     cli_binary: str = "claude"
-    accepts_continue: bool = True
-    supports_cache_control: bool = True
+    # ``accepts_continue`` + ``supports_cache_control`` derive from the
+    # YAML-backed capability matrix (C07a §G9 + D8) via
+    # :func:`eawf.runtimes.selector.runtime_supports` — no parallel
+    # hard-coded table per W13 success criterion 3.
+    accepts_continue: bool = runtime_supports("claude-code", "session_resume")
+    supports_cache_control: bool = runtime_supports("claude-code", "cache_control")
     error_classes_emitted: tuple[ErrorClass, ...] = (
         "RUNTIME_RATE_LIMIT",
         "RUNTIME_SERVER_ERROR",

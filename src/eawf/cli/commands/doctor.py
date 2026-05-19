@@ -43,17 +43,25 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import typer
 
 import eawf
-from eawf.cli.errors import InstrumentMissing, emit_error
+from eawf.cli.errors import InstrumentMissing, ValidationFailed, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.doctor import checks as doctor_checks
 from eawf.doctor.report import overall_status, to_payload, to_text
 from eawf.install.instrument_probe import resolve_cache_path
+from eawf.runtimes.capabilities import (
+    RUNTIME_IDS,
+    DriftRow,
+    ProbeResult,
+    detect_drift,
+    render_drift_table,
+)
+from eawf.runtimes.probes.sdk_baseline import probe_all
 
 logger = logging.getLogger(__name__)
 
@@ -235,9 +243,72 @@ def _maybe_clear_cache(workspace: Path | None) -> None:
     if target.exists():
         try:
             target.unlink()
-            logger.info(f"_maybe_clear_cache: removed {target}")
+            logger.info(f"_maybe_clear_cache removed={target}")
         except OSError as exc:
             logger.warning(f"_maybe_clear_cache: cannot remove {target}: {exc}")
+
+
+def _drift_row_to_payload(row: DriftRow) -> dict[str, str]:
+    """JSON-friendly mapping for a single :class:`DriftRow`."""
+    return {
+        "capability": row.capability,
+        "declared": row.declared,
+        "status": row.status,
+        "detail": row.detail,
+    }
+
+
+def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
+    """Run the capability-matrix drift detector for one runtime.
+
+    Args:
+        runtime_id: Canonical runtime id (``claude-code`` / ``codex`` /
+            ``opencode``).
+
+    Returns:
+        ``(payload, text)`` tuple. ``payload`` is the JSON envelope shape
+        emitted via :func:`emit_json_or_text`; ``text`` is the
+        column-aligned rendered table the TTY branch prints.
+
+    Raises:
+        ValidationFailed: ``runtime_id`` is not one of the three
+            canonical v0.3-v0.5 runtimes.
+    """
+    if runtime_id not in RUNTIME_IDS:
+        raise ValidationFailed(
+            f"unknown runtime: {runtime_id!r} (expected one of {list(RUNTIME_IDS)!r})"
+        )
+
+    snapshot = probe_all()
+    probe_row = next(
+        (row for row in snapshot.runtimes if row.runtime_id == runtime_id),
+        None,
+    )
+    if probe_row is None:
+        # Snapshot always returns rows for every probed runtime, so this
+        # branch is defence-in-depth; the loader-side schema check would
+        # catch a missing row at startup.
+        raise ValidationFailed(f"probe snapshot missing row for runtime: {runtime_id!r}")
+
+    probe = ProbeResult(
+        runtime_id=probe_row.runtime_id,
+        installed=probe_row.installed,
+        observed_flags=probe_row.advertised_sdk_flags,
+    )
+    rows = detect_drift(runtime_id, probe)
+
+    payload: dict[str, Any] = {
+        "runtime": runtime_id,
+        "installed": probe.installed,
+        "drift_rows": [_drift_row_to_payload(row) for row in rows],
+        "ok": all(row.status in {"OK", "UNKNOWN", "MISSING"} for row in rows),
+    }
+    text = render_drift_table(runtime_id, rows)
+    logger.info(
+        f"_run_runtime_drift_check runtime={runtime_id!r} "
+        f"installed={probe.installed} rows={len(rows)}"
+    )
+    return payload, text
 
 
 @doctor_app.callback(invoke_without_command=True)
@@ -257,6 +328,17 @@ def doctor(
             help="Probe `uv tool list` for a user-scope eawf install.",
         ),
     ] = False,
+    runtime: Annotated[
+        str | None,
+        typer.Option(
+            "--runtime",
+            help=(
+                "Report capability-matrix drift for one runtime "
+                "(claude-code | codex | opencode); bypasses the "
+                "install-readiness check set."
+            ),
+        ),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -273,6 +355,15 @@ def doctor(
         no_input=flags.no_input,
         workspace=flags.workspace,
     )
+
+    if runtime is not None:
+        try:
+            payload, text = _run_runtime_drift_check(runtime)
+        except ValidationFailed as exc:
+            emit_error(exc, flags=effective_flags)
+        emit_json_or_text(payload, text, flags=effective_flags)
+        return
+
     if reprobe:
         _maybe_clear_cache(effective_flags.workspace)
 
