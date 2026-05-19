@@ -126,7 +126,13 @@ class WizardAnswers(BaseModel):
       enumerations declared by their respective steps.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # ``frozen=True`` is dropped from the v0.3 model because P25-W16 needs
+    # to carry an immutable mapping (``template_extras``) — Pydantic v2's
+    # frozen models forbid ``dict`` field values from being deep-copied
+    # cleanly. Immutability is now enforced by treating ``WizardAnswers``
+    # as a value object: instances are built once at the CLI boundary and
+    # passed through the pure pipeline without mutation.
+    model_config = ConfigDict(extra="forbid")
 
     state_path: str
     project_code: Annotated[str, Field(min_length=2, max_length=16)]
@@ -147,6 +153,13 @@ class WizardAnswers(BaseModel):
     # ``--write-confirm`` CLI flag was deliberately not surfaced (per the
     # P03 W05 review): exposing a flag with no behaviour is misleading.
     write_confirm: bool = True
+    # ``template_extras`` carries the parsed bootstrap-template payload
+    # when ``eawf init --template <name>`` is used (P25-W16). The wizard
+    # deep-merges these keys into the canonical ``.ea/config.yaml`` after
+    # the structured-answer-derived sections, so template-declared
+    # ``dispatch.session_policy_default`` etc. land on disk verbatim.
+    # ``None`` for the legacy ``--profile`` only path.
+    template_extras: dict[str, Any] | None = None
 
     @field_validator("project_code")
     @classmethod
@@ -270,6 +283,35 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
     }
 
 
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Recursive last-wins merge for the bootstrap-template overlay.
+
+    Used by :func:`_build_config_yaml` to fold a template's parsed YAML
+    (``answers.template_extras``) into the answers-derived base. Rules:
+
+    - For matching nested dict slots, recurse so per-key overrides land
+      precisely (e.g. an ``acceptance.commands`` block in a template
+      extends the base ``acceptance`` map without nuking peer keys).
+    - For every other type pair (list, scalar, type mismatch), the
+      overlay value replaces the base value verbatim. The template is
+      treated as authoritative for the keys it declares.
+
+    Args:
+        base: Answers-derived config payload (mutated in place).
+        overlay: Template-derived YAML payload (read-only).
+
+    Returns:
+        ``base``, after the merge, for chainable calls.
+    """
+    for key, overlay_value in overlay.items():
+        base_value = base.get(key)
+        if isinstance(base_value, dict) and isinstance(overlay_value, dict):
+            _deep_merge(base_value, overlay_value)
+        else:
+            base[key] = overlay_value
+    return base
+
+
 def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     """Serialise ``answers`` into the canonical ``.ea/config.yaml`` shape.
 
@@ -289,7 +331,7 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     byte-stable across re-runs — golden snapshots and pre-commit's
     end-of-file-fixer become idempotent on the second pass.
     """
-    return {
+    base: dict[str, Any] = {
         "schema_version": CONFIG_SCHEMA_VERSION,
         "profiles": {"enabled": list(answers.profiles)},
         # ``adapters`` is the canonical selector list (D14, B056); ``kind``
@@ -308,6 +350,15 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
         "plugins": {"enabled": list(answers.plugins)},
         "mcp": {"enabled": list(answers.mcp)},
     }
+    # P25-W16: when ``eawf init --template <name>`` is used, the parsed
+    # template payload deep-merges into the base. The template's own
+    # ``profiles.enabled`` already populated ``answers.profiles`` at the
+    # CLI boundary, so re-applying it through the merge is a noop on that
+    # key; new keys (``dispatch``, ``planning``, ``audit``, ``ship``,
+    # ``project``) land verbatim.
+    if answers.template_extras:
+        _deep_merge(base, answers.template_extras)
+    return base
 
 
 def run_wizard_no_input(

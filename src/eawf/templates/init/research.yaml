@@ -1,0 +1,27 @@
+# Research bootstrap template (C08 D7 — 3 v0.3 templates).
+#
+# Consumed by ``eawf init --template research``. Merged with operator
+# answers (project_code, project_title) to produce ``.ea/config.yaml``.
+#
+# Per C08 D10: research profile defaults dispatch.session_policy_default
+# to ``continue`` — research skills preserve session context across
+# attempts so the evidence chain (hypotheses + audits + decisions) stays
+# coherent within one investigative arc.
+schema_version: "1.0"
+profiles:
+  enabled: [core, research]
+runtime:
+  preference: [claude, codex]
+dispatch:
+  session_policy_default: continue
+planning:
+  approval: ask
+  max_parallel_waves: 2
+audit:
+  default_checks: [state, evidence_chain]
+ship:
+  require_audit_pass: true
+  require_memory_review: true
+project:
+  goals: []
+  success_metrics: {}

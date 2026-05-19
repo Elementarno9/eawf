@@ -10,6 +10,12 @@ Surface contract:
   :func:`prompt_toolkit.application.create_app_session`.
 - ``eawf init --no-input --project-code DEMO --profile core ...`` runs the
   pure pipeline in :func:`eawf.install.wizard.run_wizard_no_input`.
+- ``eawf init --no-input --profiles core,python ...`` is the comma-list
+  equivalent of repeated ``--profile`` flags (P25-W16 — C08 D7 surface).
+- ``eawf init --no-input --template research ...`` selects a bundled
+  bootstrap template (P25-W16 — three v0.3 templates: research,
+  engineering, reverse-engineering). Mutually exclusive with
+  ``--profiles`` / ``--profile``.
 - ``eawf init --force`` allows the pipeline to overwrite an existing
   ``.ea/state.json`` or ``.ea/config.yaml`` (otherwise init refuses).
 
@@ -31,7 +37,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from pydantic import ValidationError
@@ -46,6 +52,7 @@ from eawf.install.wizard import (
     run_wizard_no_input,
 )
 from eawf.lock import portalock
+from eawf.profiles.discovery import list_init_templates, load_init_template
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +75,101 @@ def _friendly_validation_message(exc: ValidationError) -> str:
     return msg or str(exc)
 
 
+def _parse_profiles_csv(csv: str | None) -> list[str] | None:
+    """Split a ``--profiles a,b,c`` comma list into a deduplicated ordered list.
+
+    Whitespace around commas is tolerated. Empty entries are rejected so
+    ``--profiles ,core`` fails fast instead of silently selecting only
+    ``core``. The order of first appearance is preserved — the wizard's
+    ``profiles`` field is order-significant (composition runs in
+    caller order).
+    """
+    if csv is None:
+        return None
+    parts = [p.strip() for p in csv.split(",")]
+    if any(not p for p in parts):
+        raise cli_errors.InvalidInput(
+            f"--profiles got an empty entry: {csv!r}; comma-separate "
+            "without trailing/leading commas"
+        )
+    seen: list[str] = []
+    for p in parts:
+        if p not in seen:
+            seen.append(p)
+    return seen
+
+
+def _resolve_profiles_and_template(
+    *,
+    profile: list[str] | None,
+    profiles_csv: str | None,
+    template: str | None,
+) -> tuple[list[str] | None, dict[str, Any] | None]:
+    """Resolve the three init-surface flags into ``(profiles, template_extras)``.
+
+    Per C08 D7, the three surfaces (`--profile`, `--profiles`,
+    `--template`) are mutually exclusive: at most one may be passed.
+    Passing none falls through to the wizard default (``["core"]``).
+    Passing more than one raises :class:`InvalidInput` so the operator
+    picks the form they want.
+
+    When ``--template`` is the chosen surface, the template's
+    ``profiles.enabled`` becomes the profiles list and the remaining
+    keys become ``template_extras`` (deep-merged into ``.ea/config.yaml``
+    by :func:`eawf.install.wizard._build_config_yaml`).
+
+    Args:
+        profile: Repeatable ``--profile`` values (legacy v0.1 surface).
+        profiles_csv: ``--profiles a,b,c`` comma list (P25-W16).
+        template: ``--template <name>`` bundled template name (P25-W16).
+
+    Returns:
+        Pair ``(profiles_list, template_extras)``. ``profiles_list`` is
+        ``None`` when no flag chose a profile set (wizard default
+        applies). ``template_extras`` is ``None`` unless ``--template``
+        was selected.
+
+    Raises:
+        InvalidInput: More than one surface used, or unknown template.
+    """
+    chosen = [
+        flag
+        for flag, present in (
+            ("--profile", bool(profile)),
+            ("--profiles", profiles_csv is not None),
+            ("--template", template is not None),
+        )
+        if present
+    ]
+    if len(chosen) > 1:
+        raise cli_errors.InvalidInput(
+            f"profile-selection flags are mutually exclusive: pass at most one of {chosen}"
+        )
+
+    if template is not None:
+        try:
+            payload = load_init_template(template)
+        except cli_errors.CliError:
+            raise
+        template_profiles_section = payload.get("profiles", {})
+        if not isinstance(template_profiles_section, dict):
+            raise cli_errors.InvalidInput(
+                f"init template {template!r}: 'profiles' section must be a mapping"
+            )
+        enabled = template_profiles_section.get("enabled", [])
+        if not isinstance(enabled, list) or not enabled:
+            raise cli_errors.InvalidInput(
+                f"init template {template!r}: 'profiles.enabled' must be a "
+                f"non-empty list of profile names"
+            )
+        return list(enabled), payload
+
+    if profiles_csv is not None:
+        return _parse_profiles_csv(profiles_csv), None
+
+    return (profile if profile else None), None
+
+
 def _build_answers(
     *,
     state_path: Path,
@@ -81,19 +183,24 @@ def _build_answers(
     acceptance_tests: bool,
     acceptance_lint: bool,
     acceptance_typecheck: bool,
+    template_extras: dict[str, Any] | None = None,
 ) -> WizardAnswers:
     """Coerce CLI flag values into a validated :class:`WizardAnswers`.
 
     Translates Typer-side ``None`` defaults into the wizard's expected
     shapes — empty strings are normalised to project_code/title sentinels
     so :class:`WizardAnswers` can apply its own validation. Multichoice
-    flags are coerced to tuples (Pydantic accepts lists, but tuples make
-    :class:`WizardAnswers` ``frozen=True`` happy on the round-trip).
+    flags are coerced to tuples (Pydantic accepts lists; tuples are the
+    canonical wizard-side form).
 
     ``write_confirm`` is intentionally NOT exposed at the CLI surface — it
     is reserved for the interactive questionary wizard (see
     :class:`WizardAnswers` field doc) and has no effect on the
     ``--no-input`` pipeline. The model default (``True``) carries through.
+
+    ``template_extras`` is the parsed bootstrap-template payload (P25-W16);
+    forwarded into the wizard so ``_build_config_yaml`` can deep-merge it
+    into the canonical ``.ea/config.yaml``.
     """
     return WizardAnswers(
         state_path=str(state_path),
@@ -107,6 +214,7 @@ def _build_answers(
         acceptance_tests=acceptance_tests,
         acceptance_lint=acceptance_lint,
         acceptance_typecheck=acceptance_typecheck,
+        template_extras=template_extras,
     )
 
 
@@ -160,9 +268,44 @@ def init_cmd(
         list[str] | None,
         typer.Option(
             "--profile",
-            help="Profiles to enable (repeatable; defaults to 'core').",
+            help=(
+                "Profiles to enable (repeatable; defaults to 'core'). "
+                "Mutually exclusive with --profiles and --template."
+            ),
         ),
     ] = None,
+    profiles: Annotated[
+        str | None,
+        typer.Option(
+            "--profiles",
+            help=(
+                "Comma-separated profiles (e.g. 'core,python'). Equivalent "
+                "to repeated --profile flags. Mutually exclusive with "
+                "--profile and --template."
+            ),
+        ),
+    ] = None,
+    template: Annotated[
+        str | None,
+        typer.Option(
+            "--template",
+            help=(
+                "Bundled bootstrap template (research|engineering|"
+                "reverse-engineering). Mutually exclusive with --profile "
+                "and --profiles. Lists via `eawf init --list-templates`."
+            ),
+        ),
+    ] = None,
+    list_templates: Annotated[
+        bool,
+        typer.Option(
+            "--list-templates",
+            help=(
+                "Print the bundled init templates (one per line) and exit. "
+                "Skips the wizard pipeline entirely."
+            ),
+        ),
+    ] = False,
     runtime: Annotated[
         str,
         typer.Option(
@@ -218,6 +361,23 @@ def init_cmd(
     flags: GlobalFlags = ctx.obj
     target_dir = (target or Path.cwd()).resolve()
 
+    if list_templates:
+        names = list_init_templates()
+        list_payload: dict[str, object] = {"templates": list(names)}
+        text = "\n".join(names) if names else "(no bundled templates)"
+        emit_json_or_text(list_payload, text, flags=flags)
+        return
+
+    try:
+        resolved_profiles, template_extras = _resolve_profiles_and_template(
+            profile=profile,
+            profiles_csv=profiles,
+            template=template,
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+
     if flags.no_input:
         if not project_code:
             cli_errors.emit_error(
@@ -232,7 +392,7 @@ def init_cmd(
                 state_path=state_path,
                 project_code=project_code,
                 project_title=project_title,
-                profiles=profile,
+                profiles=resolved_profiles,
                 runtime=runtime,
                 lifecycle_depth=lifecycle_depth,
                 plugins=plugin,
@@ -240,6 +400,7 @@ def init_cmd(
                 acceptance_tests=acceptance_tests,
                 acceptance_lint=acceptance_lint,
                 acceptance_typecheck=acceptance_typecheck,
+                template_extras=template_extras,
             )
         except ValidationError as exc:
             cli_errors.emit_error(
