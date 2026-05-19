@@ -166,6 +166,12 @@ def _parse_frame(line: bytes) -> tuple[dict[str, Any] | None, dict[str, Any] | N
 async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     """Decode + dispatch a single JSON-RPC frame.
 
+    Refreshes :attr:`MethodContext.last_activity` for every dispatched
+    method EXCEPT those in :data:`SUBSCRIBE_METHODS`; subscribers keep
+    the daemon alive via the live-subscriber gate inside the idle
+    watchdog (C02 §5.5), so counting them as RPC activity would
+    double-credit a quiescent connection.
+
     Args:
         line: Raw bytes for one frame (without trailing newline).
         ctx: Server context shared across handlers.
@@ -180,6 +186,8 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     req_id = payload.get("id")
     method = payload["method"]
     params = payload.get("params", {}) or {}
+    if method not in SUBSCRIBE_METHODS:
+        ctx.touch_activity()
     try:
         result = await dispatch(method, ctx, params)
     except MethodNotFoundError:

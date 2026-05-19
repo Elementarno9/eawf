@@ -12,6 +12,7 @@ W01 wires only the ``daemon.*`` namespace. Subsequent waves attach
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -57,6 +58,11 @@ class MethodContext:
             ``agent.*`` methods to inspect wave / session rows.
             ``None`` when the daemon runs without an on-disk state
             (unit tests; daemonless paths).
+        last_activity: ``time.monotonic()`` value of the most recent
+            non-subscribe RPC dispatch. Refreshed by the server in
+            :func:`eawf.daemon.server._process_frame` and consumed by
+            :class:`eawf.daemon.idle.IdleTimeoutWatchdog` to gate the
+            idle-timeout shutdown.
     """
 
     started_at: str
@@ -70,6 +76,17 @@ class MethodContext:
     bus: Any = field(default=None)
     event_path: Any = field(default=None)
     state_path: Any = field(default=None)
+    last_activity: float = field(default_factory=time.monotonic)
+
+    def touch_activity(self) -> None:
+        """Refresh :attr:`last_activity` to the current monotonic time.
+
+        Called by the server dispatcher before invoking every method
+        EXCEPT ``event.subscribe`` (per C02 §5.5). Subscribers
+        independently keep the daemon alive via the live-subscriber
+        gate inside :class:`eawf.daemon.idle.IdleTimeoutWatchdog`.
+        """
+        self.last_activity = time.monotonic()
 
 
 Handler = Callable[[MethodContext, dict[str, Any]], Awaitable[dict[str, Any]]]
