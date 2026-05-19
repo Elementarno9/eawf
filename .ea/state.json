@@ -1510,8 +1510,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P25-I01",
+    "phase_id": "P25",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2339,7 +2339,7 @@
       "id": "P25-I01",
       "opened_at": "2026-05-18T19:45:10.543231Z",
       "phase_id": "P25",
-      "status": "planned",
+      "status": "active",
       "title": "P25-I01: contracts waves (4-way parallel)",
       "wave_ids": [
         "P25-I01-W01",
@@ -2816,7 +2816,7 @@
         "ART-research-long-term-2026-05-16-c08-configurability-profiles",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS events + profiles"
     },
@@ -2903,7 +2903,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T19:48:54.244676Z",
+  "updated_at": "2026-05-19T19:50:02.615458Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
