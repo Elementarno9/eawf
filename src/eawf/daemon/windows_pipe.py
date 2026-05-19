@@ -138,7 +138,7 @@ class WindowsPipeServer:
             RuntimeError: When called twice on the same instance.
         """
         if self._listener_thread is not None:
-            raise RuntimeError("WindowsPipeServer.start() called twice")
+            raise RuntimeError("windows pipe server already started")
         logger.info(f"start pipe={self._pipe_name!r}")
         self._listener_thread = threading.Thread(
             target=self._listen_loop,
