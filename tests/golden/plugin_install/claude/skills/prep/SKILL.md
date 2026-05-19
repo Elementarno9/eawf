@@ -27,11 +27,17 @@ phase's PLANNED-queue state:
      + `/roadmap propose`.
    - **Case B — PLANNED phase with empty wave DAG.** Dispatch the
      `planner` agent (`build/eawf-plugin/agents/planner.md`). The
-     planner returns either a sequence of `eawf roadmap revise
-     --add-wave` commands or a YAML payload. Surface `AskUserQuestion`
-     with `approve`, `edit`, `cancel`. On `approve`, apply the
-     planner's commands through the state CLI, then
-     `eawf phase activate <id>`.
+     planner returns a sequence of `eawf roadmap revise --add-wave`
+     commands (or a YAML payload). **Apply the planner's commands
+     first** through the state CLI — waves land as PENDING on the
+     still-PLANNED iter — then render the resulting DAG via
+     `eawf roadmap show --phase <id> --md` and enter Claude Code
+     plan mode (`EnterPlanMode`) with that rendering. Surface
+     `AskUserQuestion` with `approve`, `edit`, `cancel`. The
+     operator reviews the rendered roadmap, not the planner's raw
+     commands. Edits during plan mode are `/roadmap revise` calls
+     (PLANNED scope is mutable). On `approve`, call
+     `eawf phase activate <id>` (V11 hard gate).
    - **Case C — no PLANNED phase by that id.** Reject with exit 4
      and hint `Run \`eawf roadmap propose --phase <id> --title ...\`
      first.` for the operator.

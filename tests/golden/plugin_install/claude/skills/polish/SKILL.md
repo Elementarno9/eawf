@@ -20,6 +20,10 @@ disable-model-invocation: true
 
 - [ ] Scope is declared and bounded.
 - [ ] No public API rename without explicit user confirmation.
+- [ ] The target iter is NOT yet closed. Iter close is gated on
+      `audit + polish + ship CI + PR review pass` per the
+      `iter-phase-close-timing` rule in AGENTS.md; `/polish` runs
+      after `/audit` and before that close.
 
 ## Decision surfaces
 
