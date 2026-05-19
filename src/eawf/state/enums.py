@@ -303,6 +303,8 @@ class StoreKind(StrEnum):
     OPERATOR_REPORT = "operator_report"
     DOMAIN_SPECIALIST_REPORT = "domain_specialist_report"
     SUBSCRIPTION_LAG = "subscription_lag"
+    CONFIG_UPDATED = "config_updated"
+    REGISTRY_UPDATED = "registry_updated"
 
 
 class ArtifactKind(StrEnum):

@@ -8,12 +8,14 @@ from eawf.state.enums import StoreKind
 from eawf.store.kinds.actual import ActualPayload
 from eawf.store.kinds.agent_report import AgentReportPayload
 from eawf.store.kinds.audit import AuditPayload
+from eawf.store.kinds.config_updated import ConfigUpdatedPayload
 from eawf.store.kinds.decision import DecisionPayload
 from eawf.store.kinds.estimate import EstimatePayload
 from eawf.store.kinds.event import EventPayload
 from eawf.store.kinds.flow import FlowPayload
 from eawf.store.kinds.incident import IncidentPayload
 from eawf.store.kinds.memory import MemoryPayload
+from eawf.store.kinds.registry_updated import RegistryUpdatedPayload
 from eawf.store.kinds.research import ResearchPayload
 from eawf.store.kinds.subscription_lag import SubscriptionLagPayload
 
@@ -36,4 +38,6 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.OPERATOR_REPORT: AgentReportPayload,
     StoreKind.DOMAIN_SPECIALIST_REPORT: AgentReportPayload,
     StoreKind.SUBSCRIPTION_LAG: SubscriptionLagPayload,
+    StoreKind.CONFIG_UPDATED: ConfigUpdatedPayload,
+    StoreKind.REGISTRY_UPDATED: RegistryUpdatedPayload,
 }

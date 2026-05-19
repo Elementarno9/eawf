@@ -1,5 +1,15 @@
 """``eawf repo`` — repo-scoped init + workspace linkage + registry mutators.
 
+Daemon-internal note (P24-W10): :func:`_persist_registry` is the sole
+CLI-side mutator for ``~/.eawf/registry.json``; since W10 it
+dispatches through the daemon's ``registry.update`` RPC when
+``daemon.proxy_enabled=True`` (the new default). The in-process arm
+is retained as the V1 carve-out fallback (CI / read-only one-shot /
+recovery shell / ``EAWF_DAEMONLESS=1``). After v0.5 the in-process
+arm migrates under ``daemon/_internal/`` and stops being importable
+from user code.
+
+
 Subcommands:
 
 - ``repo init`` — for v0.1 this is a thin alias of :func:`eawf.cli.commands.init.init_cmd`.
@@ -44,6 +54,7 @@ ones that are not part of any workspace), the link is recorded under
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -475,17 +486,109 @@ def _read_registry_for_write(registry_path: Path) -> Registry:
         raise cli_errors.InvalidInput(msg) from exc
 
 
-def _persist_registry(registry: Registry, registry_path: Path) -> None:
-    """Write *registry* to *registry_path* atomically under a sibling lock.
+def _daemon_proxy_enabled_for_registry() -> bool:
+    """Return True when daemon-proxy mode is on for registry mutations.
 
-    Validates the candidate via :class:`Registry` before persisting
-    so a programmer-error (manual dict mutation that drops a
-    required field) fails before the write hits disk.
+    Mirrors :func:`eawf.cli.commands.config._daemon_proxy_enabled` —
+    the daemon-proxy gate honours both ``daemon.proxy_enabled`` in
+    the merged config AND the ``EAWF_DAEMONLESS=1`` env-var override
+    so callers can opt out of the proxy for one process.
+    """
+    import os
+
+    if os.environ.get("EAWF_DAEMONLESS", "") == "1":
+        return False
+    from eawf.cli._mutation import _proxy_enabled
+
+    return _proxy_enabled(None)
+
+
+def _diff_registries_to_ops(
+    before: Registry,
+    after: Registry,
+) -> list[tuple[str, str, dict[str, Any]]]:
+    """Derive one or more ``registry.update`` ops from the before/after diff.
+
+    Returns a list of ``(operation, repo_id, fields)`` tuples that, when
+    applied in order, transform *before* into *after*. The supported
+    diff vocabulary is:
+
+    * ``add`` — a code present in *after* but absent in *before*.
+    * ``remove`` — a code present in *before* but absent in *after*.
+    * ``add`` (idempotent ``set_active`` flip) — when only
+      ``active_code`` changes, emit an idempotent add for the new
+      active code that flags ``set_active=True``.
+
+    The current call sites only exercise these three shapes; the
+    daemon API supports ``rename`` too but the CLI never round-trips a
+    rename through ``_persist_registry`` (rename is a same-code path
+    swap in v0.3, not its own verb).
+    """
+    ops: list[tuple[str, str, dict[str, Any]]] = []
+    before_codes = set(before.repos.keys())
+    after_codes = set(after.repos.keys())
+
+    added = after_codes - before_codes
+    removed = before_codes - after_codes
+
+    for code in sorted(added):
+        entry = after.repos[code]
+        fields: dict[str, Any] = {"path": entry.path}
+        if entry.title is not None:
+            fields["title"] = entry.title
+        if after.active_code == code:
+            fields["set_active"] = True
+        ops.append(("add", code, fields))
+
+    for code in sorted(removed):
+        ops.append(("remove", code, {}))
+
+    if (
+        not added
+        and not removed
+        and before.active_code != after.active_code
+        and after.active_code is not None
+    ):
+        entry = after.repos[after.active_code]
+        ops.append(
+            (
+                "add",
+                after.active_code,
+                {
+                    "path": entry.path,
+                    "set_active": True,
+                    **({"title": entry.title} if entry.title else {}),
+                },
+            ),
+        )
+
+    return ops
+
+
+def _persist_registry(registry: Registry, registry_path: Path) -> None:
+    """Write *registry* to *registry_path*.
+
+    Since P24-W10 this helper is a thin dispatcher:
+
+    * **Daemon-proxy arm (default).** When ``daemon.proxy_enabled``
+      is ``True`` AND the daemon is reachable, diff *registry*
+      against the on-disk state, then dispatch one or more
+      ``registry.update`` RPCs (one per add/remove). The daemon owns
+      the portalock + atomic-rename + bus publish.
+    * **In-process fallback arm.** Reached when ``proxy_enabled`` is
+      ``False`` (V1 carve-out), ``EAWF_DAEMONLESS=1`` is set, OR the
+      daemon is unreachable. The legacy validate + lock + atomic-
+      write loop runs.
+
+    Args:
+        registry: Candidate registry to persist (already mutated).
+        registry_path: Absolute path to ``~/.eawf/registry.json``
+            (or a test override).
 
     Raises:
-        ValidationFailed: When the candidate payload does not
-            round-trip through the :class:`Registry` schema.
-        LockConflict: When the sibling lock is held past the timeout.
+        IntegrityViolation: Daemon required but unreachable.
+        ValidationFailed: Candidate payload fails schema validation.
+        LockConflict: In-process arm could not acquire the lock.
     """
     try:
         validated = Registry.model_validate(registry.model_dump(mode="json"))
@@ -493,6 +596,59 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
         raise cli_errors.ValidationFailed(f"registry post-mutation payload invalid: {exc}") from exc
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     payload = validated.model_dump(mode="json")
+
+    if _daemon_proxy_enabled_for_registry():
+        from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
+        from eawf.cli._mutation import _daemon_reachable
+
+        if not _daemon_reachable():
+            raise cli_errors.IntegrityViolation(
+                "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
+                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out"
+            )
+        # Load the on-disk before-image so we can derive operations.
+        try:
+            on_disk = read_registry(path=registry_path)
+        except RegistryReadError as exc:
+            msg = str(exc)
+            if "not found" in msg:
+                on_disk = Registry()
+            else:
+                raise cli_errors.InvalidInput(msg) from exc
+        ops = _diff_registries_to_ops(on_disk, validated)
+        # Point the daemon at the right registry file for tests; the
+        # production daemon ignores the env when its own resolver
+        # finds the default path. Setting the env here is process-
+        # local; the with-block on the CLI side restores it on exit.
+        previous = os.environ.get("EAWF_REGISTRY_PATH")
+        os.environ["EAWF_REGISTRY_PATH"] = str(registry_path)
+        try:
+            with DaemonClient() as client:
+                for operation, repo_id, fields in ops:
+                    try:
+                        client.registry_update(
+                            operation=operation,
+                            repo_id=repo_id,
+                            fields=fields,
+                        )
+                    except DaemonRpcError as exc:
+                        if exc.code == -32601:
+                            # Pre-W10 daemon — drop through to in-process arm.
+                            logger.debug(
+                                "_persist_registry daemon-rpc method-not-found; "
+                                "falling back to in-process write"
+                            )
+                            break
+                        raise
+                else:
+                    return
+        finally:
+            if previous is None:
+                os.environ.pop("EAWF_REGISTRY_PATH", None)
+            else:
+                os.environ["EAWF_REGISTRY_PATH"] = previous
+
+    # In-process fallback arm (V1 carve-out / EAWF_DAEMONLESS=1 / pre-W10 daemon).
     try:
         with portalock.acquire(registry_path, timeout=5.0):
             atomic_write_json_locked(registry_path, payload)

@@ -463,6 +463,9 @@ def test_store_kind_values() -> None:
         "operator_report",
         "domain_specialist_report",
         "subscription_lag",
+        # P24-W10 — config + registry updates fan out through the bus.
+        "config_updated",
+        "registry_updated",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

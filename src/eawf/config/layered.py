@@ -176,6 +176,23 @@ def _deep_merge_with_sources(
     return merged, sources
 
 
+#: ``EAWF_*`` env vars that are runtime control knobs, not config overrides.
+#: These names are claimed by infrastructure (daemon escape hatch, verbose-
+#: logging gate, etc.) and MUST be excluded from the layered-config env merge
+#: so they cannot accidentally inject phantom top-level keys.
+_RESERVED_ENV_VARS: frozenset[str] = frozenset(
+    {
+        "EAWF_DAEMONLESS",
+        "EAWF_VERBOSE",
+        "EAWF_REGISTRY_PATH",
+        "EAWF_STATE",
+        "EAWF_DAEMON_IDLE_TIMEOUT",
+        "EAWF_LOCK_TIMEOUT",
+        "EAWF_SKIP_GLOBAL_HOOKS",
+    }
+)
+
+
 def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
     """Translate ``EAWF_FOO__BAR=baz`` env vars into ``{foo: {bar: "baz"}}``.
 
@@ -185,10 +202,15 @@ def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
     and integer strings are coerced for ergonomic CLI overrides; everything
     else stays a string. JSON-mode callers can pre-coerce by passing CLI
     overrides directly via :func:`merge_config`.
+
+    Reserved control vars (:data:`_RESERVED_ENV_VARS`) are skipped — they
+    name runtime knobs, not config keys.
     """
     out: dict[str, Any] = {}
     for raw_key, raw_val in env.items():
         if not raw_key.startswith(_ENV_PREFIX):
+            continue
+        if raw_key in _RESERVED_ENV_VARS:
             continue
         stripped = raw_key[len(_ENV_PREFIX) :]
         if not stripped:

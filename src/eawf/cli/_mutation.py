@@ -126,10 +126,15 @@ def _proxy_enabled(workspace: Path | None) -> bool:
     """Return True when the merged config enables daemon proxying.
 
     Resolves ``daemon.proxy_enabled`` through the layered-config merge
-    (built-in → global → workspace → repo → local → env). A missing or
-    ill-typed value defaults to ``False`` — the V1 carve-out window
-    is the active state until W10 flips the default.
+    (built-in → global → workspace → repo → local → env). Default since
+    P24-W10 is ``True`` — the V1 daemonless carve-out runs only when
+    the merged config explicitly opts out OR the process has
+    ``EAWF_DAEMONLESS=1`` set.
     """
+    import os
+
+    if os.environ.get("EAWF_DAEMONLESS", "") == "1":
+        return False
     from eawf.config.layered import merge_config
 
     repo = workspace if workspace is not None else Path.cwd()

@@ -55,6 +55,20 @@ from eawf.render.regions import find_regions
 SCENARIOS_DIR: Path = Path(__file__).parent
 
 
+@pytest.fixture(autouse=True)
+def _daemonless_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force the V1 daemonless carve-out for every golden-scenario test.
+
+    The scenarios exercise the CLI surface via Typer's ``CliRunner`` in
+    process. After P24-W10 the built-in ``daemon.proxy_enabled`` default
+    is ``True`` — without an explicit opt-out the wave / phase / iter
+    mutators would try to reach the daemon (which does not run in test).
+    See :mod:`tests.integration.conftest` for the equivalent fixture on
+    the integration tree.
+    """
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+
+
 def regen_mode() -> bool:
     """Return True when the regen env var is set to a truthy value.
 

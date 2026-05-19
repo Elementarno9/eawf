@@ -24,6 +24,15 @@ Exit-code mapping (per W00 plan / ``cli/exit_codes.py``):
         unknown profile id.
 - ``4``: ``VALIDATION_FAILED`` — malformed YAML in any layer or schema
         rejection during ``validate``.
+
+Daemon-internal note (P24-W10): :func:`_save_value_to_layer` is the
+sole CLI-side mutator for layered YAML; since W10 it dispatches
+through the daemon's ``config.set_layer_value`` RPC when
+``daemon.proxy_enabled=True`` (the new default). The in-process arm
+is retained as the V1 carve-out fallback (CI / read-only one-shot /
+recovery shell / ``EAWF_DAEMONLESS=1``). After v0.5 the in-process
+arm migrates under ``daemon/_internal/`` and stops being importable
+from user code.
 """
 
 from __future__ import annotations
@@ -215,29 +224,109 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             tmp.unlink(missing_ok=True)
 
 
+def _layer_label_for_path(target_path: Path) -> str | None:
+    """Reverse-resolve a writable layer label from *target_path*.
+
+    The daemon ``config.set_layer_value`` RPC takes a layer *label*
+    (``"repo"`` / ``"local"`` / ``"workspace"`` / ``"global"``) rather
+    than a path, so the proxy wrapper has to map back. Returns
+    ``None`` when the path does not match any of the four canonical
+    file-layer paths — callers fall through to the in-process arm.
+    """
+    from eawf.config.layered import (
+        global_config_path,
+        local_config_path,
+        repo_config_path,
+    )
+
+    resolved = target_path.resolve()
+    if resolved == global_config_path().resolve():
+        return "global"
+    parent = target_path.parent
+    if parent.name == ".ea" and resolved == repo_config_path(parent.parent).resolve():
+        return "repo"
+    if parent.name == "local" and resolved == local_config_path(parent.parent.parent).resolve():
+        return "local"
+    # Workspace anchor matches the same shape as repo; only the
+    # outer caller knows which it is. We treat unambiguous matches
+    # only — if both ``repo`` and ``workspace`` candidates exist for
+    # the same prefix, fall through to the in-process arm.
+    return None
+
+
+def _daemon_proxy_enabled() -> bool:
+    """Return True when ``daemon.proxy_enabled`` is on AND no daemonless override.
+
+    Mirrors :func:`eawf.cli._mutation._proxy_enabled` but adds the
+    ``EAWF_DAEMONLESS=1`` env-var escape hatch so callers (CI hooks,
+    recovery shell) can force the in-process arm without rewriting
+    the merged config.
+    """
+    if os.environ.get("EAWF_DAEMONLESS", "") == "1":
+        return False
+    from eawf.cli._mutation import _proxy_enabled
+
+    return _proxy_enabled(None)
+
+
 def _save_value_to_layer(*, target_path: Path, key: str, value: Any) -> None:
     """Persist ``key=value`` into the YAML layer at *target_path*.
 
-    Loads the layer, deep-sets the dotted ``key``, and rewrites the file
-    atomically under the same sibling lock the rest of the config CLI
-    honours. Centralising the read-modify-write loop here means every
-    writer — ``eawf config set`` and the interactive ``eawf config menu``
-    alike — converges on a single mutator path: the config CLI continues
-    to be the only writer of layered YAML, and ``state.json`` is never
-    touched from this helper.
+    Since P24-W10 this helper is a thin dispatcher:
+
+    * **Daemon-proxy arm (default).** When ``daemon.proxy_enabled``
+      is ``True`` (the default since W10) AND the daemon is reachable,
+      the call routes through ``config.set_layer_value`` RPC. The
+      daemon owns the portalock + atomic-rename + bus publish.
+    * **In-process fallback arm.** Reached when (a) ``proxy_enabled``
+      is ``False`` (V1 carve-out), (b) ``EAWF_DAEMONLESS=1`` is set,
+      (c) the daemon is unreachable, or (d) the path does not map
+      onto a canonical writable layer. The legacy lock-read-write
+      loop runs under :func:`eawf.lock.portalock.acquire`.
 
     Args:
-        target_path: Absolute path of the layer's ``config.yaml`` (resolved
-            by :func:`eawf.config.layered.layer_path`).
+        target_path: Absolute path of the layer's ``config.yaml``.
         key: Dotted config key (e.g. ``"vcs.auto_commit"``).
-        value: Typed value to write. Caller is responsible for type
-            coercion (the registry helper or the legacy ``_coerce_value``).
+        value: Typed value to write.
 
     Raises:
+        IntegrityViolation: Daemon required but unreachable
+            (``daemon_required`` envelope per F20).
         ValidationFailed: Underlying YAML is malformed.
         OSError: Filesystem failure during read or write.
         yaml.YAMLError: Dump failure when serialising the merged payload.
     """
+    if _daemon_proxy_enabled():
+        layer_label = _layer_label_for_path(target_path)
+        if layer_label is not None:
+            from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
+            from eawf.cli._mutation import _daemon_reachable
+
+            if not _daemon_reachable():
+                from eawf.cli.errors import IntegrityViolation
+
+                raise IntegrityViolation(
+                    "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
+                    "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out"
+                )
+            key_path = key.split(".")
+            try:
+                with DaemonClient() as client:
+                    client.config_set_layer_value(
+                        layer=layer_label,
+                        key_path=key_path,
+                        value=value,
+                    )
+                return
+            except DaemonRpcError as exc:
+                if exc.code == -32601:
+                    # Method not found — fall through to in-process
+                    # path so a pre-W10 daemon stays usable.
+                    logger.debug("_save_value_to_layer daemon-rpc method-not-found; fallback")
+                else:
+                    raise
+
+    # In-process fallback arm (V1 carve-out / EAWF_DAEMONLESS=1 / unmapped path).
     with portalock.acquire(target_path):
         existing = load_yaml_layer(target_path)
         _set_dotted_in_yaml(existing, key, value)
