@@ -71,11 +71,15 @@ packages = ["eawf"]
 
 [[tool.mypy.overrides]]
 # Windows-only transport: pywin32 stubs are not installable on the
-# POSIX dev/CI hosts where mypy runs. The module is import-guarded
+# POSIX dev/CI hosts where mypy runs. The modules are import-guarded
 # (``raise ImportError`` on non-win32) so non-Windows builds never
 # resolve these symbols; lifting the stub requirement keeps the
 # rest of the tree under strict checking.
-module = ["eawf.daemon.windows_pipe", "eawf.daemon.windows_security"]
+module = [
+    "eawf.daemon.windows_pipe",
+    "eawf.daemon.windows_security",
+    "eawf.daemon.win_service",
+]
 ignore_errors = true
 
 [tool.ruff]

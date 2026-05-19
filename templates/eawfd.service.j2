@@ -1,0 +1,14 @@
+[Unit]
+Description=eawf coordinator daemon (eawfd)
+After=default.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/env uv tool run eawf daemon run --foreground
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+Environment="EAWF_RUNTIME_DIR={{ runtime_dir }}"
+
+[Install]
+WantedBy=default.target
