@@ -3,7 +3,7 @@ name: differentiate
 description: Recommend the cheapest experiment that discriminates between two or more candidate paths.
 argument-hint: "<candidate-id>"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # /differentiate

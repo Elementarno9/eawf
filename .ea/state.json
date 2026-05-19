@@ -2393,7 +2393,9 @@
       "phase_id": "P26",
       "status": "planned",
       "title": "P26-I01: surfaces waves",
-      "wave_ids": []
+      "wave_ids": [
+        "P26-I01-W01"
+      ]
     },
     "P27-I01": {
       "audit_id": null,
@@ -2925,7 +2927,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T23:19:28.215399Z",
+  "updated_at": "2026-05-19T23:46:06.500439Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8493,6 +8495,38 @@
         "full test suite green (4200+ tests)"
       ],
       "title": "fix: P25-I01 polish — flip stale .claude/worktrees test + scrub W04-backfill stub citations",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/render/skills.py",
+        "tests/golden/plugin_install/claude/skills/research/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/audit/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/review/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/differentiate/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/blitz/SKILL.md"
+      ],
+      "id": "P26-I01-W01",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:46:06.500411Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "5 skills (research/audit/review/differentiate/blitz) flip disable-model-invocation to false; goldens regen; pre-commit green"
+      ],
+      "title": "feat: enable model invocation for read-only skills + blitz",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

@@ -589,7 +589,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         ),
         argument_hint="<topic-slug> [--final]",
         user_invocable=True,
-        disable_model_invocation=True,
+        disable_model_invocation=False,
         body=_RESEARCH_BODY,
     ),
     SkillSpec(
@@ -613,7 +613,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         ),
         argument_hint="<phase-id|wave-id|commit-range>",
         user_invocable=True,
-        disable_model_invocation=True,
+        disable_model_invocation=False,
         body=_AUDIT_BODY,
     ),
     SkillSpec(
@@ -635,7 +635,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         ),
         argument_hint="[<PR# | commit-range>]",
         user_invocable=True,
-        disable_model_invocation=True,
+        disable_model_invocation=False,
         body=_REVIEW_BODY,
     ),
     SkillSpec(
@@ -680,7 +680,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         ),
         argument_hint="<candidate-id>",
         user_invocable=True,
-        disable_model_invocation=True,
+        disable_model_invocation=False,
         body=_DIFFERENTIATE_BODY,
     ),
     SkillSpec(
@@ -702,7 +702,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         ),
         argument_hint="[--residual-unknowns=<n>]",
         user_invocable=True,
-        disable_model_invocation=True,
+        disable_model_invocation=False,
         body=_BLITZ_BODY,
     ),
 )

@@ -3,7 +3,7 @@ name: review
 description: Code review of an open PR or local diff. Surfaces issues with severity tags; no scope creep, no praise.
 argument-hint: "[<PR# | commit-range>]"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # /review
