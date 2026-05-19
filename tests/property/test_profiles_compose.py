@@ -101,9 +101,16 @@ def test_compose_idempotent(profiles: list[ProfileBody]) -> None:
     """
     once = compose(profiles)
     # Re-wrap the composed view as a single ProfileBody so it can be fed
-    # back into compose. ProfileBody and ComposedProfile share every field
-    # except provenance.
-    fed_back = ProfileBody.model_validate(once.model_dump(mode="python", exclude={"provenance"}))
+    # back into compose. ProfileBody and ComposedProfile share every
+    # contribution-bearing field; the audit-only maps on ComposedProfile
+    # (``provenance``, ``override_audit``, ``conflict_warnings``) are
+    # dropped here because ProfileBody is the upstream shape.
+    fed_back = ProfileBody.model_validate(
+        once.model_dump(
+            mode="python",
+            exclude={"provenance", "override_audit", "conflict_warnings"},
+        ),
+    )
     twice = compose([fed_back])
 
     # Compare the merge-bearing fields only — the synthetic ``name`` differs

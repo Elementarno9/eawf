@@ -54,14 +54,20 @@ def test_compose_empty_returns_empty() -> None:
     assert composed.hooks_referenced == []
     # Provenance for every populated-or-default top-level field is present
     # even when empty so callers don't get KeyErrors when introspecting.
+    # v2 (P25-W15) adds ``dispatch_session_policy`` to the provenance map.
     assert set(composed.provenance.keys()) == {
         "state_extensions",
         "instrument_requirements",
         "render_blocks",
         "skills_referenced",
         "hooks_referenced",
+        "dispatch_session_policy",
     }
     assert all(v == [] for v in composed.provenance.values())
+    # v2 audit maps default to empty for compositions with no conflicts.
+    assert composed.override_audit == {}
+    assert composed.conflict_warnings == []
+    assert composed.dispatch_session_policy is None
 
 
 def test_compose_single_passthrough() -> None:
