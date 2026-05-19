@@ -1479,7 +1479,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P24",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2727,7 +2727,7 @@
         "ART-research-long-term-2026-05-18-migration-dag",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock writer"
     },
@@ -2838,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T13:36:21.221161Z",
+  "updated_at": "2026-05-19T13:37:05.016496Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
