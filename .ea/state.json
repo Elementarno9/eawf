@@ -1510,9 +1510,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P25-I01-W04",
-      "P25-I01-W11",
-      "P25-I01-W13"
+      "P25-I01-W04"
     ],
     "iter_id": "P25-I01",
     "phase_id": "P25",
@@ -2907,7 +2905,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T21:09:16.945550Z",
+  "updated_at": "2026-05-19T21:28:32.523732Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8155,7 +8153,7 @@
         "P25-I01-W12"
       ],
       "claim_session_id": "p25-w11-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:28:28.943257Z",
       "commit": null,
       "deps": [
         "P25-I01-W10"
@@ -8173,10 +8171,10 @@
       "id": "P25-I01-W11",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:54.219815Z",
-      "outcome": null,
+      "outcome": "C07a PluginManifest + plugin sync deterministic regeneration + KISS-004 helpers (294 LOC); 30 new tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "PluginManifest(BaseModel extra='forbid') per XB19 lands",
         "eawf plugin sync regenerates per-runtime artifacts deterministically from SKILL_REGISTRY",
@@ -8227,7 +8225,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w13-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:28:31.789095Z",
       "commit": null,
       "deps": [
         "P25-I01-W10"
@@ -8243,10 +8241,10 @@
       "id": "P25-I01-W13",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:55.349968Z",
-      "outcome": null,
+      "outcome": "C07a capability matrix 8x3 + drift detector + adapter integration; 38 new + 50 existing adapter tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "capability matrix at src/eawf/runtimes/capabilities.yaml with 8 rows by 3 runtimes",
         "eawf doctor --runtime <id> reports drift between declared capabilities and probed runtime",
@@ -8730,10 +8728,10 @@
       "branch": "feature/eawf-v0.3-p25-w11",
       "created_at": "2026-05-19T21:09:16.122371Z",
       "id": "WT-P25-I01-W11-1779224956",
-      "merged_commit": null,
+      "merged_commit": "58430b8",
       "owner_session_id": "p25-w11-exec",
       "path": ".ea/worktrees/p25-w11",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W11"
     },
     "WT-P25-I01-W13-1779224956": {
@@ -8741,10 +8739,10 @@
       "branch": "feature/eawf-v0.3-p25-w13",
       "created_at": "2026-05-19T21:09:16.945550Z",
       "id": "WT-P25-I01-W13-1779224956",
-      "merged_commit": null,
+      "merged_commit": "ebc123b",
       "owner_session_id": "p25-w13-exec",
       "path": ".ea/worktrees/p25-w13",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W13"
     },
     "WT-P25-I01-W14-1779221190": {
