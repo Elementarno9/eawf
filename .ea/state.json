@@ -1477,7 +1477,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P24-I01-W09"
+    ],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2838,7 +2840,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T15:21:57.204058Z",
+  "updated_at": "2026-05-19T15:22:39.668154Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7627,7 +7629,7 @@
       "blocks": [
         "P24-I01-W10"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7648,7 +7650,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: state-CLI direct writer migrated to daemon state.mutate RPC proxy + event/audit/per-kind JSONL emitters daemon-internal (authority map rows 1-4)",
       "token_budget": null,
