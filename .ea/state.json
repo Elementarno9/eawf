@@ -1477,11 +1477,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I01-W04",
-      "P24-I01-W05",
-      "P24-I01-W06"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2842,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T14:24:42.085108Z",
+  "updated_at": "2026-05-19T14:53:08.710288Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7048,7 +7044,7 @@
         "P24-I01-W08"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T14:53:07.577249Z",
       "commit": null,
       "deps": [
         "P24-I01-W01",
@@ -7064,8 +7060,8 @@
       "id": "P24-I01-W04",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:29.719908Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "per-OS service registration (systemd-user + launchd + pywin32 ServiceFramework with XB14 SCM-asyncio bridge); 74 daemon tests + 20 skip; Jinja2 templates",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: per-OS service registration (systemd-user + launchd + pywin32 Service with SCM-asyncio bridge XB14)",
       "token_budget": null,
@@ -7076,7 +7072,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T14:53:08.156019Z",
       "commit": null,
       "deps": [
         "P24-I01-W01",
@@ -7090,8 +7086,8 @@
       "id": "P24-I01-W05",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:38.288951Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "per-OS peer-cred dispatcher: PeerCredential + Linux/macOS/FreeBSD/Windows recipes; forensic UnauthorizedError data fields; 74 tests + 14 skips",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS os.getpeereid + FreeBSD ctypes + Windows SID per XB13)",
       "token_budget": null,
@@ -7104,7 +7100,7 @@
         "P24-I01-W07"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T14:53:08.710098Z",
       "commit": null,
       "deps": [
         "P24-I01-W01",
@@ -7119,8 +7115,8 @@
       "id": "P24-I01-W06",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:43.768302Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "subscription bus + drop-oldest (D7/C02.F50); event.subscribe/list/show RPCs; SUBSCRIPTION_LAG StoreKind; 114 daemon tests",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) + reconnect catch-up via event.jsonl",
       "token_budget": null,
