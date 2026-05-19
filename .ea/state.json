@@ -2274,7 +2274,18 @@
       "phase_id": "P24",
       "status": "planned",
       "title": "P24-I01: C02-IMPL daemon waves",
-      "wave_ids": []
+      "wave_ids": [
+        "P24-I01-W01",
+        "P24-I01-W02",
+        "P24-I01-W03",
+        "P24-I01-W04",
+        "P24-I01-W05",
+        "P24-I01-W06",
+        "P24-I01-W07",
+        "P24-I01-W08",
+        "P24-I01-W09",
+        "P24-I01-W10"
+      ]
     },
     "P25-I01": {
       "audit_id": null,
@@ -2827,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-18T21:39:06.691628Z",
+  "updated_at": "2026-05-19T13:36:21.221161Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6935,6 +6946,294 @@
         "Audit A29-P23-ship-gate followups F1..F4 are the worked example: lint MUST flag tests/unit/test_state_urn*.py + tests/unit/test_lifecycle*.py as unresolved if those success_criteria were re-validated"
       ],
       "title": "feat: criterion drift detector — wave success_criteria path-glob resolver + close-time warning",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W02",
+        "P24-I01-W03",
+        "P24-I01-W04",
+        "P24-I01-W05",
+        "P24-I01-W06",
+        "P24-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/**/*.py",
+        "tests/daemon/test_scaffolding.py"
+      ],
+      "id": "P24-I01-W01",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:12.455384Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: daemon process scaffolding + asyncio JSON-RPC framing + daemon.ping/status/shutdown methods",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W04",
+        "P24-I01-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W01"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/windows_pipe.py",
+        "tests/daemon/test_windows_pipe.py"
+      ],
+      "id": "P24-I01-W02",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:18.597212Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: Windows pywin32 named-pipe listener + asyncio queue bridge (XB11/Q8)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W06",
+        "P24-I01-W07",
+        "P24-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W01"
+      ],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/daemon/wal.py",
+        "src/eawf/daemon/recovery.py",
+        "tests/daemon/test_wal.py"
+      ],
+      "id": "P24-I01-W03",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:23.326566Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: outcome-WAL (XB12/Q10) + startup replay + poisoned-WAL handling",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W01",
+        "P24-I01-W02"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "templates/eawfd.service.j2",
+        "templates/dev.eawf.eawfd.plist.j2",
+        "src/eawf/daemon/win_service.py",
+        "src/eawf/cli/commands/daemon.py"
+      ],
+      "id": "P24-I01-W04",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:29.719908Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: per-OS service registration (systemd-user + launchd + pywin32 Service with SCM-asyncio bridge XB14)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W01",
+        "P24-I01-W02"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/auth.py",
+        "tests/daemon/test_auth.py"
+      ],
+      "id": "P24-I01-W05",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:38.288951Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS os.getpeereid + FreeBSD ctypes + Windows SID per XB13)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W01",
+        "P24-I01-W03"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/bus.py",
+        "src/eawf/daemon/methods/event.py",
+        "tests/daemon/test_bus.py"
+      ],
+      "id": "P24-I01-W06",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:43.768302Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) + reconnect catch-up via event.jsonl",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W03",
+        "P24-I01-W06"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/daemon/methods/agent.py",
+        "src/eawf/daemon/session.py"
+      ],
+      "id": "P24-I01-W07",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:49.411324Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: session-handle tracking (V8) with opaque session_log_handle (XB05) + TTL sweep + agent.dispatch fresh-path skeleton",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W01",
+        "P24-I01-W04"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/spawn.py",
+        "src/eawf/daemon/idle.py",
+        "benches/daemon_cold_spawn.py"
+      ],
+      "id": "P24-I01-W08",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:35:54.410845Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: idle-timeout watchdog + on-demand auto-spawn + cold-spawn p95 benchmark under V1 400ms budget",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P24-I01-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W03",
+        "P24-I01-W07",
+        "P24-I01-W08"
+      ],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/cli/_mutation.py",
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/cli/commands/*.py"
+      ],
+      "id": "P24-I01-W09",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:36:00.328252Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: state-CLI direct writer migrated to daemon state.mutate RPC proxy + event/audit/per-kind JSONL emitters daemon-internal (authority map rows 1-4)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P24-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P24-I01-W09"
+      ],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/commands/config.py",
+        "src/eawf/cli/commands/repo.py",
+        "src/eawf/daemon/methods/config.py",
+        "src/eawf/daemon/methods/registry.py"
+      ],
+      "id": "P24-I01-W10",
+      "iter_id": "P24-I01",
+      "opened_at": "2026-05-19T13:36:05.729485Z",
+      "outcome": null,
+      "status": "pending",
+      "success_criteria": [],
+      "title": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
