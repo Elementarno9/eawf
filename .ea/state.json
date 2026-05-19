@@ -1509,7 +1509,15 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P25-I01-W02",
+      "P25-I01-W03",
+      "P25-I01-W04",
+      "P25-I01-W05",
+      "P25-I01-W10",
+      "P25-I01-W15",
+      "P25-I01-W16"
+    ],
     "iter_id": "P25-I01",
     "phase_id": "P25",
     "project_code": "EAWF",
@@ -2903,7 +2911,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T20:39:22.684632Z",
+  "updated_at": "2026-05-19T20:42:01.321935Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7819,7 +7827,7 @@
     "P25-I01-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w02-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7840,7 +7848,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "verify_implements registered in audit_dsl.kinds",
         "walks closed WaveSpec under a phase + greps git diff <base>...HEAD for verdict markers (regex ^[VDRH]\\d+(-[A-Z0-9]+)?$) restricted to file_scopes",
@@ -7850,12 +7858,12 @@
       "title": "feat: C03 verify-implements audit-DSL kind + grep + diff verdict markers",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W02-1779223316"
     },
     "P25-I01-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w03-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7877,7 +7885,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "daemon spec.{init",
         "validate",
@@ -7890,12 +7898,12 @@
       "title": "feat: C03 daemon spec writer + spec cache + DRAFT/READY/IMPLEMENTED/ARCHIVED",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W03-1779223317"
     },
     "P25-I01-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w04-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7916,7 +7924,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "backfill writer reads closed Wave.success_criteria via daemon read API + emits WaveSpec stub under .ea/specs/<phase>/[<iter>/]<wave>.md",
         "idempotent (re-run = no-op)",
@@ -7926,12 +7934,12 @@
       "title": "feat: C03 closed-wave success_criteria to WaveSpec backfill writer + bulk-run",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W04-1779223318"
     },
     "P25-I01-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w05-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7952,7 +7960,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "three independent enforcement layers active per [3] §1: Pydantic load (init/validate) + pre-commit hook (real-test-paths grep) + audit DSL (verify-implements at AuditSpec.cadence)",
         "UI-scope file_scope heuristic fires when path under src/eawf/tui_v2/ or src/eawf/render/ and demands mockup reference",
@@ -7961,7 +7969,7 @@
       "title": "feat: C03 KPI + non-empty + mockup heuristic + tests-real-paths validators",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W05-1779223318"
     },
     "P25-I01-W06": {
       "agent_role": "executor",
@@ -8111,7 +8119,7 @@
         "P25-I01-W11",
         "P25-I01-W13"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w10-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8133,7 +8141,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "RuntimeAdapter(Protocol) defined at src/eawf/runtimes/adapter.py + 3 implementations land",
         "SessionAttempt import from C02/state (P24) works",
@@ -8143,7 +8151,7 @@
       "title": "feat: C07a RuntimeAdapter Protocol + 3 adapters (claude/codex/opencode)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W10-1779223319"
     },
     "P25-I01-W11": {
       "agent_role": "executor",
@@ -8296,7 +8304,7 @@
     "P25-I01-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w15-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8317,7 +8325,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "ProfileBody v2 closed schema lands with conflicts_with: list[str] + overrides: list[str] + dispatch_session_policy: Literal['fresh'",
         "'continue'",
@@ -8328,12 +8336,12 @@
       "title": "feat: C08 ProfileBody v2 + conflicts_with + overrides + composition loader",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W15-1779223320"
     },
     "P25-I01-W16": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w16-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8356,7 +8364,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "three template YAMLs land under templates/init/<template>.yaml (research + engineering + reverse-engineering) per D7 trim",
         "eawf init --profiles a",
@@ -8368,7 +8376,7 @@
       "title": "feat: C08 3 bootstrap templates (research+engineering+reverse-eng) + migration",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W16-1779223321"
     },
     "P25-I01-W17": {
       "agent_role": "executor",
@@ -8622,6 +8630,50 @@
       "status": "merged",
       "wave_id": "P25-I01-W01"
     },
+    "WT-P25-I01-W02-1779223316": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w02",
+      "created_at": "2026-05-19T20:41:56.494460Z",
+      "id": "WT-P25-I01-W02-1779223316",
+      "merged_commit": null,
+      "owner_session_id": "p25-w02-exec",
+      "path": ".ea/worktrees/p25-w02",
+      "status": "active",
+      "wave_id": "P25-I01-W02"
+    },
+    "WT-P25-I01-W03-1779223317": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w03",
+      "created_at": "2026-05-19T20:41:57.298837Z",
+      "id": "WT-P25-I01-W03-1779223317",
+      "merged_commit": null,
+      "owner_session_id": "p25-w03-exec",
+      "path": ".ea/worktrees/p25-w03",
+      "status": "active",
+      "wave_id": "P25-I01-W03"
+    },
+    "WT-P25-I01-W04-1779223318": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w04",
+      "created_at": "2026-05-19T20:41:58.087533Z",
+      "id": "WT-P25-I01-W04-1779223318",
+      "merged_commit": null,
+      "owner_session_id": "p25-w04-exec",
+      "path": ".ea/worktrees/p25-w04",
+      "status": "active",
+      "wave_id": "P25-I01-W04"
+    },
+    "WT-P25-I01-W05-1779223318": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w05",
+      "created_at": "2026-05-19T20:41:58.872957Z",
+      "id": "WT-P25-I01-W05-1779223318",
+      "merged_commit": null,
+      "owner_session_id": "p25-w05-exec",
+      "path": ".ea/worktrees/p25-w05",
+      "status": "active",
+      "wave_id": "P25-I01-W05"
+    },
     "WT-P25-I01-W06-1779221187": {
       "base_branch": "feature/eawf-v0.3-p25",
       "branch": "feature/eawf-v0.3-p25-w06",
@@ -8666,6 +8718,17 @@
       "status": "merged",
       "wave_id": "P25-I01-W09"
     },
+    "WT-P25-I01-W10-1779223319": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w10",
+      "created_at": "2026-05-19T20:41:59.683708Z",
+      "id": "WT-P25-I01-W10-1779223319",
+      "merged_commit": null,
+      "owner_session_id": "p25-w10-exec",
+      "path": ".ea/worktrees/p25-w10",
+      "status": "active",
+      "wave_id": "P25-I01-W10"
+    },
     "WT-P25-I01-W14-1779221190": {
       "base_branch": "feature/eawf-v0.3-p25",
       "branch": "feature/eawf-v0.3-p25-w14",
@@ -8676,6 +8739,28 @@
       "path": ".ea/worktrees/p25-w14",
       "status": "merged",
       "wave_id": "P25-I01-W14"
+    },
+    "WT-P25-I01-W15-1779223320": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w15",
+      "created_at": "2026-05-19T20:42:00.494677Z",
+      "id": "WT-P25-I01-W15-1779223320",
+      "merged_commit": null,
+      "owner_session_id": "p25-w15-exec",
+      "path": ".ea/worktrees/p25-w15",
+      "status": "active",
+      "wave_id": "P25-I01-W15"
+    },
+    "WT-P25-I01-W16-1779223321": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w16",
+      "created_at": "2026-05-19T20:42:01.321935Z",
+      "id": "WT-P25-I01-W16-1779223321",
+      "merged_commit": null,
+      "owner_session_id": "p25-w16-exec",
+      "path": ".ea/worktrees/p25-w16",
+      "status": "active",
+      "wave_id": "P25-I01-W16"
     },
     "WT-P25-I01-W17-1779220281": {
       "base_branch": "feature/eawf-v0.3-p25",
