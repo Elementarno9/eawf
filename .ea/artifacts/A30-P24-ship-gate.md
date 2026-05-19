@@ -2,7 +2,7 @@
 
 ## Summary
 
-- P24 (C02-IMPL daemon keystone) shipped 10 waves under iter P24-I01; phase verdict **minor** (pass-with-followups: implementation complete + 3,560 full-suite tests green + mypy/pre-commit clean; 2 wiring gaps identified) [1].
+- P24 (C02-IMPL daemon keystone) shipped 10 waves under iter P24-I01 + 1 reactive wave under P24-I02; phase verdict **minor** (pass-with-followups: implementation complete per the C02 long-term spec [15] + 3,560 full-suite tests green + mypy/pre-commit clean; 2 wiring gaps identified via the spike brief checklist [14] + auditor sweep [16]) [1].
 - W01 ship: `src/eawf/daemon/` package boots (`PROTOCOL_VERSION="1"` + `asyncio.start_unix_server` + JSON-RPC 2.0 frame parser + `daemon.ping/status/shutdown` methods + Linux SO_PEERCRED + macOS LOCAL_PEERCRED via xucred + runtime_dir resolver + `eawf daemon run/ping/status/stop/logs` CLI verbs); 14 daemon scaffolding tests [2].
 - W02 ship: `WindowsPipeServer` (pywin32 listener thread + `asyncio.Queue` bridge via `loop.call_soon_threadsafe` per C02 §5.13) + DACL restricted to owning user SID + post-connect SID check + `[project.optional-dependencies] windows = ["pywin32>=306"]`; live tests skipif `sys.platform != "win32"`, design tests gated on `pytest.importorskip` [3].
 - W03 ship: outcome-WAL per Q10/XB12 (post-apply envelope payload, never re-execute mutator) + `recovery.replay_wal` algorithm + poisoned-WAL admin (`eawf daemon replay-wal --inspect|--gc`) + 47 wal/recovery/cli tests [4].
