@@ -1510,8 +1510,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P25-I01-W04",
-      "P25-I01-W12"
+      "P25-I01-W04"
     ],
     "iter_id": "P25-I01",
     "phase_id": "P25",
@@ -2906,7 +2905,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T21:28:53.368206Z",
+  "updated_at": "2026-05-19T21:48:45.456759Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8191,7 +8190,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w12-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:48:44.762481Z",
       "commit": null,
       "deps": [
         "P25-I01-W11"
@@ -8208,10 +8207,10 @@
       "id": "P25-I01-W12",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:54.782015Z",
-      "outcome": null,
+      "outcome": "C07a plugin doctor (4 drift kinds: manifest-vs-disk/registry-vs-disk/capability-vs-probe/helper-LOC-overflow) + KISS-001 coauthor explicit-opt-in; 31 new tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "eawf plugin doctor enumerates 4 drift kinds per [4] §5.9",
         "KISS-001 coauthor env-detection opt-in via explicit EAWF_COAUTHOR_RUNTIME env var OR explicit JSON detected-runtime (no implicit detection)",
@@ -8740,10 +8739,10 @@
       "branch": "feature/eawf-v0.3-p25-w12",
       "created_at": "2026-05-19T21:28:53.368206Z",
       "id": "WT-P25-I01-W12-1779226133",
-      "merged_commit": null,
+      "merged_commit": "d58ad64",
       "owner_session_id": "p25-w12-exec",
       "path": ".ea/worktrees/p25-w12",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W12"
     },
     "WT-P25-I01-W13-1779224956": {
