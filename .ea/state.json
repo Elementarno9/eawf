@@ -1510,7 +1510,9 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P25-I01-W04"
+      "P25-I01-W04",
+      "P25-I01-W11",
+      "P25-I01-W13"
     ],
     "iter_id": "P25-I01",
     "phase_id": "P25",
@@ -2905,7 +2907,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T21:06:53.668294Z",
+  "updated_at": "2026-05-19T21:09:16.945550Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8152,7 +8154,7 @@
       "blocks": [
         "P25-I01-W12"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w11-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8174,7 +8176,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "PluginManifest(BaseModel extra='forbid') per XB19 lands",
         "eawf plugin sync regenerates per-runtime artifacts deterministically from SKILL_REGISTRY",
@@ -8184,7 +8186,7 @@
       "title": "feat: C07a PluginManifest(BaseModel) + eawf plugin sync + KISS-004 helpers",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W11-1779224956"
     },
     "P25-I01-W12": {
       "agent_role": "executor",
@@ -8224,7 +8226,7 @@
     "P25-I01-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w13-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8244,7 +8246,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "capability matrix at src/eawf/runtimes/capabilities.yaml with 8 rows by 3 runtimes",
         "eawf doctor --runtime <id> reports drift between declared capabilities and probed runtime",
@@ -8253,7 +8255,7 @@
       "title": "feat: C07a capability matrix 8 rows by 3 runtimes + drift detector",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W13-1779224956"
     },
     "P25-I01-W14": {
       "agent_role": "executor",
@@ -8722,6 +8724,28 @@
       "path": ".ea/worktrees/p25-w10",
       "status": "merged",
       "wave_id": "P25-I01-W10"
+    },
+    "WT-P25-I01-W11-1779224956": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w11",
+      "created_at": "2026-05-19T21:09:16.122371Z",
+      "id": "WT-P25-I01-W11-1779224956",
+      "merged_commit": null,
+      "owner_session_id": "p25-w11-exec",
+      "path": ".ea/worktrees/p25-w11",
+      "status": "active",
+      "wave_id": "P25-I01-W11"
+    },
+    "WT-P25-I01-W13-1779224956": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w13",
+      "created_at": "2026-05-19T21:09:16.945550Z",
+      "id": "WT-P25-I01-W13-1779224956",
+      "merged_commit": null,
+      "owner_session_id": "p25-w13-exec",
+      "path": ".ea/worktrees/p25-w13",
+      "status": "active",
+      "wave_id": "P25-I01-W13"
     },
     "WT-P25-I01-W14-1779221190": {
       "base_branch": "feature/eawf-v0.3-p25",
