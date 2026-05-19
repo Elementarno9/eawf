@@ -20,14 +20,21 @@ from typing import Any
 BUILT_IN_LAYER: str = "built-in"
 
 # Single source of truth for the on-disk ``.ea/config.yaml`` schema version.
-# Bumped to ``"1.1"`` in P14-W03 to introduce ``runtime.adapters: list[str]``;
-# the loader keeps a deprecation shim that accepts legacy ``"1.0"`` config
-# files whose ``runtime.kind`` is the only adapter selector.
-CONFIG_SCHEMA_VERSION: str = "1.1"
+# Bumped to ``"1.0"`` in P25-W14 (C08 spec series) — the canonical layered
+# taxonomy. Earlier marker values ``"1.1"`` (P14-W03 ``runtime.adapters``
+# shim) and ``"2"`` (interim experimental) are auto-upgraded to ``"1.0"``
+# by :mod:`eawf.config.migration`. The numeric ordering of the marker
+# strings is irrelevant — they are opaque schema-shape identifiers.
+CONFIG_SCHEMA_VERSION: str = "1.0"
 
 
 _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "schema_version": CONFIG_SCHEMA_VERSION,
+    "config": {
+        # When ``false``, ``eawf config get`` hides the layer-source column
+        # in default output (operators that prefer terse listings).
+        "layers_visible": True,
+    },
     "cli": {
         "canonical_command": "eawf",
         "preferred_command": "eawf",
@@ -40,6 +47,14 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "slug": None,
         "domains": [],
         "default_subproject": None,
+        # Free-form project-level goal strings (one per list item). Surfaced
+        # in dispatch envelopes + research/audit briefs so subagents see
+        # project intent without re-deriving from state.
+        "goals": [],
+        # Quantitative goal targets keyed by metric name (e.g. p99 latency,
+        # contributor count). Values are floats so the same registry entry
+        # can carry rates / ratios / counts.
+        "success_metrics": {},
     },
     "workspace": {
         "enabled": False,
@@ -64,6 +79,11 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         ],
         "conflict_resolution": "prompt",
         "safety_policy": "strictest_wins",
+        # Content-hash trust ledger; key = profile id, value = sha256 of
+        # the body the operator last accepted. The composition loader
+        # cross-references this map when a profile body changes between
+        # loads — drift surfaces as a prompt.
+        "trusted": {},
     },
     "runtime": {
         "default": "claude",
@@ -71,6 +91,23 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # opts the project into the Claude adapter only; the wizard /
         # workspace overlay extends or replaces it.
         "adapters": ["claude"],
+        # ``preference`` is the C08-canonical fallback ladder; first entry
+        # is primary. The legacy-shim path in :mod:`eawf.config.layered`
+        # synthesises ``preference`` from ``adapters`` when only the
+        # latter is present.
+        "preference": ["claude"],
+        # Fallback policy applied when the primary runtime rejects a
+        # dispatch (rate-limit / server error / timeout / API error).
+        "fallback": {
+            "on_errors": [
+                "RUNTIME_RATE_LIMIT",
+                "RUNTIME_SERVER_ERROR",
+                "RUNTIME_TIMEOUT",
+                "RUNTIME_API_ERROR",
+            ],
+            "retry_policy": "hybrid",
+            "max_backoff_seconds": 90,
+        },
         "slash_commands": [
             "init",
             "roadmap",
@@ -110,6 +147,31 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "memory",
             "config",
         ],
+    },
+    # C09 (telemetry) projector reads these keys; defaults keep everything
+    # off-by-default so no external endpoint is contacted unless the
+    # operator opts in.
+    "telemetry": {
+        "enabled": False,
+        "export": {
+            "endpoint": None,
+            "format": "prom",
+        },
+        "window_default": "7d",
+        "aggregate_window": "24h",
+        "db_kind": "duckdb",
+    },
+    # Dispatch defaults — the per-skill or per-profile manifest still
+    # wins; these are the bottom-of-stack values.
+    "dispatch": {
+        "session_policy_default": "hybrid",
+        "session_handle_ttl_seconds": 86400,
+    },
+    # Language-fit knobs. ``runtime`` is locked at ``python`` for
+    # v0.3-v0.5 (D6); ``fast_extras`` opts in to PyO3 hot paths.
+    "language": {
+        "runtime": "python",
+        "fast_extras": [],
     },
     "storage": {
         "state_path": ".ea/state.json",

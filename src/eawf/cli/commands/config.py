@@ -112,6 +112,9 @@ class _ConfigSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = Field(pattern=r"^\d+\.\d+$")
+    # ``config`` top-level section landed in P25-W14 (C08) — currently
+    # holds ``layers_visible``; deeper validation arrives with C05.
+    config: dict[str, Any] = Field(default_factory=dict)
     cli: dict[str, Any]
     project: dict[str, Any]
     workspace: dict[str, Any]
@@ -142,6 +145,12 @@ class _ConfigSchema(BaseModel):
     # Treated as ``dict[str, Any]`` until C03-IMPL hardens the per-key
     # contract (see :mod:`eawf.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
+    # C08 (P25-W14) new top-level sections. Each is a loose
+    # ``dict[str, Any]`` for now; per-key Pydantic contracts arrive in
+    # C05 (CLI surface) and C09 (telemetry projector).
+    telemetry: dict[str, Any] = Field(default_factory=dict)
+    dispatch: dict[str, Any] = Field(default_factory=dict)
+    language: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Sub-app construction ---------------------------------------------------

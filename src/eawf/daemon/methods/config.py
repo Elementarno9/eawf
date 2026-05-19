@@ -1,10 +1,18 @@
-"""``config.*`` JSON-RPC methods: read / set_layer_value / list_layers.
+"""``config.*`` JSON-RPC methods: read / set_layer_value / list_layers
+plus the C08 wave-layer overlay management (set_wave_value /
+clear_wave_overlay / get_wave_overlay).
 
 Daemon-side canonical writer for layered config YAML (authority map
 rows 5-7). Wires P24-W10 sub-phase c of C02 §7.2: every layered-config
 write that previously went through the in-process ``_save_value_to_layer``
 helper now proxies through the ``config.set_layer_value`` RPC by default
 (``daemon.proxy_enabled=True``).
+
+P25-W14 (C08) extends the writer with the ``branch`` layer (file-backed
+at ``<repo>/.ea/branches/<branch>.yaml``; subdirectory layout for
+slash-bearing branch names) and the ``wave`` layer (transient daemon
+RAM, keyed by ``Wave.id``, reset on wave close — see
+``set_wave_value`` / ``clear_wave_overlay``).
 
 Algorithm — mirrors the W09 ``state.mutate`` lifecycle for symmetry:
 
@@ -39,12 +47,14 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.config.layered import (
+    branch_config_path,
     global_config_path,
     local_config_path,
     repo_config_path,
     workspace_config_path,
 )
 from eawf.config.loader import load_yaml_layer
+from eawf.config.registry import leaf_key_lookup
 from eawf.daemon.methods import MethodContext, register
 from eawf.state.enums import StoreKind
 from eawf.store.envelope import Envelope
@@ -70,10 +80,12 @@ class ReadParams(BaseModel):
             handler defaults to the ``repo`` layer resolved against
             ``ctx.state_path``'s parent — the daemonless reader merges
             layers itself when a merge is needed.
+        branch: Branch name (required when ``layer == "branch"``).
     """
 
     model_config = ConfigDict(extra="forbid")
     layer: str | None = None
+    branch: str | None = None
 
 
 class ReadResult(BaseModel):
@@ -89,12 +101,17 @@ class SetLayerValueParams(BaseModel):
 
     Attributes:
         layer: Canonical layer label (``global`` | ``workspace`` |
-            ``repo`` | ``local``). The ``built-in`` layer is read-only.
+            ``repo`` | ``branch`` | ``local``). The ``built-in`` layer
+            is read-only; ``env`` / ``cli`` / ``wave`` are not file-
+            backed (use :func:`set_wave_value` for the wave overlay).
         key_path: Dotted-key as a list (e.g. ``["vcs", "auto_commit"]``).
             List form keeps the wire encoding unambiguous when any
             segment contains a literal ``.``.
         value: Typed value to set. Caller is responsible for type
             coercion before crossing the wire.
+        branch: Branch name (required when ``layer == "branch"``).
+            Subdirectory form is preserved (``feature/foo`` →
+            ``.ea/branches/feature/foo.yaml``).
         idempotency_key: Optional caller-supplied retry key.
     """
 
@@ -102,7 +119,58 @@ class SetLayerValueParams(BaseModel):
     layer: str
     key_path: list[str] = Field(min_length=1)
     value: Any
+    branch: str | None = None
     idempotency_key: str | None = None
+
+
+class SetWaveValueParams(BaseModel):
+    """Params for :func:`set_wave_value`.
+
+    Attributes:
+        wave_id: ``Wave.id`` for the transient overlay (one map per
+            wave). The overlay lives in daemon RAM only and is dropped
+            on wave close / daemon shutdown.
+        key_path: Dotted-key as a list.
+        value: Typed value to set.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+    key_path: list[str] = Field(min_length=1)
+    value: Any
+
+
+class SetWaveValueResult(BaseModel):
+    """Result of :func:`set_wave_value`."""
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+    key_path: list[str]
+    value: Any
+    envelope: dict[str, Any]
+
+
+class WaveOverlayParams(BaseModel):
+    """Params for :func:`get_wave_overlay` / :func:`clear_wave_overlay`."""
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+
+
+class WaveOverlayResult(BaseModel):
+    """Result of :func:`get_wave_overlay`."""
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+    overlay: dict[str, Any]
+
+
+class ClearWaveOverlayResult(BaseModel):
+    """Result of :func:`clear_wave_overlay`."""
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+    cleared: bool
 
 
 class SetLayerValueResult(BaseModel):
@@ -173,11 +241,16 @@ def _evict_expired(cache: dict[str, Any], *, now: float) -> None:
 # ---- Layer-path resolution --------------------------------------------------
 
 
-def _resolve_layer_path(layer: str, *, state_path: Path | None) -> Path:
+def _resolve_layer_path(
+    layer: str,
+    *,
+    state_path: Path | None,
+    branch: str | None = None,
+) -> Path:
     """Return the YAML file path for *layer*.
 
-    Resolves the four file layers (global / workspace / repo / local)
-    relative to the daemon's project anchor. ``ctx.state_path``
+    Resolves the five file layers (global / workspace / repo / branch /
+    local) relative to the daemon's project anchor. ``ctx.state_path``
     (``<repo>/.ea/state.json``) names the repo root via its parent of
     parent; tests can pass a different anchor by configuring the
     context's ``state_path`` field.
@@ -185,13 +258,15 @@ def _resolve_layer_path(layer: str, *, state_path: Path | None) -> Path:
     Args:
         layer: Canonical writable-layer label.
         state_path: ``state.json`` path used to derive the repo root.
+        branch: Branch name (required when ``layer == "branch"``).
 
     Returns:
         The on-disk YAML path for *layer*.
 
     Raises:
-        ValueError: When *layer* is not a writable file layer, or when
-            ``state_path`` is missing for a repo-anchored layer.
+        ValueError: When *layer* is not a writable file layer, when
+            ``state_path`` is missing for a repo-anchored layer, or
+            when ``layer == "branch"`` and *branch* is missing.
     """
     if layer == "global":
         return global_config_path()
@@ -204,6 +279,10 @@ def _resolve_layer_path(layer: str, *, state_path: Path | None) -> Path:
         return local_config_path(repo)
     if layer == "workspace":
         return workspace_config_path(repo)
+    if layer == "branch":
+        if not branch:
+            raise ValueError("branch name required for 'branch' layer")
+        return branch_config_path(repo, branch)
     raise ValueError(f"unknown writable layer: {layer!r}")
 
 
@@ -311,7 +390,7 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     args = ReadParams.model_validate(params)
     layer = args.layer or "repo"
     state_path = ctx.state_path if isinstance(ctx.state_path, Path) else None
-    target = _resolve_layer_path(layer, state_path=state_path)
+    target = _resolve_layer_path(layer, state_path=state_path, branch=args.branch)
     body = load_yaml_layer(target)
     return ReadResult(config=body, layer_path=str(target)).model_dump(mode="json")
 
@@ -340,9 +419,21 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
 
     if args.layer == "built-in":
         raise ValueError("validation_failed: layer 'built-in' is read-only")
+    if args.layer == "wave":
+        raise ValueError(
+            "validation_failed: layer 'wave' is daemon-RAM-only; "
+            "use 'config.set_wave_value' instead"
+        )
+
+    # C08 leaf-key gate: refuse unknown keys with the canonical error
+    # message. The catalog is the source of truth for which dotted
+    # paths the daemon may persist; an unknown key is almost always a
+    # typo or a stale CLI build.
+    dotted = ".".join(args.key_path)
+    _ = leaf_key_lookup(dotted)  # raises ValueError on unknown.
 
     state_path = ctx.state_path if isinstance(ctx.state_path, Path) else None
-    target = _resolve_layer_path(args.layer, state_path=state_path)
+    target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
 
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
@@ -414,7 +505,10 @@ async def list_layers(ctx: MethodContext, params: dict[str, Any]) -> dict[str, A
     Returns:
         Dict matching :class:`ListLayersResult` — keys are layer
         labels, values are absolute paths (whether the file exists or
-        not — callers can ``Path(value).exists()`` themselves).
+        not — callers can ``Path(value).exists()`` themselves). The
+        ``branch`` key points at the ``.ea/branches`` parent directory
+        — callers walk the tree to enumerate branch files since each
+        branch yields a separate yaml file.
     """
     ListLayersParams.model_validate(params)
     state_path = ctx.state_path if isinstance(ctx.state_path, Path) else None
@@ -425,13 +519,150 @@ async def list_layers(ctx: MethodContext, params: dict[str, Any]) -> dict[str, A
         repo = state_path.parent.parent
         layers["workspace"] = str(workspace_config_path(repo))
         layers["repo"] = str(repo_config_path(repo))
+        layers["branch"] = str(repo / ".ea" / "branches")
         layers["local"] = str(local_config_path(repo))
     return ListLayersResult(layers=layers).model_dump(mode="json")
 
 
+# ---- Wave layer (transient, daemon-RAM) -------------------------------------
+
+
+def _wave_overlay_map(ctx: MethodContext) -> dict[str, dict[str, Any]]:
+    """Return the per-context wave-overlay map, creating it on first use.
+
+    The map lives on ``ctx`` rather than at module level so each test's
+    :class:`MethodContext` starts with a clean slate.
+    """
+    existing = getattr(ctx, "wave_config_overrides", None)
+    if isinstance(existing, dict):
+        return existing
+    fresh: dict[str, dict[str, Any]] = {}
+    ctx.wave_config_overrides = fresh  # type: ignore[attr-defined]
+    return fresh
+
+
+def _set_dotted_in_overlay(
+    overlay: dict[str, Any],
+    key_path: list[str],
+    value: Any,
+) -> None:
+    """Deep-set ``overlay[a][b]... = value`` for ``key_path = [a, b, ...]``."""
+    cur: dict[str, Any] = overlay
+    for part in key_path[:-1]:
+        nxt = cur.get(part)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[part] = nxt
+        cur = nxt
+    cur[key_path[-1]] = value
+
+
+@register("config.set_wave_value")
+async def set_wave_value(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Set one dotted-key value in the wave-layer overlay for *wave_id*.
+
+    The wave layer is daemon-RAM-only and resets on wave close. Use
+    case: V5 reactive runtime fallback (daemon flips a wave from
+    ``claude`` → ``codex`` mid-dispatch; subsequent envelopes for the
+    same wave honour the override).
+
+    Args:
+        ctx: Server context.
+        params: JSON-RPC params per :class:`SetWaveValueParams`.
+
+    Returns:
+        Dict matching :class:`SetWaveValueResult`.
+
+    Raises:
+        ValueError: When *key_path* references a key absent from the
+            C08 leaf catalog (typo gate).
+    """
+    args = SetWaveValueParams.model_validate(params)
+    dotted = ".".join(args.key_path)
+    entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
+    if "wave" not in entry.writable_layers:
+        raise ValueError(f"validation_failed: leaf {dotted!r} is not writable from the wave layer")
+
+    overlay_map = _wave_overlay_map(ctx)
+    per_wave = overlay_map.setdefault(args.wave_id, {})
+    _set_dotted_in_overlay(per_wave, list(args.key_path), args.value)
+
+    envelope = _build_envelope(
+        layer="wave",
+        layer_path=Path(f"<wave:{args.wave_id}>"),
+        key_path=list(args.key_path),
+        value=args.value,
+    )
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
+
+    logger.info(f"set_wave_value ok wave={args.wave_id!r} key_path={args.key_path}")
+    return SetWaveValueResult(
+        wave_id=args.wave_id,
+        key_path=list(args.key_path),
+        value=args.value,
+        envelope=envelope.model_dump(mode="json"),
+    ).model_dump(mode="json")
+
+
+@register("config.get_wave_overlay")
+async def get_wave_overlay(
+    ctx: MethodContext,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the current wave-layer overlay for *wave_id*.
+
+    Args:
+        ctx: Server context.
+        params: JSON-RPC params per :class:`WaveOverlayParams`.
+
+    Returns:
+        Dict matching :class:`WaveOverlayResult`. Empty mapping when
+        the wave has no overlay set.
+    """
+    args = WaveOverlayParams.model_validate(params)
+    overlay_map = _wave_overlay_map(ctx)
+    overlay = overlay_map.get(args.wave_id, {})
+    return WaveOverlayResult(
+        wave_id=args.wave_id,
+        overlay=dict(overlay),
+    ).model_dump(mode="json")
+
+
+@register("config.clear_wave_overlay")
+async def clear_wave_overlay(
+    ctx: MethodContext,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Drop the wave-layer overlay for *wave_id*.
+
+    Idempotent — clearing an absent overlay returns ``cleared=False``.
+
+    Args:
+        ctx: Server context.
+        params: JSON-RPC params per :class:`WaveOverlayParams`.
+
+    Returns:
+        Dict matching :class:`ClearWaveOverlayResult`.
+    """
+    args = WaveOverlayParams.model_validate(params)
+    overlay_map = _wave_overlay_map(ctx)
+    cleared = args.wave_id in overlay_map
+    overlay_map.pop(args.wave_id, None)
+    logger.info(f"clear_wave_overlay wave={args.wave_id!r} cleared={cleared}")
+    return ClearWaveOverlayResult(
+        wave_id=args.wave_id,
+        cleared=cleared,
+    ).model_dump(mode="json")
+
+
 __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
+    "clear_wave_overlay",
+    "get_wave_overlay",
     "list_layers",
     "read",
     "set_layer_value",
+    "set_wave_value",
 ]

@@ -44,12 +44,15 @@ def _isolate_global(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator
 
 
 def test_layer_order_canonical() -> None:
+    """P25-W14 (C08) extends the six durable layers with branch + wave."""
     assert LAYER_ORDER == (
         "built-in",
         "global",
         "workspace",
         "repo",
+        "branch",
         "local",
+        "wave",
         "env",
         "cli",
     )
