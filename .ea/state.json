@@ -236,6 +236,16 @@
       "uri": "repo:.ea/artifacts/A30-P24-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A30-P24"
     },
+    "ART-A31-P25": {
+      "created_at": "2026-05-19T23:18:28.618387Z",
+      "id": "ART-A31-P25",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/A31-P25-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-A31-P25"
+    },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
       "created_at": "2026-05-18T19:17:46.268887Z",
       "id": "ART-research-long-term-2026-05-16-c00-spec-index",
@@ -797,6 +807,17 @@
       "scope_id": "EAWF",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A31-P25-ship-gate": {
+      "check_results": [],
+      "created_at": "2026-05-19T23:18:32.244884Z",
+      "id": "A31-P25-ship-gate",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A31-P25",
+      "scope_id": "P25",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -1510,8 +1531,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P25-I01",
-    "phase_id": "P25",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2333,13 +2354,13 @@
       ]
     },
     "P25-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A31-P25-ship-gate",
+      "closed_at": "2026-05-19T23:19:24.503228Z",
       "estimate_id": null,
       "id": "P25-I01",
       "opened_at": "2026-05-18T19:45:10.543231Z",
       "phase_id": "P25",
-      "status": "active",
+      "status": "closed",
       "title": "P25-I01: contracts waves (4-way parallel)",
       "wave_ids": [
         "P25-I01-W01",
@@ -2798,8 +2819,8 @@
       "title": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock writer"
     },
     "P25": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A31-P25-ship-gate",
+      "closed_at": "2026-05-19T23:19:28.215314Z",
       "depends_on": [
         "P24"
       ],
@@ -2817,7 +2838,7 @@
         "ART-research-long-term-2026-05-16-c08-configurability-profiles",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS events + profiles"
     },
@@ -2904,7 +2925,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T22:00:08.338081Z",
+  "updated_at": "2026-05-19T23:19:28.215399Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
