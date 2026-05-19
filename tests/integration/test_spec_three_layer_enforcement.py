@@ -166,7 +166,7 @@ def test_layer2_hook_passes_when_cited_test_files_exist(tmp_path: Path) -> None:
     spec_path = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W05.md"
     _seed_spec_markdown(
         spec_path,
-        "# WaveSpec P25-I01-W05\n\n- tests/unit/test_real.py\n",
+        "# WaveSpec P25-I01-W05\n\n## Tests\n\n- tests/unit/test_real.py\n",
     )
     proc = _run_hook([".ea/specs/P25/P25-I01-W05.md"], tmp_path)
     assert proc.returncode == 0, proc.stderr
@@ -176,7 +176,7 @@ def test_layer2_hook_rejects_when_cited_test_file_missing(tmp_path: Path) -> Non
     spec_path = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W05.md"
     _seed_spec_markdown(
         spec_path,
-        "# WaveSpec P25-I01-W05\n\n- tests/unit/test_missing.py\n",
+        "# WaveSpec P25-I01-W05\n\n## Tests\n\n- tests/unit/test_missing.py\n",
     )
     proc = _run_hook([".ea/specs/P25/P25-I01-W05.md"], tmp_path)
     assert proc.returncode == 1
@@ -192,7 +192,7 @@ def test_layer2_hook_rejects_multiple_missing_paths(tmp_path: Path) -> None:
     spec_path = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W05.md"
     _seed_spec_markdown(
         spec_path,
-        "# WaveSpec\n\n- tests/unit/test_real.py\n- tests/unit/test_gone.py\n"
+        "# WaveSpec\n\n## Tests\n\n- tests/unit/test_real.py\n- tests/unit/test_gone.py\n"
         "- `tests/integration/test_z.py`\n",
     )
     proc = _run_hook([".ea/specs/P25/P25-I01-W05.md"], tmp_path)
@@ -208,7 +208,7 @@ def test_layer2_hook_handles_markdown_link_citation(tmp_path: Path) -> None:
     spec_path = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W05.md"
     _seed_spec_markdown(
         spec_path,
-        "# WaveSpec\n\nSee [the test](tests/unit/test_missing.py) for the assertion.\n",
+        "# WaveSpec\n\n## Tests\n\nSee [the test](tests/unit/test_missing.py) for the assertion.\n",
     )
     proc = _run_hook([".ea/specs/P25/P25-I01-W05.md"], tmp_path)
     assert proc.returncode == 1
@@ -219,7 +219,7 @@ def test_layer2_hook_dedupes_same_path_cited_twice(tmp_path: Path) -> None:
     spec_path = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W05.md"
     _seed_spec_markdown(
         spec_path,
-        "# WaveSpec\n\n- tests/unit/test_missing.py\n- tests/unit/test_missing.py\n",
+        "# WaveSpec\n\n## Tests\n\n- tests/unit/test_missing.py\n- tests/unit/test_missing.py\n",
     )
     proc = _run_hook([".ea/specs/P25/P25-I01-W05.md"], tmp_path)
     assert proc.returncode == 1
@@ -247,8 +247,8 @@ def test_layer2_hook_processes_multiple_spec_files(tmp_path: Path) -> None:
     (tmp_path / "tests" / "unit" / "test_real.py").write_text("# test\n", encoding="utf-8")
     spec_a = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W01.md"
     spec_b = tmp_path / ".ea" / "specs" / "P25" / "P25-I01-W02.md"
-    _seed_spec_markdown(spec_a, "Cites tests/unit/test_real.py\n")
-    _seed_spec_markdown(spec_b, "Cites tests/unit/test_missing.py\n")
+    _seed_spec_markdown(spec_a, "## Tests\n\nCites tests/unit/test_real.py\n")
+    _seed_spec_markdown(spec_b, "## Tests\n\nCites tests/unit/test_missing.py\n")
     proc = _run_hook(
         [".ea/specs/P25/P25-I01-W01.md", ".ea/specs/P25/P25-I01-W02.md"],
         tmp_path,
