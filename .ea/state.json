@@ -1477,10 +1477,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I01-W02",
-      "P24-I01-W03"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2841,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T14:02:10.944892Z",
+  "updated_at": "2026-05-19T14:23:48.960238Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6990,7 +6987,7 @@
         "P24-I01-W05"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T14:23:48.216186Z",
       "commit": null,
       "deps": [
         "P24-I01-W01"
@@ -7003,8 +7000,8 @@
       "id": "P24-I01-W02",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:18.597212Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "Windows pywin32 named-pipe + DACL/SID + asyncio queue bridge per C02 §5.13; optional pywin32 extras; macOS pre-commit/mypy/64 daemon tests pass",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: Windows pywin32 named-pipe listener + asyncio queue bridge (XB11/Q8)",
       "token_budget": null,
@@ -7019,7 +7016,7 @@
         "P24-I01-W09"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T14:23:48.960125Z",
       "commit": null,
       "deps": [
         "P24-I01-W01"
@@ -7033,8 +7030,8 @@
       "id": "P24-I01-W03",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:23.326566Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "outcome-WAL + startup replay + poisoned-WAL admin per Q10/XB12; 47 new daemon tests; pre-commit clean",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: outcome-WAL (XB12/Q10) + startup replay + poisoned-WAL handling",
       "token_budget": null,
