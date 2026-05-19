@@ -147,6 +147,47 @@ def test_extra_field_on_envelope_rejected() -> None:
         )
 
 
+def test_extra_field_on_header_rejected() -> None:
+    """``EnvelopeHeader`` rejects unknown keys (schema-version drift guard)."""
+    from pydantic import ValidationError
+
+    from eawf.render.envelope import EnvelopeHeader
+
+    with pytest.raises(ValidationError):
+        EnvelopeHeader.model_validate(
+            {
+                "skill": "/research",
+                "scope_id": "urn:eawf:v1:state:QR",
+                "session": "urn:eawf:v1:store:QR/sessions/SES-1",
+                "started_at": "2026-05-09T00:00:00Z",
+                "finished_at": "2026-05-09T00:00:01Z",
+                "status": "ok",
+                "instrument_probe": {},
+                "schema_version": "2.0",  # drifted/unknown field
+            }
+        )
+
+
+def test_extra_field_on_footer_rejected() -> None:
+    """``EnvelopeFooter`` rejects unknown keys (schema-version drift guard)."""
+    from pydantic import ValidationError
+
+    from eawf.render.envelope import EnvelopeFooter
+
+    with pytest.raises(ValidationError):
+        EnvelopeFooter.model_validate({"unexpected_footer_key": []})
+
+
+def test_envelope_status_enum_has_exactly_five_members() -> None:
+    """The frozen ``EnvelopeStatus`` Literal carries the five success-criterion values."""
+    from typing import get_args
+
+    from eawf.render.envelope import EnvelopeStatus
+
+    members = set(get_args(EnvelopeStatus))
+    assert members == {"ok", "needs_user", "blocked", "failed", "partial"}
+
+
 def test_to_markdown_is_deterministic_under_key_reorder() -> None:
     """``sort_keys=True`` makes the YAML byte-identical regardless of insertion order."""
     a = _sample_env(
