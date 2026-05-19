@@ -36,6 +36,7 @@ import eawf.daemon.methods.config  # registers config.read / set_layer_value / l
 import eawf.daemon.methods.daemon
 import eawf.daemon.methods.event
 import eawf.daemon.methods.registry  # registers registry.read / registry.update (W10)
+import eawf.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
 from eawf.daemon.auth import UnauthorizedError, verify_peer_credential

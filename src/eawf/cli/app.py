@@ -393,6 +393,12 @@ from eawf.cli.commands.daemon import daemon_app  # noqa: E402
 app.add_typer(daemon_app, name="daemon", rich_help_panel=panel_for("daemon"))
 # --- end P24 W01 ---
 
+# --- P25 W03 spec registration ---
+from eawf.cli.commands.spec import spec_app  # noqa: E402
+
+app.add_typer(spec_app, name="spec", rich_help_panel=panel_for("spec"))
+# --- end P25 W03 ---
+
 
 def main() -> None:
     app()

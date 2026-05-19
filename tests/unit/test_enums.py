@@ -466,6 +466,8 @@ def test_store_kind_values() -> None:
         # P24-W10 — config + registry updates fan out through the bus.
         "config_updated",
         "registry_updated",
+        # P25-W03 — spec writer / cache lifecycle events.
+        "spec_updated",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected
