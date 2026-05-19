@@ -26,11 +26,25 @@ logger = logging.getLogger(__name__)
 def runtime_dir() -> Path:
     """Return the runtime directory the daemon should use.
 
+    Resolution order:
+
+    1. ``EAWF_RUNTIME_DIR`` env var — explicit operator/test override.
+       The value is used verbatim; the caller is responsible for
+       choosing a path short enough for AF_UNIX (104-byte cap on
+       macOS) and for ensuring write access.
+    2. ``XDG_RUNTIME_DIR/eawfd`` on Linux when ``XDG_RUNTIME_DIR`` is
+       set.
+    3. ``~/.eawfd/`` everywhere else (macOS / generic POSIX /
+       Windows).
+
     Returns:
         Path to the per-user daemon runtime directory. Caller is
         responsible for ensuring it exists with ``Path.mkdir`` when
         a write is imminent.
     """
+    override = os.environ.get("EAWF_RUNTIME_DIR")
+    if override:
+        return Path(override)
     if sys.platform.startswith("linux"):
         xdg = os.environ.get("XDG_RUNTIME_DIR")
         if xdg:

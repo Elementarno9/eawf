@@ -24,6 +24,7 @@ from pathlib import Path
 from eawf import __version__
 from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.bus import EventBus
+from eawf.daemon.idle import IdleTimeoutWatchdog
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.runtime_dir import log_path, pid_path, runtime_dir, socket_path
 from eawf.daemon.server import process_frame_bytes, serve_unix
@@ -33,9 +34,63 @@ from eawf.store.paths import store_path
 logger = logging.getLogger(__name__)
 
 
-# Idle skeleton — placeholder so the daemon does not run forever during
-# development. W08 owns the configurable shape + cold-spawn benchmark.
-_IDLE_TIMEOUT_SECONDS = 300
+#: Default idle window before the watchdog signals shutdown. Aligned
+#: with the Anthropic prompt-cache TTL (C02 §4 D11) so a CLI that
+#: consults the daemon every five minutes keeps it warm.
+DEFAULT_IDLE_TIMEOUT_SECONDS: float = 300.0
+
+
+def _resolve_idle_timeout() -> float:
+    """Return the configured idle timeout in seconds.
+
+    The env var ``EAWF_DAEMON_IDLE_TIMEOUT`` lets the operator override
+    the default for testing + tuning; the canonical config surface
+    lands in C08's layered-config wave. A non-positive override falls
+    back to the default and logs a warning.
+    """
+    raw = os.environ.get("EAWF_DAEMON_IDLE_TIMEOUT")
+    if not raw:
+        return DEFAULT_IDLE_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(f"_resolve_idle_timeout unparseable raw={raw!r}; using default")
+        return DEFAULT_IDLE_TIMEOUT_SECONDS
+    if value <= 0:
+        logger.warning(f"_resolve_idle_timeout non-positive raw={raw!r}; using default")
+        return DEFAULT_IDLE_TIMEOUT_SECONDS
+    return value
+
+
+def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTimeoutWatchdog:
+    """Construct an :class:`IdleTimeoutWatchdog` wired to *ctx*.
+
+    Args:
+        ctx: Live :class:`MethodContext` whose ``last_activity`` field
+            the dispatcher refreshes per non-subscribe RPC.
+        idle_timeout_seconds: Idle window in seconds.
+
+    Returns:
+        Watchdog instance ready for ``await watchdog.run(event)``.
+    """
+
+    def _last_activity() -> float:
+        return ctx.last_activity
+
+    def _has_subscribers() -> bool:
+        if ctx.bus is not None and hasattr(ctx.bus, "active_subscriptions"):
+            return int(ctx.bus.active_subscriptions) > 0
+        return ctx.active_subscriptions > 0
+
+    def _in_flight() -> int:
+        return ctx.in_flight_mutations
+
+    return IdleTimeoutWatchdog(
+        idle_timeout_seconds=idle_timeout_seconds,
+        last_activity=_last_activity,
+        has_subscribers=_has_subscribers,
+        in_flight=_in_flight,
+    )
 
 
 def _write_pid_file(path: Path, pid: int, started_at: str) -> None:
@@ -92,14 +147,15 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             loop.add_signal_handler(sig, _request_shutdown)
 
     assert isinstance(ctx.shutdown_event, asyncio.Event)
+    idle_timeout = _resolve_idle_timeout()
+    watchdog = _build_watchdog(ctx, idle_timeout)
+    watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     try:
-        # Idle skeleton: stop the daemon if no traffic + no shutdown for
-        # five minutes. W08 replaces this with a config-driven watchdog.
-        try:
-            await asyncio.wait_for(ctx.shutdown_event.wait(), timeout=_IDLE_TIMEOUT_SECONDS)
-        except TimeoutError:
-            logger.info(f"_run_server idle-timeout seconds={_IDLE_TIMEOUT_SECONDS}")
+        await ctx.shutdown_event.wait()
     finally:
+        watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watchdog_task
         server.close()
         await server.wait_closed()
 
@@ -131,15 +187,15 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     logger.info(f"_run_windows_server bound pipe={pipe_server.pipe_path!r}")
 
     assert isinstance(ctx.shutdown_event, asyncio.Event)
+    idle_timeout = _resolve_idle_timeout()
+    watchdog = _build_watchdog(ctx, idle_timeout)
+    watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     try:
-        try:
-            await asyncio.wait_for(
-                ctx.shutdown_event.wait(),
-                timeout=_IDLE_TIMEOUT_SECONDS,
-            )
-        except TimeoutError:
-            logger.info(f"_run_windows_server idle-timeout seconds={_IDLE_TIMEOUT_SECONDS}")
+        await ctx.shutdown_event.wait()
     finally:
+        watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watchdog_task
         pipe_server.stop()
 
 
