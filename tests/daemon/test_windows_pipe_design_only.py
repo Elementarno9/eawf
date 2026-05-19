@@ -148,7 +148,7 @@ def test_windows_pipe_server_start_twice_rejected() -> None:
             target=lambda: None,
             daemon=True,
         )
-        with pytest.raises(RuntimeError, match=r"start\(\) called twice"):
+        with pytest.raises(RuntimeError, match=r"already started"):
             server.start()
 
     asyncio.run(runner())

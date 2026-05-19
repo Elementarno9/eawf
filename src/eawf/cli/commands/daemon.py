@@ -90,7 +90,7 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
     """
     sock_path = socket_path()
     if not sock_path.exists():
-        raise ConnectionRefusedError(f"daemon socket missing: {sock_path}")
+        raise ConnectionRefusedError(f"daemon socket missing: {sock_path!r}")
     reader, writer = await asyncio.open_unix_connection(path=str(sock_path))
     try:
         request: dict[str, Any] = {

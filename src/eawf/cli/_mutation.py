@@ -243,13 +243,15 @@ def state_mutate(
                 result = client.state_mutate(mutation, idempotency_key=idempotency_key)
         except DaemonRpcError as exc:
             if exc.code == -32601:  # method not found — daemon predates W09
-                logger.debug(f"state_mutate daemon-rpc method-not-found kind={mutation.kind.value}")
+                logger.debug(
+                    f"state_mutate daemon-rpc method-not-found mutation_kind={mutation.kind.value}"
+                )
                 # Fall through to the in-process path so the CLI still
                 # works against pre-W09 daemons; the V1 read-bypass set
                 # treats this as a clean fallback.
             elif "NotImplementedError" in (exc.message or ""):
                 logger.debug(
-                    f"state_mutate daemon-rpc not-implemented kind={mutation.kind.value}; "
+                    f"state_mutate daemon-rpc not-implemented mutation_kind={mutation.kind.value}; "
                     "falling back to in-process"
                 )
             elif exc.code == -32002:
