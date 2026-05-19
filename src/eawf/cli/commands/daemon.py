@@ -57,6 +57,7 @@ from eawf.daemon.service_install import (
     enable_service,
     service_status,
 )
+from eawf.daemon.spawn import DaemonSpawnTimeoutError, auto_spawn_daemon
 from eawf.daemon.wal import (
     gc_done_records,
     list_poisoned,
@@ -77,6 +78,9 @@ daemon_app = typer.Typer(
 async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
     """Issue a single JSON-RPC call against the local daemon socket.
 
+    Cold-spawns the daemon when no live socket is present, per the V1
+    on-demand spawn contract. Silent unless ``EAWF_VERBOSE=1`` is set.
+
     Args:
         method: JSON-RPC method name.
         params: Method params object.
@@ -85,12 +89,14 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
         The parsed response envelope (success or error).
 
     Raises:
-        ConnectionRefusedError: When the socket is missing or the
-            daemon refuses the connection.
+        ConnectionRefusedError: When the daemon refuses the connection
+            after a spawn attempt.
+        DaemonSpawnTimeoutError: When the auto-spawn never produces a
+            live socket within the timeout window.
     """
     sock_path = socket_path()
     if not sock_path.exists():
-        raise ConnectionRefusedError(f"daemon socket missing: {sock_path!r}")
+        auto_spawn_daemon(runtime_dir())
     reader, writer = await asyncio.open_unix_connection(path=str(sock_path))
     try:
         request: dict[str, Any] = {
@@ -195,7 +201,7 @@ def ping_cmd(ctx: typer.Context) -> None:
     flags: GlobalFlags = ctx.obj
     try:
         response = _run_rpc("daemon.ping", {})
-    except (ConnectionRefusedError, FileNotFoundError) as exc:
+    except (ConnectionRefusedError, FileNotFoundError, DaemonSpawnTimeoutError) as exc:
         typer.echo(f"daemon not reachable: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     _emit_or_fail(
@@ -211,7 +217,7 @@ def status_cmd(ctx: typer.Context) -> None:
     flags: GlobalFlags = ctx.obj
     try:
         response = _run_rpc("daemon.status", {})
-    except (ConnectionRefusedError, FileNotFoundError) as exc:
+    except (ConnectionRefusedError, FileNotFoundError, DaemonSpawnTimeoutError) as exc:
         typer.echo(f"daemon not reachable: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     _emit_or_fail(
@@ -244,7 +250,7 @@ def stop_cmd(
     params: dict[str, Any] = {"drain": not no_drain, "timeout_seconds": timeout}
     try:
         response = _run_rpc("daemon.shutdown", params)
-    except (ConnectionRefusedError, FileNotFoundError) as exc:
+    except (ConnectionRefusedError, FileNotFoundError, DaemonSpawnTimeoutError) as exc:
         typer.echo(f"daemon not reachable: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     _emit_or_fail(
