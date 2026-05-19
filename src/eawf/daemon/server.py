@@ -34,6 +34,7 @@ import orjson
 import eawf.daemon.methods.agent
 import eawf.daemon.methods.daemon
 import eawf.daemon.methods.event
+import eawf.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
 from eawf.daemon.auth import UnauthorizedError, verify_peer_credential
 from eawf.daemon.bus import CatchUpTooLargeError, EventBus, Subscriber

@@ -34,6 +34,7 @@ import orjson
 
 from eawf.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.daemon.spawn import auto_spawn_daemon
+from eawf.state.mutations import Mutation
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +199,43 @@ class DaemonClient:
             # other shape is a wire-level violation.
             raise RuntimeError(f"daemon returned non-object result: {result!r}")
         return result
+
+    def state_mutate(
+        self,
+        mutation: Mutation,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a :class:`Mutation` through the daemon's ``state.mutate`` RPC.
+
+        Thin convenience wrapper around :meth:`call` — serialises the
+        mutation to a JSON-mode dict, forwards the optional idempotency
+        key alongside it, and unwraps the result dict. Used by
+        :mod:`eawf.cli._mutation` for the W09 proxy callsite rewire.
+
+        Args:
+            mutation: Typed mutation to dispatch.
+            idempotency_key: Optional caller-supplied retry key. Shadows
+                :attr:`Mutation.idempotency_key` when both are set.
+
+        Returns:
+            Dict matching
+            :class:`eawf.daemon.methods.state.MutateResult` — the event
+            envelope plus ``before_version`` / ``after_version`` digests
+            and the ``idempotent_replay`` flag.
+
+        Raises:
+            DaemonRpcError: When the daemon returns a JSON-RPC error
+                envelope (e.g. ``-32002 validation_failed``).
+            RuntimeError: When the client was never entered or the
+                socket is closed.
+        """
+        params: dict[str, Any] = {"mutation": mutation.model_dump(mode="json")}
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        elif mutation.idempotency_key is not None:
+            params["idempotency_key"] = mutation.idempotency_key
+        return self.call("state.mutate", params)
 
 
 def _is_verbose() -> bool:
