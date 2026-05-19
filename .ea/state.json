@@ -1477,9 +1477,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I01-W01"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2840,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T13:40:03.443589Z",
+  "updated_at": "2026-05-19T14:00:57.771551Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -6963,7 +6961,7 @@
         "P24-I01-W08"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T14:00:57.771352Z",
       "commit": null,
       "deps": [],
       "effort_bucket": "L",
@@ -6974,8 +6972,8 @@
       "id": "P24-I01-W01",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:12.455384Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "daemon scaffolding + JSON-RPC framing landed; pivoted macOS peer-cred from os.getpeereid to LOCAL_PEERCRED (xucred); 14 daemon tests + full regression suite pass",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: daemon process scaffolding + asyncio JSON-RPC framing + daemon.ping/status/shutdown methods",
       "token_budget": null,
