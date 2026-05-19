@@ -30,10 +30,11 @@ def test_config_yaml_emits_adapters_list() -> None:
     assert runtime["kind"] == "claude-code"
 
 
-def test_config_yaml_carries_schema_v1_1() -> None:
+def test_config_yaml_carries_schema_marker() -> None:
+    """P25-W14 (C08) bumps the canonical schema marker to ``1.0``."""
     body = _build_config_yaml(_answers())
     assert body["schema_version"] == CONFIG_SCHEMA_VERSION
-    assert body["schema_version"] == "1.1"
+    assert body["schema_version"] == "1.0"
 
 
 def test_runtime_choices_accept_codex() -> None:
@@ -51,4 +52,4 @@ def test_wizard_writes_disk_config_with_adapters(tmp_path: Path) -> None:
     loaded = yaml.safe_load(config_text)
     assert loaded["runtime"]["adapters"] == ["opencode"]
     assert loaded["runtime"]["kind"] == "opencode"
-    assert loaded["schema_version"] == "1.1"
+    assert loaded["schema_version"] == "1.0"
