@@ -53,6 +53,10 @@ class MethodContext:
             ``event.subscribe`` / ``event.list`` / ``event.show`` for
             catch-up + bounded reads. ``None`` when the daemon runs in
             a context without an on-disk store (unit tests only).
+        state_path: Filesystem path to ``state.json`` used by the
+            ``agent.*`` methods to inspect wave / session rows.
+            ``None`` when the daemon runs without an on-disk state
+            (unit tests; daemonless paths).
     """
 
     started_at: str
@@ -65,6 +69,7 @@ class MethodContext:
     shutdown_event: Any = field(default=None)
     bus: Any = field(default=None)
     event_path: Any = field(default=None)
+    state_path: Any = field(default=None)
 
 
 Handler = Callable[[MethodContext, dict[str, Any]], Awaitable[dict[str, Any]]]

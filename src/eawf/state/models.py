@@ -24,6 +24,7 @@ from eawf.state.enums import (
     BacklogStatus,
     Confidence,
     DecisionStatus,
+    DispatchNote,
     EffortBucket,
     FlowStatus,
     GoalStatus,
@@ -218,6 +219,82 @@ class Iter(_StrictModel):
     closed_at: UtcDatetime | None = None
 
 
+class SessionAttempt(_StrictModel):
+    """One runtime subprocess attempt against a wave.
+
+    Captures the daemon-issued bookkeeping for a single
+    ``agent.dispatch`` invocation. ``session_log_handle`` is an
+    **opaque** handle (blob-URN or daemon-side index key) — never a
+    filesystem path. The daemon's in-process map (see
+    :func:`eawf.daemon.session.register_session_log` /
+    :func:`eawf.daemon.session.resolve_session_log`) is the only place
+    real paths live, satisfying AGENTS rule 16 + audit XB05 /
+    C02-I007.
+
+    Attributes:
+        attempt: 1-based attempt counter under the parent wave.
+        runtime: Runtime adapter id (e.g. ``"claude-code"`` /
+            ``"codex"`` / ``"opencode"``).
+        session_id: Runtime-specific session identifier (typically a
+            UUID emitted by the runtime).
+        session_log_handle: Opaque handle resolvable by the daemon to
+            a real session-log path. Format is daemon-internal; the
+            fresh-path skeleton uses
+            ``urn:eawf:v1:session-log:<runtime>:<uuid>``.
+        started_at: When the subprocess started.
+        ended_at: When the subprocess exited; ``None`` while running.
+        exit_status: Subprocess exit code; ``None`` while running.
+        subprocess_pid: PID at spawn time; ``None`` before W09 wires
+            the actual spawn.
+        cache_creation_input_tokens: Anthropic prompt-cache write
+            tokens charged on this attempt (optional).
+        cache_read_input_tokens: Anthropic prompt-cache read tokens
+            charged on this attempt (optional).
+        input_tokens: Non-cached input tokens (optional).
+        output_tokens: Output tokens (optional).
+    """
+
+    attempt: Annotated[int, Field(ge=1)]
+    runtime: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    session_log_handle: str = Field(min_length=1)
+    started_at: UtcDatetime
+    ended_at: UtcDatetime | None = None
+    exit_status: int | None = None
+    subprocess_pid: int | None = None
+    cache_creation_input_tokens: int | None = None
+    cache_read_input_tokens: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+class DispatchAnnotation(_StrictModel):
+    """One dispatch-history row attached to a wave.
+
+    The annotation captures the *transition* — fresh dispatch, continue
+    from session, continue-failed fallback, V5 runtime switch, or
+    operator-driven manual switch — that produced the matching
+    :class:`SessionAttempt` row in ``Wave.sessions``.
+
+    Attributes:
+        attempt: Attempt number this annotation belongs to.
+        note: Why the dispatch happened (per :class:`DispatchNote`).
+        runtime_from: Runtime id of the previous attempt, when this
+            transition swapped runtimes. ``None`` on first dispatch.
+        runtime_to: Runtime id of the new attempt.
+        occurred_at: Wall-clock timestamp of the transition.
+        reason: Free-form scrubbed context the operator or runtime
+            attached at dispatch time.
+    """
+
+    attempt: Annotated[int, Field(ge=1)]
+    note: DispatchNote
+    runtime_from: str | None = None
+    runtime_to: str | None = None
+    occurred_at: UtcDatetime
+    reason: str | None = None
+
+
 class Wave(_StrictModel):
     """Atomic execution unit under an iter."""
 
@@ -239,6 +316,9 @@ class Wave(_StrictModel):
     commit: ShaStr | None = None
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
+    sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
+    runtime_preference: list[str] | None = None
+    dispatch_history: list[DispatchAnnotation] = Field(default_factory=list)
 
 
 class Hypothesis(_StrictModel):

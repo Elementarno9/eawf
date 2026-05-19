@@ -31,6 +31,7 @@ from typing import Any, cast
 import orjson
 
 # Import to ensure handlers register before dispatch runs.
+import eawf.daemon.methods.agent
 import eawf.daemon.methods.daemon
 import eawf.daemon.methods.event
 import eawf.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
