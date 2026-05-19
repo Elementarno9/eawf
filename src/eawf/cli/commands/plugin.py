@@ -60,6 +60,10 @@ from eawf.runtimes.opencode.plugin_install import (
 from eawf.runtimes.opencode.plugin_install import (
     IntegrityViolation as OpencodeIntegrityViolation,
 )
+from eawf.runtimes.plugin_doctor import (
+    PluginDoctorReport,
+    run_doctor,
+)
 from eawf.runtimes.plugin_sync import (
     PluginSyncIntegrityError,
     SyncResult,
@@ -493,6 +497,46 @@ def _doctor_text(report: DoctorReport) -> str:
     return "\n".join(parts)
 
 
+def _multi_kind_doctor_payload(report: PluginDoctorReport) -> dict[str, object]:
+    """Render the multi-kind :class:`PluginDoctorReport` as JSON envelope body."""
+    return {
+        "target_dir": str(report.target_dir),
+        "runtimes": list(report.runtimes),
+        "clean": report.clean,
+        "kinds": [
+            {
+                "kind": kind.kind,
+                "clean": kind.clean,
+                "skipped": kind.skipped,
+                "findings": [
+                    {
+                        "runtime": f.runtime,
+                        "location": f.location,
+                        "detail": f.detail,
+                    }
+                    for f in kind.findings
+                ],
+            }
+            for kind in report.kinds
+        ],
+    }
+
+
+def _multi_kind_doctor_text(report: PluginDoctorReport) -> str:
+    """Render the multi-kind :class:`PluginDoctorReport` as text."""
+    parts = [f"plugin doctor (4 drift kinds) -> {report.target_dir}"]
+    parts.append(f"  runtimes: {', '.join(report.runtimes)}")
+    parts.append(f"  clean: {report.clean}")
+    for kind in report.kinds:
+        status = "skipped" if kind.skipped else ("clean" if kind.clean else "drift")
+        parts.append(f"  [{kind.kind}] {status} ({len(kind.findings)} findings)")
+        for finding in kind.findings:
+            runtime_tag = finding.runtime or "-"
+            parts.append(f"    - runtime={runtime_tag} location={finding.location}")
+            parts.append(f"      detail: {finding.detail}")
+    return "\n".join(parts)
+
+
 def _package_payload(result: PackageResult) -> dict[str, object]:
     """Render :class:`PackageResult` as the JSON envelope body."""
     return {
@@ -769,9 +813,16 @@ def update_cmd(
 def doctor_cmd(
     ctx: typer.Context,
     runtime: Annotated[
-        str,
-        typer.Argument(help="Runtime to inspect: 'claude', 'codex', or 'opencode'."),
-    ],
+        str | None,
+        typer.Argument(
+            help=(
+                "Runtime to inspect: 'claude', 'codex', or 'opencode'. "
+                "Omit the argument to run the multi-runtime 4-drift-kind "
+                "sweep (manifest-vs-disk, registry-vs-disk, "
+                "capability-vs-probe, helper-LOC-overflow) per C07a §5.9."
+            ),
+        ),
+    ] = None,
     scope: Annotated[
         str,
         typer.Option(
@@ -782,13 +833,28 @@ def doctor_cmd(
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
     flags: GlobalFlags = ctx.obj
+    target = _resolve_target(flags)
+    if runtime is None:
+        # Multi-kind sweep (no runtime arg) — enumerates the 4 drift
+        # kinds across all three runtimes. ``capability-vs-probe`` is
+        # skipped here because probe injection is the daemon's job; the
+        # CLI surface only emits the manifest/registry/LOC kinds.
+        report = run_doctor(target)
+        emit_json_or_text(
+            _multi_kind_doctor_payload(report),
+            _multi_kind_doctor_text(report),
+            flags=flags,
+        )
+        if not report.clean:
+            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+        return
+
     try:
         _validate_runtime(runtime)
         _validate_scope(scope, runtime=runtime)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
-    target = _resolve_target(flags)
     scope_lit = cast(Scope, scope)
     if runtime == "codex":
         codex_report = codex_doctor_plugin(target, scope=scope_lit)
@@ -810,9 +876,9 @@ def doctor_cmd(
         if not oc_report.clean:
             raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
         return
-    report = doctor_plugin(target)
-    emit_json_or_text(_doctor_payload(report), _doctor_text(report), flags=flags)
-    if not report.clean:
+    claude_report = doctor_plugin(target)
+    emit_json_or_text(_doctor_payload(claude_report), _doctor_text(claude_report), flags=flags)
+    if not claude_report.clean:
         raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
 
 
