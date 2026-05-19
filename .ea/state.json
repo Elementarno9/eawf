@@ -1532,7 +1532,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P26",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2889,7 +2889,7 @@
         "ART-research-long-term-2026-05-17-c06-operator-surface",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime + operator TUI"
     },
@@ -2949,7 +2949,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T23:57:37.569671Z",
+  "updated_at": "2026-05-19T23:58:40.345364Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
