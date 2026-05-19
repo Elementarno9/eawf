@@ -60,11 +60,24 @@ from eawf.runtimes.opencode.plugin_install import (
 from eawf.runtimes.opencode.plugin_install import (
     IntegrityViolation as OpencodeIntegrityViolation,
 )
+from eawf.runtimes.plugin_sync import (
+    PluginSyncIntegrityError,
+    SyncResult,
+    sync_plugins,
+)
 
 logger = logging.getLogger(__name__)
 
 
 Scope = Literal["project", "user"]
+
+
+_SYNC_RUNTIME_IDS: dict[str, str] = {
+    "claude": "claude-code",
+    "claude-code": "claude-code",
+    "codex": "codex",
+    "opencode": "opencode",
+}
 
 
 plugin_app = typer.Typer(
@@ -924,6 +937,136 @@ def package_cmd(
         return
 
     emit_json_or_text(_package_payload(result), _package_text(result), flags=flags)
+
+
+def _sync_payload(result: SyncResult) -> dict[str, object]:
+    """Render :class:`SyncResult` as the JSON envelope body."""
+    return {
+        "target_dir": str(result.target_dir),
+        "scope": result.scope,
+        "dry_run": result.dry_run,
+        "skipped": list(result.skipped),
+        "runtimes": [
+            {
+                "runtime": r.runtime,
+                "deltas": [{"path": str(d.path), "action": d.action} for d in r.deltas],
+            }
+            for r in result.results
+        ],
+    }
+
+
+def _sync_text(result: SyncResult) -> str:
+    """Render :class:`SyncResult` as a human-readable summary."""
+    verb = "dry-run" if result.dry_run else "wrote"
+    parts = [f"plugin sync --scope {result.scope} ({verb}) → {result.target_dir}"]
+    for runtime_result in result.results:
+        parts.append(f"  {runtime_result.runtime}: {len(runtime_result.deltas)} files")
+    if result.skipped:
+        parts.append(f"  skipped: {', '.join(result.skipped)}")
+    return "\n".join(parts)
+
+
+def _normalise_sync_runtimes(values: list[str]) -> list[str]:
+    """Map operator-facing aliases (``claude``) to canonical ids (``claude-code``).
+
+    Raises:
+        InvalidInput: when a value is not a recognised alias.
+    """
+    canonical: list[str] = []
+    for value in values:
+        canonical_id = _SYNC_RUNTIME_IDS.get(value)
+        if canonical_id is None:
+            raise cli_errors.InvalidInput(
+                f"unknown runtime {value!r}; expected one of "
+                f"{sorted(set(_SYNC_RUNTIME_IDS.values()))}"
+            )
+        canonical.append(canonical_id)
+    return canonical
+
+
+@plugin_app.command(name="sync")
+def sync_cmd(
+    ctx: typer.Context,
+    runtimes: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--runtime",
+            help=(
+                "Restrict sync to one or more runtime ids. Repeat the flag "
+                "to sync several (e.g. '--runtime claude --runtime codex'). "
+                "Defaults to all three (claude-code + codex + opencode)."
+            ),
+        ),
+    ] = None,
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Install location: 'project' (default) or 'user' (cross-project).",
+        ),
+    ] = "project",
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite hand-edited managed files (passed through to each runtime).",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Compute deltas across runtimes but write no bytes.",
+        ),
+    ] = False,
+) -> None:
+    """Regenerate per-runtime plugin artifacts deterministically.
+
+    The canonical multi-runtime regeneration verb introduced under
+    C07a-V9 (XB10). Each requested runtime is driven through its
+    ``install_plugin`` renderer with shared inputs (frozen timestamp,
+    pass-through force / dry_run); the result aggregates per-file
+    deltas under a single envelope.
+    """
+    flags: GlobalFlags = ctx.obj
+    if scope not in _VALID_SCOPES:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"invalid --scope {scope!r}; expected one of {list(_VALID_SCOPES)}"
+            ),
+            flags=flags,
+        )
+        return
+    try:
+        canonical = _normalise_sync_runtimes(runtimes or [])
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    target = _resolve_target(flags)
+    scope_lit = cast(Literal["project", "user"], scope)
+    try:
+        # The Sequence[RuntimeId] cast is structural — canonical is
+        # built from the closed alias map above so the strings are
+        # already one of the three canonical ids.
+        from eawf.runtimes.manifest import RuntimeId
+
+        typed_runtimes = cast(list[RuntimeId], canonical)
+        result = sync_plugins(
+            target,
+            scope=scope_lit,
+            runtimes=typed_runtimes or None,
+            force=force,
+            dry_run=dry_run,
+        )
+    except PluginSyncIntegrityError as exc:
+        cli_errors.emit_error(
+            cli_errors.IntegrityViolation(str(exc)),
+            flags=flags,
+        )
+        return
+
+    emit_json_or_text(_sync_payload(result), _sync_text(result), flags=flags)
 
 
 __all__ = [

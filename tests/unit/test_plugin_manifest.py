@@ -1,8 +1,13 @@
-"""Unit tests for ``render_plugin_manifest``.
+"""Unit tests for ``render_plugin_manifest`` + ``PluginManifest``.
 
-Per Phase 6 W05 spec: the manifest must scrub author email even when
-present in pyproject, must omit homepage/repository when undefined, and
-must always carry the canonical required keys.
+Two test surfaces share this file:
+
+* ``render_plugin_manifest`` (Claude marketplace ``package.json``
+  renderer, Phase 6 W05) — scrubs author email, omits absent URL
+  fields, byte-stable across calls.
+* ``PluginManifest(BaseModel, extra="forbid")`` (C07a §5.7, XB19) —
+  closed canonical schema fed into the three per-runtime
+  renderers. Rejects extra keys; required-field assertions.
 """
 
 from __future__ import annotations
@@ -10,8 +15,15 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.runtimes.claude.plugin_package import render_plugin_manifest
+from eawf.runtimes.manifest import (
+    PluginContributes,
+    PluginInfo,
+    PluginManaged,
+    PluginManifest,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -174,3 +186,113 @@ def test_manifest_drops_hardcoded_skill_agent_counts() -> None:
     # the canonical lists when callers want them enumerated.
     assert "10 skills" not in description
     assert "8 agents" not in description
+
+
+# ---------------------------------------------------------------------------
+# PluginManifest(BaseModel) — closed-schema validation (C07a §5.7, XB19)
+# ---------------------------------------------------------------------------
+
+
+def _valid_manifest_dict() -> dict[str, object]:
+    """Return one well-formed dict that round-trips through PluginManifest."""
+    return {
+        "schema_version": "1.0",
+        "plugin": {
+            "name": "eawf",
+            "version": "1.0",
+            "description": "Eä Workflow plugin — agent-driven development skills.",
+            "runtime": "claude-code",
+            "generator": "eawf-plugin-claude",
+        },
+        "contributes": {
+            "skills": ["research", "prep"],
+            "agents": ["executor"],
+            "hooks": {"session_level": ["session_start"]},
+        },
+        "managed": {
+            "body_hash_field": "__eawf_managed.body_hash",
+            "timestamp_field": "__eawf_managed.timestamp",
+            "source_files": ["AGENTS.md"],
+        },
+    }
+
+
+def test_plugin_manifest_round_trip() -> None:
+    """A well-formed dict validates and round-trips losslessly."""
+    raw = _valid_manifest_dict()
+    manifest = PluginManifest.model_validate(raw)
+    assert manifest.schema_version == "1.0"
+    assert manifest.plugin.runtime == "claude-code"
+    assert manifest.contributes.skills == ["research", "prep"]
+    dumped = manifest.model_dump()
+    # round trip preserves every field.
+    assert dumped["plugin"]["name"] == "eawf"
+
+
+def test_plugin_manifest_rejects_extra_top_level_key() -> None:
+    """``extra='forbid'`` per XB19 — unknown top-level key fails fast."""
+    raw = _valid_manifest_dict()
+    raw["mystery"] = "boom"
+    with pytest.raises(ValidationError):
+        PluginManifest.model_validate(raw)
+
+
+def test_plugin_manifest_rejects_extra_nested_key() -> None:
+    """Nested models share ``extra='forbid'`` — unknown keys reject."""
+    raw = _valid_manifest_dict()
+    raw["plugin"]["nickname"] = "boom"  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        PluginManifest.model_validate(raw)
+
+
+def test_plugin_manifest_rejects_missing_required_field() -> None:
+    """Missing required fields fail validation."""
+    raw = _valid_manifest_dict()
+    del raw["plugin"]
+    with pytest.raises(ValidationError):
+        PluginManifest.model_validate(raw)
+
+
+def test_plugin_manifest_rejects_unknown_runtime() -> None:
+    """``plugin.runtime`` is closed to the three canonical ids."""
+    raw = _valid_manifest_dict()
+    raw["plugin"]["runtime"] = "aider"  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        PluginManifest.model_validate(raw)
+
+
+def test_plugin_manifest_rejects_unknown_schema_version() -> None:
+    """``schema_version`` is pinned to ``"1.0"`` per Q5 / BOT-03."""
+    raw = _valid_manifest_dict()
+    raw["schema_version"] = "2.0"
+    with pytest.raises(ValidationError):
+        PluginManifest.model_validate(raw)
+
+
+def test_plugin_contributes_defaults_empty_lists() -> None:
+    """Optional list/dict fields default to empty for partial runtimes."""
+    contributes = PluginContributes()
+    assert contributes.skills == []
+    assert contributes.agents == []
+    assert contributes.hooks == {}
+
+
+def test_plugin_managed_requires_source_files() -> None:
+    """The managed namespace MUST name at least the body_hash / timestamp fields."""
+    with pytest.raises(ValidationError):
+        PluginManaged(
+            body_hash_field="__eawf_managed.body_hash",
+            timestamp_field="__eawf_managed.timestamp",
+        )  # type: ignore[call-arg]
+
+
+def test_plugin_info_rejects_blank_runtime() -> None:
+    """``runtime`` does not accept the empty string (closed Literal)."""
+    with pytest.raises(ValidationError):
+        PluginInfo(
+            name="eawf",
+            version="1.0",
+            description="d",
+            runtime="",  # type: ignore[arg-type]
+            generator="g",
+        )
