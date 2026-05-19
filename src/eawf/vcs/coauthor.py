@@ -122,14 +122,22 @@ def _canonical_runtime(value: str) -> str:
 
 
 def _runtime_from_env(env: Mapping[str, str]) -> str | None:
-    override = env.get("EAWF_COAUTHOR_RUNTIME") or env.get("EAWF_COAUTHOR_HARNESS")
-    if override:
-        return _canonical_runtime(override)
-    if any(key.startswith("CLAUDE") for key in env):
-        return "claude"
-    if any(key.startswith("CODEX") for key in env):
-        return "codex"
-    return None
+    """Resolve runtime from explicit opt-in env vars only (KISS-001).
+
+    Pre-W12 this helper additionally sniffed ``CLAUDE*`` / ``CODEX*``
+    env-var prefixes — that implicit detection path was removed per
+    KISS-001 because operators could not reliably opt out (any
+    stray ``CLAUDE_HOME`` in the parent shell would force a Claude
+    trailer even when running under Codex). Detection now requires
+    explicit opt-in via :data:`~eawf.runtimes.coauthor.COAUTHOR_RUNTIME_ENV_VAR`
+    or its legacy alias :data:`~eawf.runtimes.coauthor.COAUTHOR_RUNTIME_LEGACY_ENV_VAR`.
+    """
+    from eawf.runtimes.coauthor import resolve_runtime_explicit
+
+    resolved = resolve_runtime_explicit(env=env)
+    if resolved is None:
+        return None
+    return _canonical_runtime(resolved)
 
 
 def has_any_coauthor_trailer(text: str) -> bool:
