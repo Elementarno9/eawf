@@ -125,6 +125,26 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     return _success(req_id, result)
 
 
+async def process_frame_bytes(payload: bytes, ctx: MethodContext) -> bytes:
+    """Decode one frame, dispatch, and return the response as a frame.
+
+    Wrapper exposed for transports that hand the dispatcher raw bytes
+    rather than a stream — chiefly the Windows pipe bridge which
+    couples a blocking listener thread to the asyncio dispatcher via
+    ``loop.call_soon_threadsafe``.
+
+    Args:
+        payload: Raw bytes for one frame; trailing newline stripped
+            on the caller's behalf.
+        ctx: Server context shared across handlers.
+
+    Returns:
+        Newline-terminated JSON-RPC response frame.
+    """
+    response = await _process_frame(payload.rstrip(b"\n"), ctx)
+    return _frame(response)
+
+
 async def handle_connection(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,

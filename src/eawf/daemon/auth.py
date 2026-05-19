@@ -7,7 +7,8 @@ Minimum POSIX recipes — only the daemon-owning UID may connect:
   whose first 8 bytes hold ``(cr_version, cr_uid)``.
 
 FreeBSD ``LOCAL_PEERCRED`` via ctypes lands in W05; the Windows DACL +
-SID flow rides W04 + W05. Unsupported platforms raise
+SID flow is wired through :func:`verify_windows_peer` which defers to
+:mod:`eawf.daemon.windows_security`. Unsupported platforms raise
 :class:`NotImplementedError` so the caller fails closed.
 """
 
@@ -17,6 +18,7 @@ import logging
 import socket
 import struct
 import sys
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -117,3 +119,32 @@ def check_peer_uid(sock: socket.socket, expected_uid: int) -> None:
     if actual != expected_uid:
         logger.warning(f"check_peer_uid reject expected={expected_uid} actual={actual}")
         raise UnauthorizedError(f"peer uid mismatch: expected {expected_uid}, got {actual}")
+
+
+def verify_windows_peer(pipe_handle: Any, expected_sid: Any | None = None) -> None:
+    """Reject a Windows pipe client whose SID is not *expected_sid*.
+
+    Thin entry point that delegates to
+    :func:`eawf.daemon.windows_security.verify_peer_sid` after the
+    import-guard on the underlying module has resolved. The
+    indirection keeps ``eawf.daemon.auth`` importable on POSIX (the
+    helper itself is only invoked on Windows).
+
+    Args:
+        pipe_handle: Connected pipe handle from pywin32 after
+            ``ConnectNamedPipe`` returns.
+        expected_sid: Required peer SID. ``None`` resolves to the
+            running process owner's SID inside the helper.
+
+    Raises:
+        UnauthorizedError: When the peer SID does not match.
+        NotImplementedError: When invoked on a non-Windows host.
+    """
+    if sys.platform != "win32":
+        raise NotImplementedError("verify_windows_peer is win32-only; POSIX uses check_peer_uid")
+    from eawf.daemon.windows_security import WindowsAuthError, verify_peer_sid
+
+    try:
+        verify_peer_sid(pipe_handle, expected_sid)
+    except WindowsAuthError as exc:
+        raise UnauthorizedError(str(exc)) from exc
