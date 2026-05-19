@@ -1509,7 +1509,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P25-I01-W17"
+    ],
     "iter_id": "P25-I01",
     "phase_id": "P25",
     "project_code": "EAWF",
@@ -2903,7 +2905,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T19:50:02.615458Z",
+  "updated_at": "2026-05-19T19:51:21.911500Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8373,7 +8375,7 @@
     "P25-I01-W17": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p25-w17-exec",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -8393,7 +8395,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "AGENTS rule appended: /prep always plan mode (Case A + Case B)",
         "AGENTS rule appended: iter/phase close-timing (audited+polished gate + phase close in final pre-merge CORE commit)",
@@ -8404,7 +8406,7 @@
       "title": "chore: AGENTS.md + skill workflow rules — /prep plan mode (Case A + B) + close-timing + /flow re-order",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P25-I01-W17-1779220281"
     },
     "P25-I01-W18": {
       "agent_role": "executor",
@@ -8605,6 +8607,17 @@
       "path": ".claude/worktrees/p19-w15",
       "status": "active",
       "wave_id": "P19-I02-W15"
+    },
+    "WT-P25-I01-W17-1779220281": {
+      "base_branch": "feature/eawf-v0.3-p25",
+      "branch": "feature/eawf-v0.3-p25-w17",
+      "created_at": "2026-05-19T19:51:21.911500Z",
+      "id": "WT-P25-I01-W17-1779220281",
+      "merged_commit": null,
+      "owner_session_id": "p25-w17-exec",
+      "path": ".ea/worktrees/p25-w17",
+      "status": "active",
+      "wave_id": "P25-I01-W17"
     }
   }
 }
