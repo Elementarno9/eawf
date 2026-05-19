@@ -1498,11 +1498,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I02-W01"
-    ],
-    "iter_id": "P24-I02",
-    "phase_id": "P24",
+    "active_wave_ids": [],
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2289,13 +2287,13 @@
       ]
     },
     "P24-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A30-P24-ship-gate",
+      "closed_at": "2026-05-19T17:18:49.682691Z",
       "estimate_id": null,
       "id": "P24-I01",
       "opened_at": "2026-05-18T19:45:10.042950Z",
       "phase_id": "P24",
-      "status": "planned",
+      "status": "closed",
       "title": "P24-I01: C02-IMPL daemon waves",
       "wave_ids": [
         "P24-I01-W01",
@@ -2311,13 +2309,13 @@
       ]
     },
     "P24-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A30-P24-ship-gate",
+      "closed_at": "2026-05-19T17:18:49.136479Z",
       "estimate_id": null,
       "id": "P24-I02",
       "opened_at": "2026-05-19T17:03:00.543589Z",
       "phase_id": "P24",
-      "status": "active",
+      "status": "closed",
       "title": "P24-I02: replay_wal + session_ttl wiring (reactive followup)",
       "wave_ids": [
         "P24-I02-W01"
@@ -2745,8 +2743,8 @@
       "title": "C01-IMPL kernel: bootstrap + state + config + URN + IDs + validate"
     },
     "P24": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A30-P24-ship-gate",
+      "closed_at": "2026-05-19T17:18:50.527957Z",
       "depends_on": [
         "P23"
       ],
@@ -2764,7 +2762,7 @@
         "ART-research-long-term-2026-05-18-migration-dag",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock writer"
     },
@@ -2875,7 +2873,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T17:03:33.757134Z",
+  "updated_at": "2026-05-19T17:18:50.528069Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7726,7 +7724,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T17:18:38.011077Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -7738,10 +7736,10 @@
       "id": "P24-I02-W01",
       "iter_id": "P24-I02",
       "opened_at": "2026-05-19T17:03:27.619519Z",
-      "outcome": null,
+      "outcome": "audit F1+F2 closed: replay_wal invoked at daemon boot + session_ttl run_sweep_loop scheduled inside _run_server with shutdown_event cancel; new EAWF_DAEMON_SESSION_TTL env var; 8 new tests; 3568 full-suite pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [],
       "title": "fix: wire replay_wal + session_ttl into daemon.main.run() (audit F1+F2)",
       "token_budget": null,
