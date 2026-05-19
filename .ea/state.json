@@ -1510,13 +1510,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P25-I01-W02",
-      "P25-I01-W03",
-      "P25-I01-W04",
-      "P25-I01-W05",
-      "P25-I01-W10",
-      "P25-I01-W15",
-      "P25-I01-W16"
+      "P25-I01-W04"
     ],
     "iter_id": "P25-I01",
     "phase_id": "P25",
@@ -2911,7 +2905,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T20:42:01.321935Z",
+  "updated_at": "2026-05-19T21:06:53.668294Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7828,7 +7822,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w02-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:03:51.978845Z",
       "commit": null,
       "deps": [
         "P25-I01-W01"
@@ -7845,10 +7839,10 @@
       "id": "P25-I01-W02",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:49.206040Z",
-      "outcome": null,
+      "outcome": "C03 verify_implements audit-DSL kind + AuditSpec cadence + file_scope-restricted diff grep; 65 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "verify_implements registered in audit_dsl.kinds",
         "walks closed WaveSpec under a phase + greps git diff <base>...HEAD for verdict markers (regex ^[VDRH]\\d+(-[A-Z0-9]+)?$) restricted to file_scopes",
@@ -7864,7 +7858,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w03-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:03:54.147809Z",
       "commit": null,
       "deps": [
         "P25-I01-W01"
@@ -7882,10 +7876,10 @@
       "id": "P25-I01-W03",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:49.762993Z",
-      "outcome": null,
+      "outcome": "C03 daemon spec writer + cache + DRAFT/READY/IMPLEMENTED/ARCHIVED state machine via 4 JSON-RPCs; CLI spec subcommand; from-git recovery; 30 new + 3061 existing tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "daemon spec.{init",
         "validate",
@@ -7940,8 +7934,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w05-exec",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-19T21:06:15.034727Z",
+      "commit": "e3e13eab2d0bade11aad5c3b012f1f844a557822",
       "deps": [
         "P25-I01-W01"
       ],
@@ -7957,10 +7951,10 @@
       "id": "P25-I01-W05",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:50.868886Z",
-      "outcome": null,
+      "outcome": "C03 three-layer enforcement landed; conflict-resolved manually",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "three independent enforcement layers active per [3] §1: Pydantic load (init/validate) + pre-commit hook (real-test-paths grep) + audit DSL (verify-implements at AuditSpec.cadence)",
         "UI-scope file_scope heuristic fires when path under src/eawf/tui_v2/ or src/eawf/render/ and demands mockup reference",
@@ -8120,7 +8114,7 @@
         "P25-I01-W13"
       ],
       "claim_session_id": "p25-w10-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:06:33.976871Z",
       "commit": null,
       "deps": [
         "P25-I01-W06"
@@ -8138,10 +8132,10 @@
       "id": "P25-I01-W10",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:53.671598Z",
-      "outcome": null,
+      "outcome": "C07a RuntimeAdapter Protocol + 3 adapters (Claude/Codex/OpenCode); 50 new tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "RuntimeAdapter(Protocol) defined at src/eawf/runtimes/adapter.py + 3 implementations land",
         "SessionAttempt import from C02/state (P24) works",
@@ -8305,7 +8299,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w15-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:06:42.595217Z",
       "commit": null,
       "deps": [
         "P25-I01-W14"
@@ -8322,10 +8316,10 @@
       "id": "P25-I01-W15",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:48:52.662792Z",
-      "outcome": null,
+      "outcome": "C08 ProfileBody v2 + conflicts_with/overrides/dispatch_session_policy + deterministic deep-merge + V3 fail-fast; 32 new + 113 existing tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ProfileBody v2 closed schema lands with conflicts_with: list[str] + overrides: list[str] + dispatch_session_policy: Literal['fresh'",
         "'continue'",
@@ -8342,7 +8336,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w16-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T21:06:53.092151Z",
       "commit": null,
       "deps": [
         "P25-I01-W14"
@@ -8361,10 +8355,10 @@
       "id": "P25-I01-W16",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:48:53.190116Z",
-      "outcome": null,
+      "outcome": "C08 3 bootstrap templates (research+engineering+reverse-eng) + eawf init --profiles/--template; 37 new tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "three template YAMLs land under templates/init/<template>.yaml (research + engineering + reverse-engineering) per D7 trim",
         "eawf init --profiles a",
@@ -8635,10 +8629,10 @@
       "branch": "feature/eawf-v0.3-p25-w02",
       "created_at": "2026-05-19T20:41:56.494460Z",
       "id": "WT-P25-I01-W02-1779223316",
-      "merged_commit": null,
+      "merged_commit": "812e85c",
       "owner_session_id": "p25-w02-exec",
       "path": ".ea/worktrees/p25-w02",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W02"
     },
     "WT-P25-I01-W03-1779223317": {
@@ -8646,10 +8640,10 @@
       "branch": "feature/eawf-v0.3-p25-w03",
       "created_at": "2026-05-19T20:41:57.298837Z",
       "id": "WT-P25-I01-W03-1779223317",
-      "merged_commit": null,
+      "merged_commit": "be7988b",
       "owner_session_id": "p25-w03-exec",
       "path": ".ea/worktrees/p25-w03",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W03"
     },
     "WT-P25-I01-W04-1779223318": {
@@ -8723,10 +8717,10 @@
       "branch": "feature/eawf-v0.3-p25-w10",
       "created_at": "2026-05-19T20:41:59.683708Z",
       "id": "WT-P25-I01-W10-1779223319",
-      "merged_commit": null,
+      "merged_commit": "6ca324d",
       "owner_session_id": "p25-w10-exec",
       "path": ".ea/worktrees/p25-w10",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W10"
     },
     "WT-P25-I01-W14-1779221190": {
@@ -8745,10 +8739,10 @@
       "branch": "feature/eawf-v0.3-p25-w15",
       "created_at": "2026-05-19T20:42:00.494677Z",
       "id": "WT-P25-I01-W15-1779223320",
-      "merged_commit": null,
+      "merged_commit": "8725854",
       "owner_session_id": "p25-w15-exec",
       "path": ".ea/worktrees/p25-w15",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W15"
     },
     "WT-P25-I01-W16-1779223321": {
@@ -8756,10 +8750,10 @@
       "branch": "feature/eawf-v0.3-p25-w16",
       "created_at": "2026-05-19T20:42:01.321935Z",
       "id": "WT-P25-I01-W16-1779223321",
-      "merged_commit": null,
+      "merged_commit": "27e0f94",
       "owner_session_id": "p25-w16-exec",
       "path": ".ea/worktrees/p25-w16",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W16"
     },
     "WT-P25-I01-W17-1779220281": {
