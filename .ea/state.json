@@ -1477,7 +1477,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P24-I01-W04",
+      "P24-I01-W05",
+      "P24-I01-W06"
+    ],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2838,7 +2842,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T14:23:48.960238Z",
+  "updated_at": "2026-05-19T14:24:42.085108Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7043,7 +7047,7 @@
       "blocks": [
         "P24-I01-W08"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7061,7 +7065,7 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:29.719908Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: per-OS service registration (systemd-user + launchd + pywin32 Service with SCM-asyncio bridge XB14)",
       "token_budget": null,
@@ -7071,7 +7075,7 @@
     "P24-I01-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7087,7 +7091,7 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:38.288951Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS os.getpeereid + FreeBSD ctypes + Windows SID per XB13)",
       "token_budget": null,
@@ -7099,7 +7103,7 @@
       "blocks": [
         "P24-I01-W07"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7116,7 +7120,7 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:43.768302Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) + reconnect catch-up via event.jsonl",
       "token_budget": null,
