@@ -1477,7 +1477,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P24-I01-W10"
+    ],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2838,7 +2840,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T15:55:52.376484Z",
+  "updated_at": "2026-05-19T15:56:12.359046Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7658,7 +7660,7 @@
     "P24-I01-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7678,7 +7680,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
       "token_budget": null,
