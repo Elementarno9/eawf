@@ -3,7 +3,7 @@
 Public API surface:
 
 - :func:`create_worktree` — materialise a per-wave worktree under
-  ``.claude/worktrees/<name>/`` and append a
+  ``.ea/worktrees/<name>/`` and append a
   :class:`~eawf.state.models.WorktreeRecord`.
 - :func:`merge_back` — bring worktree commits onto the parent branch
   via ``cherry_pick`` (default per AGENTS.md rule 11) or
@@ -30,9 +30,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+import eawf.worktree.git as git
 from eawf.cli import errors as cli_errors
 from eawf.state.models import State, WorktreeRecord
-from eawf.worktree import git
 from eawf.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.worktree.create import create_worktree
 from eawf.worktree.locks import worktree_registry_lock

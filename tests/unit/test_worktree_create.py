@@ -123,12 +123,12 @@ def _claimed_state(*, wave_id: str = "P05-I01-W01") -> State:
     )
 
 
-def test_create_default_path_under_dot_claude_worktrees(tmp_path: Path) -> None:
-    """Default path resolves to ``<repo>/.claude/worktrees/<suffix>/``."""
+def test_create_default_path_under_dot_ea_worktrees(tmp_path: Path) -> None:
+    """Default path resolves to ``<repo>/.ea/worktrees/<suffix>/``."""
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    assert record.path == ".claude/worktrees/p05-w01"
+    assert record.path == ".ea/worktrees/p05-w01"
     assert record.branch == "feature/eawf-v0.1-p05-w01"
     assert record.base_branch == "feature/eawf-v0.1"
     assert record.status.value == "active"
@@ -243,10 +243,10 @@ def test_create_force_overwrites_empty_dir(tmp_path: Path) -> None:
     """Pre-existing empty target dir + ``force=True`` succeeds."""
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
-    pre = repo / ".claude" / "worktrees" / "p05-w01"
+    pre = repo / ".ea" / "worktrees" / "p05-w01"
     pre.mkdir(parents=True)
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01", force=True)
-    assert record.path == ".claude/worktrees/p05-w01"
+    assert record.path == ".ea/worktrees/p05-w01"
 
 
 def test_create_refuses_invalid_wave_id_regex(tmp_path: Path) -> None:

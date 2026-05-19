@@ -16,7 +16,7 @@ Invariants asserted after every Hypothesis example:
 3. **File-scope disjointness.** For every pair of waves
    ``(wt_i, wt_j)``, the recorded ``file_scopes`` sets are disjoint.
 4. **No git-registry collisions.** ``git worktree list --porcelain``
-   shows N entries under ``.claude/worktrees/``.
+   shows N entries under ``.ea/worktrees/``.
 
 Caveat (inherited from
 :mod:`tests.property.test_wave_claim_property`): on macOS the
@@ -244,18 +244,18 @@ def test_concurrent_create_disjoint_file_scopes(
         )
         seen_scopes |= scope_set
 
-    # git worktree list cross-check: every path under .claude/worktrees/
+    # git worktree list cross-check: every path under .ea/worktrees/
     # should be unique. The number can lag behind state.json on macOS
     # (lock race), so we assert "no duplicate paths" rather than
     # "exactly N paths".
     entries = worktree_list(repo)
-    paths_under_claude = [
+    paths_under_eawf = [
         entry["worktree"]
         for entry in entries
-        if "worktree" in entry and ".claude/worktrees/" in entry["worktree"]
+        if "worktree" in entry and ".ea/worktrees/" in entry["worktree"]
     ]
-    assert len(set(paths_under_claude)) == len(paths_under_claude), (
-        f"duplicate worktree paths: {paths_under_claude}"
+    assert len(set(paths_under_eawf)) == len(paths_under_eawf), (
+        f"duplicate worktree paths: {paths_under_eawf}"
     )
 
 

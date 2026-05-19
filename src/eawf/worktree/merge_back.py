@@ -30,10 +30,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import eawf.worktree.git as git
 from eawf.cli import errors as cli_errors
 from eawf.state.enums import WorktreeStatus
 from eawf.state.models import State, WorktreeRecord
-from eawf.worktree import git
 
 logger = logging.getLogger(__name__)
 
