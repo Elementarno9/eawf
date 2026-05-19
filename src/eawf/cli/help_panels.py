@@ -91,9 +91,11 @@ COMMAND_PANELS: dict[str, str] = {
     "session": "planning",
     "subproject": "planning",
     "wave": "planning",
-    # runtime: harness adapters, hooks, plugins, skills, MCP, profiles.
+    # runtime: harness adapters, hooks, plugins, skills, MCP, profiles,
+    # eawfd daemon.
     "cc": "runtime",
     "config": "runtime",
+    "daemon": "runtime",
     "hook": "runtime",
     "mcp": "runtime",
     "plugin": "runtime",
