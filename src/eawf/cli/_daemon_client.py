@@ -237,6 +237,68 @@ class DaemonClient:
             params["idempotency_key"] = mutation.idempotency_key
         return self.call("state.mutate", params)
 
+    def config_set_layer_value(
+        self,
+        *,
+        layer: str,
+        key_path: list[str],
+        value: Any,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a layered-config write through ``config.set_layer_value`` (W10).
+
+        Args:
+            layer: Canonical writable-layer label.
+            key_path: Dotted-key as a list of segments.
+            value: Typed value to write.
+            idempotency_key: Optional retry key.
+
+        Returns:
+            Dict matching
+            :class:`eawf.daemon.methods.config.SetLayerValueResult`.
+
+        Raises:
+            DaemonRpcError: When the daemon returns a JSON-RPC error
+                envelope (e.g. ``-32602 invalid_params``).
+        """
+        params: dict[str, Any] = {
+            "layer": layer,
+            "key_path": list(key_path),
+            "value": value,
+        }
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        return self.call("config.set_layer_value", params)
+
+    def registry_update(
+        self,
+        *,
+        operation: str,
+        repo_id: str,
+        fields: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a registry mutation through ``registry.update`` (W10).
+
+        Args:
+            operation: One of ``add`` / ``remove`` / ``rename``.
+            repo_id: Project-code-shape identifier the op targets.
+            fields: Operation-specific extras (e.g. ``path`` + ``title``
+                for ``add``; ``new_code`` for ``rename``).
+            idempotency_key: Optional retry key.
+
+        Returns:
+            Dict matching :class:`eawf.daemon.methods.registry.UpdateResult`.
+        """
+        params: dict[str, Any] = {
+            "operation": operation,
+            "repo_id": repo_id,
+            "fields": dict(fields) if fields else {},
+        }
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        return self.call("registry.update", params)
+
 
 def _is_verbose() -> bool:
     """Return True when ``EAWF_VERBOSE=1`` is set.

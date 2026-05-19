@@ -32,8 +32,10 @@ import orjson
 
 # Import to ensure handlers register before dispatch runs.
 import eawf.daemon.methods.agent
+import eawf.daemon.methods.config  # registers config.read / set_layer_value / list_layers (W10)
 import eawf.daemon.methods.daemon
 import eawf.daemon.methods.event
+import eawf.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
 from eawf.daemon.auth import UnauthorizedError, verify_peer_credential

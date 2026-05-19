@@ -309,11 +309,14 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "id_padding": 2,
     },
     "daemon": {
-        # When True, state mutations route through the daemon's
-        # ``state.mutate`` RPC. Default False until P24 W10 closes;
-        # will flip default True thereafter (per authority-map §3 + the
-        # V1 carve-out window for daemonless readers).
-        "proxy_enabled": False,
+        # When True (default since P24-W10), state + config + registry
+        # mutations route through the daemon RPCs (``state.mutate``,
+        # ``config.set_layer_value``, ``registry.update``). Flip to
+        # False for the V1 daemonless carve-out (CI, read-only one-
+        # shot, recovery shell); the in-process portalocker path
+        # remains as the fallback. ``EAWF_DAEMONLESS=1`` is the
+        # process-level escape hatch and overrides this flag.
+        "proxy_enabled": True,
         # Idle window after which the daemon self-shuts-down when no
         # subscribers or in-flight mutations are live (seconds).
         # Aligned with the Anthropic prompt-cache TTL (C02 §4 D11).
