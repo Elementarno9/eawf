@@ -2394,7 +2394,29 @@
       "status": "planned",
       "title": "P26-I01: surfaces waves",
       "wave_ids": [
-        "P26-I01-W01"
+        "P26-I01-W01",
+        "P26-I01-W02",
+        "P26-I01-W03",
+        "P26-I01-W04",
+        "P26-I01-W05",
+        "P26-I01-W06",
+        "P26-I01-W07",
+        "P26-I01-W08",
+        "P26-I01-W09",
+        "P26-I01-W10",
+        "P26-I01-W11",
+        "P26-I01-W12",
+        "P26-I01-W13",
+        "P26-I01-W14",
+        "P26-I01-W15",
+        "P26-I01-W16",
+        "P26-I01-W17",
+        "P26-I01-W18",
+        "P26-I01-W19",
+        "P26-I01-W20",
+        "P26-I01-W21",
+        "P26-I01-W22",
+        "P26-I01-W23"
       ]
     },
     "P27-I01": {
@@ -2927,7 +2949,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T23:46:06.500439Z",
+  "updated_at": "2026-05-19T23:57:37.569671Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8527,6 +8549,784 @@
         "5 skills (research/audit/review/differentiate/blitz) flip disable-model-invocation to false; goldens regen; pre-commit green"
       ],
       "title": "feat: enable model invocation for read-only skills + blitz",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/config/migration.py",
+        "src/eawf/install/wizard.py",
+        "src/eawf/install/steps.py",
+        ".ea/config.yaml",
+        "tests/config/test_migration_legacy_shape.py"
+      ],
+      "id": "P26-I01-W02",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:06.148029Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "no deprecated_runtime_kind warning fires on validate of migrated config"
+      ],
+      "title": "fix: C08 config migration — drop legacy lifecycle/plugins + rewrite runtime.kind",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/methods/config.py",
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/cli/_daemon_client.py",
+        "tests/integration/test_daemon_cross_repo_anchor.py"
+      ],
+      "id": "P26-I01-W03",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:06.835970Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "registry.* RPCs untouched (already pass path as param)"
+      ],
+      "title": "fix: C02 daemon config/state RPCs accept per-request repo_root",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W05",
+        "P26-I01-W06",
+        "P26-I01-W08",
+        "P26-I01-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W02",
+        "P26-I01-W03"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/app.py",
+        "src/eawf/cli/exit_codes.py",
+        "src/eawf/cli/errors.py",
+        "src/eawf/cli/flags.py",
+        "CHANGELOG.md"
+      ],
+      "id": "P26-I01-W04",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:07.506817Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CHANGELOG.md carries BREAKING entry for exit-code 0..9 -> 0..5 cutover; daemon JSON-RPC -3200X codes map to the five subclasses per C05 §5.3 table"
+      ],
+      "title": "feat: C05 verb-noun matrix + ErrorEnvelope + exit-code 0..5 compression (BREAKING)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W04"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/_dispatch.py",
+        "src/eawf/cli/_mutation.py",
+        "src/eawf/cli/commands/state.py",
+        "tests/cli/test_daemon_escalation.py"
+      ],
+      "id": "P26-I01-W05",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:08.187434Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/cli/test_daemon_escalation.py covers (a) mutating verb auto-spawns daemon",
+        "(b) read verb in daemonless mode",
+        "(c) mutating verb rejects --daemonless"
+      ],
+      "title": "feat: C05 daemon-vs-daemonless escalation rules + raw RPC behind dev-mode gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W04"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/streaming.py",
+        "src/eawf/cli/commands/completion.py",
+        "src/eawf/cli/commands/help.py",
+        "docs/help/",
+        "tests/cli/test_streaming.py"
+      ],
+      "id": "P26-I01-W06",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:08.889579Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/cli/test_streaming.py asserts NDJSON line-delimited shape on a mock event stream + --quiet --verbose collision rejected"
+      ],
+      "title": "feat: C05 --stream wiring + completion install verb + help-topic surface",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W05"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/lifecycle/",
+        "src/eawf/evidence/",
+        "src/eawf/memory/"
+      ],
+      "id": "P26-I01-W07",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:09.625602Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "existing pytest suite + uv run pre-commit run --all-files pass without changes to test imports (re-exports preserved at package __init__.py)"
+      ],
+      "title": "refactor: C05 split god files per Q25 LOC cap — lifecycle.py + evidence.py + memory.py <=700 LOC per module",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W04"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/research.py",
+        "src/eawf/workflow/roadmap.py",
+        "src/eawf/workflow/prep.py",
+        "src/eawf/workflow/flow.py",
+        "src/eawf/workflow/audit.py"
+      ],
+      "id": "P26-I01-W08",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:10.358181Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/roadmap propose creates phase+iter with empty wave DAG; /roadmap apply rejects empty-wave DAG"
+      ],
+      "title": "feat: C04a workflow commands — research/roadmap/prep/flow/audit/ship body completion + spike wiring",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W08"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/ship.py",
+        "src/eawf/workflow/coauthor.py",
+        "tests/workflow/test_ship_pipeline.py",
+        "tests/workflow/test_coauthor_envelope.py"
+      ],
+      "id": "P26-I01-W09",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:11.026501Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/workflow/test_coauthor_envelope.py covers (a) runtime auto-detect",
+        "(b) project override",
+        "(c) disabled mode"
+      ],
+      "title": "feat: C04a /ship pipeline + /coauthor envelope + pr_merge_method config read",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W11",
+        "P26-I01-W12",
+        "P26-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W04"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtimes/plugin_manifest.py",
+        "src/eawf/render/envelope.py",
+        "tests/runtimes/test_plugin_manifest.py",
+        "tests/integration/test_coauthor_verification.py"
+      ],
+      "id": "P26-I01-W10",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:11.698069Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/runtimes/test_plugin_manifest.py covers (a) extra=forbid rejection",
+        "(b) non-Literal runtime rejection",
+        "(c) target_dir -> output_dir rename per BOT-06"
+      ],
+      "title": "feat: C04b SkillManifest schema + envelope status enum freeze + KISS-001 coauthor env-detection fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W10"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/skills/coauthor.py",
+        "src/eawf/skills/memory.py",
+        "src/eawf/skills/agent_dispatch.py",
+        "src/eawf/skills/compress.py",
+        "src/eawf/skills/wave_spec.py",
+        "src/eawf/skills/security_review.py"
+      ],
+      "id": "P26-I01-W11",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:12.357101Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "C00 17-skill catalog drift closed; all 17 skills (11 original + 6 new) appear in skill registry per D-b4"
+      ],
+      "title": "feat: C04b six missing skills — /coauthor /memory /agent-dispatch /compress /wave-spec /security-review",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W10"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/agents/report.py",
+        "src/eawf/state/models.py",
+        "src/eawf/state/migrations/session_handle_migration.py",
+        "tests/agents/test_report_append_only.py"
+      ],
+      "id": "P26-I01-W12",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:13.015445Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/agents/test_report_append_only.py covers (a) append-on-retry",
+        "(b) overwrite rejected with LifecycleError",
+        "(c) verdict outside 4-value set raises ValidationError",
+        "(d) session_handle scrub validator rejects raw path"
+      ],
+      "title": "feat: C04c AgentReportBody typed union + session_handle opaque-handle migration (XB05)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W14",
+        "P26-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W10",
+        "P26-I01-W12"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/methods/agent.py",
+        "src/eawf/runtimes/dispatch.py",
+        "src/eawf/runtimes/fallback.py",
+        "tests/runtimes/test_skill_adapter_handshake.py"
+      ],
+      "id": "P26-I01-W13",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:13.718818Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/runtimes/test_skill_adapter_handshake.py covers (a) manifest-aware adapter pick",
+        "(b) F-d01 mismatch rejection",
+        "(c) F-d02 adapter resolution failure falls back to fresh per V8"
+      ],
+      "title": "feat: C04d runtime integration — skill->adapter handshake + dispatch.session_policy + V5 reactive switchover",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W13"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtimes/cache_control.py",
+        "src/eawf/runtimes/claude/adapter.py",
+        "src/eawf/runtimes/codex/adapter.py",
+        "src/eawf/runtimes/opencode/adapter.py",
+        "tests/runtimes/test_cache_control.py"
+      ],
+      "id": "P26-I01-W14",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:14.422456Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tests/runtimes/test_cache_control.py covers (a) marker injection at adapter boundary",
+        "(b) /compress event emit",
+        "(c) codex no-op path"
+      ],
+      "title": "feat: C04d per-runtime cache-control hook propagation + /compress wiring",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W15": {
+      "agent_role": "auditor",
+      "blocks": [
+        "P26-I01-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W06",
+        "P26-I01-W07",
+        "P26-I01-W09",
+        "P26-I01-W11",
+        "P26-I01-W13",
+        "P26-I01-W14"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/artifacts/audits/2026-05-NN-p26-i01-surfaces.md",
+        "tests/integration/test_surfaces_smoke.py"
+      ],
+      "id": "P26-I01-W15",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:15.105630Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "iter P26-I01 close envelope emitted only after /audit + /polish + ship CI + PR review pass per iter-phase-close-timing"
+      ],
+      "title": "test: P26-I01 surfaces audit + verify-implements pass on C04+C05 deliverables",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W17"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W15"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/app.py",
+        "src/eawf/tui_v2/theme.tcss",
+        "src/eawf/tui_v2/state_binding.py",
+        "src/eawf/cli/app.py",
+        "pyproject.toml"
+      ],
+      "id": "P26-I01-W16",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:15.796694Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "first-paint <150ms p99 on empty fixture state.json (perf budget enforced at W22)"
+      ],
+      "title": "feat: C06 Textual EaApp + scope dispatch ladder + tui_v2/ tree scaffold",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W18"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W16"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/roadmap_tree.py",
+        "src/eawf/tui_v2/widgets/eu_bar.py",
+        "src/eawf/tui_v2/widgets/status_pane.py",
+        "src/eawf/tui_v2/widgets/git_pane.py",
+        "src/eawf/tui_v2/widgets/backlog_table.py"
+      ],
+      "id": "P26-I01-W17",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:16.495239Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "BacklogTable(DataTable) sortable by priority/id/target; filterable via /filter backlog; Enter row -> DetailModal"
+      ],
+      "title": "feat: C06 core widgets — RoadmapTree + EUBar + StatusPane + GitPane + BacklogTable",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W19"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W17"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/scopes/repo.py",
+        "src/eawf/tui_v2/scopes/workspace.py",
+        "src/eawf/tui_v2/scopes/user.py",
+        "src/eawf/tui_v2/widgets/header.py",
+        "src/eawf/tui_v2/widgets/footer.py"
+      ],
+      "id": "P26-I01-W18",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:17.189393Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "all three screens reuse Header + Footer + Heartbeat without per-scope duplicates (D3 shared chassis; salvageable LOC trim from ~5300 to ~2500)"
+      ],
+      "title": "feat: C06 RepoScreen + WorkspaceScreen + UserScreen composing shared chassis (D3)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W20",
+        "P26-I01-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W18"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/palette/command_palette.py",
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/screens/overlays/detail.py",
+        "src/eawf/tui_v2/screens/overlays/confirm.py"
+      ],
+      "id": "P26-I01-W19",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:17.840075Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "all keybindings fixed in code per D11 (arrows + PageUp/PageDown/Home/End + vim aliases h/j/k/l/gg/G); ? opens HelpScreen full keymap overlay"
+      ],
+      "title": "feat: C06 / palette + verb registry + modal stack (depth cap 3)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W22"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W19"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/plan_preview.py",
+        "src/eawf/tui_v2/screens/overlays/needs_user.py",
+        "src/eawf/tui_v2/screens/overlays/audit_running.py",
+        "src/eawf/tui_v2/screens/overlays/audit_failed.py"
+      ],
+      "id": "P26-I01-W20",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:18.479258Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "AuditFailedModal renders mutating menu (retry/split/land-partial/abandon/scope-change) per D17; each action dispatches via eawf agent dispatch; modal status line streams 'dispatching <action> -> <runtime> · attempt <n>' per D27"
+      ],
+      "title": "feat: C06 PlanPreviewModal + NeedsUserModal + AuditRunningModal + AuditFailedModal (D17 mutating)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W21": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W22"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W19"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/metrics.py",
+        "src/eawf/tui_v2/screens/overlays/pr_list.py",
+        "src/eawf/tui_v2/screens/overlays/events.py",
+        "src/eawf/tui_v2/widgets/heartbeat.py"
+      ],
+      "id": "P26-I01-W21",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:19.130811Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "runtime cell idle state: 'runtime: idle' muted per D29; flips muted->accent->warn(switched in last 60s)->err(every runtime in ladder failed)"
+      ],
+      "title": "feat: C06 /metrics 3x2 tile grid + /pr overlay + EventsModal ring buffer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W20",
+        "P26-I01-W21"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/snapshot/pilot_harness.py",
+        "src/eawf/tui_v2/snapshot/asciinema.py",
+        "tests/snapshots/tui/",
+        "tests/perf/tui/test_perf_budget.py"
+      ],
+      "id": "P26-I01-W22",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:53:19.800171Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "legacy src/eawf/tui/ migration verdict recorded per Codex C06-I010: parallel tree stays through P26 close; bare-eawf flips to tui_v2 default; EAWF_TUI_LEGACY=1 escape hatch documented; deletion deferred to follow-up phase (not P26)"
+      ],
+      "title": "test: C06 Pilot snapshot harness (ASCII text) + asciinema cast + perf budget CI gate + legacy tui/ migration verdict",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W23": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "AGENTS.md",
+        "src/eawf/profiles/data/core.yaml",
+        "src/eawf/render/skills.py"
+      ],
+      "id": "P26-I01-W23",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-19T23:57:37.569644Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "commit_prefix_lint accepts [P##] sans -W##/-CORE for type=state path-whitelisted commits; legacy [P##-CORE] regex branch retained for back-compat",
+        "state-bookkeeping path whitelist (state.json + event.jsonl + audit.jsonl + .secrets.baseline) triggers on commit type == 'state' not on -CORE suffix",
+        "AGENTS rules 14 + 27 updated to describe type=state contract; -CORE suffix documented as legacy alias",
+        "src/eawf/profiles/data/core.yaml + src/eawf/render/skills.py reflect new lint contract",
+        "tests/unit/test_commit_prefix_lint.py exercises both legacy -CORE and new state-type paths; 3 regenerated goldens; pre-commit clean"
+      ],
+      "title": "chore: drop -CORE mandate from commit-prefix lint + rebind whitelist to type=state",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
