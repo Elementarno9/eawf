@@ -16,6 +16,19 @@ W03 adds the WAL admin verb:
 - ``replay-wal --gc`` — drop ``.fsynced.json`` records older than
   the retention window (default 3600 s).
 
+W04 adds the per-OS service-registration verbs (operator-facing, no
+running daemon required):
+
+- ``service-enable`` — render the per-OS unit template and ask the
+  native supervisor (systemd / launchd / Windows SCM) to install +
+  start the daemon.
+- ``service-disable`` — stop + uninstall the unit. Idempotent on a
+  never-installed state.
+- ``service-status`` — query the supervisor for the current state
+  (running / enabled / disabled / not-installed). Distinct from
+  ``status`` above, which still issues the W01 ``daemon.status`` RPC
+  against the running socket.
+
 The CLI is dispatch only (rule 1); all socket framing + JSON-RPC
 machinery lives under :mod:`eawf.daemon`.
 """
@@ -38,6 +51,12 @@ from eawf.cli.output import emit_json_or_text
 from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.main import run as run_daemon
 from eawf.daemon.runtime_dir import log_path, runtime_dir, socket_path
+from eawf.daemon.service_install import (
+    ServiceInstallError,
+    disable_service,
+    enable_service,
+    service_status,
+)
 from eawf.daemon.wal import (
     gc_done_records,
     list_poisoned,
@@ -375,3 +394,65 @@ def logs_cmd(
     selected = lines[-tail:]
     text = "\n".join(selected)
     emit_json_or_text({"path": str(log_file), "lines": selected}, text, flags=flags)
+
+
+@daemon_app.command("service-enable")
+def service_enable_cmd(ctx: typer.Context) -> None:
+    """Install + start the eawfd service via the native OS supervisor.
+
+    Renders the per-OS template (systemd unit / launchd plist) or
+    invokes the pywin32 service framework on Windows, asks the
+    supervisor to start the unit, and waits up to 10 s for the
+    daemon to publish its PID file.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        envelope = enable_service()
+    except ServiceInstallError as exc:
+        typer.echo(f"service enable failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    payload = {
+        "event_type": envelope.event_type,
+        "platform": envelope.platform,
+        "unit": envelope.unit,
+        "pid": envelope.pid,
+    }
+    text = (
+        f"daemon service enabled platform={envelope.platform} "
+        f"unit={envelope.unit} pid={envelope.pid}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@daemon_app.command("service-disable")
+def service_disable_cmd(ctx: typer.Context) -> None:
+    """Stop + uninstall the eawfd service. Idempotent."""
+    flags: GlobalFlags = ctx.obj
+    try:
+        envelope = disable_service()
+    except ServiceInstallError as exc:
+        typer.echo(f"service disable failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    payload = {
+        "event_type": envelope.event_type,
+        "platform": envelope.platform,
+        "unit": envelope.unit,
+    }
+    text = f"daemon service disabled platform={envelope.platform} unit={envelope.unit}"
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@daemon_app.command("service-status")
+def service_status_cmd(ctx: typer.Context) -> None:
+    """Report the supervisor-level service state (no daemon RPC).
+
+    Distinct from ``eawf daemon status``, which issues the W01
+    ``daemon.status`` RPC against the running socket. This verb asks
+    the native supervisor for its view of the unit; ``running`` here
+    requires both registration AND an active PID.
+    """
+    flags: GlobalFlags = ctx.obj
+    status = service_status()
+    payload = {"platform": sys.platform, "status": status.value}
+    text = f"daemon service platform={sys.platform} status={status.value}"
+    emit_json_or_text(payload, text, flags=flags)
