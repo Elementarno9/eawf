@@ -24,7 +24,7 @@ import orjson
 
 # Import to ensure handlers register before dispatch runs.
 import eawf.daemon.methods.daemon  # noqa: F401
-from eawf.daemon.auth import UnauthorizedError, check_peer_uid
+from eawf.daemon.auth import UnauthorizedError, verify_peer_credential
 from eawf.daemon.methods import (
     MethodContext,
     MethodNotFoundError,
@@ -56,7 +56,13 @@ def _frame(obj: dict[str, Any]) -> bytes:
     return orjson.dumps(obj) + b"\n"
 
 
-def _error(req_id: str | int | None, code: int, message: str) -> dict[str, Any]:
+def _error(
+    req_id: str | int | None,
+    code: int,
+    message: str,
+    *,
+    data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build a JSON-RPC error response payload.
 
     Args:
@@ -64,14 +70,21 @@ def _error(req_id: str | int | None, code: int, message: str) -> dict[str, Any]:
             not be parsed.
         code: Numeric error code per C02 §5.2.2.
         message: Short human description.
+        data: Optional forensic / structured payload attached as
+            ``error.data`` per JSON-RPC 2.0. Used by the ``-32000``
+            unauthorized envelope to carry the platform + expected vs.
+            actual credentials.
 
     Returns:
         JSON-RPC error envelope.
     """
+    error: dict[str, Any] = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
     return {
         "jsonrpc": "2.0",
         "id": req_id,
-        "error": {"code": code, "message": message},
+        "error": error,
     }
 
 
@@ -169,18 +182,19 @@ async def handle_connection(
     # the peer-cred check uses.
     if expected_uid is not None and peer is not None:
         try:
-            check_peer_uid(cast(socket.socket, peer), expected_uid)
+            verify_peer_credential(cast(socket.socket, peer), expected_uid=expected_uid)
         except UnauthorizedError as exc:
             logger.warning(f"handle_connection reject reason={exc!s}")
-            writer.write(_frame(_error(None, UNAUTHORIZED, "unauthorized")))
+            writer.write(_frame(_error(None, UNAUTHORIZED, "unauthorized", data=exc.forensics)))
             await writer.drain()
             writer.close()
             await writer.wait_closed()
             return
         except NotImplementedError:
-            # Platform without a W01 recipe (e.g. Windows pre-W04 wiring).
-            # Fall through to accept; the upper layer must already gate
-            # access via DACL / SID.
+            # Platform without a peer-cred recipe (e.g. Windows pipes
+            # come through the dedicated pywin32 listener — not this
+            # UDS path). Fall through to accept; the upper layer must
+            # already gate access via DACL / SID.
             logger.debug("handle_connection skip peer-cred unsupported-platform")
     try:
         while True:
