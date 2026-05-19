@@ -3,7 +3,7 @@
 Subcommands:
 
 - ``worktree create`` — branch from current HEAD, materialise a worktree
-  under ``.claude/worktrees/<name>/``, append a
+  under ``.ea/worktrees/<name>/``, append a
   :class:`~eawf.state.models.WorktreeRecord`.
 - ``worktree list`` — read-only enumeration with a ``git worktree list
   --porcelain`` cross-check column.
@@ -119,7 +119,7 @@ def worktree_create_cmd(
         Path | None,
         typer.Option(
             "--path",
-            help="Target dir; defaults to .claude/worktrees/<branch-suffix>/.",
+            help="Target dir; defaults to .ea/worktrees/<branch-suffix>/.",
         ),
     ] = None,
     session: Annotated[

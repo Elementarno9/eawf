@@ -100,6 +100,44 @@ def test_rejects_wrong_wave_id_shape(tmp_path: Path, mod) -> None:
     assert code == 1
 
 
+def test_rejects_wave_zero(tmp_path: Path, mod) -> None:
+    """``[P##-W00]`` rejected: wave indices are 1-based; reactive waves append the next W##."""
+    msg = _write_msg(tmp_path, "[P14-W00] feat: bogus wave index\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "commit subject rejected" in diag
+
+
+def test_rejects_iter_zero(tmp_path: Path, mod) -> None:
+    """``[P##-I00-...]`` rejected: iter indices are 1-based."""
+    msg = _write_msg(tmp_path, "[P14-I00-W01] feat: bogus iter index\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "commit subject rejected" in diag
+
+
+def test_rejects_iter_zero_core(tmp_path: Path, mod) -> None:
+    """``[P##-I00-CORE]`` rejected: iter indices are 1-based."""
+    msg = _write_msg(tmp_path, "[P14-I00-CORE] state: bogus iter index\n")
+    code, diag = mod.lint(msg, [".ea/state.json"])
+    assert code == 1
+    assert "commit subject rejected" in diag
+
+
+def test_accepts_wave_one(tmp_path: Path, mod) -> None:
+    """``[P##-W01]`` accepted: lowest legal wave index."""
+    msg = _write_msg(tmp_path, "[P14-W01] feat: first wave\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 0, diag
+
+
+def test_accepts_max_two_digit_wave(tmp_path: Path, mod) -> None:
+    """``[P##-W99]`` accepted: highest two-digit wave index."""
+    msg = _write_msg(tmp_path, "[P14-W99] feat: hypothetical late wave\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 0, diag
+
+
 def test_rejects_unknown_type(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "[P14-W02] gizmo: broken type\n")
     code, _diag = mod.lint(msg, [])

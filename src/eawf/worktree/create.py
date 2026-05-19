@@ -19,11 +19,11 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+import eawf.worktree.git as git
 from eawf.cli import errors as cli_errors
 from eawf.state.enums import WaveStatus, WorktreeStatus
 from eawf.state.ids import is_wave_id
 from eawf.state.models import State, WorktreeRecord
-from eawf.worktree import git
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +56,16 @@ def _default_branch_name(wave_id: str) -> str:
 
 
 def _default_path(repo_root: Path, wave_id: str) -> Path:
-    """Compose the default worktree path under ``.claude/worktrees/<suffix>/``.
+    """Compose the default worktree path under ``.ea/worktrees/<suffix>/``.
 
     The "suffix" is the wave-id slug — e.g., ``p05-w01`` for wave
-    ``P05-I01-W01``. Matches the canonical envelope shape in the wave
-    spec §2 ("path": ".claude/worktrees/p05-w01"). Honours the
-    :file:`feedback_worktree_location.md` user memo (worktrees live
-    under the repo's :file:`.claude/worktrees/`, not in sibling dirs).
+    ``P05-I01-W01``. Worktrees live under ``<repo_root>/.ea/worktrees/``
+    rather than sibling repositories so the operator's working tree
+    stays self-contained; ``.ea/worktrees/`` is gitignored alongside
+    ``.ea/locks/`` and ``.ea/local/``.
     """
     suffix = _slugify_wave(wave_id)
-    return repo_root / ".claude" / "worktrees" / suffix
+    return repo_root / ".ea" / "worktrees" / suffix
 
 
 def _validate_path_inside_repo(repo_root: Path, target: Path) -> None:
@@ -120,7 +120,7 @@ def create_worktree(
             ``main``/the project's ``default_branch``. *explicit_base*
             must be ``True`` when *base* is user-supplied.
         path: Optional explicit on-disk path; defaults to
-            ``<repo_root>/.claude/worktrees/<branch-suffix>/``.
+            ``<repo_root>/.ea/worktrees/<branch-suffix>/``.
         session_id: Optional :class:`AgentSession` id to record as the
             owner for provenance.
         force: When ``True`` and an empty directory already exists at
