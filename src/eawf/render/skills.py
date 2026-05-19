@@ -227,11 +227,17 @@ phase's PLANNED-queue state:
      + `/roadmap propose`.
    - **Case B — PLANNED phase with empty wave DAG.** Dispatch the
      `planner` agent (`build/eawf-plugin/agents/planner.md`). The
-     planner returns either a sequence of `eawf roadmap revise
-     --add-wave` commands or a YAML payload. Surface `AskUserQuestion`
-     with `approve`, `edit`, `cancel`. On `approve`, apply the
-     planner's commands through the state CLI, then
-     `eawf phase activate <id>`.
+     planner returns a sequence of `eawf roadmap revise --add-wave`
+     commands (or a YAML payload). **Apply the planner's commands
+     first** through the state CLI — waves land as PENDING on the
+     still-PLANNED iter — then render the resulting DAG via
+     `eawf roadmap show --phase <id> --md` and enter Claude Code
+     plan mode (`EnterPlanMode`) with that rendering. Surface
+     `AskUserQuestion` with `approve`, `edit`, `cancel`. The
+     operator reviews the rendered roadmap, not the planner's raw
+     commands. Edits during plan mode are `/roadmap revise` calls
+     (PLANNED scope is mutable). On `approve`, call
+     `eawf phase activate <id>` (V11 hard gate).
    - **Case C — no PLANNED phase by that id.** Reject with exit 4
      and hint `Run \\`eawf roadmap propose --phase <id> --title ...\\`
      first.` for the operator.
@@ -296,6 +302,10 @@ _AUDIT_BODY = """# /audit
 - [ ] The auditor must NOT have access to the parent conversation.
 - [ ] Every quantitative claim must include source evidence and dense
       citation refs.
+- [ ] The target iter is NOT yet closed. Iter close is gated on
+      `audit + polish + ship CI + PR review pass` per the
+      `iter-phase-close-timing` rule in AGENTS.md; `/audit` runs
+      before that close.
 
 ## Decision surfaces
 
@@ -319,7 +329,18 @@ _SHIP_BODY = """# /ship
    rules.
 4. Push the long-running feature branch.
 5. Open the phase PR via `gh pr create`.
-6. After merge, advance state via `eawf state phase close <NN>`.
+6. **PR-review pass.** Read remote review comments via
+   `gh pr view <PR> --comments` (or the inline equivalent). For each
+   actionable finding, append a follow-up wave to the current iter
+   via `eawf roadmap revise --add-wave` (not a new iter — per the
+   `iter-phase-close-timing` rule). Implement, re-push, wait for
+   green CI, re-request review until clean.
+7. **Bundle close in the final pre-merge commit.** Once CI is green
+   and the review-passed branch is on the remote, emit a single
+   `[P<NN>-CORE] state: close iter + phase (audit=<id>)` commit
+   that bundles `eawf iter close P<NN>-I<MM>` +
+   `eawf phase close P<NN>` (no other touched files). The operator
+   merges that commit to end the phase.
 
 ## Pre-flight checklist
 
@@ -327,6 +348,8 @@ _SHIP_BODY = """# /ship
 - [ ] Cherry-picks from worktree subagents have all landed.
 - [ ] `eawf artifact validate` passes for promoted markdown.
 - [ ] CI on the latest push is green.
+- [ ] `/audit` and `/polish` have already run on the iter — phase
+      close is gated on both per `iter-phase-close-timing`.
 
 ## Decision surfaces
 
@@ -388,6 +411,10 @@ _POLISH_BODY = """# /polish
 
 - [ ] Scope is declared and bounded.
 - [ ] No public API rename without explicit user confirmation.
+- [ ] The target iter is NOT yet closed. Iter close is gated on
+      `audit + polish + ship CI + PR review pass` per the
+      `iter-phase-close-timing` rule in AGENTS.md; `/polish` runs
+      after `/audit` and before that close.
 
 ## Decision surfaces
 
@@ -490,8 +517,12 @@ _FLOW_BODY = """# /flow
 
 ## Canonical algorithm
 
-1. Run `/research` → `/prep` → `/audit` → `/ship` → `/review` →
-   `/polish` sequentially.
+1. Run `/research` → `/prep` → `/audit` → `/polish` → `/ship`
+   sequentially. The PR-review pass is folded into `/ship` (it reads
+   the remote review comments, addresses feedback by appending
+   waves to the current iter, then bundles iter + phase close in
+   the final pre-merge commit per the `iter-phase-close-timing`
+   rule in AGENTS.md).
 2. **Inter-stage gate (default).** After each step returns
    `status=ok`, check `flow.auto_accept.<stage>` (via
    `uv run eawf config get flow.auto_accept.<stage>`). When `false`
@@ -655,8 +686,9 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
         skill_name="flow",
         description=(
-            "Run /research → /prep → /audit → /ship → /review → /polish"
-            " sequentially; short-circuit on any non-ok status."
+            "Run /research → /prep → /audit → /polish → /ship sequentially;"
+            " review folds into /ship as the PR-review pass. Short-circuit"
+            " on any non-ok status."
         ),
         argument_hint="<task-slug> [--auto-accept=<stage>[,<stage>...]]",
         user_invocable=True,

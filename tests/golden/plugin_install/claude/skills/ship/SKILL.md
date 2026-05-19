@@ -16,7 +16,18 @@ disable-model-invocation: true
    rules.
 4. Push the long-running feature branch.
 5. Open the phase PR via `gh pr create`.
-6. After merge, advance state via `eawf state phase close <NN>`.
+6. **PR-review pass.** Read remote review comments via
+   `gh pr view <PR> --comments` (or the inline equivalent). For each
+   actionable finding, append a follow-up wave to the current iter
+   via `eawf roadmap revise --add-wave` (not a new iter — per the
+   `iter-phase-close-timing` rule). Implement, re-push, wait for
+   green CI, re-request review until clean.
+7. **Bundle close in the final pre-merge commit.** Once CI is green
+   and the review-passed branch is on the remote, emit a single
+   `[P<NN>-CORE] state: close iter + phase (audit=<id>)` commit
+   that bundles `eawf iter close P<NN>-I<MM>` +
+   `eawf phase close P<NN>` (no other touched files). The operator
+   merges that commit to end the phase.
 
 ## Pre-flight checklist
 
@@ -24,6 +35,8 @@ disable-model-invocation: true
 - [ ] Cherry-picks from worktree subagents have all landed.
 - [ ] `eawf artifact validate` passes for promoted markdown.
 - [ ] CI on the latest push is green.
+- [ ] `/audit` and `/polish` have already run on the iter — phase
+      close is gated on both per `iter-phase-close-timing`.
 
 ## Decision surfaces
 

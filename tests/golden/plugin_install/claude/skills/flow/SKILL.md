@@ -1,6 +1,6 @@
 ---
 name: flow
-description: Run /research → /prep → /audit → /ship → /review → /polish sequentially; short-circuit on any non-ok status.
+description: Run /research → /prep → /audit → /polish → /ship sequentially; review folds into /ship as the PR-review pass. Short-circuit on any non-ok status.
 argument-hint: "<task-slug> [--auto-accept=<stage>[,<stage>...]]"
 user-invocable: true
 disable-model-invocation: true
@@ -10,8 +10,12 @@ disable-model-invocation: true
 
 ## Canonical algorithm
 
-1. Run `/research` → `/prep` → `/audit` → `/ship` → `/review` →
-   `/polish` sequentially.
+1. Run `/research` → `/prep` → `/audit` → `/polish` → `/ship`
+   sequentially. The PR-review pass is folded into `/ship` (it reads
+   the remote review comments, addresses feedback by appending
+   waves to the current iter, then bundles iter + phase close in
+   the final pre-merge commit per the `iter-phase-close-timing`
+   rule in AGENTS.md).
 2. **Inter-stage gate (default).** After each step returns
    `status=ok`, check `flow.auto_accept.<stage>` (via
    `uv run eawf config get flow.auto_accept.<stage>`). When `false`

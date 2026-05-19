@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.5 hash=cba988ccaf44e0ec -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.6 hash=cb8dc71df1a41581 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -65,6 +65,10 @@ non-trivial body has an expansion block immediately following.
     Decision URN in ``state.json``; source comments are reserved for
     WHY-the-code-does-X explanations that aid future readers
     irrespective of provenance.
+26. **/prep always renders the DAG in plan mode.** See
+    ``prep-plan-mode``.
+27. **Iter and phase close timing.** See
+    ``iter-phase-close-timing``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -522,3 +526,66 @@ artifact-chassis validator + scrub gate. Spikes that do NOT
 inform a typed verdict stay local.
 
 <!-- END EAWF:managed id=spike-workflow -->
+<!-- BEGIN EAWF:managed id=prep-plan-mode version=1.0 hash=1a9d4b39246035f4 -->
+### /prep always renders the DAG in plan mode
+
+Both Case A and Case B of ``/prep`` MUST enter Claude Code
+plan mode (``EnterPlanMode``) with the rendered wave DAG of
+the target phase's current iter before surfacing the
+approve / edit / cancel ``AskUserQuestion``. Free-text
+approvals are forbidden per the project-wide
+``AskUserQuestion``-only approval policy.
+
+**Case A — PLANNED phase with at least one PENDING wave.**
+Render the plan via ``eawf roadmap show --phase <id> --md``
+→ ``EnterPlanMode`` → ``AskUserQuestion``
+(``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On
+``revise``, hand back to ``/roadmap revise``; on ``replace``,
+hand back to ``/roadmap drop`` + ``/roadmap propose``.
+
+**Case B — PLANNED phase with empty wave DAG.** Apply the
+planner's emitted ``eawf roadmap revise --add-wave`` commands
+**first** (waves land as PENDING on the still-PLANNED iter),
+then render the resulting DAG via ``eawf roadmap show
+--phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion``
+(``approve`` / ``edit`` / ``cancel``). The operator reviews
+the rendered roadmap, not the planner's raw commands. Edits
+during plan mode are ``/roadmap revise`` calls (PLANNED
+scope is mutable). On ``approve``, run
+``eawf phase activate <id>`` (V11 hard gate).
+
+The plan-mode-first invariant applies to any future ``/prep``
+cases (e.g. mid-flight scope expansion of an ACTIVE iter):
+the operator-facing surface is always the rendered DAG, not
+raw mutator commands.
+
+<!-- END EAWF:managed id=prep-plan-mode -->
+<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.0 hash=1ece2b22bcb81974 -->
+### Iter and phase close timing
+
+Iter close is gated on **audit + polish + ship CI + PR
+review pass**. Do not close an iter the moment its waves
+finish — run ``/audit`` and ``/polish`` first, then
+``/ship`` (which runs the PR review pass + addresses feedback
+by appending waves to the same iter), then close.
+
+**Append, don't open a second iter.** When ``/audit`` or
+``/polish`` surfaces follow-up work that fits the same
+delivery, append waves to the current iter via
+``eawf roadmap revise --add-wave`` (ACTIVE-phase
+``add_wave_plan`` keeps the iter ACTIVE and the new waves
+land PENDING). Opening a second iter under the same phase
+is reserved for true scope expansions or repair cycles per
+decision D17 (iter-bump triggers), not for routine
+follow-ups.
+
+**Phase close goes in the latest commit before merge.** Do
+not close the phase until ship CI is green AND the
+review-passed branch is on the remote. The phase-close
+mutation rides in a single ``[P<NN>-CORE] state: close iter
++ phase (audit=<id>)`` commit that bundles iter close +
+phase close. Merging that commit ends the phase; pre-merge
+close keeps ``state.json`` in sync with what reviewers
+approved.
+
+<!-- END EAWF:managed id=iter-phase-close-timing -->
