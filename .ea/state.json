@@ -1477,10 +1477,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I01-W07",
-      "P24-I01-W08"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2841,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T14:53:37.965000Z",
+  "updated_at": "2026-05-19T15:21:57.204058Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -2853,6 +2850,7 @@
       "deps": [
         "P08-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/dispatch/**",
@@ -2863,6 +2861,8 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:45.260116Z",
       "outcome": "subagent prompt renderer + wave dispatch/dispatch-batch CLI (17 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B025 subagent prompt renderer (wave dispatch)",
@@ -2880,6 +2880,7 @@
       "closed_at": "2026-05-10T22:13:08.058437Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -2891,6 +2892,8 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:39.762631Z",
       "outcome": "DAG persistence: blocks index + cycle check + graph/next-ready verbs (24 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B026 wave DAG persistence in state.waves",
@@ -2910,6 +2913,7 @@
       "deps": [
         "P08-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/worktree/merge_back.py",
@@ -2920,6 +2924,8 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.156927Z",
       "outcome": "wave land cherry-pick automation + wave land-batch (13 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B027 cherry-pick automation (wave land)",
@@ -2934,6 +2940,7 @@
       "closed_at": "2026-05-10T22:13:08.501855Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/budget/**",
@@ -2944,6 +2951,8 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.551109Z",
       "outcome": "token-budget cap: Wave.token_budget/tokens_consumed + budget pkg + wave budget set/consume/show + claim gate (24 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B028 per-wave token-budget cap",
@@ -2960,6 +2969,7 @@
       "deps": [
         "P08-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/ci_loop/**",
@@ -2970,6 +2980,8 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:40.954397Z",
       "outcome": "CI-fix loop: pytest/ruff/mypy parser + wave fix-ci/fix-ci-loop CLI (14 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B040 CI-fix loop (wave fix-ci)",
@@ -2986,6 +2998,7 @@
       "deps": [
         "P08-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/pr_review/**",
@@ -2996,6 +3009,8 @@
       "iter_id": "P08-I01",
       "opened_at": "2026-05-10T21:46:41.350163Z",
       "outcome": "PR review automation: findings parser + verdict policy + wave review CLI (19 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B041 PR review automation",
@@ -3012,6 +3027,7 @@
       "closed_at": "2026-05-11T08:18:14.020785Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py",
@@ -3022,6 +3038,8 @@
       "iter_id": "P09-I01",
       "opened_at": "2026-05-11T08:16:04.388462Z",
       "outcome": "Dedup _insort to bisect.insort; rename project_init→project_init_cmd",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "DRY _insort to shared util; rename project_init→project_init_cmd",
@@ -3036,6 +3054,7 @@
       "closed_at": "2026-05-11T08:20:17.430900Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -3045,6 +3064,8 @@
       "iter_id": "P09-I01",
       "opened_at": "2026-05-11T08:16:10.471461Z",
       "outcome": "Add check_wave_blocks_invariant + INV.GRAPH.{BLOCKS,DEPS}_MISSING_REVERSE codes; ALL_INVARIANTS extended",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "State-level validator for Wave.blocks reverse-index invariant",
@@ -3059,6 +3080,7 @@
       "closed_at": "2026-05-11T08:21:40.313753Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/worktree.py",
@@ -3068,6 +3090,8 @@
       "iter_id": "P09-I01",
       "opened_at": "2026-05-11T08:16:11.236826Z",
       "outcome": "Cross-platform abs-path detection in worktree path-fix via PurePosixPath/PureWindowsPath; helper extracted + tested",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Cross-platform absoluteness check in worktree path-fix",
@@ -3084,6 +3108,7 @@
       "deps": [
         "P09-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py",
@@ -3093,6 +3118,8 @@
       "iter_id": "P09-I01",
       "opened_at": "2026-05-11T08:16:12.495035Z",
       "outcome": "Surface discarded delta + pre-rollback consumed in budget-consume block error; rollback persistence documented + tested",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Surface discarded_delta in wave budget consume envelope on rollback",
@@ -3109,6 +3136,7 @@
       "closed_at": "2026-05-11T10:43:00.505929Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/skill.py",
@@ -3120,6 +3148,8 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:48.876900Z",
       "outcome": "skill render command (B024): render_skill_md_from_spec helper, --format=skill-md|json, byte-equal to plugin_install render",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Skill render command",
@@ -3136,6 +3166,7 @@
       "closed_at": "2026-05-11T10:43:01.565652Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -3150,6 +3181,8 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:50.323650Z",
       "outcome": "mcp_grants table + grant/revoke CLI + INV.REF.MCP_GRANT_SERVER_MISSING invariant + schema regen (B035)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "MCP grants state table + CLI",
@@ -3166,6 +3199,7 @@
       "closed_at": "2026-05-11T10:43:02.296715Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/mcp/installer.py",
@@ -3178,6 +3212,8 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:51.534514Z",
       "outcome": "claude-agent-sdk dispatch adapter: render_dispatch_envelope pure-fn + --runtime CLI flag, no new runtime deps",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "claude-agent-sdk dispatch adapter",
@@ -3196,6 +3232,7 @@
         "P10-I01-W02",
         "P10-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "tests/integration/test_dual_runtime_envelope.py",
@@ -3205,6 +3242,8 @@
       "iter_id": "P10-I01",
       "opened_at": "2026-05-11T10:19:55.225521Z",
       "outcome": "ship-gate dual-runtime envelope equivalence verified (6 integration tests + A11-P10 audit pass)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Ship-gate dual-runtime envelope demo",
@@ -3221,6 +3260,7 @@
       "closed_at": "2026-05-11T11:49:56.625542Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/config/defaults.py",
@@ -3230,6 +3270,8 @@
       "iter_id": "P11-I01",
       "opened_at": "2026-05-11T11:38:24.463815Z",
       "outcome": "Config defaults: planning.auto_plan + flow.auto_accept per-stage + flow.ask_on_decisions; _ConfigSchema extended",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Config defaults: planning.auto_plan + flow.auto_accept",
@@ -3246,6 +3288,7 @@
       "closed_at": "2026-05-11T11:49:57.680282Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/skills.py"
@@ -3254,6 +3297,8 @@
       "iter_id": "P11-I01",
       "opened_at": "2026-05-11T11:38:25.070841Z",
       "outcome": "SkillSpec body updates: _PREP_BODY plan-mode gate, _FLOW_BODY inter-stage gate, decision-surfaces in 5 remaining bodies; argument hints expose --auto-plan / --auto-accept",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "SKILL.md bodies: plan-mode prep + AskUserQuestion flow",
@@ -3271,6 +3316,7 @@
         "P11-I01-W01",
         "P11-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "build/eawf-plugin/skills/**",
@@ -3280,6 +3326,8 @@
       "iter_id": "P11-I01",
       "opened_at": "2026-05-11T11:38:28.724159Z",
       "outcome": "Golden plugin tree regenerated byte-equal; tests/unit/test_skill_registry_p11.py pins 8 acceptance contracts",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Plugin tree re-emit + skill registry tests",
@@ -3294,6 +3342,7 @@
       "closed_at": "2026-05-11T13:05:27.792212Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/decision_graph.py",
@@ -3304,6 +3353,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:42.441739Z",
       "outcome": "Decision graph render (text/dot/mermaid) + 6 unit tests",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B029 decision graph render",
@@ -3318,6 +3369,7 @@
       "closed_at": "2026-05-11T13:09:07.015750Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/memory/gc.py",
@@ -3331,6 +3383,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:42.852028Z",
       "outcome": "Memory GC + tiered memory (10 unit tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B030+B037 memory GC + tiered memory",
@@ -3345,6 +3399,7 @@
       "closed_at": "2026-05-11T13:13:40.278328Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/doctor/doc_verify.py",
@@ -3355,6 +3410,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:43.258193Z",
       "outcome": "Doc-drift linter (verify_docs + eawf doc verify CLI + 6 tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B031 doc-drift linter",
@@ -3369,6 +3426,7 @@
       "closed_at": "2026-05-11T13:16:03.556288Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/pr_body.py",
@@ -3382,6 +3440,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:43.652488Z",
       "outcome": "PR body + project wiki render (5 unit tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B032+B038 PR body + wiki render",
@@ -3396,6 +3456,7 @@
       "closed_at": "2026-05-11T13:19:04.760498Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "tests/eval/**",
@@ -3405,6 +3466,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.040533Z",
       "outcome": "Skill eval harness (6 golden envelopes + pytest -m eval gate)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B033 skill eval harness",
@@ -3419,6 +3482,7 @@
       "closed_at": "2026-05-11T13:22:43.169235Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/sandbox/**",
@@ -3433,6 +3497,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.441254Z",
       "outcome": "Sandbox policy table + CLI + invariant (13 unit tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B034 sandbox policy",
@@ -3447,6 +3513,7 @@
       "closed_at": "2026-05-11T13:24:44.025187Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/render/impact.py",
@@ -3457,6 +3524,8 @@
       "iter_id": "P12-I01",
       "opened_at": "2026-05-11T12:57:44.829037Z",
       "outcome": "File-impact graph render + impact CLI (6 unit tests)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B039 file impact graph",
@@ -3476,6 +3545,7 @@
       "closed_at": "2026-05-11T14:14:04.500555Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         ".ea/state.json",
@@ -3485,6 +3555,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:53.989701Z",
       "outcome": "Closed 13 shipped backlog items (B025/B027/B029-B034/B037-B041) drifted since P08/P12",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Backlog hygiene — close 13 shipped items",
@@ -3504,6 +3576,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "tests/golden/scenarios/**",
@@ -3513,6 +3586,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:57.733885Z",
       "outcome": "B009 golden scenarios — 4 cases (fresh_repo, byte-stable agents_md, enrich_existing, flow_full) under golden_scenarios marker",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B009 golden scenarios",
@@ -3531,6 +3606,7 @@
       "deps": [
         "P13-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/eval/**",
@@ -3542,6 +3618,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:05.379970Z",
       "outcome": "B042 self-eval scoring — 6-dim weighted EvalScore + 0.85 threshold gate parametrised over 6 skills",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B042 self-eval scoring loop",
@@ -3560,6 +3638,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/audit_dsl/**",
@@ -3573,6 +3652,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:12:59.217228Z",
       "outcome": "B019 audit-check DSL — 5 kinds + yaml runner + --checks CLI; D02 closed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B019 audit-check DSL skeleton",
@@ -3591,6 +3672,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/claude/**",
@@ -3604,6 +3686,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:00.581229Z",
       "outcome": "B015 plugin-mode hooks — 6 session-level events + hooks.json; eawf-internal lifecycle stays in state CLI",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B015 plugin-mode hooks",
@@ -3624,6 +3708,7 @@
         "P13-I01-W05",
         "P13-I01-W07"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "pyproject.toml",
@@ -3638,6 +3723,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:06.925391Z",
       "outcome": "Version bump 0.1.0→0.2.0; CHANGELOG mined P07..P13; doc scrub; B048+B049 v0.3 backlog filed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Version bump 0.2.0 + CHANGELOG mine",
@@ -3656,6 +3743,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "docs/architecture/installation.md",
@@ -3667,6 +3755,8 @@
       "iter_id": "P13-I01",
       "opened_at": "2026-05-11T14:13:01.571308Z",
       "outcome": "B017 user-scope install — doctor --user-scope probe + update_plugin check=True",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "B017 user-scope install",
@@ -3683,6 +3773,7 @@
       "closed_at": "2026-05-11T21:27:58.133113Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/**",
@@ -3694,6 +3785,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:00:33.174379Z",
       "outcome": "hygiene preamble landed: phase prepare-close + D17 iter-bump hint + version-coupling test",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
@@ -3710,6 +3803,7 @@
       "deps": [
         "P14-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         ".pre-commit-config.yaml",
@@ -3721,6 +3815,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:28:10.662736Z",
       "outcome": "commit-prefix linter + detect-secrets baseline hash + doc verify pre-push wired",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Pre-commit hygiene + commit-prefix linter",
@@ -3739,6 +3835,7 @@
       "closed_at": "2026-05-11T21:39:06.329869Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/install/wizard.py",
@@ -3752,6 +3849,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:32:18.747639Z",
       "outcome": "runtime.adapters list[str] + codex choice + legacy kind shim",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Profile-config schema bump: runtime.adapters list",
@@ -3770,6 +3869,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/profiles/loader.py",
@@ -3780,6 +3880,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:39:25.044442Z",
       "outcome": "layered profile discovery + mtime cache; workspace > user > builtin",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Custom profile discovery roots + mtime cache",
@@ -3796,6 +3898,7 @@
       "deps": [
         "P14-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/profile.py",
@@ -3808,6 +3911,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:44:21.784088Z",
       "outcome": "profile new --inherit + validate + TOFU trust ledger",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Profile new + validate + TOFU trust ledger",
@@ -3826,6 +3931,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/__init__.py",
@@ -3840,6 +3946,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:50:51.134918Z",
       "outcome": "Codex runtime adapter: install+doctor+TOML managed block",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Codex runtime adapter",
@@ -3858,6 +3966,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/opencode/__init__.py",
@@ -3871,6 +3980,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T21:57:51.148314Z",
       "outcome": "OpenCode plugin adapter: opencode.json + untyped plugin.js + doctor drift",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "OpenCode plugin adapter (untyped js)",
@@ -3888,6 +3999,7 @@
         "P14-I01-W06",
         "P14-I01-W07"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/mcp/installer.py",
@@ -3898,6 +4010,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T22:15:48.229075Z",
       "outcome": "doctor check_mcp_drift + MCP installer runtime dispatch (claude+codex+opencode)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "MCP emit hardening + plugin doctor MCP drift",
@@ -3912,6 +4026,7 @@
       "closed_at": "2026-05-11T22:31:24.973405Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/skills/discovery.py",
@@ -3923,6 +4038,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T22:24:59.090192Z",
       "outcome": "layered skill discovery: workspace > user > builtin + --scope filter",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Skill registry + user catalogue",
@@ -3937,6 +4054,7 @@
       "closed_at": "2026-05-11T22:46:46.811276Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/tui/__init__.py",
@@ -3948,6 +4066,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T22:31:52.514972Z",
       "outcome": "rich-backed TUI scaffold + bare-eawf auto-launch + non-TTY status fallback",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "TUI on rich + bare-eawf auto-launch",
@@ -3962,6 +4082,7 @@
       "closed_at": "2026-05-11T23:01:22.700165Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -3976,6 +4097,8 @@
       "iter_id": "P14-I01",
       "opened_at": "2026-05-11T22:47:23.381719Z",
       "outcome": "ArtifactKind enum + a11y profile stub + /blitz recursion guard",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Artifact-kind enum + a11y stub + /blitz skill scaffold",
@@ -3990,6 +4113,7 @@
       "closed_at": "2026-05-12T18:28:41.232196Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/**",
@@ -4005,6 +4129,8 @@
       "iter_id": "P14-I02",
       "opened_at": "2026-05-12T16:55:50.420692Z",
       "outcome": "Hotfix complete: codex marketplace package + display fixes. (1) Install/doctor text now derives real destination from result file paths instead of workspace pwd. (2) New `eawf plugin package codex` emits marketplace tree per Codex schema (name + interface.displayName + plugins[].{name,source,policy,category}); operator registers via `codex plugin marketplace add`. (3) Codex install command prints registration tip pointing at package command. 9 new unit tests + 2 integration tests pass; full suite (1851 unit + 380 integration) green; mypy clean.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "plugin install native layout + user scope",
@@ -4019,6 +4145,7 @@
       "closed_at": "2026-05-12T18:58:48.589880Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_doctor.py",
@@ -4035,6 +4162,8 @@
       "iter_id": "P14-I03",
       "opened_at": "2026-05-12T18:43:34.186139Z",
       "outcome": "B1+B3+B4 fixed: codex doctor plugin_root display, codex marketplace at .agents/plugins/marketplace.json, opencode emits 8 agents + 10 commands with $ARGUMENTS substitution. 2240 pytest pass, all three flows live-verified.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "codex doctor folder display + marketplace path + opencode agents/skills emission",
@@ -4049,6 +4178,7 @@
       "closed_at": "2026-05-12T20:09:22.023040Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/lifecycle/transitions.py",
@@ -4058,6 +4188,8 @@
       "iter_id": "P14-I04",
       "opened_at": "2026-05-12T20:09:21.174742Z",
       "outcome": "shipped",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Add phase reopen CLI",
@@ -4072,6 +4204,7 @@
       "closed_at": "2026-05-12T20:09:23.291579Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py",
@@ -4082,6 +4215,8 @@
       "iter_id": "P14-I04",
       "opened_at": "2026-05-12T20:09:22.438256Z",
       "outcome": "shipped",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Drop agents/ from codex plugin render",
@@ -4096,6 +4231,7 @@
       "closed_at": "2026-05-12T20:09:24.561088Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py",
@@ -4105,6 +4241,8 @@
       "iter_id": "P14-I04",
       "opened_at": "2026-05-12T20:09:23.704746Z",
       "outcome": "shipped",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Codex skill dir layout",
@@ -4119,6 +4257,7 @@
       "closed_at": "2026-05-12T20:09:25.802062Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py"
@@ -4127,6 +4266,8 @@
       "iter_id": "P14-I04",
       "opened_at": "2026-05-12T20:09:24.983901Z",
       "outcome": "shipped",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Add interface block",
@@ -4144,6 +4285,7 @@
       "closed_at": "2026-05-13T12:42:40.715867Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/skills/research.py",
@@ -4155,6 +4297,8 @@
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:30.543548Z",
       "outcome": "Implemented /research args and final research-store persistence.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "/research args + final research-store persistence",
@@ -4173,6 +4317,7 @@
       "deps": [
         "P15-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/skills/blitz.py",
@@ -4187,6 +4332,8 @@
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:31.512202Z",
       "outcome": "Registered /blitz and integrated /research auto-chain.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Registered /blitz skill + /research auto-chain",
@@ -4203,6 +4350,7 @@
       "closed_at": "2026-05-13T12:44:45.255714Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "src/eawf/cli/commands/skill.py",
@@ -4214,6 +4362,8 @@
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:31.010828Z",
       "outcome": "Implemented executable workspace/user skill overlays.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Executable workspace/user skill overlays",
@@ -4232,6 +4382,7 @@
         "P15-I01-W02",
         "P15-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
         "tests/golden/**",
@@ -4246,6 +4397,8 @@
       "iter_id": "P15-I01",
       "opened_at": "2026-05-13T12:39:32.000777Z",
       "outcome": "Refreshed schemas, goldens, and P15 audit evidence.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "Docs, schemas, plugin goldens, audit evidence, and compatibility sweep",
@@ -4262,6 +4415,7 @@
       "closed_at": "2026-05-14T15:43:46.780266Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/vcs/**",
@@ -4273,6 +4427,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:37.689957Z",
       "outcome": "coauthor config model landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "vcs.coauthor config validates strict modes"
@@ -4293,6 +4449,7 @@
       "deps": [
         "P17-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/coauthor.py",
@@ -4305,6 +4462,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:38.091640Z",
       "outcome": "coauthor resolve CLI and hook policy landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "coauthor resolve uses runtime registry"
@@ -4323,6 +4482,7 @@
       "closed_at": "2026-05-14T15:43:48.397007Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/render/pr_body.py",
@@ -4333,6 +4493,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:38.489895Z",
       "outcome": "PR kind inference landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "PR kind inference covers roadmap kinds"
@@ -4354,6 +4516,7 @@
       "deps": [
         "P17-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/render/pr_body.py",
@@ -4363,6 +4526,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:38.881107Z",
       "outcome": "profile-aware PR body renderers landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "PR body renders typed inputs and profile blocks"
@@ -4384,6 +4549,7 @@
       "deps": [
         "P17-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/pr.py",
@@ -4396,6 +4562,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:39.272722Z",
       "outcome": "release notes drafts landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "PR and release prose render through CLI"
@@ -4416,6 +4584,7 @@
       "deps": [
         "P17-I01-W05"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/artifacts/**",
@@ -4429,6 +4598,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:39.660797Z",
       "outcome": "PR and ship artifact gates landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "ship and pr helpers block invalid artifacts"
@@ -4447,6 +4618,7 @@
       "deps": [
         "P17-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/render/pr_body.py",
@@ -4456,6 +4628,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:40.050612Z",
       "outcome": "docs/research citation source rows landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "citation rows render in docs and research PR sections"
@@ -4477,6 +4651,7 @@
         "P17-I01-W02",
         "P17-I01-W05"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "docs/**",
@@ -4488,6 +4663,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:40.469572Z",
       "outcome": "single-wave close guard and docs landed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "docs and lint coverage describe coauthor and PR policy"
@@ -4507,6 +4684,7 @@
         "P17-I01-W06",
         "P17-I01-W08"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         ".ea/artifacts/**",
@@ -4517,6 +4695,8 @@
       "iter_id": "P17-I01",
       "opened_at": "2026-05-14T15:07:40.863358Z",
       "outcome": "P17 ship-gate audit recorded",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "P17 ship gate audit records verification"
@@ -4535,6 +4715,7 @@
       "closed_at": "2026-05-14T17:27:53.626739Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/store/kinds/agent_report.py",
@@ -4545,6 +4726,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:50.578819Z",
       "outcome": "Added strict shared agent-report primitives and verdict enum.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "strict shared report models exist",
@@ -4567,6 +4750,7 @@
       "deps": [
         "P18-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/store/kinds/agent_report.py",
@@ -4576,6 +4760,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:51.020569Z",
       "outcome": "Added strict per-role agent report bodies with header/body role validation.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "all eight role bodies validate strictly",
@@ -4598,6 +4784,7 @@
       "deps": [
         "P18-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/enums.py",
@@ -4611,6 +4798,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:51.443345Z",
       "outcome": "Registered role-report store kinds, artifact kind, payload registry, and scoped store URNs.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "eight report StoreKind values registered",
@@ -4635,6 +4824,7 @@
       "deps": [
         "P18-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/agent_report/store.py",
@@ -4646,6 +4836,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:51.855832Z",
       "outcome": "Added append-only agent report writer and agent_end hook persistence path.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "agent-end payload writes through CLI writer",
@@ -4667,6 +4859,7 @@
       "deps": [
         "P18-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/hooks/event.py",
@@ -4682,6 +4875,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:52.262791Z",
       "outcome": "Wired agent_end hooks for Claude, Codex, and OpenCode; updated doctor coverage and hook goldens.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "Claude Codex and OpenCode wire agent-end hook",
@@ -4705,6 +4900,7 @@
       "deps": [
         "P18-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/agent_report.py",
@@ -4717,6 +4913,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:52.668693Z",
       "outcome": "Added agent-report CLI surfaces and operator rollup over typed report stores.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "add show list commands work",
@@ -4739,6 +4937,7 @@
       "deps": [
         "P18-I01-W06"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/render/agent_report.py",
@@ -4749,6 +4948,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:53.085854Z",
       "outcome": "Added deterministic markdown renderers and goldens for all typed agent report roles.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "all eight role reports render markdown",
@@ -4772,6 +4973,7 @@
       "deps": [
         "P18-I01-W06"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/validate/invariants.py",
@@ -4781,6 +4983,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:53.509212Z",
       "outcome": "Added typed agent report invariant checks for session roles, attempts, scope resolution, executor commits, reviewer coverage, auditor criteria, and operator phase coverage.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "session role match",
@@ -4808,6 +5012,7 @@
         "P18-I01-W07",
         "P18-I01-W08"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/render/pr_body.py",
@@ -4818,6 +5023,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:53.924814Z",
       "outcome": "Integrated typed agent reports into PR body rendering for phase rollups, iter executor/reviewer reports, and docs-research reports.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "phase PR reads operator rollup",
@@ -4840,6 +5047,7 @@
       "deps": [
         "P18-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/render/agents.py",
@@ -4851,6 +5059,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:54.333240Z",
       "outcome": "Added typed output envelope blocks to all rendered Claude agent manifests and refreshed plugin goldens.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "all eight agent manifests include typed output envelope blocks",
@@ -4873,6 +5083,7 @@
         "P18-I01-W08",
         "P18-I01-W10"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "docs/architecture/agent-reports.md",
@@ -4883,6 +5094,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:54.732413Z",
       "outcome": "Documented typed agent report store flow, report enums, role-specific store URNs, validation rules, and promotion path.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "architecture doc explains store flow",
@@ -4905,6 +5118,7 @@
       "deps": [
         "P18-I01-W11"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "AGENTS.md",
@@ -4916,6 +5130,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:55.160076Z",
       "outcome": "Added managed AGENTS rules requiring typed append-only agent reports with canonical verdict values and refreshed profile goldens.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "AGENTS rules require typed reports",
@@ -4938,6 +5154,7 @@
         "P18-I01-W09",
         "P18-I01-W12"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         ".ea/artifacts/A23-P18-ship-gate.md",
@@ -4948,6 +5165,8 @@
       "iter_id": "P18-I01",
       "opened_at": "2026-05-14T17:24:55.574985Z",
       "outcome": "Recorded P18 ship-gate audit A23-P18, validated artifact chassis, refreshed scenario golden, and verified ruff, mypy, and full pytest.",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "ship-gate audit records P18 criteria",
@@ -4973,6 +5192,7 @@
       "closed_at": "2026-05-14T20:44:43.535335Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -4984,6 +5204,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:46.330116Z",
       "outcome": "lifecycle planned-scope transitions added",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "plan_phase and plan_iter add PLANNED status; activate_phase and activate_iter transition PLANNED to ACTIVE; edit_wave_plan/remove_wave_plan/set_wave_deps mutate PENDING-only; Phase.depends_on field added; cyclic deps rejected"
@@ -5004,6 +5226,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/lifecycle/transitions.py",
@@ -5014,6 +5237,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:52.876644Z",
       "outcome": "P19 W02 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "claim_wave rejects when any wave in .deps not CLOSED; rejects when a sibling lower-numbered ready wave is uncliamed; --out-of-order escape hatch supported"
@@ -5034,6 +5259,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         "src/eawf/lifecycle/transitions.py",
@@ -5043,6 +5269,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:54.640441Z",
       "outcome": "P19 W03 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "close_phase rejects when no wave under the phase has status=CLOSED"
@@ -5064,6 +5292,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -5077,6 +5306,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:56.885654Z",
       "outcome": "P19 W04 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "Wave.commit field removed; close_wave drops --commit arg; wave show --commit derives SHA via git log --grep; event envelope omits commit_sha; one-shot migration script lands"
@@ -5095,6 +5326,7 @@
       "closed_at": "2026-05-14T20:45:34.465923Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         "tools/commit_prefix_lint.py",
@@ -5104,6 +5336,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:20:47.935729Z",
       "outcome": "P19 W05 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "regex rejects bare [P##] subject; requires -W## or -CORE suffix; state type allowlist retained"
@@ -5125,6 +5359,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/cli/roadmap.py",
@@ -5136,6 +5371,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:21:04.944520Z",
       "outcome": "P19 W06 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "roadmap propose emits needs_user envelope with plan body; --apply atomically populates state with plan_phase + plan_iter + waves; --revise edits PENDING waves via structured flags or YAML; --drop archives PLANNED phase; roadmap show + diff renderers"
@@ -5157,6 +5394,7 @@
         "P19-I01-W01",
         "P19-I01-W06"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "build/eawf-plugin/skills/prep/SKILL.md",
@@ -5166,6 +5404,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:21:07.763041Z",
       "outcome": "P19 W07 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "case A PLANNED with non-empty DAG: render via roadmap show + AUQ then activate_phase; case B PLANNED empty DAG: dispatch planner agent then AUQ approve + activate; case C no PLANNED phase: reject with hint"
@@ -5192,6 +5432,7 @@
         "P19-I01-W06",
         "P19-I01-W07"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "AGENTS.md",
@@ -5201,6 +5442,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T19:21:09.950524Z",
       "outcome": "P19 W08 complete",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "managed blocks updated: planned-scope-revisability",
@@ -5226,6 +5469,7 @@
         "P19-I01-W04",
         "P19-I01-W08"
       ],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         "tests/golden/"
@@ -5234,6 +5478,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T22:08:08.425793Z",
       "outcome": "golden + lifecycle scenario sync after W04/W08; all golden tests green local",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "all golden tests pass on py3.14 CI"
@@ -5252,6 +5498,7 @@
       "deps": [
         "P19-I01-W09"
       ],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         ".ea/artifacts/"
@@ -5260,6 +5507,8 @@
       "iter_id": "P19-I01",
       "opened_at": "2026-05-14T22:22:01.301447Z",
       "outcome": "A24-P19 ship-gate registered with pass verdict",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "phase + iter closed; A24-P19 ship-gate registered"
@@ -5279,6 +5528,7 @@
       "closed_at": "2026-05-15T15:18:57.190971Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/lifecycle/transitions.py",
@@ -5288,6 +5538,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:02.591688Z",
       "outcome": "activate-gate complete: wave count + currency + dirty (commit 8fb9b40)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "activate_phase rejects phase without waves",
@@ -5308,6 +5560,7 @@
       "closed_at": "2026-05-15T15:17:41.945993Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/roadmap.py",
@@ -5317,6 +5570,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:24.595415Z",
       "outcome": "ACTIVE-phase revise for PENDING waves (commit 2d93247)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "roadmap revise accepts ACTIVE phase for PENDING-only mutations",
@@ -5339,6 +5594,7 @@
       "deps": [
         "P19-I02-W11"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py"
@@ -5347,6 +5603,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:25.078401Z",
       "outcome": "phase activate fetches + --allow-stale (commit a6300b6)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "phase activate fetches + compares to source branch",
@@ -5368,6 +5626,7 @@
       "closed_at": "2026-05-15T15:17:41.002945Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "docs/architecture/coauthor.md",
@@ -5377,6 +5636,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:25.563232Z",
       "outcome": "coauthor verification docs + integration test (commit 9299ff3)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "test commit lands single Co-Authored-By line",
@@ -5399,6 +5660,7 @@
       "deps": [
         "P19-I02-W14"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "git-hooks",
@@ -5408,6 +5670,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:26.051188Z",
       "outcome": "commit-msg normalize-coauthor hook (commit 36ffc98)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "hook collapses Claude variant to Claude generic",
@@ -5429,6 +5693,7 @@
       "closed_at": "2026-05-15T15:17:41.485183Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         ".ea/state.json",
@@ -5438,6 +5703,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:26.536663Z",
       "outcome": "bulk-close stale backlog: 7 delivered, 2 superseded, 7 defer-published (commit 9fad87b, audit A25)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "stale items closed via audit",
@@ -5458,6 +5725,7 @@
       "closed_at": "2026-05-15T15:33:06.335759Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py",
@@ -5467,6 +5735,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:27.077055Z",
       "outcome": "wave close --commit SHA normalisation + ShaStr on Wave model (commit cfd8043)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "wave close --commit accepts full SHA",
@@ -5486,6 +5756,7 @@
       "closed_at": "2026-05-15T15:17:42.418104Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py",
@@ -5495,6 +5766,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:27.563420Z",
       "outcome": "eawf wave update --files verb (commit 8576835)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "wave update --files mutates Wave.file_scopes on PENDING/CLAIMED/IN_PROGRESS",
@@ -5514,6 +5787,7 @@
       "closed_at": "2026-05-15T15:18:01.828920Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/render/agents_md.py",
@@ -5523,6 +5797,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:28.059798Z",
       "outcome": "AGENTS.md decisions render from typed Decision records (commit db8d91d)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "render_agents_md consumes typed Decision rows",
@@ -5543,6 +5819,7 @@
       "closed_at": "2026-05-15T15:20:27.151013Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/state.py",
@@ -5552,6 +5829,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:28.548189Z",
       "outcome": "eawf artifact verify CLI (commit d6a9b9b)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "eawf artifact verify recomputes sha256 on demand",
@@ -5581,6 +5860,7 @@
         "P19-I02-W19",
         "P19-I02-W20"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         ".ea/artifacts",
@@ -5590,6 +5870,8 @@
       "iter_id": "P19-I02",
       "opened_at": "2026-05-15T14:43:29.048857Z",
       "outcome": "P19-I02 ship-gate audit A26-P19-I02 verdict=pass; report ART-A26-P19-I02",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "ship-gate audit verdict=pass",
@@ -5611,6 +5893,7 @@
       "closed_at": "2026-05-15T16:59:40.385437Z",
       "commit": "7a8e0b1dba25a6db592940fa57501f0c1b50438e",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/cli/commands/roadmap.py"
@@ -5619,6 +5902,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:54.485894Z",
       "outcome": "rich.table.Table renderer for eawf roadmap show with stale-row annotation; 7 new integration tests; gauntlet clean",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "rich-table render covers phases iters waves",
@@ -5643,6 +5928,7 @@
       "deps": [
         "P20-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/tui/app.py",
@@ -5652,6 +5938,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:54.976913Z",
       "outcome": "rich.live + rich.layout quadrant TUI, brand+breadcrumb+keymap, offline+online tick modes; 65 new tests; gauntlet green (2632 passed)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "Eä brand outside-left of breadcrumb",
@@ -5675,6 +5963,7 @@
       "deps": [
         "P20-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/tui/wave_board.py"
@@ -5683,6 +5972,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:55.537642Z",
       "outcome": "TUI wave-board view: typed DAG-edge consumer, operator-priority sort, 5-mode filter cycle, b-key dispatch; 62 new tests; 2760 passed",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "list view sorted by status priority then wave_id",
@@ -5703,6 +5994,7 @@
       "deps": [
         "P20-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/tui/overlays.py"
@@ -5711,6 +6003,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:56.024559Z",
       "outcome": "5 detail overlays (hypothesis/decision/memory/events/dispatch); single open_overlay dispatch; verb-prefixed keymap oH/oD/oM/oE/oR; 5 golden snapshots; 45 wave-specific tests",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "five overlays",
@@ -5733,6 +6027,7 @@
       "deps": [
         "P20-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/tui/workspace.py",
@@ -5742,6 +6037,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:56.512048Z",
       "outcome": "workspace dashboard: read-only registry helper + typed Registry, top-strip multi-repo, active-repo quadrant reuse, stale chips on 3 signals; 85 wave tests; 2845 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "top strip multi-repo",
@@ -5762,6 +6059,7 @@
       "deps": [
         "P20-I01-W05"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/tui/portfolio.py",
@@ -5771,6 +6069,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:57.026026Z",
       "outcome": "portfolio dashboard rich-table + explicit repo add/remove/prune CLI verbs (no scan/walk); 3 goldens; 111 wave tests; 3070 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "portfolio view across registered repos",
@@ -5792,6 +6092,7 @@
       "deps": [
         "P20-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/tui/audit_overlay.py"
@@ -5800,6 +6101,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:43:57.519989Z",
       "outcome": "audit-running overlay: remediation hints, read-only AuditAttachment (pid + harness_adapter + session), v0.4-deferred action menu; 63 wave tests; 3022 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "remediation hints surface",
@@ -5820,6 +6123,7 @@
       "closed_at": "2026-05-15T17:15:52.681457Z",
       "commit": "fc693de084948326c6c634338e14683ee5b9d0ed",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/metrics.py",
@@ -5829,6 +6133,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:17.242264Z",
       "outcome": "eawf metrics CLI; shared rich/plain renderer; typed MetricsSummary schema_version=1; 22 unit + 4 integration tests",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "rich-table CLI render",
@@ -5849,6 +6155,7 @@
       "deps": [
         "P20-I01-W08"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -5858,6 +6165,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:17.727196Z",
       "outcome": "weekly_eu_target field on Project (default None), WeeklyBurnMetric + compute_weekly_burn helper, TUI footer divisor when set; 20 tests; 2980 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "field defaults None",
@@ -5879,6 +6188,7 @@
       "closed_at": "2026-05-15T16:59:41.139622Z",
       "commit": "541da25cd0744a82b4c19cbfec41f9b15cd7ce34",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/cli/commands/config.py",
@@ -5888,6 +6198,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:18.270476Z",
       "outcome": "questionary menu + ConfigKey metadata registry (498 LoC); 30 unit + 12 integration tests; subagent leak salvaged inline",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "menu lists tabs alphabetical",
@@ -5911,6 +6223,7 @@
         "P20-I01-W02",
         "P20-I01-W10"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/tui/config_modal.py"
@@ -5919,6 +6232,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:18.771208Z",
       "outcome": "TUI config modal with c hotkey, tabbed metadata-driven form, type-sized inputs, s save through W10 _save_value_to_layer helper; 69 wave-specific tests; 2829 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "c hotkey opens tabbed full-screen modal",
@@ -5941,6 +6256,7 @@
       "deps": [
         "P20-I01-W10"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/cli"
@@ -5949,6 +6265,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:19.308779Z",
       "outcome": "RegistryOrderedTyperGroup drives help panel order from CONFIG_REGISTRY.tabs_sorted(); stale v0.1 banner scrubbed; golden + unit + integration tests",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "help groups follow metadata registry order",
@@ -5973,6 +6291,7 @@
         "P20-I01-W11",
         "P20-I01-W12"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "docs/architecture/tui.md",
@@ -5982,6 +6301,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:19.806798Z",
       "outcome": "TUI surface docs (docs/architecture/tui.md, 326 LoC) + P20 ship-gate audit A27 verdict=pass; chassis-validated; 3154 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "TUI surface documented",
@@ -6002,6 +6323,7 @@
       "deps": [
         "P20-I01-W13"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "AGENTS.md",
@@ -6011,6 +6333,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:20.300974Z",
       "outcome": "spike-workflow AGENTS rule 22 + /prep + /research skill prompts + dispatch renderer auto-surfacing spike briefs; 9 new renderer tests; 3164 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "spike convention codified in AGENTS",
@@ -6031,6 +6355,7 @@
       "deps": [
         "P20-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -6040,6 +6365,8 @@
       "iter_id": "P20-I01",
       "opened_at": "2026-05-15T14:44:20.790753Z",
       "outcome": "typed DAG edges via eawf.state.wave_graph (deps/blocks/blocked_by/edges/edges_for_iter); blocks-rebuild primes typed view; derived design (no model field); 22 unit + 5 integration tests",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "Wave.blocked_by derived OR typed field",
@@ -6058,6 +6385,7 @@
       "closed_at": "2026-05-15T20:10:04.578780Z",
       "commit": "f4eda19eedaae697f41df7e9eb88676898a2e94c",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "AGENTS.md",
@@ -6068,6 +6396,8 @@
       "iter_id": "P20-I02",
       "opened_at": "2026-05-15T20:03:24.727866Z",
       "outcome": "mutator-path precision rule landed in AGENTS naming-conventions block (1.0 -> 1.1); 3 audit nits prevented at source; goldens regenerated; gauntlet 3164 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "naming-conventions block carries mutator-path precision rule",
@@ -6086,6 +6416,7 @@
       "closed_at": "2026-05-15T21:05:53.553442Z",
       "commit": "193a2debc4622bed0883f0417b5f6b8aab843066",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/tui/app.py",
@@ -6099,6 +6430,8 @@
       "iter_id": "P20-I03",
       "opened_at": "2026-05-15T20:31:00.338534Z",
       "outcome": "live git CLI pane + 30Hz refresh + daemon-thread input queue + verb-prefix overlay state machine + latest-iter surface + rewritten footer keymap; 920 fps offline; 3210 pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "git pane reads live from git CLI (rev-parse + status --porcelain)",
@@ -6119,6 +6452,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         ".ea/state.json",
@@ -6128,6 +6462,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:38.402622Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "P14 leftovers closed or reopened with rationale",
@@ -6154,6 +6490,7 @@
       "deps": [
         "P21-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/profiles",
@@ -6163,6 +6500,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:38.893043Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "instruments resolved through composed profile",
@@ -6183,6 +6522,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/profiles"
@@ -6191,6 +6531,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:39.467429Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "stub warnings surface at install",
@@ -6213,6 +6555,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/profiles/quant.yaml"
@@ -6221,6 +6564,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:39.975202Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "quant body complete",
@@ -6244,6 +6589,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/profiles/ml.yaml"
@@ -6252,6 +6598,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:40.462095Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "ml body complete",
@@ -6274,6 +6622,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/profiles"
@@ -6282,6 +6631,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:40.947997Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "six minimal bodies registered",
@@ -6305,6 +6656,7 @@
         "P21-I01-W04",
         "P21-I01-W05"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/enums.py",
@@ -6314,6 +6666,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:44:41.501249Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "URN routing covers domain artefact kinds",
@@ -6336,6 +6690,7 @@
       "deps": [
         "P21-I01-W07"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/profiles/uiux.yaml",
@@ -6346,6 +6701,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:01.316805Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "uiux + web bodies complete",
@@ -6366,6 +6723,7 @@
       "deps": [
         "P21-I01-W08"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/profiles"
@@ -6374,6 +6732,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:01.857006Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "six stub bodies registered",
@@ -6396,6 +6756,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/profiles"
@@ -6404,6 +6765,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:02.354304Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "rust go typescript bodies complete",
@@ -6426,6 +6789,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/install",
@@ -6436,6 +6800,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:02.840366Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "manifests record skill + hook refs",
@@ -6459,6 +6825,7 @@
       "deps": [
         "P21-I01-W11"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -6469,6 +6836,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:03.333345Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "mcp_grants typed field",
@@ -6491,6 +6860,7 @@
       "deps": [
         "P21-I01-W12"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/sandbox",
@@ -6500,6 +6870,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:03.878718Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "sandbox policy cannot weaken audit-check execution",
@@ -6527,6 +6899,7 @@
         "P21-I01-W10",
         "P21-I01-W13"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "docs/architecture/profiles.md",
@@ -6536,6 +6909,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:04.360212Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "profile docs cover quant/ml/uiux/web/cross-lang",
@@ -6555,6 +6930,7 @@
       "deps": [
         "P21-I01-W14"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         ".ea/artifacts",
@@ -6564,6 +6940,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:04.849217Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "ship-gate verdict=pass",
@@ -6585,6 +6963,7 @@
       "deps": [
         "P21-I01-W12"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/mcp",
@@ -6596,6 +6975,8 @@
       "iter_id": "P21-I01",
       "opened_at": "2026-05-15T14:45:05.335291Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [
         "Claude .mcp.json + Codex TOML + OpenCode opencode.json emit consistent",
@@ -6616,6 +6997,7 @@
       "closed_at": "2026-05-18T19:01:58.119217Z",
       "commit": "cf16d84d6a75a93f430bc939f7d4b0366493a728",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "AGENTS.md"
@@ -6624,6 +7006,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:38.848493Z",
       "outcome": "AGENTS amendments landed: rule 4 daemon canonical mutator, rules 23/24/25 added, rule 17 mutator-path rewritten, spike-workflow + anti-patterns appended, goldens regen, header count 22→25",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "rule 4 renamed to daemon canonical mutator",
@@ -6647,6 +7031,7 @@
       "closed_at": "2026-05-18T19:04:17.649123Z",
       "commit": "7133c0fccf553116746f022b909a84600911cd58",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         ".gitignore"
@@ -6655,6 +7040,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:56.147139Z",
       "outcome": ".gitignore extended with .ea/worktrees/ + .ea/state.json.bak.* (per Q13 + C10 §5.5)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         ".ea/worktrees/ entry present",
@@ -6675,6 +7062,7 @@
       "closed_at": "2026-05-18T19:08:41.219577Z",
       "commit": "99f1dfa043dcfbdfab895bce83a470dc18cc30b2",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/cli/commands/evidence.py",
@@ -6685,6 +7073,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:56.684148Z",
       "outcome": "decision add --supersedes flag wired; atomic parent SUPERSEDED + superseded_by flip; 4 unit tests pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "--supersedes flag accepted by typer",
@@ -6707,6 +7097,7 @@
       "deps": [
         "P22-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         ".ea/state.json",
@@ -6716,6 +7107,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:50:57.208785Z",
       "outcome": "6 D-SUP rows landed (D-SUP-01..05 + D-SUP-TUI-01) all ACTIVE, scope=urn:eawf:v1:repo:eawf",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "D-SUP-01..05 + D-SUP-TUI-01 in state.decisions",
@@ -6736,6 +7129,7 @@
       "closed_at": "2026-05-18T19:12:58.010493Z",
       "commit": "131b469339b4354624e9c0a635aa5b851df096d7",
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
         "/dev/null"
@@ -6744,6 +7138,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:03.319449Z",
       "outcome": "3 new memory entries written: feedback_no_design_comments_in_source, feedback_eu_calibration, project_v03_v05_spec_series; MEMORY.md index updated",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "feedback_no_design_comments_in_source.md written",
@@ -6771,6 +7167,7 @@
         "P22-I01-W04",
         "P22-I01-W05"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/cli/commands/draft.py",
@@ -6780,6 +7177,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:03.967313Z",
       "outcome": "22 briefs promoted to .ea/artifacts/research/long-term/; promote_draft patched for subdir slugs + --legacy-chassis flag for long-form briefs",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "promote_draft accepts long-term/<slug> subdirectory form",
@@ -6801,6 +7200,7 @@
       "deps": [
         "P22-I01-W06"
       ],
+      "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         ".ea/artifacts/A28-P22-ship-gate.md",
@@ -6810,6 +7210,8 @@
       "iter_id": "P22-I01",
       "opened_at": "2026-05-18T18:51:04.504767Z",
       "outcome": "ship-gate audit A28-P22 verdict=pass; pre-commit + pytest 3214/3214 pass; PR ready",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "ship-gate audit row with verdict=pass",
@@ -6832,6 +7234,7 @@
       "closed_at": "2026-05-18T21:01:02.531487Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/urn.py",
@@ -6841,6 +7244,8 @@
       "iter_id": "P23-I01",
       "opened_at": "2026-05-18T20:39:13.032574Z",
       "outcome": "URN_KINDS extended 10->26 per c01-foundations; _SLASH_KINDS extended with 7 new slash-friendly kinds; 63 unit tests green; full suite 3252 passed; state schema regenerated",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "URN_KINDS extended from 10 to 26 kinds per c01-foundations §7.1 item 1",
@@ -6865,6 +7270,7 @@
       "deps": [
         "P23-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -6874,6 +7280,8 @@
       "iter_id": "P23-I01",
       "opened_at": "2026-05-18T20:39:19.350372Z",
       "outcome": "Principal model added (id/kind/display_name) + EventPayload.actor_principal_id placeholder; 70 unit tests + 3266 full suite green; Cost.attributed_to deferred (no class exists yet)",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "Cost.attributed_to: Literal['cli'] = 'cli' added to State Cost model per c01-foundations Q3",
@@ -6897,6 +7305,7 @@
       "deps": [
         "P23-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/lifecycle/transitions.py",
@@ -6907,6 +7316,8 @@
       "iter_id": "P23-I01",
       "opened_at": "2026-05-18T20:39:26.124879Z",
       "outcome": "SpecStatus enum + lifecycle DAG helpers in src/eawf/lifecycle/spec.py; library-private; 19 unit tests + 3285 full-suite green; C02/C03 ready to consume",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "Shared lifecycle DAG helpers for downstream phase/iter/wave/spec transitions live under src/eawf/lifecycle/",
@@ -6928,6 +7339,7 @@
       "closed_at": "2026-05-18T21:38:27.201933Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/lifecycle/criterion_drift.py",
@@ -6938,6 +7350,8 @@
       "iter_id": "P23-I02",
       "opened_at": "2026-05-18T21:30:52.994417Z",
       "outcome": "criterion drift detector module + wave_close_cmd hook + 19 unit tests + 3304 full-suite green; advisory warning surfaces unresolved path globs at close time",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [
         "extract_path_globs(criteria) pure function returns the set of path-shaped tokens (matching r'tests/[\\S]+\\.py|src/[\\S]+\\.py') from a wave's success_criteria list",
@@ -6967,6 +7381,7 @@
       "closed_at": "2026-05-19T14:00:57.771352Z",
       "commit": null,
       "deps": [],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/daemon/**/*.py",
@@ -6976,6 +7391,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:12.455384Z",
       "outcome": "daemon scaffolding + JSON-RPC framing landed; pivoted macOS peer-cred from os.getpeereid to LOCAL_PEERCRED (xucred); 14 daemon tests + full regression suite pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "feat: daemon process scaffolding + asyncio JSON-RPC framing + daemon.ping/status/shutdown methods",
@@ -6995,6 +7412,7 @@
       "deps": [
         "P24-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/daemon/windows_pipe.py",
@@ -7004,6 +7422,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:18.597212Z",
       "outcome": "Windows pywin32 named-pipe + DACL/SID + asyncio queue bridge per C02 §5.13; optional pywin32 extras; macOS pre-commit/mypy/64 daemon tests pass",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "feat: Windows pywin32 named-pipe listener + asyncio queue bridge (XB11/Q8)",
@@ -7024,6 +7444,7 @@
       "deps": [
         "P24-I01-W01"
       ],
+      "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
         "src/eawf/daemon/wal.py",
@@ -7034,6 +7455,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:23.326566Z",
       "outcome": "outcome-WAL + startup replay + poisoned-WAL admin per Q10/XB12; 47 new daemon tests; pre-commit clean",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "feat: outcome-WAL (XB12/Q10) + startup replay + poisoned-WAL handling",
@@ -7053,6 +7476,7 @@
         "P24-I01-W01",
         "P24-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "templates/eawfd.service.j2",
@@ -7064,6 +7488,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:29.719908Z",
       "outcome": "per-OS service registration (systemd-user + launchd + pywin32 ServiceFramework with XB14 SCM-asyncio bridge); 74 daemon tests + 20 skip; Jinja2 templates",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "feat: per-OS service registration (systemd-user + launchd + pywin32 Service with SCM-asyncio bridge XB14)",
@@ -7081,6 +7507,7 @@
         "P24-I01-W01",
         "P24-I01-W02"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/daemon/auth.py",
@@ -7090,6 +7517,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:38.288951Z",
       "outcome": "per-OS peer-cred dispatcher: PeerCredential + Linux/macOS/FreeBSD/Windows recipes; forensic UnauthorizedError data fields; 74 tests + 14 skips",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS os.getpeereid + FreeBSD ctypes + Windows SID per XB13)",
@@ -7109,6 +7538,7 @@
         "P24-I01-W01",
         "P24-I01-W03"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/daemon/bus.py",
@@ -7119,6 +7549,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:43.768302Z",
       "outcome": "subscription bus + drop-oldest (D7/C02.F50); event.subscribe/list/show RPCs; SUBSCRIPTION_LAG StoreKind; 114 daemon tests",
+      "runtime_preference": null,
+      "sessions": {},
       "status": "closed",
       "success_criteria": [],
       "title": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) + reconnect catch-up via event.jsonl",
@@ -7132,12 +7564,13 @@
         "P24-I01-W09"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T15:21:56.694737Z",
       "commit": null,
       "deps": [
         "P24-I01-W03",
         "P24-I01-W06"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/state/models.py",
@@ -7147,8 +7580,10 @@
       "id": "P24-I01-W07",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:49.411324Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "session-handle opaque registry + Wave.sessions/runtime_preference/dispatch_history + agent.dispatch fresh-path skeleton + TTL sweep; 16+17+16 = 49 new tests, 163 daemon tests",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: session-handle tracking (V8) with opaque session_log_handle (XB05) + TTL sweep + agent.dispatch fresh-path skeleton",
       "token_budget": null,
@@ -7161,12 +7596,13 @@
         "P24-I01-W09"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T15:21:57.203896Z",
       "commit": null,
       "deps": [
         "P24-I01-W01",
         "P24-I01-W04"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/daemon/spawn.py",
@@ -7176,8 +7612,10 @@
       "id": "P24-I01-W08",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:54.410845Z",
-      "outcome": null,
-      "status": "claimed",
+      "outcome": "IdleTimeoutWatchdog + auto_spawn_daemon (POSIX double-fork + Windows DETACHED) + DaemonClient + cold-spawn p95 benchmark; observed p95 ~168ms < 400ms V1 target; 26 new tests",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: idle-timeout watchdog + on-demand auto-spawn + cold-spawn p95 benchmark under V1 400ms budget",
       "token_budget": null,
@@ -7197,6 +7635,7 @@
         "P24-I01-W07",
         "P24-I01-W08"
       ],
+      "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
         "src/eawf/cli/_mutation.py",
@@ -7207,6 +7646,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:36:00.328252Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [],
       "title": "feat: state-CLI direct writer migrated to daemon state.mutate RPC proxy + event/audit/per-kind JSONL emitters daemon-internal (authority map rows 1-4)",
@@ -7223,6 +7664,7 @@
       "deps": [
         "P24-I01-W09"
       ],
+      "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/cli/commands/config.py",
@@ -7234,6 +7676,8 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:36:05.729485Z",
       "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
       "status": "pending",
       "success_criteria": [],
       "title": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
