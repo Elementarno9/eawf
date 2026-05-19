@@ -1509,9 +1509,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P25-I01-W04"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P25-I01",
     "phase_id": "P25",
     "project_code": "EAWF",
@@ -2361,7 +2359,8 @@
         "P25-I01-W15",
         "P25-I01-W16",
         "P25-I01-W17",
-        "P25-I01-W18"
+        "P25-I01-W18",
+        "P25-I01-W19"
       ]
     },
     "P26-I01": {
@@ -2905,7 +2904,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T21:48:45.456759Z",
+  "updated_at": "2026-05-19T22:00:08.338081Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7898,8 +7897,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w04-exec",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-19T21:49:03.515628Z",
+      "commit": "6a8c43b9a82c8ab390458fec011836e2eab03fe8",
       "deps": [
         "P25-I01-W01"
       ],
@@ -7915,10 +7914,10 @@
       "id": "P25-I01-W04",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:47:50.318735Z",
-      "outcome": null,
+      "outcome": "C03 backfill writer + bulk-run; 142 stubs emitted under .ea/specs/ across 16 phases (OQ-1); idempotent; 19 unit + 6 integration tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "backfill writer reads closed Wave.success_criteria via daemon read API + emits WaveSpec stub under .ea/specs/<phase>/[<iter>/]<wave>.md",
         "idempotent (re-run = no-op)",
@@ -8444,6 +8443,38 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W18-1779221191"
+    },
+    "P25-I01-W19": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p25-w19-polish",
+      "closed_at": "2026-05-19T22:00:08.337822Z",
+      "commit": "c43766e297ee7b68bcbd1f9b481c3f1fcff10c02",
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/integration/test_worktree_cli_create.py",
+        ".ea/specs/**/*.md",
+        "src/eawf/spec/backfill.py"
+      ],
+      "id": "P25-I01-W19",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T21:55:58.947356Z",
+      "outcome": "polish: flipped .claude/worktrees test reference + hook scoped to ## Tests section; 47 spec/worktree tests green; full pre-commit clean",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "tests/integration/test_worktree_cli_create.py::test_cli_create_full_cycle passes (asserts .ea/worktrees/ per D15 + W07 flip)",
+        "spec-paths pre-commit hook passes across .ea/specs/ (stale path globs from W04 bulk-run stubs scrubbed or skipped by hook)",
+        "backfill writer emits warnings + skips stale path citations to prevent future stale-stub debt",
+        "full test suite green (4200+ tests)"
+      ],
+      "title": "fix: P25-I01 polish — flip stale .claude/worktrees test + scrub W04-backfill stub citations",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
