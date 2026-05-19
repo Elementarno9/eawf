@@ -36,13 +36,23 @@ class MethodContext:
         protocol_version: Wire-protocol version string.
         version: Library / package version string.
         active_subscriptions: Number of live ``event.subscribe`` connections.
-            W06 wires the real counter; W01 keeps the field for shape.
+            W06 wires the real counter via :class:`eawf.daemon.bus.EventBus`.
         in_flight_mutations: Number of mutations currently being applied.
             W09 wires the real counter; W01 keeps the field for shape.
         last_event_id: Most recent ``event.jsonl`` envelope id.
-            W06 wires the real value; W01 returns an empty string.
+            W09's mutator hook updates this after each publish; the bus
+            itself stays oblivious to last-id bookkeeping.
         shutdown_event: asyncio event raised when ``daemon.shutdown`` is
             received; populated by the server before any method runs.
+        bus: Subscription bus shared by every connection on this
+            daemon process. Method handlers reach for it via
+            ``ctx.bus.publish(envelope)``; W09 wires the real mutator
+            path. ``None`` only on contexts built before W06 (legacy
+            tests).
+        event_path: Filesystem path to ``event.jsonl`` used by
+            ``event.subscribe`` / ``event.list`` / ``event.show`` for
+            catch-up + bounded reads. ``None`` when the daemon runs in
+            a context without an on-disk store (unit tests only).
     """
 
     started_at: str
@@ -53,6 +63,8 @@ class MethodContext:
     in_flight_mutations: int = 0
     last_event_id: str = ""
     shutdown_event: Any = field(default=None)
+    bus: Any = field(default=None)
+    event_path: Any = field(default=None)
 
 
 Handler = Callable[[MethodContext, dict[str, Any]], Awaitable[dict[str, Any]]]

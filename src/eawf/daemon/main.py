@@ -23,9 +23,12 @@ from pathlib import Path
 
 from eawf import __version__
 from eawf.daemon import PROTOCOL_VERSION
+from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.runtime_dir import log_path, pid_path, runtime_dir, socket_path
 from eawf.daemon.server import process_frame_bytes, serve_unix
+from eawf.state.enums import StoreKind
+from eawf.store.paths import store_path
 
 logger = logging.getLogger(__name__)
 
@@ -165,12 +168,18 @@ def run(*, foreground: bool = True) -> int:
     pid = os.getpid()
     _write_pid_file(pid_file, pid, started_at)
 
+    # W06 wires the bus into every connection. W09's mutator hook
+    # supplies the project-level ``event_path`` once registry
+    # resolution lands; main.py keeps a runtime_dir-relative default
+    # for the daemon's own bookkeeping.
     ctx = MethodContext(
         started_at=started_at,
         pid=pid,
         protocol_version=PROTOCOL_VERSION,
         version=__version__,
         shutdown_event=asyncio.Event(),
+        bus=EventBus(),
+        event_path=store_path(rt_dir / "state.json", StoreKind.EVENT),
     )
 
     logger.info(f"run boot pid={pid} version={__version__!r} protocol={PROTOCOL_VERSION!r}")

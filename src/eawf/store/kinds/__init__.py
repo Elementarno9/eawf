@@ -15,6 +15,7 @@ from eawf.store.kinds.flow import FlowPayload
 from eawf.store.kinds.incident import IncidentPayload
 from eawf.store.kinds.memory import MemoryPayload
 from eawf.store.kinds.research import ResearchPayload
+from eawf.store.kinds.subscription_lag import SubscriptionLagPayload
 
 PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.RESEARCH: ResearchPayload,
@@ -34,4 +35,5 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.POLISHER_REPORT: AgentReportPayload,
     StoreKind.OPERATOR_REPORT: AgentReportPayload,
     StoreKind.DOMAIN_SPECIALIST_REPORT: AgentReportPayload,
+    StoreKind.SUBSCRIPTION_LAG: SubscriptionLagPayload,
 }
