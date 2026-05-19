@@ -9,6 +9,13 @@ W01 ships five verbs:
 - ``stop`` — issue ``daemon.shutdown`` against the local UDS.
 - ``logs`` — print recent lines from the daemon's log file.
 
+W03 adds the WAL admin verb:
+
+- ``replay-wal --inspect`` — list poisoned WAL records (operator
+  reads the local WAL directory; daemon need not be running).
+- ``replay-wal --gc`` — drop ``.fsynced.json`` records older than
+  the retention window (default 3600 s).
+
 The CLI is dispatch only (rule 1); all socket framing + JSON-RPC
 machinery lives under :mod:`eawf.daemon`.
 """
@@ -20,6 +27,7 @@ import contextlib
 import logging
 import sys
 import uuid
+from pathlib import Path
 from typing import Annotated, Any
 
 import orjson
@@ -29,7 +37,12 @@ from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.main import run as run_daemon
-from eawf.daemon.runtime_dir import log_path, socket_path
+from eawf.daemon.runtime_dir import log_path, runtime_dir, socket_path
+from eawf.daemon.wal import (
+    gc_done_records,
+    list_poisoned,
+    read_record,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +233,125 @@ def stop_cmd(
         "daemon shutting down at={shutdown_at} drained={drained}",
         flags,
     )
+
+
+def _wal_dir() -> Path:
+    """Return the daemon WAL directory (``<runtime_dir>/wal/``)."""
+    return runtime_dir() / "wal"
+
+
+@daemon_app.command("replay-wal")
+def replay_wal_cmd(
+    ctx: typer.Context,
+    inspect: Annotated[
+        bool,
+        typer.Option(
+            "--inspect",
+            help="List poisoned WAL records (no daemon required; reads local WAL dir).",
+        ),
+    ] = False,
+    gc: Annotated[
+        bool,
+        typer.Option(
+            "--gc",
+            help="Drop .fsynced.json records older than --max-age-seconds.",
+        ),
+    ] = False,
+    max_age_seconds: Annotated[
+        int,
+        typer.Option(
+            "--max-age-seconds",
+            help="Retention window for .fsynced.json records (default 3600).",
+        ),
+    ] = 3600,
+) -> None:
+    """Inspect poisoned WAL records or GC the done window.
+
+    Operator-facing surface. Reads the WAL directory directly so the
+    verb works when the daemon is down (post-crash forensic flow). The
+    two modes are mutually exclusive — pass exactly one of ``--inspect``
+    or ``--gc``.
+
+    Args:
+        ctx: Typer context (global flags carried on ``ctx.obj``).
+        inspect: List ``poisoned/*.poisoned.json`` records with their
+            recorded ``poison_reason``.
+        gc: Drop ``.fsynced.json`` records older than the retention
+            window from the WAL directory.
+        max_age_seconds: Retention threshold for ``--gc``. Negative or
+            absurdly large values surface as an exit-code-2 usage error.
+    """
+    flags: GlobalFlags = ctx.obj
+    if inspect == gc:
+        typer.echo(
+            "exactly one of --inspect / --gc must be set",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if max_age_seconds < 0 or max_age_seconds > 30 * 24 * 3600:
+        typer.echo(
+            "--max-age-seconds must be between 0 and 2592000",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    wal_dir = _wal_dir()
+    if inspect:
+        _replay_wal_inspect(wal_dir, flags)
+        return
+    _replay_wal_gc(wal_dir, max_age_seconds, flags)
+
+
+def _replay_wal_inspect(wal_dir: Path, flags: GlobalFlags) -> None:
+    """Emit the list of poisoned WAL records under *wal_dir*."""
+    paths = list_poisoned(wal_dir)
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            record = read_record(path)
+        except (ValueError, OSError) as exc:
+            rows.append(
+                {
+                    "path": str(path),
+                    "record_id": path.stem.split(".")[0],
+                    "poison_reason": f"unreadable: {exc}",
+                    "written_at": None,
+                }
+            )
+            continue
+        rows.append(
+            {
+                "path": str(path),
+                "record_id": record.record_id,
+                "poison_reason": record.poison_reason,
+                "written_at": record.written_at.isoformat(),
+            }
+        )
+    if not rows:
+        text = "no poisoned WAL records"
+    else:
+        text_lines = [f"poisoned WAL records: {len(rows)}"]
+        for row in rows:
+            text_lines.append(
+                f"  record={row['record_id']} reason={row['poison_reason']!r} path={row['path']}"
+            )
+        text = "\n".join(text_lines)
+    emit_json_or_text({"count": len(rows), "records": rows}, text, flags=flags)
+
+
+def _replay_wal_gc(wal_dir: Path, max_age_seconds: int, flags: GlobalFlags) -> None:
+    """GC aged ``.fsynced.json`` records under *wal_dir* and emit the report."""
+    removed = gc_done_records(wal_dir, max_age_seconds=max_age_seconds)
+    text = (
+        f"gc removed {len(removed)} WAL record(s) "
+        f"max_age_seconds={max_age_seconds} wal_dir={wal_dir}"
+    )
+    payload = {
+        "removed_count": len(removed),
+        "removed_paths": [str(p) for p in removed],
+        "max_age_seconds": max_age_seconds,
+        "wal_dir": str(wal_dir),
+    }
+    emit_json_or_text(payload, text, flags=flags)
 
 
 @daemon_app.command("logs")
