@@ -1509,9 +1509,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P25-I01-W17"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P25-I01",
     "phase_id": "P25",
     "project_code": "EAWF",
@@ -2905,7 +2903,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T19:51:21.911500Z",
+  "updated_at": "2026-05-19T20:03:59.769794Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8376,26 +8374,31 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p25-w17-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-19T20:03:59.138813Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "AGENTS.md",
-        "build/eawf-plugin/skills/flow/SKILL.md",
-        "build/eawf-plugin/skills/prep/SKILL.md",
-        "build/eawf-plugin/skills/audit/SKILL.md",
-        "build/eawf-plugin/skills/polish/SKILL.md",
-        "build/eawf-plugin/skills/ship/SKILL.md"
+        "src/eawf/profiles/data/core.yaml",
+        "src/eawf/render/skills.py",
+        "tests/golden/agents_md/core_only.md",
+        "tests/golden/agents_md/core_python_research.md",
+        "tests/golden/plugin_install/claude/skills/flow/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/prep/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/audit/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/polish/SKILL.md",
+        "tests/golden/plugin_install/claude/skills/ship/SKILL.md",
+        "tests/golden/scenarios/fresh_repo/agents.golden.json"
       ],
       "id": "P25-I01-W17",
       "iter_id": "P25-I01",
       "opened_at": "2026-05-19T19:48:53.712855Z",
-      "outcome": null,
+      "outcome": "AGENTS rules 26/27 + skill bodies updated; goldens regenerated; 2900 unit tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "AGENTS rule appended: /prep always plan mode (Case A + Case B)",
         "AGENTS rule appended: iter/phase close-timing (audited+polished gate + phase close in final pre-merge CORE commit)",
@@ -8613,10 +8616,10 @@
       "branch": "feature/eawf-v0.3-p25-w17",
       "created_at": "2026-05-19T19:51:21.911500Z",
       "id": "WT-P25-I01-W17-1779220281",
-      "merged_commit": null,
+      "merged_commit": "b6a60d0",
       "owner_session_id": "p25-w17-exec",
       "path": ".ea/worktrees/p25-w17",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P25-I01-W17"
     }
   }
