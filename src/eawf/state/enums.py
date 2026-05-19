@@ -305,6 +305,7 @@ class StoreKind(StrEnum):
     SUBSCRIPTION_LAG = "subscription_lag"
     CONFIG_UPDATED = "config_updated"
     REGISTRY_UPDATED = "registry_updated"
+    SPEC_UPDATED = "spec_updated"
 
 
 class ArtifactKind(StrEnum):

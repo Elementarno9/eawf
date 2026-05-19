@@ -298,6 +298,95 @@ class DaemonClient:
             params["idempotency_key"] = idempotency_key
         return self.call("registry.update", params)
 
+    def spec_init(
+        self,
+        *,
+        scope_id: str,
+        title: str,
+        repo_code: str,
+        repo_root: str | None = None,
+        idempotency_key: str | None = None,
+        cache_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a ``spec.init`` call through the daemon (P25-W03 / C03)."""
+        params: dict[str, Any] = {
+            "scope_id": scope_id,
+            "title": title,
+            "repo_code": repo_code,
+        }
+        if repo_root is not None:
+            params["repo_root"] = repo_root
+        if cache_dir is not None:
+            params["cache_dir"] = cache_dir
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        return self.call("spec.init", params)
+
+    def spec_validate(
+        self,
+        *,
+        scope_id: str,
+        repo_code: str,
+        repo_root: str | None = None,
+        cache_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a ``spec.validate`` call through the daemon (P25-W03)."""
+        params: dict[str, Any] = {
+            "scope_id": scope_id,
+            "repo_code": repo_code,
+        }
+        if repo_root is not None:
+            params["repo_root"] = repo_root
+        if cache_dir is not None:
+            params["cache_dir"] = cache_dir
+        return self.call("spec.validate", params)
+
+    def spec_promote(
+        self,
+        *,
+        scope_id: str,
+        repo_code: str,
+        target_status: str,
+        repo_root: str | None = None,
+        idempotency_key: str | None = None,
+        cache_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a ``spec.promote`` call through the daemon (P25-W03)."""
+        params: dict[str, Any] = {
+            "scope_id": scope_id,
+            "repo_code": repo_code,
+            "target_status": target_status,
+        }
+        if repo_root is not None:
+            params["repo_root"] = repo_root
+        if cache_dir is not None:
+            params["cache_dir"] = cache_dir
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        return self.call("spec.promote", params)
+
+    def spec_archive(
+        self,
+        *,
+        scope_id: str,
+        repo_code: str,
+        repo_root: str | None = None,
+        idempotency_key: str | None = None,
+        cache_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a ``spec.archive`` call through the daemon (P25-W03)."""
+        params: dict[str, Any] = {
+            "scope_id": scope_id,
+            "repo_code": repo_code,
+        }
+        if repo_root is not None:
+            params["repo_root"] = repo_root
+        if cache_dir is not None:
+            params["cache_dir"] = cache_dir
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        return self.call("spec.archive", params)
+
 
 __all__ = [
     "DEFAULT_CALL_TIMEOUT_SECONDS",
