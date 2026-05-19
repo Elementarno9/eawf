@@ -34,6 +34,12 @@ from eawf.spec.common import (
     VerdictCitation,
     VerdictIdStr,
 )
+from eawf.spec.heuristics import (
+    UI_SCOPE_PREFIXES,
+    is_ui_scope,
+    missing_test_paths,
+    requires_mockup_reference,
+)
 from eawf.spec.iter import IterAuditCadence, IterSpec, IterWaveGroup
 from eawf.spec.phase import (
     PhaseEUEnvelope,
@@ -41,10 +47,19 @@ from eawf.spec.phase import (
     PhaseShipCriterion,
     PhaseSpec,
 )
+from eawf.spec.validators import (
+    SpecValidationError,
+    validate_phase_spec_at_load,
+    validate_phase_spec_has_kpis,
+    validate_wave_spec_at_load,
+    validate_wave_spec_brief_paths_exist,
+    validate_wave_spec_tests_exist,
+)
 from eawf.spec.wave import WaveBehavior, WaveMockup, WaveSpec
 
 __all__ = [
     "AUDIT_CADENCE_VALUES",
+    "UI_SCOPE_PREFIXES",
     "AuditCadence",
     "AuditSpec",
     "BriefPathStr",
@@ -57,10 +72,19 @@ __all__ = [
     "PhaseKPI",
     "PhaseShipCriterion",
     "PhaseSpec",
+    "SpecValidationError",
     "TestRef",
     "VerdictCitation",
     "VerdictIdStr",
     "WaveBehavior",
     "WaveMockup",
     "WaveSpec",
+    "is_ui_scope",
+    "missing_test_paths",
+    "requires_mockup_reference",
+    "validate_phase_spec_at_load",
+    "validate_phase_spec_has_kpis",
+    "validate_wave_spec_at_load",
+    "validate_wave_spec_brief_paths_exist",
+    "validate_wave_spec_tests_exist",
 ]

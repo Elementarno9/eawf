@@ -72,3 +72,9 @@ repos:
         language: system
         pass_filenames: false
         stages: [manual]
+      - id: spec-paths
+        name: spec-paths
+        entry: python3 tools/pre_commit_spec_paths.py
+        language: system
+        files: '^\.ea/specs/.*\.md$'
+        stages: [pre-commit]
