@@ -1477,7 +1477,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P24-I01-W07",
+      "P24-I01-W08"
+    ],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2838,7 +2841,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T14:53:08.710288Z",
+  "updated_at": "2026-05-19T14:53:37.965000Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7128,7 +7131,7 @@
       "blocks": [
         "P24-I01-W09"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7145,7 +7148,7 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:49.411324Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: session-handle tracking (V8) with opaque session_log_handle (XB05) + TTL sweep + agent.dispatch fresh-path skeleton",
       "token_budget": null,
@@ -7157,7 +7160,7 @@
       "blocks": [
         "P24-I01-W09"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -7174,7 +7177,7 @@
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:35:54.410845Z",
       "outcome": null,
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [],
       "title": "feat: idle-timeout watchdog + on-demand auto-spawn + cold-spawn p95 benchmark under V1 400ms budget",
       "token_budget": null,
