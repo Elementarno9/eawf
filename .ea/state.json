@@ -2341,7 +2341,26 @@
       "phase_id": "P25",
       "status": "planned",
       "title": "P25-I01: contracts waves (4-way parallel)",
-      "wave_ids": []
+      "wave_ids": [
+        "P25-I01-W01",
+        "P25-I01-W02",
+        "P25-I01-W03",
+        "P25-I01-W04",
+        "P25-I01-W05",
+        "P25-I01-W06",
+        "P25-I01-W07",
+        "P25-I01-W08",
+        "P25-I01-W09",
+        "P25-I01-W10",
+        "P25-I01-W11",
+        "P25-I01-W12",
+        "P25-I01-W13",
+        "P25-I01-W14",
+        "P25-I01-W15",
+        "P25-I01-W16",
+        "P25-I01-W17",
+        "P25-I01-W18"
+      ]
     },
     "P26-I01": {
       "audit_id": null,
@@ -2884,7 +2903,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T19:07:20.948384Z",
+  "updated_at": "2026-05-19T19:48:54.244676Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7753,6 +7772,668 @@
       "status": "closed",
       "success_criteria": [],
       "title": "fix: wire replay_wal + session_ttl into daemon.main.run() (audit F1+F2)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P25-I01-W02",
+        "P25-I01-W03",
+        "P25-I01-W04",
+        "P25-I01-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/spec/common.py",
+        "src/eawf/spec/phase.py",
+        "src/eawf/spec/iter.py",
+        "src/eawf/spec/wave.py",
+        "src/eawf/spec/__init__.py",
+        "tests/unit/test_spec_schemas.py"
+      ],
+      "id": "P25-I01-W01",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:48.657212Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "from eawf.spec.common import VerdictCitation/TestRef/FileScopeRef/EvidenceRef imports clean",
+        "PhaseSpec/IterSpec/WaveSpec reject extra keys via ConfigDict(extra='forbid')",
+        "schema_version Literal['1.0'] enforced per BOT-03/Q5 lock",
+        "missing failure_modes/ship_criteria/file_scopes raises ValidationError"
+      ],
+      "title": "feat: C03 PhaseSpec + IterSpec + WaveSpec Pydantic schemas + common types",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/audit_dsl/kinds/verify_implements.py",
+        "src/eawf/audit_dsl/registry.py",
+        "src/eawf/audit_dsl/__init__.py",
+        "tests/unit/test_verify_implements.py",
+        "tests/integration/test_verify_implements_cadence.py"
+      ],
+      "id": "P25-I01-W02",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:49.206040Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "verify_implements registered in audit_dsl.kinds",
+        "walks closed WaveSpec under a phase + greps git diff <base>...HEAD for verdict markers (regex ^[VDRH]\\d+(-[A-Z0-9]+)?$) restricted to file_scopes",
+        "missing marker fails the gate",
+        "AuditSpec.cadence configurable per [3] D10"
+      ],
+      "title": "feat: C03 verify-implements audit-DSL kind + grep + diff verdict markers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/rpc/spec.py",
+        "src/eawf/spec/writer.py",
+        "src/eawf/spec/cache.py",
+        "src/eawf/cli/commands/spec.py",
+        "tests/unit/test_spec_writer.py",
+        "tests/integration/test_spec_rpc.py"
+      ],
+      "id": "P25-I01-W03",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:49.762993Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "daemon spec.{init",
+        "validate",
+        "promote",
+        "archive} JSON-RPCs land via eawfd (sole canonical writer per D-SUP-01)",
+        "ARCHIVED transition atomically git rm's source + writes daemon-resident cache at authority-map row 10 location",
+        "eawf spec show <urn> --from-git recovers archived specs",
+        "state-CLI surface proxies through daemon with portalocker fallback"
+      ],
+      "title": "feat: C03 daemon spec writer + spec cache + DRAFT/READY/IMPLEMENTED/ARCHIVED",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/spec/backfill.py",
+        "src/eawf/cli/commands/spec.py",
+        ".ea/specs/**/*.md",
+        "tests/unit/test_spec_backfill.py",
+        "tests/integration/test_spec_backfill_bulk.py"
+      ],
+      "id": "P25-I01-W04",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:50.318735Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "backfill writer reads closed Wave.success_criteria via daemon read API + emits WaveSpec stub under .ea/specs/<phase>/[<iter>/]<wave>.md",
+        "idempotent (re-run = no-op)",
+        "OQ-1 verdict: bulk-run executed against existing 50+ closed waves in this repo and resulting WaveSpec files committed under .ea/specs/",
+        "closed waves remain readable through both surfaces (state row + WaveSpec file)"
+      ],
+      "title": "feat: C03 closed-wave success_criteria to WaveSpec backfill writer + bulk-run",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/spec/validators.py",
+        "src/eawf/spec/heuristics.py",
+        "tools/pre_commit_spec_paths.py",
+        "tests/unit/test_spec_validators.py",
+        "tests/integration/test_spec_three_layer_enforcement.py"
+      ],
+      "id": "P25-I01-W05",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:50.868886Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "three independent enforcement layers active per [3] §1: Pydantic load (init/validate) + pre-commit hook (real-test-paths grep) + audit DSL (verify-implements at AuditSpec.cadence)",
+        "UI-scope file_scope heuristic fires when path under src/eawf/tui_v2/ or src/eawf/render/ and demands mockup reference",
+        "non-empty success_criteria + KPI presence enforced at schema load"
+      ],
+      "title": "feat: C03 KPI + non-empty + mockup heuristic + tests-real-paths validators",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P25-I01-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/store/kinds/event.py",
+        "src/eawf/store/envelope.py",
+        "src/eawf/store/paths.py",
+        "src/eawf/store/append.py",
+        "src/eawf/store/__init__.py",
+        "tests/unit/test_event_canonical_model.py",
+        "tests/unit/test_event_store_layout.py"
+      ],
+      "id": "P25-I01-W06",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:51.426607Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "canonical Event + EventPayload defined per [5] §5.4 + Q14/D14",
+        "10 per-kind JSONL kinds (event/audit/decision/incident/estimate/actual/memory/research/flow/<role>_report) open on first append",
+        "schema_version Literal['1.0'] enforced + extra=forbid",
+        "C06/C09/C11 import the same model (XB07 four-model risk killed) verified via import test"
+      ],
+      "title": "feat: C07b canonical Event model + event store + 10 per-kind JSONL layout",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "src/eawf/worktree/create.py",
+        "src/eawf/worktree/git.py",
+        "src/eawf/worktree/__init__.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "tests/unit/test_worktree_home.py"
+      ],
+      "id": "P25-I01-W07",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:51.981881Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "worktree home resolved to .ea/worktrees/ per D15 (memory feedback_worktree_location)",
+        "commit-prefix lint regex enforces ^\\[P\\d{2}(-I\\d{2})?(-W\\d{2}|-CORE)\\]\\s+(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\\s+\\S.*$",
+        "KISS-007 cycle break: src/eawf/worktree/ submodules import eawf.worktree.git directly + cycle detector reports 0 internal cycles"
+      ],
+      "title": "feat: C07b commit-prefix lint hardening + worktree at .ea/worktrees/ + KISS-007",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/registry/__init__.py",
+        "src/eawf/registry/models.py",
+        "src/eawf/registry/staleness.py",
+        "src/eawf/cli/scope.py",
+        "tests/unit/test_registry_explicit_growth.py",
+        "tests/integration/test_scope_dispatch_ladder.py"
+      ],
+      "id": "P25-I01-W08",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:52.536735Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "registry growth surface = explicit init / add-repo only per memory feedback_explicit_registry_only",
+        "scope dispatch ladder resolves cwd -> workspace > repo > user",
+        "staleness = 14-day OR-chain per [5] §5.3 is_stale",
+        "scan/walk/import-from-scan rejected with explicit error"
+      ],
+      "title": "feat: C07b multi-repo registry + scope dispatch ladder (cwd to workspace/repo/user)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/render/envelope.py",
+        "src/eawf/render/brand.py",
+        "src/eawf/render/_atomic.py",
+        "src/eawf/render/__init__.py",
+        "tests/unit/test_render_envelope.py",
+        "tests/unit/test_brand_glyph_fallback.py"
+      ],
+      "id": "P25-I01-W09",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:53.089527Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "OutputEnvelope 3-part shape (header/body/footer) + 5-status enum (ok/needs_user/blocked/failed/partial)",
+        "Eä logotype literal (capital E + a-umlaut bold accent) outside-left of breadcrumb per memory feedback_tui_branding",
+        "Nerd Font glyph emitted on TTY + ASCII fallback when stdout not a TTY",
+        "envelope rejects schema-version drift via extra=forbid"
+      ],
+      "title": "feat: C07b render envelope + Eä brand glyph + Nerd-Font + ASCII fallback",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P25-I01-W11",
+        "P25-I01-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W06"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtimes/adapter.py",
+        "src/eawf/runtimes/claude/adapter.py",
+        "src/eawf/runtimes/codex/adapter.py",
+        "src/eawf/runtimes/opencode/adapter.py",
+        "tests/unit/test_runtime_adapter.py",
+        "tests/integration/test_runtime_event_emission.py"
+      ],
+      "id": "P25-I01-W10",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:53.671598Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "RuntimeAdapter(Protocol) defined at src/eawf/runtimes/adapter.py + 3 implementations land",
+        "SessionAttempt import from C02/state (P24) works",
+        "parse_error returns one of 5 closed classes per [4] §5.5",
+        "emits runtime_switched / session_continued / session_failover events via canonical Event model (depends on W06)"
+      ],
+      "title": "feat: C07a RuntimeAdapter Protocol + 3 adapters (claude/codex/opencode)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P25-I01-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W10"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtimes/manifest.py",
+        "src/eawf/runtimes/plugin_sync.py",
+        "src/eawf/runtimes/helpers/",
+        "src/eawf/cli/commands/plugin.py",
+        "tests/unit/test_plugin_manifest.py",
+        "tests/integration/test_plugin_sync_three_runtimes.py"
+      ],
+      "id": "P25-I01-W11",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:54.219815Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "PluginManifest(BaseModel extra='forbid') per XB19 lands",
+        "eawf plugin sync regenerates per-runtime artifacts deterministically from SKILL_REGISTRY",
+        "KISS-004 helper module < 300 LOC per [1] §4.1",
+        "three rendered outputs land at .claude/ + .codex/ + .opencode/ via daemon-mediated writer (authority-map row 14)"
+      ],
+      "title": "feat: C07a PluginManifest(BaseModel) + eawf plugin sync + KISS-004 helpers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W11"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtimes/plugin_doctor.py",
+        "src/eawf/runtimes/coauthor.py",
+        "src/eawf/cli/commands/plugin.py",
+        "tests/unit/test_plugin_doctor.py",
+        "tests/integration/test_coauthor_verification.py"
+      ],
+      "id": "P25-I01-W12",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:54.782015Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf plugin doctor enumerates 4 drift kinds per [4] §5.9",
+        "KISS-001 coauthor env-detection opt-in via explicit EAWF_COAUTHOR_RUNTIME env var OR explicit JSON detected-runtime (no implicit detection)",
+        "tests/integration/test_coauthor_verification.py passes"
+      ],
+      "title": "feat: C07a plugin doctor + 4 drift kinds + KISS-001 coauthor env-detection fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W10"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtimes/capabilities.yaml",
+        "src/eawf/runtimes/capabilities.py",
+        "src/eawf/cli/commands/doctor.py",
+        "tests/unit/test_capability_matrix.py"
+      ],
+      "id": "P25-I01-W13",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:47:55.349968Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "capability matrix at src/eawf/runtimes/capabilities.yaml with 8 rows by 3 runtimes",
+        "eawf doctor --runtime <id> reports drift between declared capabilities and probed runtime",
+        "matrix consumed by RuntimeAdapter selection logic without duplicate hardcoded tables"
+      ],
+      "title": "feat: C07a capability matrix 8 rows by 3 runtimes + drift detector",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P25-I01-W15",
+        "P25-I01-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/config/layered.py",
+        "src/eawf/config/registry.py",
+        "src/eawf/config/defaults.py",
+        "src/eawf/config/migration.py",
+        "src/eawf/daemon/rpc/config.py",
+        "tests/unit/test_layered_config.py",
+        "tests/integration/test_config_migration_1_0.py"
+      ],
+      "id": "P25-I01-W14",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:48:52.126991Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "six durable layers (built-in < global < workspace < repo < branch < local < env < cli) + transient daemon-resident wave layer + two runtime overlays per [6] §5.1 precedence table",
+        "branch layer at .ea/branches/<branch>.yaml with subdirectory form on /",
+        "field registry enumerates ~140 leaf keys per [6] §5.2",
+        "schema_version Literal['1.0'] migration: legacy '1.1' / '2' -> '1.0' per migration DAG row 6",
+        "daemon = sole writer per D13 (supersedes XB01 path-a)"
+      ],
+      "title": "feat: C08 layered config taxonomy + branch + wave layer + field registry",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W14"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/models.py",
+        "src/eawf/profiles/compose.py",
+        "src/eawf/profiles/loader.py",
+        "tests/unit/test_profile_body_v2.py",
+        "tests/integration/test_profile_composition_loader.py"
+      ],
+      "id": "P25-I01-W15",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:48:52.662792Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ProfileBody v2 closed schema lands with conflicts_with: list[str] + overrides: list[str] + dispatch_session_policy: Literal['fresh'",
+        "'continue'",
+        "'hybrid'] | None",
+        "composition loader performs deterministic deep-merge by id + strictest-wins on instrument_requirements.kind + fail-fast on undeclared conflict per V3",
+        "extra=forbid rejects unknown profile keys at load"
+      ],
+      "title": "feat: C08 ProfileBody v2 + conflicts_with + overrides + composition loader",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P25-I01-W14"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "templates/init/research.yaml",
+        "templates/init/engineering.yaml",
+        "templates/init/reverse-engineering.yaml",
+        "src/eawf/cli/commands/init.py",
+        "src/eawf/profiles/discovery.py",
+        "tests/unit/test_init_templates.py",
+        "tests/integration/test_init_multi_profile.py"
+      ],
+      "id": "P25-I01-W16",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:48:53.190116Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "three template YAMLs land under templates/init/<template>.yaml (research + engineering + reverse-engineering) per D7 trim",
+        "eawf init --profiles a",
+        "b",
+        "c writes .ea/config.yaml + scaffolds materialised state keys",
+        "per-profile dispatch_session_policy defaults per [4] D10 (research:continue + engineering:fresh + reverse-engineering:continue)",
+        "spike + hybrid templates explicitly NOT shipped (deferred v0.4+)"
+      ],
+      "title": "feat: C08 3 bootstrap templates (research+engineering+reverse-eng) + migration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W17": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md",
+        "build/eawf-plugin/skills/flow/SKILL.md",
+        "build/eawf-plugin/skills/prep/SKILL.md",
+        "build/eawf-plugin/skills/audit/SKILL.md",
+        "build/eawf-plugin/skills/polish/SKILL.md",
+        "build/eawf-plugin/skills/ship/SKILL.md"
+      ],
+      "id": "P25-I01-W17",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:48:53.712855Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "AGENTS rule appended: /prep always plan mode (Case A + Case B)",
+        "AGENTS rule appended: iter/phase close-timing (audited+polished gate + phase close in final pre-merge CORE commit)",
+        "/flow canonical sequence re-ordered to research->prep->audit->polish->ship (review folds into ship as PR pass)",
+        "/prep skill body documents apply planner commands first then render via roadmap show inside plan mode",
+        "audit + polish skills note iter close gate"
+      ],
+      "title": "chore: AGENTS.md + skill workflow rules — /prep plan mode (Case A + B) + close-timing + /flow re-order",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P25-I01-W18": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/research/long-term/2026-05-19-sdk-prerelease-probe.md",
+        "src/eawf/runtimes/probes/sdk_baseline.py",
+        "tests/integration/test_sdk_probe_baseline.py"
+      ],
+      "id": "P25-I01-W18",
+      "iter_id": "P25-I01",
+      "opened_at": "2026-05-19T19:48:54.244657Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "snapshot wave captures pre-2026-06-15 baseline of claude -p + codex + opencode capabilities (subprocess primary surface + advertised SDK feature flags)",
+        "probe script lands under src/eawf/runtimes/probes/ + emits machine-readable JSON snapshot",
+        "artifact under .ea/artifacts/research/long-term/2026-05-19-sdk-prerelease-probe.md records baseline so a future v0.4 wave can re-probe + diff",
+        "independent of W10-W13 (no runtime adapter dep; snapshot operates on raw subprocess + advertised flags)"
+      ],
+      "title": "test: C07a SDK pre-release probe snapshot (pre-2026-06-15 baseline for v0.4 diff)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
