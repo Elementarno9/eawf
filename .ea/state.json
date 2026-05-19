@@ -1477,9 +1477,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P24-I01-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P24",
     "project_code": "EAWF",
@@ -2840,7 +2838,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T15:56:12.359046Z",
+  "updated_at": "2026-05-19T16:43:13.692487Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -7661,7 +7659,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-19T16:43:13.692409Z",
       "commit": null,
       "deps": [
         "P24-I01-W09"
@@ -7677,10 +7675,10 @@
       "id": "P24-I01-W10",
       "iter_id": "P24-I01",
       "opened_at": "2026-05-19T13:36:05.729485Z",
-      "outcome": null,
+      "outcome": "config + registry RPCs migrated; daemon.proxy_enabled default flipped to True; 238 daemon+cli + 44 new W10 tests; 3560 full-suite pass; EAWF_DAEMONLESS=1 V1 carve-out wired for CI",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [],
       "title": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
       "token_budget": null,
