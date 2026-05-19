@@ -139,7 +139,7 @@ def test_cli_create_full_cycle(tmp_path: Path) -> None:
     )
     assert res.exit_code == 0, res.stdout
     # Worktree dir created.
-    assert (repo / ".claude" / "worktrees" / "p05-w01").is_dir()
+    assert (repo / ".ea" / "worktrees" / "p05-w01").is_dir()
     # state.json updated with worktree record + wave.worktree_id.
     payload = orjson.loads(state_path.read_bytes())
     assert payload["worktrees"]

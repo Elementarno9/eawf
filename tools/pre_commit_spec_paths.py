@@ -1,8 +1,13 @@
 """Pre-commit hook: spec test-path freshness (C03 layer 2 of 3).
 
-Greps each staged ``.ea/specs/**/*.md`` for ``tests/`` paths and
-verifies that every cited test file exists on disk in the working
-tree. This is the second of the three-layer enforcement stack:
+Greps the ``## Tests`` section of each staged ``.ea/specs/**/*.md``
+for ``tests/`` paths and verifies that every cited test file exists
+on disk in the working tree. Citations under ``## File scopes``
+(which carry scope globs like ``tests/foo/**``, not concrete
+``TestRef`` rows) are ignored — only the ``## Tests`` section
+carries citation contract. Glob patterns (any ref containing
+``*``) inside ``## Tests`` are also skipped as scope hints. This
+is the second of the three-layer enforcement stack:
 
 1. **Pydantic load** — :mod:`eawf.spec.wave` + :mod:`eawf.spec.validators`
    reject empty / non-existent paths at ``model_validate`` and loader
@@ -59,6 +64,30 @@ _SPEC_PATH_PREFIX = ".ea/specs/"
 _SPEC_PATH_SUFFIX = ".md"
 
 
+def _extract_tests_section(body: str) -> str:
+    """Slice out the ``## Tests`` section body.
+
+    File-scope globs (``tests/foo/**``) are scope hints, not citations,
+    and live under ``## File scopes`` in the WaveSpec stub chassis.
+    Only ``## Tests`` rows are real ``TestRef`` citations that must
+    resolve to a concrete file on disk.
+
+    Args:
+        body: Full spec markdown text.
+
+    Returns:
+        The text between the ``## Tests`` heading and the next ``##``
+        heading. Empty string when the section is absent.
+    """
+    match = re.search(r"^##\s+Tests\s*$", body, re.MULTILINE)
+    if not match:
+        return ""
+    start = match.end()
+    next_heading = re.search(r"^##\s+\S", body[start:], re.MULTILINE)
+    end = start + next_heading.start() if next_heading else len(body)
+    return body[start:end]
+
+
 def _scan_spec_file(spec_path: Path, project_root: Path) -> list[str]:
     """Return repo-relative test paths cited in ``spec_path`` that do not exist.
 
@@ -70,17 +99,23 @@ def _scan_spec_file(spec_path: Path, project_root: Path) -> list[str]:
         List of cited test paths (in source order, de-duplicated by
         first occurrence) that do not resolve to an existing file
         under ``project_root``. Empty list when the spec cites no
-        test paths or every cited path exists.
+        test paths or every cited path exists. Glob patterns (any
+        ref containing ``*``) are skipped — they're scope hints, not
+        ``TestRef`` citations.
     """
     absolute = project_root / spec_path
     if not absolute.is_file():
-        # Staged-but-deleted (rename in flight); nothing to scan.
         return []
     body = absolute.read_text(encoding="utf-8")
+    tests_section = _extract_tests_section(body)
+    if not tests_section:
+        return []
     seen: set[str] = set()
     missing: list[str] = []
-    for match in _TEST_PATH_RE.finditer(body):
+    for match in _TEST_PATH_RE.finditer(tests_section):
         ref = match.group(1)
+        if "*" in ref:
+            continue
         if ref in seen:
             continue
         seen.add(ref)
