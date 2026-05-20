@@ -1,0 +1,282 @@
+"""Pure-functional phase lifecycle transitions.
+
+Open / close / plan / activate / archive / reopen for :class:`Phase`. Every
+helper mutates the supplied :class:`State` in place. See
+:mod:`eawf.lifecycle.transitions` for the shared design rules and the
+re-export surface that keeps ``eawf.lifecycle.transitions`` import paths
+working after the per-entity split.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime
+
+from eawf.lifecycle._errors import LifecycleError
+from eawf.state.enums import IterStatus, PhaseStatus, WaveStatus
+from eawf.state.models import Phase, State
+
+logger = logging.getLogger(__name__)
+
+
+def open_phase(
+    state: State,
+    *,
+    phase_id: str,
+    title: str,
+    scope_id: str | None = None,
+) -> Phase:
+    """Insert a new phase into ``state.phases`` with status ``active``.
+
+    Raises:
+        LifecycleError: if *phase_id* already exists.
+    """
+    if phase_id in state.phases:
+        raise LifecycleError(f"phase {phase_id!r} already exists")
+    project_code = state.project.code if state.project is not None else None
+    effective_scope = scope_id or project_code or "unknown"
+    phase = Phase(
+        id=phase_id,
+        scope_id=effective_scope,
+        subproject_id=state.current.subproject_id,
+        title=title,
+        status=PhaseStatus.ACTIVE,
+        iter_ids=[],
+        outcome_ids=[],
+        opened_at=datetime.now(UTC),
+        closed_at=None,
+        audit_id=None,
+    )
+    state.phases[phase_id] = phase
+    state.current.phase_id = phase_id
+    state.current.iter_id = None
+    state.current.active_wave_ids = []
+    logger.info(f"open_phase id={phase_id} title={title!r}")
+    return phase
+
+
+def close_phase(
+    state: State,
+    *,
+    phase_id: str,
+    audit_id: str,
+    checkpoint: str | None = None,
+) -> Phase:
+    """Close an active phase. Rejects when child iters are still open
+    or when the phase has zero waves in :data:`WaveStatus.CLOSED`.
+
+    The ≥1-closed-wave gate (P19-W03) catches the
+    "single-commit-per-phase" anti-pattern where a runtime ships the
+    entire phase as one commit without closing any waves first.
+
+    The ``checkpoint`` argument is recorded in the lifecycle event but does
+    not currently mutate the phase record — that field will land in Phase 3
+    when the audit-link table is introduced.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status not in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}:
+        raise LifecycleError(f"phase {phase_id!r} has status {phase.status.value!r}; cannot close")
+    open_children = [
+        iid
+        for iid, it in state.iters.items()
+        if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
+    ]
+    if open_children:
+        raise LifecycleError(f"phase {phase_id!r} has open iters: {sorted(open_children)}")
+    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    closed_wave_count = sum(
+        1
+        for w in state.waves.values()
+        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+    )
+    if closed_wave_count == 0:
+        raise LifecycleError(
+            f"phase {phase_id!r} has no closed waves; close_phase requires at least one closed wave"
+        )
+    phase.status = PhaseStatus.CLOSED
+    phase.closed_at = datetime.now(UTC)
+    phase.audit_id = audit_id
+    if state.current.phase_id == phase_id:
+        state.current.phase_id = None
+        state.current.iter_id = None
+        state.current.active_wave_ids = []
+    logger.info(f"close_phase id={phase_id} audit={audit_id} checkpoint={checkpoint!r}")
+    return phase
+
+
+def plan_phase(
+    state: State,
+    *,
+    phase_id: str,
+    title: str,
+    scope_id: str | None = None,
+    depends_on: list[str] | None = None,
+    source_brief_ids: list[str] | None = None,
+) -> Phase:
+    """Insert a new phase into ``state.phases`` with status ``planned``.
+
+    Phases created via :func:`plan_phase` sit on the PLANNED queue until
+    :func:`activate_phase` flips them to ACTIVE. ``depends_on`` declares
+    phase-level prerequisites; cycles are rejected up-front.
+
+    Raises:
+        LifecycleError: if *phase_id* already exists, any declared
+            ``depends_on`` references a missing phase, or the resulting
+            phase DAG would contain a cycle.
+    """
+    if phase_id in state.phases:
+        raise LifecycleError(f"phase {phase_id!r} already exists")
+    deps_list = list(depends_on or [])
+    if phase_id in deps_list:
+        raise LifecycleError(f"phase {phase_id!r} cannot depend on itself")
+    for dep in deps_list:
+        if dep not in state.phases:
+            raise LifecycleError(f"unknown phase dep: {dep!r}")
+    if _would_create_phase_cycle(state, new_id=phase_id, new_deps=deps_list):
+        raise LifecycleError(
+            f"adding phase {phase_id!r} with depends_on={deps_list} would create a cycle"
+        )
+    project_code = state.project.code if state.project is not None else None
+    effective_scope = scope_id or project_code or "unknown"
+    phase = Phase(
+        id=phase_id,
+        scope_id=effective_scope,
+        subproject_id=state.current.subproject_id,
+        title=title,
+        status=PhaseStatus.PLANNED,
+        iter_ids=[],
+        outcome_ids=[],
+        depends_on=deps_list,
+        source_brief_ids=list(source_brief_ids or []),
+        opened_at=datetime.now(UTC),
+        closed_at=None,
+        audit_id=None,
+    )
+    state.phases[phase_id] = phase
+    logger.info(
+        f"plan_phase id={phase_id} title={title!r} depends_on={deps_list} "
+        f"source_briefs={list(source_brief_ids or [])}"
+    )
+    return phase
+
+
+def activate_phase(state: State, *, phase_id: str) -> Phase:
+    """Flip a planned phase to active. Sets ``current.phase_id``.
+
+    Hard gate (V11 in P19 brief; tightened in P19-W11):
+
+    - The phase must exist and be in PLANNED status.
+    - Every phase in ``depends_on`` must be CLOSED.
+    - The phase must already have at least one wave planned under it.
+
+    The branch-currency and clean-working-tree gates live in the CLI
+    handler (:func:`eawf.cli.commands.lifecycle.phase_activate_cmd`)
+    because they need git access; together with the no-waves gate above
+    they form the complete P19-W11 V11 hard gate.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown, not in PLANNED state,
+            has no waves planned, or any phase in ``depends_on`` is not
+            yet CLOSED.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.PLANNED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; "
+            "only planned phases can activate"
+        )
+    unmet = [pid for pid in phase.depends_on if state.phases[pid].status != PhaseStatus.CLOSED]
+    if unmet:
+        raise LifecycleError(f"phase {phase_id!r} blocked on un-closed dep phases: {sorted(unmet)}")
+    iter_ids = phase.iter_ids
+    wave_count = sum(1 for w in state.waves.values() if w.iter_id in set(iter_ids))
+    if wave_count == 0:
+        logger.info(f"activate_phase phase={phase_id!r} no_waves=True")
+        raise LifecycleError(
+            f"phase {phase_id!r} has no planned waves; activate_phase requires at least one wave"
+        )
+    phase.status = PhaseStatus.ACTIVE
+    state.current.phase_id = phase_id
+    state.current.iter_id = None
+    state.current.active_wave_ids = []
+    logger.info(f"activate_phase id={phase_id} waves={wave_count}")
+    return phase
+
+
+def archive_phase(state: State, *, phase_id: str) -> Phase:
+    """Move a planned phase to archived. Used by ``eawf roadmap drop``.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown or not in PLANNED state.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.PLANNED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; "
+            "only planned phases can be archived"
+        )
+    phase.status = PhaseStatus.ARCHIVED
+    phase.closed_at = datetime.now(UTC)
+    logger.info(f"archive_phase id={phase_id}")
+    return phase
+
+
+def _would_create_phase_cycle(
+    state: State,
+    *,
+    new_id: str,
+    new_deps: list[str],
+) -> bool:
+    """Return True iff inserting *new_id* with phase-level *new_deps* yields a cycle."""
+    deps_by_node: dict[str, set[str]] = {pid: set(p.depends_on) for pid, p in state.phases.items()}
+    deps_by_node[new_id] = set(new_deps)
+    in_degree: dict[str, int] = {node: len(parents) for node, parents in deps_by_node.items()}
+    children: dict[str, list[str]] = {node: [] for node in deps_by_node}
+    for node, parents in deps_by_node.items():
+        for parent in parents:
+            if parent in children:
+                children[parent].append(node)
+    ready = [node for node, count in in_degree.items() if count == 0]
+    visited = 0
+    while ready:
+        node = ready.pop()
+        visited += 1
+        for child in children[node]:
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                ready.append(child)
+    return visited != len(deps_by_node)
+
+
+def reopen_phase(state: State, *, phase_id: str) -> Phase:
+    """Reopen a closed phase. Flips status closed→active, clears closed_at.
+
+    Audit linkage (``audit_id``) is preserved so the original close evidence
+    stays reconstructible; the next ``close_phase`` overwrites it with a new
+    audit. ``state.current.phase_id`` is set to *phase_id* iff no other phase
+    is currently active.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown or not in the closed state.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.CLOSED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; only closed phases can reopen"
+        )
+    phase.status = PhaseStatus.ACTIVE
+    phase.closed_at = None
+    if state.current.phase_id is None:
+        state.current.phase_id = phase_id
+        state.current.iter_id = None
+        state.current.active_wave_ids = []
+    logger.info(f"reopen_phase id={phase_id}")
+    return phase
