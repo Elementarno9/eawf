@@ -1552,7 +1552,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W16",
       "P26-I01-W25"
     ],
     "iter_id": null,
@@ -2976,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:07:27.850113Z",
+  "updated_at": "2026-05-20T14:21:51.330581Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9086,7 +9085,7 @@
         "P26-I01-W17"
       ],
       "claim_session_id": "p26-w16-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T14:21:50.574723Z",
       "commit": null,
       "deps": [
         "P26-I01-W15"
@@ -9098,15 +9097,19 @@
         "src/eawf/tui_v2/theme.tcss",
         "src/eawf/tui_v2/state_binding.py",
         "src/eawf/cli/app.py",
-        "pyproject.toml"
+        "pyproject.toml",
+        "src/eawf/tui_v2/__init__.py",
+        "tests/tui_v2/__init__.py",
+        "tests/tui_v2/test_app_scaffold.py",
+        "uv.lock"
       ],
       "id": "P26-I01-W16",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:15.796694Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "first-paint <150ms p99 on empty fixture state.json (perf budget enforced at W22)"
       ],
@@ -9981,10 +9984,10 @@
       "branch": "feature/eawf-v0.1-p26-w16",
       "created_at": "2026-05-20T14:07:26.997581Z",
       "id": "WT-P26-I01-W16-1779286046",
-      "merged_commit": null,
+      "merged_commit": "8fb37ba",
       "owner_session_id": "p26-w16-exec",
       "path": ".ea/worktrees/p26-w16",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W16"
     },
     "WT-P26-I01-W23-1779235537": {
