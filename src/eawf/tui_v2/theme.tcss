@@ -1,0 +1,70 @@
+/* Textual theme for the C06 Eä TUI rebuild (tui_v2).
+ *
+ * Defines the semantic colour vars consumed by every tui_v2 widget +
+ * screen ($ok/$warn/$err/$muted/$accent/$primary) and the base layout
+ * for the scope screens. Runtime theme swap (/theme dark|light|auto)
+ * rebinds these vars at the App level in a later wave; this file is the
+ * default dark palette. Colours follow the Wong 2011 deuteranopia-safe
+ * set so the colour-blind palette swap stays a var rebind, not a layout
+ * change.
+ */
+
+/* --- semantic colour vars (dark default) --- */
+$accent: #56b6c2;
+$primary: #56b6c2;
+$ok: #009e73;
+$warn: #e69f00;
+$err: #d55e00;
+$muted: #6c6c6c;
+
+Screen {
+    background: $surface;
+    color: $text;
+}
+
+/* --- header: Eä brand outside-left of the scope breadcrumb --- */
+Header {
+    height: 1;
+    dock: top;
+    background: $panel;
+}
+
+Header > .ea-brand {
+    color: $accent;
+    text-style: bold;
+    padding: 0 1 0 0;
+}
+
+Header > .ea-breadcrumb {
+    color: $text;
+}
+
+/* --- footer: context key hints, full key names --- */
+Footer {
+    height: 1;
+    dock: bottom;
+    background: $panel;
+    color: $muted;
+}
+
+/* --- scope-screen body shells (panes land in later waves) --- */
+.scope-body {
+    height: 1fr;
+    padding: 0 1;
+}
+
+.scope-placeholder {
+    height: 1fr;
+    width: 1fr;
+    content-align: center middle;
+    color: $muted;
+}
+
+/* --- degraded banner (mtime-poll fallback active) --- */
+.degraded-banner {
+    height: 1;
+    dock: top;
+    background: $err;
+    color: $text;
+    text-style: bold;
+}

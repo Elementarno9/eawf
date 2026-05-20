@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
+import orjson
 import typer
 
 from eawf import __version__
@@ -96,14 +97,58 @@ def _root(
         debug=debug,
     )
     if ctx.invoked_subcommand is None:
-        # Bare ``eawf`` on a TTY routes to the TUI (config.ui.bare_command
-        # default: "tui"); plain / no-input / non-TTY falls back to the
+        # Bare ``eawf`` on a TTY routes to the Textual TUI
+        # (config.ui.bare_command default: "tui") via the C06 scope-
+        # dispatch ladder; plain / no-input / non-TTY falls back to the
         # deterministic status emission so headless callers stay
         # script-stable.
-        from eawf.tui.app import run_tui
-
-        rc = run_tui(workspace=workspace, no_input=no_input, plain=plain_output)
+        rc = _dispatch_tui(workspace=workspace, no_input=no_input, plain=plain_output)
         raise typer.Exit(code=rc)
+
+
+def _dispatch_tui(
+    *,
+    workspace: Path | None,
+    no_input: bool,
+    plain: bool,
+) -> int:
+    """Resolve the launch scope and open the TUI (C06 §5.2 / D10).
+
+    On an interactive TTY this resolves the scope via the cwd-upward
+    ladder (``-w/--workspace`` flag wins, else the nearest ``state.json``
+    determines ``repo`` vs ``workspace``) and launches the Textual
+    :class:`~eawf.tui_v2.app.EaApp`. When ``--plain`` / ``--no-input`` is
+    set or stdout is not a TTY it falls back to the deterministic
+    single-frame status emission so headless callers stay script-stable.
+
+    Args:
+        workspace: Optional workspace root from ``-w/--workspace``.
+        no_input: Fail-closed flag — forces the deterministic fallback.
+        plain: Plain-output flag — forces the deterministic fallback.
+
+    Returns:
+        Process exit code (``0`` on a clean quit).
+    """
+    import sys
+
+    from eawf.tui.app import run_tui
+
+    if no_input or plain or not sys.stdout.isatty():
+        return run_tui(workspace=workspace, no_input=no_input, plain=plain)
+
+    from eawf.state.enums import ScopeKind
+    from eawf.state.resolve import resolve_with_reason
+    from eawf.tui_v2.app import resolve_scope, run_app
+
+    state_path, _reason = resolve_with_reason(workspace=workspace)
+    if state_path.is_file():
+        try:
+            payload = orjson.loads(state_path.read_bytes())
+            scope_kind = ScopeKind(payload["scope_kind"])
+        except orjson.JSONDecodeError, OSError, KeyError, ValueError:
+            return run_app("repo", state_path)
+        return run_app(resolve_scope(scope_kind), state_path)
+    return run_app("user", None)
 
 
 @app.command(name="version", rich_help_panel=panel_for("version"))
@@ -378,22 +423,20 @@ from eawf.cli.commands.profile import profile_app  # noqa: E402
 app.add_typer(profile_app, name="profile", rich_help_panel=panel_for("profile"))
 # --- end P14 W05 ---
 
-# --- P14 W10 TUI registration ---
-from eawf.tui.app import run_tui as _run_tui  # noqa: E402
 
-
+# --- P14 W10 / P26 W16 TUI registration ---
 @app.command(
     name="tui",
-    help="Open the Rich-backed Eä TUI (or text fallback off-TTY).",
+    help="Open the Eä Textual TUI (or deterministic status fallback off-TTY).",
     rich_help_panel=panel_for("tui"),
 )
 def _tui_cmd(ctx: typer.Context) -> None:
     flags: GlobalFlags = ctx.obj
-    rc = _run_tui(workspace=flags.workspace, no_input=flags.no_input, plain=flags.plain_output)
+    rc = _dispatch_tui(workspace=flags.workspace, no_input=flags.no_input, plain=flags.plain_output)
     raise typer.Exit(code=rc)
 
 
-# --- end P14 W10 ---
+# --- end P14 W10 / P26 W16 ---
 
 # --- P20 W08 metrics registration ---
 from eawf.cli.commands.metrics import metrics_cmd  # noqa: E402
