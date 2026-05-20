@@ -15,8 +15,8 @@ These tests drive the real entry point (``eawf`` resolved on ``PATH`` via the
 ``uv``-installed console script) in a subprocess with the completion env vars
 set — exactly what bash/zsh do at tab time — and assert the handshake (a) does
 not crash / exit non-zero and (b) emits a non-empty candidate set for a known
-prefix. The :func:`eawf.cli.commands.completion._patch_zsh_completion` fix is
-covered head-on by :func:`test_zsh_script_exports_comp_words` plus the live
+prefix. The :func:`eawf.cli.commands.completion._zsh_native_script` fix is
+covered head-on by :func:`test_zsh_script_is_click_native_no_eval` plus the live
 zsh-runtime test below.
 """
 
@@ -151,20 +151,25 @@ def test_completion_runtime_bash_unaffected_by_zsh_patch() -> None:
 # --- generated-script content: the fix, asserted in-process -----------------
 
 
-def test_zsh_script_exports_comp_words() -> None:
-    """The rendered zsh script exports the vars Click's zsh handler reads.
+def test_zsh_script_is_click_native_no_eval() -> None:
+    """The rendered zsh script is click-native (``_describe``), not typer's eval wrapper.
 
-    The Typer-0.25.1 template exports only ``_TYPER_COMPLETE_ARGS``; the
-    :func:`_patch_zsh_completion` fix injects ``COMP_WORDS`` / ``COMP_CWORD``
-    so the runtime handshake matches Click >=8.2.
+    typer 0.25.1's zsh template ``eval``s click's output — whose descriptions
+    contain ``(...)`` that zsh mis-reads as a glob (``bad pattern``) — and omits
+    ``COMP_WORDS``. :func:`_zsh_native_script` instead renders click's own
+    ``ZshComplete`` template (consumes ``type/key/descr`` triples via
+    ``_describe`` / ``compadd``, no ``eval``; exports the vars click reads) wired
+    to typer's ``complete_zsh`` instruction so typer's interceptor routes it.
     """
     from eawf.cli.commands.completion import Shell
 
     rendered = _render_script(Shell.ZSH)
-    assert 'COMP_WORDS="${words[*]}"' in rendered
-    assert "COMP_CWORD=$((CURRENT - 1))" in rendered
-    # The completion-function still calls the program with the activation var.
-    assert "_EAWF_COMPLETE=complete_zsh" in rendered
+    assert "COMP_WORDS=" in rendered
+    assert "COMP_CWORD=" in rendered
+    assert "_describe" in rendered  # click-native triple consumer
+    assert "eval $(" not in rendered  # NOT typer's eval-the-output wrapper
+    assert "_EAWF_COMPLETE=complete_zsh" in rendered  # typer-accepted instruction
+    assert "_EAWF_COMPLETE=zsh_complete" not in rendered  # click-native value swapped out
 
 
 def test_bash_script_unchanged_still_exports_comp_words() -> None:
@@ -180,16 +185,16 @@ def test_bash_script_unchanged_still_exports_comp_words() -> None:
 
 
 @_requires_console_script
-def test_installed_zsh_script_sources_in_live_zsh() -> None:
-    """The patched zsh script's *own* completion function works in a real zsh.
+def test_installed_zsh_script_completes_in_live_zsh() -> None:
+    """The click-native zsh script offers candidates in a real zsh, no crash.
 
-    The strongest proof, and the one that fails on the unpatched script: source
-    the generated script in an actual ``zsh`` (when one is on the box), then
-    invoke the ``_eawf_completion`` function the script defines — letting the
-    script build the completion env itself from ``words`` / ``CURRENT`` — and
-    assert it offers ``wave`` with no ``KeyError``. The unpatched script builds
-    only ``_TYPER_COMPLETE_ARGS`` here, so Click crashes with
-    ``KeyError: 'COMP_WORDS'`` (leaked from the inner ``eval`` subshell).
+    The strongest proof, and the one that fails on the typer-eval script: with
+    ``compinit`` loaded (so ``_describe`` / ``compadd`` exist), source the
+    generated script in a real ``zsh`` and invoke its ``_eawf_completion``
+    function with ``words`` / ``CURRENT`` set. We stub ``_describe`` / ``compadd``
+    to print the candidates the function feeds them, then assert ``wave`` is
+    offered with no ``KeyError`` (the input-layer crash) and no ``bad pattern``
+    (the output-layer crash from ``eval``-ing click's ``(...)`` descriptions).
 
     Both ``completion show`` and the ``eawf`` wrapper are pinned to this
     worktree's binary so a globally ``uv tool install``-ed ``eawf`` cannot mask
@@ -199,23 +204,19 @@ def test_installed_zsh_script_sources_in_live_zsh() -> None:
     if zsh is None:
         pytest.skip("zsh not installed")
     assert _EAWF_BIN is not None
-    # Drive the script's *own* ``_eawf_completion`` function so its env-building
-    # (``COMP_WORDS`` / ``COMP_CWORD`` vs only ``_TYPER_COMPLETE_ARGS``) is what
-    # is under test. The function does ``eval $(env ... eawf)``: the inner
-    # ``$(...)`` runs eawf to produce candidates, which ``eval`` would then feed
-    # to zsh's compsys. We override ``eval`` to *print* what it receives so we
-    # capture the candidate list (patched) — or the Click crash traceback
-    # (unpatched) — without needing a live completion context. ``eawf`` and
-    # ``compdef`` are stubbed so the worktree binary is used and the trailing
-    # ``compdef`` registration is a no-op.
+    # compinit provides _describe/compadd the click-native function calls; we
+    # override them after sourcing to capture the candidate args the function
+    # builds from the live ``env ... eawf`` triple output.
     program = (
-        "emulate -L zsh\n"
+        "autoload -U compinit; compinit -u 2>/dev/null\n"
         f'eawf() {{ {_EAWF_BIN!r} "$@"; }}\n'
-        "compdef() { : }\n"
         f"source <({_EAWF_BIN!r} completion show zsh)\n"
+        # click's function passes its candidate arrays by name; print their
+        # contents (dynamically scoped, visible from the stub) to capture them.
+        '_describe() { print -r -- "${completions_with_descriptions[@]}" "${completions[@]}" }\n'
+        'compadd() { print -r -- "${completions[@]}" "$@" }\n'
         "words=(eawf wa)\n"
         "CURRENT=2\n"
-        'eval() { print -r -- "$@"; }\n'
         "_eawf_completion\n"
     )
     result = subprocess.run(
@@ -226,8 +227,9 @@ def test_installed_zsh_script_sources_in_live_zsh() -> None:
     )
     combined = result.stdout + result.stderr
     assert "KeyError" not in combined, f"live zsh completion crashed: {combined!r}"
+    assert "bad pattern" not in combined, f"zsh bad pattern (eval of descriptions): {combined!r}"
     assert "Traceback" not in combined
-    assert "wave" in result.stdout, f"no candidate from live zsh: {combined!r}"
+    assert "wave" in combined, f"no candidate from live zsh: {combined!r}"
 
 
 if __name__ == "__main__":  # pragma: no cover
