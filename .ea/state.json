@@ -1530,9 +1530,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W04"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2951,7 +2949,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T00:36:26.935055Z",
+  "updated_at": "2026-05-20T12:47:51.032376Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8629,7 +8627,7 @@
         "P26-I01-W10"
       ],
       "claim_session_id": "p26-w04-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T12:47:50.462080Z",
       "commit": null,
       "deps": [
         "P26-I01-W02",
@@ -8647,10 +8645,10 @@
       "id": "P26-I01-W04",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:07.506817Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "CHANGELOG.md carries BREAKING entry for exit-code 0..9 -> 0..5 cutover; daemon JSON-RPC -3200X codes map to the five subclasses per C05 §5.3 table"
       ],
@@ -9726,10 +9724,10 @@
       "branch": "feature/eawf-v0.1-p26-w04",
       "created_at": "2026-05-20T00:36:26.935055Z",
       "id": "WT-P26-I01-W04-1779237386",
-      "merged_commit": null,
+      "merged_commit": "5fdd0ef",
       "owner_session_id": "p26-w04-exec",
       "path": ".ea/worktrees/p26-w04",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W04"
     },
     "WT-P26-I01-W23-1779235537": {
