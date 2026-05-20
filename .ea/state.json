@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W22"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2975,7 +2973,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T16:02:49.569962Z",
+  "updated_at": "2026-05-20T16:34:39.463074Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9331,7 +9329,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w22-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T16:34:38.720312Z",
       "commit": null,
       "deps": [
         "P26-I01-W20",
@@ -9343,15 +9341,21 @@
         "src/eawf/tui_v2/snapshot/pilot_harness.py",
         "src/eawf/tui_v2/snapshot/asciinema.py",
         "tests/snapshots/tui/",
-        "tests/perf/tui/test_perf_budget.py"
+        "tests/perf/tui/test_perf_budget.py",
+        "src/eawf/tui_v2/snapshot/__init__.py",
+        "src/eawf/cli/app.py",
+        "src/eawf/tui/__init__.py",
+        "tests/perf/__init__.py",
+        "tests/perf/tui/__init__.py",
+        "tests/tui_v2/test_legacy_escape_hatch.py"
       ],
       "id": "P26-I01-W22",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:19.800171Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "legacy src/eawf/tui/ migration verdict recorded per Codex C06-I010: parallel tree stays through P26 close; bare-eawf flips to tui_v2 default; EAWF_TUI_LEGACY=1 escape hatch documented; deletion deferred to follow-up phase (not P26)"
       ],
@@ -10086,10 +10090,10 @@
       "branch": "feature/eawf-v0.1-p26-w22",
       "created_at": "2026-05-20T16:02:49.569962Z",
       "id": "WT-P26-I01-W22-1779292969",
-      "merged_commit": null,
+      "merged_commit": "67867be",
       "owner_session_id": "p26-w22-exec",
       "path": ".ea/worktrees/p26-w22",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W22"
     },
     "WT-P26-I01-W23-1779235537": {
