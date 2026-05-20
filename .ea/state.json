@@ -1530,9 +1530,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W01"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2951,7 +2949,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T00:33:57.165838Z",
+  "updated_at": "2026-05-20T00:34:51.487658Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8527,8 +8525,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w01-exec",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-20T00:34:51.487530Z",
+      "commit": "efcd3250b21fbc7378786fede6f99c9ae5a1384a",
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "XS",
@@ -8543,10 +8541,10 @@
       "id": "P26-I01-W01",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:46:06.500411Z",
-      "outcome": null,
+      "outcome": "enable model invocation for read-only skills + blitz (5 SKILL.md flips + render/skills.py); work pre-committed in efcd325",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "5 skills (research/audit/review/differentiate/blitz) flip disable-model-invocation to false; goldens regen; pre-commit green"
       ],
