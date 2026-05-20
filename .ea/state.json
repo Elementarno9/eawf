@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W28"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2977,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T18:11:41.520578Z",
+  "updated_at": "2026-05-20T18:42:29.798538Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9544,7 +9542,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w28-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T18:42:29.071244Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9558,10 +9556,10 @@
       "id": "P26-I01-W28",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T18:11:30.839473Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "typer bumped to newest version whose completion runtime is compatible with click 8.3.x (prefer upgrade over pinning click down); uv.lock regenerated",
         "the reproduce 'env _TYPER_COMPLETE_ARGS=\"eawf wave\" _EAWF_COMPLETE=complete_zsh eawf' no longer raises KeyError COMP_WORDS and emits completion candidates",
@@ -10230,10 +10228,10 @@
       "branch": "feature/eawf-v0.1-p26-w28",
       "created_at": "2026-05-20T18:11:41.520578Z",
       "id": "WT-P26-I01-W28-1779300701",
-      "merged_commit": null,
+      "merged_commit": "3d1a20e",
       "owner_session_id": "p26-w28-exec",
       "path": ".ea/worktrees/p26-w28",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W28"
     }
   }
