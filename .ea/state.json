@@ -1533,7 +1533,8 @@
     "active_wave_ids": [
       "P26-I01-W08",
       "P26-I01-W11",
-      "P26-I01-W07"
+      "P26-I01-W07",
+      "P26-I01-W13"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2954,7 +2955,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:10:42.070278Z",
+  "updated_at": "2026-05-20T13:11:08.202881Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8948,7 +8949,7 @@
         "P26-I01-W14",
         "P26-I01-W15"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w13-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8969,7 +8970,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "tests/runtimes/test_skill_adapter_handshake.py covers (a) manifest-aware adapter pick",
         "(b) F-d01 mismatch rejection",
@@ -8978,7 +8979,7 @@
       "title": "feat: C04d runtime integration — skill->adapter handshake + dispatch.session_policy + V5 reactive switchover",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W13-1779282668"
     },
     "P26-I01-W14": {
       "agent_role": "executor",
@@ -9833,6 +9834,17 @@
       "path": ".ea/worktrees/p26-w12",
       "status": "merged",
       "wave_id": "P26-I01-W12"
+    },
+    "WT-P26-I01-W13-1779282668": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w13",
+      "created_at": "2026-05-20T13:11:08.202881Z",
+      "id": "WT-P26-I01-W13-1779282668",
+      "merged_commit": null,
+      "owner_session_id": "p26-w13-exec",
+      "path": ".ea/worktrees/p26-w13",
+      "status": "active",
+      "wave_id": "P26-I01-W13"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
