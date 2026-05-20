@@ -1552,8 +1552,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W17",
-      "P26-I01-W26"
+      "P26-I01-W17"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2976,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:26:06.222009Z",
+  "updated_at": "2026-05-20T14:39:22.178383Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9427,7 +9426,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w26-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T14:39:21.535246Z",
       "commit": null,
       "deps": [
         "P26-I01-W11",
@@ -9445,10 +9444,10 @@
       "id": "P26-I01-W26",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T13:44:29.893534Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "CANONICAL_SKILL_NAMES (render/envelope.py) + SKILL_REGISTRY (render/skills.py) extended to all 17 skills; eawf skill list shows 17",
         "each new skill (coauthor/memory/agent_dispatch/compress/wave_spec/security_review) has a typed body model in skills/bodies + description in cli/commands/skill.py",
@@ -10040,10 +10039,10 @@
       "branch": "feature/eawf-v0.1-p26-w26",
       "created_at": "2026-05-20T14:26:06.222009Z",
       "id": "WT-P26-I01-W26-1779287166",
-      "merged_commit": null,
+      "merged_commit": "512f471",
       "owner_session_id": "p26-w26-exec",
       "path": ".ea/worktrees/p26-w26",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W26"
     }
   }
