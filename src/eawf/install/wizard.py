@@ -320,34 +320,41 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
         {
           "schema_version": "1.0",
           "profiles":   {"enabled": [...]},
-          "runtime":    {"kind": "claude-code"},
-          "lifecycle":  {"depth": "phase"},
+          "runtime":    {"adapters": [...], "preference": [...]},
           "acceptance": {"tests": True, "lint": True, "typecheck": True},
-          "plugins":    {"enabled": [...]},
           "mcp":        {"enabled": [...]},
         }
 
     Sorting (by ``yaml.safe_dump(sort_keys=True)``) keeps the file
     byte-stable across re-runs — golden snapshots and pre-commit's
     end-of-file-fixer become idempotent on the second pass.
+
+    Schema notes (P26-W02, C08):
+
+    - ``runtime.adapters`` (list) supersedes the v0.1 ``runtime.kind``
+      scalar; the migrator (:mod:`eawf.config.migration`) cleans up
+      legacy on-disk files that still carry ``kind``.
+    - ``runtime.preference`` mirrors ``adapters`` initially — the
+      C08 fallback ladder defaults to "primary == first adapter".
+    - The pre-C08 top-level ``lifecycle`` and ``plugins`` blocks are
+      no longer emitted. ``answers.lifecycle_depth`` and
+      ``answers.plugins`` remain on :class:`WizardAnswers` as
+      operator-collected hints (consumed elsewhere) but are not part
+      of the canonical config-yaml shape.
     """
+    runtime_id = answers.runtime
     base: dict[str, Any] = {
         "schema_version": CONFIG_SCHEMA_VERSION,
         "profiles": {"enabled": list(answers.profiles)},
-        # ``adapters`` is the canonical selector list (D14, B056); ``kind``
-        # is kept as a deprecated alias = ``adapters[0]`` so legacy callers
-        # that read ``runtime.kind`` keep working until the v0.4 cleanup.
         "runtime": {
-            "adapters": [answers.runtime],
-            "kind": answers.runtime,
+            "adapters": [runtime_id],
+            "preference": [runtime_id],
         },
-        "lifecycle": {"depth": answers.lifecycle_depth},
         "acceptance": {
             "tests": answers.acceptance_tests,
             "lint": answers.acceptance_lint,
             "typecheck": answers.acceptance_typecheck,
         },
-        "plugins": {"enabled": list(answers.plugins)},
         "mcp": {"enabled": list(answers.mcp)},
     }
     # P25-W16: when ``eawf init --template <name>`` is used, the parsed

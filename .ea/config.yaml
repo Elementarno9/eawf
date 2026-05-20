@@ -2,17 +2,23 @@ acceptance:
   lint: true
   tests: true
   typecheck: true
-lifecycle:
-  depth: phase
+flow:
+  auto_accept:
+    audit: true
+    polish: true
+    research: true
 mcp:
   enabled: []
-plugins:
-  enabled: []
+polish:
+  auto_apply_safe: true
 profiles:
   enabled:
   - core
   - python
   - research
 runtime:
-  kind: claude-code
+  adapters:
+  - claude-code
+  preference:
+  - claude-code
 schema_version: '1.0'

@@ -1,4 +1,4 @@
-"""Unit tests for the wizard config-yaml shape (P14-W03 / D14)."""
+"""Unit tests for the wizard config-yaml shape (P14-W03 / D14 / P26-W02)."""
 
 from __future__ import annotations
 
@@ -27,7 +27,15 @@ def test_config_yaml_emits_adapters_list() -> None:
     body = _build_config_yaml(_answers("claude-code"))
     runtime = body["runtime"]
     assert runtime["adapters"] == ["claude-code"]
-    assert runtime["kind"] == "claude-code"
+    # ``runtime.kind`` is dropped per C08 / D14 — the warning shim was
+    # firing on every CLI invocation while it was emitted.
+    assert "kind" not in runtime
+
+
+def test_config_yaml_emits_preference_ladder() -> None:
+    """P26-W02: ``runtime.preference`` mirrors the adapters list at init."""
+    body = _build_config_yaml(_answers("claude-code"))
+    assert body["runtime"]["preference"] == ["claude-code"]
 
 
 def test_config_yaml_carries_schema_marker() -> None:
@@ -35,6 +43,13 @@ def test_config_yaml_carries_schema_marker() -> None:
     body = _build_config_yaml(_answers())
     assert body["schema_version"] == CONFIG_SCHEMA_VERSION
     assert body["schema_version"] == "1.0"
+
+
+def test_config_yaml_drops_legacy_lifecycle_and_plugins() -> None:
+    """P26-W02: legacy top-level keys are no longer emitted to YAML."""
+    body = _build_config_yaml(_answers())
+    assert "lifecycle" not in body
+    assert "plugins" not in body
 
 
 def test_runtime_choices_accept_codex() -> None:
@@ -51,5 +66,8 @@ def test_wizard_writes_disk_config_with_adapters(tmp_path: Path) -> None:
     config_text = result.config_path.read_text()
     loaded = yaml.safe_load(config_text)
     assert loaded["runtime"]["adapters"] == ["opencode"]
-    assert loaded["runtime"]["kind"] == "opencode"
+    assert loaded["runtime"]["preference"] == ["opencode"]
+    assert "kind" not in loaded["runtime"]
     assert loaded["schema_version"] == "1.0"
+    assert "lifecycle" not in loaded
+    assert "plugins" not in loaded

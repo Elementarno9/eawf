@@ -95,7 +95,12 @@ def test_cli_init_refuses_existing_non_empty_ea_without_force(tmp_path: Path) ->
 
 
 def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
-    """config.yaml records profiles.enabled, runtime.kind, lifecycle.depth, acceptance gates."""
+    """config.yaml records profiles.enabled, runtime.adapters, acceptance gates.
+
+    P26-W02 (C08 D14): the legacy top-level ``lifecycle`` and ``plugins``
+    blocks are no longer emitted, and ``runtime.kind`` is replaced by the
+    canonical ``runtime.adapters`` + ``runtime.preference`` pair.
+    """
     res = _invoke_init(
         tmp_path,
         "--profile",
@@ -113,8 +118,11 @@ def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
     config_text = (tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8")
     parsed = yaml.safe_load(config_text)
     assert parsed["profiles"]["enabled"] == ["core", "python"]
-    assert parsed["runtime"]["kind"] == "claude-code"
-    assert parsed["lifecycle"]["depth"] == "wave"
+    assert parsed["runtime"]["adapters"] == ["claude-code"]
+    assert parsed["runtime"]["preference"] == ["claude-code"]
+    assert "kind" not in parsed["runtime"]
+    assert "lifecycle" not in parsed
+    assert "plugins" not in parsed
     assert parsed["acceptance"]["tests"] is True
     assert parsed["acceptance"]["lint"] is True
     assert parsed["acceptance"]["typecheck"] is False

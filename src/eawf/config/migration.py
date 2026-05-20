@@ -90,11 +90,19 @@ def migrate_config_payload(
 
     upgraded: dict[str, Any] = _deep_copy(payload)
     if marker == CURRENT_MARKER:
-        return upgraded, False
+        # On-marker "1.0" payloads may still carry legacy keys from old
+        # wizard runs (top-level ``lifecycle`` / ``plugins`` blocks,
+        # ``runtime.kind`` without ``runtime.adapters``). The
+        # cleanup step below is idempotent: when the body is already
+        # canonical, ``changed`` stays ``False`` and the call is a
+        # no-op as advertised.
+        cleaned = _cleanup_legacy_keys(upgraded)
+        return upgraded, cleaned
 
     # Legacy → "1.0" upgrade. Apply each fix in order; every step is
     # idempotent on its own so re-running mid-migration is safe.
     upgraded["schema_version"] = CURRENT_MARKER
+    _cleanup_legacy_keys(upgraded)
     _shim_runtime_preference(upgraded)
     _ensure_section(upgraded, "config", {"layers_visible": True})
     _ensure_section(
@@ -274,6 +282,58 @@ def _ensure_subkey(
         payload[parent] = {}
     if key not in payload[parent]:
         payload[parent][key] = _deep_copy(default)
+
+
+def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
+    """Strip legacy C08-superseded keys + rewrite ``runtime.kind``.
+
+    Three signals identify a legacy body irrespective of the
+    ``schema_version`` marker:
+
+    1. Top-level ``lifecycle`` block — the pre-C08 wizard wrote
+       ``{depth: phase}`` here; nothing in the runtime reads it any
+       more (the wave allocator pins depth from the iter, not config).
+    2. Top-level ``plugins`` block — superseded by the per-runtime
+       ``runtime.adapter_catalog`` map.
+    3. ``runtime.kind`` scalar — superseded by ``runtime.adapters``
+       (list) + ``runtime.preference`` (ordered fallback). The shim in
+       :mod:`eawf.config.layered` warns on every CLI invocation until
+       the on-disk file drops the legacy key.
+
+    The cleanup is idempotent: a body that already passes all three
+    checks returns ``False`` and the input is untouched.
+
+    Returns:
+        ``True`` when at least one legacy key was removed or
+        rewritten; ``False`` when the body was already canonical.
+    """
+    changed = False
+
+    if "lifecycle" in payload:
+        del payload["lifecycle"]
+        changed = True
+
+    if "plugins" in payload:
+        del payload["plugins"]
+        changed = True
+
+    runtime = payload.get("runtime")
+    if isinstance(runtime, dict) and "kind" in runtime:
+        kind = runtime.pop("kind")
+        adapters = runtime.get("adapters")
+        if not (isinstance(adapters, list) and adapters):
+            # Promote the legacy scalar so the merged config still
+            # carries a usable adapter selector.
+            runtime["adapters"] = [kind]
+        changed = True
+
+    # Ensure ``runtime.preference`` shadows ``adapters`` whenever the
+    # cleanup synthesised the adapter list — keeps the C08 ladder
+    # populated without a second migration pass.
+    if changed:
+        _shim_runtime_preference(payload)
+
+    return changed
 
 
 def _shim_runtime_preference(payload: dict[str, Any]) -> None:
