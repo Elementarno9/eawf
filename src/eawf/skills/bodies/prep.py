@@ -61,6 +61,7 @@ class PrepBody(BaseModel):
     waves: list[PrepWave] = Field(default_factory=list)
     acceptance: PrepAcceptance | None = None
     approval_required: bool = False
+    no_op: bool = False
     user_question: UserQuestion | None = None
 
 
