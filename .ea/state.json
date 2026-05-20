@@ -1551,7 +1551,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W29"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2442,7 +2444,8 @@
         "P26-I01-W25",
         "P26-I01-W26",
         "P26-I01-W27",
-        "P26-I01-W28"
+        "P26-I01-W28",
+        "P26-I01-W29"
       ]
     },
     "P27-I01": {
@@ -2975,7 +2978,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T18:42:29.798538Z",
+  "updated_at": "2026-05-20T19:09:22.118803Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9570,6 +9573,38 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W28-1779300701"
+    },
+    "P26-I01-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p26-w29-fix",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/completion.py",
+        "tests/cli/test_completion_runtime.py"
+      ],
+      "id": "P26-I01-W29",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T19:09:20.681389Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "zsh completion script generated from click's native ZshComplete.source() (parses type/key/descr triples via _describe; NO eval of raw output) with _EAWF_COMPLETE value swapped zsh_complete->complete_zsh so typer's interceptor routes it; W28 eval-line _patch_zsh_completion removed as superseded",
+        "sourcing the generated zsh script under compinit no longer errors with 'bad pattern' (the W28 partial fix exposed this output-layer crash)",
+        "bash + fish scripts unchanged (typer-native; bash already works)",
+        "test_completion_runtime strengthened: asserts zsh script uses _describe + no raw-output eval + sources cleanly in live zsh with compinit; runtime handshake still emits candidates",
+        "full suite + mypy + pre-commit green"
+      ],
+      "title": "fix: zsh completion uses click-native function (typer eval-wrapper incompatible with click >=8.2 output)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P26-I01-W29-1779304162"
     }
   },
   "workspace": null,
@@ -10233,6 +10268,17 @@
       "path": ".ea/worktrees/p26-w28",
       "status": "merged",
       "wave_id": "P26-I01-W28"
+    },
+    "WT-P26-I01-W29-1779304162": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w29",
+      "created_at": "2026-05-20T19:09:22.118803Z",
+      "id": "WT-P26-I01-W29-1779304162",
+      "merged_commit": null,
+      "owner_session_id": "p26-w29-fix",
+      "path": ".ea/worktrees/p26-w29",
+      "status": "active",
+      "wave_id": "P26-I01-W29"
     }
   }
 }
