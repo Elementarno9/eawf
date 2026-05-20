@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W17"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2975,7 +2973,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:39:22.178383Z",
+  "updated_at": "2026-05-20T14:39:46.177370Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9124,7 +9122,7 @@
         "P26-I01-W18"
       ],
       "claim_session_id": "p26-w17-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T14:39:45.525400Z",
       "commit": null,
       "deps": [
         "P26-I01-W16"
@@ -9141,10 +9139,10 @@
       "id": "P26-I01-W17",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:16.495239Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "BacklogTable(DataTable) sortable by priority/id/target; filterable via /filter backlog; Enter row -> DetailModal"
       ],
@@ -9995,10 +9993,10 @@
       "branch": "feature/eawf-v0.1-p26-w17",
       "created_at": "2026-05-20T14:22:12.818424Z",
       "id": "WT-P26-I01-W17-1779286932",
-      "merged_commit": null,
+      "merged_commit": "92a5422",
       "owner_session_id": "p26-w17-exec",
       "path": ".ea/worktrees/p26-w17",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W17"
     },
     "WT-P26-I01-W23-1779235537": {
