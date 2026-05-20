@@ -1532,7 +1532,6 @@
     ],
     "active_wave_ids": [
       "P26-I01-W01",
-      "P26-I01-W02",
       "P26-I01-W03",
       "P26-I01-W23"
     ],
@@ -2954,7 +2953,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T00:05:37.881558Z",
+  "updated_at": "2026-05-20T00:19:55.363551Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8564,7 +8563,7 @@
         "P26-I01-W04"
       ],
       "claim_session_id": "p26-w02-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T00:19:54.558852Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8579,10 +8578,10 @@
       "id": "P26-I01-W02",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:06.148029Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "no deprecated_runtime_kind warning fires on validate of migrated config"
       ],
@@ -9707,10 +9706,10 @@
       "branch": "feature/eawf-v0.1-p26-w02",
       "created_at": "2026-05-20T00:05:35.859831Z",
       "id": "WT-P26-I01-W02-1779235535",
-      "merged_commit": null,
+      "merged_commit": "6106559",
       "owner_session_id": "p26-w02-exec",
       "path": ".ea/worktrees/p26-w02",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W02"
     },
     "WT-P26-I01-W03-1779235536": {
