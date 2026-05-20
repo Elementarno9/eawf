@@ -179,11 +179,21 @@ def state_mutate(
     apply: Any,
     idempotency_key: str | None = None,
     workspace: Path | None = None,
+    daemonless: bool = False,
+    verb: str | None = None,
 ) -> dict[str, Any]:
     """Apply *mutation* via the daemon proxy or the in-process fallback.
 
-    The dispatch policy follows AGENTS rule 4 + the W09 spike brief:
+    The dispatch policy follows AGENTS rule 4 + the W09 spike brief +
+    the C05 §5.5 escalation table:
 
+    * When the operator requested the daemon-bypass carve-out for this
+      **mutating** verb (``daemonless=True`` — sourced from the
+      ``--daemonless`` flag): refuse with :class:`cli_errors.UserError`
+      (``data.kind="InvalidInput"``) per §5.5 / F3. Mutating verbs are
+      daemon-only; the carve-out is read-only. This check fires before
+      any config-merge so a daemonless write is rejected even when the
+      daemon happens to be up.
     * When ``daemon.proxy_enabled`` is ``true`` AND the daemon is
       reachable: marshal the mutation across the daemon ``state.mutate``
       RPC. The daemon owns the WAL + event-append + bus-publish
@@ -192,11 +202,11 @@ def state_mutate(
       **not** reachable AND the mutation is a writer: refuse with
       :class:`cli_errors.IntegrityViolation` — per F20 the daemon-
       required envelope keeps the daemonless-write path closed.
-    * When ``daemon.proxy_enabled`` is ``false`` (W09 default) OR the
-      daemon refuses the kind with ``NotImplementedError``: fall back
-      to the in-process path. The *apply* callable receives the typed
-      :class:`State` under :func:`state_transaction`; the caller is
-      responsible for invoking the lifecycle helper + appending the
+    * When ``daemon.proxy_enabled`` is ``false`` (V1 carve-out / CI) OR
+      the daemon refuses the kind with ``NotImplementedError``: fall
+      back to the in-process path. The *apply* callable receives the
+      typed :class:`State` under :func:`state_transaction`; the caller
+      is responsible for invoking the lifecycle helper + appending the
       event row exactly as the pre-W09 surface did.
 
     Args:
@@ -213,6 +223,14 @@ def state_mutate(
             :attr:`Mutation.idempotency_key` when both are set.
         workspace: Workspace anchor for config-merge resolution
             (typically ``flags.workspace``).
+        daemonless: When True, the operator passed ``--daemonless`` on a
+            mutating verb. Per §5.5 this is rejected — a mutating verb
+            cannot run daemonless. The ``EAWF_DAEMONLESS=1`` env hatch is
+            handled separately by ``_proxy_enabled`` (it routes to the
+            in-process fallback for CI, not a hard rejection).
+        verb: Operator-facing verb name for the ``--daemonless``
+            rejection envelope (e.g. ``"wave close"``). Defaults to a
+            generic ``"this"`` label when omitted.
 
     Returns:
         Dict with at least ``proxied: bool`` (True when the daemon
@@ -221,6 +239,8 @@ def state_mutate(
         caller's apply function already appended its own envelope).
 
     Raises:
+        UserError: When ``daemonless=True`` — mutating verbs reject the
+            daemon-bypass carve-out (``data.kind="InvalidInput"``).
         IntegrityViolation: When ``daemon.proxy_enabled=true`` AND the
             daemon is unreachable AND the mutation is a writer (F20).
         ValidationFailed: When the daemon rejects the mutation with
@@ -230,6 +250,10 @@ def state_mutate(
             sibling lock within the timeout.
     """
     from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
+    from eawf.cli._dispatch import reject_daemonless_on_mutating
+
+    if daemonless:
+        reject_daemonless_on_mutating(verb or "this")
 
     proxy_enabled = _proxy_enabled(workspace)
     if proxy_enabled:

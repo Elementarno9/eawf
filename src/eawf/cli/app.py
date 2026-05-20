@@ -59,6 +59,23 @@ def _root(
         Path | None,
         typer.Option("-w", "--workspace", help="Workspace root used to locate .ea/state.json."),
     ] = None,
+    daemonless: Annotated[
+        bool,
+        typer.Option(
+            "--daemonless",
+            help=(
+                "Bypass the daemon (V1 carve-out: CI / one-shot / recovery). "
+                "Read-only verbs read state directly; mutating verbs reject it."
+            ),
+        ),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help="Enable dev-mode surfaces (raw `state rpc`, hidden daemon verbs).",
+        ),
+    ] = False,
     version: Annotated[
         bool,
         typer.Option(
@@ -75,6 +92,8 @@ def _root(
         plain_output=plain_output,
         no_input=no_input,
         workspace=workspace,
+        daemonless=daemonless,
+        debug=debug,
     )
     if ctx.invoked_subcommand is None:
         # Bare ``eawf`` on a TTY routes to the TUI (config.ui.bare_command
@@ -107,6 +126,8 @@ def scope_debug(ctx: typer.Context) -> None:
         f"\njson={flags.json_output}"
         f"\nplain={flags.plain_output}"
         f"\nno_input={flags.no_input}"
+        f"\ndaemonless={flags.daemonless}"
+        f"\ndebug={flags.debug}"
     )
     typer.echo(text)
 

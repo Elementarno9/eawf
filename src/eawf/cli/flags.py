@@ -43,9 +43,21 @@ class GlobalFlags:
             pwd-upward scope resolution but is itself overridden by
             ``EA_STATE``. Also serves as the ``repo_root`` source for
             daemon JSON-RPC requests (see module docstring).
+        daemonless: When True, the V1 daemon-bypass carve-out is
+            requested explicitly (CI / one-shot / recovery shell per
+            C05 §5.5). Read-only verbs honour it by reading state
+            directly; mutating verbs reject it with a ``UserError``
+            (``data.kind="InvalidInput"``) per the §5.5 escalation
+            table. Mirrors the ``EAWF_DAEMONLESS=1`` env-var hatch.
+        debug: When True, dev-mode-gated surfaces (the raw ``state rpc``
+            JSON-RPC passthrough, hidden ``daemon`` control verbs)
+            become reachable per C05 §5.1 D7. Mirrors the
+            ``EAWF_DEBUG=1`` env-var hatch. Off in normal operation.
     """
 
     json_output: bool = False
     plain_output: bool = False
     no_input: bool = False
     workspace: Path | None = None
+    daemonless: bool = False
+    debug: bool = False

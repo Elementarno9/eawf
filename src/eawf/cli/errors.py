@@ -36,7 +36,7 @@ Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field
@@ -404,7 +404,7 @@ def emit_error(
     correlation_id: str | None = None,
     protocol_version: str | None = None,
     data: dict[str, Any] | None = None,
-) -> None:
+) -> NoReturn:
     """Print the canonical envelope for *err* and exit with its code.
 
     Args:
