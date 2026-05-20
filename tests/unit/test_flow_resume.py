@@ -402,7 +402,7 @@ def test_cli_run_resume_exit_code_on_no_flow(cli_state_dir: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
     # No flow records exist → NotFound (2).
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_cli_run_resume_multiple_flows_requires_flow_id(cli_state_dir: Path) -> None:
@@ -420,7 +420,7 @@ def test_cli_run_resume_multiple_flows_requires_flow_id(cli_state_dir: Path) -> 
     )
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_cli_run_resume_no_safe_checkpoint_returns_integrity_violation(
@@ -437,7 +437,7 @@ def test_cli_run_resume_no_safe_checkpoint_returns_integrity_violation(
     _append_checkpoint(cli_state_dir, unsafe, envelope_id="EV-002")
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 8, result.stdout
+    assert result.exit_code == 3, result.stdout
 
 
 def test_abort_flow_record_appends_abandoned_envelope(tmp_path: Path) -> None:
@@ -479,7 +479,7 @@ def test_abort_flow_record_appends_abandoned_envelope(tmp_path: Path) -> None:
 def test_cli_abort_unknown_flow_returns_not_found(cli_state_dir: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "abort", "--flow-id", "FL-deadbeefcafe"])
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_cli_abort_idempotent(cli_state_dir: Path) -> None:
@@ -533,4 +533,4 @@ def test_cli_status_emits_structured_json(cli_state_dir: Path) -> None:
 def test_cli_status_no_flow_returns_not_found(cli_state_dir: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "status"])
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout

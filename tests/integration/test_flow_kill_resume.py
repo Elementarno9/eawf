@@ -217,7 +217,7 @@ def test_flow_kill_via_failing_step_leaves_safe_checkpoint(
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--topic", "demo"])
     # /prep raises → engine wraps to ``failed`` → exit 4.
-    assert result.exit_code == 4, result.stdout
+    assert result.exit_code == 2, result.stdout
 
     records = load_flow_records(state_path)
     safe_ckpts = [
@@ -264,7 +264,7 @@ def test_flow_resume_refuses_on_state_drift(integration_repo: Path) -> None:
 
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 8, result.stdout
+    assert result.exit_code == 3, result.stdout
     payload = orjson.loads(result.stdout)
     assert payload["error"] == "IntegrityViolation"
     assert "state_json" in payload["drift"]
@@ -307,7 +307,7 @@ def test_flow_resume_refuses_on_git_drift(
 
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 8, result.stdout
+    assert result.exit_code == 3, result.stdout
     payload = orjson.loads(result.stdout)
     assert payload["error"] == "IntegrityViolation"
     assert "git_head" in payload["drift"]
@@ -334,7 +334,7 @@ def test_flow_two_concurrent_in_progress_requires_flow_id(
     )
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 # ---- Test 5 — abort preserves existing records ----------------------------

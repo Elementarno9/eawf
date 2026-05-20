@@ -126,7 +126,7 @@ def test_wave_budget_consume_block_nonzero_exit(workspace: Path) -> None:
     # Block path raises ValidationFailed (exit 4) and rolls back the
     # state mutation because the lock-held transaction never reaches the
     # write step.
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     state = _read_state(workspace)
     # tokens_consumed stays at 0 — the transaction was rolled back.
     assert state["waves"]["P01-I01-W01"]["tokens_consumed"] == 0  # type: ignore[index]
@@ -142,7 +142,7 @@ def test_wave_budget_consume_block_surfaces_discarded_delta(workspace: Path) -> 
     assert runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code == 0
     # Second consume tips over the cap; transaction rolls back.
     res = runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "500"])
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     # Pre-rollback consumed, delta, and would-be value all in the message.
     assert "750+500=1250" in res.stdout
     assert "discarded" in res.stdout
@@ -154,13 +154,13 @@ def test_wave_budget_consume_block_surfaces_discarded_delta(workspace: Path) -> 
 def test_wave_budget_consume_unknown_wave_exits_2(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
     res = runner.invoke(app, ["wave", "budget", "consume", "P09-I09-W09", "100"])
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_budget_set_unknown_wave_exits_2(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
     res = runner.invoke(app, ["wave", "budget", "set", "P09-I09-W09", "100"])
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_claim_refuses_over_budget(workspace: Path) -> None:
@@ -188,7 +188,7 @@ def test_wave_claim_refuses_over_budget(workspace: Path) -> None:
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "750"]).exit_code == 0
 
     res = runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     assert "over token budget" in res.stdout
 
     state = _read_state(workspace)

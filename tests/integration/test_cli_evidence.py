@@ -94,7 +94,7 @@ def test_goal_define_writes_state_and_event(state_path: Path) -> None:
 def test_goal_define_duplicate_exits_invalid_input(state_path: Path) -> None:
     runner.invoke(app, ["goal", "define", "G01", "--title", "t"])
     result = runner.invoke(app, ["goal", "define", "G01", "--title", "t2"])
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
 
 
 # ---- outcome ---------------------------------------------------------------
@@ -131,7 +131,7 @@ def test_outcome_set_without_audit_exits_validation_failed(state_path: Path) -> 
             "AUD-NOPE",
         ],
     )
-    assert result.exit_code == 4
+    assert result.exit_code == 2
     assert "INV.AUDIT.UNKNOWN" in result.stdout
 
 
@@ -209,7 +209,7 @@ def test_hypothesis_verdict_without_audit_exits_validation_failed(
             "AUD-NOPE",
         ],
     )
-    assert result.exit_code == 4
+    assert result.exit_code == 2
 
 
 def test_hypothesis_verdict_happy_path(state_path: Path) -> None:
@@ -325,11 +325,14 @@ def test_audit_add_with_unknown_artifact_returns_exit_3(state_path: Path) -> Non
             "pass",
         ],
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["error"] == "InvalidInput"
-    assert payload["exit_code"] == 3
-    assert payload["exit_name"] == "INVALID_INPUT"
+    # Post C05 § 5.3 the envelope reports the new bucket name; legacy
+    # ``InvalidInput`` surfaces through ``data.kind``.
+    assert payload["error"] == "UserError"
+    assert payload["exit_code"] == 1
+    assert payload["exit_name"] == "USER_ERROR"
+    assert payload["data"]["kind"] == "InvalidInput"
     assert "BOGUS-001" in payload["message"]
     body = json.loads(state_path.read_text())
     assert "AUD-001" not in (body.get("audits") or {})
@@ -403,7 +406,7 @@ def test_audit_integrity_appends(state_path: Path) -> None:
 
 def test_audit_show_unknown_exits_not_found(state_path: Path) -> None:
     result = runner.invoke(app, ["audit", "show", "AUD-DOES-NOT-EXIST"])
-    assert result.exit_code == 2  # NOT_FOUND
+    assert result.exit_code == 1  # NOT_FOUND
 
 
 def test_audit_set_verdict_lifts_pending(state_path: Path) -> None:
@@ -459,9 +462,11 @@ def test_audit_set_verdict_pending_without_report_exits_invalid_input(
         app,
         ["--json", "audit", "set-verdict", "AUD-001", "--verdict", "pass"],
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["error"] == "InvalidInput"
+    # C05 § 5.3: ``InvalidInput`` folds to ``UserError``; legacy name in data.kind.
+    assert payload["error"] == "UserError"
+    assert payload["data"]["kind"] == "InvalidInput"
     assert "pending" in payload["message"]
     body = json.loads(state_path.read_text())
     assert body["audits"]["AUD-001"]["verdict"] is None
@@ -508,7 +513,7 @@ def test_incident_close_without_audit_exits_validation_failed(state_path: Path) 
             "AUD-NOPE",
         ],
     )
-    assert result.exit_code == 4
+    assert result.exit_code == 2
 
 
 def test_incident_close_happy_path(state_path: Path) -> None:
@@ -547,7 +552,7 @@ def test_incident_close_happy_path(state_path: Path) -> None:
 
 def test_incident_view_unknown_exits_not_found(state_path: Path) -> None:
     result = runner.invoke(app, ["incident", "view", "INC-MISSING"])
-    assert result.exit_code == 2
+    assert result.exit_code == 1
 
 
 # ---- decision --------------------------------------------------------------
@@ -622,7 +627,7 @@ def test_artifact_add_rejects_local_uri(state_path: Path) -> None:
             "file:///tmp/audit.md",
         ],
     )
-    assert result.exit_code == 3
+    assert result.exit_code == 1
     body = json.loads(state_path.read_text())
     assert "ART-001" not in body["artifacts"]
 
@@ -647,7 +652,7 @@ def test_artifact_add_rejects_local_path_option(state_path: Path) -> None:
 
 def test_artifact_show_unknown_exits_not_found(state_path: Path) -> None:
     result = runner.invoke(app, ["artifact", "show", "ART-MISSING"])
-    assert result.exit_code == 2
+    assert result.exit_code == 1
 
 
 # ---- backlog ---------------------------------------------------------------
@@ -680,7 +685,7 @@ def test_backlog_close_without_audit_exits_validation_failed(state_path: Path) -
             "AUD-NOPE",
         ],
     )
-    assert result.exit_code == 4
+    assert result.exit_code == 2
 
 
 def test_backlog_close_happy_path(state_path: Path) -> None:
@@ -748,9 +753,11 @@ def test_backlog_set_priority_unknown_exits_not_found(state_path: Path) -> None:
         app,
         ["--json", "backlog", "set-priority", "B999", "--priority", "P1"],
     )
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["error"] == "NotFound"
+    # C05 § 5.3: ``NotFound`` folds to ``UserError``; legacy name in data.kind.
+    assert payload["error"] == "UserError"
+    assert payload["data"]["kind"] == "NotFound"
 
 
 # ---- cross-cutting ---------------------------------------------------------

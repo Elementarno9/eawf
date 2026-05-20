@@ -116,7 +116,7 @@ def test_registry_list_missing_file_exits_2(tmp_path: Path) -> None:
             str(tmp_path / "missing.json"),
         ],
     )
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "not found" in result.stdout
 
 
@@ -124,7 +124,7 @@ def test_registry_list_corrupted_exits_3(tmp_path: Path) -> None:
     target = tmp_path / "bad.json"
     target.write_bytes(b"{not json")
     result = runner.invoke(app, ["workspace", "registry-list", "--registry-path", str(target)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "corrupted" in result.stdout
 
 
@@ -354,7 +354,7 @@ def test_registry_list_extra_field_rejected(tmp_path: Path) -> None:
         },
     )
     result = runner.invoke(app, ["workspace", "registry-list", "--registry-path", str(target)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "invalid registry schema" in result.stdout
 
 

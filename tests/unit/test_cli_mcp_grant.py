@@ -182,7 +182,7 @@ def test_grant_cmd_rejects_unknown_scope_kind(tmp_state: Path) -> None:
         ["mcp", "grant", "team", "research", "filesystem"],
     )
     # InvalidInput → exit code 3.
-    assert res.exit_code == 3, res.output
+    assert res.exit_code == 1, res.output
     assert "scope_kind" in res.output
 
 
@@ -194,7 +194,7 @@ def test_grant_cmd_refuses_dangling_server_id_via_invariant(tmp_state: Path) -> 
         ["mcp", "grant", "wave", "P10-I01-W04", "ghost-server"],
     )
     # ValidationFailed → exit code 4.
-    assert res.exit_code == 4, res.output
+    assert res.exit_code == 2, res.output
     assert "INV.REF.MCP_GRANT_SERVER_MISSING" in res.output
     state = _read_state(tmp_state)
     assert state.get("mcp_grants") in (None, {})
@@ -211,7 +211,7 @@ def test_grant_cmd_rejects_duplicate_grant_id(tmp_state: Path) -> None:
         app,
         ["mcp", "grant", "wave", "P10-I01-W04", "filesystem", "--grant-id", "GRANT-7"],
     )
-    assert second.exit_code == 3, second.output
+    assert second.exit_code == 1, second.output
     assert "already exists" in second.output
 
 
@@ -258,7 +258,7 @@ def test_revoke_cmd_keeps_other_grants_intact(tmp_state: Path) -> None:
 def test_revoke_cmd_returns_not_found_on_missing_id(tmp_state: Path) -> None:
     res = runner.invoke(app, ["mcp", "revoke", "GRANT-404"])
     # NotFound → exit code 2.
-    assert res.exit_code == 2, res.output
+    assert res.exit_code == 1, res.output
     assert "GRANT-404" in res.output
 
 

@@ -186,7 +186,7 @@ def test_wave_dispatch_unknown_runtime_invalid_input(workspace: Path) -> None:
         app,
         ["wave", "dispatch", "P01-I01-W01", "--runtime", "bogus"],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     # Canonical phrasing — matches mcp/installer.py:_validate_runtime.
     assert "unknown runtime 'bogus'" in res.stdout
     assert "expected one of" in res.stdout
@@ -211,5 +211,5 @@ def test_wave_dispatch_unknown_runtime_short_circuits_before_state_load(
         app,
         ["wave", "dispatch", "P01-I01-W01", "--runtime", "bogus"],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "unknown runtime 'bogus'" in res.stdout

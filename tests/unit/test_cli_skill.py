@@ -209,7 +209,7 @@ def test_skill_list_json_payload_carries_status_and_schema(
 def test_skill_run_unknown_skill_returns_invalid_input(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["skill", "run", "/not-a-skill"], input="")
     # Unknown skill name is rejected at parse-time as InvalidInput (3).
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_skill_run_known_but_unregistered_returns_not_found(cli_runner: CliRunner) -> None:
@@ -220,7 +220,7 @@ def test_skill_run_known_but_unregistered_returns_not_found(cli_runner: CliRunne
     registry.unregister("/ship")
     try:
         result = cli_runner.invoke(app, ["skill", "run", "/ship"], input="")
-        assert result.exit_code == 2, result.stdout
+        assert result.exit_code == 1, result.stdout
     finally:
         if previous is not None:
             registry.register(previous)
@@ -252,7 +252,7 @@ def test_skill_run_failed_status_exits_four(
         ["--json", "skill", "run", "/audit"],
         input="",
     )
-    assert result.exit_code == 4, result.stdout
+    assert result.exit_code == 2, result.stdout
     env = OutputEnvelope.model_validate_json(result.stdout)
     assert env.header.status == "failed"
 
@@ -267,7 +267,7 @@ def test_skill_run_needs_user_status_exits_seven(
         ["--json", "skill", "run", "/prep"],
         input="",
     )
-    assert result.exit_code == 7, result.stdout
+    assert result.exit_code == 1, result.stdout
     env = OutputEnvelope.model_validate_json(result.stdout)
     assert env.header.status == "needs_user"
 
@@ -310,7 +310,7 @@ def test_skill_run_malformed_stdin_returns_invalid_input(
         ["skill", "run", "/research"],
         input="{not json",
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_skill_run_non_object_stdin_returns_invalid_input(
@@ -323,7 +323,7 @@ def test_skill_run_non_object_stdin_returns_invalid_input(
         ["skill", "run", "/research"],
         input='["not-an-object"]',
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> None:

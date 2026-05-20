@@ -89,7 +89,7 @@ def test_cli_clone_repo_rejects_non_url(tmp_path: Path) -> None:
             "DEMO",
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "not a git URL" in res.stdout
     assert not target.exists()
 
@@ -151,7 +151,7 @@ def test_cli_clone_repo_requires_project_code_when_basename_invalid(
         app,
         ["clone-repo", "file:///tmp/whatever.git", "--target", str(target)],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "pass --project-code" in res.stdout
     assert not target.exists()
 
@@ -180,4 +180,4 @@ def test_cli_clone_repo_translates_git_failure_to_exit_5(tmp_path: Path) -> None
                 "DEMO",
             ],
         )
-    assert res.exit_code == 5, res.stdout
+    assert res.exit_code == 3, res.stdout

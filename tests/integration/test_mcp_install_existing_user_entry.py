@@ -161,7 +161,7 @@ def test_user_dup_id_blocks_install_without_force(tmp_path: Path, tmp_state: Pat
             "dup-id",
         ],
     )
-    assert result.exit_code == 8, result.output  # INTEGRITY_VIOLATION
+    assert result.exit_code == 3, result.output  # INTEGRITY_VIOLATION
 
 
 def test_user_dup_id_force_overrides_install(tmp_path: Path, tmp_state: Path) -> None:

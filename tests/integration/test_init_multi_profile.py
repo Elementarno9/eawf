@@ -68,14 +68,14 @@ def test_profiles_csv_tolerates_whitespace(tmp_path: Path) -> None:
 def test_profiles_csv_rejects_empty_entries(tmp_path: Path) -> None:
     """Trailing comma → exit-3 (operator may have stripped a value by accident)."""
     res = _invoke(tmp_path, "--profiles", "core,")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert not (tmp_path / ".ea").exists()
 
 
 def test_profiles_csv_rejects_unknown_profile(tmp_path: Path) -> None:
     """Same membership gate as --profile: unknown name → exit-3."""
     res = _invoke(tmp_path, "--profiles", "core,bogus")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 # ---- --template surface ----------------------------------------------------
@@ -118,11 +118,11 @@ def test_template_reverse_engineering_writes_continue_session_policy(tmp_path: P
 def test_template_rejects_unknown_name(tmp_path: Path) -> None:
     """``--template spike`` (deferred) fails with exit-3."""
     res = _invoke(tmp_path, "--template", "spike")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "unknown init template" in res.stdout
 
     res = _invoke(tmp_path, "--template", "totally-bogus")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_template_materialises_state_keys(tmp_path: Path) -> None:
@@ -164,21 +164,21 @@ def test_template_materialises_state_keys(tmp_path: Path) -> None:
 def test_profile_and_profiles_mutually_exclusive(tmp_path: Path) -> None:
     """Passing both --profile and --profiles → exit-3."""
     res = _invoke(tmp_path, "--profile", "core", "--profiles", "core,python")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "mutually exclusive" in res.stdout
 
 
 def test_profile_and_template_mutually_exclusive(tmp_path: Path) -> None:
     """Passing both --profile and --template → exit-3 (D7)."""
     res = _invoke(tmp_path, "--profile", "core", "--template", "research")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "mutually exclusive" in res.stdout
 
 
 def test_profiles_and_template_mutually_exclusive(tmp_path: Path) -> None:
     """Passing both --profiles and --template → exit-3 (D7)."""
     res = _invoke(tmp_path, "--profiles", "core,python", "--template", "research")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "mutually exclusive" in res.stdout
 
 

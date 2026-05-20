@@ -219,7 +219,7 @@ def test_doc_verify_cli_strict_exits_4_on_drift(tmp_path: Path) -> None:
     )
     runner = CliRunner()
     res_strict = runner.invoke(app, ["-w", str(repo), "doc", "verify", "--strict"])
-    assert res_strict.exit_code == 4, res_strict.output
+    assert res_strict.exit_code == 2, res_strict.output
     res_default = runner.invoke(app, ["-w", str(repo), "doc", "verify"])
     assert res_default.exit_code == 0, res_default.output
 

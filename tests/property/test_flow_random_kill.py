@@ -196,7 +196,7 @@ def test_random_kill_at_every_step_resume_converges_or_refuses_cleanly(
             assert body["drift"] is None
             assert body["resume_from_checkpoint_id"] is not None
         else:
-            assert result.exit_code == 8, result.stdout
+            assert result.exit_code == 3, result.stdout
             payload = orjson.loads(result.stdout)
             assert payload["error"] == "IntegrityViolation"
             assert payload["drift"], "drift dict must be populated on refusal"

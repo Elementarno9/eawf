@@ -58,7 +58,7 @@ def test_cli_init_second_run_no_force_fails(tmp_path: Path) -> None:
     assert res1.exit_code == 0, res1.stdout
 
     res2 = _invoke_init(tmp_path, "--profile", "core")
-    assert res2.exit_code == 3, res2.stdout
+    assert res2.exit_code == 1, res2.stdout
 
 
 def test_cli_init_with_multiple_profiles_combines_render_blocks(tmp_path: Path) -> None:

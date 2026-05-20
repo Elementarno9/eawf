@@ -116,14 +116,14 @@ def test_repo_remove_absent_code_exits_2(tmp_path: Path) -> None:
     target = tmp_path / "registry.json"
     _write_registry(target, {"EAWF": {"code": "EAWF", "path": "/tmp/eawf", "title": "Eä"}})
     result = runner.invoke(app, ["repo", "remove", "MISSING", "--registry-path", str(target)])
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "not registered" in result.stdout
 
 
 def test_repo_remove_missing_registry_exits_2(tmp_path: Path) -> None:
     target = tmp_path / "absent.json"
     result = runner.invoke(app, ["repo", "remove", "EAWF", "--registry-path", str(target)])
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "not found" in result.stdout
     assert not target.exists(), "missing-registry path MUST NOT auto-create"
 
@@ -132,7 +132,7 @@ def test_repo_remove_invalid_code_shape_exits_3(tmp_path: Path) -> None:
     target = tmp_path / "registry.json"
     _write_registry(target, {})
     result = runner.invoke(app, ["repo", "remove", "bad-lowercase", "--registry-path", str(target)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "invalid repo code" in result.stdout
 
 
@@ -140,7 +140,7 @@ def test_repo_remove_corrupted_registry_exits_3(tmp_path: Path) -> None:
     target = tmp_path / "registry.json"
     target.write_bytes(b"{not json")
     result = runner.invoke(app, ["repo", "remove", "EAWF", "--registry-path", str(target)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "corrupted" in result.stdout
 
 

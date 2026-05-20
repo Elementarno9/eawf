@@ -1,106 +1,472 @@
-"""Exit-code-mapped error helpers for CLI handlers.
+"""Exit-code-mapped error helpers + ErrorEnvelope for CLI handlers.
 
-Each non-zero canonical exit code in :mod:`eawf.cli.exit_codes` has its own
-:class:`CliError` subclass; handlers raise the right subclass and rely on
-:func:`emit_error` to print the canonical envelope and raise
-:class:`typer.Exit`.
+Per C05 § 5.3 / § 5.4 the v0.3 CLI surface compresses the legacy nine
+``CliError`` subclasses into five buckets — ``UserError``,
+``ValidationError``, ``StateConflict``, ``DaemonUnreachable``,
+``InternalError`` — that map 1:1 onto the new 0..5 exit-code surface.
+Legacy specificity is preserved via ``ErrorEnvelope.data.kind`` per the
+§ 5.3 disambiguation rule.
 
-Envelope shape (JSON branch):
+The legacy nine subclasses (``NotFound``, ``InvalidInput``,
+``ValidationFailed``, ``LockConflict``, ``InstrumentMissing``,
+``UserDeclined``, ``IntegrityViolation``, ``HookBlocked``) remain
+importable as deprecation-aliased subclasses of the new five so the
+~100 existing callsites continue to compile. Downstream waves (W05+)
+migrate each callsite to raise the new class names directly with the
+appropriate ``data.kind``; once empty, the aliases will be dropped.
+
+Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
 
 .. code-block:: json
 
     {
+      "schema_version": "1.0",
       "error": "<class name>",
       "message": "<str(err)>",
-      "exit_code": 5,
-      "exit_name": "LOCK_CONFLICT"
+      "exit_code": 3,
+      "exit_name": "STATE_CONFLICT",
+      "suggested_next_step": "another writer / hook / ...",
+      "data": {"kind": "LockConflict"},
+      "correlation_id": null,
+      "protocol_version": null,
+      "timestamp": "2026-05-19T..."
     }
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any, Literal
+
 import typer
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 
+# --- Five-class CliError taxonomy (C05 § 5.3) ------------------------------
+
 
 class CliError(Exception):
     """Base class for CLI-mapped errors.
 
-    The default :attr:`exit_code` is :data:`exit_codes.GENERIC_ERROR`. Each
-    subclass overrides it with the canonical code per the v0.1 plan §5 table.
+    The default :attr:`exit_code` is :data:`exit_codes.INTERNAL_ERROR` per
+    C05 § 5.3 — an uncaught raised path is an internal error. Each subclass
+    overrides it with the canonical 0..5 code for its bucket.
     """
 
-    exit_code: int = exit_codes.GENERIC_ERROR
+    exit_code: int = exit_codes.INTERNAL_ERROR
 
 
-class NotFound(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """Scope, state file, artifact, or referenced ID was not found."""
+class UserError(CliError):
+    """Operator-fixable input / environment problem.
 
-    exit_code = exit_codes.NOT_FOUND
+    Covers bad CLI args, schema mismatch on input, missing scope ids,
+    missing external tools, user-declined gates, and protocol-version
+    mismatches. Per-cause specificity lives in ``ErrorEnvelope.data.kind``.
+    """
 
-
-class InvalidInput(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """Bad CLI args or schema mismatch on input."""
-
-    exit_code = exit_codes.INVALID_INPUT
-
-
-class ValidationFailed(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """Strict invariant validation rejected the candidate state."""
-
-    exit_code = exit_codes.VALIDATION_FAILED
+    exit_code = exit_codes.USER_ERROR
 
 
-class LockConflict(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """Sibling lock held by a live holder, or wait timed out."""
+class ValidationError(CliError):
+    """Schema or invariant rejection.
 
-    exit_code = exit_codes.LOCK_CONFLICT
+    The candidate state failed strict invariant validation. Operators
+    inspect the violation list via ``ErrorEnvelope.data.violations``.
+    """
 
-
-class InstrumentMissing(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """A required external tool (git, jq, ...) is absent."""
-
-    exit_code = exit_codes.INSTRUMENT_MISSING
+    exit_code = exit_codes.VALIDATION_ERROR
 
 
-class UserDeclined(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """User declined at a confirmation gate (or ``--no-input`` aborted it)."""
+class StateConflict(CliError):  # noqa: N818 — canonical C05 § 5.3 bucket name
+    """State-side conflict — lock, integrity, hook gate, or runtime ladder.
 
-    exit_code = exit_codes.USER_DECLINED
+    Sibling writer holds a lock, hash mismatch detected, hook fail-closed,
+    or the configured runtime ladder exhausted. Operators run
+    ``eawf doctor`` to triage.
+    """
 
-
-class IntegrityViolation(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """Hash mismatch, drift, or corrupted store."""
-
-    exit_code = exit_codes.INTEGRITY_VIOLATION
-
-
-class HookBlocked(CliError):  # noqa: N818 — canonical CLI error name per plan §5
-    """Pre-/post-tool hook fail-closed."""
-
-    exit_code = exit_codes.HOOK_BLOCKED
+    exit_code = exit_codes.STATE_CONFLICT
 
 
-def emit_error(err: CliError, *, flags: GlobalFlags) -> None:
+class DaemonUnreachable(CliError):  # noqa: N818 — canonical C05 § 5.3 bucket name
+    """Daemon process down, unresponsive, or shutting down.
+
+    Connection refused, stale PID, or ``-32009 daemon shutting down``
+    surfaced through the JSON-RPC layer. Operators run
+    ``eawf daemon start`` then retry.
+    """
+
+    exit_code = exit_codes.DAEMON_UNREACHABLE
+
+
+class InternalError(CliError):
+    """Uncaught raised path — file an issue.
+
+    Covers ``-32700 parse error``, ``-32603 internal error``,
+    ``-32000 unauthorized`` (daemon-side bug — OS UDS auth is
+    OS-enforced), and any other unexpected raise.
+    """
+
+    exit_code = exit_codes.INTERNAL_ERROR
+
+
+# --- Legacy nine-class subclasses (deprecation aliases, C05 § 5.3) ---------
+# Each legacy class subclasses its new five-class bucket so existing
+# ``raise errors.LockConflict(...)`` callsites keep working unchanged.
+# ``isinstance(err, errors.LockConflict)`` continues to hold for legacy
+# call paths; ``isinstance(err, errors.StateConflict)`` also holds (new
+# bucket). Downstream waves migrate each callsite to either raise the
+# new class with ``data={"kind": "LockConflict"}`` or drop the alias.
+
+
+class NotFound(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+    """Scope, state file, artifact, or referenced ID was not found.
+
+    Legacy class — deprecated. New callers raise :class:`UserError` with
+    ``data={"kind": "NotFound"}`` per C05 § 5.3.
+    """
+
+
+class InvalidInput(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+    """Bad CLI args or schema mismatch on input.
+
+    Legacy class — deprecated. New callers raise :class:`UserError` with
+    ``data={"kind": "InvalidInput"}`` per C05 § 5.3.
+    """
+
+
+class ValidationFailed(ValidationError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+    """Strict invariant validation rejected the candidate state.
+
+    Legacy class — deprecated. New callers raise :class:`ValidationError`
+    directly per C05 § 5.3 (the legacy and new buckets coincide).
+    """
+
+
+class LockConflict(StateConflict):
+    """Sibling lock held by a live holder, or wait timed out.
+
+    Legacy class — deprecated. New callers raise :class:`StateConflict`
+    with ``data={"kind": "LockConflict"}`` per C05 § 5.3.
+    """
+
+
+class InstrumentMissing(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+    """A required external tool (git, jq, ...) is absent.
+
+    Legacy class — deprecated. New callers raise :class:`UserError` with
+    ``data={"kind": "InstrumentMissing"}`` per C05 § 5.3.
+    """
+
+
+class UserDeclined(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+    """User declined at a confirmation gate (or ``--no-input`` aborted it).
+
+    Legacy class — deprecated. New callers raise :class:`UserError` with
+    ``data={"kind": "UserDeclined"}`` per C05 § 5.3.
+    """
+
+
+class IntegrityViolation(StateConflict):
+    """Hash mismatch, drift, or corrupted store.
+
+    Legacy class — deprecated. New callers raise :class:`StateConflict`
+    with ``data={"kind": "IntegrityViolation"}`` per C05 § 5.3.
+    """
+
+
+class HookBlocked(StateConflict):
+    """Pre-/post-tool hook fail-closed.
+
+    Legacy class — deprecated. New callers raise :class:`StateConflict`
+    with ``data={"kind": "HookBlocked"}`` per C05 § 5.3.
+    """
+
+
+# --- ErrorEnvelope (C05 § 5.4) ---------------------------------------------
+
+
+def _utcnow() -> datetime:
+    """Return current UTC datetime — module-level default factory.
+
+    Lifted out of the :class:`ErrorEnvelope` field definition so the
+    factory itself stays importable + mockable in tests.
+    """
+    return datetime.now(tz=UTC)
+
+
+class ErrorEnvelope(BaseModel):
+    """JSON-branch error envelope shape per C05 § 5.4.
+
+    Wired through :func:`emit_error` when ``flags.json_output`` is true.
+    The plain-text branch renders the same fields as ``error: <message>``
+    followed by hint / kind / data / correlation_id lines.
+
+    The five canonical ``error`` subclass names are ``UserError``,
+    ``ValidationError``, ``StateConflict``, ``DaemonUnreachable``, and
+    ``InternalError``. Legacy subclass names (``NotFound``,
+    ``LockConflict``, etc.) surface through ``data.kind`` for CI scripts
+    that need fine-grained pivots without growing the exit-code surface.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+
+    error: str
+    """CliError subclass ``__name__`` — one of ``UserError``,
+    ``ValidationError``, ``StateConflict``, ``DaemonUnreachable``,
+    ``InternalError``."""
+
+    message: str
+    """User-facing ``str(err)`` body."""
+
+    exit_code: int
+    """:mod:`eawf.cli.exit_codes` value (0..5)."""
+
+    exit_name: str
+    """Canonical name from :func:`exit_codes.name_for`."""
+
+    suggested_next_step: str | None = None
+    """Operator-facing actionable hint per C00 § C05 goal 4 — e.g.
+    ``"run \\`eawf daemon start\\` then retry"``."""
+
+    data: dict[str, Any] = Field(default_factory=dict)
+    """Verb-specific structured context. Always JSON-safe. The ``kind``
+    key preserves the legacy nine-class subclass distinction
+    (``"NotFound"`` / ``"InstrumentMissing"`` / ``"HookBlocked"`` / ...)
+    so CI scripts can pivot on specific failure modes without growing
+    the exit-code surface."""
+
+    correlation_id: str | None = None
+    """JSON-RPC request id when the error is daemon-mediated. Absent for
+    daemonless errors. Lets operators join CLI errors to daemon log
+    entries by id."""
+
+    protocol_version: str | None = None
+    """Daemon protocol version surfaced when
+    ``data.kind == "ProtocolMismatch"``. Absent otherwise."""
+
+    timestamp: datetime = Field(default_factory=_utcnow)
+    """Envelope construction time (UTC)."""
+
+
+# --- Subclass-to-hint mapping (C05 § 5.4) ----------------------------------
+
+_DEFAULT_HINTS: dict[str, str] = {
+    "UserError": "run `eawf <verb> --help` for option shapes; check ids and env",
+    "ValidationError": "run `eawf validate` to inspect schema errors",
+    "StateConflict": "another writer / hook / runtime conflict; run `eawf doctor` for diagnosis",
+    "DaemonUnreachable": (
+        "run `eawf daemon start` then retry; pass --daemonless for read-only verbs"
+    ),
+    "InternalError": (
+        "file an issue with the error envelope; include `eawf daemon logs --lines 200`"
+    ),
+}
+
+# Per-``data.kind`` refinement preserves legacy specificity inside the
+# five buckets (C05 § 5.4 table).
+_KIND_HINTS: dict[str, str] = {
+    "NotFound": "check the scope id or run `eawf state resolve` to see resolved paths",
+    "InvalidInput": "run `eawf <verb> --help` to see option shapes",
+    "InstrumentMissing": "install the missing tool then retry; run `eawf doctor` for inventory",
+    "UserDeclined": "re-run without --no-input to interact, or pass --yes when supported",
+    "ProtocolMismatch": "upgrade with `uv tool upgrade eawf` then retry",
+    "LockConflict": "another writer holds the lock; retry in a moment or run `eawf doctor`",
+    "IntegrityViolation": "run `eawf doctor --repair` to inspect the integrity violation",
+    "HookBlocked": "the hook printed its reason above; fix the underlying issue and retry",
+    "RuntimeUnavailable": (
+        "check runtime preference: `eawf runtime list` and `eawf config get runtime.preference`"
+    ),
+}
+
+
+def _canonical_error_name(err: CliError) -> str:
+    """Return the canonical (new five-bucket) class name for *err*.
+
+    Walks the MRO until it hits one of the five new bucket classes. For a
+    legacy subclass like :class:`NotFound`, this returns ``"UserError"``.
+    For a direct ``UserError`` raise, this returns ``"UserError"``.
+    The legacy class name is preserved separately via ``data.kind``.
+    """
+    for cls in type(err).__mro__:
+        name = cls.__name__
+        if name in _DEFAULT_HINTS:
+            return name
+    return "CliError"
+
+
+def _legacy_kind(err: CliError) -> str | None:
+    """Return the legacy class name when *err* is a legacy subclass.
+
+    Returns ``None`` when *err* is already a new five-bucket class. This
+    is what gets folded into ``data.kind`` so CI scripts retain their
+    fine-grained pivot.
+    """
+    cls_name = type(err).__name__
+    if cls_name in _DEFAULT_HINTS:
+        return None
+    return cls_name
+
+
+def _resolve_hint(canonical: str, kind: str | None) -> str:
+    """Pick the most specific hint for *canonical* + *kind*.
+
+    Args:
+        canonical: One of the five new bucket class names.
+        kind: Legacy subclass name (or operator-supplied kind tag) when
+            present.
+
+    Returns:
+        The kind-specific hint when one exists; otherwise the bucket
+        default hint.
+    """
+    if kind is not None and kind in _KIND_HINTS:
+        return _KIND_HINTS[kind]
+    return _DEFAULT_HINTS.get(canonical, _DEFAULT_HINTS["InternalError"])
+
+
+def build_envelope(
+    err: CliError,
+    *,
+    correlation_id: str | None = None,
+    protocol_version: str | None = None,
+    data: dict[str, Any] | None = None,
+) -> ErrorEnvelope:
+    """Construct a typed :class:`ErrorEnvelope` for *err*.
+
+    The envelope ``error`` field carries the canonical new-bucket name
+    (``UserError`` / ``ValidationError`` / ``StateConflict`` /
+    ``DaemonUnreachable`` / ``InternalError``). When *err* is a legacy
+    subclass, the legacy name is preserved in ``data.kind`` per the C05
+    § 5.3 disambiguation rule.
+
+    Args:
+        err: The :class:`CliError` (or legacy subclass) instance.
+        correlation_id: JSON-RPC request id when the error is
+            daemon-mediated.
+        protocol_version: Daemon protocol version (only set on
+            ``ProtocolMismatch``).
+        data: Verb-specific structured context. When *err* is a legacy
+            subclass and ``data`` lacks ``kind``, the legacy class name
+            is injected as ``data.kind``.
+
+    Returns:
+        A populated :class:`ErrorEnvelope`.
+    """
+    canonical = _canonical_error_name(err)
+    legacy = _legacy_kind(err)
+    merged_data: dict[str, Any] = dict(data) if data else {}
+    if legacy is not None and "kind" not in merged_data:
+        merged_data["kind"] = legacy
+    kind = merged_data.get("kind")
+    return ErrorEnvelope(
+        error=canonical,
+        message=str(err),
+        exit_code=err.exit_code,
+        exit_name=exit_codes.name_for(err.exit_code),
+        suggested_next_step=_resolve_hint(canonical, kind),
+        data=merged_data,
+        correlation_id=correlation_id,
+        protocol_version=protocol_version,
+    )
+
+
+def _render_text(env: ErrorEnvelope) -> str:
+    """Render *env* as the plain-text branch body per C05 § 5.4.
+
+    Skipped fields when empty: ``kind`` (when absent), ``data`` (when
+    only ``kind`` was present), ``correlation_id`` (when ``None``).
+    """
+    lines = [f"error: {env.message}"]
+    if env.suggested_next_step is not None:
+        lines.append(f"hint: {env.suggested_next_step}")
+    lines.append(f"exit_code: {env.exit_code} ({env.exit_name})")
+    kind = env.data.get("kind")
+    if kind is not None:
+        lines.append(f"kind: {kind}")
+    leftover = {k: v for k, v in env.data.items() if k != "kind"}
+    if leftover:
+        lines.append(f"data: {leftover}")
+    if env.correlation_id is not None:
+        lines.append(f"correlation_id: {env.correlation_id}")
+    return "\n".join(lines)
+
+
+def emit_error(
+    err: CliError,
+    *,
+    flags: GlobalFlags,
+    correlation_id: str | None = None,
+    protocol_version: str | None = None,
+    data: dict[str, Any] | None = None,
+) -> None:
     """Print the canonical envelope for *err* and exit with its code.
 
     Args:
-        err: The :class:`CliError` instance to surface. The class name and
-            string body populate the envelope.
+        err: The :class:`CliError` instance to surface. The class name
+            and string body populate the envelope.
         flags: Resolved global flags. ``flags.json_output`` controls the
             text/JSON branch in :func:`eawf.cli.output.emit_json_or_text`.
+        correlation_id: Optional JSON-RPC request id for daemon-mediated
+            errors.
+        protocol_version: Optional daemon protocol version for
+            ``ProtocolMismatch``.
+        data: Optional verb-specific structured context merged into
+            ``ErrorEnvelope.data``.
 
     Raises:
         typer.Exit: Always — with ``err.exit_code``.
     """
-    payload = {
-        "error": err.__class__.__name__,
-        "message": str(err),
-        "exit_code": err.exit_code,
-        "exit_name": exit_codes.name_for(err.exit_code),
-    }
-    emit_json_or_text(payload, f"error: {err}", flags=flags)
+    env = build_envelope(
+        err,
+        correlation_id=correlation_id,
+        protocol_version=protocol_version,
+        data=data,
+    )
+    payload = env.model_dump(mode="json", exclude_none=False)
+    emit_json_or_text(payload, _render_text(env), flags=flags)
     raise typer.Exit(err.exit_code)
+
+
+# --- Daemon JSON-RPC error code mapping (C05 § 5.3) ------------------------
+# Each daemon JSON-RPC error code (C02 § 5.2.2) folds onto one of the five
+# CliError subclasses per the § 5.3 table. The mapping is consulted by
+# the daemon client when surfacing an RPC failure as a CLI exit.
+
+_DAEMON_RPC_MAP: dict[int, tuple[type[CliError], str | None]] = {
+    -32700: (InternalError, None),
+    -32600: (UserError, "InvalidInput"),
+    -32601: (UserError, "InvalidInput"),
+    -32602: (UserError, "InvalidInput"),
+    -32603: (InternalError, None),
+    -32000: (InternalError, None),
+    -32001: (StateConflict, "LockConflict"),
+    -32002: (ValidationError, None),
+    -32003: (UserError, "NotFound"),
+    -32004: (UserError, "ProtocolMismatch"),
+    -32005: (StateConflict, "RuntimeUnavailable"),
+    -32006: (StateConflict, "RuntimeUnavailable"),
+    -32007: (InternalError, None),
+    -32008: (InternalError, None),
+    -32009: (DaemonUnreachable, None),
+}
+
+
+def cli_error_for_rpc(rpc_code: int, message: str) -> CliError:
+    """Map a JSON-RPC error *rpc_code* onto the matching :class:`CliError`.
+
+    Args:
+        rpc_code: The JSON-RPC error code (e.g. ``-32001``).
+        message: The RPC error message body — becomes ``str(err)``.
+
+    Returns:
+        A :class:`CliError` instance whose class matches the § 5.3 table
+        bucket. Unknown codes fall back to :class:`InternalError`.
+    """
+    cls, _kind = _DAEMON_RPC_MAP.get(rpc_code, (InternalError, None))
+    return cls(message)

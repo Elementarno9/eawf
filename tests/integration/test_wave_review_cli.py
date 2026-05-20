@@ -151,9 +151,11 @@ def test_wave_review_missing_findings_path_exit_2(workspace: Path) -> None:
             str(workspace / "does-not-exist.md"),
         ],
     )
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
     payload = json.loads(res.stdout)
-    assert payload["error"] == "NotFound"
+    # C05 § 5.3: ``NotFound`` folds to ``UserError``; legacy name in data.kind.
+    assert payload["error"] == "UserError"
+    assert payload["data"]["kind"] == "NotFound"
 
 
 def test_wave_review_both_findings_and_diff_exit_3(workspace: Path) -> None:
@@ -174,14 +176,14 @@ def test_wave_review_both_findings_and_diff_exit_3(workspace: Path) -> None:
             str(diff),
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_review_neither_findings_nor_diff_exit_3(workspace: Path) -> None:
     """Omitting both ``--findings`` and ``--diff`` is rejected at exit 3."""
     _bootstrap_wave(workspace)
     res = runner.invoke(app, ["--json", "wave", "review", "P01-I01-W01"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_review_unknown_wave_id_exit_2(workspace: Path) -> None:
@@ -199,7 +201,7 @@ def test_wave_review_unknown_wave_id_exit_2(workspace: Path) -> None:
             str(findings),
         ],
     )
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 # ---- --diff (prompt-prep, no state mutation) -------------------------------

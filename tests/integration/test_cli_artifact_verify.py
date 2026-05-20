@@ -116,7 +116,7 @@ def test_artifact_verify_all_multiple_artifacts_ok(repo_root: Path) -> None:
 
 def test_artifact_verify_missing_id_exits_not_found(repo_root: Path) -> None:
     result = runner.invoke(app, ["artifact", "verify", "ART-MISSING"])
-    assert result.exit_code == 2
+    assert result.exit_code == 1
     assert "artifact not found" in result.stdout
 
 
@@ -125,7 +125,7 @@ def test_artifact_verify_missing_file_exits_integrity_violation(repo_root: Path)
     # Delete the on-disk body but keep the registered artifact entry.
     (repo_root / ".ea" / "artifacts" / "seed.md").unlink()
     result = runner.invoke(app, ["--json", "artifact", "verify", "ART-001"])
-    assert result.exit_code == 8  # INTEGRITY_VIOLATION
+    assert result.exit_code == 3  # INTEGRITY_VIOLATION
     payload = json.loads(result.stdout)
     assert payload["missing"] == 1
     assert payload["results"][0]["status"] == "missing_file"
@@ -139,7 +139,7 @@ def test_artifact_verify_hash_mismatch_exits_integrity_violation(repo_root: Path
         sha256="0" * 64,  # registered with a deliberately wrong hash.
     )
     result = runner.invoke(app, ["--json", "artifact", "verify", "ART-001"])
-    assert result.exit_code == 8  # INTEGRITY_VIOLATION
+    assert result.exit_code == 3  # INTEGRITY_VIOLATION
     payload = json.loads(result.stdout)
     assert payload["mismatches"] == 1
     row = payload["results"][0]
@@ -150,14 +150,14 @@ def test_artifact_verify_hash_mismatch_exits_integrity_violation(repo_root: Path
 
 def test_artifact_verify_requires_id_or_all(repo_root: Path) -> None:
     result = runner.invoke(app, ["artifact", "verify"])
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
     assert "exactly one of <artifact-id> or --all" in result.stdout
 
 
 def test_artifact_verify_rejects_id_and_all_together(repo_root: Path) -> None:
     _seed_artifact(repo_root, artifact_id="ART-001", body=b"x")
     result = runner.invoke(app, ["artifact", "verify", "ART-001", "--all"])
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
 
 
 def test_artifact_verify_remote_uri_without_refresh_is_skipped(repo_root: Path) -> None:

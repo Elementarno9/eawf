@@ -175,7 +175,7 @@ def test_mcp_install_without_no_input_user_declined_when_stdin_not_tty(
         app,
         ["-w", str(tmp_path), "mcp", "install", "demo"],
     )
-    assert result.exit_code == 7, result.output  # USER_DECLINED
+    assert result.exit_code == 1, result.output  # USER_DECLINED
 
 
 def test_mcp_install_user_declines_at_prompt(tmp_path: Path, tmp_state: Path) -> None:
@@ -206,7 +206,7 @@ def test_mcp_install_user_declines_at_prompt(tmp_path: Path, tmp_state: Path) ->
     finally:
         sys.stdin.isatty = real_isatty  # type: ignore[method-assign]
         builtins.input = real_input  # type: ignore[assignment]
-    assert result.exit_code == 7, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_mcp_install_unknown_runtime_invalid_input(tmp_path: Path, tmp_state: Path) -> None:
@@ -224,7 +224,7 @@ def test_mcp_install_unknown_runtime_invalid_input(tmp_path: Path, tmp_state: Pa
             "opencode",
         ],
     )
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_mcp_install_missing_id_returns_not_found(tmp_path: Path, tmp_state: Path) -> None:
@@ -239,7 +239,7 @@ def test_mcp_install_missing_id_returns_not_found(tmp_path: Path, tmp_state: Pat
             "ghost",
         ],
     )
-    assert result.exit_code == 2, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_mcp_add_malformed_env_ref_invalid_input(tmp_state: Path) -> None:
@@ -247,12 +247,12 @@ def test_mcp_add_malformed_env_ref_invalid_input(tmp_state: Path) -> None:
         app,
         ["mcp", "add", "demo", "--command", "/demo", "--env-ref", "BAD"],
     )
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_mcp_remove_missing_id_returns_not_found(tmp_state: Path) -> None:
     result = runner.invoke(app, ["mcp", "remove", "ghost"])
-    assert result.exit_code == 2, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_mcp_list_owner_filter_user(tmp_path: Path, tmp_state: Path) -> None:
@@ -273,7 +273,7 @@ def test_mcp_list_owner_filter_invalid(tmp_state: Path) -> None:
         app,
         ["mcp", "list", "--owner", "weird"],
     )
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_mcp_remove_keep_runtime_entry_does_not_touch_settings(
@@ -314,4 +314,4 @@ def test_mcp_add_force_overrides_existing_eawf_entry(tmp_state: Path) -> None:
 def test_mcp_update_no_changes_returns_invalid_input(tmp_state: Path) -> None:
     runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
     result = runner.invoke(app, ["mcp", "update", "demo"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output

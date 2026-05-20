@@ -112,7 +112,7 @@ def test_session_start_rejects_dual_session(tmp_state: Path) -> None:
             "claude",
         ],
     )
-    assert result.exit_code == 4  # VALIDATION_FAILED
+    assert result.exit_code == 2  # VALIDATION_FAILED
 
 
 def test_session_start_invalid_runtime(tmp_state: Path) -> None:
@@ -129,7 +129,7 @@ def test_session_start_invalid_runtime(tmp_state: Path) -> None:
             "nope",
         ],
     )
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
 
 
 def test_session_start_invalid_role(tmp_state: Path) -> None:
@@ -146,7 +146,7 @@ def test_session_start_invalid_role(tmp_state: Path) -> None:
             "claude",
         ],
     )
-    assert result.exit_code == 3
+    assert result.exit_code == 1
 
 
 def test_session_start_then_checkpoint_then_close(tmp_state: Path) -> None:
@@ -204,12 +204,12 @@ def test_session_start_then_checkpoint_then_close(tmp_state: Path) -> None:
 
 def test_session_checkpoint_unknown_returns_not_found(tmp_state: Path) -> None:
     result = runner.invoke(app, ["session", "checkpoint", "SES-MISSING"])
-    assert result.exit_code == 2
+    assert result.exit_code == 1
 
 
 def test_session_close_unknown_returns_not_found(tmp_state: Path) -> None:
     result = runner.invoke(app, ["session", "close", "SES-MISSING"])
-    assert result.exit_code == 2
+    assert result.exit_code == 1
 
 
 def test_session_close_invalid_status(tmp_state: Path) -> None:
@@ -238,7 +238,7 @@ def test_session_close_invalid_status(tmp_state: Path) -> None:
             "active",  # not a terminal status
         ],
     )
-    assert result.exit_code == 3
+    assert result.exit_code == 1
 
 
 def test_session_recover_marks_stale_session(

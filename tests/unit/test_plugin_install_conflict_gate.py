@@ -148,7 +148,7 @@ def test_install_claude_user_scope_rejected(tmp_path: Path, no_conflict: None) -
         app,
         ["-w", str(tmp_path), "plugin", "install", "claude", "--scope", "user"],
     )
-    assert res.exit_code == 3, res.output
+    assert res.exit_code == 1, res.output
     combined = res.output + (res.stderr or "")
     assert "project-scope only" in combined or "marketplace" in combined.lower()
 

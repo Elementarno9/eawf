@@ -116,17 +116,17 @@ def test_hook_run_with_payload_folds_into_payloads_key() -> None:
 
 def test_hook_run_unknown_event_type_returns_invalid_input() -> None:
     result = runner.invoke(app, ["hook", "run", "not_a_real_event"], input="")
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_hook_run_malformed_stdin_returns_invalid_input() -> None:
     result = runner.invoke(app, ["hook", "run", "pre_commit"], input="{not json")
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_hook_run_non_object_stdin_returns_invalid_input() -> None:
     result = runner.invoke(app, ["hook", "run", "pre_commit"], input='["x"]')
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_hook_run_unknown_runtime_returns_invalid_input() -> None:
@@ -135,7 +135,7 @@ def test_hook_run_unknown_runtime_returns_invalid_input() -> None:
         ["hook", "run", "pre_commit", "--runtime", "zsh"],
         input="",
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_hook_run_agent_end_writes_typed_report(tmp_path: Path) -> None:
@@ -241,4 +241,4 @@ def test_hook_run_blocking_hook_propagates_exit_9(monkeypatch) -> None:
 
     monkeypatch.setattr(hook_cmd, "HookRunner", _BlockingRunner)
     result = runner.invoke(app, ["hook", "run", "pre_commit"], input="")
-    assert result.exit_code == 9, result.stdout
+    assert result.exit_code == 3, result.stdout

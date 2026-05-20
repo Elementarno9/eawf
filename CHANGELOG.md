@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+- **Exit-code surface compressed 0..9 → 0..5 per C05 § 5.3.** The
+  legacy nine-class CLI exit-code taxonomy is replaced by the five
+  canonical buckets `OK (0)`, `USER_ERROR (1)`, `VALIDATION_ERROR (2)`,
+  `STATE_CONFLICT (3)`, `DAEMON_UNREACHABLE (4)`, `INTERNAL_ERROR (5)`.
+  The numeric values under the legacy names (`GENERIC_ERROR`,
+  `NOT_FOUND`, `INVALID_INPUT`, `VALIDATION_FAILED`, `LOCK_CONFLICT`,
+  `INSTRUMENT_MISSING`, `USER_DECLINED`, `INTEGRITY_VIOLATION`,
+  `HOOK_BLOCKED`) have *changed*: each legacy name is now a
+  deprecation alias mapped onto its new bucket per the § 5.3 bucket
+  table. Scripts that pinned specific exit codes (e.g. `if rc == 4`
+  meaning `VALIDATION_FAILED`) update to the new code (`2` for
+  `VALIDATION_ERROR`) or to the alias name. Single-PR cutover —
+  self-only consumer scope; no downstream announce window.
+- **`ErrorEnvelope` JSON shape introduced per C05 § 5.4.** Every
+  non-zero exit emits a typed envelope with `schema_version`,
+  `error` (canonical bucket name), `message`, `exit_code`,
+  `exit_name`, `suggested_next_step`, `data` (carries legacy
+  subclass name as `data.kind` for CI-script pivots),
+  `correlation_id` (set on daemon-mediated errors),
+  `protocol_version` (set on `ProtocolMismatch`), and `timestamp`
+  (UTC ISO-8601). Replaces the prior four-field shape
+  (`error`/`message`/`exit_code`/`exit_name`).
+- **Legacy `CliError` subclasses are now deprecation aliases.**
+  `NotFound`/`InvalidInput`/`InstrumentMissing`/`UserDeclined` →
+  `UserError`; `ValidationFailed` → `ValidationError`;
+  `LockConflict`/`IntegrityViolation`/`HookBlocked` →
+  `StateConflict`. Each remains importable as a subclass of its
+  new bucket so existing `raise errors.NotFound(...)` callsites
+  keep working; the legacy name surfaces through
+  `ErrorEnvelope.data.kind`. Downstream waves retire each callsite
+  to raise the new bucket class directly with `data={"kind": ...}`.
+
+### Added
+- Daemon JSON-RPC error code mapping (C02 `-3200X` codes) folded
+  onto the five-class taxonomy per C05 § 5.3 table; surfaced via
+  `eawf.cli.errors.cli_error_for_rpc(rpc_code, message)`.
+- Per-`data.kind` hint refinement (`_KIND_HINTS`) preserves the
+  legacy nine-class specificity inside the five buckets — operator
+  hint text stays informative even after callsites switch to the
+  new bucket classes.
+
 ## [0.2.0] - 2026-05-11
 
 ### Added

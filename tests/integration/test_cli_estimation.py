@@ -130,7 +130,7 @@ def test_estimate_update_without_existing_returns_not_found(tmp_path: Path) -> N
             "replan",
         ],
     )
-    assert result.exit_code == 2  # NOT_FOUND
+    assert result.exit_code == 1  # NOT_FOUND
     assert "no estimate exists" in result.output
 
 
@@ -148,7 +148,7 @@ def test_estimate_invalid_confidence_returns_invalid_input(tmp_path: Path) -> No
             "z",
         ],
     )
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
 
 
 def test_actual_start_then_stop_round_trip(tmp_path: Path) -> None:
@@ -234,7 +234,7 @@ def test_actual_start_double_open_rejected(tmp_path: Path) -> None:
             "SES-001",
         ],
     )
-    assert second.exit_code == 4  # VALIDATION_FAILED
+    assert second.exit_code == 2  # VALIDATION_FAILED
     assert "already open" in second.output
 
 
@@ -244,7 +244,7 @@ def test_actual_stop_without_open_segment_returns_not_found(tmp_path: Path) -> N
         app,
         ["-w", str(workspace), "actual", "stop", "P01-I01-W01"],
     )
-    assert result.exit_code == 2  # NOT_FOUND
+    assert result.exit_code == 1  # NOT_FOUND
 
 
 def test_actual_stop_with_status_abandoned_marks_abandoned(tmp_path: Path) -> None:
@@ -288,7 +288,7 @@ def test_actual_stop_invalid_status_returns_invalid_input(tmp_path: Path) -> Non
             "garbage-status",
         ],
     )
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
 
 
 def test_actual_recover_promotes_stale_segment(tmp_path: Path) -> None:
@@ -466,7 +466,7 @@ def test_actual_start_jsonl_lands_when_commit_state_raises(
         ],
     )
     # _commit_state raised ValidationFailed -> exit code 4.
-    assert result.exit_code == 4, result.output
+    assert result.exit_code == 2, result.output
 
     # The actuals.jsonl record landed BEFORE _commit_state ran.
     actuals = _read_jsonl(workspace / ".ea" / "store" / "actual.jsonl")

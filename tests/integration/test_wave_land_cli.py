@@ -89,7 +89,7 @@ def test_wave_land_unknown_wave_exit_2(tmp_path: Path) -> None:
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_land_already_closed_wave_exit_4(tmp_path: Path) -> None:
@@ -113,7 +113,7 @@ def test_wave_land_already_closed_wave_exit_4(tmp_path: Path) -> None:
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
 
 
 def test_wave_land_batch_stops_on_failure(tmp_path: Path) -> None:
@@ -168,7 +168,7 @@ def test_wave_land_batch_stops_on_failure(tmp_path: Path) -> None:
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     envelope = json.loads(res.stdout)
     assert envelope["failed_wave"] == "P05-I01-W01"
     assert envelope["error"]

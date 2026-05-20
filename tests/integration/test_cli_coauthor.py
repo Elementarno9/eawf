@@ -44,5 +44,6 @@ def test_coauthor_resolve_disabled_rejects_message_trailer(repo_root: Path) -> N
         app,
         ["coauthor", "resolve", "--message-file", str(message)],
     )
-    assert result.exit_code == 4
+    # Post C05 § 5.3: VALIDATION_FAILED bucket = VALIDATION_ERROR (2).
+    assert result.exit_code == 2
     assert "disabled" in result.output

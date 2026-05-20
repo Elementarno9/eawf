@@ -98,7 +98,7 @@ def test_repo_init_invalid_project_code_exits_3(tmp_path: Path) -> None:
             "core",
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_repo_link_round_trip(tmp_path: Path) -> None:
@@ -157,7 +157,7 @@ def test_repo_link_rejects_workspace_code_mismatch(tmp_path: Path) -> None:
             str(repo_dir),
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "workspace code mismatch" in res.stdout
 
 
@@ -182,7 +182,7 @@ def test_repo_link_rejects_duplicate(tmp_path: Path) -> None:
     res = runner.invoke(app, args)
     assert res.exit_code == 0
     res = runner.invoke(app, args)
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "already linked" in res.stdout
 
 

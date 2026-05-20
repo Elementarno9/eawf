@@ -203,7 +203,7 @@ def test_memory_view_shows_full_body(tmp_state: Path) -> None:
 
 def test_memory_view_unknown_returns_not_found(tmp_state: Path) -> None:
     result = runner.invoke(app, ["memory", "view", "MEM-NOPE"])
-    assert result.exit_code == 2  # NOT_FOUND
+    assert result.exit_code == 1  # NOT_FOUND
 
 
 def test_memory_stale_lists_low_confidence_aged(tmp_state: Path) -> None:
@@ -270,7 +270,7 @@ def test_memory_add_invalid_confidence_returns_invalid_input(tmp_state: Path) ->
             "ultra-high",
         ],
     )
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
 
 
 def test_memory_full_pipeline_add_list_render_view_stale_compact(tmp_state: Path) -> None:
@@ -328,4 +328,4 @@ def test_memory_add_no_state_returns_not_found(
             "b",
         ],
     )
-    assert result.exit_code == 2  # NOT_FOUND
+    assert result.exit_code == 1  # NOT_FOUND

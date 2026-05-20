@@ -141,9 +141,9 @@ def test_store_compact_returns_not_found_when_state_dir_missing(
     nonexistent = tmp_path / "no" / "such" / ".ea" / "state.json"
     monkeypatch.setenv("EA_STATE", str(nonexistent))
     result = runner.invoke(app, ["--json", "store", "compact", "--kind", "memory"])
-    assert result.exit_code == 2
+    assert result.exit_code == 1
     body = json.loads(result.stdout)
-    assert body["error"] == "NotFound"
+    assert body["error"] == "UserError"
 
 
 def test_store_compact_rejects_unknown_kind(

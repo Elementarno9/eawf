@@ -193,7 +193,7 @@ def test_repo_prune_no_input_without_yes_exits_7(tmp_path: Path) -> None:
             str(target),
         ],
     )
-    assert result.exit_code == 7, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "refusing" in result.stdout or "user declined" in result.stdout
     # Registry unchanged.
     payload = json.loads(target.read_text())
@@ -208,7 +208,7 @@ def test_repo_prune_no_input_without_yes_exits_7(tmp_path: Path) -> None:
 def test_repo_prune_missing_registry_exits_2(tmp_path: Path) -> None:
     target = tmp_path / "absent.json"
     result = runner.invoke(app, ["repo", "prune", "--yes", "--registry-path", str(target)])
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "not found" in result.stdout
 
 
@@ -216,7 +216,7 @@ def test_repo_prune_corrupted_registry_exits_3(tmp_path: Path) -> None:
     target = tmp_path / "registry.json"
     target.write_bytes(b"{not json")
     result = runner.invoke(app, ["repo", "prune", "--yes", "--registry-path", str(target)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "corrupted" in result.stdout
 
 

@@ -196,5 +196,5 @@ def test_cli_create_exit_3_on_main(tmp_path: Path) -> None:
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "refuses to branch from" in res.stdout

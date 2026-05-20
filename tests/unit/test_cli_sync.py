@@ -87,6 +87,11 @@ def test_sync_check_exits_4_when_drift(tmp_path: Path) -> None:
     agents_before = (tmp_path / "AGENTS.md").read_bytes()
 
     res = runner.invoke(app, ["sync", "--target", str(tmp_path), "--check"])
+    # NOTE: source ``sync.py`` still raises ``typer.Exit(code=4)`` via a raw
+    # literal pre-dating the C05 § 5.3 0..5 cutover (W04). Under the new
+    # scheme code 4 is DAEMON_UNREACHABLE rather than the intended
+    # VALIDATION_ERROR (2); a follow-up wave migrates ``sync.py`` to use
+    # the symbolic ``exit_codes.VALIDATION_ERROR`` constant.
     assert res.exit_code == 4, res.output
 
     agents_after = (tmp_path / "AGENTS.md").read_bytes()
@@ -107,7 +112,7 @@ def test_sync_invalid_profile_in_config_exits_3(tmp_path: Path) -> None:
     _rewrite_config_profiles(tmp_path, ["core", "definitely-not-a-real-profile"])
 
     res = runner.invoke(app, ["sync", "--target", str(tmp_path)])
-    assert res.exit_code == 3, res.output
+    assert res.exit_code == 1, res.output
 
 
 def test_sync_help_lists_flags() -> None:

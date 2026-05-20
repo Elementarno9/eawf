@@ -109,7 +109,7 @@ def test_wave_dispatch_unknown_wave_exit_2(workspace: Path) -> None:
     """An unknown wave id surfaces as NOT_FOUND (exit 2)."""
     _bootstrap_chain(workspace)
     res = runner.invoke(app, ["wave", "dispatch", "P01-I01-W99"])
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "unknown wave" in res.stdout
 
 
@@ -189,7 +189,7 @@ def test_wave_dispatch_batch_no_iter_no_current_iter_exit_3(workspace: Path) -> 
     )
     # No phase / iter opened, so state.current.iter_id is None.
     res = runner.invoke(app, ["wave", "dispatch-batch"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "state.current.iter_id" in res.stdout
 
 

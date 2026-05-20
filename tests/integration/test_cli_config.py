@@ -81,7 +81,8 @@ def test_set_to_local_writes_to_local_layer(repo_root: Path) -> None:
 
 def test_get_unknown_key_returns_exit_code_2(repo_root: Path) -> None:
     result = runner.invoke(app, ["config", "get", "no.such.key"])
-    assert result.exit_code == 2
+    # Post C05 § 5.3: NotFound bucket = USER_ERROR (1) under new 0..5 surface.
+    assert result.exit_code == 1
 
 
 def test_get_returns_built_in_default_with_built_in_source(repo_root: Path) -> None:
@@ -104,7 +105,7 @@ def test_set_overrides_built_in_via_repo_layer(repo_root: Path) -> None:
 
 def test_set_with_built_in_scope_exits_3(repo_root: Path) -> None:
     result = runner.invoke(app, ["config", "set", "built-in.x", "y", "--scope", "built-in"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_set_with_built_in_scope_exits_3_json_envelope(repo_root: Path) -> None:
@@ -112,17 +113,17 @@ def test_set_with_built_in_scope_exits_3_json_envelope(repo_root: Path) -> None:
         app,
         ["--json", "config", "set", "built-in.x", "y", "--scope", "built-in"],
     )
-    assert result.exit_code == 3
+    assert result.exit_code == 1
     body = json.loads(result.output)
-    assert body["error"] == "InvalidInput"
-    assert body["exit_code"] == 3
-    assert body["exit_name"] == "INVALID_INPUT"
+    assert body["error"] == "UserError"
+    assert body["exit_code"] == 1
+    assert body["exit_name"] == "USER_ERROR"
     assert "read-only" in body["message"]
 
 
 def test_set_with_unknown_scope_exits_3(repo_root: Path) -> None:
     result = runner.invoke(app, ["config", "set", "foo", "bar", "--scope", "moonbase"])
-    assert result.exit_code == 3
+    assert result.exit_code == 1
 
 
 # --- validate ---------------------------------------------------------------
@@ -145,7 +146,7 @@ def test_validate_exits_4_on_malformed_yaml(repo_root: Path) -> None:
         "planning:\n  approval: [unclosed\n", encoding="utf-8"
     )
     result = runner.invoke(app, ["config", "validate"])
-    assert result.exit_code == 4, result.output
+    assert result.exit_code == 2, result.output
 
 
 def test_validate_exits_4_when_required_section_overwritten_with_scalar(
@@ -155,7 +156,7 @@ def test_validate_exits_4_when_required_section_overwritten_with_scalar(
     # Bypass the layered helper to plant a hostile override the schema rejects.
     (repo_root / ".ea" / "config.yaml").write_text("planning: not_a_mapping\n", encoding="utf-8")
     result = runner.invoke(app, ["config", "validate"])
-    assert result.exit_code == 4, result.output
+    assert result.exit_code == 2, result.output
 
 
 # --- profile enable ---------------------------------------------------------
@@ -186,12 +187,12 @@ def test_profile_enable_research_materialises_state_keys(repo_root: Path) -> Non
 
 def test_profile_enable_unknown_id_exits_3(repo_root: Path) -> None:
     result = runner.invoke(app, ["config", "profile", "enable", "no-such-profile"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_profile_enable_built_in_scope_exits_3(repo_root: Path) -> None:
     result = runner.invoke(app, ["config", "profile", "enable", "python", "--scope", "built-in"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_profile_enable_idempotent(repo_root: Path) -> None:
@@ -240,7 +241,8 @@ def test_set_with_malformed_yaml_emits_envelope_text_mode(repo_root: Path) -> No
     """
     (repo_root / ".ea" / "config.yaml").write_text(": [bad\n", encoding="utf-8")
     result = runner.invoke(app, ["config", "set", "foo", "bar", "--scope", "repo"])
-    assert result.exit_code == 4, result.output
+    # Post C05 § 5.3: VALIDATION_FAILED bucket = VALIDATION_ERROR (2).
+    assert result.exit_code == 2, result.output
     assert "Traceback" not in result.output
     assert "Traceback" not in (result.stderr or "")
 
@@ -252,12 +254,12 @@ def test_set_with_malformed_yaml_emits_envelope_json_mode(repo_root: Path) -> No
         app,
         ["--json", "config", "set", "foo", "bar", "--scope", "repo"],
     )
-    assert result.exit_code == 4, result.output
+    assert result.exit_code == 2, result.output
     assert "Traceback" not in result.output
     body = json.loads(result.output)
-    assert body["error"] == "ValidationFailed"
-    assert body["exit_code"] == 4
-    assert body["exit_name"] == "VALIDATION_FAILED"
+    assert body["error"] == "ValidationError"
+    assert body["exit_code"] == 2
+    assert body["exit_name"] == "VALIDATION_ERROR"
 
 
 def test_profile_enable_with_malformed_yaml_emits_envelope_json_mode(
@@ -269,12 +271,12 @@ def test_profile_enable_with_malformed_yaml_emits_envelope_json_mode(
         app,
         ["--json", "config", "profile", "enable", "research", "--scope", "repo"],
     )
-    assert result.exit_code == 4, result.output
+    assert result.exit_code == 2, result.output
     assert "Traceback" not in result.output
     body = json.loads(result.output)
-    assert body["error"] == "ValidationFailed"
-    assert body["exit_code"] == 4
-    assert body["exit_name"] == "VALIDATION_FAILED"
+    assert body["error"] == "ValidationError"
+    assert body["exit_code"] == 2
+    assert body["exit_name"] == "VALIDATION_ERROR"
 
 
 # --- validate --composed ----------------------------------------------------
@@ -342,6 +344,6 @@ def test_validate_composed_unknown_profile_exits_3(repo_root: Path) -> None:
         "profiles:\n  enabled: [bogus]\n", encoding="utf-8"
     )
     result = runner.invoke(app, ["--json", "config", "validate", "--composed"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
     body = json.loads(result.output)
-    assert body["error"] == "InvalidInput"
+    assert body["error"] == "UserError"

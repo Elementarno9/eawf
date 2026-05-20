@@ -38,8 +38,8 @@ def test_update_plugin_aborts_on_hand_edit(tmp_path: Path) -> None:
 
 
 def test_update_plugin_integrity_violation_exit_code_constant() -> None:
-    """The exit code mapping is :data:`INTEGRITY_VIOLATION` (8)."""
-    assert INTEGRITY_VIOLATION == 8
+    """``INTEGRITY_VIOLATION`` aliases to ``STATE_CONFLICT`` (3) post C05 § 5.3."""
+    assert INTEGRITY_VIOLATION == 3
 
 
 def test_update_plugin_aborts_on_hand_edit_in_agent(tmp_path: Path) -> None:

@@ -106,7 +106,7 @@ def test_wave_graph_no_current_iter_no_flag_exits_invalid_input(workspace: Path)
     )
     # No phase / iter opened ⇒ state.current.iter_id is None.
     res = runner.invoke(app, ["wave", "graph"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "state.current.iter_id" in res.stdout
 
 
@@ -114,7 +114,7 @@ def test_wave_graph_unknown_iter_exits_invalid_input(workspace: Path) -> None:
     """An --iter flag pointing at a non-existent iter exits 3."""
     _bootstrap_chain(workspace)
     res = runner.invoke(app, ["wave", "graph", "--iter", "P99-I99"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_graph_empty_iter(workspace: Path) -> None:
@@ -225,7 +225,7 @@ def test_wave_plan_self_dep_exits_invalid_input(workspace: Path) -> None:
             "P01-I01-W04",
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "cannot depend on itself" in res.stdout
 
 

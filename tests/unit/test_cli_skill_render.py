@@ -132,7 +132,7 @@ def test_render_cmd_unknown_skill_returns_invalid_input(cli_runner: CliRunner) -
     ``skill run`` uses.
     """
     result = cli_runner.invoke(app, ["skill", "render", "/not-a-skill"])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "unknown skill" in result.stdout
 
 
@@ -142,7 +142,7 @@ def test_render_cmd_unknown_format_returns_invalid_input(cli_runner: CliRunner) 
     the canonical alternatives.
     """
     result = cli_runner.invoke(app, ["skill", "render", "/research", "--format", "html"])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "unknown --format" in result.stdout
     assert "'json'" in result.stdout
     assert "'skill-md'" in result.stdout

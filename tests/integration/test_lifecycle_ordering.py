@@ -179,7 +179,7 @@ def test_phase_open_state_unchanged_when_event_append_lock_conflict(
     monkeypatch.setattr(lifecycle_module, "append_envelope", _fail_lock)
 
     res = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
-    assert res.exit_code == 5, res.stdout
+    assert res.exit_code == 3, res.stdout
 
     state_bytes_after = state_path.read_bytes()
     assert state_bytes_after == state_bytes_before, (

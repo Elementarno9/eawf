@@ -113,7 +113,7 @@ def test_plugin_install_unknown_runtime_exits_invalid_input(tmp_path: Path) -> N
     """
     _equip_ea_dir(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "goose"])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_plugin_install_after_hand_edit_aborts(tmp_path: Path) -> None:
@@ -185,7 +185,7 @@ def test_plugin_install_claude_user_scope_rejected(tmp_path: Path) -> None:
         app,
         ["-w", str(tmp_path), "plugin", "install", "claude", "--scope", "user"],
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     combined = result.stdout + (result.stderr or "")
     assert "project-scope only" in combined or "marketplace" in combined.lower()
 
@@ -235,7 +235,7 @@ def test_plugin_package_opencode_rejected(tmp_path: Path) -> None:
     """opencode has no marketplace; CLI rejects with InvalidInput."""
     _equip_ea_dir(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "package", "opencode"])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
 
 
 def test_plugin_install_codex_idempotent_at_scope(tmp_path: Path) -> None:

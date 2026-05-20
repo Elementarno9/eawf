@@ -135,12 +135,12 @@ def test_update_refuses_user_owned_entry(tmp_state_with_user_mcp: Path) -> None:
         app,
         ["mcp", "update", "manual-mcp", "--command", "/should-not-apply"],
     )
-    assert result.exit_code == 3, result.output  # INVALID_INPUT
+    assert result.exit_code == 1, result.output  # INVALID_INPUT
 
 
 def test_remove_refuses_user_owned_entry(tmp_state_with_user_mcp: Path) -> None:
     result = runner.invoke(app, ["mcp", "remove", "manual-mcp"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_add_rejects_collision_without_force(tmp_state_with_eawf_mcp: Path) -> None:
@@ -148,7 +148,7 @@ def test_add_rejects_collision_without_force(tmp_state_with_eawf_mcp: Path) -> N
         app,
         ["mcp", "add", "ours", "--command", "/dup"],
     )
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_add_force_redefines_existing_eawf_entry(tmp_state_with_eawf_mcp: Path) -> None:

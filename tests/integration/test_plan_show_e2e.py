@@ -251,9 +251,9 @@ def test_plan_show_no_active_iter_exits_3(
     state_path = _seed(tmp_path, state)
     monkeypatch.setenv("EA_STATE", str(state_path))
     result = runner.invoke(app, ["--json", "plan", "show"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
     body = json.loads(result.stdout)
-    assert body["error"] == "InvalidInput"
+    assert body["error"] == "UserError"
     assert "no active iter" in body["message"]
 
 
@@ -264,9 +264,9 @@ def test_plan_show_unknown_iter_exits_2(
     state_path = _seed(tmp_path)
     monkeypatch.setenv("EA_STATE", str(state_path))
     result = runner.invoke(app, ["--json", "plan", "show", "--iter", "P99-I99"])
-    assert result.exit_code == 2, result.output
+    assert result.exit_code == 1, result.output
     body = json.loads(result.stdout)
-    assert body["error"] == "NotFound"
+    assert body["error"] == "UserError"
 
 
 def test_plan_show_format_conflict_exits_3(
@@ -276,9 +276,9 @@ def test_plan_show_format_conflict_exits_3(
     state_path = _seed(tmp_path)
     monkeypatch.setenv("EA_STATE", str(state_path))
     result = runner.invoke(app, ["--json", "plan", "show", "--format", "markdown"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
     body = json.loads(result.stdout)
-    assert body["error"] == "InvalidInput"
+    assert body["error"] == "UserError"
     assert "contradictory" in body["message"]
 
 
@@ -289,9 +289,9 @@ def test_plan_show_invalid_iter_id_exits_3(
     state_path = _seed(tmp_path)
     monkeypatch.setenv("EA_STATE", str(state_path))
     result = runner.invoke(app, ["--json", "plan", "show", "--iter", "not-an-iter"])
-    assert result.exit_code == 3, result.output
+    assert result.exit_code == 1, result.output
     body = json.loads(result.stdout)
-    assert body["error"] == "InvalidInput"
+    assert body["error"] == "UserError"
     assert "invalid iter id" in body["message"]
 
 
@@ -301,9 +301,9 @@ def test_plan_show_state_missing_exits_2(
 ) -> None:
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     result = runner.invoke(app, ["--json", "plan", "show"])
-    assert result.exit_code == 2, result.output
+    assert result.exit_code == 1, result.output
     body = json.loads(result.stdout)
-    assert body["error"] == "NotFound"
+    assert body["error"] == "UserError"
 
 
 def test_plan_show_ascii_dag_replaces_mermaid(
@@ -371,7 +371,7 @@ def test_plan_show_invalid_json_exits_4(
     state_path.write_text('{"schema_version": "1.0",', encoding="utf-8")
     monkeypatch.setenv("EA_STATE", str(state_path))
     result = runner.invoke(app, ["--json", "plan", "show"])
-    assert result.exit_code == 4, result.output
+    assert result.exit_code == 2, result.output
     body = json.loads(result.stdout)
-    assert body["error"] == "ValidationFailed"
+    assert body["error"] == "ValidationError"
     assert "not valid JSON" in body["message"]

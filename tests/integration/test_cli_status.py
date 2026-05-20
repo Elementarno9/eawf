@@ -168,9 +168,9 @@ def test_status_returns_not_found_when_state_missing(
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     _stub_no_git(monkeypatch)
     result = runner.invoke(app, ["--json", "status"])
-    assert result.exit_code == 2  # NOT_FOUND
+    assert result.exit_code == 1  # NOT_FOUND
     body = json.loads(result.stdout)
-    assert body["error"] == "NotFound"
+    assert body["error"] == "UserError"
     assert "state.json" in body["message"]
 
 
@@ -187,9 +187,9 @@ def test_status_returns_invalid_input_when_state_malformed(
     monkeypatch.setenv("EA_STATE", str(state_path))
     _stub_no_git(monkeypatch)
     result = runner.invoke(app, ["--json", "status"])
-    assert result.exit_code == 3  # INVALID_INPUT
+    assert result.exit_code == 1  # INVALID_INPUT
     body = json.loads(result.stdout)
-    assert body["error"] == "InvalidInput"
+    assert body["error"] == "UserError"
 
 
 def test_status_workspace_flag_overrides_pwd(

@@ -66,7 +66,7 @@ def test_workspace_init_refuses_overwrite_without_force(workspace_state: Path) -
     """A second ``workspace init`` against the same path requires ``--force``."""
     _init_workspace(workspace_state)
     res = runner.invoke(app, ["workspace", "init", "OTHER", "--title", "Other"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "already exists" in res.stdout
     state = _read_state(workspace_state)
     # State unchanged.
@@ -82,7 +82,7 @@ def test_workspace_init_refuses_overwrite_without_force(workspace_state: Path) -
 def test_workspace_init_invalid_code_exits_3(workspace_state: Path) -> None:
     """Lowercase or invalid codes fail the regex with exit 3."""
     res = runner.invoke(app, ["workspace", "init", "lower", "--title", "x"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "invalid workspace code" in res.stdout
 
 
@@ -138,7 +138,7 @@ def test_workspace_add_repo_rejects_duplicate(workspace_state: Path, tmp_path: P
     res = runner.invoke(app, args)
     assert res.exit_code == 0
     res = runner.invoke(app, args)
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "already linked" in res.stdout
 
 
@@ -177,7 +177,7 @@ def test_workspace_remove_repo_unknown_exits_2(
     """Removing a non-existent code yields ``NotFound`` (exit 2)."""
     _init_workspace(workspace_state)
     res = runner.invoke(app, ["workspace", "remove-repo", "MISSING"])
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "not linked" in res.stdout
 
 

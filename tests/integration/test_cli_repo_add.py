@@ -210,7 +210,7 @@ def test_repo_add_rejects_same_code_at_different_path(tmp_path: Path) -> None:
     registry_path = tmp_path / "registry.json"
     runner.invoke(app, ["repo", "add", str(repo_a), "--registry-path", str(registry_path)])
     result = runner.invoke(app, ["repo", "add", str(other), "--registry-path", str(registry_path)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "already registered" in result.stdout
 
 
@@ -231,7 +231,7 @@ def test_repo_add_missing_path_exits_2(tmp_path: Path) -> None:
             str(registry_path),
         ],
     )
-    assert result.exit_code == 2, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "does not exist" in result.stdout
 
 
@@ -243,7 +243,7 @@ def test_repo_add_path_not_directory_exits_3(tmp_path: Path) -> None:
         app,
         ["repo", "add", str(afile), "--registry-path", str(registry_path), "--yes"],
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "not a directory" in result.stdout
 
 
@@ -254,7 +254,7 @@ def test_repo_add_no_code_no_state_file_exits_3(tmp_path: Path) -> None:
     repo.mkdir()
     registry_path = tmp_path / "registry.json"
     result = runner.invoke(app, ["repo", "add", str(repo), "--registry-path", str(registry_path)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "cannot derive repo code" in result.stdout
 
 
@@ -273,7 +273,7 @@ def test_repo_add_invalid_code_exits_3(tmp_path: Path) -> None:
             str(registry_path),
         ],
     )
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "invalid repo code" in result.stdout
 
 
@@ -297,7 +297,7 @@ def test_repo_add_unrecognised_parent_no_input_without_yes_exits_7(tmp_path: Pat
         ],
     )
     # ``UserDeclined`` maps to exit code 7 (canonical USER_DECLINED).
-    assert result.exit_code == 7, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "recognised" in result.stdout or "refusing" in result.stdout
 
 
@@ -404,7 +404,7 @@ def test_repo_add_rejects_corrupted_existing_registry(tmp_path: Path) -> None:
     registry_path = tmp_path / "registry.json"
     registry_path.write_bytes(b"{not json")
     result = runner.invoke(app, ["repo", "add", str(repo), "--registry-path", str(registry_path)])
-    assert result.exit_code == 3, result.stdout
+    assert result.exit_code == 1, result.stdout
     assert "corrupted" in result.stdout
 
 

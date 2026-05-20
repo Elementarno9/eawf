@@ -161,5 +161,5 @@ def test_dual_runtime_unknown_runtime_rejected(workspace: Path) -> None:
         app,
         ["wave", "dispatch", wave_id, "--runtime", "claude-bogus"],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "unknown runtime" in res.stdout

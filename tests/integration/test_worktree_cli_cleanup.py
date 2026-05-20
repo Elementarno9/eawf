@@ -105,7 +105,7 @@ def test_cli_cleanup_refuses_dirty_no_force(tmp_path: Path) -> None:
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 8, res.stdout
+    assert res.exit_code == 3, res.stdout
     assert "dirty" in res.stdout
     # Refusal must have left the worktree untouched — the polluting
     # file is still present and the worktree directory exists.

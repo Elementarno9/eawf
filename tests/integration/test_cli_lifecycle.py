@@ -73,7 +73,7 @@ def test_project_init_invalid_code_exits_3(workspace: Path) -> None:
             "x",
         ],
     )
-    assert res.exit_code == 3
+    assert res.exit_code == 1
     assert "invalid project code" in res.stdout
 
 
@@ -90,7 +90,7 @@ def test_project_init_empty_domains_exits_3(workspace: Path) -> None:
             "",
         ],
     )
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_project_init_existing_state_exits_3(workspace: Path) -> None:
@@ -103,7 +103,7 @@ def test_project_init_existing_state_exits_3(workspace: Path) -> None:
         app,
         ["project", "init", "QR2", "--title", "y", "--domains", "y"],
     )
-    assert res2.exit_code == 3
+    assert res2.exit_code == 1
     assert "already exists" in res2.stdout
 
 
@@ -150,7 +150,7 @@ def test_subproject_add_then_switch(workspace: Path) -> None:
 def test_subproject_switch_unknown_exits_3(workspace: Path) -> None:
     _init_project(workspace)
     res = runner.invoke(app, ["subproject", "switch", "GHOST"])
-    assert res.exit_code == 3
+    assert res.exit_code == 1
     assert "unknown" in res.stdout
 
 
@@ -184,7 +184,7 @@ def test_phase_open_explicit_p03(workspace: Path) -> None:
 def test_phase_open_requires_id_or_auto(workspace: Path) -> None:
     _init_project(workspace)
     res = runner.invoke(app, ["phase", "open", "--title", "x"])
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_phase_open_auto_and_explicit_conflict(workspace: Path) -> None:
@@ -193,7 +193,7 @@ def test_phase_open_auto_and_explicit_conflict(workspace: Path) -> None:
         app,
         ["phase", "open", "P01", "--auto", "--title", "x"],
     )
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_phase_close_with_open_iter_exits_4(workspace: Path) -> None:
@@ -201,7 +201,7 @@ def test_phase_close_with_open_iter_exits_4(workspace: Path) -> None:
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
     res = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
 
 
 def test_phase_close_happy(workspace: Path) -> None:
@@ -279,7 +279,7 @@ def test_phase_close_single_closed_wave_without_decision_exits_4(workspace: Path
 
     res = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
 
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     assert "single closed wave" in res.stdout
 
 
@@ -370,7 +370,7 @@ def test_iter_open_unknown_phase_exits_3(workspace: Path) -> None:
         app,
         ["iter", "open", "--phase", "P99", "--title", "x"],
     )
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_iter_close_with_pending_wave_exits_4(workspace: Path) -> None:
@@ -392,7 +392,7 @@ def test_iter_close_with_pending_wave_exits_4(workspace: Path) -> None:
         ],
     )
     res = runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-1"])
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
 
 
 # ---- wave plan/claim/close/fail --------------------------------------------
@@ -443,7 +443,7 @@ def test_wave_plan_id_iter_mismatch_exits_3(workspace: Path) -> None:
             "src/",
         ],
     )
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_wave_plan_closed_iter_exits_3(workspace: Path) -> None:
@@ -464,7 +464,8 @@ def test_wave_plan_closed_iter_exits_3(workspace: Path) -> None:
         ],
     )
     # closure invariant fires before structural; either way must be non-zero
-    assert res.exit_code in (3, 4)
+    # Post C05 § 5.3 the value lands in (1, 2): USER_ERROR or VALIDATION_ERROR.
+    assert res.exit_code in (1, 2)
 
 
 def test_wave_claim_happy(workspace: Path) -> None:
@@ -525,7 +526,7 @@ def test_wave_claim_invalid_policy_exits_3(workspace: Path) -> None:
             "bogus",
         ],
     )
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_wave_close_without_outcome_exits_3(workspace: Path) -> None:
@@ -546,7 +547,7 @@ def test_wave_close_without_outcome_exits_3(workspace: Path) -> None:
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
     res = runner.invoke(app, ["wave", "close", "P01-I01-W01"])
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_wave_close_happy(workspace: Path) -> None:
@@ -600,7 +601,7 @@ def test_wave_fail_without_reason_exits_3(workspace: Path) -> None:
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
     res = runner.invoke(app, ["wave", "fail", "P01-I01-W01"])
-    assert res.exit_code == 3
+    assert res.exit_code == 1
 
 
 def test_wave_fail_happy(workspace: Path) -> None:
@@ -804,7 +805,7 @@ def test_wave_update_files_closed_wave_exits_4(workspace: Path) -> None:
         app,
         ["wave", "update", "P01-I01-W01", "--files", "src/b.py"],
     )
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     assert "closed" in res.stdout.lower() or "pending or claimed" in res.stdout.lower()
 
 
@@ -814,7 +815,7 @@ def test_wave_update_files_unknown_wave_exits_2(workspace: Path) -> None:
         app,
         ["wave", "update", "P01-I01-W99", "--files", "src/b.py"],
     )
-    assert res.exit_code == 2, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "unknown wave" in res.stdout.lower()
 
 
@@ -824,13 +825,13 @@ def test_wave_update_files_invalid_wave_id_exits_3(workspace: Path) -> None:
         app,
         ["wave", "update", "not-a-wave-id", "--files", "src/b.py"],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_update_files_no_mode_exits_3(workspace: Path) -> None:
     _bootstrap_update_pending_wave(workspace, files_csv="src/a.py")
     res = runner.invoke(app, ["wave", "update", "P01-I01-W01"])
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_update_files_multiple_modes_exits_3(workspace: Path) -> None:
@@ -847,7 +848,7 @@ def test_wave_update_files_multiple_modes_exits_3(workspace: Path) -> None:
             "src/c.py",
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_wave_update_files_empty_files_list_exits_3(workspace: Path) -> None:
@@ -857,7 +858,7 @@ def test_wave_update_files_empty_files_list_exits_3(workspace: Path) -> None:
         app,
         ["wave", "update", "P01-I01-W01", "--files", "   ,  ,"],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "at least one path" in res.stdout.lower()
 
 
@@ -985,4 +986,4 @@ def test_resolve_state_path_no_state_exits_2(
     state_path = tmp_path / ".ea" / "state.json"
     monkeypatch.setenv("EA_STATE", str(state_path))
     res = runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
-    assert res.exit_code == 2
+    assert res.exit_code == 1

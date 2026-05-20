@@ -222,7 +222,7 @@ def test_wave_fix_ci_loop_refuses_on_repeated_signature(workspace: Path) -> None
             "3",
         ],
     )
-    assert res.exit_code == 4, res.stdout
+    assert res.exit_code == 2, res.stdout
     envelope = json.loads(res.stdout)
     history = envelope["history"]
     # Iter 1: planned W02. Iter 2: same signature → refused.

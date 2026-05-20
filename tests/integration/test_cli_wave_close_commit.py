@@ -266,7 +266,7 @@ def test_wave_close_commit_unknown_ref_exits_3_without_mutation(
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "cannot resolve commit ref" in res.stdout
     state = _read_state(state_path)
     # Precondition failure must NOT have flipped status to closed.
@@ -293,7 +293,7 @@ def test_wave_close_commit_invalid_ref_syntax_exits_3(
         ],
         env={**os.environ, "EA_STATE": str(state_path)},
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert "cannot resolve commit ref" in res.stdout
 
 

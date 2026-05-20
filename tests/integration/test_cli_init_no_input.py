@@ -58,7 +58,7 @@ def test_cli_init_no_input_creates_state_and_config(tmp_path: Path) -> None:
 def test_cli_init_no_input_validates_profile_membership(tmp_path: Path) -> None:
     """``--profile bogus`` exits 3 (InvalidInput) before any file is written."""
     res = _invoke_init(tmp_path, "--profile", "bogus-not-a-real-profile")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert not (tmp_path / ".ea").exists(), ".ea must not be created when profile validation fails"
 
 
@@ -77,7 +77,7 @@ def test_cli_init_rejects_invalid_project_code(tmp_path: Path) -> None:
             str(tmp_path),
         ],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
 
 def test_cli_init_refuses_existing_non_empty_ea_without_force(tmp_path: Path) -> None:
@@ -87,7 +87,7 @@ def test_cli_init_refuses_existing_non_empty_ea_without_force(tmp_path: Path) ->
     (ea_dir / "state.json").write_text("{}", encoding="utf-8")
 
     res = _invoke_init(tmp_path, "--profile", "core")
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
 
     # With --force, init succeeds.
     res = _invoke_init(tmp_path, "--profile", "core", "--force")
@@ -176,5 +176,5 @@ def test_cli_init_no_input_requires_project_code(tmp_path: Path) -> None:
         app,
         ["--no-input", "init", "--profile", "core", "--target", str(tmp_path)],
     )
-    assert res.exit_code == 3, res.stdout
+    assert res.exit_code == 1, res.stdout
     assert not (tmp_path / ".ea").exists()

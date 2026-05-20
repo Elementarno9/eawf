@@ -99,7 +99,7 @@ def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr("eawf.doctor.checks.probe", angry_probe)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "doctor"])
-    assert result.exit_code == 6, result.output
+    assert result.exit_code == 1, result.output
     assert "git missing" in result.output
 
 
