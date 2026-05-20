@@ -1534,8 +1534,7 @@
       "P26-I01-W05",
       "P26-I01-W06",
       "P26-I01-W08",
-      "P26-I01-W10",
-      "P26-I01-W24"
+      "P26-I01-W10"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2956,7 +2955,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T12:56:09.942722Z",
+  "updated_at": "2026-05-20T12:57:20.258922Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9339,7 +9338,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w24-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T12:57:19.412387Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9351,10 +9350,10 @@
       "id": "P26-I01-W24",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T12:48:35.150155Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "build_weekly_burn_line + build_footer_panel accept now= and thread it to compute_weekly_burn; test_tui_weekly_eu fixtures inject a fixed anchor so the trailing-7-day window is deterministic; both previously-failing tests pass; pre-commit + mypy + pytest green"
       ],
@@ -9822,10 +9821,10 @@
       "branch": "feature/eawf-v0.1-p26-w24",
       "created_at": "2026-05-20T12:49:07.430631Z",
       "id": "WT-P26-I01-W24-1779281347",
-      "merged_commit": null,
+      "merged_commit": "dd514c9",
       "owner_session_id": "p26-w24-exec",
       "path": ".ea/worktrees/p26-w24",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W24"
     }
   }
