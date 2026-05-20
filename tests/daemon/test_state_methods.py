@@ -534,7 +534,11 @@ def test_mutate_rejects_missing_state_path(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        with pytest.raises(RuntimeError, match="state_path / event_path not configured"):
+        # P26-W03: ``_resolve_mutator_paths`` raises with the
+        # ``state_path not configured`` phrasing when neither the
+        # per-request ``repo_root`` param nor ``ctx.state_path`` is
+        # available — same fail-fast contract, sharper message.
+        with pytest.raises(RuntimeError, match="state_path not configured"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
 
     _run(body)

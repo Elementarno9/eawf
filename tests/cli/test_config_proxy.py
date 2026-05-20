@@ -56,12 +56,14 @@ class _FakeConfigClient:
         key_path: list[str],
         value: Any,
         idempotency_key: str | None = None,
+        repo_root: str | None = None,
     ) -> dict[str, Any]:
         _FakeConfigClient.last_args = {
             "layer": layer,
             "key_path": list(key_path),
             "value": value,
             "idempotency_key": idempotency_key,
+            "repo_root": repo_root,
         }
         _FakeConfigClient.call_count += 1
         return {
@@ -95,6 +97,7 @@ def test_save_value_to_layer_proxies_through_daemon_when_enabled(
         target_path=config_yaml,
         key="vcs.auto_commit",
         value=True,
+        repo_root=repo,
     )
 
     assert _FakeConfigClient.call_count == 1
@@ -103,6 +106,7 @@ def test_save_value_to_layer_proxies_through_daemon_when_enabled(
         "key_path": ["vcs", "auto_commit"],
         "value": True,
         "idempotency_key": None,
+        "repo_root": str(repo),
     }
     # Local file untouched — the (fake) daemon owns the write.
     assert not config_yaml.exists()

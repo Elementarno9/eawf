@@ -139,8 +139,21 @@ def _capture_save_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]
     """Patch the layered-config save helper and record every invocation."""
     recorded: list[dict[str, Any]] = []
 
-    def fake_save(*, target_path: Path, key: str, value: Any) -> None:
-        recorded.append({"target_path": target_path, "key": key, "value": value})
+    def fake_save(
+        *,
+        target_path: Path,
+        key: str,
+        value: Any,
+        repo_root: Path | None = None,
+    ) -> None:
+        recorded.append(
+            {
+                "target_path": target_path,
+                "key": key,
+                "value": value,
+                "repo_root": repo_root,
+            }
+        )
 
     monkeypatch.setattr(config_cmd, "_save_value_to_layer", fake_save)
     return recorded

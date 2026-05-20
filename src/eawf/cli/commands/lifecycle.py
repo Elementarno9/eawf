@@ -1700,9 +1700,10 @@ def _wave_close_via_daemon(
         idempotency_key=None,
         params={"wave_id": wave_id, "outcome": outcome, "commit": resolved_sha},
     )
+    repo_root = str((flags.workspace or Path.cwd()).resolve())
     try:
         with DaemonClient() as client:
-            result = client.state_mutate(mutation)
+            result = client.state_mutate(mutation, repo_root=repo_root)
     except DaemonRpcError as exc:
         if exc.code == -32601 or "NotImplementedError" in (exc.message or ""):
             logger.debug(

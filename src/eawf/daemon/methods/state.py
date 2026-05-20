@@ -81,6 +81,13 @@ from eawf.validate.strict import validate_state
 logger = logging.getLogger(__name__)
 
 
+#: Module-level one-shot flag for the back-compat warning emitted when a
+#: caller omits the ``repo_root`` param. Flipped True on the first emit;
+#: never reset for the lifetime of the daemon process. The companion
+#: helper :func:`_resolve_anchor` reads + writes this directly.
+_ANCHOR_FALLBACK_WARN_EMITTED: bool = False
+
+
 #: JSON-RPC error code raised when the post-mutation state fails
 #: validation (or when the mutation body itself is rejected by the
 #: lifecycle guard). C02 §5.2.2 reserves this code for ``validation_failed``.
@@ -104,11 +111,18 @@ class ReadParams(BaseModel):
         scope_id: Optional scope filter (not yet enforced; W09 returns
             the full state — projection lands in C03-IMPL).
         fields: Optional projection list (not yet enforced — see above).
+        repo_root: Optional absolute path of the repo whose ``state.json``
+            the daemon should read. The CLI proxy forwards ``flags.workspace``
+            (or ``Path.cwd()``) here so the daemon — which is one per user,
+            not one per repo — resolves the right anchor regardless of the
+            boot-time cwd. Omitting falls back to ``ctx.state_path`` with a
+            one-shot ``daemon_anchor_fallback`` warning.
     """
 
     model_config = ConfigDict(extra="forbid")
     scope_id: str | None = None
     fields: list[str] | None = None
+    repo_root: str | None = None
 
 
 class ReadResult(BaseModel):
@@ -133,11 +147,15 @@ class MutateParams(BaseModel):
             shadows :attr:`Mutation.idempotency_key`; precedence matches
             ``DaemonClient.call(idempotency_key=...)`` which carries the
             key as a sibling field of ``params``.
+        repo_root: Optional absolute path of the repo whose ``state.json``
+            the daemon should mutate. Same semantics as the field on
+            :class:`ReadParams`.
     """
 
     model_config = ConfigDict(extra="forbid")
     mutation: Mutation
     idempotency_key: str | None = None
+    repo_root: str | None = None
 
 
 class MutateResult(BaseModel):
@@ -151,9 +169,16 @@ class MutateResult(BaseModel):
 
 
 class DigestParams(BaseModel):
-    """Params for :func:`digest` — empty by contract."""
+    """Params for :func:`digest`.
+
+    Attributes:
+        repo_root: Optional absolute path of the repo whose ``state.json``
+            digest the daemon should return. Same semantics as the field
+            on :class:`ReadParams`.
+    """
 
     model_config = ConfigDict(extra="forbid")
+    repo_root: str | None = None
 
 
 class DigestResult(BaseModel):
@@ -208,6 +233,90 @@ def _evict_expired(cache: dict[str, _CachedMutation], *, now: float) -> None:
     expired = [k for k, v in cache.items() if now - v.cached_at > IDEMPOTENCY_TTL_SECONDS]
     for k in expired:
         cache.pop(k, None)
+
+
+# ---- Per-request repo anchor resolution -----------------------------------
+
+
+def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
+    """Log the one-shot ``daemon_anchor_fallback`` deprecation warning.
+
+    Stays a no-op after the first call for the lifetime of the daemon
+    process — mirrors the
+    :data:`eawf.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
+    a stale CLI client does not spam the daemon log.
+    """
+    global _ANCHOR_FALLBACK_WARN_EMITTED
+    if _ANCHOR_FALLBACK_WARN_EMITTED:
+        return
+    logger.warning(
+        f"daemon_anchor_fallback caller omitted 'repo_root' param; "
+        f"resolving against boot-time state_path={ctx.state_path!r}. "
+        f"Update the caller to pass repo_root explicitly — the boot-"
+        f"time fallback will be removed in a future wave."
+    )
+    _ANCHOR_FALLBACK_WARN_EMITTED = True
+
+
+def _resolve_state_path(*, repo_root: str | None, ctx: MethodContext) -> Path:
+    """Return ``<repo>/.ea/state.json`` for the caller's repo.
+
+    The daemon process owns one per-user UDS / named pipe and serves
+    many repos. Path joins against ``<repo>/.ea/...`` MUST honour the
+    caller's repo root, not the daemon's boot-time cwd — otherwise a
+    daemon spawned from one directory will resolve a different repo's
+    ``state.json`` against its own anchor and (on a read-only-root host)
+    blow up with ``[Errno 30] Read-only file system: '/.ea'``.
+
+    Precedence:
+
+    1. Per-request *repo_root* param (the canonical, post-W03 callsite).
+    2. Boot-time ``ctx.state_path`` (legacy fallback for callers that
+       have not yet been rewired). Emits a one-shot
+       ``daemon_anchor_fallback`` warning per process so stale clients
+       surface in the daemon log without breaking CI.
+
+    Raises:
+        RuntimeError: When *repo_root* is ``None`` AND ``ctx.state_path``
+            is also unset.
+    """
+    if repo_root:
+        return Path(repo_root) / ".ea" / "state.json"
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    _emit_anchor_fallback_warning(ctx)
+    return Path(ctx.state_path)
+
+
+def _resolve_mutator_paths(
+    *,
+    repo_root: str | None,
+    ctx: MethodContext,
+) -> tuple[Path, Path, Path]:
+    """Return ``(state_path, event_path, wal_dir)`` for the mutator path.
+
+    Same precedence as :func:`_resolve_state_path` for *state_path*;
+    *event_path* is always derived from the resolved *state_path* via
+    :func:`eawf.store.paths.store_path` so a per-request ``repo_root``
+    routes the event-jsonl append to the correct repo too. *wal_dir*
+    stays daemon-process-local (one WAL per daemon).
+
+    Raises:
+        RuntimeError: When the state path cannot be resolved or
+            ``ctx.wal_dir`` is unset.
+    """
+    state_path = _resolve_state_path(repo_root=repo_root, ctx=ctx)
+    if repo_root:
+        event_path = store_path(state_path, StoreKind.EVENT)
+    else:
+        event_path = (
+            Path(ctx.event_path)
+            if ctx.event_path is not None
+            else store_path(state_path, StoreKind.EVENT)
+        )
+    if not isinstance(ctx.wal_dir, Path):
+        raise RuntimeError("wal_dir not configured on daemon context")
+    return state_path, event_path, ctx.wal_dir
 
 
 # ---- State payload helpers --------------------------------------------------
@@ -443,7 +552,8 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Return the full ``state.json`` payload + digest version.
 
     Args:
-        ctx: Server context — ``ctx.state_path`` must be configured.
+        ctx: Server context — ``ctx.state_path`` is consulted only as a
+            legacy fallback when *params* omits ``repo_root``.
         params: JSON-RPC params per :class:`ReadParams`.
 
     Returns:
@@ -451,15 +561,14 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         dict and the 16-hex-char digest.
 
     Raises:
-        RuntimeError: when ``ctx.state_path`` is not configured.
+        RuntimeError: when neither *params* nor the legacy ``ctx``
+            fields resolve to a state path.
         ValueError: when the on-disk payload fails schema validation;
             the server maps this to ``-32602 invalid_params`` per
             :func:`eawf.daemon.server._process_frame`.
     """
-    ReadParams.model_validate(params)
-    if ctx.state_path is None:
-        raise RuntimeError("state_path not configured on daemon context")
-    state_path = Path(ctx.state_path)
+    args = ReadParams.model_validate(params)
+    state_path = _resolve_state_path(repo_root=args.repo_root, ctx=ctx)
     _, payload = _read_state(state_path)
     version = _state_version(payload)
     return ReadResult(state=payload, version=version).model_dump(mode="json")
@@ -472,16 +581,15 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Used by TUI mtime-poll fallback per C02 §5.3.1 / C06 axis [1:619].
 
     Args:
-        ctx: Server context — ``ctx.state_path`` must be configured.
-        params: JSON-RPC params; must be empty.
+        ctx: Server context — ``ctx.state_path`` is consulted only as a
+            legacy fallback when *params* omits ``repo_root``.
+        params: JSON-RPC params per :class:`DigestParams`.
 
     Returns:
         Dict matching :class:`DigestResult`.
     """
-    DigestParams.model_validate(params)
-    if ctx.state_path is None:
-        raise RuntimeError("state_path not configured on daemon context")
-    state_path = Path(ctx.state_path)
+    args = DigestParams.model_validate(params)
+    state_path = _resolve_state_path(repo_root=args.repo_root, ctx=ctx)
     if not state_path.exists():
         # An absent state file is a digest of empty bytes — keeps the
         # TUI poll path from faulting on an uninitialised project.
@@ -518,11 +626,10 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         # was syntactically fine — the body failed the typed contract.
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    if ctx.state_path is None or ctx.event_path is None:
-        raise RuntimeError("state_path / event_path not configured on daemon context")
-    wal_dir = getattr(ctx, "wal_dir", None)
-    if wal_dir is None:
-        raise RuntimeError("wal_dir not configured on daemon context")
+    state_path, event_path, wal_path = _resolve_mutator_paths(
+        repo_root=args.repo_root,
+        ctx=ctx,
+    )
 
     mutation = args.mutation
     idempotency_key = args.idempotency_key or mutation.idempotency_key
@@ -541,10 +648,6 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             return result
 
     apply_func = _resolve_apply(mutation.kind)
-
-    state_path = Path(ctx.state_path)
-    event_path = Path(ctx.event_path)
-    wal_path = Path(wal_dir)
 
     # The portalock keeps the daemon's defense-in-depth guard live
     # (rule 4 V1 carve-out); concurrent CLI fallback writers serialise

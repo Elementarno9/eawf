@@ -204,18 +204,28 @@ class DaemonClient:
         mutation: Mutation,
         *,
         idempotency_key: str | None = None,
+        repo_root: str | None = None,
     ) -> dict[str, Any]:
         """Proxy a :class:`Mutation` through the daemon's ``state.mutate`` RPC.
 
         Thin convenience wrapper around :meth:`call` — serialises the
         mutation to a JSON-mode dict, forwards the optional idempotency
-        key alongside it, and unwraps the result dict. Used by
-        :mod:`eawf.cli._mutation` for the W09 proxy callsite rewire.
+        key + repo anchor alongside it, and unwraps the result dict.
+        Used by :mod:`eawf.cli._mutation` for the W09 proxy callsite
+        rewire.
 
         Args:
             mutation: Typed mutation to dispatch.
             idempotency_key: Optional caller-supplied retry key. Shadows
                 :attr:`Mutation.idempotency_key` when both are set.
+            repo_root: Optional absolute path of the repo whose
+                ``state.json`` the mutation targets. The daemon is one
+                per user — passing the caller's repo root keeps a
+                cross-repo invocation from being mis-routed against the
+                daemon's boot-time cwd anchor. Omitting falls back to
+                the daemon's boot-time ``state_path`` with a one-shot
+                ``daemon_anchor_fallback`` warning logged on the daemon
+                side.
 
         Returns:
             Dict matching
@@ -234,6 +244,8 @@ class DaemonClient:
             params["idempotency_key"] = idempotency_key
         elif mutation.idempotency_key is not None:
             params["idempotency_key"] = mutation.idempotency_key
+        if repo_root is not None:
+            params["repo_root"] = repo_root
         return self.call("state.mutate", params)
 
     def config_set_layer_value(
@@ -243,6 +255,7 @@ class DaemonClient:
         key_path: list[str],
         value: Any,
         idempotency_key: str | None = None,
+        repo_root: str | None = None,
     ) -> dict[str, Any]:
         """Proxy a layered-config write through ``config.set_layer_value`` (W10).
 
@@ -251,6 +264,14 @@ class DaemonClient:
             key_path: Dotted-key as a list of segments.
             value: Typed value to write.
             idempotency_key: Optional retry key.
+            repo_root: Optional absolute path of the repo whose layered
+                config YAML the write targets. Required when the daemon
+                is one-per-user but the caller is one of many repos —
+                without it the daemon resolves the layer against its
+                own boot-time ``state_path``, which can be a different
+                repo entirely. Omitting falls back to that boot-time
+                anchor with a one-shot ``daemon_anchor_fallback``
+                warning on the daemon side.
 
         Returns:
             Dict matching
@@ -267,6 +288,8 @@ class DaemonClient:
         }
         if idempotency_key is not None:
             params["idempotency_key"] = idempotency_key
+        if repo_root is not None:
+            params["repo_root"] = repo_root
         return self.call("config.set_layer_value", params)
 
     def registry_update(

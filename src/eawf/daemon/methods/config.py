@@ -62,6 +62,14 @@ from eawf.store.envelope import Envelope
 logger = logging.getLogger(__name__)
 
 
+#: Module-level one-shot flag for the back-compat warning emitted when a
+#: caller omits the ``repo_root`` param. Mirrors the state-side flag in
+#: :data:`eawf.daemon.methods.state._ANCHOR_FALLBACK_WARN_EMITTED` —
+#: one warning per process per surface keeps the daemon log readable
+#: under stale-CLI load.
+_ANCHOR_FALLBACK_WARN_EMITTED: bool = False
+
+
 #: TTL for cached idempotency results (seconds). Mirrors
 #: :data:`eawf.daemon.methods.state.IDEMPOTENCY_TTL_SECONDS` so the
 #: replay window across the two mutator surfaces stays consistent.
@@ -77,15 +85,23 @@ class ReadParams(BaseModel):
     Attributes:
         layer: Optional canonical layer label. When set, only the named
             layer's YAML is loaded and returned (raw). When ``None`` the
-            handler defaults to the ``repo`` layer resolved against
-            ``ctx.state_path``'s parent — the daemonless reader merges
-            layers itself when a merge is needed.
+            handler defaults to the ``repo`` layer resolved against the
+            caller's repo root — the daemonless reader merges layers
+            itself when a merge is needed.
         branch: Branch name (required when ``layer == "branch"``).
+        repo_root: Optional absolute path of the repo whose layered
+            config YAML the daemon should read. The CLI proxy forwards
+            ``flags.workspace`` (or ``Path.cwd()``) here so the daemon
+            — which is one per user, not one per repo — resolves the
+            right anchor regardless of boot-time cwd. Omitting falls
+            back to ``ctx.state_path`` with a one-shot
+            ``daemon_anchor_fallback`` warning.
     """
 
     model_config = ConfigDict(extra="forbid")
     layer: str | None = None
     branch: str | None = None
+    repo_root: str | None = None
 
 
 class ReadResult(BaseModel):
@@ -113,6 +129,9 @@ class SetLayerValueParams(BaseModel):
             Subdirectory form is preserved (``feature/foo`` →
             ``.ea/branches/feature/foo.yaml``).
         idempotency_key: Optional caller-supplied retry key.
+        repo_root: Optional absolute path of the repo whose layered
+            config YAML the daemon should write. Same semantics as
+            the field on :class:`ReadParams`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -121,6 +140,7 @@ class SetLayerValueParams(BaseModel):
     value: Any
     branch: str | None = None
     idempotency_key: str | None = None
+    repo_root: str | None = None
 
 
 class SetWaveValueParams(BaseModel):
@@ -186,9 +206,16 @@ class SetLayerValueResult(BaseModel):
 
 
 class ListLayersParams(BaseModel):
-    """Params for :func:`list_layers` — empty by contract."""
+    """Params for :func:`list_layers`.
+
+    Attributes:
+        repo_root: Optional absolute path of the repo whose layer paths
+            the daemon should enumerate. Same semantics as the field on
+            :class:`ReadParams`.
+    """
 
     model_config = ConfigDict(extra="forbid")
+    repo_root: str | None = None
 
 
 class ListLayersResult(BaseModel):
@@ -239,6 +266,48 @@ def _evict_expired(cache: dict[str, Any], *, now: float) -> None:
 
 
 # ---- Layer-path resolution --------------------------------------------------
+
+
+def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
+    """Log the one-shot ``daemon_anchor_fallback`` deprecation warning.
+
+    Stays a no-op after the first call for the lifetime of the daemon
+    process — mirrors the
+    :data:`eawf.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
+    a stale CLI client does not spam the daemon log.
+    """
+    global _ANCHOR_FALLBACK_WARN_EMITTED
+    if _ANCHOR_FALLBACK_WARN_EMITTED:
+        return
+    logger.warning(
+        f"daemon_anchor_fallback caller omitted 'repo_root' param; "
+        f"resolving against boot-time state_path={ctx.state_path!r}. "
+        f"Update the caller to pass repo_root explicitly — the boot-"
+        f"time fallback will be removed in a future wave."
+    )
+    _ANCHOR_FALLBACK_WARN_EMITTED = True
+
+
+def _resolve_state_anchor(*, repo_root: str | None, ctx: MethodContext) -> Path | None:
+    """Return the effective ``state.json`` anchor for the caller's repo.
+
+    The layered-config helpers all derive their target YAML paths from
+    ``state_path.parent.parent`` (the repo root). This helper centralises
+    the per-request override:
+
+    1. Per-request *repo_root* param wins — ``<repo>/.ea/state.json``.
+    2. Boot-time ``ctx.state_path`` (legacy fallback). Emits a one-shot
+       ``daemon_anchor_fallback`` warning so stale callers surface in
+       the daemon log.
+    3. ``None`` only when both are absent — the caller decides whether
+       that is a fatal error (writers) or a benign skip (global layer).
+    """
+    if repo_root:
+        return Path(repo_root) / ".ea" / "state.json"
+    if isinstance(ctx.state_path, Path):
+        _emit_anchor_fallback_warning(ctx)
+        return ctx.state_path
+    return None
 
 
 def _resolve_layer_path(
@@ -389,7 +458,7 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """
     args = ReadParams.model_validate(params)
     layer = args.layer or "repo"
-    state_path = ctx.state_path if isinstance(ctx.state_path, Path) else None
+    state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     target = _resolve_layer_path(layer, state_path=state_path, branch=args.branch)
     body = load_yaml_layer(target)
     return ReadResult(config=body, layer_path=str(target)).model_dump(mode="json")
@@ -432,7 +501,7 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     dotted = ".".join(args.key_path)
     _ = leaf_key_lookup(dotted)  # raises ValueError on unknown.
 
-    state_path = ctx.state_path if isinstance(ctx.state_path, Path) else None
+    state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
 
     cache = _idempotency_cache(ctx)
@@ -510,8 +579,8 @@ async def list_layers(ctx: MethodContext, params: dict[str, Any]) -> dict[str, A
         — callers walk the tree to enumerate branch files since each
         branch yields a separate yaml file.
     """
-    ListLayersParams.model_validate(params)
-    state_path = ctx.state_path if isinstance(ctx.state_path, Path) else None
+    args = ListLayersParams.model_validate(params)
+    state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     layers: dict[str, str] = {
         "global": str(global_config_path()),
     }

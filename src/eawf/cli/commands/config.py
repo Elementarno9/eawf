@@ -278,7 +278,13 @@ def _daemon_proxy_enabled() -> bool:
     return _proxy_enabled(None)
 
 
-def _save_value_to_layer(*, target_path: Path, key: str, value: Any) -> None:
+def _save_value_to_layer(
+    *,
+    target_path: Path,
+    key: str,
+    value: Any,
+    repo_root: Path | None = None,
+) -> None:
     """Persist ``key=value`` into the YAML layer at *target_path*.
 
     Since P24-W10 this helper is a thin dispatcher:
@@ -286,7 +292,11 @@ def _save_value_to_layer(*, target_path: Path, key: str, value: Any) -> None:
     * **Daemon-proxy arm (default).** When ``daemon.proxy_enabled``
       is ``True`` (the default since W10) AND the daemon is reachable,
       the call routes through ``config.set_layer_value`` RPC. The
-      daemon owns the portalock + atomic-rename + bus publish.
+      daemon owns the portalock + atomic-rename + bus publish. The
+      caller's *repo_root* is forwarded so the daemon resolves the
+      target layer against the right repo (the daemon is one per user;
+      pre-W03 callers could be mis-routed against the daemon's
+      boot-time cwd).
     * **In-process fallback arm.** Reached when (a) ``proxy_enabled``
       is ``False`` (V1 carve-out), (b) ``EAWF_DAEMONLESS=1`` is set,
       (c) the daemon is unreachable, or (d) the path does not map
@@ -297,6 +307,11 @@ def _save_value_to_layer(*, target_path: Path, key: str, value: Any) -> None:
         target_path: Absolute path of the layer's ``config.yaml``.
         key: Dotted config key (e.g. ``"vcs.auto_commit"``).
         value: Typed value to write.
+        repo_root: Absolute path of the repo root the layer belongs to
+            (e.g. ``flags.workspace`` or ``Path.cwd()``). Forwarded to
+            the daemon as the per-request anchor. ``None`` falls back
+            to the daemon's boot-time anchor with a one-shot
+            ``daemon_anchor_fallback`` warning on the daemon side.
 
     Raises:
         IntegrityViolation: Daemon required but unreachable
@@ -325,6 +340,7 @@ def _save_value_to_layer(*, target_path: Path, key: str, value: Any) -> None:
                         layer=layer_label,
                         key_path=key_path,
                         value=value,
+                        repo_root=str(repo_root) if repo_root is not None else None,
                     )
                 return
             except DaemonRpcError as exc:
@@ -422,7 +438,7 @@ def config_set(
 
     coerced = _coerce_value(value)
     try:
-        _save_value_to_layer(target_path=target_path, key=key, value=coerced)
+        _save_value_to_layer(target_path=target_path, key=key, value=coerced, repo_root=repo)
     except ValidationFailed as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
@@ -857,7 +873,7 @@ def config_menu(
         return  # pragma: no cover
 
     try:
-        _save_value_to_layer(target_path=target_path, key=entry.key, value=coerced)
+        _save_value_to_layer(target_path=target_path, key=entry.key, value=coerced, repo_root=repo)
     except ValidationFailed as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover

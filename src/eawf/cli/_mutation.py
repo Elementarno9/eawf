@@ -238,9 +238,14 @@ def state_mutate(
                 "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
                 "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out"
             )
+        repo_root = str((workspace or Path.cwd()).resolve())
         try:
             with DaemonClient() as client:
-                result = client.state_mutate(mutation, idempotency_key=idempotency_key)
+                result = client.state_mutate(
+                    mutation,
+                    idempotency_key=idempotency_key,
+                    repo_root=repo_root,
+                )
         except DaemonRpcError as exc:
             if exc.code == -32601:  # method not found — daemon predates W09
                 logger.debug(

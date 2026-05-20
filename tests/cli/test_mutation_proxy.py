@@ -164,6 +164,7 @@ class _FakeClient:
 
     last_mutation: Mutation | None = None
     last_idempotency: str | None = None
+    last_repo_root: str | None = None
     call_count: int = 0
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
@@ -180,9 +181,11 @@ class _FakeClient:
         mutation: Mutation,
         *,
         idempotency_key: str | None = None,
+        repo_root: str | None = None,
     ) -> dict[str, Any]:
         _FakeClient.last_mutation = mutation
         _FakeClient.last_idempotency = idempotency_key
+        _FakeClient.last_repo_root = repo_root
         _FakeClient.call_count += 1
         return {
             "event": {
@@ -208,6 +211,7 @@ def test_state_mutate_proxy_up_routes_through_daemon(
     monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _FakeClient)
     _FakeClient.last_mutation = None
     _FakeClient.last_idempotency = None
+    _FakeClient.last_repo_root = None
     _FakeClient.call_count = 0
 
     apply_called = [False]
@@ -228,6 +232,12 @@ def test_state_mutate_proxy_up_routes_through_daemon(
     assert _FakeClient.call_count == 1
     assert _FakeClient.last_mutation is not None
     assert _FakeClient.last_mutation.kind is MutationKind.WAVE_CLOSE
+    # P26-W03: the proxy forwards the caller's repo root so the daemon
+    # — which is one per user — resolves the right anchor regardless
+    # of its boot-time cwd. With ``workspace=None`` the helper uses the
+    # resolved ``Path.cwd()`` value.
+    assert _FakeClient.last_repo_root is not None
+    assert Path(_FakeClient.last_repo_root) == Path.cwd().resolve()
     # The proxy path does NOT touch state.json directly; the (fake)
     # daemon owns the on-disk write. The local file stays untouched.
     on_disk = orjson.loads(state_path.read_bytes())
