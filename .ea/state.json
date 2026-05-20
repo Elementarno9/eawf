@@ -1533,7 +1533,8 @@
     "active_wave_ids": [
       "P26-I01-W11",
       "P26-I01-W07",
-      "P26-I01-W13"
+      "P26-I01-W13",
+      "P26-I01-W09"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2954,7 +2955,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:11:22.488072Z",
+  "updated_at": "2026-05-20T13:12:01.203087Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8804,7 +8805,7 @@
       "blocks": [
         "P26-I01-W15"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w09-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8813,10 +8814,8 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/workflow/ship.py",
-        "src/eawf/workflow/coauthor.py",
-        "tests/workflow/test_ship_pipeline.py",
-        "tests/workflow/test_coauthor_envelope.py"
+        "src/eawf/skills/ship.py",
+        "tests/unit/test_skill_ship.py"
       ],
       "id": "P26-I01-W09",
       "iter_id": "P26-I01",
@@ -8824,16 +8823,16 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "tests/workflow/test_coauthor_envelope.py covers (a) runtime auto-detect",
         "(b) project override",
         "(c) disabled mode"
       ],
-      "title": "feat: C04a /ship pipeline + /coauthor envelope + pr_merge_method config read",
+      "title": "feat: C04a /ship pipeline — audit-verdict gate + coauthor trailer + rebase merge",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W09-1779282721"
     },
     "P26-I01-W10": {
       "agent_role": "executor",
@@ -9801,6 +9800,17 @@
       "path": ".ea/worktrees/p26-w08",
       "status": "merged",
       "wave_id": "P26-I01-W08"
+    },
+    "WT-P26-I01-W09-1779282721": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w09",
+      "created_at": "2026-05-20T13:12:01.203087Z",
+      "id": "WT-P26-I01-W09-1779282721",
+      "merged_commit": null,
+      "owner_session_id": "p26-w09-exec",
+      "path": ".ea/worktrees/p26-w09",
+      "status": "active",
+      "wave_id": "P26-I01-W09"
     },
     "WT-P26-I01-W10-1779281346": {
       "base_branch": "feature/eawf-v0.3-p26",
