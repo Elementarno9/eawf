@@ -1,15 +1,14 @@
 """``config.*`` JSON-RPC methods: read / set_layer_value / list_layers
-plus the C08 wave-layer overlay management (set_wave_value /
+plus wave-layer overlay management (set_wave_value /
 clear_wave_overlay / get_wave_overlay).
 
 Daemon-side canonical writer for layered config YAML (authority map
-rows 5-7). Wires P24-W10 sub-phase c of C02 §7.2: every layered-config
-write that previously went through the in-process ``_save_value_to_layer``
-helper now proxies through the ``config.set_layer_value`` RPC by default
-(``daemon.proxy_enabled=True``).
+rows 5-7): every layered-config write that previously went through the
+in-process ``_save_value_to_layer`` helper now proxies through the
+``config.set_layer_value`` RPC by default (``daemon.proxy_enabled=True``).
 
-P25-W14 (C08) extends the writer with the ``branch`` layer (file-backed
-at ``<repo>/.ea/branches/<branch>.yaml``; subdirectory layout for
+The writer also covers the ``branch`` layer (file-backed at
+``<repo>/.ea/branches/<branch>.yaml``; subdirectory layout for
 slash-bearing branch names) and the ``wave`` layer (transient daemon
 RAM, keyed by ``Wave.id``, reset on wave close — see
 ``set_wave_value`` / ``clear_wave_overlay``).
@@ -494,7 +493,7 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
             "use 'config.set_wave_value' instead"
         )
 
-    # C08 leaf-key gate: refuse unknown keys with the canonical error
+    # Leaf-key gate: refuse unknown keys with the canonical error
     # message. The catalog is the source of truth for which dotted
     # paths the daemon may persist; an unknown key is almost always a
     # typo or a stale CLI build.
@@ -644,7 +643,7 @@ async def set_wave_value(ctx: MethodContext, params: dict[str, Any]) -> dict[str
 
     Raises:
         ValueError: When *key_path* references a key absent from the
-            C08 leaf catalog (typo gate).
+            leaf catalog (typo gate).
     """
     args = SetWaveValueParams.model_validate(params)
     dotted = ".".join(args.key_path)

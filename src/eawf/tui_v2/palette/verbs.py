@@ -1,7 +1,7 @@
-"""Static ``/`` command-palette verb registry (C06 §5.6 / Decision D13).
+"""Static ``/`` command-palette verb registry.
 
-The palette reads a **statically declared** registry (D13 picked the
-in-code list over a plugin-discovered one): every operator-reachable verb
+The palette reads a **statically declared** registry (the in-code list
+is picked over a plugin-discovered one): every operator-reachable verb
 is a frozen :class:`PaletteVerb` row carrying its name, one-line hint,
 handler callable, the screens it is allowed on, and the optional profile /
 runtime gates that hide it when the active project does not enable them.
@@ -82,7 +82,7 @@ def _placeholder(verb_name: str) -> VerbHandler:
 
 @dataclass(frozen=True)
 class PaletteVerb:
-    """One row in the static palette verb registry (D13).
+    """One row in the static palette verb registry.
 
     Attributes:
         name: The verb token including the leading slash (e.g. ``/find``,
@@ -134,9 +134,9 @@ def _handle_audit(app: App[None], args: str) -> None:
     modal-cap-aware ``push_modal`` (via
     :func:`~eawf.tui_v2.screens.overlays.audit_running.open_audit_running`).
     The per-check rows fill in as the daemon streams ``check_*`` events to
-    the overlay's ``update_progress`` once the event subscription lands
-    (C06 §5.8); until then the overlay opens with the scope label parsed
-    from *args* and no checks. The ``audit_completed`` (verdict=fail) flow
+    the overlay's ``update_progress`` once the event subscription lands;
+    until then the overlay opens with the scope label parsed from *args*
+    and no checks. The ``audit_completed`` (verdict=fail) flow
     that swaps in the audit-failed overlay is daemon-push driven.
 
     Args:
@@ -155,8 +155,8 @@ def _handle_audit(app: App[None], args: str) -> None:
 def _handle_roadmap(app: App[None], args: str) -> None:
     """Open the plan-mode preview for ``/roadmap propose`` (the ``/roadmap`` verb).
 
-    The plan-mode surface (C06 §5.7 / D4): when the sub-verb is
-    ``propose`` (the path that returns ``status=needs_user``), this builds
+    The plan-mode surface: when the sub-verb is ``propose`` (the path
+    that returns ``status=needs_user``), this builds
     the proposed phase's wave-DAG tree via
     :func:`~eawf.tui_v2.screens.overlays.plan_preview.build_plan_tree` from
     the App's bound state and opens
@@ -221,8 +221,8 @@ def _handle_metrics(app: App[None], args: str) -> None:
     modal-cap-aware ``push_modal`` (via
     :func:`~eawf.tui_v2.screens.overlays.metrics.open_metrics`). The six
     tiles open with their placeholders and arm the 5 s refresh seam; they
-    fill in once the daemon telemetry-projection RPC is wired (C06 §5.10 /
-    C09 + C02). Read-only — opening the dashboard mutates nothing.
+    fill in once the daemon telemetry-projection RPC is wired. Read-only
+    — opening the dashboard mutates nothing.
 
     Args:
         app: The running App.
@@ -240,7 +240,7 @@ def _handle_pr(app: App[None], args: str) -> None:
     through the modal-cap-aware ``push_modal`` (via
     :func:`~eawf.tui_v2.screens.overlays.pr_list.open_pr_list`). The list
     opens empty with the ``gh``-shell-out placeholder; the lazy
-    ``gh pr list --json`` fetch + 60 s cache (D21) lands later this band —
+    ``gh pr list --json`` fetch + 60 s cache lands later this band —
     the overlay degrades gracefully when ``gh`` is absent. Read-only.
 
     Args:
@@ -261,7 +261,7 @@ def _handle_events(app: App[None], args: str) -> None:
     opens :class:`~eawf.tui_v2.screens.overlays.events.EventsModal`
     through the modal-cap-aware ``push_modal`` (via
     :func:`~eawf.tui_v2.screens.overlays.events.open_events`). The live
-    daemon-push ring buffer (C06 §5.8) prepends to this seed tail when the
+    daemon-push ring buffer prepends to this seed tail when the
     subscription lands; the ``f`` filter cycle + render path is reused.
 
     Args:
@@ -277,7 +277,7 @@ def _handle_events(app: App[None], args: str) -> None:
     open_events(app, load_recent_events(event_path))
 
 
-#: The static verb registry (D13). Order is display order in the palette
+#: The static verb registry. Order is display order in the palette
 #: before fuzzy ranking. Handlers that land in a later wave use
 #: :func:`_placeholder` so the registry is complete now and the follow-up
 #: wave swaps the handler in place.

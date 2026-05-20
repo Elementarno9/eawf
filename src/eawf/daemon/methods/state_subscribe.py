@@ -1,8 +1,8 @@
 """``state.subscribe`` — vocabulary alias for :func:`event.subscribe`.
 
-C02 §5.3.1 keeps ``state.subscribe`` in the public surface for callers
-that think of the live stream as "state changed" rather than "event
-emitted"; the two names share one implementation (see
+``state.subscribe`` stays in the public surface for callers that think
+of the live stream as "state changed" rather than "event emitted"; the
+two names share one implementation (see
 :func:`eawf.daemon.methods.event.subscribe`).
 
 The streamer itself runs out of the connection handler in

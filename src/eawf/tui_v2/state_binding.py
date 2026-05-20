@@ -1,11 +1,11 @@
 """Read-only bridge from ``state.json`` into the TUI's reactive data.
 
-The C06 operator surface binds the daemon ``state.json`` into the
-:class:`~eawf.tui_v2.app.EaApp` reactive layer. Per Decision D19 of the
-C06 brief the long-term shape is *daemon-push primary + mtime-poll
-fallback*: the TUI subscribes to the daemon ``event.subscribe`` stream
-when the daemon is up and falls back to a 2 s mtime poll when it is not
-(the V1 daemonless carve-out). This module ships the **fallback leg**
+The operator surface binds the daemon ``state.json`` into the
+:class:`~eawf.tui_v2.app.EaApp` reactive layer. The long-term shape is
+*daemon-push primary + mtime-poll fallback*: the TUI subscribes to the
+daemon ``event.subscribe`` stream when the daemon is up and falls back
+to a 2 s mtime poll when it is not (the daemonless carve-out). This
+module ships the **fallback leg**
 that works today — a direct, read-only load of ``state.json`` plus an
 mtime-poll loop — and exposes the seams (``connect`` / ``disconnect``,
 the ``on_state`` / ``on_degraded`` callbacks) the daemon-push leg slots

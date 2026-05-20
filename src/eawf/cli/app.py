@@ -97,16 +97,16 @@ def _root(
         debug=debug,
     )
     # Record the --daemonless flag process-wide so the shared
-    # state_transaction chokepoint can reject mutating verbs per C05
-    # §5.5 without each command threading the flag through. Always set
-    # (incl. False) so the record reflects only this invocation.
+    # state_transaction chokepoint can reject mutating verbs without
+    # each command threading the flag through. Always set (incl. False)
+    # so the record reflects only this invocation.
     from eawf.cli._mutation import set_daemonless_flag
 
     set_daemonless_flag(daemonless)
     if ctx.invoked_subcommand is None:
         # Bare ``eawf`` on a TTY routes to the Textual TUI
-        # (config.ui.bare_command default: "tui") via the C06 scope-
-        # dispatch ladder; plain / no-input / non-TTY falls back to the
+        # (config.ui.bare_command default: "tui") via the scope-dispatch
+        # ladder; plain / no-input / non-TTY falls back to the
         # deterministic status emission so headless callers stay
         # script-stable.
         rc = _dispatch_tui(workspace=workspace, no_input=no_input, plain=plain_output)
@@ -119,7 +119,7 @@ def _dispatch_tui(
     no_input: bool,
     plain: bool,
 ) -> int:
-    """Resolve the launch scope and open the TUI (C06 §5.2 / D10).
+    """Resolve the launch scope and open the TUI.
 
     On an interactive TTY this resolves the scope via the cwd-upward
     ladder (``-w/--workspace`` flag wins, else the nearest ``state.json``
@@ -128,13 +128,12 @@ def _dispatch_tui(
     set or stdout is not a TTY it falls back to the deterministic
     single-frame status emission so headless callers stay script-stable.
 
-    Per the C06 migration plan the bare-``eawf`` default is the new
-    ``tui_v2`` surface; the legacy ``src/eawf/tui/`` tree stays as a
-    parallel artifact for one alpha cycle and is reachable via the
-    ``EAWF_TUI_LEGACY=1`` escape hatch (an operator who hits a regression
-    in ``tui_v2`` can opt back). Deletion of the legacy tree is deferred
-    to a follow-up phase, not this one — see
-    :mod:`eawf.tui_v2.snapshot` and the C06 brief §7.7 migration safety.
+    The bare-``eawf`` default is the new ``tui_v2`` surface; the legacy
+    ``src/eawf/tui/`` tree stays as a parallel artifact for one alpha
+    cycle and is reachable via the ``EAWF_TUI_LEGACY=1`` escape hatch
+    (an operator who hits a regression in ``tui_v2`` can opt back).
+    Deletion of the legacy tree is deferred to a follow-up phase, not
+    this one — see :mod:`eawf.tui_v2.snapshot` for migration safety.
 
     Args:
         workspace: Optional workspace root from ``-w/--workspace``.
@@ -482,13 +481,13 @@ from eawf.cli.commands.spec import spec_app  # noqa: E402
 app.add_typer(spec_app, name="spec", rich_help_panel=panel_for("spec"))
 # --- end P25 W03 ---
 
-# --- P26 W06 completion + help registrations (C05 § 5.6 / § 5.7) ---
+# --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402
 
 app.add_typer(completion_app, name="completion", rich_help_panel=panel_for("completion"))
 app.add_typer(help_app, name="help", rich_help_panel=panel_for("help"))
-# --- end P26 W06 ---
+# --- end completion + help registrations ---
 
 
 def main() -> None:

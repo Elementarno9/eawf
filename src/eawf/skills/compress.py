@@ -1,8 +1,8 @@
 """``/compress`` skill — compress the session conversation near the limit.
 
-C04b §5.4 lands ``/compress`` as the skill surface that compacts a
-session's conversation when its context approaches the model limit. It
-wires to the V8 cache-control hooks and emits a ``compression_emitted``
+``/compress`` is the skill surface that compacts a session's
+conversation when its context approaches the model limit. It wires to
+the V8 cache-control hooks and emits a ``compression_emitted``
 event carrying the token counts before and after the pass so the
 telemetry projector can chart context pressure over a session.
 
@@ -79,7 +79,7 @@ def _coerce_tokens(value: Any) -> int | None:
 
 @register
 class CompressSkill(Skill):
-    """Concrete ``/compress`` skill (C04b §5.4)."""
+    """Concrete ``/compress`` skill."""
 
     name: SkillName = "/compress"
 
@@ -113,8 +113,8 @@ class CompressSkill(Skill):
         ratio = round(tokens_after / tokens_before, 4)
 
         runtime_id = str(args.get("runtime") or _DEFAULT_RUNTIME)
-        # Wire the cache-control side (C04d D-d2): build the per-runtime
-        # compression directive so the emitted event records whether the
+        # Wire the cache-control side: build the per-runtime compression
+        # directive so the emitted event records whether the
         # post-compression prefix carried a caller-side cache-control
         # marker. An unknown runtime id is a caller error, not a crash.
         try:

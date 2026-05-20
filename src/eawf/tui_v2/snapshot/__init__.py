@@ -1,15 +1,15 @@
-"""C06 snapshot + cast harness for the ``tui_v2`` operator surface.
+"""Snapshot + cast harness for the ``tui_v2`` operator surface.
 
 Two deterministic, CI-stable capture surfaces driven by Textual's
 ``App.run_test()`` Pilot:
 
 * :mod:`~eawf.tui_v2.snapshot.pilot_harness` — captures a running
   screen's rendered terminal as **plain ASCII text** (one line per
-  terminal row, trailing whitespace trimmed). Per the C06 brief Q-new1
-  OVERRIDE, snapshots are ASCII text — not SVG / binary — so the goldens
-  are diffable in code review, scrub-safe (no machine paths or PII leak
-  through a rendered pane), and free of the Python-version + Textual-
-  version byte-drift that SVG ``export_screenshot`` output carries.
+  terminal row, trailing whitespace trimmed). Snapshots are ASCII text
+  — not SVG / binary — so the goldens are diffable in code review,
+  scrub-safe (no machine paths or PII leak through a rendered pane), and
+  free of the Python-version + Textual-version byte-drift that SVG
+  ``export_screenshot`` output carries.
 * :mod:`~eawf.tui_v2.snapshot.asciinema` — composes an asciinema v2
   cast of a scripted TUI session for docs / demos, using the same
   ASCII-text capture at a fixed monotonic cadence (no real-time terminal
@@ -23,9 +23,8 @@ alike — so a single capture path serves screen + overlay fixtures.
 Legacy ``src/eawf/tui/`` migration verdict
 ------------------------------------------
 
-This module closes the C06 TUI band. The migration verdict for the
-legacy ``src/eawf/tui/`` parallel tree (per the C06 brief §7.5-§7.7 and
-the Codex C06-I010 ratification) is recorded here as the band's
+This module closes the TUI band. The migration verdict for the
+legacy ``src/eawf/tui/`` parallel tree is recorded here as the band's
 single source of truth:
 
 1. **The legacy ``src/eawf/tui/`` tree STAYS through the close of this
@@ -42,10 +41,10 @@ single source of truth:
    ``--plain`` / ``--no-input`` fallback continues to use the legacy
    deterministic status renderer regardless of the flag.
 4. **Deletion of ``src/eawf/tui/`` is DEFERRED to a follow-up phase.**
-   The brief's §7.5-W04 "delete the legacy tree" step does **not** run in
-   this phase — the deletion (and the salvage of any shared constants)
-   moves to a later phase per the C06-I010 verdict, keeping the
-   defense-in-depth fallback available for the alpha cycle.
+   The "delete the legacy tree" step does **not** run in this phase —
+   the deletion (and the salvage of any shared constants) moves to a
+   later phase, keeping the defense-in-depth fallback available for the
+   alpha cycle.
 """
 
 from __future__ import annotations

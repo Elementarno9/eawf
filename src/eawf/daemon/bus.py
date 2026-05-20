@@ -38,7 +38,7 @@ DEFAULT_QUEUE_SIZE: Final[int] = 1024
 
 #: Maximum number of events the catch-up reader will replay before
 #: raising :class:`CatchUpTooLargeError`. Subscribers exceeding the
-#: bound MUST refresh from a state snapshot first (C02 §5.7).
+#: bound MUST refresh from a state snapshot first.
 CATCH_UP_MAX: Final[int] = 10000
 
 
@@ -46,8 +46,8 @@ class CatchUpTooLargeError(RuntimeError):
     """Raised when :func:`catch_up` would replay more than ``CATCH_UP_MAX`` events.
 
     The JSON-RPC layer maps this to error code ``-32008
-    catch_up_too_large`` per C02 §5.7. The subscriber must fetch a
-    state snapshot before reconnecting.
+    catch_up_too_large``. The subscriber must fetch a state snapshot
+    before reconnecting.
     """
 
 

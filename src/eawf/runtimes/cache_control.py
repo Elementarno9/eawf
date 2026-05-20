@@ -1,25 +1,24 @@
-"""Per-runtime cache-control marker injection (C04d D-d2 / C07a §5.6).
+"""Per-runtime cache-control marker injection.
 
-C04d D-d2 places cache-control marker injection at the **adapter
-layer**: a skill body never sees cache markers; the adapter injects
-them per its runtime's convention. This module owns the *pure*
-injection policy — the typed marker model + the per-runtime decision
-of whether a caller-side marker is materialised — so each adapter's
-``open_session`` routes its ``cache_prefix`` through one shared gate
-instead of carrying a parallel hard-coded table.
+Cache-control marker injection lives at the **adapter layer**: a skill
+body never sees cache markers; the adapter injects them per its
+runtime's convention. This module owns the *pure* injection policy —
+the typed marker model + the per-runtime decision of whether a
+caller-side marker is materialised — so each adapter's ``open_session``
+routes its ``cache_prefix`` through one shared gate instead of carrying
+a parallel hard-coded table.
 
 The decision is driven by the YAML capability matrix
 (``capabilities.yaml`` ``cache_control`` row) via
 :func:`eawf.runtimes.selector.runtime_supports`, keeping the matrix the
-single source of truth (C07a §G9 + D8). Per §5.6 only ``claude-code``
-exposes a caller-side marker
-(``<cache_control type="ephemeral" />``); ``codex`` (OpenAI prompt
-caching is automatic at the ≥1024-token threshold) and ``opencode``
-(the ``@ai-sdk/anthropic`` provider injects internally + the OAuth path
-strips the marker per upstream ``#17910``) are **no-op paths** — the
-prompt is returned unchanged.
+single source of truth. Only ``claude-code`` exposes a caller-side
+marker (``<cache_control type="ephemeral" />``); ``codex`` (OpenAI
+prompt caching is automatic at the ≥1024-token threshold) and
+``opencode`` (the ``@ai-sdk/anthropic`` provider injects internally +
+the OAuth path strips the marker per upstream ``#17910``) are **no-op
+paths** — the prompt is returned unchanged.
 
-The ``/compress`` skill (C04b §5.4) wires to this module via
+The ``/compress`` skill wires to this module via
 :func:`compression_directive`: the skill records the requested token
 deltas and the per-runtime cache-control applicability so the telemetry
 projector can correlate a compression pass with the runtime's caching
@@ -70,10 +69,10 @@ _EPHEMERAL_MARKER: Final[str] = '<cache_control type="ephemeral" />'
 class CacheControlMarker(BaseModel):
     """A caller-side cache-control breakpoint (Claude ``cache_control``).
 
-    Per C07a §5.6 only Claude accepts a caller-side marker; the marker
-    is appended to the dispatch *cache prefix* (the stable prompt head
-    the runtime caches). The model is frozen so a single shared default
-    instance is safe to reuse across adapters.
+    Only Claude accepts a caller-side marker; the marker is appended to
+    the dispatch *cache prefix* (the stable prompt head the runtime
+    caches). The model is frozen so a single shared default instance is
+    safe to reuse across adapters.
 
     Attributes:
         marker_type: Breakpoint type. ``"ephemeral"`` is the only
@@ -132,12 +131,12 @@ def inject_cache_control(
     """Inject a cache-control marker into ``cache_prefix`` at the adapter boundary.
 
     The single injection gate every adapter routes its ``cache_prefix``
-    through (C04d D-d2). For a runtime whose matrix ``cache_control``
-    cell is ``supported`` (``claude-code``) the marker token is appended
-    to the prefix; for an ``unsupported`` runtime (``codex`` /
-    ``opencode``) this is a **no-op** and ``cache_prefix`` is returned
-    unchanged — the runtime caches via prefix-stability + session
-    resume, with no caller-side knob (§5.6).
+    through. For a runtime whose matrix ``cache_control`` cell is
+    ``supported`` (``claude-code``) the marker token is appended to the
+    prefix; for an ``unsupported`` runtime (``codex`` / ``opencode``)
+    this is a **no-op** and ``cache_prefix`` is returned unchanged — the
+    runtime caches via prefix-stability + session resume, with no
+    caller-side knob.
 
     A ``None`` ``cache_prefix`` (no caller-supplied prefix) is returned
     as ``None`` regardless of runtime: there is nothing to mark.
@@ -168,7 +167,7 @@ def inject_cache_control(
 
 
 class CompressionDirective(BaseModel):
-    """``/compress`` -> cache-control hook product (C04b §5.4 / C04d D-d2).
+    """``/compress`` -> cache-control hook product.
 
     The typed bridge between the ``/compress`` skill body and the
     per-runtime cache-control layer. The skill computes the token deltas
@@ -208,10 +207,10 @@ def compression_directive(
 
     Resolves the per-runtime cache-control applicability off the YAML
     matrix and packages it with the token deltas. The skill body folds
-    the result into its ``compression_emitted`` event payload (criterion
-    b) so the cache-control side is wired without the skill knowing the
-    per-runtime convention (C04d D-d2 — the adapter / this module owns
-    the marker decision, not the skill body).
+    the result into its ``compression_emitted`` event payload so the
+    cache-control side is wired without the skill knowing the
+    per-runtime convention (the adapter / this module owns the marker
+    decision, not the skill body).
 
     Args:
         runtime_id: Canonical runtime id the compression pass targets.

@@ -1,10 +1,9 @@
-"""``WorkspaceScreen`` — workspace-scope strip + zoom screen (C06 §5.5).
+"""``WorkspaceScreen`` — workspace-scope strip + zoom screen.
 
-Per the C06 brief §5.5 (``workspace-and-user-tui.md`` §2 [8:60-126]):
-the workspace screen composes a top **strip** (one summary row per
+The workspace screen composes a top **strip** (one summary row per
 linked repo) above a **zoom** quadrant scoped to the focused repo,
 inside the :class:`~eawf.tui_v2.scopes.ScopeScreen` shared chassis
-(Header + Footer + Heartbeat reused verbatim per Decision D3).
+(Header + Footer + Heartbeat reused verbatim).
 
 The dedicated strip/zoom sub-widgets the brief names
 (``WorkspaceTopStrip`` — a per-repo ``DataTable`` with expansion-on-focus
@@ -22,7 +21,7 @@ catalog in the strip+zoom arrangement so the screen renders live today:
 
 This screen overrides **only** :meth:`compose_body` plus its scope
 bindings + footer hints; the entire chassis is inherited from
-:class:`~eawf.tui_v2.scopes.ScopeScreen` (D3 zero-duplication).
+:class:`~eawf.tui_v2.scopes.ScopeScreen` (zero-duplication).
 """
 
 from __future__ import annotations

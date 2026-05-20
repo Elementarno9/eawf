@@ -1,4 +1,4 @@
-"""``/security-review`` skill body (C04b §5.6).
+"""``/security-review`` skill body.
 
 Mirrors the dict body emitted by
 :class:`eawf.skills.security_review.SecurityReviewSkill`: the per-check

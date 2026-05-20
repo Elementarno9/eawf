@@ -1,9 +1,8 @@
-"""Textual ``EaApp`` — the C06 operator-surface entry point (tui_v2).
+"""Textual ``EaApp`` — the operator-surface entry point (tui_v2).
 
-This is the START of the C06 TUI rebuild. Per the operator decision of
-2026-05-18 the v0.3+ TUI is **Textual** (reversing the prior P14 ``rich``
-pick); the legacy ``src/eawf/tui/`` tree stays untouched until its
-cutover is ratified in a later wave. This module ships the App shell:
+The v0.3+ TUI is **Textual** (reversing the prior ``rich`` pick); the
+legacy ``src/eawf/tui/`` tree stays untouched until its cutover is
+ratified in a later wave. This module ships the App shell:
 
 * :class:`EaApp` — a :class:`textual.app.App` subclass that resolves to
   one of three scope screens (``repo`` / ``workspace`` / ``user``) on
@@ -16,9 +15,9 @@ cutover is ratified in a later wave. This module ships the App shell:
   reactive plumbing, header branding, footer keymap, and scope-dispatch
   contract those waves build on.
 
-Scope dispatch (per C06 §5.2 / Decision D10) lives in the CLI bare-
-command handler (:mod:`eawf.cli.app`); this module receives the already-
-resolved ``scope`` + ``state_path`` and renders the matching screen.
+Scope dispatch lives in the CLI bare-command handler
+(:mod:`eawf.cli.app`); this module receives the already-resolved
+``scope`` + ``state_path`` and renders the matching screen.
 
 Branding + keymap follow the operator conventions: the header brand is
 the literal ``Eä`` (capital E + a-umlaut), bold accent, positioned
@@ -63,7 +62,7 @@ logger = logging.getLogger(__name__)
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.state.enums.ScopeKind`; ``user`` is the registry-
 #: scoped portfolio view that has no ``state.json`` ``scope_kind`` of its
-#: own (resolved from a populated ``~/.eawf/registry.json`` per D10).
+#: own (resolved from a populated ``~/.eawf/registry.json``).
 ScopeName = Literal["repo", "workspace", "user"]
 
 #: Backwards-compatible alias for the breadcrumb builder. The canonical
@@ -77,9 +76,9 @@ _breadcrumb = build_breadcrumb
 class EaApp(App[None]):
     """Single Textual app; one of three scope screens chosen on launch.
 
-    The scope is resolved by the CLI bare-command handler (per Decision
-    D10) and handed in via :paramref:`scope`; this app pushes the
-    matching screen in ``on_mount`` and binds ``state.json`` into the
+    The scope is resolved by the CLI bare-command handler and handed in
+    via :paramref:`scope`; this app pushes the matching screen in
+    ``on_mount`` and binds ``state.json`` into the
     reactive :attr:`state` attribute through
     :class:`~eawf.tui_v2.state_binding.StateBinding`.
     """
@@ -88,10 +87,10 @@ class EaApp(App[None]):
 
     #: Maximum number of stacked :class:`~textual.screen.ModalScreen`
     #: overlays (command palette, detail card, confirm, help, and the
-    #: audit / plan-preview overlays of later waves). Per the C06 brief
-    #: §5.7 the cap is **3** — deep enough for the plan-mode → edit →
-    #: confirm flow, shallow enough to keep the stack legible. A fourth
-    #: push is rejected by :meth:`push_modal` with a toast.
+    #: audit / plan-preview overlays of later waves). The cap is **3** —
+    #: deep enough for the plan-mode → edit → confirm flow, shallow
+    #: enough to keep the stack legible. A fourth push is rejected by
+    #: :meth:`push_modal` with a toast.
     MAX_MODAL_DEPTH: ClassVar[int] = 3
 
     #: Global key bindings shared across every scope screen. Arrow keys
@@ -200,12 +199,11 @@ class EaApp(App[None]):
     def push_modal(self, modal: ModalScreen[Any]) -> bool:
         """Push *modal* unless the stack is already at :attr:`MAX_MODAL_DEPTH`.
 
-        The single modal-stack-cap gate (C06 §5.7 / failure mode F6): every
-        overlay-opening path (the ``/`` palette, the ``?`` help, the
-        row-drill DetailModal, the destructive ConfirmModal, and the
-        later-wave overlays) routes through here so the depth limit is
-        enforced in exactly one place. A rejected push toasts and mutates
-        nothing.
+        The single modal-stack-cap gate: every overlay-opening path (the
+        ``/`` palette, the ``?`` help, the row-drill DetailModal, the
+        destructive ConfirmModal, and the later-wave overlays) routes
+        through here so the depth limit is enforced in exactly one place.
+        A rejected push toasts and mutates nothing.
 
         Args:
             modal: The overlay screen to push.
@@ -240,8 +238,8 @@ class EaApp(App[None]):
     def action_open_help(self) -> None:
         """Open the ``?`` help overlay (cap-checked, single-instance).
 
-        Per D31 a second ``?`` (or ``/help``) while the help overlay is
-        already open is a no-op — the :attr:`_help_open` guard suppresses
+        A second ``?`` (or ``/help``) while the help overlay is already
+        open is a no-op — the :attr:`_help_open` guard suppresses
         the duplicate push so the operator cannot exhaust the stack cap by
         holding ``?``. The guard clears when the overlay dismisses.
         """

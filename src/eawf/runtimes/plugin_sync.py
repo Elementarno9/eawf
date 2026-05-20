@@ -1,8 +1,7 @@
 """``eawf plugin sync`` — regenerate per-runtime artifacts deterministically.
 
-V9 (C07a brief §5.7-§5.9; XB10 added 2026-05-18) names plugin sync
-as the canonical per-runtime artifact regeneration verb. The
-existing ``eawf plugin install <runtime>`` surface stays as the
+Plugin sync is the canonical per-runtime artifact regeneration verb.
+The existing ``eawf plugin install <runtime>`` surface stays as the
 per-runtime affordance; ``plugin sync`` is the **single-shot
 multi-runtime** orchestrator that drives all three runtimes in one
 call, deterministically derived from :data:`SKILL_REGISTRY` +

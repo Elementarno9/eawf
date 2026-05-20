@@ -74,10 +74,9 @@ from eawf.store.paths import store_path
 
 logger = logging.getLogger(__name__)
 
-# Freshness window for PLANNED phases / iters and dormant iters (D17
-# iter-bump triggers note repair-cycle thresholds, but the renderer is a
-# read-only diagnostic — 14 days mirrors the memory-staleness default in
-# :mod:`eawf.memory.staleness`).
+# Freshness window for PLANNED phases / iters and dormant iters. The
+# renderer is a read-only diagnostic — 14 days mirrors the
+# memory-staleness default in :mod:`eawf.memory.staleness`.
 _STALE_AGE_DAYS = 14
 
 roadmap_app = typer.Typer(

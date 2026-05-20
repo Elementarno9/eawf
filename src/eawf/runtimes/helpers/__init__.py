@@ -3,14 +3,13 @@
 Background
 ----------
 
-The pre-W11 per-runtime renderers (``eawf.runtimes.{claude,codex,
+The earlier per-runtime renderers (``eawf.runtimes.{claude,codex,
 opencode}.plugin_install``) shipped with significant copy-paste:
 ``_classify`` / ``_ensure_dir`` / blake2b body-hash construction /
 sidecar fingerprint (JSON minus ``generated_at`` + derived ``hash``) /
-the ``_DEFAULT_TIMESTAMP`` constant. KISS-004 (C07a brief §4.1)
-caps the consolidated helper module at **<300 LOC** so the
-duplication shrinks without the helper itself ballooning into a
-mini-framework.
+the ``_DEFAULT_TIMESTAMP`` constant. A KISS LOC budget caps the
+consolidated helper module at **<300 LOC** so the duplication shrinks
+without the helper itself ballooning into a mini-framework.
 
 Public surface (all pure, no IO side-effects):
 

@@ -1,8 +1,8 @@
-"""Per-runtime adapter Protocol + supporting types (C07a §5.1, §5.5).
+"""Per-runtime adapter Protocol + supporting types.
 
 This module defines the **single Protocol** every runtime adapter
-implements. The daemon's dispatch router (C07a §5.8) loads adapters
-from ``src/eawf/runtimes/<id>/adapter.py``; each implementation is a
+implements. The daemon's dispatch router loads adapters from
+``src/eawf/runtimes/<id>/adapter.py``; each implementation is a
 plain class that satisfies the structural :class:`RuntimeAdapter`
 Protocol.
 
@@ -12,20 +12,20 @@ Boundaries
 * :class:`RuntimeAdapter` — structural Protocol the daemon imports +
   uses to type its adapter registry. ``@runtime_checkable`` so the
   daemon can ``isinstance(adapter, RuntimeAdapter)`` at load time
-  (catches F1 third-party-adapter Protocol-mismatch per §6).
+  (catches third-party-adapter Protocol-mismatch).
 * :data:`ErrorClass` — closed ``Literal`` of the five canonical
-  error-class strings per §5.5. Adapters return ONE of these from
+  error-class strings. Adapters return ONE of these from
   :meth:`RuntimeAdapter.parse_error`.
 * :class:`SessionResumeFailedError` — raised by :meth:`continue_session`
   when the runtime cannot resume the session (deleted log, corrupted
   state, expired session); the daemon catches this and falls back to
-  fresh per §5.8 + V8 fall-through.
+  fresh via the V8 fall-through.
 * :func:`emit_runtime_event` — helper that constructs canonical
   :class:`~eawf.store.kinds.event.Event` rows for the three
   dispatch-side event kinds adapters emit: ``runtime_switched``,
-  ``session_continued``, ``session_failover``. Per D14 + XB07 the
-  ``Event`` model from :mod:`eawf.store.kinds.event` is the single
-  source of truth; adapters never roll their own envelope.
+  ``session_continued``, ``session_failover``. The ``Event`` model
+  from :mod:`eawf.store.kinds.event` is the single source of truth;
+  adapters never roll their own envelope.
 
 Naming convention
 -----------------
@@ -58,12 +58,12 @@ ErrorClass = Literal[
     "RUNTIME_API_ERROR",
     "RUNTIME_AUTH_ERROR",
 ]
-"""Canonical error-class set per C07a §5.5.
+"""Canonical error-class set.
 
 Adapters return ONE of these from :meth:`RuntimeAdapter.parse_error`;
 the daemon validates against this closed set and treats an unknown
 return value as ``RUNTIME_API_ERROR`` while emitting a
-``runtime_error_class_unknown`` event (F4)."""
+``runtime_error_class_unknown`` event."""
 
 RUNTIME_RATE_LIMIT: Final[ErrorClass] = "RUNTIME_RATE_LIMIT"
 RUNTIME_SERVER_ERROR: Final[ErrorClass] = "RUNTIME_SERVER_ERROR"
@@ -93,8 +93,8 @@ class SessionResumeFailedError(Exception):
     The daemon's dispatch router catches this exception and falls back
     to a fresh ``open_session`` call, annotating the resulting
     :class:`~eawf.state.models.DispatchAnnotation` with
-    ``DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`` (per V8
-    fall-through, C07a §5.8).
+    ``DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`` (per the V8
+    fall-through).
     """
 
 
@@ -198,13 +198,13 @@ class RuntimeAdapter(Protocol):
         """Whether this adapter supports :meth:`continue_session`.
 
         OpenCode's v0.3 adapter returns ``False`` until the session
-        path catalog is fully verified (F12 in §6); the daemon
-        treats every dispatch as fresh under that branch.
+        path catalog is fully verified; the daemon treats every
+        dispatch as fresh under that branch.
         """
 
 
 # ---------------------------------------------------------------------------
-# Event emission helpers (D14 / XB07 — canonical Event model)
+# Event emission helpers (canonical Event model)
 # ---------------------------------------------------------------------------
 
 
@@ -236,9 +236,9 @@ def emit_runtime_event(
 ) -> Event:
     """Construct a canonical :class:`Event` for adapter-side emission.
 
-    Per D14 + XB07 the :class:`~eawf.store.kinds.event.Event` model is
-    the **single source of truth** — adapters do NOT roll their own
-    envelope. This helper centralises the construction so every
+    The :class:`~eawf.store.kinds.event.Event` model is the **single
+    source of truth** — adapters do NOT roll their own envelope. This
+    helper centralises the construction so every
     adapter populates ``event_kind`` from the closed Literal subset
     :data:`DispatchEventKind` (rules out emitting wave-lifecycle
     kinds from the adapter layer).

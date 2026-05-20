@@ -1,7 +1,7 @@
 """``/agent-dispatch`` skill — dispatch a wave to a runtime (V8 reuse).
 
-C04b §5.3 lands ``/agent-dispatch`` as the skill surface that routes a
-claimed wave to a runtime per the V8 hybrid session-reuse contract. The
+``/agent-dispatch`` is the skill surface that routes a claimed wave to
+a runtime per the V8 hybrid session-reuse contract. The
 canonical mutator is the daemon's ``agent.dispatch`` RPC; the skill does
 not perform the dispatch itself. It resolves the runtime ladder for the
 target wave and folds the resolution into a dict envelope body, routing
@@ -63,7 +63,7 @@ def _coerce_ladder(value: Any) -> list[str]:
 
 @register
 class AgentDispatchSkill(Skill):
-    """Concrete ``/agent-dispatch`` skill (C04b §5.3)."""
+    """Concrete ``/agent-dispatch`` skill."""
 
     name: SkillName = "/agent-dispatch"
 

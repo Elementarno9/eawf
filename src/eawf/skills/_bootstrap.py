@@ -4,21 +4,20 @@ Importing this module is the canonical way to ensure every builtin
 ``Skill`` subclass is registered with :mod:`eawf.skills.registry`. Each
 skill module is imported for its registration decorator (``@register``);
 the imports are otherwise unused. The catalog spans the six core + four
-meta workflow skills, ``/blitz`` (P15), and the six C04b skills
+meta workflow skills, ``/blitz``, and the six skill-surface bodies
 (``/coauthor``, ``/memory``, ``/agent-dispatch``, ``/compress``,
 ``/wave-spec``, ``/security-review``).
 
 The CLI surface (`eawf.cli.commands.skill`) imports this module so
-``eawf skill list`` reports every skill as ``installed`` once W02 + W03
-have landed.
+``eawf skill list`` reports every skill as ``installed``.
 
 A dedicated module avoids two failure modes:
 
 1. Putting the imports in :mod:`eawf.skills.__init__` would force every
    importer of ``eawf.skills`` to pay the registration cost — including
-   tests that explicitly want the registry empty (e.g. the W07
-   ``test_skill_list_shows_all_ten_names_missing_by_default`` predates
-   W02 and unregisters first).
+   tests that explicitly want the registry empty (e.g.
+   ``test_skill_list_shows_all_ten_names_missing_by_default``
+   unregisters first).
 2. Putting the imports inside the CLI handler at call time would force
    the import on every command (slows ``--help``).
 

@@ -1,14 +1,13 @@
-"""Codex CLI adapter — implements :class:`RuntimeAdapter` (C07a §5.1).
+"""Codex CLI adapter — implements :class:`RuntimeAdapter`.
 
-Codex CLI = ``codex exec``. Per §5.2 + §5.6 there is no caller-side
-``cache_control`` marker (OpenAI prompt caching is automatic at the
-≥1024-token threshold); :attr:`supports_cache_control` is therefore
-``False``.
+Codex CLI = ``codex exec``. There is no caller-side ``cache_control``
+marker (OpenAI prompt caching is automatic at the ≥1024-token
+threshold); :attr:`supports_cache_control` is therefore ``False``.
 
-Per §5.4 Codex session logs live under ``$CODEX_HOME`` (date-sharded
-JSONL); the adapter caches ``(session_id → path)`` at dispatch time so
-subsequent retries skip the tree walk. v0.3 ships the typed surface
-only; the live walk lands in P26-SURFACES.
+Codex session logs live under ``$CODEX_HOME`` (date-sharded JSONL); the
+adapter caches ``(session_id → path)`` at dispatch time so subsequent
+retries skip the tree walk. v0.3 ships the typed surface only; the live
+walk lands in a later wave.
 """
 
 from __future__ import annotations
@@ -46,9 +45,9 @@ class CodexAdapter:
     id: str = "codex"
     cli_binary: str = "codex"
     # ``accepts_continue`` + ``supports_cache_control`` derive from the
-    # YAML-backed capability matrix (C07a §G9 + D8) via
+    # YAML-backed capability matrix via
     # :func:`eawf.runtimes.selector.runtime_supports` — no parallel
-    # hard-coded table per W13 success criterion 3.
+    # hard-coded table.
     accepts_continue: bool = runtime_supports("codex", "session_resume")
     supports_cache_control: bool = runtime_supports("codex", "cache_control")
     error_classes_emitted: tuple[ErrorClass, ...] = (
@@ -71,10 +70,10 @@ class CodexAdapter:
 
         ``cache_prefix`` is routed through
         :func:`~eawf.runtimes.cache_control.inject_cache_control` for
-        boundary parity, but Codex is a **no-op path** (C04d D-d2 / §5.6):
-        OpenAI prompt caching is automatic at the ≥1024-token threshold
-        and there is no caller-side marker surface, so the prefix is
-        returned unchanged.
+        boundary parity, but Codex is a **no-op path**: OpenAI prompt
+        caching is automatic at the ≥1024-token threshold and there is
+        no caller-side marker surface, so the prefix is returned
+        unchanged.
         """
 
         injected_prefix = inject_cache_control(

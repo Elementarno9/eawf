@@ -7,9 +7,9 @@ invokes the JSON-RPC handler (same dispatcher the POSIX UDS listener
 uses), and posts the response bytes back through a reply callback so
 the listener thread can ``WriteFile`` to the pipe.
 
-The structure matches the C02 reference sketch: the listener thread
-owns the pipe lifecycle and never awaits coroutines, while the
-asyncio task owns the dispatch and never blocks on Windows I/O.
+The listener thread owns the pipe lifecycle and never awaits
+coroutines, while the asyncio task owns the dispatch and never blocks
+on Windows I/O.
 Cross-thread coordination uses :class:`threading.Event` for shutdown
 + per-frame ``done`` signalling, and :func:`asyncio.Queue` for the
 work hand-off.
@@ -42,8 +42,8 @@ if sys.platform == "win32":  # pragma: no cover - win32-only branch
 logger = logging.getLogger(__name__)
 
 
-# Per-frame buffer cap matches the C02 reference sketch + the
-# JSON-RPC frame ceiling we enforce on the POSIX listener.
+# Per-frame buffer cap matches the JSON-RPC frame ceiling we enforce on
+# the POSIX listener.
 _PIPE_BUFFER_BYTES = 65536
 
 

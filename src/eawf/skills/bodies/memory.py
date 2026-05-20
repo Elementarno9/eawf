@@ -1,4 +1,4 @@
-"""``/memory`` skill body (C04b §5.2).
+"""``/memory`` skill body.
 
 Mirrors the dict body emitted by :class:`eawf.skills.memory.MemorySkill`:
 a single ``save|list|forget`` memory operation intent plus the target

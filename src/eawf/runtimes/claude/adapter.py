@@ -1,15 +1,10 @@
-"""Claude Code adapter — implements :class:`RuntimeAdapter` (C07a §5.1).
-
-Per-runtime stderr parsing rules come from §5.5; subprocess spawn +
-session-resume wiring lands in P26-SURFACES (this wave ships the
-typed contract surface only, not the live subprocess invocation).
+"""Claude Code adapter — implements :class:`RuntimeAdapter`.
 
 The :meth:`open_session` / :meth:`continue_session` methods return
 fully-typed :class:`~eawf.state.models.SessionAttempt` rows. In
 v0.3-v0.5 the live subprocess spawn lives in the daemon dispatch
-router (C07a §5.8); the adapter's role here is to construct the
-typed row + parse subprocess outcomes. P26 wires the actual
-``asyncio.create_subprocess_exec`` call.
+router; the adapter's role here is to construct the typed row + parse
+subprocess outcomes.
 """
 
 from __future__ import annotations
@@ -51,9 +46,9 @@ class ClaudeAdapter:
     id: str = "claude-code"
     cli_binary: str = "claude"
     # ``accepts_continue`` + ``supports_cache_control`` derive from the
-    # YAML-backed capability matrix (C07a §G9 + D8) via
+    # YAML-backed capability matrix via
     # :func:`eawf.runtimes.selector.runtime_supports` — no parallel
-    # hard-coded table per W13 success criterion 3.
+    # hard-coded table.
     accepts_continue: bool = runtime_supports("claude-code", "session_resume")
     supports_cache_control: bool = runtime_supports("claude-code", "cache_control")
     error_classes_emitted: tuple[ErrorClass, ...] = (
@@ -79,12 +74,12 @@ class ClaudeAdapter:
         adapter-allocated ``session_id`` UUID and the opaque
         ``session_log_handle`` per rule 16.
 
-        Per C04d D-d2 the caller-side ``cache_prefix`` is routed through
+        The caller-side ``cache_prefix`` is routed through
         :func:`~eawf.runtimes.cache_control.inject_cache_control`, which
         appends the Claude ``<cache_control type="ephemeral" />``
         breakpoint (``claude-code`` is the only runtime that accepts a
-        caller-side marker, §5.6). The injected prefix feeds the live
-        subprocess spawn that lands in P26-SURFACES.
+        caller-side marker). The injected prefix feeds the live
+        subprocess spawn.
         """
 
         injected_prefix = inject_cache_control(
@@ -176,9 +171,9 @@ class ClaudeAdapter:
 
 
 # Module-level Protocol-conformance sanity check. The daemon's
-# ``isinstance(adapter, RuntimeAdapter)`` load-time gate catches F1
-# Protocol-mismatch (§6); checking at import keeps the failure mode
-# at the right layer.
+# ``isinstance(adapter, RuntimeAdapter)`` load-time gate catches a
+# Protocol-mismatch; checking at import keeps the failure mode at the
+# right layer.
 _ADAPTER_CHECK: RuntimeAdapter = ClaudeAdapter()
 
 __all__ = ["ClaudeAdapter"]

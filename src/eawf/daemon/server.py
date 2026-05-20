@@ -3,7 +3,7 @@
 Each accepted connection runs in its own asyncio task that reads
 newline-delimited JSON frames, dispatches the method through
 :mod:`eawf.daemon.methods`, and writes a response frame back. The frame
-format is one JSON object per ``\\n``-terminated line per C02 §5.2.1.
+format is one JSON object per ``\\n``-terminated line.
 
 The server is process-internal — the entry point in :mod:`eawf.daemon.main`
 binds the Unix domain socket and wires the :class:`MethodContext`.
@@ -89,7 +89,7 @@ def _error(
     Args:
         req_id: Echo of the request id; ``None`` when the request could
             not be parsed.
-        code: Numeric error code per C02 §5.2.2.
+        code: Numeric JSON-RPC error code.
         message: Short human description.
         data: Optional forensic / structured payload attached as
             ``error.data`` per JSON-RPC 2.0. Used by the ``-32000``
@@ -174,8 +174,8 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     Refreshes :attr:`MethodContext.last_activity` for every dispatched
     method EXCEPT those in :data:`SUBSCRIBE_METHODS`; subscribers keep
     the daemon alive via the live-subscriber gate inside the idle
-    watchdog (C02 §5.5), so counting them as RPC activity would
-    double-credit a quiescent connection.
+    watchdog, so counting them as RPC activity would double-credit a
+    quiescent connection.
 
     Args:
         line: Raw bytes for one frame (without trailing newline).

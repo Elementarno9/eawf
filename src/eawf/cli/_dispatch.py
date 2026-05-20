@@ -1,23 +1,22 @@
-"""Daemon-vs-daemonless escalation rules for CLI verbs (C05 §5.5).
+"""Daemon-vs-daemonless escalation rules for CLI verbs.
 
 This module centralises the verb-class escalation decision so every
 mutating / read-only handler shares one implementation rather than
-re-deriving the rule per command. The escalation table per the C05
-§5.5 contract:
+re-deriving the rule per command. The escalation table:
 
 * **Read-only (R)** verbs MAY bypass the daemon when ``--daemonless``
-  is passed or ``EAWF_DAEMONLESS=1`` is set — the V1 carve-out for CI,
+  is passed or ``EAWF_DAEMONLESS=1`` is set — the carve-out for CI,
   read-only flows, and the recovery shell. Otherwise they still hop the
   daemon for cache freshness.
 * **Mutating (W)** verbs ALWAYS escalate to the daemon: they refuse
   ``--daemonless`` with a ``UserError`` carrying ``data.kind=
-  "InvalidInput"`` + exit-code 1 (per §5.5 / F3), and auto-spawn the
-  daemon when none is running (the on-demand spawn flow in §5.5).
+  "InvalidInput"`` + exit-code 1, and auto-spawn the daemon when none
+  is running (the on-demand spawn flow).
 
 A separate **dev-mode gate** (``--debug`` flag or ``EAWF_DEBUG=1``)
 controls whether the raw JSON-RPC passthrough verb (``state rpc``) and
-the hidden ``daemon`` control verbs are reachable (C05 §5.1 D7). The
-raw passthrough is never exposed in normal operation.
+the hidden ``daemon`` control verbs are reachable. The raw passthrough
+is never exposed in normal operation.
 
 The helpers here are intentionally side-effect-light:
 
@@ -69,9 +68,9 @@ def dev_mode_enabled(flags: GlobalFlags | None) -> bool:
     """Return True when dev-mode (``--debug`` / ``EAWF_DEBUG=1``) is on.
 
     Dev-mode gates the raw JSON-RPC passthrough verb and the hidden
-    ``daemon`` control verbs per C05 §5.1 D7. It is off in normal
-    operation; turning it on does not change any default behaviour, it
-    only un-hides the developer escape hatches.
+    ``daemon`` control verbs. It is off in normal operation; turning it
+    on does not change any default behaviour, it only un-hides the
+    developer escape hatches.
 
     Args:
         flags: Resolved global flags, or ``None`` for env-only
@@ -88,16 +87,16 @@ def dev_mode_enabled(flags: GlobalFlags | None) -> bool:
 def reject_daemonless_on_mutating(verb: str) -> None:
     """Raise the canonical ``--daemonless`` rejection for a mutating verb.
 
-    Per C05 §5.5 / F3 a mutating verb cannot run daemonless — the daemon
-    owns the WAL + event-append + bus-publish ordering, so a daemonless
-    write would bypass the transactional guarantees. The rejection is a
+    A mutating verb cannot run daemonless — the daemon owns the WAL +
+    event-append + bus-publish ordering, so a daemonless write would
+    bypass the transactional guarantees. The rejection is a
     :class:`~eawf.cli.errors.UserError` (exit-code 1) carrying
     ``data.kind="InvalidInput"`` so CI scripts pivot on the specific
     failure mode without growing the exit-code surface.
 
     Args:
         verb: The operator-facing verb name (e.g. ``"wave claim"``),
-            interpolated into the error body for the §5.5 envelope.
+            interpolated into the error body for the envelope.
 
     Raises:
         UserError: Always — the caller surfaces it via
@@ -116,9 +115,9 @@ def ensure_daemon(runtime_dir: Path | None = None) -> int:
     Thin wrapper over :func:`eawf.daemon.spawn.auto_spawn_daemon` that
     resolves the default runtime dir when none is supplied. Used by the
     mutating-verb escalation path: when no daemon is up, the first
-    mutating call cold-spawns one (the §5.5 auto-spawn flow). The spawn
-    is silent unless ``EAWF_VERBOSE=1`` is set (the spawn helper owns
-    that emission).
+    mutating call cold-spawns one (the auto-spawn flow). The spawn is
+    silent unless ``EAWF_VERBOSE=1`` is set (the spawn helper owns that
+    emission).
 
     Args:
         runtime_dir: Daemon runtime directory. ``None`` resolves the
@@ -155,8 +154,7 @@ def escalate_mutation(
     """Apply the mutating-verb escalation rule and return the daemon PID.
 
     The single entry point every mutating-verb wrapper calls before it
-    opens a :class:`~eawf.cli._daemon_client.DaemonClient`. Procedure
-    per C05 §5.5:
+    opens a :class:`~eawf.cli._daemon_client.DaemonClient`. Procedure:
 
     1. When the daemon-bypass carve-out is requested (``--daemonless``
        or ``EAWF_DAEMONLESS=1``), refuse via

@@ -1,7 +1,7 @@
 """``/memory`` skill — read/write/list curated durable memory records.
 
-C04b §5.2 lands ``/memory`` as the skill surface over the tiered-memory
-store. The three verbs map onto the operator-facing ``eawf memory`` CLI:
+``/memory`` is the skill surface over the tiered-memory store. The
+three verbs map onto the operator-facing ``eawf memory`` CLI:
 
 - ``/memory save <name>``  → records a WORKING-tier entry intent.
 - ``/memory list``         → enumerates the current entries.
@@ -81,7 +81,7 @@ def _coerce_tier(value: Any) -> MemoryTier:
 
 @register
 class MemorySkill(Skill):
-    """Concrete ``/memory`` skill (C04b §5.2)."""
+    """Concrete ``/memory`` skill."""
 
     name: SkillName = "/memory"
 

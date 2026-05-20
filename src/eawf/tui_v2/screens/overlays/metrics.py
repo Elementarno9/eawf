@@ -1,8 +1,7 @@
-"""``MetricsModal`` — the V7 ``/metrics`` 3x2 dashboard overlay (C06 §5.10).
+"""``MetricsModal`` — the V7 ``/metrics`` 3x2 dashboard overlay.
 
-Per Decision D9 the ``/metrics`` palette verb opens a 3x2 grid of metric
-tiles backed by the daemon's telemetry projection (V7 [1:184-224]). The
-six tiles, in grid order, are:
+The ``/metrics`` palette verb opens a 3x2 grid of metric tiles backed by
+the daemon's telemetry projection. The six tiles, in grid order, are:
 
 1. **Variance** (top-left) — estimate-vs-actual EU per effort bucket.
 2. **Weekly burn** (top-middle) — actual EU vs the project's weekly target.
@@ -13,8 +12,8 @@ six tiles, in grid order, are:
 6. **Per-runtime tokens** (bottom-right) — token split per runtime.
 
 **Deferral seam.** The daemon telemetry-projection RPC
-(``client.telemetry_metrics(scope=..., window=...)`` per §5.10) lands with
-the C09 telemetry projector + the C02 daemon client; it does not exist on
+(``client.telemetry_metrics(scope=..., window=...)``) lands with the
+telemetry projector + the daemon client; it does not exist on
 the read-only :class:`~eawf.tui_v2.state_binding.StateBinding` fallback
 this band ships. So this wave lands the **grid + tile chrome + the
 5-second refresh seam**: the modal composes the six titled tiles, renders
@@ -53,11 +52,11 @@ METRIC_WINDOWS: tuple[str, ...] = ("7d", "30d", "90d")
 #: Default rolling window when ``--window`` is omitted (V7 [1:198-201]).
 DEFAULT_WINDOW: str = "7d"
 
-#: Telemetry-projection refresh cadence in seconds (D9 — 5 s tick).
+#: Telemetry-projection refresh cadence in seconds (5 s tick).
 METRICS_REFRESH_S: float = 5.0
 
 #: Placeholder body each tile shows until the telemetry-projection RPC is
-#: wired (the data seam lands with the C09 projector + C02 client).
+#: wired (the data seam lands with the telemetry projector + daemon client).
 _AWAITING: str = "[$text-muted]awaiting telemetry projection[/]"
 
 
@@ -76,8 +75,8 @@ class TileSpec:
 
 
 #: The 3x2 tile inventory in grid order (row-major: top-left → bottom-
-#: right) per §5.10 / D9. The grid is ``grid-size: 3 2`` so the first
-#: three specs fill the top row and the last three the bottom row.
+#: right). The grid is ``grid-size: 3 2`` so the first three specs fill
+#: the top row and the last three the bottom row.
 TILE_SPECS: tuple[TileSpec, ...] = (
     TileSpec("tile-variance", "Variance / bucket"),
     TileSpec("tile-burn", "Weekly burn"),
@@ -137,7 +136,7 @@ def parse_metrics_args(args: str) -> MetricsArgs:
 
 
 class MetricsModal(ModalScreen[None]):
-    """3x2 grid of metric tiles (Esc to close); D9 dashboard overlay.
+    """3x2 grid of metric tiles (Esc to close); dashboard overlay.
 
     Composes the six :data:`TILE_SPECS` tiles in a ``grid-size: 3 2``
     grid, renders each tile's placeholder until the telemetry-projection
@@ -242,11 +241,11 @@ class MetricsModal(ModalScreen[None]):
         """Refresh every tile from the telemetry projection (seamed).
 
         The daemon telemetry-projection client is not reachable on the
-        read-only state-binding fallback this band ships; until the C09
-        projector + C02 client land, this is a no-op so the tiles keep
-        their placeholder rather than clearing to blank. The per-tile
-        ``update_from(metrics)`` fan-out slots in here when the client
-        arrives (§5.10).
+        read-only state-binding fallback this band ships; until the
+        telemetry projector + daemon client land, this is a no-op so the
+        tiles keep their placeholder rather than clearing to blank. The
+        per-tile ``update_from(metrics)`` fan-out slots in here when the
+        client arrives.
         """
         client = self._telemetry_client()
         if client is None:
@@ -261,7 +260,7 @@ class MetricsModal(ModalScreen[None]):
         Read-only probe of the App's state binder for a telemetry client.
         The fallback binder this band ships exposes none, so this returns
         ``None`` and the refresh stays a no-op until the daemon client
-        lands (§5.10 / C02 + C09).
+        lands.
 
         Returns:
             The telemetry client when present, else ``None``.
@@ -278,7 +277,7 @@ def open_metrics(app: App[None], metrics_args: MetricsArgs | None = None) -> boo
     """Push the metrics dashboard onto *app* (modal-cap-aware).
 
     Routes through the App's ``push_modal`` helper so the modal-stack
-    depth cap (C06 §5.7) is enforced in one place; falls back to a plain
+    depth cap is enforced in one place; falls back to a plain
     ``push_screen`` under a bare harness that lacks the cap helper.
 
     Args:

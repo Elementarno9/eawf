@@ -1,4 +1,4 @@
-"""``/blitz`` skill scaffold + recursion guard (P14-W11 / D22).
+"""``/blitz`` skill scaffold + recursion guard.
 
 ``/blitz`` is the auto-invoked follow-up skill the ``/research`` body
 spawns when the residual-unknowns count exceeds 1. It chains additional

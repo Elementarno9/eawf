@@ -1,9 +1,9 @@
-// Eä-owned OpenCode plugin bridge (P14-W07 / D13).
+// Eä-owned OpenCode plugin bridge.
 //
 // OpenCode plugins are loaded by ID via `opencode.json`. This file is
 // the untyped JS surface the OpenCode CLI executes; every hook event
 // is forwarded to `eawf hook` over stdio so the typed Python side does
-// the actual work. No TypeScript / build step per D13 — the bridge is
+// the actual work. No TypeScript / build step — the bridge is
 // intentionally minimal.
 //
 // Region markers `__eawf_managed begin/end` exist so the install

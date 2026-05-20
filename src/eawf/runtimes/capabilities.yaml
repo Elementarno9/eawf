@@ -1,4 +1,4 @@
-# Cross-runtime capability matrix — 8 rows x 3 runtimes (C07a §G9 + D8).
+# Cross-runtime capability matrix — 8 rows x 3 runtimes.
 #
 # Each cell value is one of:
 #   - supported    — runtime fully exposes the capability per its primary
@@ -10,32 +10,28 @@
 #   - unknown      — capability state not yet established (probe pending
 #                    or upstream contract in flux)
 #
-# Sources: C07a brief §5 (Plugin/runtime architecture, V8 hybrid session
-# reuse, V5 reactive fallback) + W18 SDK pre-release baseline probe.
-#
-# Bumped per cluster cadence (C07a D8 — per-minor bump). Drift between
-# the declared cell and the live probe is surfaced by
-# ``eawf doctor --runtime <id>`` (see runtimes/capabilities.py).
+# Bumped per minor release. Drift between the declared cell and the live
+# probe is surfaced by ``eawf doctor --runtime <id>`` (see
+# runtimes/capabilities.py).
 schema_version: "1.0"
 
 # Canonical runtime identifiers — match ``SessionAttempt.runtime`` +
-# ``RuntimeAdapter.id`` exactly. Three-tuple locked for v0.3-v0.5
-# (C07a NG5).
+# ``RuntimeAdapter.id`` exactly. Three-tuple locked for v0.3-v0.5.
 runtimes:
   - claude-code
   - codex
   - opencode
 
-# Eight capability rows x 3 runtimes = 24 cells. Row order matches the
-# C07a brief §1 enumeration (skills, plan-mode, tool-use, sub-agents,
-# streaming, session-resume, cache-control, error-class surface).
+# Eight capability rows x 3 runtimes = 24 cells. Row order: skills,
+# plan-mode, tool-use, sub-agents, streaming, session-resume,
+# cache-control, error-class surface.
 capabilities:
   skills:
     description: >-
       Runtime exposes a per-skill artifact directory the eawf plugin
       renderer materialises (e.g. ``.claude/skills/<name>/SKILL.md``).
       Drives B6 skill-model boundary (C07a §5.3).
-    claude-code: supported    # .claude/skills/<name>/SKILL.md (C07a §5.7)
+    claude-code: supported    # .claude/skills/<name>/SKILL.md
     codex: supported          # .codex/plugins/eawf/skills/<name>/SKILL.md
     opencode: supported       # .opencode/command/<name>.md (renamed surface)
 
@@ -89,7 +85,7 @@ capabilities:
       flips to ``supported`` in v0.4.
     claude-code: supported    # claude --continue <session-id>
     codex: supported          # codex resume <id> / codex exec resume <id>
-    opencode: unsupported     # adapter gates at False per F12 until v0.4
+    opencode: unsupported     # adapter gates at False until v0.4
 
   cache_control:
     description: >-

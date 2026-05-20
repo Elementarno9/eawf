@@ -9,8 +9,8 @@ Two entry points:
 
 2. :func:`resolve_scope_tier` — multi-repo dispatch ladder
    (cwd → workspace > repo > user) for the workspace dashboard and
-   any future portfolio surface. Per C07b §5.3 the ladder maps the
-   invocation cwd to one of three tiers:
+   any future portfolio surface. The ladder maps the invocation cwd to
+   one of three tiers:
 
    - **repo**: cwd resolves to a registered repo (an entry in
      ``~/.eawf/registry.json`` whose ``path`` is an ancestor of cwd
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 
 class ScopeTier(StrEnum):
-    """One of the three resolution tiers per C07b §5.3.
+    """One of the three resolution tiers.
 
     Values:
         REPO: cwd resolves to a registered repo's working tree.
@@ -176,7 +176,7 @@ def resolve_scope_tier(
 ) -> ScopeResolution:
     """Resolve the active scope tier per the cwd-driven ladder.
 
-    Algorithm (C07b §5.3, first match wins):
+    Algorithm (first match wins):
 
     1. Read the registry at *registry_path* (or the user default).
        When the file is missing or unreadable, return

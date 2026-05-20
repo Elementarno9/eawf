@@ -1,4 +1,4 @@
-"""``eawf profile`` Typer sub-app (P14-W05 / D19).
+"""``eawf profile`` Typer sub-app.
 
 Two verbs:
 

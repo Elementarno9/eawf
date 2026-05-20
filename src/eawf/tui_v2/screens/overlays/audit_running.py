@@ -1,8 +1,8 @@
-"""``AuditRunningModal`` — live audit-in-progress overlay (C06 §5.7).
+"""``AuditRunningModal`` — live audit-in-progress overlay.
 
-The read-only audit-progress surface from the C06 brief §5.7 modal-stack
-inventory: auto-opened when the TUI receives an ``audit_started`` event
-for a scope visible in the current screen, it shows one row per audit
+The read-only audit-progress surface: auto-opened when the TUI receives
+an ``audit_started`` event for a scope visible in the current screen, it
+shows one row per audit
 check with a status glyph (``✓`` pass / ``✗`` fail / ``·`` still running)
 and a running ``done/total`` tally. The overlay pops on the
 ``audit_completed`` event (the host swaps in
@@ -10,12 +10,12 @@ and a running ``done/total`` tally. The overlay pops on the
 the verdict is ``fail``) or on ``Esc`` (minimise to the footer chip
 ``A19 4/7``).
 
-Per the W19 deferral pattern this wave lands the **overlay**: the
-per-check rows rendered from a typed :class:`AuditProgress`, the glyph +
-tally presentation, and the live-update seam (:meth:`AuditRunningModal.update_progress`)
-the daemon-push handler drives as ``check_*`` events arrive. Wiring the
+This wave lands the **overlay**: the per-check rows rendered from a
+typed :class:`AuditProgress`, the glyph + tally presentation, and the
+live-update seam (:meth:`AuditRunningModal.update_progress`) the
+daemon-push handler drives as ``check_*`` events arrive. Wiring the
 ``audit_started`` / ``audit_completed`` daemon-push auto-open + the
-per-check event stream (C06 §5.8) rides the wave that lands the event
+per-check event stream rides the wave that lands the event
 subscription; the overlay exposes the update method those events call.
 
 The progress aggregate is a pure dataclass (:class:`AuditProgress`) so the

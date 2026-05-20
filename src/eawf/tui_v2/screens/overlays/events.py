@@ -1,12 +1,11 @@
-"""``EventsModal`` — the ``/events`` live event-log overlay (C06 §5.7).
+"""``EventsModal`` — the ``/events`` live event-log overlay.
 
 The ``/events`` palette verb opens a scrollable ring-buffer view of the
-most recent events (per the C06 brief §5.7 modal row + ``tui-ux-resolved``
-§``:events`` [7:304-326]): the last 50 events, newest first, with an ``f``
+most recent events: the last 50 events, newest first, with an ``f``
 filter cycle (all → errors-only → reports-only → all). ``Esc`` closes.
 
-**Data source.** The brief's long-term shape is a session-only ring buffer
-fed by the daemon ``event.subscribe`` push stream (C06 §5.8); that stream
+**Data source.** The long-term shape is a session-only ring buffer
+fed by the daemon ``event.subscribe`` push stream; that stream
 does not exist on the read-only :class:`~eawf.tui_v2.state_binding.StateBinding`
 fallback this band ships. So this wave reads the **on-disk event store**
 (``<state_dir>/store/event.jsonl``) read-only via :func:`load_recent_events`
@@ -41,7 +40,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: The ring-buffer cap — the overlay shows at most this many events,
-#: newest first (per ``tui-ux-resolved`` §``:events`` [7:304-326] / D14).
+#: newest first.
 EVENT_RING_SIZE: int = 50
 
 #: The ``f`` filter cycle, in order. ``all`` shows every row; ``errors``
@@ -322,7 +321,7 @@ def open_events(app: App[None], rows: tuple[EventRow, ...]) -> bool:
     """Push the events overlay onto *app* (modal-cap-aware).
 
     Routes through the App's ``push_modal`` helper so the modal-stack
-    depth cap (C06 §5.7) is enforced in one place; falls back to a plain
+    depth cap is enforced in one place; falls back to a plain
     ``push_screen`` under a bare harness that lacks the cap helper.
 
     Args:

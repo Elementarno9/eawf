@@ -1,4 +1,4 @@
-"""``CommandPalette`` — the ``/``-triggered command palette (C06 §5.6).
+"""``CommandPalette`` — the ``/``-triggered command palette.
 
 A :class:`~textual.screen.ModalScreen` overlaying any scope screen: the
 operator presses ``/`` (wired on the shared
@@ -8,7 +8,7 @@ below lists the verbs from the static registry
 (:mod:`eawf.tui_v2.palette.verbs`) filtered + ranked by fuzzy match as the
 operator types.
 
-Per the C06 brief §5.6 palette UX:
+Palette UX:
 
 * The verbs shown are :func:`~eawf.tui_v2.palette.verbs.visible_verbs`
   for the App's resolved scope (so wave-board verbs hide on the user

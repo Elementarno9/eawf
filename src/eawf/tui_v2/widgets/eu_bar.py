@@ -1,8 +1,8 @@
-"""``EUBar`` — a 5-cell effort-unit progress bar (C06 widget catalog).
+"""``EUBar`` — a 5-cell effort-unit progress bar (widget catalog).
 
-Per the C06 brief §5.3 widget row: a fixed-width 5-cell glyph bar that
-renders ``consumed_eu / total_eu`` as filled (``#``) vs empty (``-``)
-cells, colour-coded by the consumed fraction:
+A fixed-width 5-cell glyph bar that renders ``consumed_eu / total_eu``
+as filled (``#``) vs empty (``-``) cells, colour-coded by the consumed
+fraction:
 
 * ``ok``   when consumed ≤ 80 % of total,
 * ``warn`` when consumed ≤ 100 % of total,
@@ -30,7 +30,7 @@ from typing import ClassVar
 from textual.reactive import reactive
 from textual.widgets import Static
 
-#: Number of glyph cells in the bar. Fixed at 5 per the C06 widget row
+#: Number of glyph cells in the bar. Fixed at 5
 #: (``5-cell glyph bar``); the inline roadmap variant relies on this
 #: constant width so tree rows align.
 BAR_CELLS: int = 5

@@ -21,8 +21,7 @@ Four meta bodies (W03 fills implementations):
 - :class:`~eawf.skills.bodies.differentiate.DifferentiateBody`
 - :class:`~eawf.skills.bodies.flow.FlowBody`
 
-``/blitz`` (P15) and the six C04b bodies (P26-W11 landed the runtime
-skills; P26-W26 added these typed bodies + the user-facing catalog rows):
+``/blitz`` and the six skill-surface bodies:
 
 - :class:`~eawf.skills.bodies.blitz.BlitzBody`
 - :class:`~eawf.skills.bodies.coauthor.CoauthorBody`

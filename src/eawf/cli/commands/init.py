@@ -11,10 +11,10 @@ Surface contract:
 - ``eawf init --no-input --project-code DEMO --profile core ...`` runs the
   pure pipeline in :func:`eawf.install.wizard.run_wizard_no_input`.
 - ``eawf init --no-input --profiles core,python ...`` is the comma-list
-  equivalent of repeated ``--profile`` flags (P25-W16 — C08 D7 surface).
+  equivalent of repeated ``--profile`` flags.
 - ``eawf init --no-input --template research ...`` selects a bundled
-  bootstrap template (P25-W16 — three v0.3 templates: research,
-  engineering, reverse-engineering). Mutually exclusive with
+  bootstrap template (three v0.3 templates: research, engineering,
+  reverse-engineering). Mutually exclusive with
   ``--profiles`` / ``--profile``.
 - ``eawf init --force`` allows the pipeline to overwrite an existing
   ``.ea/state.json`` or ``.ea/config.yaml`` (otherwise init refuses).
@@ -107,8 +107,8 @@ def _resolve_profiles_and_template(
 ) -> tuple[list[str] | None, dict[str, Any] | None]:
     """Resolve the three init-surface flags into ``(profiles, template_extras)``.
 
-    Per C08 D7, the three surfaces (`--profile`, `--profiles`,
-    `--template`) are mutually exclusive: at most one may be passed.
+    The three surfaces (`--profile`, `--profiles`, `--template`) are
+    mutually exclusive: at most one may be passed.
     Passing none falls through to the wizard default (``["core"]``).
     Passing more than one raises :class:`InvalidInput` so the operator
     picks the form they want.

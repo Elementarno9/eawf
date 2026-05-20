@@ -96,7 +96,7 @@ class BaselineSnapshot:
     runtimes: tuple[RuntimeProbeRow, ...]
 
 
-# --- Subprocess primary surface (per [4] §5.2 of the C07a brief). ---
+# --- Subprocess primary surface. ---
 #
 # We hard-code the eawf-adapter form per runtime so the snapshot records
 # what eawf *intends to invoke*, not just what ``--help`` advertises. A

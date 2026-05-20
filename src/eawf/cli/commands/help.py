@@ -1,4 +1,4 @@
-"""``eawf help [<topic>]`` — prose help-topic surface (C05 § 5.6 / D10).
+"""``eawf help [<topic>]`` — prose help-topic surface.
 
 The smallest prose layer the operator needs without leaving the terminal.
 Six hand-authored topics ship with v0.3, each ≤80 lines, sourced from
@@ -15,7 +15,7 @@ Six hand-authored topics ship with v0.3, each ≤80 lines, sourced from
 renders the topic markdown: paged through ``less -R`` when stdout is a TTY,
 flat markdown otherwise (so CI / pipe consumers get deterministic output).
 An unknown topic exits 1 USER_ERROR with ``data.kind="NotFound"`` and the
-list of registered topics (C05 F13).
+list of registered topics.
 
 Topic files are located relative to the repo root (the ancestor of this
 package that contains ``docs/help/``); AI-summarise-on-miss is YAGNI and
@@ -40,7 +40,7 @@ from eawf.cli.output import emit_json_or_text
 
 logger = logging.getLogger(__name__)
 
-#: Registered help topics in display order (C05 § 5.6). Each maps to a
+#: Registered help topics in display order. Each maps to a
 #: ``docs/help/<topic>.md`` file. The order is the order ``eawf help``
 #: lists them — grouped by what the operator reaches for first.
 TOPICS: tuple[str, ...] = (

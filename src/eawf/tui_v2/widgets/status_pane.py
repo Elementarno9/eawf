@@ -1,11 +1,10 @@
-"""``StatusPane`` — current-scope status summary widget (C06 widget catalog).
+"""``StatusPane`` — current-scope status summary widget (widget catalog).
 
-Per the C06 brief §5.3 widget row: a :class:`~textual.widgets.Static`
-composite that surfaces the current scope's lifecycle counters —
-project / phase / iter / wave counts, audit count, open worktrees, and
-blocked (failed) waves — the same information the ``eawf status`` text
-output carries, rendered as a live pane that watches the reactive
-:class:`~eawf.state.models.State`.
+A :class:`~textual.widgets.Static` composite that surfaces the current
+scope's lifecycle counters — project / phase / iter / wave counts, audit
+count, open worktrees, and blocked (failed) waves — the same information
+the ``eawf status`` text output carries, rendered as a live pane that
+watches the reactive :class:`~eawf.state.models.State`.
 
 The full V8 SESSIONS sub-block (per-session run rows) is a richer
 follow-up; this wave ships the counter summary block those rows hang off

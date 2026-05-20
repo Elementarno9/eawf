@@ -1,10 +1,9 @@
 """``registry.*`` JSON-RPC methods: read / update.
 
 Daemon-side canonical writer for ``~/.eawf/registry.json`` (authority
-map row 8). Wires P24-W10 sub-phase c of C02 §7.2: every registry
-mutation that previously went through the in-process
-``_persist_registry`` helper now proxies through the ``registry.update``
-RPC by default (``daemon.proxy_enabled=True``).
+map row 8): every registry mutation that previously went through the
+in-process ``_persist_registry`` helper now proxies through the
+``registry.update`` RPC by default (``daemon.proxy_enabled=True``).
 
 Algorithm — mirrors the W09 ``state.mutate`` lifecycle:
 

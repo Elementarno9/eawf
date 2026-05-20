@@ -1,22 +1,21 @@
-"""``Footer`` + ``Heartbeat`` — shared chassis footer (C06 widget catalog).
+"""``Footer`` + ``Heartbeat`` — shared chassis footer (widget catalog).
 
-Per the C06 brief §5.3 widget rows + Decision D3 (shared chassis): a
-single footer composite reused by every per-scope screen
+A single footer composite reused by every per-scope screen
 (``RepoScreen`` / ``WorkspaceScreen`` / ``UserScreen``) with **no
 per-scope duplication**. The footer carries:
 
 * a context-aware key-hint strip using **full key names** only
   (``PageUp`` / ``PageDown`` / ``Enter`` / ``Esc`` — never ``PgUp``) per
-  the operator keymap convention (D11), and
-* a live :class:`Heartbeat` dot (D22) — a ``•`` pulse that proves the
+  the operator keymap convention, and
+* a live :class:`Heartbeat` dot — a ``•`` pulse that proves the
   TUI is alive, ``accent``-coloured by default and ``err``-coloured when
   any pane is degraded, with a 0.5 s double-pulse ack on the ``r``
   force-refresh keypress.
 
-Bundling the heartbeat inside the footer is the literal D3 trim: the
+Bundling the heartbeat inside the footer is the chassis trim: the
 three scope screens reuse one :class:`Footer` (which owns the
 :class:`Heartbeat`) rather than each re-declaring the chrome — the
-``~5300 → ~2500`` salvageable-LOC target [2:122-126]. Colours resolve
+``~5300 → ~2500`` salvageable-LOC target. Colours resolve
 against the ``theme.tcss`` palette vars (``$muted`` for the hints,
 ``$accent`` / ``$err`` for the heartbeat) — never hardcoded hex.
 
@@ -43,7 +42,7 @@ HEARTBEAT_GLYPH: str = "•"
 #: this interval so the operator sees a steady blink).
 HEARTBEAT_INTERVAL_S: float = 1.0
 
-#: Default footer key hints (full key names per D11). Screens may pass a
+#: Default footer key hints (full key names). Screens may pass a
 #: scope-specific override via :meth:`Footer.set_hints`; this is the base
 #: chrome shared by every scope.
 DEFAULT_HINTS: tuple[str, ...] = (
@@ -68,7 +67,7 @@ def format_hints(hints: tuple[str, ...]) -> str:
 
 
 class Heartbeat(Static):
-    """A pulsing ``•`` liveness dot (D22).
+    """A pulsing ``•`` liveness dot.
 
     Default ``accent`` colour; ``err`` colour when :attr:`degraded` is
     set. The dot toggles visible/hidden on :data:`HEARTBEAT_INTERVAL_S`
@@ -125,7 +124,7 @@ class Heartbeat(Static):
 class Footer(Static):
     """Shared chassis footer: context key hints + a live heartbeat dot.
 
-    Reused verbatim by every per-scope screen (D3 shared chassis). The
+    Reused verbatim by every per-scope screen (shared chassis). The
     footer composes a hint strip and a :class:`Heartbeat`; a host screen
     may override the hints via :meth:`set_hints` without touching the
     chrome. Standalone-testable via the Pilot harness.

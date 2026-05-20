@@ -1,6 +1,6 @@
-"""Eä Textual TUI (tui_v2) — C06 operator-surface rebuild.
+"""Eä Textual TUI (tui_v2) — operator-surface rebuild.
 
-The v0.3+ TUI is built on Textual (reversing the prior P14 ``rich``
+The v0.3+ TUI is built on Textual (reversing the prior ``rich``
 pick); this package is the parallel rebuild that supersedes
 :mod:`eawf.tui` once its cutover is ratified in a later wave.
 

@@ -1,7 +1,7 @@
-"""``RoadmapTree`` — the phase → iter → wave roadmap tree (C06 widget).
+"""``RoadmapTree`` — the phase → iter → wave roadmap tree (widget).
 
-Per the C06 brief §5.3 widget row: a :class:`~textual.widgets.Tree` that
-renders the full phase → iter → wave hierarchy from the reactive
+A :class:`~textual.widgets.Tree` that renders the full
+phase → iter → wave hierarchy from the reactive
 :class:`~eawf.state.models.State`, prefixing each row with the **V12
 glyph schema** (``- > ~ # x !``) keyed off the row's lifecycle status,
 and surfacing an inline 5-cell EU bar on iter rows that carry an estimate.
@@ -57,8 +57,7 @@ logger = logging.getLogger(__name__)
 
 #: V12 glyph schema (``- > ~ # x !``) mapped onto wave lifecycle status.
 #: ``-`` pending · ``>`` claimed · ``~`` in-progress · ``#`` closed ·
-#: ``x`` (reserved done/abandoned) · ``!`` failed. Per the C06 brief
-#: §5.3 RoadmapTree row + §5.12 glyph set. ASCII-stable so the
+#: ``x`` (reserved done/abandoned) · ``!`` failed. ASCII-stable so the
 #: ``--plain`` fallback needs no swap.
 WAVE_GLYPHS: dict[WaveStatus, str] = {
     WaveStatus.PENDING: "-",

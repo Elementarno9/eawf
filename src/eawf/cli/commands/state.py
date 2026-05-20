@@ -6,15 +6,15 @@ Subcommands:
   ``state.json`` path and the *reason* it was selected
   (``env`` / ``workspace_flag`` / ``pwd_upward``).
 - ``eawf state show [--workspace <path>]`` — read-only ``state.json``
-  view. Honours the V1 daemon-bypass carve-out: with ``--daemonless``
+  view. Honours the daemon-bypass carve-out: with ``--daemonless``
   (or ``EAWF_DAEMONLESS=1``) it reads the file directly and never spawns
-  the daemon (C05 §5.5 read-only row).
+  the daemon.
 - ``eawf state rpc <method> [--params <json>]`` — **dev-mode only** raw
   JSON-RPC passthrough to the daemon. Hidden unless ``--debug`` (or
-  ``EAWF_DEBUG=1``) is set per C05 §5.1 D7; it is the developer escape
-  hatch for poking the daemon directly and is never exposed in normal
-  operation. Domain verbs (``wave claim``, ``phase open``, ...) are the
-  supported mutation surface (Q8: ``state mutate`` is hidden entirely).
+  ``EAWF_DEBUG=1``) is set; it is the developer escape hatch for poking
+  the daemon directly and is never exposed in normal operation. Domain
+  verbs (``wave claim``, ``phase open``, ...) are the supported mutation
+  surface (``state mutate`` is hidden entirely).
 
 The resolver itself lives in :mod:`eawf.state.resolve` so other waves
 (e.g. ``status``, ``store compact``) reuse it without depending on the
@@ -107,8 +107,8 @@ def show_cmd(
 ) -> None:
     """Print a read-only view of ``state.json``.
 
-    This is a read-only (R) verb. Per the C05 §5.5 escalation table it
-    honours the daemon-bypass carve-out: when ``--daemonless`` (or
+    This is a read-only (R) verb. Per the escalation table it honours
+    the daemon-bypass carve-out: when ``--daemonless`` (or
     ``EAWF_DAEMONLESS=1``) is set it reads the resolved file directly and
     never spawns the daemon. Without the carve-out a future wave will
     route through the daemon ``state.read`` RPC for cache freshness; this
@@ -165,13 +165,13 @@ def rpc_cmd(
 ) -> None:
     """Issue a raw JSON-RPC call against the daemon (dev-mode only).
 
-    Hidden unless dev-mode is on (``--debug`` flag or ``EAWF_DEBUG=1``)
-    per C05 §5.1 D7. This is the developer escape hatch for poking the
-    daemon directly — there is **no** supported operator use; domain
-    verbs (``wave claim``, ``phase open``, ...) are the production
-    mutation surface (Q8: ``state mutate`` is hidden entirely).
+    Hidden unless dev-mode is on (``--debug`` flag or ``EAWF_DEBUG=1``).
+    This is the developer escape hatch for poking the daemon directly —
+    there is **no** supported operator use; domain verbs (``wave
+    claim``, ``phase open``, ...) are the production mutation surface
+    (``state mutate`` is hidden entirely).
 
-    Escalation (C05 §5.5): when *method* names a mutating RPC, the verb
+    Escalation: when *method* names a mutating RPC, the verb
     refuses ``--daemonless`` (mutating verbs are daemon-only) and
     auto-spawns the daemon if none is running. Read-only methods
     (``daemon.ping``, ``state.read``, ...) honour the bypass — but a

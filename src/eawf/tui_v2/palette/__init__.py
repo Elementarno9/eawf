@@ -1,4 +1,4 @@
-"""The ``/`` command-palette package for the C06 Eä TUI (tui_v2).
+"""The ``/`` command-palette package for the Eä TUI (tui_v2).
 
 Re-exports the palette overlay (:class:`CommandPalette` +
 :func:`open_palette`) and the static verb registry surface

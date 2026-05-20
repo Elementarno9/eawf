@@ -3,9 +3,9 @@
 Drives a Textual app via ``App.run_test()`` Pilot, captures the rendered
 screen as plain ASCII text at a fixed monotonic cadence, and composes an
 `asciinema v2 <https://docs.asciinema.org/manual/asciicast/v2/>`_ cast
-for docs / demos. Per the C06 brief Decision D7 there is **no real-time
-terminal recording**: frame timestamps are synthesised from a fixed
-``frame_ms`` interval, so the resulting cast is byte-stable across
+for docs / demos. There is **no real-time terminal recording**: frame
+timestamps are synthesised from a fixed ``frame_ms`` interval, so the
+resulting cast is byte-stable across
 machines and CI runs (a header ``timestamp`` of ``0`` keeps the file
 reproducible).
 
@@ -34,14 +34,13 @@ if TYPE_CHECKING:
 
     from textual.pilot import Pilot
 
-#: Default inter-frame interval in milliseconds. Per the C06 brief Q6
-#: OVERRIDE the default is 50 ms (higher fidelity than the brief's
-#: original 100 ms recommendation); casts run minutes not hours so the
-#: doubled frame count is acceptable.
+#: Default inter-frame interval in milliseconds. The default is 50 ms
+#: (higher fidelity than a 100 ms recommendation); casts run minutes not
+#: hours so the doubled frame count is acceptable.
 DEFAULT_FRAME_MS: int = 50
 
-#: asciinema cast terminal geometry (columns x rows). Matches the C06
-#: §5.15 cast header so the rendered frames line up with a 120x40 viewer.
+#: asciinema cast terminal geometry (columns x rows). Matches the cast
+#: header so the rendered frames line up with a 120x40 viewer.
 CAST_WIDTH: int = 120
 CAST_HEIGHT: int = 40
 

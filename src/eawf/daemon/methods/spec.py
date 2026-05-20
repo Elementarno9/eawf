@@ -3,12 +3,11 @@
 Daemon-side canonical writer for spec files
 (authority-map row 9 — ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md``)
 and the daemon-resident spec cache (authority-map row 10 — per-phase
-JSON document under ``<runtime_dir>/spec-cache/``). Wires P25-W03 of
-C03: every spec mutation that previously went through ad-hoc shell
-commands now proxies through one of four JSON-RPC methods so the
-daemon owns the lifecycle.
+JSON document under ``<runtime_dir>/spec-cache/``): every spec mutation
+that previously went through ad-hoc shell commands now proxies through
+one of four JSON-RPC methods so the daemon owns the lifecycle.
 
-Algorithm — mirrors the W09 ``state.mutate`` / W10 ``registry.update``
+Algorithm — mirrors the ``state.mutate`` / ``registry.update``
 lifecycle:
 
 1. Idempotency-cache lookup keyed by ``params['idempotency_key']``

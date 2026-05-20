@@ -1,4 +1,4 @@
-/* Textual theme for the C06 Eä TUI rebuild (tui_v2).
+/* Textual theme for the Eä TUI rebuild (tui_v2).
  *
  * Defines the semantic colour vars consumed by every tui_v2 widget +
  * screen ($ok/$warn/$err/$muted/$accent/$primary) and the base layout
@@ -47,7 +47,7 @@ Footer .footer-hints {
     color: $muted;
 }
 
-/* --- heartbeat: accent pulse, err when any pane degraded (D22) --- */
+/* --- heartbeat: accent pulse, err when any pane degraded --- */
 Heartbeat {
     color: $accent;
 }

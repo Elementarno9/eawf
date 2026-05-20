@@ -1,17 +1,16 @@
-"""OpenCode adapter — implements :class:`RuntimeAdapter` (C07a §5.1).
+"""OpenCode adapter — implements :class:`RuntimeAdapter`.
 
-OpenCode CLI = ``opencode run``. Per §5.2 + §5.6 there is no
-caller-side ``cache_control`` marker (the bundled
-``@ai-sdk/anthropic`` provider injects it internally + the live
-regression at ``anomalyco/opencode#17910`` strips the marker for the
-OAuth-Claude auth path); :attr:`supports_cache_control` is ``False``.
+OpenCode CLI = ``opencode run``. There is no caller-side
+``cache_control`` marker (the bundled ``@ai-sdk/anthropic`` provider
+injects it internally + the live regression at
+``anomalyco/opencode#17910`` strips the marker for the OAuth-Claude
+auth path); :attr:`supports_cache_control` is ``False``.
 
-Per §5.4 OpenCode uses a two-store layout: a SQLite primary store +
-auxiliary diff arrays. The :meth:`session_log_handle` returns an
-opaque URN; the daemon resolves the SQLite path via its in-process
-map. F12 in §6 names "session-log path nonexistent" as a documented
-v0.3 risk — :meth:`supports_continue` therefore returns ``False``
-until §8 Q1 ships the documented path in v0.4.
+OpenCode uses a two-store layout: a SQLite primary store + auxiliary
+diff arrays. The :meth:`session_log_handle` returns an opaque URN; the
+daemon resolves the SQLite path via its in-process map. "session-log
+path nonexistent" is a documented v0.3 risk — :meth:`supports_continue`
+therefore returns ``False`` until the documented path ships in v0.4.
 """
 
 from __future__ import annotations
@@ -45,20 +44,19 @@ _API_RE = re.compile(rb"\b4\d\d\b")
 class OpenCodeAdapter:
     """OpenCode runtime adapter (``opencode run`` subprocess primary).
 
-    Per F12 (§6): :attr:`accepts_continue` ships ``False`` in v0.3
-    because the session-log path catalog is not yet fully verified;
-    the daemon treats every dispatch as fresh under that branch and
-    avoids the fallback churn that would otherwise fire on every
-    retry. v0.4 flips :attr:`accepts_continue` to ``True`` once §8 Q1
-    lands the documented path.
+    :attr:`accepts_continue` ships ``False`` in v0.3 because the
+    session-log path catalog is not yet fully verified; the daemon
+    treats every dispatch as fresh under that branch and avoids the
+    fallback churn that would otherwise fire on every retry. v0.4 flips
+    :attr:`accepts_continue` to ``True`` once the documented path lands.
     """
 
     id: str = "opencode"
     cli_binary: str = "opencode"
     # ``accepts_continue`` + ``supports_cache_control`` derive from the
-    # YAML-backed capability matrix (C07a §G9 + D8) via
+    # YAML-backed capability matrix via
     # :func:`eawf.runtimes.selector.runtime_supports` — no parallel
-    # hard-coded table per W13 success criterion 3.
+    # hard-coded table.
     accepts_continue: bool = runtime_supports("opencode", "session_resume")
     supports_cache_control: bool = runtime_supports("opencode", "cache_control")
     error_classes_emitted: tuple[ErrorClass, ...] = (
@@ -81,11 +79,11 @@ class OpenCodeAdapter:
 
         ``cache_prefix`` is routed through
         :func:`~eawf.runtimes.cache_control.inject_cache_control` for
-        boundary parity, but OpenCode is a **no-op path** (C04d D-d2 /
-        §5.6): the bundled ``@ai-sdk/anthropic`` provider injects
-        ``cache_control`` internally and the OAuth-Claude path strips
-        any caller-side marker (upstream ``#17910``), so the eawf adapter
-        has no caller-side knob and returns the prefix unchanged.
+        boundary parity, but OpenCode is a **no-op path**: the bundled
+        ``@ai-sdk/anthropic`` provider injects ``cache_control``
+        internally and the OAuth-Claude path strips any caller-side
+        marker (upstream ``#17910``), so the eawf adapter has no
+        caller-side knob and returns the prefix unchanged.
         """
 
         injected_prefix = inject_cache_control(
@@ -112,10 +110,10 @@ class OpenCodeAdapter:
     ) -> SessionAttempt:
         """OpenCode v0.3: session resume not yet supported.
 
-        Per :attr:`accepts_continue` = ``False`` (F12 + §8 Q1) the
-        daemon does not normally invoke this path; if it does the
-        adapter raises :class:`SessionResumeFailedError` so the caller
-        falls back to :meth:`open_session`.
+        Per :attr:`accepts_continue` = ``False`` the daemon does not
+        normally invoke this path; if it does the adapter raises
+        :class:`SessionResumeFailedError` so the caller falls back to
+        :meth:`open_session`.
 
         Raises:
             SessionResumeFailedError: OpenCode adapter does not support
@@ -164,8 +162,8 @@ class OpenCodeAdapter:
     def supports_continue(self) -> bool:
         """Whether the adapter supports session resume.
 
-        Returns ``False`` in v0.3 (F12 + §8 Q1); flips to ``True`` in
-        v0.4 once the session-log path catalog ships.
+        Returns ``False`` in v0.3; flips to ``True`` in v0.4 once the
+        session-log path catalog ships.
         """
 
         return self.accepts_continue

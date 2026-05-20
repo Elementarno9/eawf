@@ -1,10 +1,10 @@
-"""``/wave-spec`` skill body (C04b §5.5).
+"""``/wave-spec`` skill body.
 
 Mirrors the dict body emitted by
 :class:`eawf.skills.wave_spec.WaveSpecSkill`: an ``init|validate``
 WaveSpec operation intent for a wave, plus the optional Mockup-waiver
-reason (C03 D11) threaded through for non-UI waves. A missing
-``wave_id`` degrades to ``needs_user`` with a ``reason``.
+reason threaded through for non-UI waves. A missing ``wave_id`` degrades
+to ``needs_user`` with a ``reason``.
 """
 
 from __future__ import annotations

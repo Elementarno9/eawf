@@ -1,24 +1,23 @@
-"""C06 per-scope screens for the Eä Textual TUI (tui_v2).
+"""Per-scope screens for the Eä Textual TUI (tui_v2).
 
 The three scope screens (``RepoScreen`` / ``WorkspaceScreen`` /
-``UserScreen``) compose the W17 widget catalog
+``UserScreen``) compose the widget catalog
 (:mod:`eawf.tui_v2.widgets`) inside a **shared chassis** — one
 :class:`~eawf.tui_v2.widgets.header.Header` + one
 :class:`~eawf.tui_v2.widgets.footer.Footer` (which owns the
 :class:`~eawf.tui_v2.widgets.footer.Heartbeat`) reused verbatim by every
-screen with **no per-scope duplication** (Decision D3 / G3
-[2:99-101]).
+screen with **no per-scope duplication**.
 
 The shared chassis lives on :class:`ScopeScreen`: it yields the Header,
 then a per-scope body produced by the subclass's :meth:`ScopeScreen.compose_body`
 hook, then the Footer. Each concrete screen overrides **only** the body
 hook (and its scope-specific footer hints) — the brand, breadcrumb,
 runtime cell, clock, heartbeat, and quit/help/palette key bindings are
-declared once on the base. That is the literal D3 trim: the salvageable
-chassis LOC drops from the P20 ``~5300`` duplicate-per-scope baseline to
-``~2500`` shared [2:122-126].
+declared once on the base. That is the chassis trim: the salvageable
+chassis LOC drops from a ``~5300`` duplicate-per-scope baseline to
+``~2500`` shared.
 
-Per-scope body layouts follow C06 §5.5:
+Per-scope body layouts:
 
 * ``RepoScreen`` — 2x2 quadrant (roadmap · status / git · backlog).
 * ``WorkspaceScreen`` — top strip + active-repo quadrant (the
@@ -48,7 +47,7 @@ from eawf.tui_v2.widgets.roadmap_tree import RoadmapTree
 
 
 class ScopeScreen(Screen[None]):
-    """Shared-chassis base for every per-scope screen (D3).
+    """Shared-chassis base for every per-scope screen.
 
     Owns the Header + Footer (+ Heartbeat) chrome and the chrome key
     bindings; subclasses override **only** :meth:`compose_body` (and
@@ -56,8 +55,8 @@ class ScopeScreen(Screen[None]):
     chassis composition — no scope re-declares the header or footer.
     """
 
-    #: Chrome key bindings shared by every scope screen (full key names
-    #: per D11; arrows are primary, vim aliases live app-wide on
+    #: Chrome key bindings shared by every scope screen (full key names;
+    #: arrows are primary, vim aliases live app-wide on
     #: :class:`~eawf.tui_v2.app.EaApp`). Scope-specific bindings (e.g.
     #: workspace ``z`` zoom) are appended by the subclass.
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -77,7 +76,7 @@ class ScopeScreen(Screen[None]):
 
         Header (top) → subclass body → Footer (bottom). The body is the
         only part a concrete screen customises; everything else is the
-        D3 shared chassis.
+        shared chassis.
         """
         yield Header()
         yield from self.compose_body()

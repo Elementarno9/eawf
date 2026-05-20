@@ -1,7 +1,7 @@
-"""``DetailModal`` — scrollable detail card for a selected entity (C06 §5.7).
+"""``DetailModal`` — scrollable detail card for a selected entity.
 
 The drill-in overlay opened when the operator presses ``Enter`` on a row:
-the W17 widgets emit a selection message
+the widgets emit a selection message
 (:class:`~eawf.tui_v2.widgets.backlog_table.BacklogTable.RowActivated`
 carrying a backlog-item id,
 :class:`~eawf.tui_v2.widgets.roadmap_tree.RoadmapTree.WaveSelected`
@@ -9,11 +9,10 @@ carrying a wave id), the shared
 :class:`~eawf.tui_v2.scopes.ScopeScreen` routes the message here, and this
 modal renders the resolved entity's detail in a scrollable card.
 
-Per the C06 brief §5.7 modal-stack row for ``DetailModal``: a scrollable
-detail card, ``Esc`` to close, stack depth ≤ 3 enforced by the App. The
-``g <id>`` cross-jump and the per-overlay h/d/m/e/dp tabs the brief lists
+A scrollable detail card, ``Esc`` to close, stack depth ≤ 3 enforced by
+the App. The ``g <id>`` cross-jump and the per-overlay h/d/m/e/dp tabs
 ride later waves of this band; this wave lands the card itself + the
-message-routing seam the W17 widgets were waiting for.
+message-routing seam the widgets were waiting for.
 
 Entity resolution is a pure function (:func:`resolve_detail`) that takes
 the reactive :class:`~eawf.state.models.State` and the selection id and

@@ -1,29 +1,29 @@
-"""Skill -> adapter handshake (C04d §5 / D-d1).
+"""Skill -> adapter handshake.
 
-C04d names the contract boundary where a workflow skill (C04a/C04b) is
-matched to a concrete runtime adapter (C07a §5.1) by the daemon. Per
-D-d1 the **skill never picks the runtime** — it declares the set of
-runtimes that can host it via :attr:`SkillManifest.runtime`, and the
-daemon picks the highest-preference runtime that is *both* listed by the
-skill *and* has a resolvable adapter.
+The contract boundary where a workflow skill is matched to a concrete
+runtime adapter by the daemon. The **skill never picks the runtime** —
+it declares the set of runtimes that can host it via
+:attr:`SkillManifest.runtime`, and the daemon picks the
+highest-preference runtime that is *both* listed by the skill *and* has
+a resolvable adapter.
 
 This module owns the pure resolution half of that handshake: given a
 :class:`~eawf.runtimes.plugin_manifest.SkillManifest`, a wave's
 ``runtime_preference`` list, and an optional caller override, it returns
 the chosen adapter plus the dispatch ``session_policy`` resolved off the
-manifest. The live subprocess spawn lives in the daemon dispatch router
-(C07a §5.8); this module deliberately does no I/O.
+manifest. The live subprocess spawn lives in the daemon dispatch router;
+this module deliberately does no I/O.
 
-Failure modes (C04d §6):
+Failure modes:
 
-* ``F-d01`` — a caller-supplied ``override`` runtime that the skill's
-  manifest does not list is rejected fast with
-  :class:`AdapterManifestMismatchError`. Per D-d1 the daemon refuses
-  rather than silently honouring an off-manifest runtime, so an audit
-  can reconstruct *why* a skill never ran on the requested runtime.
+* A caller-supplied ``override`` runtime that the skill's manifest does
+  not list is rejected fast with :class:`AdapterManifestMismatchError`.
+  The daemon refuses rather than silently honouring an off-manifest
+  runtime, so an audit can reconstruct *why* a skill never ran on the
+  requested runtime.
 
 The complementary half — what happens when adapter *resolution* fails
-mid-ladder (``F-d02``) — lives in :mod:`eawf.runtimes.fallback`.
+mid-ladder — lives in :mod:`eawf.runtimes.fallback`.
 """
 
 from __future__ import annotations
@@ -49,11 +49,11 @@ DEFAULT_SESSION_POLICY = "hybrid"
 class AdapterManifestMismatchError(ValueError):
     """Raised when a caller cites a runtime the skill manifest forbids.
 
-    The C04d F-d01 failure mode: a workflow command requests an explicit
-    ``runtime`` that is not in the skill's
+    The off-manifest failure mode: a workflow command requests an
+    explicit ``runtime`` that is not in the skill's
     :attr:`~eawf.runtimes.plugin_manifest.SkillManifest.runtime` list.
-    Per D-d1 the daemon is the single point of runtime policy and refuses
-    the off-manifest request rather than honouring it. Subclasses
+    The daemon is the single point of runtime policy and refuses the
+    off-manifest request rather than honouring it. Subclasses
     :class:`ValueError` so the daemon's JSON-RPC layer maps it to
     ``-32602 invalid params`` without a bespoke catch.
     """
@@ -65,10 +65,10 @@ class AdapterResolutionError(ValueError):
     Emitted by :func:`resolve_adapter` when every candidate runtime (the
     manifest list intersected with the wave preference order) fails to
     resolve to a concrete adapter. This is the terminal rung of the
-    C04d ladder — the daemon catches it and surfaces a
-    ``runtime_unavailable`` envelope (C07a §6 F6). The mid-ladder
-    *single*-adapter resolution failure is handled by the V8 fall-through
-    in :mod:`eawf.runtimes.fallback`; this exception fires only when the
+    resolution ladder — the daemon catches it and surfaces a
+    ``runtime_unavailable`` envelope. The mid-ladder *single*-adapter
+    resolution failure is handled by the V8 fall-through in
+    :mod:`eawf.runtimes.fallback`; this exception fires only when the
     ladder is exhausted.
     """
 
@@ -151,7 +151,7 @@ def resolve_adapter(
     override: str | None = None,
     session_policy: str | None = None,
 ) -> tuple[RuntimeAdapter, AdapterHandshake]:
-    """Run the skill -> adapter handshake (C04d §5, D-d1).
+    """Run the skill -> adapter handshake.
 
     Picks the highest-preference runtime that is both hostable by the
     skill manifest and resolvable to a concrete adapter, walking the
@@ -165,7 +165,7 @@ def resolve_adapter(
             and default ``dispatch.session_policy``.
         preference: ``Wave.runtime_preference`` ordered runtime list.
         override: Optional caller-supplied runtime id. When set it must
-            be in the manifest ``runtime`` list (F-d01) and is the only
+            be in the manifest ``runtime`` list and is the only
             candidate the resolver tries.
         session_policy: Optional explicit session policy that wins over
             the manifest default.
@@ -177,9 +177,9 @@ def resolve_adapter(
 
     Raises:
         AdapterManifestMismatchError: *override* names a runtime the
-            skill manifest does not list (C04d F-d01).
+            skill manifest does not list.
         AdapterResolutionError: No candidate runtime resolves to an
-            adapter — the ladder is exhausted (C07a §6 F6).
+            adapter — the ladder is exhausted.
     """
     effective_policy = session_policy or _manifest_session_policy(manifest)
 
@@ -225,8 +225,8 @@ def _manifest_session_policy(manifest: SkillManifest) -> str:
     """Read the dispatch session policy off a skill manifest.
 
     The manifest carries dispatch knobs in the open
-    :attr:`SkillManifest.dispatch` mapping (per C04b §5). When
-    ``session_policy`` is present it must be a string; anything else is a
+    :attr:`SkillManifest.dispatch` mapping. When ``session_policy`` is
+    present it must be a string; anything else is a
     manifest authoring error and is rejected fast. A missing key falls
     back to :data:`DEFAULT_SESSION_POLICY`.
 

@@ -1,18 +1,17 @@
 """Exit-code-mapped error helpers + ErrorEnvelope for CLI handlers.
 
-Per C05 § 5.3 / § 5.4 the v0.3 CLI surface compresses the legacy nine
-``CliError`` subclasses into five buckets — ``UserError``,
-``ValidationError``, ``StateConflict``, ``DaemonUnreachable``,
-``InternalError`` — that map 1:1 onto the new 0..5 exit-code surface.
-Legacy specificity is preserved via ``ErrorEnvelope.data.kind`` per the
-§ 5.3 disambiguation rule.
+The v0.3 CLI surface compresses the legacy nine ``CliError`` subclasses
+into five buckets — ``UserError``, ``ValidationError``,
+``StateConflict``, ``DaemonUnreachable``, ``InternalError`` — that map
+1:1 onto the new 0..5 exit-code surface. Legacy specificity is preserved
+via ``ErrorEnvelope.data.kind`` per the disambiguation rule.
 
 The legacy nine subclasses (``NotFound``, ``InvalidInput``,
 ``ValidationFailed``, ``LockConflict``, ``InstrumentMissing``,
 ``UserDeclined``, ``IntegrityViolation``, ``HookBlocked``) remain
 importable as deprecation-aliased subclasses of the new five so the
-~100 existing callsites continue to compile. Downstream waves (W05+)
-migrate each callsite to raise the new class names directly with the
+~100 existing callsites continue to compile. Downstream waves migrate
+each callsite to raise the new class names directly with the
 appropriate ``data.kind``; once empty, the aliases will be dropped.
 
 Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
@@ -45,14 +44,14 @@ from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 
-# --- Five-class CliError taxonomy (C05 § 5.3) ------------------------------
+# --- Five-class CliError taxonomy ------------------------------------------
 
 
 class CliError(Exception):
     """Base class for CLI-mapped errors.
 
-    The default :attr:`exit_code` is :data:`exit_codes.INTERNAL_ERROR` per
-    C05 § 5.3 — an uncaught raised path is an internal error. Each subclass
+    The default :attr:`exit_code` is :data:`exit_codes.INTERNAL_ERROR` —
+    an uncaught raised path is an internal error. Each subclass
     overrides it with the canonical 0..5 code for its bucket.
     """
 
@@ -80,7 +79,7 @@ class ValidationError(CliError):
     exit_code = exit_codes.VALIDATION_ERROR
 
 
-class StateConflict(CliError):  # noqa: N818 — canonical C05 § 5.3 bucket name
+class StateConflict(CliError):  # noqa: N818 — canonical bucket name
     """State-side conflict — lock, integrity, hook gate, or runtime ladder.
 
     Sibling writer holds a lock, hash mismatch detected, hook fail-closed,
@@ -91,7 +90,7 @@ class StateConflict(CliError):  # noqa: N818 — canonical C05 § 5.3 bucket nam
     exit_code = exit_codes.STATE_CONFLICT
 
 
-class DaemonUnreachable(CliError):  # noqa: N818 — canonical C05 § 5.3 bucket name
+class DaemonUnreachable(CliError):  # noqa: N818 — canonical bucket name
     """Daemon process down, unresponsive, or shutting down.
 
     Connection refused, stale PID, or ``-32009 daemon shutting down``
@@ -113,7 +112,7 @@ class InternalError(CliError):
     exit_code = exit_codes.INTERNAL_ERROR
 
 
-# --- Legacy nine-class subclasses (deprecation aliases, C05 § 5.3) ---------
+# --- Legacy nine-class subclasses (deprecation aliases) --------------------
 # Each legacy class subclasses its new five-class bucket so existing
 # ``raise errors.LockConflict(...)`` callsites keep working unchanged.
 # ``isinstance(err, errors.LockConflict)`` continues to hold for legacy
@@ -122,27 +121,27 @@ class InternalError(CliError):
 # new class with ``data={"kind": "LockConflict"}`` or drop the alias.
 
 
-class NotFound(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+class NotFound(UserError):  # noqa: N818 — canonical CLI error name
     """Scope, state file, artifact, or referenced ID was not found.
 
     Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "NotFound"}`` per C05 § 5.3.
+    ``data={"kind": "NotFound"}``.
     """
 
 
-class InvalidInput(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+class InvalidInput(UserError):  # noqa: N818 — canonical CLI error name
     """Bad CLI args or schema mismatch on input.
 
     Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "InvalidInput"}`` per C05 § 5.3.
+    ``data={"kind": "InvalidInput"}``.
     """
 
 
-class ValidationFailed(ValidationError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+class ValidationFailed(ValidationError):  # noqa: N818 — canonical CLI error name
     """Strict invariant validation rejected the candidate state.
 
     Legacy class — deprecated. New callers raise :class:`ValidationError`
-    directly per C05 § 5.3 (the legacy and new buckets coincide).
+    directly (the legacy and new buckets coincide).
     """
 
 
@@ -150,23 +149,23 @@ class LockConflict(StateConflict):
     """Sibling lock held by a live holder, or wait timed out.
 
     Legacy class — deprecated. New callers raise :class:`StateConflict`
-    with ``data={"kind": "LockConflict"}`` per C05 § 5.3.
+    with ``data={"kind": "LockConflict"}``.
     """
 
 
-class InstrumentMissing(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+class InstrumentMissing(UserError):  # noqa: N818 — canonical CLI error name
     """A required external tool (git, jq, ...) is absent.
 
     Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "InstrumentMissing"}`` per C05 § 5.3.
+    ``data={"kind": "InstrumentMissing"}``.
     """
 
 
-class UserDeclined(UserError):  # noqa: N818 — canonical CLI error name per legacy plan §5
+class UserDeclined(UserError):  # noqa: N818 — canonical CLI error name
     """User declined at a confirmation gate (or ``--no-input`` aborted it).
 
     Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "UserDeclined"}`` per C05 § 5.3.
+    ``data={"kind": "UserDeclined"}``.
     """
 
 
@@ -174,7 +173,7 @@ class IntegrityViolation(StateConflict):
     """Hash mismatch, drift, or corrupted store.
 
     Legacy class — deprecated. New callers raise :class:`StateConflict`
-    with ``data={"kind": "IntegrityViolation"}`` per C05 § 5.3.
+    with ``data={"kind": "IntegrityViolation"}``.
     """
 
 
@@ -182,11 +181,11 @@ class HookBlocked(StateConflict):
     """Pre-/post-tool hook fail-closed.
 
     Legacy class — deprecated. New callers raise :class:`StateConflict`
-    with ``data={"kind": "HookBlocked"}`` per C05 § 5.3.
+    with ``data={"kind": "HookBlocked"}``.
     """
 
 
-# --- ErrorEnvelope (C05 § 5.4) ---------------------------------------------
+# --- ErrorEnvelope ---------------------------------------------------------
 
 
 def _utcnow() -> datetime:
@@ -199,7 +198,7 @@ def _utcnow() -> datetime:
 
 
 class ErrorEnvelope(BaseModel):
-    """JSON-branch error envelope shape per C05 § 5.4.
+    """JSON-branch error envelope shape.
 
     Wired through :func:`emit_error` when ``flags.json_output`` is true.
     The plain-text branch renders the same fields as ``error: <message>``
@@ -231,7 +230,7 @@ class ErrorEnvelope(BaseModel):
     """Canonical name from :func:`exit_codes.name_for`."""
 
     suggested_next_step: str | None = None
-    """Operator-facing actionable hint per C00 § C05 goal 4 — e.g.
+    """Operator-facing actionable hint — e.g.
     ``"run \\`eawf daemon start\\` then retry"``."""
 
     data: dict[str, Any] = Field(default_factory=dict)
@@ -254,7 +253,7 @@ class ErrorEnvelope(BaseModel):
     """Envelope construction time (UTC)."""
 
 
-# --- Subclass-to-hint mapping (C05 § 5.4) ----------------------------------
+# --- Subclass-to-hint mapping ----------------------------------------------
 
 _DEFAULT_HINTS: dict[str, str] = {
     "UserError": "run `eawf <verb> --help` for option shapes; check ids and env",
@@ -269,7 +268,7 @@ _DEFAULT_HINTS: dict[str, str] = {
 }
 
 # Per-``data.kind`` refinement preserves legacy specificity inside the
-# five buckets (C05 § 5.4 table).
+# five buckets.
 _KIND_HINTS: dict[str, str] = {
     "NotFound": "check the scope id or run `eawf state resolve` to see resolved paths",
     "InvalidInput": "run `eawf <verb> --help` to see option shapes",
@@ -342,8 +341,8 @@ def build_envelope(
     The envelope ``error`` field carries the canonical new-bucket name
     (``UserError`` / ``ValidationError`` / ``StateConflict`` /
     ``DaemonUnreachable`` / ``InternalError``). When *err* is a legacy
-    subclass, the legacy name is preserved in ``data.kind`` per the C05
-    § 5.3 disambiguation rule.
+    subclass, the legacy name is preserved in ``data.kind`` per the
+    disambiguation rule.
 
     Args:
         err: The :class:`CliError` (or legacy subclass) instance.
@@ -377,7 +376,7 @@ def build_envelope(
 
 
 def _render_text(env: ErrorEnvelope) -> str:
-    """Render *env* as the plain-text branch body per C05 § 5.4.
+    """Render *env* as the plain-text branch body.
 
     Skipped fields when empty: ``kind`` (when absent), ``data`` (when
     only ``kind`` was present), ``correlation_id`` (when ``None``).
@@ -433,10 +432,10 @@ def emit_error(
     raise typer.Exit(err.exit_code)
 
 
-# --- Daemon JSON-RPC error code mapping (C05 § 5.3) ------------------------
-# Each daemon JSON-RPC error code (C02 § 5.2.2) folds onto one of the five
-# CliError subclasses per the § 5.3 table. The mapping is consulted by
-# the daemon client when surfacing an RPC failure as a CLI exit.
+# --- Daemon JSON-RPC error code mapping ------------------------------------
+# Each daemon JSON-RPC error code folds onto one of the five CliError
+# subclasses. The mapping is consulted by the daemon client when
+# surfacing an RPC failure as a CLI exit.
 
 _DAEMON_RPC_MAP: dict[int, tuple[type[CliError], str | None]] = {
     -32700: (InternalError, None),

@@ -7,7 +7,7 @@ capability state lives in ``capabilities.yaml`` (loaded via
 :func:`eawf.runtimes.capabilities.get_matrix`); adapter classes derive
 their :attr:`accepts_continue` / :attr:`supports_cache_control` class
 attributes from this module so the YAML stays the single source of
-truth (C07a §G9 + D8 — D9 doctor drift detection).
+truth.
 
 Public surface
 --------------
@@ -72,8 +72,7 @@ def runtime_supports(runtime_id: str, capability: str) -> bool:
     """Return whether ``runtime_id`` exposes ``capability``.
 
     Reads from the YAML-backed capability matrix (no duplication of
-    adapter-side hard-coded tables per C07a §G9 / W13 success criterion
-    3).
+    adapter-side hard-coded tables).
 
     Args:
         runtime_id: Canonical runtime id (``claude-code`` / ``codex``

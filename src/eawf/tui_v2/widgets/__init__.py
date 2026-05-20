@@ -1,7 +1,7 @@
-"""C06 reusable widget catalog for the Eä Textual TUI (tui_v2).
+"""Reusable widget catalog for the Eä Textual TUI (tui_v2).
 
 These standalone widgets are the building blocks the per-scope screens
-compose (per the C06 brief §5.3 widget catalog + §5.5 per-screen layout):
+compose:
 
     Header        — shared chassis brand + breadcrumb + runtime + clock
     Footer        — shared chassis key hints + heartbeat (owns Heartbeat)
@@ -12,7 +12,7 @@ compose (per the C06 brief §5.3 widget catalog + §5.5 per-screen layout):
     GitPane       — live git branch / status / ahead-behind context
     BacklogTable  — sortable / filterable backlog grid
 
-The Header / Footer / Heartbeat trio is the D3 shared chassis: every
+The Header / Footer / Heartbeat trio is the shared chassis: every
 per-scope screen reuses the same three widgets with no per-scope
 duplication. Each widget is driven by the App's reactive ``state``
 (read-only) and is unit-testable standalone via the Textual Pilot

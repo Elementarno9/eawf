@@ -1,19 +1,17 @@
-"""Modal overlays for the C06 Eä TUI (tui_v2).
+"""Modal overlays for the Eä TUI (tui_v2).
 
 Each overlay is a Textual :class:`~textual.screen.ModalScreen` pushed on
-top of a scope screen, capped at a stack depth of 3 by the App. W19 shipped
-:class:`DetailModal` (the row-drill-in card the W17 widgets emit selection
-messages into) and :class:`ConfirmModal` (the yes/no destructive-op
-confirmation). The P26-W20 + W21 waves add the plan-mode, needs_user,
-audit, and metrics/pr/events overlays: :class:`PlanPreviewModal` (the
-``/prep`` wave-DAG preview), :class:`NeedsUserModal` (the
-``status=needs_user`` AskUserQuestion surface), :class:`AuditRunningModal`
-(live audit progress), :class:`AuditFailedModal` (the D17 mutating repair
-menu), :class:`MetricsModal` (the V7 ``/metrics`` 3x2 dashboard, D9),
-:class:`PrListModal` (the ``/pr`` open-PRs list, D21), and
+top of a scope screen, capped at a stack depth of 3 by the App. The
+catalog: :class:`DetailModal` (the row-drill-in card the widgets emit
+selection messages into), :class:`ConfirmModal` (the yes/no
+destructive-op confirmation), :class:`PlanPreviewModal` (the ``/prep``
+wave-DAG preview), :class:`NeedsUserModal` (the ``status=needs_user``
+AskUserQuestion surface), :class:`AuditRunningModal` (live audit
+progress), :class:`AuditFailedModal` (the mutating repair menu),
+:class:`MetricsModal` (the ``/metrics`` 3x2 dashboard),
+:class:`PrListModal` (the ``/pr`` open-PRs list), and
 :class:`EventsModal` (the ``/events`` last-50 ring buffer). The remaining
-config overlays the C06 brief §5.7 enumerates land in later waves and
-register here as they arrive.
+config overlays land in later waves and register here as they arrive.
 """
 
 from __future__ import annotations

@@ -1,10 +1,8 @@
-"""``RepoScreen`` — repo-scope 2x2 quadrant screen (C06 §5.5).
+"""``RepoScreen`` — repo-scope 2x2 quadrant screen.
 
-Per the C06 brief §5.5 (``tui-layout.md`` §"Chosen layout — Quadrant
-2x2" [9:56-81]): the repo screen composes the W17 widget catalog into a
-two-row, two-column quadrant body inside the
-:class:`~eawf.tui_v2.scopes.ScopeScreen` shared chassis (Header + Footer
-+ Heartbeat reused verbatim per Decision D3):
+The repo screen composes the widget catalog into a two-row, two-column
+quadrant body inside the :class:`~eawf.tui_v2.scopes.ScopeScreen` shared
+chassis (Header + Footer + Heartbeat reused verbatim):
 
 * top-left  — :class:`~eawf.tui_v2.widgets.roadmap_tree.RoadmapTree`
 * top-right — :class:`~eawf.tui_v2.widgets.status_pane.StatusPane`
@@ -19,8 +17,8 @@ screen only declares the layout — it holds no per-widget state plumbing.
 
 This screen overrides **only** :meth:`compose_body`; the brand,
 breadcrumb, runtime cell, clock, heartbeat, and quit/help/palette
-bindings are inherited from :class:`~eawf.tui_v2.scopes.ScopeScreen` (D3
-zero-duplication chassis). The ``w`` wave-board / ``c`` config bindings
+bindings are inherited from :class:`~eawf.tui_v2.scopes.ScopeScreen`
+(zero-duplication chassis). The ``w`` wave-board / ``c`` config bindings
 the brief lists for this screen target screens that land in later waves;
 they are added here as the navigation seam those waves wire up.
 """
@@ -40,7 +38,7 @@ from eawf.tui_v2.widgets.git_pane import GitPane
 from eawf.tui_v2.widgets.roadmap_tree import RoadmapTree
 from eawf.tui_v2.widgets.status_pane import StatusPane
 
-#: Footer hints tuned for the repo quadrant (full key names per D11).
+#: Footer hints tuned for the repo quadrant (full key names).
 _REPO_HINTS: tuple[str, ...] = (
     "↑↓ move",
     "←→ collapse",

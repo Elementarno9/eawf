@@ -1,19 +1,13 @@
-"""Canonical ``PluginManifest`` schema (C07a §5.7, XB19).
+"""Canonical ``PluginManifest`` schema.
 
 The manifest is the single canonical shape that feeds the three
 per-runtime render paths (Claude, Codex, OpenCode). It is loaded
 from ``build/<runtime>-plugin/manifest.yaml`` and validated via
 Pydantic v2 :class:`BaseModel` with ``extra="forbid"`` so a new
-field at v0.4 fails-fast on the v0.3 daemon (per F11 in §6).
+field at v0.4 fails-fast on the v0.3 daemon.
 
-History
--------
-
-C07a-V9 (added 2026-05-18 per XB10) named per-runtime plugin
-manifests as a first-class distribution channel. XB19 (2026-05-18)
-corrected the prior brief: the manifest was described as
-"Pydantic" but defined as ``@dataclass(frozen=True)``; this
-module implements the corrected ``BaseModel`` form.
+The manifest is implemented as a Pydantic :class:`BaseModel` (not a
+``@dataclass``) so ``extra="forbid"`` and field validation apply.
 
 Boundaries
 ----------
@@ -30,7 +24,7 @@ Boundaries
   manifest, not the values — values are computed by the
   per-runtime renderer at install time).
 * :class:`PluginManifest` — top-level schema with
-  ``schema_version: Literal["1.0"]`` per Q5 / BOT-03.
+  ``schema_version: Literal["1.0"]``.
 
 Naming
 ------
@@ -124,8 +118,8 @@ class PluginManifest(BaseModel):
 
     Loaded from ``build/<runtime>-plugin/manifest.yaml`` and fed
     into the per-runtime renderer that emits the on-disk plugin
-    tree. ``schema_version`` is pinned to ``"1.0"`` per Q5 /
-    BOT-03 (string MAJOR.MINOR; bumps backward-compatibly).
+    tree. ``schema_version`` is pinned to ``"1.0"`` (string
+    MAJOR.MINOR; bumps backward-compatibly).
 
     Attributes:
         schema_version: Manifest schema version. Literal

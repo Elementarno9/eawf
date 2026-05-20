@@ -1,16 +1,16 @@
 """Runtime fallback ladder — V5 reactive switchover + V8 fall-through.
 
-C04d §5 wires the runtime fallback ladder into the skill -> adapter
-handshake. Two distinct fall-throughs share this module:
+The runtime fallback ladder wires into the skill -> adapter handshake.
+Two distinct fall-throughs share this module:
 
-* **V8 fall-through (F-d02).** Adapter session-handle *resolution* fails
+* **V8 fall-through.** Adapter session-handle *resolution* fails
   mid-dispatch (a ``--continue`` resume cannot find/replay the session
   log). The daemon falls through to a *fresh* ``open_session`` on the
   same runtime, annotating the new attempt with
   :attr:`DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`. No runtime
   switch happens — the session policy degrades from continue to fresh.
 * **V5 reactive switchover.** A dispatch *fails* with a normalized
-  error class (C07a §5.5). Availability errors
+  error class. Availability errors
   (``RUNTIME_SERVER_ERROR`` / ``RUNTIME_TIMEOUT`` / ``RUNTIME_API_ERROR``)
   fall through immediately to the next runtime in
   ``Wave.runtime_preference``; ``RUNTIME_RATE_LIMIT`` retries the same
@@ -21,7 +21,7 @@ handshake. Two distinct fall-throughs share this module:
 
 This module owns the *policy* — the typed action for an error class and
 the typed annotation a fall-through produces. It performs no I/O and
-spawns no subprocess; the daemon dispatch router (C07a §5.8) drives it.
+spawns no subprocess; the daemon dispatch router drives it.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 class FallbackAction(StrEnum):
-    """Action the V5 ladder takes for a normalized error class (C07a §5.5).
+    """Action the V5 ladder takes for a normalized error class.
 
     - :attr:`RETRY_SAME` — retry the *same* runtime once (rate limit;
       honour ``Retry-After`` cap). A second failure escalates to
@@ -56,9 +56,9 @@ class FallbackAction(StrEnum):
     HALT = "halt"
 
 
-#: V5 error-class -> action map (C07a §5.5 fallback-policy table). The
-#: map is total over :data:`ALL_ERROR_CLASSES`; an error class missing a
-#: row is a programming error caught by the module-level totality check.
+#: V5 error-class -> action map (fallback-policy table). The map is
+#: total over :data:`ALL_ERROR_CLASSES`; an error class missing a row
+#: is a programming error caught by the module-level totality check.
 _FALLBACK_POLICY: dict[ErrorClass, FallbackAction] = {
     "RUNTIME_RATE_LIMIT": FallbackAction.RETRY_SAME,
     "RUNTIME_SERVER_ERROR": FallbackAction.SWITCH_RUNTIME,
@@ -74,7 +74,7 @@ assert set(_FALLBACK_POLICY) == set(ALL_ERROR_CLASSES)
 
 
 def fallback_action(error_class: ErrorClass) -> FallbackAction:
-    """Return the V5 ladder action for *error_class* (C07a §5.5).
+    """Return the V5 ladder action for *error_class*.
 
     Args:
         error_class: A canonical error class from
@@ -138,7 +138,7 @@ def fall_back_to_fresh(
     occurred_at: UtcDatetime,
     reason: str | None = None,
 ) -> DispatchAnnotation:
-    """Build the V8 fall-through annotation for a resolution failure (F-d02).
+    """Build the V8 fall-through annotation for a resolution failure.
 
     When an adapter's ``continue_session`` raises
     :class:`~eawf.runtimes.adapter.SessionResumeFailedError` (the session
@@ -182,9 +182,9 @@ def switch_runtime_annotation(
 
     Records a runtime change driven by an availability error
     (:attr:`FallbackAction.SWITCH_RUNTIME`) with
-    :attr:`DispatchNote.SWITCH_ON_ERROR`. Per C04d D-d3 the switch
-    happens *between attempts* — the prior attempt is already closed; this
-    annotation belongs to the new attempt on ``runtime_to``.
+    :attr:`DispatchNote.SWITCH_ON_ERROR`. The switch happens *between
+    attempts* — the prior attempt is already closed; this annotation
+    belongs to the new attempt on ``runtime_to``.
 
     Args:
         attempt: Attempt number of the new (switched) session.

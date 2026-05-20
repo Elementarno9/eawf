@@ -1,16 +1,15 @@
 """``state.*`` JSON-RPC methods: read / mutate / digest.
 
-Wires the canonical mutator path for the daemon (P24-W09). The
-``state.mutate`` handler is the **sole canonical writer** for
-``state.json`` + ``event.jsonl`` (authority-map rows 1-4); every
-state-mutating CLI verb routes through this RPC once
-``daemon.proxy_enabled`` flips to ``true`` (W10 closes that gate).
+Wires the canonical mutator path for the daemon. The ``state.mutate``
+handler is the **sole canonical writer** for ``state.json`` +
+``event.jsonl`` (authority-map rows 1-4); every state-mutating CLI verb
+routes through this RPC once ``daemon.proxy_enabled`` flips to ``true``.
 
-Algorithm — implements C02 §5.6 transaction lifecycle verbatim:
+Algorithm — the transaction lifecycle:
 
 1. Idempotency-cache lookup keyed by :attr:`Mutation.idempotency_key`.
-2. ``portalock(state.json, timeout=5)`` — defense-in-depth per V1
-   (rule 4 retains portalocker as belt-and-braces under the daemon).
+2. ``portalock(state.json, timeout=5)`` — defense-in-depth; AGENTS
+   rule 4 retains portalocker as belt-and-braces under the daemon.
 3. Read + decode + validate ``state.json`` → :class:`State`.
 4. Dispatch the :class:`MutationKind` to its per-kind apply function;
    on success the candidate :class:`State` carries the mutation.
@@ -29,15 +28,15 @@ Algorithm — implements C02 §5.6 transaction lifecycle verbatim:
 11. Release portalock; cache the result for the idempotency window;
     return ``{event, before_version, after_version}``.
 
-The per-kind apply registry is loose-typed in W09 (the
-:attr:`Mutation.params` dict is the contract). C03-IMPL hardens each
+The per-kind apply registry is loose-typed (the
+:attr:`Mutation.params` dict is the contract). A later wave hardens each
 variant into a Pydantic subclass per MutationKind.
 
-The MVP apply table covers ``wave_close`` end-to-end (the canary
+The current apply table covers ``wave_close`` end-to-end (the canary
 callsite); other lifecycle kinds dispatch to existing
-:mod:`eawf.lifecycle.transitions` functions. Kinds reserved for
-C03-IMPL raise :class:`NotImplementedError` so the CLI falls back
-to the daemonless ``state_transaction`` path until C03 lands.
+:mod:`eawf.lifecycle.transitions` functions. Not-yet-wired kinds raise
+:class:`NotImplementedError` so the CLI falls back to the daemonless
+``state_transaction`` path.
 """
 
 from __future__ import annotations
@@ -90,7 +89,7 @@ _ANCHOR_FALLBACK_WARN_EMITTED: bool = False
 
 #: JSON-RPC error code raised when the post-mutation state fails
 #: validation (or when the mutation body itself is rejected by the
-#: lifecycle guard). C02 §5.2.2 reserves this code for ``validation_failed``.
+#: lifecycle guard). This code is reserved for ``validation_failed``.
 VALIDATION_FAILED: Final[int] = -32002
 
 #: TTL for cached idempotency results (seconds). A repeat
@@ -108,8 +107,8 @@ class ReadParams(BaseModel):
     """Params for :func:`read`.
 
     Attributes:
-        scope_id: Optional scope filter (not yet enforced; W09 returns
-            the full state — projection lands in C03-IMPL).
+        scope_id: Optional scope filter (not yet enforced; returns
+            the full state — projection lands in a later wave).
         fields: Optional projection list (not yet enforced — see above).
         repo_root: Optional absolute path of the repo whose ``state.json``
             the daemon should read. The CLI proxy forwards ``flags.workspace``
@@ -197,7 +196,7 @@ class _CachedMutation(BaseModel):
     Stored verbatim under :class:`MethodContext.idempotency_cache` (a
     plain dict keyed by ``idempotency_key``). Entries older than
     :data:`IDEMPOTENCY_TTL_SECONDS` are pruned on every lookup; the
-    durable replay guarantee lives in the WAL (C02 §5.6), not here.
+    durable replay guarantee lives in the WAL, not here.
 
     Attributes:
         result: The :class:`MutateResult` dict returned to the original
@@ -455,14 +454,14 @@ def _apply_iter_close(state: State, mutation: Mutation) -> None:
 
 
 def _apply_not_yet_wired(state: State, mutation: Mutation) -> None:
-    """Apply stub for kinds whose lifecycle helper lands in C03-IMPL.
+    """Apply stub for kinds whose lifecycle helper is not yet wired.
 
     Raises :class:`NotImplementedError` so the CLI wrapper detects the
     gap and falls back to the in-process ``state_transaction`` path
-    (V1 carve-out). ``WAVE_RELEASE`` falls here because the lifecycle
-    helper itself is unimplemented as of W09; the roadmap- and event-
+    (daemonless carve-out). ``WAVE_RELEASE`` falls here because the
+    lifecycle helper itself is unimplemented; the roadmap- and event-
     append kinds fall here because their multi-step compositions need
-    the C03 spec catalogue before they can be wired.
+    the spec catalogue before they can be wired.
     """
     raise NotImplementedError(
         f"mutation kind {mutation.kind.value!r} not yet wired in W09 MVP; "
@@ -578,7 +577,7 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Return the digest of the on-disk state.
 
-    Used by TUI mtime-poll fallback per C02 §5.3.1 / C06 axis [1:619].
+    Used by the TUI mtime-poll fallback.
 
     Args:
         ctx: Server context — ``ctx.state_path`` is consulted only as a

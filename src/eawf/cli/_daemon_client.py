@@ -331,7 +331,7 @@ class DaemonClient:
         idempotency_key: str | None = None,
         cache_dir: str | None = None,
     ) -> dict[str, Any]:
-        """Proxy a ``spec.init`` call through the daemon (P25-W03 / C03)."""
+        """Proxy a ``spec.init`` call through the daemon."""
         params: dict[str, Any] = {
             "scope_id": scope_id,
             "title": title,

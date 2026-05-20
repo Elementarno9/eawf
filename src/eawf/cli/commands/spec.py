@@ -1,6 +1,6 @@
-"""``eawf spec`` Typer sub-app — proxies through the daemon (C03 / P25-W03).
+"""``eawf spec`` Typer sub-app — proxies through the daemon.
 
-W03 ships five verbs:
+Five verbs:
 
 * ``eawf spec init <scope-id> --title ... --repo-code ...``
 * ``eawf spec validate <scope-id> --repo-code ...``
@@ -11,10 +11,10 @@ W03 ships five verbs:
 The first four are mutators and route through the daemon's
 ``spec.{init,validate,promote,archive}`` JSON-RPC methods per
 authority-map row 9-10. The dispatch matches the existing
-``_persist_registry`` shape: daemon-proxy arm by default; the V1
-carve-out (``EAWF_DAEMONLESS=1`` or daemon unreachable) falls back to
-the in-process writer for the operations that do not require a
-running daemon. ``archive`` always requires the daemon up because the
+``_persist_registry`` shape: daemon-proxy arm by default; the
+daemonless carve-out (``EAWF_DAEMONLESS=1`` or daemon unreachable)
+falls back to the in-process writer for the operations that do not
+require a running daemon. ``archive`` always requires the daemon up because the
 ``git rm`` + cache atomicity is daemon-owned.
 
 ``show`` is the recovery surface: it reads the daemon-resident cache

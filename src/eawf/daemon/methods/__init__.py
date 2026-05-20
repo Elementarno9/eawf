@@ -94,9 +94,9 @@ class MethodContext:
         """Refresh :attr:`last_activity` to the current monotonic time.
 
         Called by the server dispatcher before invoking every method
-        EXCEPT ``event.subscribe`` (per C02 §5.5). Subscribers
-        independently keep the daemon alive via the live-subscriber
-        gate inside :class:`eawf.daemon.idle.IdleTimeoutWatchdog`.
+        EXCEPT ``event.subscribe``. Subscribers independently keep the
+        daemon alive via the live-subscriber gate inside
+        :class:`eawf.daemon.idle.IdleTimeoutWatchdog`.
         """
         self.last_activity = time.monotonic()
 

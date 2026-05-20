@@ -1,4 +1,4 @@
-"""``/agent-dispatch`` skill body (C04b §5.3).
+"""``/agent-dispatch`` skill body.
 
 Mirrors the dict body emitted by
 :class:`eawf.skills.agent_dispatch.AgentDispatchSkill`: the resolved

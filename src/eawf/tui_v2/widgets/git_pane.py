@@ -1,16 +1,15 @@
-"""``GitPane`` — live git branch / status / ahead-behind widget (C06).
+"""``GitPane`` — live git branch / status / ahead-behind widget.
 
-Per the C06 brief §5.3 widget row: a :class:`~textual.widgets.Static`
-composite that surfaces the working tree's git context — current branch,
-dirty/clean status, the last few commit subjects, and the ahead/behind
-counts versus the upstream — refreshed from short ``git`` shell-outs with
-a ~1 s cache so a high-frequency repaint never re-pays the subprocess
-cost (per the brief's ``tui-layout.md`` 1 s cache citation).
+A :class:`~textual.widgets.Static` composite that surfaces the working
+tree's git context — current branch, dirty/clean status, the last few
+commit subjects, and the ahead/behind counts versus the upstream —
+refreshed from short ``git`` shell-outs with a ~1 s cache so a
+high-frequency repaint never re-pays the subprocess cost.
 
-Unlike the other C06 widgets this pane is **not** driven by the reactive
+Unlike the other widgets this pane is **not** driven by the reactive
 :class:`~eawf.state.models.State`: there is no ``state['git']`` producer
-(the P20 surface always rendered dashes off that unwritten slot), so the
-pane reads the live repo directly. Every shell-out is total — a missing
+(the earlier surface always rendered dashes off that unwritten slot), so
+the pane reads the live repo directly. Every shell-out is total — a missing
 ``git`` binary, a non-git cwd, a timeout, or no configured upstream each
 render a ``—`` for the affected field rather than raising, so the render
 loop stays alive on any path.

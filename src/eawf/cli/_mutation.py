@@ -8,8 +8,8 @@ Two entry points coexist in this module:
   :class:`~eawf.state.models.State` for the caller to mutate in place,
   then validates and atomically writes it back. The full read-modify-
   write runs under one lock acquisition so concurrent writers serialise.
-  Because it is the shared write path, the C05 §5.5 ``--daemonless``
-  rejection for mutating verbs lives here: when the operator passed the
+  Because it is the shared write path, the ``--daemonless`` rejection
+  for mutating verbs lives here: when the operator passed the
   ``--daemonless`` flag (recorded process-wide by the root callback via
   :func:`set_daemonless_flag`) and the caller did not opt out with
   ``read_only=True``, the transaction refuses before acquiring the lock.
@@ -59,12 +59,12 @@ logger = logging.getLogger(__name__)
 # Process-wide record of whether the operator passed the ``--daemonless``
 # *flag* on this invocation. Set once per process by the Typer root
 # callback (:func:`eawf.cli.app._root`) from :class:`GlobalFlags`. The
-# chokepoint in :func:`state_transaction` reads it to enforce the C05
-# §5.5 rule that mutating verbs reject ``--daemonless``.
+# chokepoint in :func:`state_transaction` reads it to enforce the rule
+# that mutating verbs reject ``--daemonless``.
 #
 # This keys on the *flag* deliberately, NOT on ``EAWF_DAEMONLESS=1``:
 # the env hatch routes mutating verbs to the in-process fallback for the
-# V1 CI / one-shot / recovery carve-out (handled in :func:`_proxy_enabled`)
+# CI / one-shot / recovery carve-out (handled in :func:`_proxy_enabled`)
 # and must NOT hard-reject — the integration suite forces the env var
 # autouse precisely so its in-process mutating verbs keep working. The
 # explicit ``--daemonless`` flag, by contrast, is the operator asserting
@@ -113,7 +113,7 @@ def state_transaction(
 
     Procedure:
 
-    0. C05 §5.5 daemonless gate: when this is a mutating transaction
+    0. Daemonless gate: when this is a mutating transaction
        (``read_only=False``, the default) AND the operator passed the
        ``--daemonless`` flag (per :func:`daemonless_flag_requested`),
        refuse with :class:`~eawf.cli.errors.InvalidInput` *before*
@@ -137,13 +137,13 @@ def state_transaction(
         timeout: Lock-acquisition timeout in seconds.
         read_only: When ``True`` the caller only reads the yielded state
             for a consistent snapshot (e.g. listing / show verbs) and the
-            §5.5 ``--daemonless`` rejection is skipped. Defaults to
-            ``False`` (mutating) so every write path inherits the gate.
+            ``--daemonless`` rejection is skipped. Defaults to ``False``
+            (mutating) so every write path inherits the gate.
 
     Raises:
         InvalidInput: When ``read_only=False`` and the ``--daemonless``
             flag was passed (``data.kind="InvalidInput"``) — mutating
-            verbs cannot run daemonless per C05 §5.5 / F3.
+            verbs cannot run daemonless.
         NotFound: When *state_path* does not exist.
         ValidationFailed: When the loaded payload fails schema
             validation, or the post-mutation payload fails schema
@@ -260,15 +260,15 @@ def state_mutate(
 ) -> dict[str, Any]:
     """Apply *mutation* via the daemon proxy or the in-process fallback.
 
-    The dispatch policy follows AGENTS rule 4 + the W09 spike brief +
-    the C05 §5.5 escalation table:
+    The dispatch policy follows AGENTS rule 4 (the daemon is the sole
+    canonical mutator):
 
     * When the operator requested the daemon-bypass carve-out for this
       **mutating** verb (``daemonless=True`` — sourced from the
       ``--daemonless`` flag): refuse with :class:`cli_errors.UserError`
-      (``data.kind="InvalidInput"``) per §5.5 / F3. Mutating verbs are
-      daemon-only; the carve-out is read-only. This check fires before
-      any config-merge so a daemonless write is rejected even when the
+      (``data.kind="InvalidInput"``). Mutating verbs are daemon-only;
+      the carve-out is read-only. This check fires before any
+      config-merge so a daemonless write is rejected even when the
       daemon happens to be up.
     * When ``daemon.proxy_enabled`` is ``true`` AND the daemon is
       reachable: marshal the mutation across the daemon ``state.mutate``
@@ -276,14 +276,14 @@ def state_mutate(
       ordering; the CLI gets back the event envelope verbatim.
     * When ``daemon.proxy_enabled`` is ``true`` AND the daemon is
       **not** reachable AND the mutation is a writer: refuse with
-      :class:`cli_errors.IntegrityViolation` — per F20 the daemon-
-      required envelope keeps the daemonless-write path closed.
-    * When ``daemon.proxy_enabled`` is ``false`` (V1 carve-out / CI) OR
+      :class:`cli_errors.IntegrityViolation` — the daemon-required
+      envelope keeps the daemonless-write path closed.
+    * When ``daemon.proxy_enabled`` is ``false`` (CI carve-out) OR
       the daemon refuses the kind with ``NotImplementedError``: fall
       back to the in-process path. The *apply* callable receives the
       typed :class:`State` under :func:`state_transaction`; the caller
       is responsible for invoking the lifecycle helper + appending the
-      event row exactly as the pre-W09 surface did.
+      event row exactly as the legacy surface did.
 
     Args:
         state_path: Absolute path to ``state.json``.
@@ -300,9 +300,9 @@ def state_mutate(
         workspace: Workspace anchor for config-merge resolution
             (typically ``flags.workspace``).
         daemonless: When True, the operator passed ``--daemonless`` on a
-            mutating verb. Per §5.5 this is rejected — a mutating verb
-            cannot run daemonless. The ``EAWF_DAEMONLESS=1`` env hatch is
-            handled separately by ``_proxy_enabled`` (it routes to the
+            mutating verb. This is rejected — a mutating verb cannot run
+            daemonless. The ``EAWF_DAEMONLESS=1`` env hatch is handled
+            separately by ``_proxy_enabled`` (it routes to the
             in-process fallback for CI, not a hard rejection).
         verb: Operator-facing verb name for the ``--daemonless``
             rejection envelope (e.g. ``"wave close"``). Defaults to a
@@ -318,7 +318,7 @@ def state_mutate(
         UserError: When ``daemonless=True`` — mutating verbs reject the
             daemon-bypass carve-out (``data.kind="InvalidInput"``).
         IntegrityViolation: When ``daemon.proxy_enabled=true`` AND the
-            daemon is unreachable AND the mutation is a writer (F20).
+            daemon is unreachable AND the mutation is a writer.
         ValidationFailed: When the daemon rejects the mutation with
             ``-32002 validation_failed`` or the in-process post-
             mutation validation fails.
@@ -366,9 +366,9 @@ def state_mutate(
         else:
             return {"proxied": True, "result": result}
 
-    # In-process fallback path (W09 default; also reached when the
-    # daemon refuses the kind with NotImplementedError per the apply
-    # registry's reserved-for-C03-IMPL stub).
+    # In-process fallback path; also reached when the daemon refuses the
+    # kind with NotImplementedError per the apply registry's reserved
+    # stub.
     with state_transaction(state_path) as state:
         apply(state)
     return {"proxied": False, "result": {}}

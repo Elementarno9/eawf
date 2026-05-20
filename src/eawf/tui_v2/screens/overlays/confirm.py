@@ -1,8 +1,8 @@
-"""``ConfirmModal`` — yes/no confirmation overlay (C06 §5.7).
+"""``ConfirmModal`` — yes/no confirmation overlay.
 
-The destructive-op approval overlay from the C06 brief §5.7 modal-stack
-inventory: a small centred :class:`~textual.screen.ModalScreen` with a
-prompt and two arrow-toggle choices (``Yes`` / ``No``). ``←`` / ``→``
+The destructive-op approval overlay: a small centred
+:class:`~textual.screen.ModalScreen` with a prompt and two arrow-toggle
+choices (``Yes`` / ``No``). ``←`` / ``→``
 move the selection, ``Enter`` confirms the highlighted choice, ``Esc``
 cancels (equivalent to ``No``). The modal returns its boolean result
 through Textual's ``ModalScreen`` dismiss value, so a caller awaits

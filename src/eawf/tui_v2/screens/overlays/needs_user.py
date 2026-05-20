@@ -1,23 +1,22 @@
-"""``NeedsUserModal`` — needs_user AskUserQuestion overlay (C06 §5.7).
+"""``NeedsUserModal`` — needs_user AskUserQuestion overlay.
 
-The modal AUQ surface from the C06 brief §5.7 modal-stack inventory (D24):
-auto-opened when the TUI receives a ``needs_user_pause`` envelope for the
-active scope/session, it renders the envelope's
+The modal AUQ surface: auto-opened when the TUI receives a
+``needs_user_pause`` envelope for the active scope/session, it renders
+the envelope's
 :class:`~eawf.skills.bodies.user_question.UserQuestion` — the prompt plus
 its 2-4 enumerated options — and lets the operator pick one with ``↑`` /
 ``↓`` + ``Enter``. The chosen option's label routes back to the paused
-skill via ``eawf skill resume <pause-urn> --choice <label>`` (C04 §5.7
-resume flow). ``Esc`` defers (the daemon keeps the pause open; the next
-queued envelope opens when this one dismisses, per F16).
+skill via ``eawf skill resume <pause-urn> --choice <label>``. ``Esc``
+defers (the daemon keeps the pause open; the next queued envelope opens
+when this one dismisses).
 
-Per the W19 deferral pattern this wave lands the **overlay**: the
-question + option list rendered from the typed ``UserQuestion``, the ``↑``
-/ ``↓`` highlight, and the chosen label returned through the
-``ModalScreen`` dismiss value (``None`` on defer). Wiring the pick to the
-``eawf skill resume`` CLI verb + the ``needs_user_pause`` daemon-push
-auto-open (C04 D4) rides the wave that lands those seams — the resume CLI
-verb does not exist yet — so the host runs the resume on the returned
-label.
+This wave lands the **overlay**: the question + option list rendered from
+the typed ``UserQuestion``, the ``↑`` / ``↓`` highlight, and the chosen
+label returned through the ``ModalScreen`` dismiss value (``None`` on
+defer). Wiring the pick to the ``eawf skill resume`` CLI verb + the
+``needs_user_pause`` daemon-push auto-open rides the wave that lands
+those seams — the resume CLI verb does not exist yet — so the host runs
+the resume on the returned label.
 
 The overlay holds no domain logic beyond presenting a validated
 ``UserQuestion`` and returning the picked label; the question is built by
@@ -174,8 +173,8 @@ def open_needs_user(app: object, question: UserQuestion) -> None:
     plain ``push_screen`` under a bare harness — mirroring the
     :func:`~eawf.tui_v2.screens.help.open_help` pattern. The future
     ``needs_user_pause`` daemon-push handler calls this for the active
-    scope/session; there is no palette verb for it (it is daemon-push only
-    per C06 §5.7).
+    scope/session; there is no palette verb for it (it is daemon-push
+    only).
 
     Args:
         app: The running App (typed loosely to avoid an import cycle with

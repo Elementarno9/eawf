@@ -1,8 +1,8 @@
 """``/wave-spec`` skill — scaffold / validate a WaveSpec for a wave.
 
-C04b §5.5 lands ``/wave-spec`` as the skill surface over the WaveSpec
-deliverable document (:class:`eawf.spec.wave.WaveSpec`). Two verbs map
-onto the operator-facing ``eawf spec`` CLI:
+``/wave-spec`` is the skill surface over the WaveSpec deliverable
+document (:class:`eawf.spec.wave.WaveSpec`). Two verbs map onto the
+operator-facing ``eawf spec`` CLI:
 
 - ``/wave-spec init <wave-id>``     → scaffold a new WaveSpec.
 - ``/wave-spec validate <wave-id>`` → re-hash + revalidate the spec.
@@ -11,7 +11,7 @@ Per the authority map, the daemon owns spec scaffolding + cache
 mutation; the skill validates the requested verb + wave id, appends a
 single append-only ``EVENT`` describing the intent, and routes the
 operator to the canonical ``eawf spec`` writer via
-``next_valid_actions``. The Mockup-waiver path (C03 D11) is honoured by
+``next_valid_actions``. The Mockup-waiver path is honoured by
 threading an optional ``mockup_waiver_reason`` arg through the body so a
 downstream scaffold can carry it onto the WaveSpec without forcing an
 ASCII mockup for non-UI waves.
@@ -68,7 +68,7 @@ def _coerce_verb(value: Any) -> str:
 
 @register
 class WaveSpecSkill(Skill):
-    """Concrete ``/wave-spec`` skill (C04b §5.5)."""
+    """Concrete ``/wave-spec`` skill."""
 
     name: SkillName = "/wave-spec"
 

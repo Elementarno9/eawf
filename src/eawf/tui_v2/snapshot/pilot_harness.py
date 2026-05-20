@@ -1,9 +1,9 @@
-"""ASCII-text snapshot harness for the C06 ``tui_v2`` operator surface.
+"""ASCII-text snapshot harness for the ``tui_v2`` operator surface.
 
 Captures a running Textual screen's rendered terminal as **plain ASCII
 text** for golden-fixture comparison, driven by Textual's
-``App.run_test()`` Pilot. Per the C06 brief Q-new1 OVERRIDE the snapshot
-artifact is ASCII text (not the SVG ``App.export_screenshot`` output):
+``App.run_test()`` Pilot. The snapshot artifact is ASCII text (not the
+SVG ``App.export_screenshot`` output):
 
 * **diffable** — a reviewer reads the golden ``.txt`` and the unified
   diff in a code-review tool;
@@ -63,7 +63,7 @@ _SETTLE_MAX_CYCLES: int = 20
 async def settle_screen(pilot: Pilot[object]) -> str:
     """Pump the app until its rendered frame stabilises, return that frame.
 
-    The C06 read-only state binder loads ``state.json`` and pushes it into
+    The read-only state binder loads ``state.json`` and pushes it into
     the App reactive asynchronously, and each widget seeds from
     ``app.state`` on its own mount. A bare ``await pilot.pause()`` can
     therefore capture an in-between frame (state not yet bound → empty-

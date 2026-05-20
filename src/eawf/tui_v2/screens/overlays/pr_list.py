@@ -1,13 +1,12 @@
-"""``PrListModal`` — the ``/pr`` open-PRs overlay (C06 §5.7 / D21).
+"""``PrListModal`` — the ``/pr`` open-PRs overlay.
 
-The ``/pr`` palette verb opens a list of the repo's open pull requests
-(per the C06 brief §5.7 modal row + ``tui-ux-resolved`` §``:pr overlay``
-[7:418-450] / Decision D21): per-repo PR rows, ``Enter`` opens the
-highlighted PR via ``gh pr view --web``, a 60 s cache balances freshness
-against the ``gh pr list`` cost, and the overlay degrades gracefully when
-``gh`` is absent. ``Esc`` closes.
+The ``/pr`` palette verb opens a list of the repo's open pull requests:
+per-repo PR rows, ``Enter`` opens the highlighted PR via
+``gh pr view --web``, a 60 s cache balances freshness against the
+``gh pr list`` cost, and the overlay degrades gracefully when ``gh`` is
+absent. ``Esc`` closes.
 
-**Shell-out seam.** D21's data source is a lazy ``gh pr list --json``
+**Shell-out seam.** The data source is a lazy ``gh pr list --json``
 shell-out cached for 60 s. The subprocess plumbing (spawn, timeout, cache
 TTL) belongs to the daemon-mediated command surface that lands later in
 this band; wiring a raw ``subprocess`` call here would duplicate that and
@@ -43,8 +42,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: The ``gh pr list`` cache TTL in seconds (D21 — 60 s balances freshness
-#: against the ~200-500 ms ``gh pr list`` cost per repo).
+#: The ``gh pr list`` cache TTL in seconds — 60 s balances freshness
+#: against the ~200-500 ms ``gh pr list`` cost per repo.
 PR_CACHE_TTL_S: float = 60.0
 
 #: The ``gh pr list --json`` field set the parser expects.
@@ -139,7 +138,7 @@ def _render_row(row: PrRow) -> str:
 
 
 class PrListModal(ModalScreen[None]):
-    """Scrollable open-PR list (Enter opens web, Esc closes); D21 overlay.
+    """Scrollable open-PR list (Enter opens web, Esc closes).
 
     Built with a pre-fetched tuple of :class:`PrRow` (the host resolves
     them from the ``gh pr list`` shell-out once it lands) so the overlay
@@ -278,7 +277,7 @@ def open_pr_list(app: App[None], rows: tuple[PrRow, ...]) -> bool:
     """Push the PR-list overlay onto *app* (modal-cap-aware).
 
     Routes through the App's ``push_modal`` helper so the modal-stack
-    depth cap (C06 §5.7) is enforced in one place; falls back to a plain
+    depth cap is enforced in one place; falls back to a plain
     ``push_screen`` under a bare harness that lacks the cap helper.
 
     Args:

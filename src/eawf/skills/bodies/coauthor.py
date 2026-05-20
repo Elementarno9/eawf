@@ -1,4 +1,4 @@
-"""``/coauthor`` skill body (C04b §5.1).
+"""``/coauthor`` skill body.
 
 Mirrors the dict body emitted by :class:`eawf.skills.coauthor.CoauthorSkill`:
 the resolved ``Co-Authored-By`` trailer policy. The ``needs_user`` path

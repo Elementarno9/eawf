@@ -1,11 +1,10 @@
-"""Top-level plugin doctor — enumerates 4 drift kinds (C07a §5.9 / F14).
+"""Top-level plugin doctor — enumerates 4 drift kinds.
 
 The per-runtime plugin doctors at
 :mod:`eawf.runtimes.{claude,codex,opencode}.plugin_doctor` answer
 "does the rendered tree on disk still match what the installer would
 emit?". This module composes them into a single multi-runtime sweep
-plus three additional drift kinds the cluster brief names per C07a
-F14 / §5.9:
+plus three additional drift kinds:
 
 1. ``manifest-vs-disk`` — :class:`PluginManifest` source files are
    declared on the manifest's ``managed.source_files`` list; this
@@ -18,11 +17,11 @@ F14 / §5.9:
    three runtimes (or the requested subset). This is the existing
    byte-equality sweep promoted to a kind.
 3. ``capability-vs-probe`` — capability-matrix declared cell vs
-   live probe results, per the W13 detector
+   live probe results, via the matrix detector
    (:func:`eawf.runtimes.capabilities.detect_drift`).
-4. ``helper-LOC-overflow`` — KISS-004 budget enforcement; the
+4. ``helper-LOC-overflow`` — LOC-budget enforcement; the
    ``src/eawf/runtimes/helpers/`` module + its submodules must
-   stay under 300 LOC combined (per C07a brief §4.1 +
+   stay under 300 LOC combined (see
    :mod:`eawf.runtimes.helpers` module docstring). Drift fires
    when the total exceeds the cap.
 
@@ -31,15 +30,14 @@ Each kind is an isolated check function that returns a typed
 exposes ``clean`` (no drift across any kind) and the per-kind
 lists so the CLI surface can render one consolidated table.
 
-Composition with W11 / W13
---------------------------
+Composition
+-----------
 
-* W11 (``PluginManifest``) sources the ``manifest-vs-disk`` rule;
-  the manifest is loaded from ``build/<runtime>-plugin/manifest.yaml``
+* ``PluginManifest`` sources the ``manifest-vs-disk`` rule; the
+  manifest is loaded from ``build/<runtime>-plugin/manifest.yaml``
   when present, else skipped (the doctor reports an empty kind row
-  rather than failing) per the brief §F14 — the manifest is a
-  build-time artifact.
-* W13 (:mod:`eawf.runtimes.capabilities`) sources the
+  rather than failing) — the manifest is a build-time artifact.
+* :mod:`eawf.runtimes.capabilities` sources the
   ``capability-vs-probe`` rule; the doctor wraps
   :func:`~eawf.runtimes.capabilities.detect_drift` per runtime.
 """

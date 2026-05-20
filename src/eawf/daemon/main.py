@@ -48,7 +48,7 @@ def _resolve_idle_timeout() -> float:
 
     The env var ``EAWF_DAEMON_IDLE_TIMEOUT`` lets the operator override
     the default for testing + tuning; the canonical config surface
-    lands in C08's layered-config wave. A non-positive override falls
+    lands in a later layered-config wave. A non-positive override falls
     back to the default and logs a warning.
     """
     raw = os.environ.get("EAWF_DAEMON_IDLE_TIMEOUT")

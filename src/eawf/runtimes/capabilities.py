@@ -2,8 +2,7 @@
 
 The matrix at :data:`MATRIX_PATH` (``src/eawf/runtimes/capabilities.yaml``)
 enumerates eight capability rows across the three v0.3-v0.5 runtimes
-(``claude-code`` / ``codex`` / ``opencode``) per C07a §G9 + D8. This
-module:
+(``claude-code`` / ``codex`` / ``opencode``). This module:
 
 * Parses the YAML with strict :class:`pydantic.BaseModel`
   (``extra="forbid"``) validation so cell values stay within the closed
@@ -55,9 +54,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CapabilityCell = Literal["supported", "unsupported", "partial", "unknown"]
-"""Closed set of cell values per C07a §G9. Pydantic rejects anything
-else via :class:`CapabilityRow.model_config = ConfigDict(extra="forbid")`
-plus the field-level Literal narrowing below."""
+"""Closed set of cell values. Pydantic rejects anything else via
+:class:`CapabilityRow.model_config = ConfigDict(extra="forbid")` plus
+the field-level Literal narrowing below."""
 
 CAPABILITY_CELLS: Final[tuple[CapabilityCell, ...]] = (
     "supported",
@@ -78,8 +77,7 @@ RUNTIME_IDS: Final[tuple[str, ...]] = ("claude-code", "codex", "opencode")
 
 # Canonical capability-row ordering — pinned to keep the rendered table
 # deterministic and to keep the schema validator's row-count check
-# tight (success criterion 1 — exactly 8 rows). Matches the C07a brief
-# §1 enumeration verbatim.
+# tight (exactly 8 rows).
 CAPABILITY_NAMES: Final[tuple[str, ...]] = (
     "skills",
     "plan_mode",
@@ -92,10 +90,10 @@ CAPABILITY_NAMES: Final[tuple[str, ...]] = (
 )
 
 EXPECTED_CAPABILITY_ROWS: Final[int] = 8
-"""Closed row count per C07a §G9 — exactly 8 capability rows."""
+"""Closed row count — exactly 8 capability rows."""
 
 EXPECTED_RUNTIMES: Final[int] = 3
-"""Closed runtime count for v0.3-v0.5 per C07a NG5."""
+"""Closed runtime count for v0.3-v0.5."""
 
 
 # ---------------------------------------------------------------------------

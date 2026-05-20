@@ -1,22 +1,21 @@
-"""``PlanPreviewModal`` — plan-mode wave-DAG preview overlay (C06 §5.7).
+"""``PlanPreviewModal`` — plan-mode wave-DAG preview overlay.
 
-The ``/prep`` plan-mode surface from the C06 brief §5.7 modal-stack
-inventory: opened when ``/roadmap propose`` returns a ``status=needs_user``
-envelope, it renders the proposed phase's three-tier spec aggregate
-(PhaseSpec + IterSpec + WaveSpec) as a hierarchical :class:`~textual.widgets.Tree`
-and surfaces a three-option AUQ — ``approve`` / ``edit`` / ``reject`` (per
-Decision D4: ``approve`` runs ``eawf roadmap apply <P##>`` only). ``←`` /
-``→`` move the highlight, ``Enter`` confirms the highlighted action, and
-``Esc`` is equivalent to ``reject``.
+The ``/prep`` plan-mode surface: opened when ``/roadmap propose`` returns
+a ``status=needs_user`` envelope, it renders the proposed phase's
+three-tier spec aggregate (PhaseSpec + IterSpec + WaveSpec) as a
+hierarchical :class:`~textual.widgets.Tree` and surfaces a three-option
+AUQ — ``approve`` / ``edit`` / ``reject`` (``approve`` runs
+``eawf roadmap apply <P##>`` only). ``←`` / ``→`` move the highlight,
+``Enter`` confirms the highlighted action, and ``Esc`` is equivalent to
+``reject``.
 
-Per the W19 deferral pattern this wave lands the **overlay**: the
-hierarchical tree built from the bound :class:`~eawf.state.models.State`,
-the three-option AUQ, and the chosen-action result returned through the
-``ModalScreen`` dismiss value. Wiring the ``approve`` pick to the
-``eawf roadmap apply`` CLI verb + re-rendering on the Edit-Plan subagent's
-``agent_end`` report (C06 §5.7 / D5) rides the wave that lands those CLI
-verbs — they do not exist yet — so the host gates its mutation on the
-returned action label.
+This wave lands the **overlay**: the hierarchical tree built from the
+bound :class:`~eawf.state.models.State`, the three-option AUQ, and the
+chosen-action result returned through the ``ModalScreen`` dismiss value.
+Wiring the ``approve`` pick to the ``eawf roadmap apply`` CLI verb +
+re-rendering on the Edit-Plan subagent's ``agent_end`` report rides the
+wave that lands those CLI verbs — they do not exist yet — so the host
+gates its mutation on the returned action label.
 
 The tree content is assembled by a pure builder (:func:`build_plan_tree`)
 that takes the reactive state + a phase id and returns a typed
@@ -144,8 +143,8 @@ class PlanPreviewModal(ModalScreen[str]):
     ``/roadmap propose`` returns ``status=needs_user``. The modal owns the
     presentation, the ``←`` / ``→`` action toggle, and returns the chosen
     action label (``approve`` / ``edit`` / ``reject``) through the dismiss
-    value so the host can run ``eawf roadmap apply`` on ``approve`` only
-    (D4). ``approve`` is disabled when the tree carries no waves (F14).
+    value so the host can run ``eawf roadmap apply`` on ``approve`` only.
+    ``approve`` is disabled when the tree carries no waves.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -260,7 +259,7 @@ class PlanPreviewModal(ModalScreen[str]):
     def on_mount(self) -> None:
         """Paint the initial action highlight (approve, or edit if empty)."""
         if not self._has_waves:
-            # F14: a no-wave plan cannot be approved; default to ``edit``.
+            # A no-wave plan cannot be approved; default to ``edit``.
             self.selected = _ACTIONS.index("edit")
         self._repaint_actions()
 
@@ -273,7 +272,7 @@ class PlanPreviewModal(ModalScreen[str]):
         """Rebuild the action row, marking selected + disabled cells.
 
         ``approve`` carries the ``-disabled`` style when the plan has no
-        waves (F14); the highlight skips it in :meth:`action_move`.
+        waves; the highlight skips it in :meth:`action_move`.
         """
         row = self.query_one("#plan-action-row", Static)
         cells: list[str] = []
@@ -302,7 +301,7 @@ class PlanPreviewModal(ModalScreen[str]):
 
         A highlighted-but-disabled ``approve`` (only reachable if the
         guard is bypassed) is suppressed so an empty plan cannot be
-        approved (F14).
+        approved.
         """
         action = _ACTIONS[self.selected]
         if action == "approve" and not self._has_waves:

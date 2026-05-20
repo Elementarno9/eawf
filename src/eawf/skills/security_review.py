@@ -1,10 +1,10 @@
 """``/security-review`` skill — run the security-audit DSL on a scope.
 
-C04b §5.6 lands ``/security-review`` as the skill surface over the
-audit-check DSL (:mod:`eawf.audit_dsl.runner`). It runs a declarative
-security-audit spec against a closed scope and emits audit envelopes per
-C03 §5.6. When the active profile is ``security`` (a C08 contribution),
-this skill is a required gate for ``phase close``.
+``/security-review`` is the skill surface over the audit-check DSL
+(:mod:`eawf.audit_dsl.runner`). It runs a declarative security-audit
+spec against a closed scope and emits audit envelopes. When the active
+profile is ``security`` (a profile contribution), this skill is a
+required gate for ``phase close``.
 
 The skill loads a caller-supplied audit spec (a YAML file of declarative
 checks) via :func:`eawf.audit_dsl.runner.load_spec`, dispatches every
@@ -54,7 +54,7 @@ MANIFEST = SkillManifest(
 
 @register
 class SecurityReviewSkill(Skill):
-    """Concrete ``/security-review`` skill (C04b §5.6)."""
+    """Concrete ``/security-review`` skill."""
 
     name: SkillName = "/security-review"
 

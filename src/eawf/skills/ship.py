@@ -192,7 +192,7 @@ def _load_vcs_config(state_path: Path) -> VcsConfig:
 
 
 def _resolve_coauthor_trailer_for_ship(vcs_config: VcsConfig) -> str | None:
-    """Resolve the ship run's co-author trailer via the W12 resolver.
+    """Resolve the ship run's co-author trailer.
 
     Delegates entirely to :func:`eawf.vcs.coauthor.resolve_coauthor_trailer`;
     co-author policy is never reimplemented here. A
@@ -211,7 +211,10 @@ def _resolve_coauthor_trailer_for_ship(vcs_config: VcsConfig) -> str | None:
     try:
         return resolve_coauthor_trailer(vcs_config.coauthor, env=os.environ)
     except CoauthorPolicyError as exc:
-        logger.warning(f"_resolve_coauthor_trailer_for_ship: trailer unresolved: {exc}")
+        logger.warning(
+            f"_resolve_coauthor_trailer_for_ship coauthor={vcs_config.coauthor!r} "
+            f"resolution=failed reason={exc!r}"
+        )
         return None
 
 

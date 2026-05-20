@@ -1,9 +1,9 @@
-"""``BacklogTable`` — sortable / filterable backlog grid (C06 widget).
+"""``BacklogTable`` — sortable / filterable backlog grid (widget).
 
-Per the C06 brief §5.3 widget row: a :class:`~textual.widgets.DataTable`
-of the current scope's backlog items, **sortable** by priority / id /
-status, **filterable** by a substring (driven by the ``/filter backlog``
-palette verb), with ``Enter`` on the cursor row opening a detail modal.
+A :class:`~textual.widgets.DataTable` of the current scope's backlog
+items, **sortable** by priority / id / status, **filterable** by a
+substring (driven by the ``/filter backlog`` palette verb), with
+``Enter`` on the cursor row opening a detail modal.
 
 The modal screen itself is a later wave of this band (the modal-stack
 inventory in the brief §5.7 lands the ``DetailModal``); this wave wires
@@ -35,7 +35,7 @@ from eawf.state.enums import BacklogPriority
 if TYPE_CHECKING:
     from eawf.state.models import BacklogItem, State
 
-#: The sort keys the table cycles through (the C06 ``priority / id /
+#: The sort keys the table cycles through (the ``priority / id /
 #: target`` row; ``target`` maps onto ``status`` for backlog rows, which
 #: carry no dedicated target field). Pressing the sort key advances to the
 #: next member, wrapping at the end.

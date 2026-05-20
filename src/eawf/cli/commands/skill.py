@@ -64,7 +64,7 @@ from eawf.render.envelope import (
 )
 from eawf.render.skills import SKILL_REGISTRY, SkillSpec, render_skill_md_from_spec
 from eawf.skills import (
-    _bootstrap as _skills_bootstrap,  # noqa: F401 — import-side-effect registers W02 skills
+    _bootstrap as _skills_bootstrap,  # noqa: F401 — import-side-effect registers skills
 )
 from eawf.skills import registry
 from eawf.skills.bodies import (
@@ -100,8 +100,8 @@ skill_app = typer.Typer(
 
 # Per-skill metadata used by ``eawf skill list``. Mirrors `docs/architecture/envelope.md`:
 # six core (research/prep/audit/ship/review/polish) + four meta
-# (init/roadmap/differentiate/flow) + /blitz + the six C04b skills
-# (coauthor/memory/agent-dispatch/compress/wave-spec/security-review),
+# (init/roadmap/differentiate/flow) + /blitz + the six skill-surface
+# bodies (coauthor/memory/agent-dispatch/compress/wave-spec/security-review),
 # descriptions kept short enough for a terminal table column.
 _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
     "/research": "Investigate questions; produce a peer-reviewed brief.",

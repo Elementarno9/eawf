@@ -1,10 +1,9 @@
-"""``UserScreen`` — user-scope portfolio screen (C06 §5.5).
+"""``UserScreen`` — user-scope portfolio screen.
 
-Per the C06 brief §5.5 (``workspace-and-user-tui.md`` §3 [8:166-208]):
-the user screen composes three vertical sections — **attention**,
+The user screen composes three vertical sections — **attention**,
 **effort**, **portfolio** — weighted ``3:2:5``, inside the
 :class:`~eawf.tui_v2.scopes.ScopeScreen` shared chassis (Header + Footer
-+ Heartbeat reused verbatim per Decision D3).
++ Heartbeat reused verbatim).
 
 The dedicated section sub-widgets the brief names (``AttentionList`` —
 cross-repo attention rows; ``EffortBars`` — 7-day EU bars per repo;
@@ -21,7 +20,7 @@ three-section arrangement so the screen renders live today:
 
 This screen overrides **only** :meth:`compose_body` + its footer hints;
 the entire chassis is inherited from
-:class:`~eawf.tui_v2.scopes.ScopeScreen` (D3 zero-duplication).
+:class:`~eawf.tui_v2.scopes.ScopeScreen` (zero-duplication).
 """
 
 from __future__ import annotations

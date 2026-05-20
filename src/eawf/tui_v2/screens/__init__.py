@@ -1,4 +1,4 @@
-"""Full-screen + overlay screens for the C06 Eä TUI (tui_v2).
+"""Full-screen + overlay screens for the Eä TUI (tui_v2).
 
 The non-scope screens of the TUI: the :class:`HelpScreen` full-keymap
 overlay (this wave) and the modal overlays under

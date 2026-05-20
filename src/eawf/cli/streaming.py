@@ -1,11 +1,10 @@
-"""``--stream`` output surface for long-running ``eawf`` verbs (C05 § 5.8).
+"""``--stream`` output surface for long-running ``eawf`` verbs.
 
 Verbs that subscribe to the daemon event bus (``wave dispatch``,
 ``wave dispatch-batch``, ``flow run``, ``audit run``, ``skill run``,
 ``metrics show --watch``, ``daemon logs --follow``) render their progress
 through this module when ``--stream`` is passed. ``--stream`` is opt-in and
-off by default so CI consumers keep a single deterministic stdout block
-(C05 D12).
+off by default so CI consumers keep a single deterministic stdout block.
 
 Two wire shapes, picked by ``json_output``:
 
@@ -14,9 +13,9 @@ Two wire shapes, picked by ``json_output``:
   daemon ``event.push`` becomes an ``event`` frame, and the stream is
   terminated by an ``end`` frame carrying the terminal ``status``. Every
   line is independently parseable; a partial line means a consumer-side
-  parser bug or a killed process (C05 F6).
+  parser bug or a killed process.
 * **Human** (``--stream`` alone) — bracketed ``[HH:MM:SS]`` progress lines
-  with a blank terminator line per C05 § 5.8 EOF semantics.
+  with a blank terminator line per the EOF semantics.
 
 Frame shapes are typed via :class:`StreamFrame` so the renderer cannot drift
 from the spec'd envelope. The module is daemon-agnostic: it consumes an
@@ -26,14 +25,14 @@ testable against an in-memory stream without a live socket.
 Two flag-combination rejections live here because they gate the ``--stream``
 surface:
 
-* ``--md --stream`` — markdown is not round-trippable line-by-line
-  (C05 F7); rejected with :class:`UserError` (``data.kind="InvalidInput"``).
-* ``--quiet --verbose`` — contradictory output verbosity (C05 § 5.2);
-  rejected with :class:`UserError` (``data.kind="InvalidInput"``). The
-  legacy draft prose floated exit 3 here, but the canonical taxonomy maps a
-  bad flag combination to operator-fixable input — exit 1 USER_ERROR —
-  matching the sibling ``--md --stream`` and ``--daemonless`` rejections and
-  the ``-32602 → USER_ERROR`` row in :mod:`eawf.cli.errors`.
+* ``--md --stream`` — markdown is not round-trippable line-by-line;
+  rejected with :class:`UserError` (``data.kind="InvalidInput"``).
+* ``--quiet --verbose`` — contradictory output verbosity;
+  rejected with :class:`UserError` (``data.kind="InvalidInput"``). A
+  bad flag combination maps to operator-fixable input — exit 1
+  USER_ERROR — matching the sibling ``--md --stream`` and
+  ``--daemonless`` rejections and the ``-32602 → USER_ERROR`` row in
+  :mod:`eawf.cli.errors`.
 """
 
 from __future__ import annotations
@@ -50,10 +49,10 @@ from eawf.cli.errors import UserError
 
 #: Terminal-status string carried by the ``end`` frame. ``ok`` exits 0;
 #: ``failed`` exits 5 INTERNAL_ERROR; ``disconnected`` (daemon dropped the
-#: subscription) exits 4 DAEMON_UNREACHABLE per C05 § 5.8 named edge cases.
+#: subscription) exits 4 DAEMON_UNREACHABLE.
 StreamStatus = Literal["ok", "failed", "disconnected"]
 
-#: Exit code for each terminal stream status (C05 § 5.8 named edge cases).
+#: Exit code for each terminal stream status.
 _STATUS_EXIT_CODE: dict[StreamStatus, int] = {
     "ok": exit_codes.OK,
     "failed": exit_codes.INTERNAL_ERROR,
@@ -67,7 +66,7 @@ def _utcnow() -> datetime:
 
 
 class StreamFrame(BaseModel):
-    """One line of ``--stream`` output (C05 § 5.8 NDJSON shape).
+    """One line of ``--stream`` output (NDJSON shape).
 
     A single model carries all three frame types via the ``type``
     discriminator so the renderer round-trips one shape. Field presence
@@ -182,10 +181,11 @@ def render_ndjson_line(frame: StreamFrame) -> str:
     """Render *frame* as a single NDJSON line (no trailing newline).
 
     The line is a complete JSON object with ``None`` fields dropped so it
-    matches the C05 § 5.8 example. orjson is used for byte-stability with
-    the rest of the CLI output surface; ``OPT_SORT_KEYS`` keeps the key
-    order deterministic across runs for golden diffs. No indent option is
-    set — NDJSON requires exactly one object per line.
+    matches the documented NDJSON example. orjson is used for
+    byte-stability with the rest of the CLI output surface;
+    ``OPT_SORT_KEYS`` keeps the key order deterministic across runs for
+    golden diffs. No indent option is set — NDJSON requires exactly one
+    object per line.
 
     Args:
         frame: The stream frame to serialise.
@@ -213,7 +213,7 @@ def render_human_line(frame: StreamFrame, *, verbose: bool = False) -> str:
     Args:
         frame: The stream frame to render.
         verbose: When False, ``dispatch_log`` lines are truncated to their
-            first 80 characters with a ``--verbose`` hint per C05 § 5.8.
+            first 80 characters with a ``--verbose`` hint.
 
     Returns:
         A single human-readable line (caller appends the ``\\n``).
@@ -233,7 +233,7 @@ def render_human_line(frame: StreamFrame, *, verbose: bool = False) -> str:
 
 
 def reject_unstreamable_combination(*, md_output: bool, stream: bool) -> None:
-    """Reject ``--md --stream`` — markdown is not line-streamable (C05 F7).
+    """Reject ``--md --stream`` — markdown is not line-streamable.
 
     Args:
         md_output: Whether ``--md`` was passed.
@@ -249,7 +249,7 @@ def reject_unstreamable_combination(*, md_output: bool, stream: bool) -> None:
 
 
 def reject_quiet_verbose_collision(*, quiet: bool, verbose: bool) -> None:
-    """Reject the contradictory ``--quiet --verbose`` pair (C05 § 5.2).
+    """Reject the contradictory ``--quiet --verbose`` pair.
 
     Args:
         quiet: Whether ``--quiet`` was passed.
@@ -308,7 +308,7 @@ def stream_events(
 
     Returns:
         The exit code for the terminal status — 0 (ok), 5 (failed), or 4
-        (disconnected) per C05 § 5.8.
+        (disconnected).
     """
     sink = out if out is not None else sys.stdout
 
@@ -335,7 +335,7 @@ def stream_events(
             status = _coerce_status(raw.get("status", "ok"))
             break
 
-    # EOF semantics per C05 § 5.8: NDJSON terminates with the ``end`` frame
+    # EOF semantics: NDJSON terminates with the ``end`` frame
     # (machine consumers parse it for the terminal status); human output
     # terminates with a single blank ``^$`` marker line and surfaces the
     # status through the terminal event line, not a duplicate ``end`` line.

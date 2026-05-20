@@ -1089,11 +1089,10 @@ def sync_cmd(
 ) -> None:
     """Regenerate per-runtime plugin artifacts deterministically.
 
-    The canonical multi-runtime regeneration verb introduced under
-    C07a-V9 (XB10). Each requested runtime is driven through its
-    ``install_plugin`` renderer with shared inputs (frozen timestamp,
-    pass-through force / dry_run); the result aggregates per-file
-    deltas under a single envelope.
+    The canonical multi-runtime regeneration verb. Each requested
+    runtime is driven through its ``install_plugin`` renderer with
+    shared inputs (frozen timestamp, pass-through force / dry_run); the
+    result aggregates per-file deltas under a single envelope.
     """
     flags: GlobalFlags = ctx.obj
     if scope not in _VALID_SCOPES:

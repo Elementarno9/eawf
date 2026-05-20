@@ -1,7 +1,6 @@
-"""``Header`` — shared chassis header (C06 widget catalog).
+"""``Header`` — shared chassis header (widget catalog).
 
-Per the C06 brief §5.3 widget row + Decision D3 (shared chassis): a
-single :class:`~textual.widgets.Static` composite reused by every
+A single :class:`~textual.widgets.Static` composite reused by every
 per-scope screen (``RepoScreen`` / ``WorkspaceScreen`` / ``UserScreen``)
 with **no per-scope duplication**. It renders, left to right:
 
@@ -11,7 +10,7 @@ with **no per-scope duplication**. It renders, left to right:
 * a ``scope > code > phase`` breadcrumb derived from the bound
   :class:`~eawf.state.models.State` (rendered with the angle-ornament
   separator :data:`CRUMB_SEP`);
-* a runtime cell (D8 / D29) — ``runtime: idle`` muted when nothing is
+* a runtime cell — ``runtime: idle`` muted when nothing is
   dispatched, flipping to the active runtime when a wave is running;
 * a UTC clock (``HH:MM UTC``).
 
@@ -50,13 +49,13 @@ BRAND: str = "Eä"
 #: yet (fresh workspace / daemon cold-spawn placeholder).
 DEFAULT_PROJECT_CODE: str = "EAWF"
 
-#: Breadcrumb segment separator — the angle ornament per the C06 §5.3
-#: Header row. The glyph is intentional UI chrome (not a ``>`` typo), so
-#: the ambiguous-unicode lint is suppressed on the literal.
+#: Breadcrumb segment separator — the angle ornament in the Header row.
+#: The glyph is intentional UI chrome (not a ``>`` typo), so the
+#: ambiguous-unicode lint is suppressed on the literal.
 CRUMB_SEP: str = " ❯ "  # noqa: RUF001
 
-#: Idle runtime-cell text shown when no wave is dispatched (D29 — the
-#: cell stays visible and muted so the operator sees the field exists).
+#: Idle runtime-cell text shown when no wave is dispatched — the cell
+#: stays visible and muted so the operator sees the field exists.
 RUNTIME_IDLE: str = "idle"
 
 
@@ -86,9 +85,9 @@ def runtime_cell_text(state: State | None) -> str:
 
     The runtime cell shows ``runtime: idle`` (muted) when no wave is
     dispatched; once a wave is active it surfaces ``runtime: active``.
-    The richer per-runtime id + switchover colour banding (D8 / V5)
-    lands with the event-stream wiring in a later wave; this is the
-    idle/active seam those revisions extend.
+    The richer per-runtime id + switchover colour banding lands with
+    the event-stream wiring in a later wave; this is the idle/active
+    seam those revisions extend.
 
     Args:
         state: The currently bound state, or ``None``.
@@ -130,7 +129,7 @@ def render_header(state: State | None) -> str:
 class Header(Static):
     """Shared chassis header: ``Eä`` brand + breadcrumb + runtime + clock.
 
-    Reused verbatim by every per-scope screen (D3 shared chassis). Reads
+    Reused verbatim by every per-scope screen (shared chassis). Reads
     the host app's reactive ``state`` (seeded on mount) and repaints on
     every revision. Standalone-testable by assigning :attr:`state`
     directly.

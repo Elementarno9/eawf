@@ -48,8 +48,7 @@ class WalGcParams(_WalDirParams):
 
     Attributes:
         max_age_seconds: Drop ``.fsynced.json`` files older than this
-            threshold. Defaults to the C02 §5.6 retention window of
-            one hour.
+            threshold. Defaults to the retention window of one hour.
     """
 
     max_age_seconds: int = Field(default=3600, ge=0, le=30 * 24 * 3600)

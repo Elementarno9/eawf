@@ -5,13 +5,13 @@ exit-code surface is stable across runtimes. The
 :class:`eawf.cli.errors.CliError` taxonomy maps one exception class per
 non-zero code.
 
-C05 § 5.3 compresses the legacy 0..9 surface into the new 0..5 taxonomy
-(``OK``, ``USER_ERROR``, ``VALIDATION_ERROR``, ``STATE_CONFLICT``,
+The v0.3 surface compresses the legacy 0..9 surface into the new 0..5
+taxonomy (``OK``, ``USER_ERROR``, ``VALIDATION_ERROR``, ``STATE_CONFLICT``,
 ``DAEMON_UNREACHABLE``, ``INTERNAL_ERROR``). Legacy names remain exposed as
-aliases mapped per the §5.3 bucket table so downstream callsites continue to
+aliases mapped per the bucket table so downstream callsites continue to
 compile until they migrate to the new five-class surface in subsequent waves.
 
-Legacy → new bucket map (per C05 § 5.3):
+Legacy → new bucket map:
 
 * ``GENERIC_ERROR (1)`` → ``INTERNAL_ERROR (5)``
 * ``NOT_FOUND (2)`` → ``USER_ERROR (1)``
@@ -26,7 +26,7 @@ Legacy → new bucket map (per C05 § 5.3):
 
 from __future__ import annotations
 
-# --- New 0..5 surface (C05 § 5.3) -----------------------------------------
+# --- New 0..5 surface ------------------------------------------------------
 
 OK: int = 0
 USER_ERROR: int = 1

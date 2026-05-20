@@ -1,8 +1,8 @@
 """``daemon.*`` JSON-RPC methods: ping / status / shutdown.
 
-Implements the minimum control surface per C02 §5.3.5. ``daemon.ping``
-returns liveness + version; ``daemon.status`` returns operational
-counters; ``daemon.shutdown`` signals the server to stop.
+Implements the minimum control surface. ``daemon.ping`` returns
+liveness + version; ``daemon.status`` returns operational counters;
+``daemon.shutdown`` signals the server to stop.
 
 Each handler validates its params via a Pydantic v2 model with
 ``ConfigDict(extra="forbid")`` so unknown fields raise before any

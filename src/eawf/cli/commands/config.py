@@ -112,8 +112,8 @@ class _ConfigSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = Field(pattern=r"^\d+\.\d+$")
-    # ``config`` top-level section landed in P25-W14 (C08) — currently
-    # holds ``layers_visible``; deeper validation arrives with C05.
+    # ``config`` top-level section currently holds ``layers_visible``;
+    # deeper per-key validation arrives in a later wave.
     config: dict[str, Any] = Field(default_factory=dict)
     cli: dict[str, Any]
     project: dict[str, Any]
@@ -141,13 +141,13 @@ class _ConfigSchema(BaseModel):
     docs: dict[str, Any]
     commands: dict[str, Any]
     state_schema: dict[str, Any]
-    # ``daemon`` section landed in P24-W09 alongside the ``state.mutate`` RPC.
-    # Treated as ``dict[str, Any]`` until C03-IMPL hardens the per-key
-    # contract (see :mod:`eawf.config.defaults` for the shipped schema).
+    # ``daemon`` section pairs with the ``state.mutate`` RPC. Treated as
+    # ``dict[str, Any]`` until a later wave hardens the per-key contract
+    # (see :mod:`eawf.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
-    # C08 (P25-W14) new top-level sections. Each is a loose
-    # ``dict[str, Any]`` for now; per-key Pydantic contracts arrive in
-    # C05 (CLI surface) and C09 (telemetry projector).
+    # New top-level sections. Each is a loose ``dict[str, Any]`` for
+    # now; per-key Pydantic contracts arrive in later waves (CLI
+    # surface + telemetry projector).
     telemetry: dict[str, Any] = Field(default_factory=dict)
     dispatch: dict[str, Any] = Field(default_factory=dict)
     language: dict[str, Any] = Field(default_factory=dict)
@@ -315,7 +315,7 @@ def _save_value_to_layer(
 
     Raises:
         IntegrityViolation: Daemon required but unreachable
-            (``daemon_required`` envelope per F20).
+            (``daemon_required`` envelope).
         ValidationFailed: Underlying YAML is malformed.
         OSError: Filesystem failure during read or write.
         yaml.YAMLError: Dump failure when serialising the merged payload.

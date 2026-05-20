@@ -1,15 +1,14 @@
-"""``Heartbeat`` — standalone pulsing ``•`` liveness dot (C06 §5.3 / D22).
+"""``Heartbeat`` — standalone pulsing ``•`` liveness dot.
 
 A leaf :class:`~textual.widgets.Static` that pulses a single ``•`` glyph on
 a fixed cadence so the operator has visual proof the render loop is live.
 ``accent``-coloured by default, ``err``-coloured when :attr:`degraded` is
 set, with a one-shot lit-frame :meth:`ack` for the ``r`` force-refresh
-acknowledgement (per the C06 brief §5.3 widget row + Decision D22).
+acknowledgement.
 
 This is the **standalone** Heartbeat the metrics / events overlays embed
-in their card chrome. The C06 brief's widget catalog [2] names a dedicated
-``widgets/heartbeat.py`` module; the W18 footer
-(:mod:`eawf.tui_v2.widgets.footer`) embeds its own private
+in their card chrome; a dedicated ``widgets/heartbeat.py`` module. The
+footer (:mod:`eawf.tui_v2.widgets.footer`) embeds its own private
 :class:`~eawf.tui_v2.widgets.footer.Heartbeat` for the shared chassis
 footer dot. The two are intentionally separate for this wave — the footer
 keeps its embedded dot untouched — and the duplication is flagged for a
@@ -38,7 +37,7 @@ HEARTBEAT_INTERVAL_S: float = 1.0
 
 
 class Heartbeat(Static):
-    """A pulsing ``•`` liveness dot (D22), standalone leaf widget.
+    """A pulsing ``•`` liveness dot, standalone leaf widget.
 
     Default ``accent`` colour; ``err`` colour when :attr:`degraded` is
     set. The dot toggles visible/hidden on :data:`HEARTBEAT_INTERVAL_S`

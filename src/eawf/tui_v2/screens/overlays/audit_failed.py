@@ -1,35 +1,34 @@
-"""``AuditFailedModal`` — mutating audit-failure overlay (C06 §5.7 / D17).
+"""``AuditFailedModal`` — mutating audit-failure overlay.
 
-The audit-failure surface from the C06 brief §5.7 modal-stack inventory,
-and the **mutating** menu Decision D17 picked over the V07 read-only
-overlay: auto-opened when the TUI receives an ``audit_completed`` event
-with ``verdict=fail`` for the active scope, it surfaces the five repair
-actions — ``retry`` / ``split`` / ``land-partial`` / ``abandon`` /
-``scope-change`` — each of which dispatches a ``/flow`` worker via
-``eawf agent dispatch <wave-id> --action <action>`` (D17). Per Decision
-D27 the modal carries a single **status line** that streams
+The audit-failure surface, and a **mutating** menu (picked over a
+read-only overlay): auto-opened when the TUI receives an
+``audit_completed`` event with ``verdict=fail`` for the active scope, it
+surfaces the five repair actions — ``retry`` / ``split`` /
+``land-partial`` / ``abandon`` / ``scope-change`` — each of which
+dispatches a ``/flow`` worker via
+``eawf agent dispatch <wave-id> --action <action>``. The modal carries a
+single **status line** that streams
 ``dispatching <action> → <runtime> · attempt <n>`` while the dispatched
 subagent runs, then ``closed`` on its ``agent_end`` return — keeping the
 operator on the active audit without a second modal (no stack-depth
-pressure against the D14 cap of 3).
+pressure against the cap of 3).
 
-This is the only operator surface for mutating wave actions: per V11 the
+This is the only operator surface for mutating wave actions: the
 ``/wave`` palette verbs are read-only, so ``retry`` / ``abandon`` /
-``split`` reach the operator **only** through this structured menu (C06
-§5.6).
+``split`` reach the operator **only** through this structured menu.
 
-Per the W19 deferral pattern this wave lands the **overlay**: the five-row
-menu rendered for a failing wave, the ``↑`` / ``↓`` highlight, the D27
-status-line render seam (:meth:`AuditFailedModal.mark_dispatching` /
+This wave lands the **overlay**: the five-row menu rendered for a failing
+wave, the ``↑`` / ``↓`` highlight, the status-line render seam
+(:meth:`AuditFailedModal.mark_dispatching` /
 :meth:`AuditFailedModal.mark_closed`), and the chosen-action result
 returned through the dismiss value. Wiring the pick to the
 ``eawf agent dispatch`` CLI verb + driving the status line off the
-subagent's event stream (C06 §5.8 / F19) rides the wave that lands that
-CLI verb — it does not exist yet — so the host shells out on the returned
-action and feeds the status line from the dispatch events.
+subagent's event stream rides the wave that lands that CLI verb — it does
+not exist yet — so the host shells out on the returned action and feeds
+the status line from the dispatch events.
 
 The status-line text is built by a pure helper
-(:func:`format_dispatch_line`) so the D27 wording is unit-testable without
+(:func:`format_dispatch_line`) so the wording is unit-testable without
 mounting Textual; the modal is a thin view over the menu + the line.
 """
 
@@ -47,7 +46,7 @@ from textual.widgets import Static
 
 logger = logging.getLogger(__name__)
 
-#: The five D17 mutating repair actions, in menu order. ``retry`` (index
+#: The five mutating repair actions, in menu order. ``retry`` (index
 #: ``0``) is the default highlight — the most common repair response.
 _ACTIONS: tuple[str, ...] = (
     "retry",
@@ -68,10 +67,10 @@ _ACTION_HINTS: dict[str, str] = {
 
 
 def format_dispatch_line(action: str, runtime: str, attempt: int) -> str:
-    """Build the D27 status line for an in-flight dispatch.
+    """Build the status line for an in-flight dispatch.
 
-    The exact D27 wording: ``dispatching <action> → <runtime> · attempt
-    <n>`` (em-arrow + middle-dot separators per the brief).
+    The exact wording: ``dispatching <action> → <runtime> · attempt
+    <n>`` (em-arrow + middle-dot separators).
 
     Args:
         action: The dispatched repair action (e.g. ``retry``).
@@ -88,11 +87,11 @@ def format_dispatch_line(action: str, runtime: str, attempt: int) -> str:
 class AuditFailedModal(ModalScreen[str]):
     """Mutating audit-failure menu (returns the chosen action on dismiss).
 
-    ``↑`` / ``↓`` move the highlight across the five D17 actions, ``Enter``
+    ``↑`` / ``↓`` move the highlight across the five actions, ``Enter``
     confirms the highlighted action — its label is the dismiss value the
     host shells out to ``eawf agent dispatch <wave-id> --action <action>``
     — and ``Esc`` closes without dispatching. While a dispatch is in
-    flight the host calls :meth:`mark_dispatching` to stream the D27 status
+    flight the host calls :meth:`mark_dispatching` to stream the status
     line, then :meth:`mark_closed` on the subagent's return.
     """
 
@@ -160,7 +159,7 @@ class AuditFailedModal(ModalScreen[str]):
         Args:
             wave_id: The wave whose audit failed (the dispatch target).
             runtime: The runtime the repair subagent will dispatch onto;
-                rendered in the D27 status line. Defaults to the canonical
+                rendered in the status line. Defaults to the canonical
                 ``claude-code`` adapter id.
         """
         super().__init__()
@@ -210,7 +209,7 @@ class AuditFailedModal(ModalScreen[str]):
         self.selected = (self.selected + delta) % count
 
     def mark_dispatching(self, action: str, attempt: int) -> None:
-        """Render the D27 in-flight status line for *action*.
+        """Render the in-flight status line for *action*.
 
         Called by the host while the dispatched repair subagent runs.
 
@@ -223,7 +222,7 @@ class AuditFailedModal(ModalScreen[str]):
         self.query_one("#audit-failed-status", Static).update(line)
 
     def mark_closed(self) -> None:
-        """Render the D27 terminal ``closed`` status line.
+        """Render the terminal ``closed`` status line.
 
         Called by the host on the dispatched subagent's ``agent_end``
         return.
@@ -249,9 +248,9 @@ def open_audit_failed(app: object, wave_id: str, runtime: str = "claude-code") -
     present (so the modal-stack depth limit is enforced), falling back to a
     plain ``push_screen`` under a bare harness — mirroring the
     :func:`~eawf.tui_v2.screens.help.open_help` pattern. The future
-    ``audit_completed`` (verdict=fail) daemon-push handler calls this; per
-    V11 + C06 §5.6 there is **no palette verb** for it — mutating wave
-    actions reach the operator only through this structured menu.
+    ``audit_completed`` (verdict=fail) daemon-push handler calls this;
+    there is **no palette verb** for it — mutating wave actions reach the
+    operator only through this structured menu.
 
     Args:
         app: The running App (typed loosely to avoid an import cycle with

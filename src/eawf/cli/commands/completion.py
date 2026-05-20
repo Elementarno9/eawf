@@ -1,13 +1,13 @@
-"""``eawf completion`` — shell-completion script generation + install (C05 § 5.7).
+"""``eawf completion`` — shell-completion script generation + install.
 
-Two opt-in verbs (C05 D11 — explicit verb, never auto-edit dotfiles):
+Two opt-in verbs (explicit verb, never auto-edit dotfiles):
 
 * ``eawf completion show <shell>`` — render the completion script to stdout.
   The operator pipes it wherever they like.
 * ``eawf completion install <shell>`` — write the script to the shell's
   canonical completion directory and print the path. Best-effort: on a
   permission failure the script is written to stdout instead with a hint
-  carrying the explicit operator-side ``mv`` command (C05 F9).
+  carrying the explicit operator-side ``mv`` command.
 
 Supported shells: ``bash`` / ``zsh`` / ``fish``. The underlying generator is
 Typer's ``get_completion_script``; ``add_completion=False`` on the root app
@@ -44,7 +44,7 @@ _COMPLETE_VAR = "_EAWF_COMPLETE"
 
 
 class Shell(StrEnum):
-    """Shell flavours the completion verbs support (C05 § 5.7)."""
+    """Shell flavours the completion verbs support."""
 
     BASH = "bash"
     ZSH = "zsh"
@@ -78,7 +78,7 @@ def _install_path(shell: Shell) -> Path:
         shell: Target shell flavour.
 
     Returns:
-        The absolute path the completion file is written to (C05 § 5.7).
+        The absolute path the completion file is written to.
         Directories are not created here — :func:`_install` does that.
     """
     data_home = _xdg_data_home()
@@ -158,7 +158,7 @@ def install_cmd(
 ) -> None:
     """Write the completion script to *shell*'s canonical directory.
 
-    Best-effort per C05 F9: on a permission / OS error the script is written
+    Best-effort: on a permission / OS error the script is written
     to stdout instead and a :class:`UserError` envelope carries the explicit
     operator-side ``mv`` command. Never edits shell-rc files.
 

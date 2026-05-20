@@ -292,8 +292,8 @@ def gc_done_records(
         wal_dir: Directory the WAL lives under. A missing directory
             returns an empty list (no records to GC).
         max_age_seconds: Files whose mtime is older than ``now -
-            max_age_seconds`` are unlinked. Default matches the C02
-            §5.6 retention window of 1 hour.
+            max_age_seconds`` are unlinked. Default matches the
+            retention window of 1 hour.
 
     Returns:
         Paths that were unlinked, in lexical order. Useful for tests

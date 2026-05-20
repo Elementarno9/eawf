@@ -1,13 +1,13 @@
-"""``HelpScreen`` — full keymap + palette-verb overlay (C06 §5.18).
+"""``HelpScreen`` — full keymap + palette-verb overlay.
 
 Reachable from the ``?`` keypress or the palette ``/help`` verb (both
 route through the shared :class:`~eawf.tui_v2.scopes.ScopeScreen` /
 App helpers so the modal-stack cap is honoured). The overlay renders the
-master keybinding catalog (C06 §5.13) — global keys, pane navigation
-(with vim aliases), the active scope's extra keys, and the palette verb
-table — in a scrollable card. ``Esc`` closes.
+master keybinding catalog — global keys, pane navigation (with vim
+aliases), the active scope's extra keys, and the palette verb table —
+in a scrollable card. ``Esc`` closes.
 
-Per D11 every key is shown with its **full name** (``PageUp`` not
+Every key is shown with its **full name** (``PageUp`` not
 ``PgUp``, ``PageDown`` not ``PgDn``) and arrows are listed as primary with
 the vim ``hjkl`` aliases beside them, matching the operator keymap
 convention. The verb table is built from the static registry
@@ -35,8 +35,8 @@ from eawf.tui_v2.palette.verbs import ScopeName, visible_verbs
 
 logger = logging.getLogger(__name__)
 
-#: Global keybinding rows (key, action) — C06 §5.13 "Global" table. Full
-#: key names per D11.
+#: Global keybinding rows (key, action) — the "Global" table. Full
+#: key names.
 _GLOBAL_KEYS: tuple[tuple[str, str], ...] = (
     ("q", "quit"),
     ("Esc", "close overlay / clear filter / drop palette"),
@@ -51,7 +51,7 @@ _GLOBAL_KEYS: tuple[tuple[str, str], ...] = (
     ("Shift-Tab", "previous pane"),
 )
 
-#: Pane-navigation rows (key, action, vim-alias) — C06 §5.13 "Pane
+#: Pane-navigation rows (key, action, vim-alias) — the "Pane
 #: navigation" table. Arrows are primary; the vim column is the alias.
 _PANE_NAV: tuple[tuple[str, str, str], ...] = (
     ("↑", "line up", "k"),
@@ -65,7 +65,7 @@ _PANE_NAV: tuple[tuple[str, str, str], ...] = (
     ("Enter", "drill into row (modal)", "—"),
 )
 
-#: Per-scope extra keys — C06 §5.13 "Per-screen extras".
+#: Per-scope extra keys — the "Per-screen extras".
 _SCOPE_KEYS: dict[ScopeName, tuple[tuple[str, str], ...]] = {
     "repo": (("w", "open wave board"), ("c", "open config")),
     "workspace": (("z", "zoom focused repo to repo screen"),),
@@ -186,7 +186,7 @@ class HelpScreen(ModalScreen[None]):
         self.dismiss(None)
 
     def on_unmount(self) -> None:
-        """Clear the App's help-open guard (D31) when this overlay closes."""
+        """Clear the App's help-open guard when this overlay closes."""
         clear = getattr(self.app, "_on_help_closed", None)
         if callable(clear):
             clear()
@@ -197,9 +197,9 @@ def open_help(app: object) -> None:
 
     Routes through the App's modal-cap-aware ``push_modal`` helper when
     present so the modal-stack depth limit is enforced; falls back to a
-    plain ``push_screen`` under a bare harness. Per D31 a second ``?``
-    while help is already open is suppressed by the App's
-    help-already-open guard before this is called.
+    plain ``push_screen`` under a bare harness. A second ``?`` while
+    help is already open is suppressed by the App's help-already-open
+    guard before this is called.
 
     Args:
         app: The running App (typed loosely to avoid an import cycle with

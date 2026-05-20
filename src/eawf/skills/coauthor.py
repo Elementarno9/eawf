@@ -1,7 +1,7 @@
 """``/coauthor`` skill — resolve the ``Co-Authored-By:`` trailer policy.
 
-C04b §5.1 lands ``/coauthor`` as a thin skill-surface wrapper over the
-already-shipped co-author policy machinery:
+``/coauthor`` is a thin skill-surface wrapper over the already-shipped
+co-author policy machinery:
 
 - :class:`eawf.vcs.coauthor.CoauthorConfig` — the validated
   ``vcs.coauthor`` config block (``mode`` ∈ ``runtime|project|disabled``).
@@ -80,7 +80,7 @@ def _coerce_mode(value: Any, default: CoauthorMode) -> CoauthorMode:
 
 @register
 class CoauthorSkill(Skill):
-    """Concrete ``/coauthor`` skill (C04b §5.1)."""
+    """Concrete ``/coauthor`` skill."""
 
     name: SkillName = "/coauthor"
 

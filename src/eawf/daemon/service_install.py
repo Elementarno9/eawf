@@ -15,10 +15,9 @@ disabling a never-installed service must succeed without raising.
 Each enable call waits up to ten seconds for the daemon to write its
 PID file so the operator gets a synchronous "service is up" signal.
 
-Per C02 §5.10.3 the NSSM fallback is *documented* but not shipped;
-the install verb relies on pywin32 being importable. Operators can
-manually layer NSSM atop the same service binary if pywin32 fails
-post-install.
+The NSSM fallback is *documented* but not shipped; the install verb
+relies on pywin32 being importable. Operators can manually layer NSSM
+atop the same service binary if pywin32 fails post-install.
 """
 
 from __future__ import annotations

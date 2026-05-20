@@ -1,4 +1,4 @@
-"""``/compress`` skill body (C04b §5.4).
+"""``/compress`` skill body.
 
 Mirrors the dict body emitted by
 :class:`eawf.skills.compress.CompressSkill`: the before/after token
