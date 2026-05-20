@@ -1552,7 +1552,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W25"
+      "P26-I01-W25",
+      "P26-I01-W17"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2975,7 +2976,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:21:51.330581Z",
+  "updated_at": "2026-05-20T14:22:12.818424Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9123,7 +9124,7 @@
       "blocks": [
         "P26-I01-W18"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w17-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9144,14 +9145,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "BacklogTable(DataTable) sortable by priority/id/target; filterable via /filter backlog; Enter row -> DetailModal"
       ],
       "title": "feat: C06 core widgets — RoadmapTree + EUBar + StatusPane + GitPane + BacklogTable",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W17-1779286932"
     },
     "P26-I01-W18": {
       "agent_role": "executor",
@@ -9989,6 +9990,17 @@
       "path": ".ea/worktrees/p26-w16",
       "status": "merged",
       "wave_id": "P26-I01-W16"
+    },
+    "WT-P26-I01-W17-1779286932": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w17",
+      "created_at": "2026-05-20T14:22:12.818424Z",
+      "id": "WT-P26-I01-W17-1779286932",
+      "merged_commit": null,
+      "owner_session_id": "p26-w17-exec",
+      "path": ".ea/worktrees/p26-w17",
+      "status": "active",
+      "wave_id": "P26-I01-W17"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
