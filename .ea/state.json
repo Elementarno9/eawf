@@ -1530,9 +1530,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W13"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2952,7 +2950,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:23:48.055553Z",
+  "updated_at": "2026-05-20T13:25:01.284139Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8947,7 +8945,7 @@
         "P26-I01-W15"
       ],
       "claim_session_id": "p26-w13-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:25:00.688110Z",
       "commit": null,
       "deps": [
         "P26-I01-W10",
@@ -8964,10 +8962,10 @@
       "id": "P26-I01-W13",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:13.718818Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/runtimes/test_skill_adapter_handshake.py covers (a) manifest-aware adapter pick",
         "(b) F-d01 mismatch rejection",
@@ -9848,10 +9846,10 @@
       "branch": "feature/eawf-v0.1-p26-w13",
       "created_at": "2026-05-20T13:11:08.202881Z",
       "id": "WT-P26-I01-W13-1779282668",
-      "merged_commit": null,
+      "merged_commit": "e547cb0",
       "owner_session_id": "p26-w13-exec",
       "path": ".ea/worktrees/p26-w13",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W13"
     },
     "WT-P26-I01-W23-1779235537": {
