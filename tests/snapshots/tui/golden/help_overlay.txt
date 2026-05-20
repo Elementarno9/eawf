@@ -1,0 +1,38 @@
+
+
+      ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+      │                                                                                                          │
+      │  Eä TUI — Help                                                                                           │
+      │                                                                                                          │
+      │  Global keys                                                                                             │
+      │    q          quit                                                                                       │
+      │    Esc        close overlay / clear filter / drop palette                                                │
+      │    r          force refresh (offline)                                                                    │
+      │    R          force refresh + git fetch (online)                                                         │
+      │    ?          open help                                                                                  │
+      │    /          open palette                                                                               │
+      │    Ctrl-R     switch to repo scope                                                                       │
+      │    Ctrl-W     switch to workspace scope                                                                  │
+      │    Ctrl-U     switch to user scope                                                                       │
+      │    Tab        next pane                                                                                  │
+      │    Shift-Tab  previous pane                                                                              │
+      │                                                                                                          │
+      │  Pane navigation (vim alias)                                                                             │
+      │    ↑          line up  (k)                                                                               │
+      │    ↓          line down  (j)                                                                         ▇▇  │
+      │    ←          collapse row / scroll left  (h)                                                            │
+      │    →          expand row / scroll right  (l)                                                             │
+      │    PageUp     half-page up  (Ctrl-u)                                                                     │
+      │    PageDown   half-page down  (Ctrl-d)                                                                   │
+      │    Home       top of pane  (gg)                                                                          │
+      │    End        bottom of pane  (G)                                                                        │
+      │    Enter      drill into row (modal)  (—)                                                                │
+      │                                                                                                          │
+      │  Repo screen keys                                                                                        │
+      │    w          open wave board                                                                            │
+      │    c          open config                                                                                │
+      │                                                                                                          │
+      │  Palette verbs                                                                                           │
+      │    /find            fuzzy ID + title search                                                              │
+      │                                                                                                          │
+      └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
