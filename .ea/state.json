@@ -1531,7 +1531,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W06",
       "P26-I01-W08",
       "P26-I01-W11",
       "P26-I01-W12"
@@ -2955,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:01:59.849920Z",
+  "updated_at": "2026-05-20T13:03:18.909590Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8705,7 +8704,7 @@
         "P26-I01-W15"
       ],
       "claim_session_id": "p26-w06-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:03:18.225111Z",
       "commit": null,
       "deps": [
         "P26-I01-W04"
@@ -8722,10 +8721,10 @@
       "id": "P26-I01-W06",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:08.889579Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/cli/test_streaming.py asserts NDJSON line-delimited shape on a mock event stream + --quiet --verbose collision rejected"
       ],
@@ -9777,10 +9776,10 @@
       "branch": "feature/eawf-v0.1-p26-w06",
       "created_at": "2026-05-20T12:49:04.882682Z",
       "id": "WT-P26-I01-W06-1779281344",
-      "merged_commit": null,
+      "merged_commit": "611b4c0",
       "owner_session_id": "p26-w06-exec",
       "path": ".ea/worktrees/p26-w06",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W06"
     },
     "WT-P26-I01-W08-1779281345": {
