@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W18"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2975,7 +2973,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:40:16.554009Z",
+  "updated_at": "2026-05-20T14:57:39.265748Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9159,7 +9157,7 @@
         "P26-I01-W19"
       ],
       "claim_session_id": "p26-w18-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T14:57:38.645421Z",
       "commit": null,
       "deps": [
         "P26-I01-W17"
@@ -9171,15 +9169,26 @@
         "src/eawf/tui_v2/scopes/workspace.py",
         "src/eawf/tui_v2/scopes/user.py",
         "src/eawf/tui_v2/widgets/header.py",
-        "src/eawf/tui_v2/widgets/footer.py"
+        "src/eawf/tui_v2/widgets/footer.py",
+        "src/eawf/tui_v2/app.py",
+        "src/eawf/tui_v2/theme.tcss",
+        "src/eawf/tui_v2/scopes/__init__.py",
+        "src/eawf/tui_v2/widgets/__init__.py",
+        "src/eawf/tui_v2/widgets/backlog_table.py",
+        "tests/tui_v2/test_app_scaffold.py",
+        "tests/tui_v2/test_widgets_header.py",
+        "tests/tui_v2/test_widgets_footer.py",
+        "tests/tui_v2/test_scope_repo.py",
+        "tests/tui_v2/test_scope_workspace.py",
+        "tests/tui_v2/test_scope_user.py"
       ],
       "id": "P26-I01-W18",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:17.189393Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "all three screens reuse Header + Footer + Heartbeat without per-scope duplicates (D3 shared chassis; salvageable LOC trim from ~5300 to ~2500)"
       ],
@@ -10006,10 +10015,10 @@
       "branch": "feature/eawf-v0.1-p26-w18",
       "created_at": "2026-05-20T14:40:16.554009Z",
       "id": "WT-P26-I01-W18-1779288016",
-      "merged_commit": null,
+      "merged_commit": "78c5db5",
       "owner_session_id": "p26-w18-exec",
       "path": ".ea/worktrees/p26-w18",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W18"
     },
     "WT-P26-I01-W23-1779235537": {
