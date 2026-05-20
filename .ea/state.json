@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W30"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2979,7 +2977,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T19:32:57.556231Z",
+  "updated_at": "2026-05-20T22:37:52.572002Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9611,7 +9609,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w30",
-      "closed_at": null,
+      "closed_at": "2026-05-20T22:37:51.788581Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9623,10 +9621,10 @@
       "id": "P26-I01-W30",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T19:27:48.728147Z",
-      "outcome": null,
+      "outcome": "lazy-import sweep (brief Phase 1): completion 0.52s->0.24s (~2.1x); all heavy offenders (state.models/validate/store.kinds/config/profiles/daemon/render-jinja2/yaml/sandbox/mcp) off the eawf.cli.app tree-build path; tests/perf/cli import-budget gate added; full pytest 4777 passed, mypy + pre-commit green, no goldens changed; 2 shared-infra residuals (cli/errors pydantic ErrorEnvelope, cli/help_panels config.registry) deferred to Phase 2",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "heavy module-level imports relocated into command handlers (validate->state.models",
         "config->config.profile",
@@ -10325,10 +10323,10 @@
       "branch": "feature/eawf-v0.3-p26-w30",
       "created_at": "2026-05-20T19:32:57.556231Z",
       "id": "WT-P26-I01-W30-1779305577",
-      "merged_commit": null,
+      "merged_commit": "40ff1ec",
       "owner_session_id": "op-p26-w30",
       "path": ".ea/worktrees/p26-w30",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W30"
     }
   }
