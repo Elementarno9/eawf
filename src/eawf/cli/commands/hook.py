@@ -25,33 +25,22 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import orjson
 import typer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.agent_report.store import (
-    AgentReportRoleMismatchError,
-    AgentReportScrubError,
-    append_agent_report,
-    parse_agent_report_body,
-)
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.scope import resolve_state_path
-from eawf.hooks.event import HookEvent, HookEventType, HookRuntime
-from eawf.hooks.runner import HookResult, HookRunner
-from eawf.render.envelope import (
-    EnvelopeFooter,
-    EnvelopeHeader,
-    EnvelopeStatus,
-    EnvelopeWarning,
-    OutputEnvelope,
-)
-from eawf.state.models import State
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.hooks.event import HookEvent, HookEventType, HookRuntime
+    from eawf.hooks.runner import HookResult
+    from eawf.render.envelope import EnvelopeStatus, OutputEnvelope
+    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +72,8 @@ def _parse_event_type(raw: str) -> HookEventType:
     :class:`~eawf.cli.errors.InvalidInput` so the handler can surface
     exit code 3.
     """
+    from eawf.hooks.event import HookEventType
+
     try:
         return HookEventType(raw)
     except ValueError as exc:
@@ -130,6 +121,8 @@ def _build_event(
     The decoded stdin mapping is folded into ``payloads[<event_type>]``
     so downstream hooks see the original shape under a stable key.
     """
+    from eawf.hooks.event import HookEvent
+
     return HookEvent(
         event_type=event_type,
         scope_id=scope,
@@ -156,6 +149,13 @@ def _envelope_for(
     operator-facing skill is required). Status is ``ok`` when no hook
     blocked, ``blocked`` otherwise.
     """
+    from eawf.render.envelope import (
+        EnvelopeFooter,
+        EnvelopeHeader,
+        EnvelopeWarning,
+        OutputEnvelope,
+    )
+
     blocked = any(r.block for r in results)
     status: EnvelopeStatus = "blocked" if blocked else "ok"
     body: dict[str, object] = {
@@ -197,6 +197,8 @@ def _envelope_for(
 
 def _load_state(state_path: Path) -> State:
     """Load and validate state from *state_path*."""
+    from eawf.validate.strict import validate_state
+
     path = state_path
     if not path.exists():
         raise cli_errors.NotFound(f"state file not found: {path}")
@@ -220,6 +222,8 @@ def _envelope_for_agent_report(
     finished_at: datetime,
 ) -> OutputEnvelope:
     """Assemble the output envelope for an agent_end report append."""
+    from eawf.render.envelope import EnvelopeFooter, EnvelopeHeader, OutputEnvelope
+
     body: dict[str, object] = {
         "event_type": event.event_type.value,
         "scope_id": event.scope_id,
@@ -303,6 +307,15 @@ def run(
     ] = "",
 ) -> None:
     """Dispatch a hook event read from stdin and emit the result envelope."""
+    from eawf.agent_report.store import (
+        AgentReportRoleMismatchError,
+        AgentReportScrubError,
+        append_agent_report,
+        parse_agent_report_body,
+    )
+    from eawf.hooks.event import HookEventType
+    from eawf.hooks.runner import HookRunner
+
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
 
@@ -326,7 +339,7 @@ def run(
             payload=payload,
             scope=scope,
             command=command,
-            runtime=cast(HookRuntime, runtime.lower()),
+            runtime=cast("HookRuntime", runtime.lower()),
             occurred_at=started_at,
         )
     except cli_errors.CliError as err:

@@ -37,19 +37,19 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.state.enums import WaveStatus
-from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
+
+if TYPE_CHECKING:
+    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +162,8 @@ def _active_waves(state: State) -> list[dict[str, Any]]:
     ``state.current.active_wave_ids`` but missing from ``state.waves`` are
     skipped silently — the validator will surface them.
     """
+    from eawf.lifecycle.wave_sha import derive_wave_sha
+
     out: list[dict[str, Any]] = []
     for wave_id in state.current.active_wave_ids:
         wave = state.waves.get(wave_id)
@@ -267,6 +269,10 @@ def status(
     ] = False,
 ) -> None:
     """Print active pointers, blockers, and git head for the current state."""
+    from pydantic import ValidationError
+
+    from eawf.state.models import State
+
     flags: GlobalFlags = ctx.obj
     # ``scope`` is captured for forward compatibility (per-command option) but
     # not yet consumed by the rendering path — see :mod:`eawf.cli.flags` for

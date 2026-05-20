@@ -29,9 +29,6 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.estimation.metrics import compute_metrics
-from eawf.evidence._io import load_state
-from eawf.render.metrics_view import render_metrics_plain, render_metrics_table
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +45,10 @@ def metrics_cmd(ctx: typer.Context) -> None:
     - :class:`~eawf.cli.errors.ValidationFailed` (``exit=6``) when the
       on-disk payload fails strict schema validation.
     """
+    from eawf.estimation.metrics import compute_metrics
+    from eawf.evidence._io import load_state
+    from eawf.render.metrics_view import render_metrics_plain, render_metrics_table
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)

@@ -25,31 +25,24 @@ import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.memory.promotion import (
-    PromotionError,
-    promote_record,
-    promote_to_artifact,
-)
-from eawf.memory.prune import PruneError, prune_memory
-from eawf.memory.render_context import DEFAULT_BUDGET, render_context
-from eawf.memory.staleness import find_stale
-from eawf.memory.store import add_memory, find_envelope, read_envelopes
-from eawf.session.store import append_event
 from eawf.state.enums import Confidence, MemoryStatus, StoreKind
-from eawf.state.models import State
-from eawf.store.compact import compact_store
-from eawf.store.paths import store_path
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.state.models import State
+
+#: Mirrors :data:`eawf.memory.render_context.DEFAULT_BUDGET`; inlined as a
+#: literal so the ``memory render-context --budget`` default does not import
+#: the heavy ``memory.render_context`` subtree at command-tree build time.
+_DEFAULT_BUDGET: int = 4096
 
 logger = logging.getLogger(__name__)
 
@@ -72,16 +65,22 @@ _CONFIDENCE_FROM_FLAG: dict[str, Confidence] = {
 
 def _memory_path_for(state_path: Path) -> Path:
     """Return the canonical memory-store JSONL location next to ``state.json``."""
+    from eawf.store.paths import store_path
+
     return store_path(state_path, StoreKind.MEMORY)
 
 
 def _events_path_for(state_path: Path) -> Path:
     """Return the canonical events-store JSONL location next to ``state.json``."""
+    from eawf.store.paths import store_path
+
     return store_path(state_path, StoreKind.EVENT)
 
 
 def _load_state(state_path: Path) -> State:
     """Read + schema-validate a state document. Used by read-only handlers."""
+    from eawf.validate.strict import validate_state
+
     if not state_path.exists():
         raise cli_errors.NotFound(f"state file not found: {state_path}")
     payload = orjson.loads(state_path.read_bytes())
@@ -135,6 +134,10 @@ def memory_add(
     ] = None,
 ) -> None:
     """Write a new memory entry to ``memory.jsonl`` + ``state.memory_index``."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.memory.store import add_memory
+    from eawf.session.store import append_event
+
     flags: GlobalFlags = ctx.obj
     try:
         conf = _resolve_confidence(confidence)
@@ -221,6 +224,11 @@ def memory_promote(
     ] = None,
 ) -> None:
     """Promote a record. ``--to memory`` (default) or ``--to artifact``."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.memory.promotion import PromotionError, promote_record
+    from eawf.session.store import append_event
+    from eawf.store.paths import store_path
+
     flags: GlobalFlags = ctx.obj
     target = to.strip().lower()
     if target not in {"memory", "artifact"}:
@@ -314,6 +322,11 @@ def _memory_promote_to_artifact(
        VALIDATION_FAILED / 2 NOT_FOUND).
     3. Emits a ``memory.promote`` event with the artifact ID linked.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.memory.promotion import PromotionError, promote_to_artifact
+    from eawf.session.store import append_event
+    from eawf.store.paths import store_path
+
     flags: GlobalFlags = ctx.obj
     try:
         if source_kind.strip().lower() != StoreKind.MEMORY.value:
@@ -442,6 +455,9 @@ def memory_compact(
     ] = None,
 ) -> None:
     """Compact ``memory.jsonl`` (dedup by content; idempotent)."""
+    from eawf.session.store import append_event
+    from eawf.store.compact import compact_store
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -489,7 +505,7 @@ def memory_render_context(
     ] = None,
     budget: Annotated[
         int, typer.Option("--budget", help="Token budget. Default 4096.")
-    ] = DEFAULT_BUDGET,
+    ] = _DEFAULT_BUDGET,
     include_superseded: Annotated[
         bool,
         typer.Option(
@@ -515,6 +531,8 @@ def memory_render_context(
     ] = None,
 ) -> None:
     """Produce a token-budgeted Markdown rendering of memory entries."""
+    from eawf.memory.render_context import render_context
+
     flags: GlobalFlags = ctx.obj
     fmt_norm = fmt.strip().lower()
     if fmt_norm not in {"markdown", "json"}:
@@ -638,6 +656,10 @@ def memory_prune(
     ] = False,
 ) -> None:
     """Soft-delete prune. Flips status to PRUNED; preserves the prior record."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.memory.prune import PruneError, prune_memory
+    from eawf.session.store import append_event
+
     flags: GlobalFlags = ctx.obj
     try:
         try:
@@ -760,7 +782,9 @@ def memory_gc(
     ] = False,
 ) -> None:
     """Archive matched memory entries by flipping their ``tier`` to ARCHIVAL."""
+    from eawf.cli._mutation import state_transaction
     from eawf.memory.gc import GcError, gc_memory
+    from eawf.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -845,6 +869,8 @@ def memory_tier(
     ],
 ) -> None:
     """Set the tier on a single memory entry."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.session.store import append_event
     from eawf.state.enums import MemoryTier
 
     flags: GlobalFlags = ctx.obj
@@ -902,6 +928,8 @@ def memory_view(
     ] = None,
 ) -> None:
     """Show a single memory entry: cache summary + JSONL body."""
+    from eawf.memory.store import find_envelope
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -945,6 +973,8 @@ def memory_stale(
     age: Annotated[int, typer.Option("--age", help="Age threshold in days.")] = 30,
 ) -> None:
     """List memory entries that exceed ``--age`` days and are below high confidence."""
+    from eawf.memory.staleness import find_stale
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -984,4 +1014,4 @@ def memory_stale(
 
 
 # Re-export to keep the linter quiet about the imported helpers used only above.
-__all__ = ["memory_app", "read_envelopes"]
+__all__ = ["memory_app"]

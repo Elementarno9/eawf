@@ -19,14 +19,11 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-import yaml
 
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.profiles import discovery as profiles_discovery
-from eawf.profiles import trust as profiles_trust
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +77,11 @@ def profile_new_cmd(
     ] = "",
 ) -> None:
     """Scaffold a workspace profile at ``.ea/profiles/<name>.yaml``."""
+    import yaml
+
+    from eawf.profiles import discovery as profiles_discovery
+    from eawf.profiles import trust as profiles_trust
+
     flags: GlobalFlags = ctx.obj
     workspace = _resolve_workspace(flags)
     if profiles_trust.is_bundled(name) and not force:
@@ -144,6 +146,9 @@ def profile_validate_cmd(
     ] = False,
 ) -> None:
     """Validate a profile (or every profile) against the layered loader."""
+    from eawf.profiles import discovery as profiles_discovery
+    from eawf.profiles import trust as profiles_trust
+
     flags: GlobalFlags = ctx.obj
     if (name is None) == (not validate_all):
         cli_errors.emit_error(

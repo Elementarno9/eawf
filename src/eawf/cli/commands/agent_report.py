@@ -4,26 +4,19 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
-from pydantic import ValidationError
 
-from eawf.agent_report.rollup import find_agent_report, iter_agent_reports, operator_rollup
-from eawf.agent_report.store import (
-    AgentReportRoleMismatchError,
-    AgentReportScrubError,
-    append_agent_report,
-    parse_agent_report_body,
-)
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 from eawf.state.enums import AgentSessionRole
-from eawf.state.models import State
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.state.models import State
 
 agent_report_app = typer.Typer(
     name="agent-report",
@@ -38,6 +31,8 @@ operator_app = typer.Typer(
 
 
 def _load_state(state_path: Path) -> State:
+    from eawf.validate.strict import validate_state
+
     if not state_path.exists():
         raise cli_errors.NotFound(f"state file not found: {state_path}")
     payload = orjson.loads(state_path.read_bytes())
@@ -94,6 +89,15 @@ def add_report(
     ] = None,
 ) -> None:
     """Append a typed agent report."""
+    from pydantic import ValidationError
+
+    from eawf.agent_report.store import (
+        AgentReportRoleMismatchError,
+        AgentReportScrubError,
+        append_agent_report,
+        parse_agent_report_body,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -141,6 +145,8 @@ def list_reports(
     scope_id: Annotated[str | None, typer.Option("--scope-id", help="Scope id filter.")] = None,
 ) -> None:
     """List typed agent reports."""
+    from eawf.agent_report.rollup import iter_agent_reports
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -161,6 +167,8 @@ def show_report(
     role: Annotated[str | None, typer.Option("--role", help="Role alias hint.")] = None,
 ) -> None:
     """Show a typed agent report."""
+    from eawf.agent_report.rollup import find_agent_report
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -184,6 +192,8 @@ def rollup(
     phase_id: Annotated[str, typer.Argument(help="Phase id to roll up, e.g. P18.")],
 ) -> None:
     """Render a read-only operator rollup for *phase_id*."""
+    from eawf.agent_report.rollup import operator_rollup
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)

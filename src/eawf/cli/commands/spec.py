@@ -32,15 +32,11 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from pydantic import ValidationError as PydValidationError
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
-from eawf.cli._mutation import _daemon_reachable, _proxy_enabled
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.spec import cache as spec_cache
-from eawf.spec import writer as spec_writer
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +58,8 @@ def _daemon_proxy_enabled_for_spec() -> bool:
     Mirrors :func:`eawf.cli.commands.repo._daemon_proxy_enabled_for_registry`.
     Honours ``EAWF_DAEMONLESS=1`` for the V1 carve-out.
     """
+    from eawf.cli._mutation import _proxy_enabled
+
     if os.environ.get("EAWF_DAEMONLESS", "") == "1":
         return False
     return _proxy_enabled(None)
@@ -94,6 +92,9 @@ def _inprocess_init(
     ``archive`` refuse without a daemon because the lifecycle gate
     + ``git rm`` atomicity sit inside the daemon process.
     """
+    from eawf.spec import cache as spec_cache
+    from eawf.spec import writer as spec_writer
+
     spec_writer.classify_scope(scope_id)
     spec_urn = spec_writer.build_spec_urn(scope_id, repo_code=repo_code)
     file_path = spec_writer.spec_file_path(scope_id, repo_root=repo_root)
@@ -141,6 +142,9 @@ def _inprocess_validate(
     repo_root: Path,
 ) -> dict[str, Any]:
     """Daemonless-path fallback for ``spec validate``."""
+    from eawf.spec import cache as spec_cache
+    from eawf.spec import writer as spec_writer
+
     spec_writer.classify_scope(scope_id)
     spec_urn = spec_writer.build_spec_urn(scope_id, repo_code=repo_code)
     file_path = spec_writer.spec_file_path(scope_id, repo_root=repo_root)
@@ -200,6 +204,10 @@ def spec_init_cmd(
     Refuses to overwrite an existing spec file — re-init the same
     scope returns the cached entry verbatim (idempotent).
     """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.cli._mutation import _daemon_reachable
+
     flags: GlobalFlags = ctx.obj
     repo_root = (flags.workspace or Path.cwd()).resolve()
 
@@ -253,6 +261,8 @@ def spec_validate_cmd(
     ],
 ) -> None:
     """Re-hash the on-disk spec body + refresh the daemon cache row."""
+    from eawf.cli._mutation import _daemon_reachable
+
     flags: GlobalFlags = ctx.obj
     repo_root = (flags.workspace or Path.cwd()).resolve()
 
@@ -312,6 +322,8 @@ def spec_promote_cmd(
     handler so concurrent CLIs see one consistent view of the
     cached status.
     """
+    from eawf.cli._mutation import _daemon_reachable
+
     flags: GlobalFlags = ctx.obj
     if to not in {"READY", "IMPLEMENTED"}:
         raise cli_errors.InvalidInput(f"--to must be 'READY' or 'IMPLEMENTED', got {to!r}")
@@ -353,6 +365,8 @@ def spec_archive_cmd(
     atomicity (so a recovery walk via ``git log -- <path>`` finds
     the blob) sits inside the daemon process.
     """
+    from eawf.cli._mutation import _daemon_reachable
+
     flags: GlobalFlags = ctx.obj
     repo_root = (flags.workspace or Path.cwd()).resolve()
 
@@ -481,6 +495,8 @@ def spec_show_cmd(
        that body.
     4. Anything else: raise :class:`NotFound`.
     """
+    from eawf.spec import cache as spec_cache
+
     flags: GlobalFlags = ctx.obj
     repo_root = (flags.workspace or Path.cwd()).resolve()
     phase_id, _scope_id = _parse_spec_urn(urn)

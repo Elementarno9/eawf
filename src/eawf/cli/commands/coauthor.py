@@ -8,13 +8,10 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.config.layered import merge_config
-from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +41,11 @@ def coauthor_resolve(
     ] = None,
 ) -> None:
     """Resolve the configured co-author trailer."""
+    from pydantic import ValidationError
+
+    from eawf.config.layered import merge_config
+    from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
+
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
     try:

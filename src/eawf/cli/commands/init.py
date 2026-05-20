@@ -37,22 +37,19 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.install.wizard import (
-    WizardAnswers,
-    WizardResult,
-    run_wizard_interactive,
-    run_wizard_no_input,
-)
 from eawf.lock import portalock
-from eawf.profiles.discovery import list_init_templates, load_init_template
+
+if TYPE_CHECKING:
+    from pydantic import ValidationError
+
+    from eawf.install.wizard import WizardAnswers, WizardResult
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +129,8 @@ def _resolve_profiles_and_template(
     Raises:
         InvalidInput: More than one surface used, or unknown template.
     """
+    from eawf.profiles.discovery import load_init_template
+
     chosen = [
         flag
         for flag, present in (
@@ -202,6 +201,8 @@ def _build_answers(
     forwarded into the wizard so ``_build_config_yaml`` can deep-merge it
     into the canonical ``.ea/config.yaml``.
     """
+    from eawf.install.wizard import WizardAnswers
+
     return WizardAnswers(
         state_path=str(state_path),
         project_code=project_code or "",
@@ -358,6 +359,11 @@ def init_cmd(
     ] = False,
 ) -> None:
     """Initialise a new Eä Workflow workspace at *target*."""
+    from pydantic import ValidationError
+
+    from eawf.install.wizard import run_wizard_interactive, run_wizard_no_input
+    from eawf.profiles.discovery import list_init_templates
+
     flags: GlobalFlags = ctx.obj
     target_dir = (target or Path.cwd()).resolve()
 

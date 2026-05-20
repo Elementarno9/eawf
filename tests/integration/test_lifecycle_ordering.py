@@ -146,7 +146,10 @@ def test_phase_open_state_unchanged_when_event_append_fails(
     def _fail_append(*args: object, **kwargs: object) -> None:
         raise OSError("simulated event store failure")
 
-    monkeypatch.setattr(lifecycle_module, "append_envelope", _fail_append)
+    # ``append_envelope`` is lazy-imported inside the handler from its source
+    # module (deferred to keep the command-tree build light), so the failure
+    # seam is patched at the source rather than on the command module.
+    monkeypatch.setattr("eawf.store.append.append_envelope", _fail_append)
 
     res = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
     # Any non-zero exit suffices — the contract is "did not succeed".
@@ -176,7 +179,7 @@ def test_phase_open_state_unchanged_when_event_append_lock_conflict(
     def _fail_lock(*args: object, **kwargs: object) -> None:
         raise LockConflict("simulated lock conflict on event.jsonl")
 
-    monkeypatch.setattr(lifecycle_module, "append_envelope", _fail_lock)
+    monkeypatch.setattr("eawf.store.append.append_envelope", _fail_lock)
 
     res = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
     assert res.exit_code == 3, res.stdout

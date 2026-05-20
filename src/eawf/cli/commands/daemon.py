@@ -49,20 +49,8 @@ import typer
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.main import run as run_daemon
 from eawf.daemon.runtime_dir import log_path, runtime_dir, socket_path
-from eawf.daemon.service_install import (
-    ServiceInstallError,
-    disable_service,
-    enable_service,
-    service_status,
-)
 from eawf.daemon.spawn import DaemonSpawnTimeoutError, auto_spawn_daemon
-from eawf.daemon.wal import (
-    gc_done_records,
-    list_poisoned,
-    read_record,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +141,8 @@ def run_cmd(
             otherwise log to the runtime log file. W04 wires the detach
             + service-style boot path.
     """
+    from eawf.daemon.main import run as run_daemon
+
     if sys.platform.startswith("win"):
         typer.echo("eawf daemon run is not supported on windows yet (W02)", err=True)
         raise typer.Exit(code=2)
@@ -328,6 +318,8 @@ def replay_wal_cmd(
 
 def _replay_wal_inspect(wal_dir: Path, flags: GlobalFlags) -> None:
     """Emit the list of poisoned WAL records under *wal_dir*."""
+    from eawf.daemon.wal import list_poisoned, read_record
+
     paths = list_poisoned(wal_dir)
     rows: list[dict[str, Any]] = []
     for path in paths:
@@ -365,6 +357,8 @@ def _replay_wal_inspect(wal_dir: Path, flags: GlobalFlags) -> None:
 
 def _replay_wal_gc(wal_dir: Path, max_age_seconds: int, flags: GlobalFlags) -> None:
     """GC aged ``.fsynced.json`` records under *wal_dir* and emit the report."""
+    from eawf.daemon.wal import gc_done_records
+
     removed = gc_done_records(wal_dir, max_age_seconds=max_age_seconds)
     text = (
         f"gc removed {len(removed)} WAL record(s) "
@@ -411,6 +405,8 @@ def service_enable_cmd(ctx: typer.Context) -> None:
     supervisor to start the unit, and waits up to 10 s for the
     daemon to publish its PID file.
     """
+    from eawf.daemon.service_install import ServiceInstallError, enable_service
+
     flags: GlobalFlags = ctx.obj
     try:
         envelope = enable_service()
@@ -433,6 +429,8 @@ def service_enable_cmd(ctx: typer.Context) -> None:
 @daemon_app.command("service-disable")
 def service_disable_cmd(ctx: typer.Context) -> None:
     """Stop + uninstall the eawfd service. Idempotent."""
+    from eawf.daemon.service_install import ServiceInstallError, disable_service
+
     flags: GlobalFlags = ctx.obj
     try:
         envelope = disable_service()
@@ -457,6 +455,8 @@ def service_status_cmd(ctx: typer.Context) -> None:
     the native supervisor for its view of the unit; ``running`` here
     requires both registration AND an active PID.
     """
+    from eawf.daemon.service_install import service_status
+
     flags: GlobalFlags = ctx.obj
     status = service_status()
     payload = {"platform": sys.platform, "status": status.value}

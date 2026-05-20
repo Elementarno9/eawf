@@ -22,16 +22,17 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._stdin import require_piped_stdin
 from eawf.cli.flags import GlobalFlags
-from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
+
+if TYPE_CHECKING:
+    from eawf.render.envelope import OutputEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ def _emit_json(env: OutputEnvelope) -> None:
 
 def _emit_markdown(env: OutputEnvelope) -> None:
     """Print the markdown serialisation of *env* to stdout."""
+    from eawf.render.envelope import to_markdown
+
     # ``to_markdown`` already terminates with ``\n``; we suppress
     # ``typer.echo``'s own newline so the output is byte-identical to
     # ``to_markdown(env)``.
@@ -76,6 +79,10 @@ def render_output_cmd(
     ] = False,
 ) -> None:
     """Convert between the JSON and markdown forms of the output envelope."""
+    from pydantic import ValidationError
+
+    from eawf.render.envelope import OutputEnvelope, from_markdown
+
     flags: GlobalFlags = ctx.obj
     fmt = format.lower()
     if fmt not in _VALID_FORMATS:

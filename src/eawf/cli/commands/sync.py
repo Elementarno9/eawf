@@ -52,7 +52,7 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
@@ -60,19 +60,12 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.config.layered import merge_config
-from eawf.memory.markdown_view import render_all_views
-from eawf.profiles.compose import compose
-from eawf.profiles.loader import list_profiles, load_profile
-from eawf.render.agents_md import RenderResult, render_agents_md
-from eawf.render.claude_shim import render_claude_md
-from eawf.render.manifest import Manifest
-from eawf.render.manifest import load as load_manifest
-from eawf.render.manifest import save_atomic as save_manifest_atomic
 from eawf.state.enums import StoreKind
-from eawf.state.models import State
-from eawf.store.paths import store_path
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.render.agents_md import RenderResult
+    from eawf.render.manifest import Manifest
+    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +86,8 @@ def _load_state_or_none(state_path: Path) -> State | None:
     :class:`cli_errors.InvalidInput` so the existing error envelope still
     fires.
     """
+    from eawf.validate.strict import validate_state
+
     if not state_path.exists():
         return None
     payload = orjson.loads(state_path.read_bytes())
@@ -110,6 +105,8 @@ def _seed_state_for_shadow(target: Path, shadow: Path) -> None:
     The memory-view renderer reads both. The shadow tree is sparse — only the
     files we actually consume need to be mirrored.
     """
+    from eawf.store.paths import store_path
+
     src_state = target / _STATE_RELPATH
     if src_state.exists():
         dst_state = shadow / _STATE_RELPATH
@@ -130,6 +127,9 @@ def _render_memory_views(*, target_root: Path, write: bool) -> list[Path]:
     when ``write=False``). When the workspace has no ``.ea/state.json`` (e.g.
     the bare-directory init path) the function returns an empty list.
     """
+    from eawf.memory.markdown_view import render_all_views
+    from eawf.store.paths import store_path
+
     state_path = target_root / _STATE_RELPATH
     state = _load_state_or_none(state_path)
     if state is None:
@@ -193,6 +193,9 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
             strings, or the layered merge raises (malformed YAML in any
             layer).
     """
+    from eawf.config.layered import merge_config
+    from eawf.profiles.loader import list_profiles
+
     try:
         merged, _sources = merge_config(repo=target, workspace=target)
     except Exception as exc:
@@ -259,6 +262,13 @@ def _render_into(
         is True the after-manifest is also persisted via
         :func:`eawf.render.manifest.save_atomic`.
     """
+    from eawf.profiles.compose import compose
+    from eawf.profiles.loader import load_profile
+    from eawf.render.agents_md import render_agents_md
+    from eawf.render.claude_shim import render_claude_md
+    from eawf.render.manifest import load as load_manifest
+    from eawf.render.manifest import save_atomic as save_manifest_atomic
+
     composed = compose([load_profile(p) for p in enabled_profiles])
     agents_md_path = (target_root / _AGENTS_MD).resolve()
     claude_md_path = (target_root / _CLAUDE_MD).resolve()

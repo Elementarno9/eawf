@@ -38,23 +38,23 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
-from pydantic import ValidationError as PydValidationError
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 from eawf.lock import portalock
 from eawf.state.enums import ProjectStatus, ScopeKind
 from eawf.state.ids import is_project_code
-from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
 from eawf.state.urn import build as build_urn
 from eawf.state.writer import atomic_write_json_locked
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +160,8 @@ def workspace_init_cmd(
     When ``state.json`` already exists with ``scope_kind == "workspace"`` and
     a different ``code``, the operator must pass ``--force`` to overwrite.
     """
+    from pydantic import ValidationError as PydValidationError
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
@@ -243,6 +245,9 @@ def workspace_add_repo_cmd(
     and title populate the link defaults. Otherwise the operator must
     supply both via ``--project-code`` / ``--title``.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
@@ -328,6 +333,9 @@ def workspace_remove_repo_cmd(
     "unlinked" value). The audit trail of the removal lives in
     ``store/event.jsonl`` once this command lands inside ``state_transaction``.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.state.models import WorkspaceIndex
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(

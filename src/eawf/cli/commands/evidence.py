@@ -19,39 +19,11 @@ from typing import Annotated, Any
 
 import typer
 
-from eawf.artifacts.validation import sha256_file, validate_markdown_artifact
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.evidence import (
-    artifact as artifact_evi,
-)
-from eawf.evidence import (
-    audit as audit_evi,
-)
-from eawf.evidence import (
-    backlog as backlog_evi,
-)
-from eawf.evidence import (
-    decision as decision_evi,
-)
-from eawf.evidence import (
-    goal as goal_evi,
-)
-from eawf.evidence import (
-    hypothesis as hypothesis_evi,
-)
-from eawf.evidence import (
-    incident as incident_evi,
-)
-from eawf.evidence import (
-    outcome as outcome_evi,
-)
-from eawf.evidence._io import append_jsonl, load_state, store_paths
-from eawf.render.audit_report import render_audit_markdown
 from eawf.state.enums import (
     AuditKind,
     AuditStatus,
@@ -131,6 +103,10 @@ def goal_define(
     ] = None,
 ) -> None:
     """Define a new goal under the current scope."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import goal as goal_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -182,6 +158,10 @@ def outcome_define(
     ] = OutcomeDirection.MIN,
 ) -> None:
     """Define a new pending outcome."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import outcome as outcome_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -229,6 +209,10 @@ def outcome_set(
     ],
 ) -> None:
     """Record an outcome measurement; requires --audit of a complete audit."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import outcome as outcome_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -282,6 +266,10 @@ def hypothesis_define(
     ] = None,
 ) -> None:
     """Register a new pending hypothesis."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import hypothesis as hypothesis_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -331,6 +319,10 @@ def hypothesis_verdict(
     ],
 ) -> None:
     """Record a hypothesis verdict; requires --audit of a complete audit."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import hypothesis as hypothesis_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -368,6 +360,9 @@ def hypothesis_list(
     ] = None,
 ) -> None:
     """List hypotheses (read-only)."""
+    from eawf.evidence import hypothesis as hypothesis_evi
+    from eawf.evidence._io import load_state
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -419,6 +414,10 @@ def audit_add(
     ] = None,
 ) -> None:
     """Register an audit; report-bearing audits land status=complete."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -480,6 +479,10 @@ def audit_run(
     """Run an audit. ``--checks`` drives the DSL runner; ``--fixture`` is the
     legacy JSON escape hatch. Pass at most one of the two.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -545,6 +548,10 @@ def audit_integrity(
     ] = None,
 ) -> None:
     """Append an integrity-check result to an existing audit."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     passed = status.lower() == "passed"
@@ -599,6 +606,10 @@ def audit_set_verdict(
     an existing artifact; a complete audit accepts ``--verdict`` updates
     in place but rejects a differing ``--report``.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -635,6 +646,10 @@ def audit_show(
     md: Annotated[bool, typer.Option("--md", help="Render markdown artifact body.")] = False,
 ) -> None:
     """Show metadata for one audit."""
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import load_state
+    from eawf.render.audit_report import render_audit_markdown
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     state = _run_read(flags, load_state, state_path)
@@ -668,6 +683,9 @@ def audit_list(
     status: Annotated[AuditStatus | None, typer.Option("--status", help="Filter by status")] = None,
 ) -> None:
     """List audits with optional filters."""
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import load_state
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     state = _run_read(flags, load_state, state_path)
@@ -722,6 +740,10 @@ def incident_open(
     ] = None,
 ) -> None:
     """Open a new incident."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import incident as incident_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -779,6 +801,10 @@ def incident_close(
     ] = None,
 ) -> None:
     """Close an incident; requires --audit of a complete audit."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import incident as incident_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     actions = list(corrective_action or [])
@@ -818,6 +844,9 @@ def incident_view(
     incident_id: Annotated[str, typer.Argument(help="Incident id")],
 ) -> None:
     """View incident metadata + linked artifact ids."""
+    from eawf.evidence import incident as incident_evi
+    from eawf.evidence._io import load_state
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     state = _run_read(flags, load_state, state_path)
@@ -863,6 +892,10 @@ def decision_add(
     ] = None,
 ) -> None:
     """Record a durable decision."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import decision as decision_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -902,6 +935,9 @@ def decision_list(
     scope_id: Annotated[str | None, typer.Option("--scope-id", help="Filter by scope")] = None,
 ) -> None:
     """List decisions filtered by scope."""
+    from eawf.evidence import decision as decision_evi
+    from eawf.evidence._io import load_state
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     state = _run_read(flags, load_state, state_path)
@@ -942,6 +978,7 @@ def decision_graph(
     ] = _DecisionGraphFormat.TEXT,
 ) -> None:
     """Render the decision graph (text, Graphviz DOT, or Mermaid)."""
+    from eawf.evidence._io import load_state
     from eawf.render.decision_graph import (
         build_decision_graph,
         render_dot,
@@ -994,6 +1031,10 @@ def artifact_add(
     ] = None,
 ) -> None:
     """Register a durable artifact."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import artifact as artifact_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -1056,6 +1097,10 @@ def artifact_update(
     Identity fields (``id``, ``kind``, ``urn``, ``scope_id``,
     ``created_at``) stay fixed.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import artifact as artifact_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -1091,6 +1136,9 @@ def artifact_show(
     artifact_id: Annotated[str, typer.Argument(help="Artifact id")],
 ) -> None:
     """Show artifact metadata."""
+    from eawf.evidence import artifact as artifact_evi
+    from eawf.evidence._io import load_state
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
     state = _run_read(flags, load_state, state_path)
@@ -1109,6 +1157,8 @@ def artifact_validate(
     path: Annotated[Path, typer.Argument(help="Markdown artifact path.")],
 ) -> None:
     """Validate one markdown artifact body."""
+    from eawf.artifacts.validation import validate_markdown_artifact
+
     flags = _flags(ctx)
     text = path.read_text(encoding="utf-8")
     report = validate_markdown_artifact(text)
@@ -1139,6 +1189,8 @@ def _verify_one_artifact(
     - ``"skipped_remote"`` — non-``repo:`` uri with ``--refresh`` not set.
     - ``"mismatch"`` — recomputed sha256 did not match the registered value.
     """
+    from eawf.artifacts.validation import sha256_file
+
     uri = artifact.uri
     registered = artifact.sha256
     row: dict[str, Any] = {
@@ -1204,6 +1256,8 @@ def artifact_verify(
     - ``2`` (``NOT_FOUND``) — single-id mode with unknown artifact id.
     - ``8`` (``INTEGRITY_VIOLATION``) — at least one artifact mismatched.
     """
+    from eawf.evidence._io import load_state
+
     flags = _flags(ctx)
     if (artifact_id is None) == (not verify_all):
         cli_errors.emit_error(
@@ -1284,6 +1338,10 @@ def backlog_add(
     ] = None,
 ) -> None:
     """Add a new backlog item."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import backlog as backlog_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -1329,6 +1387,10 @@ def backlog_set_priority(
     ],
 ) -> None:
     """Update the priority of an open backlog item."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import backlog as backlog_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
@@ -1369,6 +1431,10 @@ def backlog_close(
     ],
 ) -> None:
     """Close a backlog item; requires --audit of a complete audit."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import backlog as backlog_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
     flags = _flags(ctx)
     state_path = _state_path(flags)
 

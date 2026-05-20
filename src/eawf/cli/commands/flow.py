@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import orjson
 import typer
@@ -33,23 +33,10 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
-from eawf.render.envelope import to_markdown
-from eawf.skills import (
-    _bootstrap as _skills_bootstrap,  # noqa: F401 — import-side-effect registers skills
-)
-from eawf.skills._common import resolve_active_state_path
-from eawf.skills.engine import SkillContext, run_skill
-from eawf.skills.flow import (
-    FlowSkill,
-    abort_flow_record,
-    in_progress_flow_ids,
-    latest_active_flow_id,
-    load_flow_records,
-    load_latest_records_per_flow,
-    load_latest_safe_checkpoint,
-)
 from eawf.state.enums import FlowStatus
-from eawf.store.kinds.flow import FlowCheckpointPayload
+
+if TYPE_CHECKING:
+    from eawf.store.kinds.flow import FlowCheckpointPayload
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +50,8 @@ flow_app = typer.Typer(
 
 def _emit_envelope_via_skill_run_cmd(envelope: Any, *, as_json: bool) -> None:
     """Print *envelope* in JSON or markdown form on stdout."""
+    from eawf.render.envelope import to_markdown
+
     if as_json:
         raw = orjson.dumps(
             envelope.model_dump(mode="json"),
@@ -120,6 +109,8 @@ def _resolve_target_flow_id(
        in-progress flows → :class:`NotFound`. More than one → ambiguous,
        raises :class:`InvalidInput` asking for ``--flow-id``.
     """
+    from eawf.skills.flow import in_progress_flow_ids
+
     if flow_id_flag is not None:
         if not flow_id_flag.startswith("FL-"):
             raise cli_errors.InvalidInput(
@@ -198,6 +189,11 @@ def run_cmd(
     multiple in-progress flows without ``--flow-id`` raise
     ``INVALID_INPUT`` (3).
     """
+    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
+    from eawf.skills._common import resolve_active_state_path
+    from eawf.skills.engine import SkillContext, run_skill
+    from eawf.skills.flow import FlowSkill, load_latest_safe_checkpoint
+
     flags: GlobalFlags = ctx.obj
 
     try:
@@ -310,6 +306,9 @@ def _latest_checkpoint_for(
     flow_id: str,
 ) -> tuple[str, FlowCheckpointPayload] | None:
     """Return the most recent checkpoint (safe or not) for *flow_id*."""
+    from eawf.skills.flow import load_flow_records
+    from eawf.store.kinds.flow import FlowCheckpointPayload
+
     last: tuple[str, FlowCheckpointPayload] | None = None
     for envelope_id, payload in load_flow_records(state_path):
         if payload.get("kind") != "flow_checkpoint":
@@ -349,6 +348,13 @@ def status_cmd(
     ] = None,
 ) -> None:
     """Print structured status for a flow run (read-only)."""
+    from eawf.skills._common import resolve_active_state_path
+    from eawf.skills.flow import (
+        latest_active_flow_id,
+        load_latest_records_per_flow,
+        load_latest_safe_checkpoint,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_active_state_path(workspace=flags.workspace)
@@ -468,6 +474,9 @@ def abort_cmd(
     ``OK`` and the JSON output reports
     ``previous_status="abandoned" new_status="abandoned"``.
     """
+    from eawf.skills._common import resolve_active_state_path
+    from eawf.skills.flow import abort_flow_record, load_latest_records_per_flow
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_active_state_path(workspace=flags.workspace)

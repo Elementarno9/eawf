@@ -43,7 +43,7 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import orjson
 import typer
@@ -53,40 +53,11 @@ from rich.table import Table
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
-from eawf.render.envelope import (
-    CANONICAL_SKILL_NAMES,
-    EnvelopeFooter,
-    EnvelopeHeader,
-    EnvelopeStatus,
-    OutputEnvelope,
-    SkillName,
-    to_markdown,
-)
-from eawf.render.skills import SKILL_REGISTRY, SkillSpec, render_skill_md_from_spec
-from eawf.skills import (
-    _bootstrap as _skills_bootstrap,  # noqa: F401 — import-side-effect registers skills
-)
-from eawf.skills import registry
-from eawf.skills.bodies import (
-    AgentDispatchBody,
-    AuditBody,
-    BlitzBody,
-    CoauthorBody,
-    CompressBody,
-    DifferentiateBody,
-    FlowBody,
-    InitBody,
-    MemoryBody,
-    PolishBody,
-    PrepBody,
-    ResearchBody,
-    ReviewBody,
-    RoadmapBody,
-    SecurityReviewBody,
-    ShipBody,
-    WaveSpecBody,
-)
-from eawf.skills.engine import Skill, SkillContext, run_skill
+
+if TYPE_CHECKING:
+    from eawf.render.envelope import EnvelopeStatus, OutputEnvelope, SkillName
+    from eawf.render.skills import SkillSpec
+    from eawf.skills.engine import Skill, SkillContext
 
 logger = logging.getLogger(__name__)
 
@@ -126,26 +97,56 @@ _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the
 # fully-qualified class name of this model — stable enough to spot a
 # drift between the canonical body schema and an installed skill at a
-# glance.
-_SKILL_BODY_MODELS: dict[SkillName, type[Any]] = {
-    "/research": ResearchBody,
-    "/prep": PrepBody,
-    "/audit": AuditBody,
-    "/ship": ShipBody,
-    "/review": ReviewBody,
-    "/polish": PolishBody,
-    "/init": InitBody,
-    "/roadmap": RoadmapBody,
-    "/differentiate": DifferentiateBody,
-    "/flow": FlowBody,
-    "/blitz": BlitzBody,
-    "/coauthor": CoauthorBody,
-    "/memory": MemoryBody,
-    "/agent-dispatch": AgentDispatchBody,
-    "/compress": CompressBody,
-    "/wave-spec": WaveSpecBody,
-    "/security-review": SecurityReviewBody,
-}
+# glance. Built lazily (deferred import of ``eawf.skills.bodies``, which
+# pulls the pydantic body models) so importing this module to register the
+# command tree stays light.
+_SKILL_BODY_MODELS_CACHE: dict[SkillName, type[Any]] | None = None
+
+
+def _skill_body_models() -> dict[SkillName, type[Any]]:
+    """Return the canonical skill-name → body-model map (cached)."""
+    global _SKILL_BODY_MODELS_CACHE
+    if _SKILL_BODY_MODELS_CACHE is None:
+        from eawf.skills.bodies import (
+            AgentDispatchBody,
+            AuditBody,
+            BlitzBody,
+            CoauthorBody,
+            CompressBody,
+            DifferentiateBody,
+            FlowBody,
+            InitBody,
+            MemoryBody,
+            PolishBody,
+            PrepBody,
+            ResearchBody,
+            ReviewBody,
+            RoadmapBody,
+            SecurityReviewBody,
+            ShipBody,
+            WaveSpecBody,
+        )
+
+        _SKILL_BODY_MODELS_CACHE = {
+            "/research": ResearchBody,
+            "/prep": PrepBody,
+            "/audit": AuditBody,
+            "/ship": ShipBody,
+            "/review": ReviewBody,
+            "/polish": PolishBody,
+            "/init": InitBody,
+            "/roadmap": RoadmapBody,
+            "/differentiate": DifferentiateBody,
+            "/flow": FlowBody,
+            "/blitz": BlitzBody,
+            "/coauthor": CoauthorBody,
+            "/memory": MemoryBody,
+            "/agent-dispatch": AgentDispatchBody,
+            "/compress": CompressBody,
+            "/wave-spec": WaveSpecBody,
+            "/security-review": SecurityReviewBody,
+        }
+    return _SKILL_BODY_MODELS_CACHE
 
 
 def _all_skill_names() -> list[SkillName]:
@@ -155,6 +156,8 @@ def _all_skill_names() -> list[SkillName]:
     :func:`typing.get_args` so the list never drifts from the frozen
     literal.
     """
+    from eawf.render.envelope import CANONICAL_SKILL_NAMES
+
     return list(CANONICAL_SKILL_NAMES)
 
 
@@ -211,6 +214,8 @@ def _overlay_envelope(
     args: dict[str, Any],
 ) -> OutputEnvelope:
     """Build a dispatch envelope for a discovered markdown skill overlay."""
+    from eawf.render.envelope import EnvelopeFooter, EnvelopeHeader, OutputEnvelope
+
     started_at = datetime.now(UTC)
     finished_at = datetime.now(UTC)
     return OutputEnvelope(
@@ -260,6 +265,8 @@ def _exit_for_status(status: EnvelopeStatus) -> int:
 
 def _emit_envelope(env: OutputEnvelope, *, as_json: bool) -> None:
     """Print *env* to stdout as JSON or as the canonical markdown form."""
+    from eawf.render.envelope import to_markdown
+
     if as_json:
         raw = orjson.dumps(
             env.model_dump(mode="json"),
@@ -279,11 +286,13 @@ def _build_list_table(*, plain: bool) -> str:
     Rich branch builds a :class:`Table` into a string buffer with a
     fixed width (100) so the output is deterministic for golden tests.
     """
+    from eawf.skills import registry
+
     rows: list[tuple[SkillName, str, str, str]] = []
     for name in _all_skill_names():
         registered = registry.lookup(name)
         status = "installed" if registered is not None else "missing"
-        body_cls = _SKILL_BODY_MODELS[name]
+        body_cls = _skill_body_models()[name]
         fingerprint = f"{body_cls.__module__}.{body_cls.__qualname__}"
         description = _SKILL_DESCRIPTIONS[name]
         rows.append((name, status, fingerprint, description))
@@ -315,10 +324,12 @@ def _build_list_table(*, plain: bool) -> str:
 
 def _list_payload() -> dict[str, Any]:
     """Build the JSON shape for ``skill list --json``."""
+    from eawf.skills import registry
+
     skills: list[dict[str, Any]] = []
     for name in _all_skill_names():
         registered = registry.lookup(name)
-        body_cls = _SKILL_BODY_MODELS[name]
+        body_cls = _skill_body_models()[name]
         skills.append(
             {
                 "name": name,
@@ -339,8 +350,10 @@ def _skill_payload(name: SkillName) -> dict[str, Any]:
     expected to splice an additional ``body`` field carrying the
     canonical SKILL.md text.
     """
+    from eawf.skills import registry
+
     registered = registry.lookup(name)
-    body_cls = _SKILL_BODY_MODELS[name]
+    body_cls = _skill_body_models()[name]
     return {
         "name": name,
         "status": "installed" if registered is not None else "missing",
@@ -365,6 +378,8 @@ def _resolve_skill_spec(name: SkillName) -> SkillSpec:
             frozen at the same ten names — but we still raise the
             canonical error so the surface stays defensive.
     """
+    from eawf.render.skills import SKILL_REGISTRY
+
     bare = name.removeprefix("/")
     for spec in SKILL_REGISTRY:
         if spec.skill_name == bare:
@@ -386,6 +401,7 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
     ``runtimes`` (per-runtime visibility hint; empty == visible to all),
     ``path``, and ``version``.
     """
+    from eawf.skills import registry
     from eawf.skills.discovery import discover_skills
 
     rows = discover_skills(workspace=workspace)
@@ -397,7 +413,7 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
         name = entry.name
         if name in builtin_names:
             registered = registry.lookup(name)
-            body_cls = _SKILL_BODY_MODELS[name]
+            body_cls = _skill_body_models()[name]
             status = "installed" if registered is not None else "missing"
             body_schema = f"{body_cls.__module__}.{body_cls.__qualname__}"
         else:
@@ -430,6 +446,8 @@ def list_cmd(
     ] = "all",
 ) -> None:
     """List every skill resolvable across builtin / user / workspace layers."""
+    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
+
     flags: GlobalFlags = ctx.obj
     if scope not in _SCOPE_CHOICES:
         cli_errors.emit_error(
@@ -501,6 +519,9 @@ def render_cmd(
     (same code), with the canonical alternatives listed in the
     rejection message.
     """
+    from eawf.render.skills import render_skill_md_from_spec
+    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
+
     flags: GlobalFlags = ctx.obj
 
     try:
@@ -562,6 +583,10 @@ def run_cmd(
     canonical envelope is emitted on stdout in markdown by default and
     in JSON when ``--json`` is set on the root.
     """
+    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
+    from eawf.skills import registry
+    from eawf.skills.engine import SkillContext, run_skill
+
     flags: GlobalFlags = ctx.obj
 
     try:

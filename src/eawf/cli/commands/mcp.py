@@ -41,31 +41,18 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.lifecycle.allocator import allocate_grant_id
-from eawf.mcp.installer import (
-    InstallEntryResult,
-    IntegrityViolation,
-    RemoveEntryResult,
-    install_runtime_entry,
-    list_runtime_entries,
-    remove_runtime_entry,
-)
 from eawf.state.enums import McpRisk, McpStatus
-from eawf.state.models import (
-    GRANT_SCOPE_KINDS,
-    McpGrant,
-    McpServer,
-)
+
+if TYPE_CHECKING:
+    from eawf.state.models import McpGrant, McpServer
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +211,11 @@ def add_cmd(
     ] = False,
 ) -> None:
     """Register a new Eä-owned MCP entry in ``state.mcp_servers``."""
+    from pydantic import ValidationError
+
+    from eawf.cli._mutation import state_transaction
+    from eawf.state.models import McpServer
+
     flags: GlobalFlags = ctx.obj
     try:
         risk_enum = _resolve_risk(risk)
@@ -289,6 +281,13 @@ def install_cmd(
     ] = False,
 ) -> None:
     """Materialise an Eä-owned MCP entry into the runtime config."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.mcp.installer import (
+        InstallEntryResult,
+        IntegrityViolation,
+        install_runtime_entry,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
@@ -396,6 +395,11 @@ def update_cmd(
     ] = None,
 ) -> None:
     """Patch an existing Eä-owned MCP entry in ``state.mcp_servers``."""
+    from pydantic import ValidationError
+
+    from eawf.cli._mutation import state_transaction
+    from eawf.state.models import McpServer
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -479,6 +483,13 @@ def remove_cmd(
     ] = False,
 ) -> None:
     """Delete an Eä-owned MCP entry from state (and optionally runtime configs)."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.mcp.installer import (
+        IntegrityViolation,
+        RemoveEntryResult,
+        remove_runtime_entry,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -564,6 +575,8 @@ def list_cmd(
     ] = None,
 ) -> None:
     """List MCP entries from state and/or runtime config."""
+    from eawf.mcp.installer import list_runtime_entries
+
     flags: GlobalFlags = ctx.obj
     try:
         if owner not in _OWNER_FILTERS:
@@ -691,6 +704,12 @@ def grant_cmd(
     ``INV.REF.MCP_GRANT_SERVER_MISSING`` invariant fires and the write is
     rolled back as :class:`ValidationFailed`.
     """
+    from pydantic import ValidationError
+
+    from eawf.cli._mutation import state_transaction
+    from eawf.lifecycle.allocator import allocate_grant_id
+    from eawf.state.models import GRANT_SCOPE_KINDS, McpGrant
+
     flags: GlobalFlags = ctx.obj
     try:
         if scope_kind not in GRANT_SCOPE_KINDS:
@@ -747,6 +766,8 @@ def revoke_cmd(
     nullable-vs-empty distinction stays parallel to the ``mcp_servers``
     handling in :func:`remove_cmd`.
     """
+    from eawf.cli._mutation import state_transaction
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)

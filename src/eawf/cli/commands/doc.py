@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
@@ -25,10 +25,10 @@ from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.doctor.doc_verify import verify_docs
-from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,8 @@ doc_app = typer.Typer(
 
 
 def _load_state(state_path: Path) -> State:
+    from eawf.validate.strict import validate_state
+
     if not state_path.exists():
         raise cli_errors.NotFound(f"state file not found: {state_path}")
     payload = orjson.loads(state_path.read_bytes())
@@ -65,6 +67,8 @@ def doc_verify(
     ] = False,
 ) -> None:
     """Verify that rendered docs match state.json + manifest hashes."""
+    from eawf.doctor.doc_verify import verify_docs
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path, _reason = resolve_with_reason(flags.workspace)

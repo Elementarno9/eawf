@@ -27,27 +27,21 @@ from __future__ import annotations
 import logging
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import click
 import orjson
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors
 from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.render.plan_view import (
-    PlanSection,
-    PlanViewNotFound,
-    build_view,
-    render_json,
-    render_markdown,
-)
 from eawf.state.ids import is_iter_id
-from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +51,23 @@ class _PlanFormat(StrEnum):
 
     MARKDOWN = "markdown"
     JSON = "json"
+
+
+class PlanSection(StrEnum):
+    """Section selector for ``--show <section>``.
+
+    Mirrors :class:`eawf.render.plan_view.PlanSection` by string value so
+    the registered command can declare its ``--show`` choices without
+    importing the heavy ``render.plan_view`` subtree (which pulls
+    ``state.models``) at command-tree build time. ``StrEnum`` equality is
+    by value, so members compare equal to the renderer's enum at call time.
+    """
+
+    ALL = "all"
+    DAG = "dag"
+    CHECKS = "checks"
+    RISKS = "risks"
+    WAVES = "waves"
 
 
 plan_app = typer.Typer(
@@ -118,6 +129,25 @@ def show_cmd(
     ] = False,
 ) -> None:
     """Print the active iter plan view (markdown or JSON)."""
+    from pydantic import ValidationError
+
+    from eawf.render.plan_view import (
+        PlanSection as RenderPlanSection,
+    )
+    from eawf.render.plan_view import (
+        PlanViewNotFound,
+        build_view,
+        render_json,
+        render_markdown,
+    )
+    from eawf.state.models import State
+
+    # The registered ``--show`` choices use the local :class:`PlanSection`
+    # mirror so the command tree builds without importing the heavy
+    # ``render.plan_view`` subtree. Map to the renderer's enum (same string
+    # values) for the typed render calls below.
+    render_section = RenderPlanSection(show.value)
+
     flags: GlobalFlags = ctx.obj
     parent_json = bool(flags.json_output)
     local_json = bool(json_output)
@@ -201,11 +231,11 @@ def show_cmd(
         return
 
     if effective_flags.json_output:
-        envelope: dict[str, Any] = render_json(view, sections=show)
+        envelope: dict[str, Any] = render_json(view, sections=render_section)
         # emit_json_or_text honours flags.json_output; we pass a dummy text body
         # because the JSON branch never consumes it.
         emit_json_or_text(envelope, "<json>", flags=effective_flags)
         return
 
-    body = render_markdown(view, ascii_dag=ascii_dag, sections=show)
+    body = render_markdown(view, ascii_dag=ascii_dag, sections=render_section)
     typer.echo(body, nl=False)

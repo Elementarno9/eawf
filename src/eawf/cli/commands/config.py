@@ -46,21 +46,11 @@ from typing import Annotated, Any
 
 import orjson
 import typer
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.cli.errors import InvalidInput, NotFound, UserDeclined, ValidationFailed, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.config.layered import (
-    LAYER_ORDER,
-    WRITABLE_LAYERS,
-    get_dotted,
-    layer_path,
-    merge_config,
-)
-from eawf.config.loader import load_yaml_layer
-from eawf.config.profile import enable_profile
 from eawf.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
@@ -70,8 +60,6 @@ from eawf.config.registry import (
     tabs_sorted,
 )
 from eawf.lock import portalock
-from eawf.profiles.compose import compose
-from eawf.profiles.loader import list_profiles, load_profile
 from eawf.vcs.coauthor import VcsConfig
 
 logger = logging.getLogger(__name__)
@@ -213,6 +201,8 @@ def _coerce_value(raw: str) -> Any:
 
 def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
     """Atomic YAML write (tempfile + fsync + rename). Caller holds the lock."""
+    import yaml
+
     target.parent.mkdir(parents=True, exist_ok=True)
     suffix = secrets.token_hex(4)
     tmp = target.with_name(f"{target.name}.tmp.{suffix}")
@@ -352,6 +342,8 @@ def _save_value_to_layer(
                     raise
 
     # In-process fallback arm (V1 carve-out / EAWF_DAEMONLESS=1 / unmapped path).
+    from eawf.config.loader import load_yaml_layer
+
     with portalock.acquire(target_path):
         existing = load_yaml_layer(target_path)
         _set_dotted_in_yaml(existing, key, value)
@@ -371,6 +363,8 @@ def config_get(
     ] = None,
 ) -> None:
     """Print the merged value for ``key`` and the layer it came from."""
+    from eawf.config.layered import LAYER_ORDER, get_dotted, merge_config
+
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
     try:
@@ -412,6 +406,10 @@ def config_set(
     ] = "repo",
 ) -> None:
     """Write *value* under *key* to the chosen layer file."""
+    import yaml
+
+    from eawf.config.layered import WRITABLE_LAYERS, layer_path
+
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
 
@@ -490,6 +488,8 @@ def config_validate(
     The composed view is deterministic (sorted lists, locked render-block
     order) so repeated invocations produce byte-identical JSON.
     """
+    from eawf.config.layered import LAYER_ORDER, merge_config
+
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
 
@@ -515,6 +515,9 @@ def config_validate(
     text = "config: ok"
 
     if composed:
+        from eawf.profiles.compose import compose
+        from eawf.profiles.loader import list_profiles, load_profile
+
         # Resolve the enabled profile list from the merged config. Unknown
         # ids surface as InvalidInput from load_profile so the user gets a
         # helpful pointer to the registry.
@@ -558,6 +561,11 @@ def profile_enable(
     ] = "repo",
 ) -> None:
     """Enable *profile_id* in *scope* and materialise required state keys."""
+    import yaml
+
+    from eawf.config.layered import WRITABLE_LAYERS, layer_path
+    from eawf.config.profile import enable_profile
+
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
 
@@ -744,6 +752,8 @@ def _menu_get_current_value(merged: dict[str, Any], entry: ConfigKey) -> Any:
     Surface contract: the menu always has something to pre-fill, even on a
     fresh repo with no overlays.
     """
+    from eawf.config.layered import get_dotted
+
     try:
         return get_dotted(merged, entry.key)
     except KeyError:
@@ -785,6 +795,10 @@ def config_menu(
       prompt against a piped stdin. CI callers should continue to use
       ``eawf config set`` directly.
     """
+    import yaml
+
+    from eawf.config.layered import WRITABLE_LAYERS, layer_path, merge_config
+
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
 

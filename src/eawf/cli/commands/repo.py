@@ -58,30 +58,22 @@ import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
-from pydantic import ValidationError as PydValidationError
 
 from eawf.cli import errors as cli_errors
-from eawf.cli.commands.init import init_cmd as _init_cmd
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.lock import portalock
-from eawf.registry import (
-    Registry,
-    RegistryReadError,
-    RegistryRepoEntry,
-    default_registry_path,
-    read_registry,
-)
 from eawf.state.enums import ProjectStatus
 from eawf.state.ids import is_project_code
-from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
 from eawf.state.urn import build as build_urn
 from eawf.state.writer import atomic_write_json_locked
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.registry import Registry, RegistryRepoEntry
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +205,8 @@ def repo_init_cmd(
     The Phase 5 W06 self-apply will fork the body so ``repo init`` records
     the optional ``--workspace`` linkage in one shot.
     """
+    from eawf.cli.commands.init import init_cmd as _init_cmd
+
     _init_cmd(
         ctx,
         target=target,
@@ -311,6 +305,9 @@ def repo_link_cmd(
     the workspace code on disk disagrees with the *workspace_code* arg, or
     when *repo_code* is already linked.
     """
+    from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
+    from eawf.validate.strict import validate_state
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(workspace_code):
         cli_errors.emit_error(
@@ -461,6 +458,8 @@ def _resolve_registry_path(registry_path: Path | None) -> Path:
     runtime callers leave it unset and pick up
     :func:`eawf.registry.default_registry_path`.
     """
+    from eawf.registry import default_registry_path
+
     return registry_path if registry_path is not None else default_registry_path()
 
 
@@ -476,6 +475,8 @@ def _read_registry_for_write(registry_path: Path) -> Registry:
         InvalidInput: When the file exists but cannot be parsed /
             validated.
     """
+    from eawf.registry import Registry, RegistryReadError, read_registry
+
     try:
         return read_registry(path=registry_path)
     except RegistryReadError as exc:
@@ -590,6 +591,10 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
         ValidationFailed: Candidate payload fails schema validation.
         LockConflict: In-process arm could not acquire the lock.
     """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.registry import Registry, RegistryReadError, read_registry
+
     try:
         validated = Registry.model_validate(registry.model_dump(mode="json"))
     except PydValidationError as exc:
@@ -827,6 +832,8 @@ def repo_add_cmd(
     - 3 (InvalidInput) — missing/invalid code, registry corrupted.
     - 6 (UserDeclined) — TOFU gate declined.
     """
+    from eawf.registry import Registry, RegistryRepoEntry
+
     flags: GlobalFlags = ctx.obj
     resolved_path = path.resolve()
     if not resolved_path.exists():
@@ -981,6 +988,8 @@ def repo_remove_cmd(
     - 2 (NotFound) — registry missing OR no entry with *code*.
     - 3 (InvalidInput) — invalid code shape, registry corrupted.
     """
+    from eawf.registry import Registry, RegistryReadError, read_registry
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
@@ -1070,6 +1079,8 @@ def repo_prune_cmd(
     - 3 (InvalidInput) — registry corrupted / invalid schema.
     - 6 (UserDeclined) — confirmation gate declined.
     """
+    from eawf.registry import Registry, RegistryReadError, read_registry
+
     flags: GlobalFlags = ctx.obj
     target = _resolve_registry_path(registry_path)
     try:

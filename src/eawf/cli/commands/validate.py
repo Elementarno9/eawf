@@ -37,8 +37,6 @@ from typing import Annotated, Any
 import orjson
 import typer
 
-from eawf.validate.strict import validate_envelope, validate_path
-
 logger = logging.getLogger(__name__)
 
 
@@ -85,6 +83,8 @@ def validate(
 
     The mode is auto-detected from the top-level keys of *target_path*.
     """
+    from eawf.validate.strict import validate_envelope, validate_path
+
     raw = orjson.loads(Path(target_path).read_bytes())
     if not isinstance(raw, dict):
         typer.echo("schema: top-level value must be a JSON object")

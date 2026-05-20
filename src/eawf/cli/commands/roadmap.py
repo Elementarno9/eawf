@@ -35,7 +35,7 @@ import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
@@ -43,20 +43,9 @@ from rich.console import Console
 from rich.table import Table
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.lifecycle.transitions import (
-    LifecycleError,
-    archive_phase,
-    edit_wave_plan,
-    plan_iter,
-    plan_phase,
-    plan_wave,
-    remove_wave_plan,
-    set_wave_deps,
-)
 from eawf.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -66,11 +55,9 @@ from eawf.state.enums import (
     WaveStatus,
 )
 from eawf.state.ids import is_phase_id, is_wave_id
-from eawf.state.models import Iter, Phase, State
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.event import EventPayload
-from eawf.store.paths import store_path
+
+if TYPE_CHECKING:
+    from eawf.state.models import Iter, Phase, State
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +89,11 @@ def _append_roadmap_event(
     :func:`state_transaction` block so the EVENT precedes the
     ``state.json`` write under the same sibling-lock window.
     """
+    from eawf.store.append import append_envelope
+    from eawf.store.envelope import Envelope
+    from eawf.store.kinds.event import EventPayload
+    from eawf.store.paths import store_path
+
     args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
     args_hash = hashlib.sha256(args_blob).hexdigest()[:16]
     now = datetime.now(UTC)
@@ -202,6 +194,9 @@ def roadmap_propose_cmd(
     ] = None,
 ) -> None:
     """Propose a new PLANNED phase + I01 iter; emits needs_user envelope."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.lifecycle.transitions import LifecycleError, plan_iter, plan_phase
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -374,6 +369,15 @@ def roadmap_revise_cmd(
     PENDING check inside the lifecycle transitions rejects edits aimed
     at CLOSED/CLAIMED/IN_PROGRESS waves.
     """
+    from eawf.cli._mutation import state_transaction
+    from eawf.lifecycle.transitions import (
+        LifecycleError,
+        edit_wave_plan,
+        plan_wave,
+        remove_wave_plan,
+        set_wave_deps,
+    )
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -488,6 +492,8 @@ def roadmap_apply_cmd(
     """Finalise a PLANNED phase. Currently informational — propose
     already persists the PLANNED scope; apply confirms readiness for
     ``/prep``."""
+    from eawf.cli._mutation import state_transaction
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -544,6 +550,9 @@ def roadmap_drop_cmd(
 ) -> None:
     """Archive a PLANNED phase (PLANNED → ARCHIVED). Irreversible via the
     state CLI; recover with ``git restore`` if needed."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.lifecycle.transitions import LifecycleError, archive_phase
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -599,6 +608,8 @@ def roadmap_show_cmd(
     the JSON envelope only. ``--plain`` (top-level flag) bypasses Rich
     markup for terminals that cannot render ANSI.
     """
+    from eawf.cli._mutation import state_transaction
+
     flags: GlobalFlags = ctx.obj
     if phase is not None and not is_phase_id(phase):
         cli_errors.emit_error(

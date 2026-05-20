@@ -113,7 +113,7 @@ def test_prepare_close_flags_closed_wave_missing_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "eawf.cli.commands.lifecycle.derive_wave_sha",
+        "eawf.lifecycle.wave_sha.derive_wave_sha",
         lambda _wid: None,
     )
     state = _empty_state()
@@ -132,7 +132,7 @@ def test_prepare_close_flags_single_wave_without_decision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "eawf.cli.commands.lifecycle.derive_wave_sha",
+        "eawf.lifecycle.wave_sha.derive_wave_sha",
         lambda _wid: "abc123",
     )
     state = _empty_state()
@@ -161,7 +161,7 @@ def test_prepare_close_allows_single_wave_with_scope_collapse_decision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "eawf.cli.commands.lifecycle.derive_wave_sha",
+        "eawf.lifecycle.wave_sha.derive_wave_sha",
         lambda _wid: "abc123",
     )
     state = _empty_state()

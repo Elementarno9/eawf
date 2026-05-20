@@ -10,15 +10,10 @@ from typing import Annotated
 
 import typer
 
-from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.evidence import artifact as artifact_evi
-from eawf.evidence._io import append_jsonl, event_envelope, store_paths
-from eawf.scrub.scan import rewrite_text, scan_text
 from eawf.state.enums import ArtifactKind, StoreKind
 
 draft_app = typer.Typer(
@@ -116,6 +111,7 @@ def _validate_legacy_brief(text: str) -> _LegacyChassisReport:
     scrub findings. Skips chassis-heading and dense-citation checks.
     """
     from eawf.artifacts.validation import _SCRUB_CLEAN_RE, _sections
+    from eawf.scrub.scan import scan_text
 
     errors: list[str] = []
     if not text.lstrip().startswith("<!-- eawf-template:"):
@@ -182,6 +178,9 @@ def draft_validate(
     path: Annotated[Path, typer.Argument(help="Draft markdown path.")],
 ) -> None:
     """Validate a local draft artifact."""
+    from eawf.artifacts.validation import validate_markdown_artifact
+    from eawf.scrub.scan import scan_text
+
     flags = _flags(ctx)
     text = path.read_text(encoding="utf-8")
     report = validate_markdown_artifact(text, require_template_sentinel=True)
@@ -212,6 +211,12 @@ def promote_draft(
     before the renderer-owned chassis convention landed. Scrub-status +
     PII-scan + sentinel-presence are still enforced.
     """
+    from eawf.artifacts.validation import validate_markdown_artifact
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import artifact as artifact_evi
+    from eawf.evidence._io import append_jsonl, event_envelope, store_paths
+    from eawf.scrub.scan import rewrite_text
+
     flags = _flags(ctx)
     try:
         _validate_kind_slug(kind, slug)

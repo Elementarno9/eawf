@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 import typer
 
@@ -29,48 +29,62 @@ from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.runtimes.claude.plugin_conflict import detect_marketplace_install
-from eawf.runtimes.claude.plugin_doctor import DoctorReport, doctor_plugin
-from eawf.runtimes.claude.plugin_install import (
-    InstallResult,
-    IntegrityViolation,
-    install_plugin,
-)
-from eawf.runtimes.claude.plugin_package import PackageResult, package_plugin
-from eawf.runtimes.claude.plugin_update import UpdateResult, update_plugin
-from eawf.runtimes.codex import detect_user_install as codex_detect_user_install
-from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
-from eawf.runtimes.codex import install_plugin as codex_install_plugin
-from eawf.runtimes.codex import package_plugin as codex_package_plugin
-from eawf.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
-from eawf.runtimes.codex.plugin_install import (
-    InstallResult as CodexInstallResult,
-)
-from eawf.runtimes.codex.plugin_install import (
-    IntegrityViolation as CodexIntegrityViolation,
-)
-from eawf.runtimes.codex.plugin_package import PackageResult as CodexPackageResult
-from eawf.runtimes.opencode import detect_user_install as opencode_detect_user_install
-from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
-from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
-from eawf.runtimes.opencode.plugin_doctor import DoctorReport as OpencodeDoctorReport
-from eawf.runtimes.opencode.plugin_install import (
-    InstallResult as OpencodeInstallResult,
-)
-from eawf.runtimes.opencode.plugin_install import (
-    IntegrityViolation as OpencodeIntegrityViolation,
-)
-from eawf.runtimes.plugin_doctor import (
-    PluginDoctorReport,
-    run_doctor,
-)
-from eawf.runtimes.plugin_sync import (
-    PluginSyncIntegrityError,
-    SyncResult,
-    sync_plugins,
-)
+
+if TYPE_CHECKING:
+    # Annotation-only result/report types. The runtime values
+    # (install/doctor/package/update/sync functions + integrity
+    # exceptions) are imported lazily inside each command handler so
+    # importing this module for completion does not pull eawf.runtimes
+    # (and its jinja2/yaml transitive deps).
+    from eawf.runtimes.claude.plugin_conflict import CCPluginConflict
+    from eawf.runtimes.claude.plugin_doctor import DoctorReport
+    from eawf.runtimes.claude.plugin_install import InstallResult
+    from eawf.runtimes.claude.plugin_package import PackageResult
+    from eawf.runtimes.claude.plugin_update import UpdateResult
+    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+    from eawf.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
+    from eawf.runtimes.codex.plugin_install import (
+        InstallResult as CodexInstallResult,
+    )
+    from eawf.runtimes.codex.plugin_package import PackageResult as CodexPackageResult
+    from eawf.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
+    from eawf.runtimes.opencode.plugin_doctor import DoctorReport as OpencodeDoctorReport
+    from eawf.runtimes.opencode.plugin_install import (
+        InstallResult as OpencodeInstallResult,
+    )
+    from eawf.runtimes.plugin_doctor import PluginDoctorReport
+    from eawf.runtimes.plugin_sync import SyncResult
 
 logger = logging.getLogger(__name__)
+
+
+# Module-level lazy wrappers for the three runtime conflict detectors.
+# Tests monkeypatch these names (``eawf.cli.commands.plugin.<detector>``)
+# to inject synthetic conflicts, so they must stay module-level
+# attributes; the real implementations are imported lazily inside each
+# wrapper so importing this module for shell completion does not pull
+# ``eawf.runtimes.*`` (and its jinja2 transitive dep).
+def detect_marketplace_install() -> CCPluginConflict | None:
+    """Detect an existing CC-marketplace eawf install (lazy import)."""
+    from eawf.runtimes.claude.plugin_conflict import (
+        detect_marketplace_install as _impl,
+    )
+
+    return _impl()
+
+
+def codex_detect_user_install() -> CodexUserPluginConflict | None:
+    """Detect a user-scope codex eawf install (lazy import)."""
+    from eawf.runtimes.codex import detect_user_install as _impl
+
+    return _impl()
+
+
+def opencode_detect_user_install() -> OpenCodeUserPluginConflict | None:
+    """Detect a user-scope opencode eawf install (lazy import)."""
+    from eawf.runtimes.opencode import detect_user_install as _impl
+
+    return _impl()
 
 
 Scope = Literal["project", "user"]
@@ -651,6 +665,19 @@ def install_cmd(
     ] = False,
 ) -> None:
     """Render a runtime plugin tree."""
+    from eawf.runtimes.claude.plugin_install import (
+        IntegrityViolation,
+        install_plugin,
+    )
+    from eawf.runtimes.codex import install_plugin as codex_install_plugin
+    from eawf.runtimes.codex.plugin_install import (
+        IntegrityViolation as CodexIntegrityViolation,
+    )
+    from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
+    from eawf.runtimes.opencode.plugin_install import (
+        IntegrityViolation as OpencodeIntegrityViolation,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
@@ -761,6 +788,17 @@ def update_cmd(
     ] = "project",
 ) -> None:
     """Re-render a runtime plugin tree, aborting on hand-edits."""
+    from eawf.runtimes.claude.plugin_install import IntegrityViolation
+    from eawf.runtimes.claude.plugin_update import update_plugin
+    from eawf.runtimes.codex import install_plugin as codex_install_plugin
+    from eawf.runtimes.codex.plugin_install import (
+        IntegrityViolation as CodexIntegrityViolation,
+    )
+    from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
+    from eawf.runtimes.opencode.plugin_install import (
+        IntegrityViolation as OpencodeIntegrityViolation,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
@@ -832,6 +870,11 @@ def doctor_cmd(
     ] = "project",
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
+    from eawf.runtimes.claude.plugin_doctor import doctor_plugin
+    from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
+    from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
+    from eawf.runtimes.plugin_doctor import run_doctor
+
     flags: GlobalFlags = ctx.obj
     target = _resolve_target(flags)
     if runtime is None:
@@ -946,6 +989,10 @@ def package_cmd(
     ] = False,
 ) -> None:
     """Emit an installable runtime plugin tree."""
+    from eawf.runtimes.claude.plugin_install import IntegrityViolation
+    from eawf.runtimes.claude.plugin_package import package_plugin
+    from eawf.runtimes.codex import package_plugin as codex_package_plugin
+
     flags: GlobalFlags = ctx.obj
     try:
         _validate_runtime(runtime)
@@ -1094,6 +1141,8 @@ def sync_cmd(
     shared inputs (frozen timestamp, pass-through force / dry_run); the
     result aggregates per-file deltas under a single envelope.
     """
+    from eawf.runtimes.plugin_sync import PluginSyncIntegrityError, sync_plugins
+
     flags: GlobalFlags = ctx.obj
     if scope not in _VALID_SCOPES:
         cli_errors.emit_error(

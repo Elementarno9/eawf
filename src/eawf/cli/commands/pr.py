@@ -9,30 +9,19 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
 
-from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.config.layered import merge_config
-from eawf.profiles.compose import compose
-from eawf.profiles.loader import load_profile
-from eawf.render.pr_body import (
-    PrBodyNotFound,
-    PrBodyValidationError,
-    build_pr_body,
-    collect_pr_report_inputs,
-    infer_pr_kind,
-    resolve_pr_phase_id,
-)
 from eawf.state.ids import is_iter_id, is_phase_id
-from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +35,8 @@ pr_app = typer.Typer(
 
 
 def _load_state(state_path: Path) -> State:
+    from eawf.validate.strict import validate_state
+
     if not state_path.exists():
         raise cli_errors.NotFound(f"state file not found: {state_path}")
     payload = orjson.loads(state_path.read_bytes())
@@ -78,6 +69,19 @@ def pr_render(
     ] = None,
 ) -> None:
     """Render the PR body for a phase or iter as Markdown (or JSON envelope)."""
+    from eawf.artifacts.validation import validate_markdown_artifact
+    from eawf.config.layered import merge_config
+    from eawf.profiles.compose import compose
+    from eawf.profiles.loader import load_profile
+    from eawf.render.pr_body import (
+        PrBodyNotFound,
+        PrBodyValidationError,
+        build_pr_body,
+        collect_pr_report_inputs,
+        infer_pr_kind,
+        resolve_pr_phase_id,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         if not (is_phase_id(scope_id) or is_iter_id(scope_id)):

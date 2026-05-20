@@ -30,28 +30,19 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
-from pydantic import ValidationError as PydValidationError
 
-from eawf.ci_loop import (
-    failure_to_file_scope,
-    parse_mypy_failures,
-    parse_pytest_failures,
-    parse_ruff_failures,
-    summarise_failures,
-)
-from eawf.ci_loop.policy import Failure
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.lifecycle.allocator import allocate_wave_id
-from eawf.lifecycle.transitions import LifecycleError, plan_wave
 from eawf.state.ids import is_wave_id
+
+if TYPE_CHECKING:
+    from eawf.ci_loop.policy import Failure
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +70,12 @@ def _read_log(log_path: Path) -> str:
 
 def _parse_all(log_text: str) -> list[Failure]:
     """Parse every supported diagnostic kind in declaration order."""
+    from eawf.ci_loop import (
+        parse_mypy_failures,
+        parse_pytest_failures,
+        parse_ruff_failures,
+    )
+
     failures: list[Failure] = []
     failures.extend(parse_pytest_failures(log_text))
     failures.extend(parse_ruff_failures(log_text))
@@ -129,6 +126,8 @@ def wave_fix_ci_cmd(
     is allocated under the parent's iter with ``deps=[parent_wave_id]``
     and ``file_scopes`` = the sorted-unique union of failing file paths.
     """
+    from eawf.ci_loop import failure_to_file_scope, summarise_failures
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(parent_wave_id):
         cli_errors.emit_error(
@@ -257,6 +256,12 @@ def _plan_follow_up(
     journal — are identical between the two paths via
     :func:`state_transaction`.
     """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.cli._mutation import state_transaction
+    from eawf.lifecycle.allocator import allocate_wave_id
+    from eawf.lifecycle.transitions import LifecycleError, plan_wave
+
     try:
         state_path = _resolve_state_path(flags)
     except cli_errors.CliError as err:
@@ -330,6 +335,8 @@ def wave_fix_ci_loop_cmd(
     loop is written to ``state.json`` beyond the planned wave records
     themselves (each via :func:`plan_wave`).
     """
+    from eawf.ci_loop import failure_to_file_scope, summarise_failures
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(parent_wave_id):
         cli_errors.emit_error(

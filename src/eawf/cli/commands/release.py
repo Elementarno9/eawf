@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
@@ -11,15 +11,10 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.render.release_notes import (
-    ReleaseNotesValidationError,
-    build_release_notes,
-    mine_unreleased_changelog,
-    release_slug,
-)
-from eawf.state.models import State
 from eawf.state.resolve import resolve_with_reason
-from eawf.validate.strict import validate_state
+
+if TYPE_CHECKING:
+    from eawf.state.models import State
 
 release_app = typer.Typer(
     name="release",
@@ -30,6 +25,8 @@ release_app = typer.Typer(
 
 
 def _load_state(state_path: Path) -> State:
+    from eawf.validate.strict import validate_state
+
     if not state_path.exists():
         raise cli_errors.NotFound(f"state file not found: {state_path}")
     payload = orjson.loads(state_path.read_bytes())
@@ -44,6 +41,8 @@ def _load_state(state_path: Path) -> State:
 @release_app.command("changelog")
 def release_changelog(ctx: typer.Context) -> None:
     """Mine the current ``CHANGELOG.md`` unreleased section."""
+    from eawf.render.release_notes import mine_unreleased_changelog
+
     flags: GlobalFlags = ctx.obj
     path = Path("CHANGELOG.md")
     try:
@@ -75,6 +74,12 @@ def release_notes(
     ] = None,
 ) -> None:
     """Render a scrubbed release-notes draft."""
+    from eawf.render.release_notes import (
+        ReleaseNotesValidationError,
+        build_release_notes,
+        release_slug,
+    )
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path, _reason = resolve_with_reason(flags.workspace)

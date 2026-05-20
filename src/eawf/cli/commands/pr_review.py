@@ -25,25 +25,22 @@ import hashlib
 import logging
 import re
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
-from eawf.cli.commands.lifecycle import _load_state_readonly, wave_app
+from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.dispatch import render_wave_prompt
-from eawf.evidence import artifact as artifact_evi
-from eawf.evidence import audit as audit_evi
-from eawf.evidence._io import append_jsonl, store_paths
-from eawf.pr_review import Finding, parse_findings, summary_line, verdict_for
-from eawf.pr_review.policy import ReviewVerdict
 from eawf.state.enums import AuditKind, AuditVerdict, StoreKind
 from eawf.state.ids import is_wave_id
-from eawf.state.models import State, Wave
+
+if TYPE_CHECKING:
+    from eawf.pr_review import Finding
+    from eawf.pr_review.policy import ReviewVerdict
+    from eawf.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +157,9 @@ def _emit_review_request(
     caller is responsible for materialising it before handing the
     rendered prompt to the agent.
     """
+    from eawf.cli.commands.lifecycle import _load_state_readonly
+    from eawf.dispatch import render_wave_prompt
+
     loaded = _load_state_readonly(ctx)
     if loaded is None:
         return
@@ -228,6 +228,12 @@ def _attach_findings(
     audit_id_override: str | None,
 ) -> None:
     """Parse *findings_path*, attach the audit, emit the envelope."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import artifact as artifact_evi
+    from eawf.evidence import audit as audit_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.pr_review import parse_findings, summary_line, verdict_for
+
     if not findings_path.exists():
         cli_errors.emit_error(
             cli_errors.NotFound(f"findings file not found: {findings_path}"),

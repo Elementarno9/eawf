@@ -26,8 +26,6 @@ from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.state.enums import StoreKind
 from eawf.state.resolve import resolve_with_reason
-from eawf.store.compact import compact_store
-from eawf.store.paths import store_path as _canonical_store_path
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +68,9 @@ def compact_cmd(
     ] = None,
 ) -> None:
     """Compact the JSONL store for *kind* and emit the dedup report."""
+    from eawf.store.compact import compact_store
+    from eawf.store.paths import store_path as _canonical_store_path
+
     flags: GlobalFlags = ctx.obj
     effective_ws = workspace if workspace is not None else flags.workspace
 

@@ -43,7 +43,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import typer
 
@@ -51,17 +51,14 @@ import eawf
 from eawf.cli.errors import InstrumentMissing, ValidationFailed, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.doctor import checks as doctor_checks
-from eawf.doctor.report import overall_status, to_payload, to_text
 from eawf.install.instrument_probe import resolve_cache_path
-from eawf.runtimes.capabilities import (
-    RUNTIME_IDS,
-    DriftRow,
-    ProbeResult,
-    detect_drift,
-    render_drift_table,
-)
-from eawf.runtimes.probes.sdk_baseline import probe_all
+
+if TYPE_CHECKING:
+    # Annotation-only; the runtime capability/probe values are imported
+    # lazily inside _run_runtime_drift_check so importing this module for
+    # completion does not pull eawf.runtimes.capabilities (and its yaml
+    # transitive dep).
+    from eawf.runtimes.capabilities import DriftRow
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +271,14 @@ def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
         ValidationFailed: ``runtime_id`` is not one of the three
             canonical v0.3-v0.5 runtimes.
     """
+    from eawf.runtimes.capabilities import (
+        RUNTIME_IDS,
+        ProbeResult,
+        detect_drift,
+        render_drift_table,
+    )
+    from eawf.runtimes.probes.sdk_baseline import probe_all
+
     if runtime_id not in RUNTIME_IDS:
         raise ValidationFailed(
             f"unknown runtime: {runtime_id!r} (expected one of {list(RUNTIME_IDS)!r})"
@@ -348,6 +353,9 @@ def doctor(
     ] = False,
 ) -> None:
     """Run install-readiness checks."""
+    from eawf.doctor import checks as doctor_checks
+    from eawf.doctor.report import overall_status, to_payload, to_text
+
     flags: GlobalFlags = ctx.obj
     effective_flags = GlobalFlags(
         json_output=flags.json_output or json_output,

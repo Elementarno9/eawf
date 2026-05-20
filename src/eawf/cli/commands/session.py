@@ -20,25 +20,17 @@ import orjson
 import typer
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.session.recovery import DEFAULT_AGE_MINUTES, recover_sessions
-from eawf.session.store import (
-    SessionConflict,
-    SessionNotFound,
-    append_event,
-    close_session,
-    start_session,
-)
-from eawf.session.store import (
-    checkpoint as checkpoint_session,
-)
 from eawf.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
-from eawf.store.paths import store_path
 
 logger = logging.getLogger(__name__)
+
+#: Mirrors :data:`eawf.session.recovery.DEFAULT_AGE_MINUTES`; inlined as a
+#: literal so the ``session recover --age`` default does not import the heavy
+#: session/recovery subtree at command-tree build time.
+_DEFAULT_AGE_MINUTES: int = 30
 
 session_app = typer.Typer(
     name="session",
@@ -49,6 +41,8 @@ session_app = typer.Typer(
 
 def _events_path_for(state_path: Path) -> Path:
     """Return the canonical events-store JSONL path next to ``state.json``."""
+    from eawf.store.paths import store_path
+
     return store_path(state_path, StoreKind.EVENT)
 
 
@@ -103,6 +97,9 @@ def session_start_cmd(
     runtime: Annotated[str, typer.Option("--runtime", help="One of claude / opencode / generic.")],
 ) -> None:
     """Start a new agent session; rejects (scope, runtime) collisions."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.session.store import SessionConflict, start_session
+
     flags: GlobalFlags = ctx.obj
     try:
         role_enum = _resolve_role(role)
@@ -154,6 +151,10 @@ def session_checkpoint_cmd(
     ] = None,
 ) -> None:
     """Append a checkpoint event for an existing session."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.session.store import SessionNotFound
+    from eawf.session.store import checkpoint as checkpoint_session
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -200,6 +201,9 @@ def session_close_cmd(
     ] = None,
 ) -> None:
     """Close a session; required to reach the ``closed/stale/failed`` set."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.session.store import SessionNotFound, close_session
+
     flags: GlobalFlags = ctx.obj
     try:
         status_enum = _resolve_close_status(status)
@@ -242,11 +246,15 @@ def session_recover_cmd(
         int,
         typer.Option(
             "--age",
-            help=f"Heartbeat age threshold in minutes. Default {DEFAULT_AGE_MINUTES}.",
+            help=f"Heartbeat age threshold in minutes. Default {_DEFAULT_AGE_MINUTES}.",
         ),
-    ] = DEFAULT_AGE_MINUTES,
+    ] = _DEFAULT_AGE_MINUTES,
 ) -> None:
     """Mark every active/checkpointed session whose heartbeat is older than ``--age`` as stale."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.session.recovery import recover_sessions
+    from eawf.session.store import append_event
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)

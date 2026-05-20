@@ -4,22 +4,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors
 from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.render.research import render_research_markdown
 from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.research import ResearchPayload
-from eawf.store.paths import store_path
+
+if TYPE_CHECKING:
+    from eawf.store.envelope import Envelope
 
 research_app = typer.Typer(
     name="research",
@@ -31,6 +29,9 @@ install_promote_command(research_app, "research")
 
 
 def _load_research_envelope(state_path: Path, record_id: str) -> Envelope:
+    from eawf.store.envelope import Envelope
+    from eawf.store.paths import store_path
+
     path = store_path(state_path, StoreKind.RESEARCH)
     if not path.exists():
         raise errors.NotFound("research store is empty")
@@ -50,6 +51,11 @@ def research_show(
     md: Annotated[bool, typer.Option("--md", help="Render markdown artifact body.")] = False,
 ) -> None:
     """Show one research store record."""
+    from pydantic import ValidationError
+
+    from eawf.render.research import render_research_markdown
+    from eawf.store.kinds.research import ResearchPayload
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)

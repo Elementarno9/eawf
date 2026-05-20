@@ -220,7 +220,6 @@ def test_hook_run_help_shows_event_type_argument() -> None:
 
 def test_hook_run_blocking_hook_propagates_exit_9(monkeypatch) -> None:
     """A blocking hook registered via monkeypatch surfaces as exit ``9``."""
-    from eawf.cli.commands import hook as hook_cmd
     from eawf.hooks.event import HookEventType
     from eawf.hooks.runner import HookResult, HookRunner
 
@@ -239,6 +238,10 @@ def test_hook_run_blocking_hook_propagates_exit_9(monkeypatch) -> None:
                 name="block-me",
             )
 
-    monkeypatch.setattr(hook_cmd, "HookRunner", _BlockingRunner)
+    # ``hook run`` lazy-imports ``HookRunner`` from its source module inside
+    # the handler (deferred to keep the command-tree build light), so the
+    # blocking-runner seam is patched at the source rather than on the
+    # command module.
+    monkeypatch.setattr("eawf.hooks.runner.HookRunner", _BlockingRunner)
     result = runner.invoke(app, ["hook", "run", "pre_commit"], input="")
     assert result.exit_code == 3, result.stdout

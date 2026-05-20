@@ -46,54 +46,15 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
-from pydantic import ValidationError as PydValidationError
 
-from eawf.budget.policy import BLOCK_TAG, WARN_TAG
-from eawf.budget.service import (
-    check_budget as budget_check,
-)
-from eawf.budget.service import (
-    record_consumption as budget_record,
-)
-from eawf.budget.service import (
-    set_budget as budget_set,
-)
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.dispatch import (
-    DISPATCH_RUNTIMES,
-    DispatchEnvelope,
-    render_dispatch_envelope,
-    render_wave_prompt,
-)
-from eawf.lifecycle.allocator import (
-    allocate_iter_id,
-    allocate_phase_id,
-)
-from eawf.lifecycle.criterion_drift import check_wave_criteria_drift
-from eawf.lifecycle.transitions import (
-    LifecycleError,
-    activate_iter,
-    activate_phase,
-    add_subproject,
-    claim_wave,
-    close_iter,
-    close_phase,
-    close_wave,
-    fail_wave,
-    open_iter,
-    open_phase,
-    plan_wave,
-    reopen_phase,
-    switch_subproject,
-)
-from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.lock import portalock
 from eawf.state.enums import (
     AgentSessionRole,
@@ -112,13 +73,11 @@ from eawf.state.ids import (
     is_project_code,
     is_wave_id,
 )
-from eawf.state.models import Project, State
 from eawf.state.urn import build as build_urn
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.event import EventPayload
-from eawf.store.paths import store_path
-from eawf.validate.strict import validate_state as validate_state_payload
+
+if TYPE_CHECKING:
+    from eawf.dispatch import DispatchEnvelope
+    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +272,10 @@ def _append_event(
     holds the state-side sibling lock; the events store uses its own
     sibling lock so concurrent appends from unrelated callers stay safe.
     """
+    from eawf.store.append import append_envelope
+    from eawf.store.envelope import Envelope
+    from eawf.store.kinds.event import EventPayload
+
     args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
     args_hash = hashlib.sha256(args_blob).hexdigest()[:16]
     now = datetime.now(UTC)
@@ -343,6 +306,8 @@ def _append_event(
 
 def _validate_or_raise(payload: dict[str, Any]) -> State:
     """Validate the candidate payload; raise ``ValidationFailed`` on error."""
+    from eawf.validate.strict import validate_state as validate_state_payload
+
     report = validate_state_payload(payload, strict_optional=False)
     if not report.ok:
         msgs = list(report.schema_errors)
@@ -373,6 +338,8 @@ def _commit_mutation(
     Returns the candidate payload (already JSON-mode-dumped) so the caller
     can compute its own envelope without a second model_dump.
     """
+    from eawf.store.paths import store_path
+
     payload = candidate.model_dump(mode="json")
     # validate the payload that will actually go to disk
     _validate_or_raise(payload)
@@ -438,6 +405,12 @@ def project_init_cmd(
     ] = "main",
 ) -> None:
     """Create a new project record at the active state path (creates the file)."""
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.state.models import Project
+    from eawf.store.paths import store_path
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
@@ -529,6 +502,8 @@ def subproject_add_cmd(
     ] = None,
 ) -> None:
     """Add a subproject under the active project."""
+    from eawf.lifecycle.transitions import add_subproject
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
@@ -562,6 +537,8 @@ def subproject_switch_cmd(
     code: Annotated[str, typer.Argument(help="Subproject code to activate.")],
 ) -> None:
     """Set the active subproject pointer."""
+    from eawf.lifecycle.transitions import switch_subproject
+
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
@@ -600,6 +577,9 @@ def phase_open_cmd(
     ] = None,
 ) -> None:
     """Open a new phase. Provide an explicit ID or use ``--auto``."""
+    from eawf.lifecycle.allocator import allocate_phase_id
+    from eawf.lifecycle.transitions import open_phase
+
     flags: GlobalFlags = ctx.obj
     if title is None:
         cli_errors.emit_error(cli_errors.InvalidInput("--title required"), flags=flags)
@@ -647,6 +627,8 @@ def phase_close_cmd(
     ] = None,
 ) -> None:
     """Close an active phase. Rejects when child iters are still open."""
+    from eawf.lifecycle.transitions import LifecycleError, close_phase
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -982,6 +964,8 @@ def phase_activate_cmd(
             return
     else:
         logger.info(f"phase_activate_cmd skip_git_gates=no_default_branch state_path={state_path}")
+    from eawf.lifecycle.transitions import activate_phase
+
     _run_mutation(
         ctx,
         command="phase activate",
@@ -999,6 +983,8 @@ def iter_activate_cmd(
     iter_id: Annotated[str, typer.Argument(help="PLANNED iter id to activate.")],
 ) -> None:
     """Flip a PLANNED iter to ACTIVE."""
+    from eawf.lifecycle.transitions import activate_iter
+
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
@@ -1023,6 +1009,8 @@ def phase_reopen_cmd(
     phase_id: Annotated[str, typer.Argument(help="Phase ID to reopen.")],
 ) -> None:
     """Reopen a closed phase. Used for follow-up iters after a phase close."""
+    from eawf.lifecycle.transitions import reopen_phase
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -1048,6 +1036,9 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     The handler renders ``ok=True`` only when every blocking item resolves to
     empty.
     """
+    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.lifecycle.wave_sha import derive_wave_sha
+
     phase = state.phases.get(phase_id)
     if phase is None:
         raise LifecycleError(f"unknown phase: {phase_id!r}")
@@ -1150,6 +1141,12 @@ def phase_prepare_close_cmd(
     Read-only by default; pass ``--no-dry-run`` to emit a ``phase prepare-close``
     event into the JSONL store. ``state.json`` is never mutated by this command.
     """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.state.models import State
+    from eawf.store.paths import store_path
+
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
@@ -1266,6 +1263,9 @@ def iter_open_cmd(
     title: Annotated[str | None, typer.Option("--title", help="Iter title.")] = None,
 ) -> None:
     """Open an iter. Pass an iter ID or a phase id (auto-allocates iter)."""
+    from eawf.lifecycle.allocator import allocate_iter_id
+    from eawf.lifecycle.transitions import open_iter
+
     flags: GlobalFlags = ctx.obj
     if title is None:
         cli_errors.emit_error(cli_errors.InvalidInput("--title required"), flags=flags)
@@ -1359,6 +1359,8 @@ def iter_close_cmd(
     audit: Annotated[str, typer.Option("--audit", help="Audit ID providing closure evidence.")],
 ) -> None:
     """Close an active iter. Rejects when child waves are still open."""
+    from eawf.lifecycle.transitions import close_iter
+
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
@@ -1412,6 +1414,8 @@ def wave_plan_cmd(
     ] = None,
 ) -> None:
     """Plan a new pending wave under an open iter."""
+    from eawf.lifecycle.transitions import plan_wave
+
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
@@ -1500,6 +1504,8 @@ def wave_claim_cmd(
     ] = False,
 ) -> None:
     """Claim a pending wave for *session*. Exactly-once across concurrent calls."""
+    from eawf.lifecycle.transitions import claim_wave
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -1591,6 +1597,9 @@ def wave_close_cmd(
     Both paths converge on the same ``state.json`` + ``event.jsonl``
     on-disk shape.
     """
+    from eawf.lifecycle.criterion_drift import check_wave_criteria_drift
+    from eawf.lifecycle.transitions import close_wave
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -1751,6 +1760,8 @@ def wave_show_cmd(
     ] = False,
 ) -> None:
     """Inspect a wave. ``--commit`` prints the pinned-or-derived SHA."""
+    from eawf.lifecycle.wave_sha import derive_wave_sha
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -1790,6 +1801,8 @@ def wave_fail_cmd(
     ] = None,
 ) -> None:
     """Mark a claimed/in-progress wave as failed with *reason*."""
+    from eawf.lifecycle.transitions import fail_wave
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -1977,6 +1990,10 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
     envelope when resolution / parse fails (caller treats ``None`` as
     "exit was already raised by ``emit_error``").
     """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.state.models import State
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -2198,6 +2215,7 @@ def wave_blocks_rebuild_cmd(
     landed against the canonical typed surface, not the inline list.
     """
     from eawf.state import wave_graph
+    from eawf.state.models import State
 
     flags: GlobalFlags = ctx.obj
     if not apply_all:
@@ -2346,6 +2364,8 @@ def wave_dispatch_cmd(
     runtime dependency on the SDK package is added; the adapter is
     render-only.
     """
+    from eawf.dispatch import DISPATCH_RUNTIMES, render_dispatch_envelope
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -2462,6 +2482,8 @@ def wave_dispatch_batch_cmd(
     :func:`wave_next_ready_cmd` would surface (deps all closed, no
     failed-dep blockers) are rendered.
     """
+    from eawf.dispatch import render_wave_prompt
+
     loaded = _load_state_readonly(ctx)
     if loaded is None:
         return
@@ -2500,6 +2522,8 @@ def wave_budget_set_cmd(
     tokens: Annotated[int, typer.Argument(help="Non-negative token cap (0 allowed).")],
 ) -> None:
     """Set ``Wave.token_budget`` for *wave_id* (non-negative integer)."""
+    from eawf.budget.service import set_budget as budget_set
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -2549,6 +2573,9 @@ def wave_budget_consume_cmd(
     so the operator can see what was attempted before deciding to raise
     the budget or split the work.
     """
+    from eawf.budget.policy import BLOCK_TAG, WARN_TAG
+    from eawf.budget.service import record_consumption as budget_record
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -2617,6 +2644,11 @@ def wave_budget_show_cmd(
     wave_id: Annotated[str, typer.Argument(help="Wave ID to inspect (read-only).")],
 ) -> None:
     """Print *wave_id*'s budget, consumption, remainder, and policy verdict."""
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.budget.service import check_budget as budget_check
+    from eawf.state.models import State
+
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -2701,6 +2733,11 @@ def _run_mutation(
     (deferred — resolved after ``mutate`` runs so handlers can capture the
     allocator-returned id rather than a placeholder).
     """
+    from pydantic import ValidationError as PydValidationError
+
+    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.state.models import State
+
     if (scope_id is None) == (scope_id_factory is None):
         raise ValueError("exactly one of scope_id or scope_id_factory must be provided")
     flags: GlobalFlags = ctx.obj

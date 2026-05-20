@@ -13,22 +13,18 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
-from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.sandbox.policy import (
-    SANDBOX_SCOPE_KINDS,
-    SandboxPolicy,
-    allocate_policy_id,
-)
+
+if TYPE_CHECKING:
+    from eawf.sandbox.policy import SandboxPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +94,11 @@ def policy_set(
     ] = None,
 ) -> None:
     """Bind allowed / denied tool lists to a wave / profile / global scope."""
+    from pydantic import ValidationError
+
+    from eawf.cli._mutation import state_transaction
+    from eawf.sandbox.policy import SANDBOX_SCOPE_KINDS, SandboxPolicy, allocate_policy_id
+
     flags: GlobalFlags = ctx.obj
     try:
         if scope_kind not in SANDBOX_SCOPE_KINDS:

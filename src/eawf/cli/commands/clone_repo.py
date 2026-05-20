@@ -30,7 +30,6 @@ from typing import Annotated
 import typer
 
 from eawf.cli import errors as cli_errors
-from eawf.cli.commands.init import init_cmd as _init_cmd
 from eawf.cli.flags import GlobalFlags
 from eawf.state.ids import is_project_code, normalize_to_project_code
 
@@ -210,6 +209,8 @@ def clone_repo_cmd(
     SSH agent, ``~/.netrc``, etc.) — the command never prompts for
     credentials.
     """
+    from eawf.cli.commands.init import init_cmd as _init_cmd
+
     flags: GlobalFlags = ctx.obj
     try:
         _validate_git_url(url)
