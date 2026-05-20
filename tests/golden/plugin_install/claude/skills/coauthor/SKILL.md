@@ -1,0 +1,41 @@
+---
+name: coauthor
+description: Resolve the Co-Authored-By trailer policy for the active repo.
+argument-hint: "[--mode=runtime|project|disabled]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /coauthor
+
+## Canonical algorithm
+
+1. Read the `vcs.coauthor` config block (`mode` ∈
+   `runtime|project|disabled`) and the caller-supplied `mode` /
+   `runtime` / `message_text` args.
+2. Run the canonical resolver (`resolve_coauthor_trailer`) to turn the
+   config + the explicit runtime opt-in into a `Co-Authored-By:` trailer
+   line (or `None` when trailers are disabled).
+3. On `mode=runtime` with no resolvable runtime (no explicit opt-in and
+   no usable default identity), degrade to `status=needs_user` so the
+   runtime adapter surfaces a `coauthor resolve` prompt rather than
+   guessing.
+
+This skill is a thin surface over the shipped co-author policy
+machinery; it does not reimplement trailer resolution.
+
+## Pre-flight checklist
+
+- [ ] Never invent an author identity — `disabled` mode rejects an
+      existing trailer in `message_text`.
+- [ ] No PII beyond the canonical author block.
+
+## Decision surfaces
+
+`status=needs_user` routes to a `coauthor resolve` `AskUserQuestion`
+when the runtime cannot be resolved.
+
+## Output contract
+
+Skill envelope with `header.skill = "/coauthor"`. Body carries mode,
+runtime, and the resolved trailer (or a reason on the needs_user path).

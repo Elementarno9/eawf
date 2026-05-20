@@ -55,6 +55,8 @@ EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 # Canonical builtin skill names. Workspace/user overlays may also emit
 # envelopes, so ``SkillName`` is intentionally open while this tuple preserves
 # deterministic builtin ordering for CLI tables and plugin rendering.
+# The eleven core/meta + /blitz skills are followed by the six C04b skills
+# (P26-W11 landed the runtime skills; P26-W26 wired the user-facing catalog).
 CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/research",
     "/prep",
@@ -67,6 +69,12 @@ CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/differentiate",
     "/flow",
     "/blitz",
+    "/coauthor",
+    "/memory",
+    "/agent-dispatch",
+    "/compress",
+    "/wave-spec",
+    "/security-review",
 )
 SkillName = str
 

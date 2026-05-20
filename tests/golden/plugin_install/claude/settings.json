@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "741fcbfb1e0f128a",
+    "hash": "c81c2facc9d6914b",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -141,6 +141,30 @@
       },
       {
         "name": "blitz",
+        "version": "1.0"
+      },
+      {
+        "name": "coauthor",
+        "version": "1.0"
+      },
+      {
+        "name": "memory",
+        "version": "1.0"
+      },
+      {
+        "name": "agent-dispatch",
+        "version": "1.0"
+      },
+      {
+        "name": "compress",
+        "version": "1.0"
+      },
+      {
+        "name": "wave-spec",
+        "version": "1.0"
+      },
+      {
+        "name": "security-review",
         "version": "1.0"
       }
     ],

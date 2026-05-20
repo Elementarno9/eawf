@@ -1,4 +1,4 @@
-"""Unit tests for the ten per-skill body Pydantic models.
+"""Unit tests for the per-skill body Pydantic models.
 
 For each body model:
 
@@ -7,9 +7,9 @@ For each body model:
   ``model_validate``;
 - ``extra='forbid'`` rejection of an unknown top-level key.
 
-These tests pin the W01 freeze: any edit to ``skills/bodies/`` after
-this wave that changes the field set should make at least one of these
-tests fail loudly so the change goes through review.
+These tests pin the W01 freeze (and the W26 C04b additions): any edit to
+``skills/bodies/`` that changes the field set should make at least one of
+these tests fail loudly so the change goes through review.
 """
 
 from __future__ import annotations
@@ -18,18 +18,24 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from eawf.skills.bodies import (
+    AgentDispatchBody,
     AuditBody,
     BlitzBody,
+    CoauthorBody,
+    CompressBody,
     DifferentiateBody,
     FlowBody,
     InitBody,
+    MemoryBody,
     PolishBody,
     PrepBody,
     ResearchBody,
     ReviewBody,
     RoadmapBody,
+    SecurityReviewBody,
     ShipBody,
     UserQuestion,
+    WaveSpecBody,
 )
 
 
@@ -402,3 +408,85 @@ def test_user_question_round_trip_2_options() -> None:
     }
     q = UserQuestion.model_validate(payload)
     assert q.model_dump(exclude_none=True) == payload
+
+
+# --- C04b bodies (P26-W26) -------------------------------------------------
+
+
+def test_coauthor_body_round_trip_and_mode_literal() -> None:
+    body = CoauthorBody(mode="runtime", trailer="Co-Authored-By: Claude <noreply@anthropic.com>")
+    _round_trip(body)
+    assert body.kind == "coauthor_resolution"
+    with pytest.raises(ValidationError, match="Input should be"):
+        CoauthorBody.model_validate({"mode": "auto"})
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        CoauthorBody.model_validate({"mode": "disabled", "unexpected": 1})
+
+
+def test_memory_body_round_trip_and_verb_literal() -> None:
+    body = MemoryBody(verb="save", name="prefs", tier="working")
+    _round_trip(body)
+    assert body.kind == "memory_operation"
+    with pytest.raises(ValidationError, match="Input should be"):
+        MemoryBody.model_validate({"verb": "drop", "tier": "working"})
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        MemoryBody.model_validate({"verb": "list", "tier": "working", "unexpected": 1})
+
+
+def test_agent_dispatch_body_round_trip_and_extra_rejected() -> None:
+    body = AgentDispatchBody(
+        wave_id="P26-I01-W26",
+        runtime_preference=["codex", "claude-code"],
+        resolved_runtime="codex",
+    )
+    _round_trip(body)
+    assert body.kind == "agent_dispatch"
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        AgentDispatchBody.model_validate({"wave_id": "X", "unexpected": 1})
+
+
+def test_compress_body_round_trip_and_extra_rejected() -> None:
+    body = CompressBody(
+        tokens_before=1000,
+        tokens_after=250,
+        ratio=0.25,
+        runtime="claude-code",
+        cache_control_applied=True,
+    )
+    _round_trip(body)
+    assert body.kind == "compression_result"
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        CompressBody.model_validate({"tokens_before": 10, "unexpected": 1})
+
+
+def test_wave_spec_body_round_trip_and_verb_literal() -> None:
+    body = WaveSpecBody(verb="validate", wave_id="P26-I01-W26")
+    _round_trip(body)
+    assert body.kind == "wave_spec_operation"
+    with pytest.raises(ValidationError, match="Input should be"):
+        WaveSpecBody.model_validate({"verb": "scaffold", "wave_id": "X"})
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        WaveSpecBody.model_validate({"verb": "init", "wave_id": "X", "unexpected": 1})
+
+
+def test_security_review_body_round_trip_and_extra_rejected() -> None:
+    body = SecurityReviewBody.model_validate(
+        {
+            "scope_id": "urn:eawf:v1:state:QR/P26",
+            "spec_path": "audit.yaml",
+            "checks_run": 1,
+            "findings": [{"name": "spec-present", "passed": True, "details": None}],
+        }
+    )
+    _round_trip(body)
+    assert body.kind == "security_review_report"
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        SecurityReviewBody.model_validate({"scope_id": "X", "unexpected": 1})
+    # Nested finding also forbids extras.
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        SecurityReviewBody.model_validate(
+            {
+                "scope_id": "X",
+                "findings": [{"name": "n", "passed": True, "unexpected": 1}],
+            }
+        )

@@ -33,6 +33,12 @@ _EXPECTED_SKILL_NAMES: set[str] = {
     "differentiate",
     "flow",
     "blitz",
+    "coauthor",
+    "memory",
+    "agent-dispatch",
+    "compress",
+    "wave-spec",
+    "security-review",
 }
 
 
@@ -106,7 +112,7 @@ def test_render_skill_md_strips_trailing_body_newlines() -> None:
     assert output.endswith("# x\n"), repr(output[-30:])
 
 
-def test_skill_registry_carries_all_ten_v01_skills() -> None:
+def test_skill_registry_carries_all_seventeen_skills() -> None:
     """The registry mirrors :data:`~eawf.render.envelope.SkillName` exactly."""
     names = {spec.skill_name for spec in SKILL_REGISTRY}
     assert names == _EXPECTED_SKILL_NAMES

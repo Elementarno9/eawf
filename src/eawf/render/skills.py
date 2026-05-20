@@ -580,6 +580,172 @@ Skill envelope with `header.skill = "/blitz"`. Body carries depth,
 depth_cap, residual_unknowns, followup_research_args, and next_actions.
 """
 
+_COAUTHOR_BODY = """# /coauthor
+
+## Canonical algorithm
+
+1. Read the `vcs.coauthor` config block (`mode` ∈
+   `runtime|project|disabled`) and the caller-supplied `mode` /
+   `runtime` / `message_text` args.
+2. Run the canonical resolver (`resolve_coauthor_trailer`) to turn the
+   config + the explicit runtime opt-in into a `Co-Authored-By:` trailer
+   line (or `None` when trailers are disabled).
+3. On `mode=runtime` with no resolvable runtime (no explicit opt-in and
+   no usable default identity), degrade to `status=needs_user` so the
+   runtime adapter surfaces a `coauthor resolve` prompt rather than
+   guessing.
+
+This skill is a thin surface over the shipped co-author policy
+machinery; it does not reimplement trailer resolution.
+
+## Pre-flight checklist
+
+- [ ] Never invent an author identity — `disabled` mode rejects an
+      existing trailer in `message_text`.
+- [ ] No PII beyond the canonical author block.
+
+## Decision surfaces
+
+`status=needs_user` routes to a `coauthor resolve` `AskUserQuestion`
+when the runtime cannot be resolved.
+
+## Output contract
+
+Skill envelope with `header.skill = "/coauthor"`. Body carries mode,
+runtime, and the resolved trailer (or a reason on the needs_user path).
+"""
+
+_MEMORY_BODY = """# /memory
+
+## Canonical algorithm
+
+1. Resolve the verb (`save` default / `list` / `forget`) and the target
+   tier (`working` default / `archival` / `retrieval`).
+2. A named verb (`save` / `forget`) without a `name` degrades to
+   `status=needs_user`.
+3. Append a single append-only `EVENT` describing the operation intent;
+   the daemon is the sole canonical writer of the memory JSONL store, so
+   the skill routes the operator to the `eawf memory` writer via
+   `next_valid_actions` rather than mutating the store itself.
+
+## Pre-flight checklist
+
+- [ ] The skill records intent only — the daemon owns the store write.
+- [ ] `save` / `forget` carry a memory entry name.
+
+## Output contract
+
+Skill envelope with `header.skill = "/memory"`. Body carries verb, name,
+and tier (or a reason on the needs_user path).
+"""
+
+_AGENT_DISPATCH_BODY = """# /agent-dispatch
+
+## Canonical algorithm
+
+1. Resolve the target `wave_id` (required; a missing id degrades to
+   `status=needs_user`).
+2. Read the `Wave.runtime_preference` ladder (or an explicit
+   `runtime_preference` arg); an explicit `runtime` arg overrides the
+   ladder head.
+3. Surface the full ladder and the resolved head. No resolvable runtime
+   is a soft `status=partial` (the dispatch can still proceed against the
+   daemon default, but the operator can pin a preference).
+4. The daemon's `agent.dispatch` RPC is the canonical mutator; the skill
+   routes to `eawf wave dispatch` via `next_valid_actions`.
+
+## Pre-flight checklist
+
+- [ ] The wave is claimed before dispatch.
+- [ ] The runtime ladder reflects how the planner sized the wave.
+
+## Output contract
+
+Skill envelope with `header.skill = "/agent-dispatch"`. Body carries
+wave_id, runtime_preference, and resolved_runtime.
+"""
+
+_COMPRESS_BODY = """# /compress
+
+## Canonical algorithm
+
+1. Read `tokens_before` (required; missing/zero degrades to
+   `status=needs_user`) and `tokens_after` (defaults to a no-op when
+   omitted; clamped so a pass can only shrink the context).
+2. Build the per-runtime compression directive (cache-control wiring) for
+   the target `runtime` (defaults to `claude-code`, the only runtime with
+   a caller-side cache-control marker). An unknown runtime degrades to
+   `status=needs_user`.
+3. Append the canonical `compression_emitted` event carrying the token
+   deltas and the realised ratio so the telemetry projector can chart
+   context pressure over a session.
+
+The model summarisation fan-out lives behind the runtime adapter's
+cache-control hook; the skill records the requested compression.
+
+## Pre-flight checklist
+
+- [ ] `tokens_before` is present and > 0.
+- [ ] The target runtime is a known runtime id.
+
+## Output contract
+
+Skill envelope with `header.skill = "/compress"`. Body carries
+tokens_before, tokens_after, ratio, runtime, and cache_control_applied.
+"""
+
+_WAVE_SPEC_BODY = """# /wave-spec
+
+## Canonical algorithm
+
+1. Resolve the verb (`init` default / `validate`) and the target
+   `wave_id` (required; a missing id degrades to `status=needs_user`).
+2. Thread the optional `mockup_waiver_reason` (C03 D11) through so a
+   downstream scaffold can carry it onto the WaveSpec without forcing an
+   ASCII mockup for non-UI waves.
+3. Append a single append-only `EVENT` describing the operation intent;
+   the daemon owns spec scaffolding + cache mutation, so the skill routes
+   to the `eawf spec` writer via `next_valid_actions`.
+
+## Pre-flight checklist
+
+- [ ] The wave exists before `init` / `validate`.
+- [ ] A Mockup-waiver reason is supplied for non-UI waves that skip the
+      ASCII mockup.
+
+## Output contract
+
+Skill envelope with `header.skill = "/wave-spec"`. Body carries verb,
+wave_id, and mockup_waiver_reason.
+"""
+
+_SECURITY_REVIEW_BODY = """# /security-review
+
+## Canonical algorithm
+
+1. Load the caller-supplied audit spec (a YAML file of declarative
+   checks) via the audit-check DSL; a missing/unreadable `spec_path`
+   degrades to `status=needs_user`.
+2. Dispatch every check through the DSL runner against the target `cwd`
+   (defaults to the process working tree).
+3. Fold the pass/fail tally into the body. The terminal status is `ok`
+   when every check passes and `failed` when any check fails (failing
+   check names surface as repair commands).
+
+When the active profile is `security` (a C08 contribution), this skill is
+a required gate for `phase close`.
+
+## Pre-flight checklist
+
+- [ ] `spec_path` points at a readable declarative audit spec.
+- [ ] The scope under review is closed.
+
+## Output contract
+
+Skill envelope with `header.skill = "/security-review"`. Body carries
+scope_id, spec_path, checks_run, and the per-check findings.
+"""
+
 
 SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
@@ -706,6 +872,54 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         user_invocable=True,
         disable_model_invocation=False,
         body=_BLITZ_BODY,
+    ),
+    SkillSpec(
+        skill_name="coauthor",
+        description="Resolve the Co-Authored-By trailer policy for the active repo.",
+        argument_hint="[--mode=runtime|project|disabled]",
+        user_invocable=True,
+        disable_model_invocation=False,
+        body=_COAUTHOR_BODY,
+    ),
+    SkillSpec(
+        skill_name="memory",
+        description="Save, list, or forget curated durable memory entries.",
+        argument_hint="save|list|forget [<name>] [--tier=working|archival|retrieval]",
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=_MEMORY_BODY,
+    ),
+    SkillSpec(
+        skill_name="agent-dispatch",
+        description="Dispatch a claimed wave to a runtime per the V8 session-reuse ladder.",
+        argument_hint="<wave-id> [--runtime=<id>]",
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=_AGENT_DISPATCH_BODY,
+    ),
+    SkillSpec(
+        skill_name="compress",
+        description="Compress the session conversation when context approaches the limit.",
+        argument_hint="[--tokens-before=<n>] [--tokens-after=<n>] [--runtime=<id>]",
+        user_invocable=True,
+        disable_model_invocation=False,
+        body=_COMPRESS_BODY,
+    ),
+    SkillSpec(
+        skill_name="wave-spec",
+        description="Scaffold or validate a WaveSpec deliverable for a claimed wave.",
+        argument_hint="init|validate <wave-id> [--mockup-waiver-reason=<text>]",
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=_WAVE_SPEC_BODY,
+    ),
+    SkillSpec(
+        skill_name="security-review",
+        description="Run the security-audit DSL against a closed scope and emit findings.",
+        argument_hint="--spec=<path> [--cwd=<dir>]",
+        user_invocable=True,
+        disable_model_invocation=False,
+        body=_SECURITY_REVIEW_BODY,
     ),
 )
 

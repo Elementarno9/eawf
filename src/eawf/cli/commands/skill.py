@@ -68,17 +68,23 @@ from eawf.skills import (
 )
 from eawf.skills import registry
 from eawf.skills.bodies import (
+    AgentDispatchBody,
     AuditBody,
     BlitzBody,
+    CoauthorBody,
+    CompressBody,
     DifferentiateBody,
     FlowBody,
     InitBody,
+    MemoryBody,
     PolishBody,
     PrepBody,
     ResearchBody,
     ReviewBody,
     RoadmapBody,
+    SecurityReviewBody,
     ShipBody,
+    WaveSpecBody,
 )
 from eawf.skills.engine import Skill, SkillContext, run_skill
 
@@ -94,8 +100,9 @@ skill_app = typer.Typer(
 
 # Per-skill metadata used by ``eawf skill list``. Mirrors `docs/architecture/envelope.md`:
 # six core (research/prep/audit/ship/review/polish) + four meta
-# (init/roadmap/differentiate/flow) skill descriptions kept short enough
-# for a terminal table column.
+# (init/roadmap/differentiate/flow) + /blitz + the six C04b skills
+# (coauthor/memory/agent-dispatch/compress/wave-spec/security-review),
+# descriptions kept short enough for a terminal table column.
 _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
     "/research": "Investigate questions; produce a peer-reviewed brief.",
     "/prep": "Plan a wave: enumerate steps, success criteria, instruments.",
@@ -108,6 +115,12 @@ _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
     "/differentiate": "Compare options and produce a differentiation matrix.",
     "/flow": "Composite skill that chains the six core skills end-to-end.",
     "/blitz": "Auto-chain research follow-ups when residual unknowns remain.",
+    "/coauthor": "Resolve the Co-Authored-By trailer policy for the active repo.",
+    "/memory": "Save, list, or forget curated durable memory entries.",
+    "/agent-dispatch": "Dispatch a claimed wave to a runtime per the V8 session-reuse ladder.",
+    "/compress": "Compress the session conversation when context approaches the limit.",
+    "/wave-spec": "Scaffold or validate a WaveSpec deliverable for a claimed wave.",
+    "/security-review": "Run the security-audit DSL against a closed scope and emit findings.",
 }
 
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the
@@ -126,6 +139,12 @@ _SKILL_BODY_MODELS: dict[SkillName, type[Any]] = {
     "/differentiate": DifferentiateBody,
     "/flow": FlowBody,
     "/blitz": BlitzBody,
+    "/coauthor": CoauthorBody,
+    "/memory": MemoryBody,
+    "/agent-dispatch": AgentDispatchBody,
+    "/compress": CompressBody,
+    "/wave-spec": WaveSpecBody,
+    "/security-review": SecurityReviewBody,
 }
 
 

@@ -11,12 +11,10 @@ Each assertion exercises the real symbol path (no mocks of the unit
 under test) so a regression in any surface fails here fast, independent
 of the deeper per-wave unit suites.
 
-One assertion is intentionally NOT here yet — it depends on a follow-up
-wave surfaced by the audit:
-
-* **W26** appends the user-facing catalog-parity assertion (the six C04b
-  skills are currently registered in the runtime registry but absent from
-  the user-facing catalog at 11; W26 closes the gap to 17).
+W26 added the user-facing catalog-parity assertion below: the six C04b
+skills were registered in the runtime registry (17) but absent from the
+user-facing catalog (11); W26 closed the gap so ``CANONICAL_SKILL_NAMES``
+and the runtime registry agree at 17, proving catalog/registry parity.
 
 W25 added the daemonless-rejection-breadth assertion below: the
 mutating-verb daemon-escalation rejection now fires at the shared
@@ -44,6 +42,7 @@ from eawf.cli import exit_codes
 from eawf.cli.app import app
 from eawf.cli.errors import ErrorEnvelope
 from eawf.config import layered
+from eawf.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter
 from eawf.runtimes.plugin_manifest import SkillManifest
@@ -156,6 +155,30 @@ def test_error_envelope_accepts_real_fields() -> None:
 def test_skill_registry_holds_seventeen_after_bootstrap() -> None:
     registered = registry.list_registered()
     assert len(registered) == 17
+
+
+# --- assertion 5b: user-facing catalog == runtime registry (W26) -----------
+
+
+def test_user_facing_catalog_matches_runtime_registry() -> None:
+    """Catalog/registry parity: ``CANONICAL_SKILL_NAMES`` == ``list_registered``.
+
+    The six C04b skills (W11) were registered in the runtime registry but
+    absent from the user-facing catalog (``eawf skill list`` read
+    ``CANONICAL_SKILL_NAMES``, frozen at 11). W26 extended the catalog to
+    17 so both surfaces agree. The names — not just the counts — must
+    match so a skill registered without a catalog row (or vice versa) is
+    caught here.
+    """
+    catalog = set(CANONICAL_SKILL_NAMES)
+    registered = set(registry.list_registered())
+    assert len(catalog) == 17
+    assert len(registered) == 17
+    assert catalog == registered, (
+        "catalog/registry drift: "
+        f"catalog-only={sorted(catalog - registered)} "
+        f"registry-only={sorted(registered - catalog)}"
+    )
 
 
 # --- assertion 6: SkillManifest invariants / BOT-06 (W10) ------------------

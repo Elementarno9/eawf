@@ -4,7 +4,7 @@ The ``skill list --json`` payload shape is consumed by
 ``skill render --format=json``, by external dashboards that surface
 ``/skill list`` JSON to operators, and by future runtime adapters
 (``claude-agent-sdk`` envelope projection in P10-W03). This module
-pins the per-row key set and the canonical ten skill names so a
+pins the per-row key set and the canonical seventeen skill names so a
 future drift in :func:`_list_payload` is caught at test time, not
 downstream.
 
@@ -30,6 +30,12 @@ _EXPECTED_SKILL_NAMES: tuple[str, ...] = (
     "/differentiate",
     "/flow",
     "/blitz",
+    "/coauthor",
+    "/memory",
+    "/agent-dispatch",
+    "/compress",
+    "/wave-spec",
+    "/security-review",
 )
 
 
@@ -42,8 +48,8 @@ def test_list_payload_top_level_keys_are_exactly_skills() -> None:
     assert set(payload.keys()) == {"skills"}
 
 
-def test_list_payload_carries_all_ten_canonical_names_in_order() -> None:
-    """The frozen ten-skill ordering is the v0.1 surface contract.
+def test_list_payload_carries_all_seventeen_canonical_names_in_order() -> None:
+    """The frozen seventeen-skill ordering is the surface contract.
     Drift in either name set or order is a breaking change."""
     payload = _list_payload()
     actual_names = [row["name"] for row in payload["skills"]]

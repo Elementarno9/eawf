@@ -138,12 +138,13 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
             registry.register(previous)
 
 
-def test_skill_list_shows_all_ten_names(cli_runner: CliRunner) -> None:
+def test_skill_list_shows_all_seventeen_names(cli_runner: CliRunner) -> None:
     """Every canonical skill name appears in the table.
 
     Post-W03 every canonical skill (six core + four meta) is registered
-    at import time and reports ``installed``. The "every name visible"
-    invariant the table contract promises is independent of the
+    at import time and reports ``installed``; W26 added the six C04b
+    skills to the user-facing catalog (17 total). The "every name
+    visible" invariant the table contract promises is independent of the
     per-skill registration state.
     """
     result = cli_runner.invoke(app, ["skill", "list"])
@@ -160,6 +161,12 @@ def test_skill_list_shows_all_ten_names(cli_runner: CliRunner) -> None:
         "/differentiate",
         "/flow",
         "/blitz",
+        "/coauthor",
+        "/memory",
+        "/agent-dispatch",
+        "/compress",
+        "/wave-spec",
+        "/security-review",
     ]
     for name in expected_names:
         assert name in result.stdout, f"missing {name!r} in: {result.stdout}"
@@ -192,7 +199,7 @@ def test_skill_list_json_payload_carries_status_and_schema(
     payload = json.loads(result.stdout)
     assert "skills" in payload
     skills = cast(list[dict[str, object]], payload["skills"])
-    assert len(skills) == 11
+    assert len(skills) == 17
     by_name = {cast(str, s["name"]): s for s in skills}
     research = by_name["/research"]
     assert research["status"] == "installed"
