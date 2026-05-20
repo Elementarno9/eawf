@@ -43,8 +43,13 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# Frozen status enum for the envelope header. Mirrors the v0.1 plan §5
-# (canonical-list row "Skill envelope | header.status").
+# Frozen status enum for the envelope header — the single source of truth
+# for the closed five-value set. Every skill's terminal status is one of
+# these; the set is deliberately closed and MUST NOT grow (a new status
+# would silently break the runtime-adapter status projections and the
+# byte-stable envelope round-trip). ``partial`` is the fifth and final
+# member; ``eawf.runtimes.plugin_manifest`` re-exports this literal rather
+# than redefining it so the freeze stays single-sourced.
 EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 
 # Canonical builtin skill names. Workspace/user overlays may also emit
