@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W19"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2975,7 +2973,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:57:56.614925Z",
+  "updated_at": "2026-05-20T15:18:34.801308Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9206,7 +9204,7 @@
         "P26-I01-W21"
       ],
       "claim_session_id": "p26-w19-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T15:18:34.123079Z",
       "commit": null,
       "deps": [
         "P26-I01-W18"
@@ -9217,15 +9215,27 @@
         "src/eawf/tui_v2/palette/command_palette.py",
         "src/eawf/tui_v2/palette/verbs.py",
         "src/eawf/tui_v2/screens/overlays/detail.py",
-        "src/eawf/tui_v2/screens/overlays/confirm.py"
+        "src/eawf/tui_v2/screens/overlays/confirm.py",
+        "src/eawf/tui_v2/palette/__init__.py",
+        "src/eawf/tui_v2/screens/__init__.py",
+        "src/eawf/tui_v2/screens/overlays/__init__.py",
+        "src/eawf/tui_v2/screens/help.py",
+        "src/eawf/tui_v2/app.py",
+        "src/eawf/tui_v2/scopes/__init__.py",
+        "tests/tui_v2/test_palette_verbs.py",
+        "tests/tui_v2/test_palette_command.py",
+        "tests/tui_v2/test_overlays_detail.py",
+        "tests/tui_v2/test_overlays_confirm.py",
+        "tests/tui_v2/test_overlays_modal_stack.py",
+        "tests/tui_v2/test_overlays_help.py"
       ],
       "id": "P26-I01-W19",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:17.840075Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "all keybindings fixed in code per D11 (arrows + PageUp/PageDown/Home/End + vim aliases h/j/k/l/gg/G); ? opens HelpScreen full keymap overlay"
       ],
@@ -10028,10 +10038,10 @@
       "branch": "feature/eawf-v0.1-p26-w19",
       "created_at": "2026-05-20T14:57:56.614925Z",
       "id": "WT-P26-I01-W19-1779289076",
-      "merged_commit": null,
+      "merged_commit": "f54cc86",
       "owner_session_id": "p26-w19-exec",
       "path": ".ea/worktrees/p26-w19",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W19"
     },
     "WT-P26-I01-W23-1779235537": {
