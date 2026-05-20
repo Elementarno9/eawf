@@ -1531,8 +1531,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W13",
-      "P26-I01-W09"
+      "P26-I01-W13"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2953,7 +2952,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:15:09.353450Z",
+  "updated_at": "2026-05-20T13:23:48.055553Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8804,7 +8803,7 @@
         "P26-I01-W15"
       ],
       "claim_session_id": "p26-w09-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:23:47.492022Z",
       "commit": null,
       "deps": [
         "P26-I01-W08"
@@ -8818,10 +8817,10 @@
       "id": "P26-I01-W09",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:11.026501Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/workflow/test_coauthor_envelope.py covers (a) runtime auto-detect",
         "(b) project override",
@@ -9805,10 +9804,10 @@
       "branch": "feature/eawf-v0.1-p26-w09",
       "created_at": "2026-05-20T13:12:01.203087Z",
       "id": "WT-P26-I01-W09-1779282721",
-      "merged_commit": null,
+      "merged_commit": "7828ac8",
       "owner_session_id": "p26-w09-exec",
       "path": ".ea/worktrees/p26-w09",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W09"
     },
     "WT-P26-I01-W10-1779281346": {
