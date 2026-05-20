@@ -110,8 +110,57 @@ def _source_hint(shell: Shell, path: Path) -> str:
     return f"add `source {path}` to your ~/.bashrc, or restart bash"
 
 
+#: Typer 0.25.1's zsh completion ``eval`` line. It exports only
+#: ``_TYPER_COMPLETE_ARGS``; click >=8.2's zsh completion handler reads
+#: ``COMP_WORDS`` / ``COMP_CWORD`` (its zsh handler converged on the bash
+#: protocol), so the unpatched zsh script crashes at completion time with
+#: ``KeyError: 'COMP_WORDS'``. typer 0.25.1 is the newest release, so the fix
+#: lives here rather than in a dependency bump.
+_TYPER_ZSH_EVAL = (
+    '  eval $(env _TYPER_COMPLETE_ARGS="${words[1,$CURRENT]}" '
+    f"{_COMPLETE_VAR}=complete_zsh {_PROG_NAME})"
+)
+
+#: Replacement zsh ``eval`` line that also exports the two vars click reads.
+#: ``${words[*]}`` is the full command line click splits back into
+#: ``COMP_WORDS``; ``CURRENT`` is zsh's 1-based cursor-word index, so
+#: ``CURRENT - 1`` is the 0-based ``COMP_CWORD``. ``_TYPER_COMPLETE_ARGS`` is
+#: kept so a future typer/click that reads it still works.
+_ZSH_EVAL_FIXED = (
+    "  eval $(env "
+    'COMP_WORDS="${words[*]}" '
+    "COMP_CWORD=$((CURRENT - 1)) "
+    '_TYPER_COMPLETE_ARGS="${words[1,$CURRENT]}" '
+    f"{_COMPLETE_VAR}=complete_zsh {_PROG_NAME})"
+)
+
+
+def _patch_zsh_completion(script: str) -> str:
+    """Repair typer's zsh completion script for click >=8.2.
+
+    typer 0.25.1's zsh template exports ``_TYPER_COMPLETE_ARGS`` only, but the
+    installed click reads ``COMP_WORDS`` / ``COMP_CWORD`` — the mismatch makes
+    the emitted script crash at tab-completion with ``KeyError: 'COMP_WORDS'``.
+    This rewrites the ``eval`` line to also export those vars.
+
+    Args:
+        script: The raw zsh completion script from typer's generator.
+
+    Returns:
+        The patched script. If typer's template ever changes such that the
+        known ``eval`` line is absent, the script is returned unchanged so
+        ``show`` / ``install`` never silently emit a broken-and-unpatched or
+        empty file.
+    """
+    return script.replace(_TYPER_ZSH_EVAL, _ZSH_EVAL_FIXED)
+
+
 def _render_script(shell: Shell) -> str:
     """Generate the completion script for *shell* via Typer's generator.
+
+    The zsh script is post-processed by :func:`_patch_zsh_completion` to
+    repair a typer/click completion-protocol mismatch. Bash and fish use
+    click's native protocol unchanged.
 
     Args:
         shell: Target shell flavour.
@@ -119,11 +168,14 @@ def _render_script(shell: Shell) -> str:
     Returns:
         The completion script body (no trailing newline guarantee).
     """
-    return get_completion_script(
+    script = get_completion_script(
         prog_name=_PROG_NAME,
         complete_var=_COMPLETE_VAR,
         shell=shell.value,
     )
+    if shell is Shell.ZSH:
+        return _patch_zsh_completion(script)
+    return script
 
 
 @completion_app.command(name="show")
