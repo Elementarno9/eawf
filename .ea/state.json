@@ -1530,7 +1530,12 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W01",
+      "P26-I01-W02",
+      "P26-I01-W03",
+      "P26-I01-W23"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2949,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-19T23:58:40.345364Z",
+  "updated_at": "2026-05-20T00:05:37.881558Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8524,7 +8529,7 @@
     "P26-I01-W01": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w01-exec",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -8544,7 +8549,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "5 skills (research/audit/review/differentiate/blitz) flip disable-model-invocation to false; goldens regen; pre-commit green"
       ],
@@ -8558,7 +8563,7 @@
       "blocks": [
         "P26-I01-W04"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w02-exec",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -8577,21 +8582,21 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "no deprecated_runtime_kind warning fires on validate of migrated config"
       ],
       "title": "fix: C08 config migration — drop legacy lifecycle/plugins + rewrite runtime.kind",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W02-1779235535"
     },
     "P26-I01-W03": {
       "agent_role": "executor",
       "blocks": [
         "P26-I01-W04"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w03-exec",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -8609,14 +8614,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "registry.* RPCs untouched (already pass path as param)"
       ],
       "title": "fix: C02 daemon config/state RPCs accept per-request repo_root",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W03-1779235536"
     },
     "P26-I01-W04": {
       "agent_role": "executor",
@@ -9299,7 +9304,7 @@
     "P26-I01-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w23-exec",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9318,7 +9323,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "commit_prefix_lint accepts [P##] sans -W##/-CORE for type=state path-whitelisted commits; legacy [P##-CORE] regex branch retained for back-compat",
         "state-bookkeeping path whitelist (state.json + event.jsonl + audit.jsonl + .secrets.baseline) triggers on commit type == 'state' not on -CORE suffix",
@@ -9329,7 +9334,7 @@
       "title": "chore: drop -CORE mandate from commit-prefix lint + rebind whitelist to type=state",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W23-1779235537"
     }
   },
   "workspace": null,
@@ -9696,6 +9701,39 @@
       "path": ".ea/worktrees/p25-w18",
       "status": "merged",
       "wave_id": "P25-I01-W18"
+    },
+    "WT-P26-I01-W02-1779235535": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w02",
+      "created_at": "2026-05-20T00:05:35.859831Z",
+      "id": "WT-P26-I01-W02-1779235535",
+      "merged_commit": null,
+      "owner_session_id": "p26-w02-exec",
+      "path": ".ea/worktrees/p26-w02",
+      "status": "active",
+      "wave_id": "P26-I01-W02"
+    },
+    "WT-P26-I01-W03-1779235536": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w03",
+      "created_at": "2026-05-20T00:05:36.847096Z",
+      "id": "WT-P26-I01-W03-1779235536",
+      "merged_commit": null,
+      "owner_session_id": "p26-w03-exec",
+      "path": ".ea/worktrees/p26-w03",
+      "status": "active",
+      "wave_id": "P26-I01-W03"
+    },
+    "WT-P26-I01-W23-1779235537": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w23",
+      "created_at": "2026-05-20T00:05:37.881558Z",
+      "id": "WT-P26-I01-W23-1779235537",
+      "merged_commit": null,
+      "owner_session_id": "p26-w23-exec",
+      "path": ".ea/worktrees/p26-w23",
+      "status": "active",
+      "wave_id": "P26-I01-W23"
     }
   }
 }
