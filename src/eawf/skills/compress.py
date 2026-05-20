@@ -19,6 +19,11 @@ Honoured args:
   because there is nothing to compress against).
 - ``tokens_after`` — context token count after compression. Defaults
   to ``tokens_before`` (a no-op ratio of 1.0) when omitted.
+- ``runtime`` — canonical runtime id the compression pass targets.
+  Defaults to ``claude-code`` (the only runtime exposing a caller-side
+  cache-control marker, §5.6); an unknown id degrades to
+  ``status=needs_user``. Drives the cache-control wiring recorded in the
+  emitted event payload.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ import logging
 from typing import Any
 
 from eawf.render.envelope import SkillName
+from eawf.runtimes.cache_control import compression_directive
 from eawf.runtimes.plugin_manifest import SkillManifest
 from eawf.skills._common import (
     emit_event,
@@ -37,6 +43,12 @@ from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.skills.registry import register
 
 logger = logging.getLogger(__name__)
+
+#: Default runtime for a ``/compress`` pass when the caller names none.
+#: ``claude-code`` is the only runtime with a caller-side cache-control
+#: marker (§5.6), so it is the natural default for the cache-control
+#: wiring.
+_DEFAULT_RUNTIME = "claude-code"
 
 
 MANIFEST = SkillManifest(
@@ -100,6 +112,30 @@ class CompressSkill(Skill):
         tokens_after = min(tokens_after, tokens_before)
         ratio = round(tokens_after / tokens_before, 4)
 
+        runtime_id = str(args.get("runtime") or _DEFAULT_RUNTIME)
+        # Wire the cache-control side (C04d D-d2): build the per-runtime
+        # compression directive so the emitted event records whether the
+        # post-compression prefix carried a caller-side cache-control
+        # marker. An unknown runtime id is a caller error, not a crash.
+        try:
+            directive = compression_directive(
+                runtime_id=runtime_id,
+                tokens_before=tokens_before,
+                tokens_after=tokens_after,
+            )
+        except ValueError:
+            return SkillResult(
+                status="needs_user",
+                body={
+                    "kind": "compression_result",
+                    "tokens_before": tokens_before,
+                    "tokens_after": tokens_after,
+                    "ratio": ratio,
+                    "reason": f"unknown runtime: {runtime_id!r}",
+                },
+                next_valid_actions=["eawf skill run /compress"],
+            )
+
         evt_id = emit_event(
             state_path=state_path,
             scope_id=scope_id,
@@ -109,6 +145,8 @@ class CompressSkill(Skill):
                 "tokens_before": tokens_before,
                 "tokens_after": tokens_after,
                 "ratio": ratio,
+                "runtime": directive.runtime_id,
+                "cache_control_applied": directive.cache_control_applied,
             },
         )
 
@@ -119,6 +157,8 @@ class CompressSkill(Skill):
                 "tokens_before": tokens_before,
                 "tokens_after": tokens_after,
                 "ratio": ratio,
+                "runtime": directive.runtime_id,
+                "cache_control_applied": directive.cache_control_applied,
             },
             persisted_store_records=[evt_id],
             next_valid_actions=["eawf skill run /compress"],

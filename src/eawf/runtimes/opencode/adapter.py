@@ -16,6 +16,7 @@ until §8 Q1 ships the documented path in v0.4.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import UTC, datetime
@@ -25,8 +26,11 @@ from eawf.runtimes.adapter import (
     RuntimeAdapter,
     SessionResumeFailedError,
 )
+from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.selector import runtime_supports
 from eawf.state.models import SessionAttempt, Wave
+
+logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate[_ -]?limit)\b", re.IGNORECASE)
 _AUTH_RE = re.compile(
@@ -75,11 +79,21 @@ class OpenCodeAdapter:
     ) -> SessionAttempt:
         """Construct a fresh-session :class:`SessionAttempt` row.
 
-        ``cache_prefix`` is accepted for Protocol parity but ignored:
-        OpenCode's provider injects ``cache_control`` internally
-        (§5.6); the eawf adapter has no caller-side knob.
+        ``cache_prefix`` is routed through
+        :func:`~eawf.runtimes.cache_control.inject_cache_control` for
+        boundary parity, but OpenCode is a **no-op path** (C04d D-d2 /
+        §5.6): the bundled ``@ai-sdk/anthropic`` provider injects
+        ``cache_control`` internally and the OAuth-Claude path strips
+        any caller-side marker (upstream ``#17910``), so the eawf adapter
+        has no caller-side knob and returns the prefix unchanged.
         """
 
+        injected_prefix = inject_cache_control(
+            runtime_id=self.id,
+            cache_prefix=cache_prefix,
+        )
+        if injected_prefix is not None:
+            logger.debug(f"open_session runtime={self.id!r} cache_control=no_op")
         session_id = str(uuid.uuid4())
         attempts = sorted(wave.sessions)
         next_attempt = (max(attempts) + 1) if attempts else 1

@@ -14,6 +14,7 @@ typed row + parse subprocess outcomes. P26 wires the actual
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import UTC, datetime
@@ -23,8 +24,11 @@ from eawf.runtimes.adapter import (
     RuntimeAdapter,
     SessionResumeFailedError,
 )
+from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.selector import runtime_supports
 from eawf.state.models import SessionAttempt, Wave
+
+logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate_limit_error|rate[_ -]?limit)\b", re.IGNORECASE)
 _AUTH_RE = re.compile(
@@ -74,8 +78,21 @@ class ClaudeAdapter:
         ships the typed contract. The returned row carries an
         adapter-allocated ``session_id`` UUID and the opaque
         ``session_log_handle`` per rule 16.
+
+        Per C04d D-d2 the caller-side ``cache_prefix`` is routed through
+        :func:`~eawf.runtimes.cache_control.inject_cache_control`, which
+        appends the Claude ``<cache_control type="ephemeral" />``
+        breakpoint (``claude-code`` is the only runtime that accepts a
+        caller-side marker, §5.6). The injected prefix feeds the live
+        subprocess spawn that lands in P26-SURFACES.
         """
 
+        injected_prefix = inject_cache_control(
+            runtime_id=self.id,
+            cache_prefix=cache_prefix,
+        )
+        if injected_prefix is not None:
+            logger.debug(f"open_session runtime={self.id!r} cache_control=injected")
         session_id = str(uuid.uuid4())
         attempts = sorted(wave.sessions)
         next_attempt = (max(attempts) + 1) if attempts else 1
