@@ -1531,7 +1531,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W11",
       "P26-I01-W07",
       "P26-I01-W13",
       "P26-I01-W09"
@@ -2955,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:12:01.203087Z",
+  "updated_at": "2026-05-20T13:14:36.205470Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8878,7 +8877,7 @@
         "P26-I01-W15"
       ],
       "claim_session_id": "p26-w11-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:14:35.597198Z",
       "commit": null,
       "deps": [
         "P26-I01-W10"
@@ -8891,15 +8890,16 @@
         "src/eawf/skills/agent_dispatch.py",
         "src/eawf/skills/compress.py",
         "src/eawf/skills/wave_spec.py",
-        "src/eawf/skills/security_review.py"
+        "src/eawf/skills/security_review.py",
+        "src/eawf/skills/_bootstrap.py"
       ],
       "id": "P26-I01-W11",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:12.357101Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "C00 17-skill catalog drift closed; all 17 skills (11 original + 6 new) appear in skill registry per D-b4"
       ],
@@ -9828,10 +9828,10 @@
       "branch": "feature/eawf-v0.1-p26-w11",
       "created_at": "2026-05-20T13:01:06.375524Z",
       "id": "WT-P26-I01-W11-1779282066",
-      "merged_commit": null,
+      "merged_commit": "299cd98",
       "owner_session_id": "p26-w11-exec",
       "path": ".ea/worktrees/p26-w11",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W11"
     },
     "WT-P26-I01-W12-1779282067": {
