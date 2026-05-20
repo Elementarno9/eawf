@@ -1552,7 +1552,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W20",
       "P26-I01-W21"
     ],
     "iter_id": null,
@@ -2976,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T15:19:16.935255Z",
+  "updated_at": "2026-05-20T15:40:04.801758Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9253,7 +9252,7 @@
         "P26-I01-W22"
       ],
       "claim_session_id": "p26-w20-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T15:40:04.079162Z",
       "commit": null,
       "deps": [
         "P26-I01-W19"
@@ -9265,15 +9264,21 @@
         "src/eawf/tui_v2/screens/overlays/needs_user.py",
         "src/eawf/tui_v2/screens/overlays/audit_running.py",
         "src/eawf/tui_v2/screens/overlays/audit_failed.py",
-        "src/eawf/tui_v2/palette/verbs.py"
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/screens/overlays/__init__.py",
+        "tests/tui_v2/test_overlays_plan_preview.py",
+        "tests/tui_v2/test_overlays_needs_user.py",
+        "tests/tui_v2/test_overlays_audit_running.py",
+        "tests/tui_v2/test_overlays_audit_failed.py",
+        "tests/tui_v2/test_overlays_verb_wiring.py"
       ],
       "id": "P26-I01-W20",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:18.479258Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "AuditFailedModal renders mutating menu (retry/split/land-partial/abandon/scope-change) per D17; each action dispatches via eawf agent dispatch; modal status line streams 'dispatching <action> -> <runtime> · attempt <n>' per D27"
       ],
@@ -10054,10 +10059,10 @@
       "branch": "feature/eawf-v0.1-p26-w20",
       "created_at": "2026-05-20T15:19:16.110596Z",
       "id": "WT-P26-I01-W20-1779290356",
-      "merged_commit": null,
+      "merged_commit": "0ebdfcb",
       "owner_session_id": "p26-w20-exec",
       "path": ".ea/worktrees/p26-w20",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W20"
     },
     "WT-P26-I01-W21-1779290356": {
