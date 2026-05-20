@@ -1531,7 +1531,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W05",
       "P26-I01-W06",
       "P26-I01-W08",
       "P26-I01-W11",
@@ -2956,7 +2955,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:01:07.217885Z",
+  "updated_at": "2026-05-20T13:01:59.849920Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8670,7 +8669,7 @@
         "P26-I01-W07"
       ],
       "claim_session_id": "p26-w05-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:01:59.197220Z",
       "commit": null,
       "deps": [
         "P26-I01-W04"
@@ -8686,10 +8685,10 @@
       "id": "P26-I01-W05",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:08.187434Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/cli/test_daemon_escalation.py covers (a) mutating verb auto-spawns daemon",
         "(b) read verb in daemonless mode",
@@ -9767,10 +9766,10 @@
       "branch": "feature/eawf-v0.1-p26-w05",
       "created_at": "2026-05-20T12:49:04.066779Z",
       "id": "WT-P26-I01-W05-1779281344",
-      "merged_commit": null,
+      "merged_commit": "6bb9036",
       "owner_session_id": "p26-w05-exec",
       "path": ".ea/worktrees/p26-w05",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W05"
     },
     "WT-P26-I01-W06-1779281344": {
