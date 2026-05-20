@@ -420,6 +420,14 @@ from eawf.cli.commands.spec import spec_app  # noqa: E402
 app.add_typer(spec_app, name="spec", rich_help_panel=panel_for("spec"))
 # --- end P25 W03 ---
 
+# --- P26 W06 completion + help registrations (C05 § 5.6 / § 5.7) ---
+from eawf.cli.commands.completion import completion_app  # noqa: E402
+from eawf.cli.commands.help import help_app  # noqa: E402
+
+app.add_typer(completion_app, name="completion", rich_help_panel=panel_for("completion"))
+app.add_typer(help_app, name="help", rich_help_panel=panel_for("help"))
+# --- end P26 W06 ---
+
 
 def main() -> None:
     app()

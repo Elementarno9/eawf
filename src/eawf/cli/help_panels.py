@@ -108,6 +108,8 @@ COMMAND_PANELS: dict[str, str] = {
     "sync": "ship",
     "wiki": "ship",
     # ui: surfaces that drive the terminal display.
+    "completion": "ui",
+    "help": "ui",
     "render-output": "ui",
     "status": "ui",
     "tui": "ui",
