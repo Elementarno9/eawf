@@ -4,13 +4,16 @@ Each overlay is a Textual :class:`~textual.screen.ModalScreen` pushed on
 top of a scope screen, capped at a stack depth of 3 by the App. W19 shipped
 :class:`DetailModal` (the row-drill-in card the W17 widgets emit selection
 messages into) and :class:`ConfirmModal` (the yes/no destructive-op
-confirmation). This wave (P26-W20) adds the plan-mode + needs_user + audit
-overlays: :class:`PlanPreviewModal` (the ``/prep`` wave-DAG preview),
-:class:`NeedsUserModal` (the ``status=needs_user`` AskUserQuestion surface),
-:class:`AuditRunningModal` (live audit progress), and
-:class:`AuditFailedModal` (the D17 mutating repair menu). The remaining
-metrics / events / pr-list / config overlays the C06 brief §5.7 enumerates
-land in later waves of this band and register here as they arrive.
+confirmation). The P26-W20 + W21 waves add the plan-mode, needs_user,
+audit, and metrics/pr/events overlays: :class:`PlanPreviewModal` (the
+``/prep`` wave-DAG preview), :class:`NeedsUserModal` (the
+``status=needs_user`` AskUserQuestion surface), :class:`AuditRunningModal`
+(live audit progress), :class:`AuditFailedModal` (the D17 mutating repair
+menu), :class:`MetricsModal` (the V7 ``/metrics`` 3x2 dashboard, D9),
+:class:`PrListModal` (the ``/pr`` open-PRs list, D21), and
+:class:`EventsModal` (the ``/events`` last-50 ring buffer). The remaining
+config overlays the C06 brief §5.7 enumerates land in later waves and
+register here as they arrive.
 """
 
 from __future__ import annotations
@@ -33,6 +36,18 @@ from eawf.tui_v2.screens.overlays.detail import (
     DetailModal,
     resolve_detail,
 )
+from eawf.tui_v2.screens.overlays.events import (
+    EventRow,
+    EventsModal,
+    load_recent_events,
+    open_events,
+)
+from eawf.tui_v2.screens.overlays.metrics import (
+    MetricsArgs,
+    MetricsModal,
+    open_metrics,
+    parse_metrics_args,
+)
 from eawf.tui_v2.screens.overlays.needs_user import NeedsUserModal, open_needs_user
 from eawf.tui_v2.screens.overlays.plan_preview import (
     PlanIterRow,
@@ -41,6 +56,12 @@ from eawf.tui_v2.screens.overlays.plan_preview import (
     PlanWaveRow,
     build_plan_tree,
     open_plan_preview,
+)
+from eawf.tui_v2.screens.overlays.pr_list import (
+    PrListModal,
+    PrRow,
+    open_pr_list,
+    parse_pr_rows,
 )
 
 __all__ = [
@@ -52,16 +73,28 @@ __all__ = [
     "ConfirmModal",
     "DetailCard",
     "DetailModal",
+    "EventRow",
+    "EventsModal",
+    "MetricsArgs",
+    "MetricsModal",
     "NeedsUserModal",
     "PlanIterRow",
     "PlanPreviewModal",
     "PlanTree",
     "PlanWaveRow",
+    "PrListModal",
+    "PrRow",
     "build_plan_tree",
     "format_dispatch_line",
+    "load_recent_events",
     "open_audit_failed",
     "open_audit_running",
+    "open_events",
+    "open_metrics",
     "open_needs_user",
     "open_plan_preview",
+    "open_pr_list",
+    "parse_metrics_args",
+    "parse_pr_rows",
     "resolve_detail",
 ]

@@ -212,6 +212,71 @@ def _active_audit_id(app: App[None]) -> str:
     return "audit"
 
 
+def _handle_metrics(app: App[None], args: str) -> None:
+    """Open the V7 ``/metrics`` 3x2 dashboard overlay (the ``/metrics`` verb).
+
+    Parses the ``--window 7d|30d|90d`` + ``--scope <urn>`` flags from
+    *args* and opens
+    :class:`~eawf.tui_v2.screens.overlays.metrics.MetricsModal` through the
+    modal-cap-aware ``push_modal`` (via
+    :func:`~eawf.tui_v2.screens.overlays.metrics.open_metrics`). The six
+    tiles open with their placeholders and arm the 5 s refresh seam; they
+    fill in once the daemon telemetry-projection RPC is wired (C06 §5.10 /
+    C09 + C02). Read-only — opening the dashboard mutates nothing.
+
+    Args:
+        app: The running App.
+        args: The raw ``/metrics`` arg string (window + scope flags).
+    """
+    from eawf.tui_v2.screens.overlays.metrics import open_metrics, parse_metrics_args
+
+    open_metrics(app, parse_metrics_args(args))
+
+
+def _handle_pr(app: App[None], args: str) -> None:
+    """Open the ``/pr`` open-PRs overlay (the ``/pr`` verb).
+
+    Opens :class:`~eawf.tui_v2.screens.overlays.pr_list.PrListModal`
+    through the modal-cap-aware ``push_modal`` (via
+    :func:`~eawf.tui_v2.screens.overlays.pr_list.open_pr_list`). The list
+    opens empty with the ``gh``-shell-out placeholder; the lazy
+    ``gh pr list --json`` fetch + 60 s cache (D21) lands later this band —
+    the overlay degrades gracefully when ``gh`` is absent. Read-only.
+
+    Args:
+        app: The running App.
+        args: The raw ``/pr`` arg string (unused this wave).
+    """
+    from eawf.tui_v2.screens.overlays.pr_list import open_pr_list
+
+    open_pr_list(app, ())
+
+
+def _handle_events(app: App[None], args: str) -> None:
+    """Open the ``/events`` last-50 event overlay (the ``/events`` verb).
+
+    Reads the tail of the scope's on-disk event store
+    (``<state_dir>/store/event.jsonl``) read-only via
+    :func:`~eawf.tui_v2.screens.overlays.events.load_recent_events` and
+    opens :class:`~eawf.tui_v2.screens.overlays.events.EventsModal`
+    through the modal-cap-aware ``push_modal`` (via
+    :func:`~eawf.tui_v2.screens.overlays.events.open_events`). The live
+    daemon-push ring buffer (C06 §5.8) prepends to this seed tail when the
+    subscription lands; the ``f`` filter cycle + render path is reused.
+
+    Args:
+        app: The running App.
+        args: The raw ``/events`` arg string (unused this wave).
+    """
+    from eawf.state.enums import StoreKind
+    from eawf.store.paths import store_path
+    from eawf.tui_v2.screens.overlays.events import load_recent_events, open_events
+
+    state_path = getattr(app, "_state_path", None)
+    event_path = store_path(state_path, StoreKind.EVENT) if state_path is not None else None
+    open_events(app, load_recent_events(event_path))
+
+
 #: The static verb registry (D13). Order is display order in the palette
 #: before fuzzy ranking. Handlers that land in a later wave use
 #: :func:`_placeholder` so the registry is complete now and the follow-up
@@ -249,15 +314,15 @@ VERBS: tuple[PaletteVerb, ...] = (
         SCOPES_ALL,
         args_grammar="<name>",
     ),
-    PaletteVerb("/events", "last 50 events overlay", _placeholder("/events"), SCOPES_ALL),
+    PaletteVerb("/events", "last 50 events overlay", _handle_events, SCOPES_ALL),
     PaletteVerb(
         "/metrics",
-        "metrics dashboard",
-        _placeholder("/metrics"),
+        "metrics dashboard (3x2 tiles)",
+        _handle_metrics,
         SCOPES_ALL,
-        args_grammar="[--window 7d|30d|90d]",
+        args_grammar="[--window 7d|30d|90d] [--scope <urn>]",
     ),
-    PaletteVerb("/pr", "open PRs (gh shell-out)", _placeholder("/pr"), SCOPES_ALL),
+    PaletteVerb("/pr", "open PRs (gh shell-out, cached)", _handle_pr, SCOPES_ALL),
     PaletteVerb("/help", "verb help / keymap", _handle_help, SCOPES_ALL, args_grammar="[verb]"),
     PaletteVerb("/quit", "quit", _handle_quit, SCOPES_ALL),
     # --- wave-board read-only verbs (V11 — read-only only) ----------------
