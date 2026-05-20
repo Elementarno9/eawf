@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W29"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2978,7 +2976,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T19:09:22.118803Z",
+  "updated_at": "2026-05-20T19:18:09.574888Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9578,7 +9576,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w29-fix",
-      "closed_at": null,
+      "closed_at": "2026-05-20T19:18:08.967365Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9590,10 +9588,10 @@
       "id": "P26-I01-W29",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T19:09:20.681389Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "zsh completion script generated from click's native ZshComplete.source() (parses type/key/descr triples via _describe; NO eval of raw output) with _EAWF_COMPLETE value swapped zsh_complete->complete_zsh so typer's interceptor routes it; W28 eval-line _patch_zsh_completion removed as superseded",
         "sourcing the generated zsh script under compinit no longer errors with 'bad pattern' (the W28 partial fix exposed this output-layer crash)",
@@ -10274,10 +10272,10 @@
       "branch": "feature/eawf-v0.1-p26-w29",
       "created_at": "2026-05-20T19:09:22.118803Z",
       "id": "WT-P26-I01-W29-1779304162",
-      "merged_commit": null,
+      "merged_commit": "49df0a2",
       "owner_session_id": "p26-w29-fix",
       "path": ".ea/worktrees/p26-w29",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W29"
     }
   }
