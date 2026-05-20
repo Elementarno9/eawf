@@ -1533,8 +1533,7 @@
     "active_wave_ids": [
       "P26-I01-W05",
       "P26-I01-W06",
-      "P26-I01-W08",
-      "P26-I01-W10"
+      "P26-I01-W08"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2955,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T12:57:20.258922Z",
+  "updated_at": "2026-05-20T12:59:09.022317Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8843,7 +8842,7 @@
         "P26-I01-W13"
       ],
       "claim_session_id": "p26-w10-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T12:59:08.337572Z",
       "commit": null,
       "deps": [
         "P26-I01-W04"
@@ -8859,10 +8858,10 @@
       "id": "P26-I01-W10",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:11.698069Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/runtimes/test_plugin_manifest.py covers (a) extra=forbid rejection",
         "(b) non-Literal runtime rejection",
@@ -9799,10 +9798,10 @@
       "branch": "feature/eawf-v0.1-p26-w10",
       "created_at": "2026-05-20T12:49:06.528204Z",
       "id": "WT-P26-I01-W10-1779281346",
-      "merged_commit": null,
+      "merged_commit": "47dd92f",
       "owner_session_id": "p26-w10-exec",
       "path": ".ea/worktrees/p26-w10",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W10"
     },
     "WT-P26-I01-W23-1779235537": {
