@@ -1530,7 +1530,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W14"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2950,7 +2952,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:25:01.284139Z",
+  "updated_at": "2026-05-20T13:25:18.092374Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8981,7 +8983,7 @@
       "blocks": [
         "P26-I01-W15"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w14-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9002,7 +9004,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "tests/runtimes/test_cache_control.py covers (a) marker injection at adapter boundary",
         "(b) /compress event emit",
@@ -9011,7 +9013,7 @@
       "title": "feat: C04d per-runtime cache-control hook propagation + /compress wiring",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W14-1779283518"
     },
     "P26-I01-W15": {
       "agent_role": "auditor",
@@ -9851,6 +9853,17 @@
       "path": ".ea/worktrees/p26-w13",
       "status": "merged",
       "wave_id": "P26-I01-W13"
+    },
+    "WT-P26-I01-W14-1779283518": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w14",
+      "created_at": "2026-05-20T13:25:18.092374Z",
+      "id": "WT-P26-I01-W14-1779283518",
+      "merged_commit": null,
+      "owner_session_id": "p26-w14-exec",
+      "path": ".ea/worktrees/p26-w14",
+      "status": "active",
+      "wave_id": "P26-I01-W14"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
