@@ -24,10 +24,15 @@ Honoured flags:
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
+import orjson
+from pydantic import ValidationError
+
 from eawf.artifacts.validation import validate_markdown_artifact, validate_text_surface
+from eawf.config.layered import merge_config
 from eawf.render.envelope import SkillName
 from eawf.skills._common import (
     emit_event,
@@ -43,11 +48,21 @@ from eawf.skills.bodies.ship import (
 )
 from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.skills.registry import register
+from eawf.state.enums import AuditKind, AuditVerdict
+from eawf.state.ids import is_phase_id, parents_of
+from eawf.state.models import Audit, State
+from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 
 logger = logging.getLogger(__name__)
 
 
 _VALID_PR_ACTIONS: tuple[str, ...] = ("open", "ready", "draft", "close", "none")
+
+#: Audit verdicts that clear the ship gate. ``pass`` is clean; ``minor``
+#: carries triage-later findings but does not block ship (mirrors the
+#: ``AgentReportVerdict.PASS_WITH_FOLLOWUPS`` semantics surfaced by
+#: ``eawf.tui.audit_overlay``). ``major`` and a missing verdict both block.
+_SHIP_ALLOWED_VERDICTS: frozenset[AuditVerdict] = frozenset({AuditVerdict.PASS, AuditVerdict.MINOR})
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -82,6 +97,122 @@ def _coerce_path_list(value: Any) -> list[Path]:
     if isinstance(value, list):
         return [Path(str(p)) for p in value]
     return [Path(str(value))]
+
+
+def _load_state(state_path: Path) -> State | None:
+    """Return the validated :class:`State`, or ``None`` when unreadable.
+
+    Read-only and best-effort (rule 4: the daemon is the sole mutator;
+    reads are free). A missing file, malformed JSON, or schema mismatch
+    all degrade to ``None`` so the ship gate can fall through rather than
+    crash when no state document is available to gate against.
+
+    Args:
+        state_path: Resolved path of the active ``state.json``.
+
+    Returns:
+        The validated state document, or ``None`` when absent or invalid.
+    """
+    if not state_path.exists():
+        return None
+    try:
+        return State.model_validate(orjson.loads(state_path.read_bytes()))
+    except (orjson.JSONDecodeError, ValidationError) as exc:
+        logger.warning(f"_load_state could not read state at {state_path}: {exc}")
+        return None
+
+
+def _phase_id_from_scope(scope_id: str) -> str | None:
+    """Resolve the bare phase id from a state-scope URN.
+
+    The skill scope arrives as a URN (``urn:eawf:v1:state:QR/P00``) or a
+    bare lifecycle id; we take the tail after the final ``/`` then walk up
+    via :func:`eawf.state.ids.parents_of` so an iter / wave scope resolves
+    to its owning phase.
+
+    Args:
+        scope_id: The skill's state-scope URN or bare lifecycle id.
+
+    Returns:
+        The phase id, or ``None`` when the tail is not a recognised
+        lifecycle id.
+    """
+    tail = scope_id.rsplit("/", 1)[-1]
+    if is_phase_id(tail):
+        return tail
+    try:
+        parents = parents_of(tail)
+    except ValueError:
+        return None
+    return parents[0] if parents else None
+
+
+def _latest_audit_for_phase(state: State, phase_id: str) -> Audit | None:
+    """Return the most-recent audit recorded against *phase_id*.
+
+    Ship-gate audits win over other kinds; within a kind the latest
+    ``created_at`` wins. Audits scoped to the phase's iters / waves are not
+    considered — the ship gate cares about the phase-level verdict.
+
+    Args:
+        state: The loaded state document.
+        phase_id: The phase id whose audit verdict gates the ship.
+
+    Returns:
+        The selected :class:`Audit`, or ``None`` when the phase has none.
+    """
+    candidates = [a for a in (state.audits or {}).values() if a.scope_id == phase_id]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda a: (a.kind == AuditKind.SHIP_GATE, a.created_at),
+    )
+
+
+def _load_vcs_config(state_path: Path) -> VcsConfig:
+    """Load the layered ``vcs`` config block as a validated :class:`VcsConfig`.
+
+    The merge anchors on the repo root (``state.json`` lives at
+    ``<repo>/.ea/state.json``) so the repo, branch, and local layers are
+    consulted on top of the built-in defaults. The config registry already
+    owns ``vcs.pr_merge_method`` / ``vcs.squash_allowed`` / ``vcs.coauthor``;
+    this helper only reads them.
+
+    Args:
+        state_path: Resolved path of the active ``state.json``.
+
+    Returns:
+        The validated ``vcs`` config surface (built-in defaults when no
+        overlay file is present).
+    """
+    anchor = state_path.parent.parent
+    merged, _sources = merge_config(repo=anchor, workspace=anchor)
+    return VcsConfig.model_validate(merged.get("vcs", {}))
+
+
+def _resolve_coauthor_trailer_for_ship(vcs_config: VcsConfig) -> str | None:
+    """Resolve the ship run's co-author trailer via the W12 resolver.
+
+    Delegates entirely to :func:`eawf.vcs.coauthor.resolve_coauthor_trailer`;
+    co-author policy is never reimplemented here. A
+    :class:`~eawf.vcs.coauthor.CoauthorPolicyError` (e.g. a runtime with no
+    configured identity) degrades to ``None`` so trailer resolution never
+    aborts a ship — the per-commit gauntlet still enforces the trailer at
+    commit time.
+
+    Args:
+        vcs_config: The validated ``vcs`` config surface.
+
+    Returns:
+        The resolved trailer line, or ``None`` when trailers are disabled or
+        cannot be inferred.
+    """
+    try:
+        return resolve_coauthor_trailer(vcs_config.coauthor, env=os.environ)
+    except CoauthorPolicyError as exc:
+        logger.warning(f"_resolve_coauthor_trailer_for_ship: trailer unresolved: {exc}")
+        return None
 
 
 @register
@@ -143,15 +274,88 @@ class ShipSkill(Skill):
                 repair_commands=["fix artifact validation errors and rerun /ship"],
             )
 
-        # Step 1 — probe ran. Step 2: gate on audit.
+        # Step 1 — probe ran. Step 2: gate on the recorded audit verdict.
+        state = _load_state(state_path)
+        phase_id = _phase_id_from_scope(scope_id)
+        audit = (
+            _latest_audit_for_phase(state, phase_id)
+            if state is not None and phase_id is not None
+            else None
+        )
+        # When state or a matching audit is unavailable we cannot gate on a
+        # verdict; degrade open rather than block (the audit row is created
+        # by /audit, which is a precondition the operator owns). When an
+        # audit *does* exist its verdict must be ship-clearing.
+        if audit is not None and audit.verdict not in _SHIP_ALLOWED_VERDICTS:
+            verdict_label = audit.verdict.value if audit.verdict is not None else "none"
+            evt_id = emit_event(
+                state_path=state_path,
+                scope_id=scope_id,
+                event_type="ship.audit_gate",
+                summary=f"ship: audit gate blocked (verdict={verdict_label})",
+                payload={"audit_required": True, "passed": False, "verdict": verdict_label},
+            )
+            persisted_records.append(evt_id)
+            assert phase_id is not None  # narrowed: audit only set when phase_id resolved
+            return SkillResult(
+                status="failed",
+                body=ShipBody(
+                    commit_groups=[],
+                    push=None,
+                    pr=None,
+                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
+                    rollback_notes=f"audit verdict {verdict_label!r} does not clear the ship gate",
+                ).model_dump(mode="json"),
+                persisted_store_records=persisted_records,
+                state_mutations=state_mutations,
+                next_valid_actions=next_actions,
+                repair_commands=[f"/audit {phase_id} --kind ship-gate"],
+            )
+        verdict_label = (
+            audit.verdict.value if audit is not None and audit.verdict is not None else "ungated"
+        )
         evt_id = emit_event(
             state_path=state_path,
             scope_id=scope_id,
             event_type="ship.audit_gate",
-            summary="ship: audit gate (v0.1 stub allows pass)",
-            payload={"audit_required": True, "passed": True},
+            summary=f"ship: audit gate passed (verdict={verdict_label})",
+            payload={"audit_required": True, "passed": True, "verdict": verdict_label},
         )
         persisted_records.append(evt_id)
+
+        # Step 2b — gate on the configured PR merge method. Squash is
+        # rejected unless explicitly allowed; rebase / merge clear.
+        vcs_config = _load_vcs_config(state_path)
+        merge_method = vcs_config.pr_merge_method
+        if merge_method == "squash" and not vcs_config.squash_allowed:
+            evt_id = emit_event(
+                state_path=state_path,
+                scope_id=scope_id,
+                event_type="ship.merge_method_gate",
+                summary="ship: merge-method gate blocked (squash not allowed)",
+                payload={"pr_merge_method": merge_method, "squash_allowed": False},
+            )
+            persisted_records.append(evt_id)
+            return SkillResult(
+                status="failed",
+                body=ShipBody(
+                    commit_groups=[],
+                    push=None,
+                    pr=None,
+                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
+                    rollback_notes="squash merge not permitted (set vcs.squash_allowed)",
+                ).model_dump(mode="json"),
+                persisted_store_records=persisted_records,
+                state_mutations=state_mutations,
+                next_valid_actions=next_actions,
+                repair_commands=[
+                    "set vcs.pr_merge_method to rebase (or enable vcs.squash_allowed)"
+                ],
+            )
+
+        # Resolve the co-author trailer once for every commit group's
+        # message. Reuses the W12 resolver; never reimplemented here.
+        coauthor_trailer = _resolve_coauthor_trailer_for_ship(vcs_config)
 
         # Step 3 — inspect git.
         evt_id = emit_event(
@@ -173,12 +377,17 @@ class ShipSkill(Skill):
         )
         persisted_records.append(evt_id)
 
-        # Step 5 — build pending-ship artefact.
+        # Step 5 — build pending-ship artefact. The commit-group message
+        # carries the resolved co-author trailer so the per-commit gauntlet
+        # finds the required trailer already present.
         commit_groups: list[ShipCommitGroup] = []
         if do_commit:
+            message = f"[{scope_id}] feat: pending ship"
+            if coauthor_trailer is not None:
+                message = f"{message}\n\n{coauthor_trailer}"
             commit_groups.append(
                 ShipCommitGroup(
-                    message=f"[{scope_id}] feat: pending ship",
+                    message=message,
                     files=[],
                     evidence_refs=[],
                 )
