@@ -1531,8 +1531,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W01",
-      "P26-I01-W03"
+      "P26-I01-W01"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2952,7 +2951,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T00:24:53.276019Z",
+  "updated_at": "2026-05-20T00:33:57.165838Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8595,7 +8594,7 @@
         "P26-I01-W04"
       ],
       "claim_session_id": "p26-w03-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T00:33:56.431756Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -8609,10 +8608,10 @@
       "id": "P26-I01-W03",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:06.835970Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "registry.* RPCs untouched (already pass path as param)"
       ],
@@ -9716,10 +9715,10 @@
       "branch": "feature/eawf-v0.1-p26-w03",
       "created_at": "2026-05-20T00:05:36.847096Z",
       "id": "WT-P26-I01-W03-1779235536",
-      "merged_commit": null,
+      "merged_commit": "1ebca26",
       "owner_session_id": "p26-w03-exec",
       "path": ".ea/worktrees/p26-w03",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W03"
     },
     "WT-P26-I01-W23-1779235537": {
