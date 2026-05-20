@@ -2441,7 +2441,8 @@
         "P26-I01-W24",
         "P26-I01-W25",
         "P26-I01-W26",
-        "P26-I01-W27"
+        "P26-I01-W27",
+        "P26-I01-W28"
       ]
     },
     "P27-I01": {
@@ -2974,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T17:29:07.969531Z",
+  "updated_at": "2026-05-20T18:11:30.839499Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9536,6 +9537,39 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W27-1779295160"
+    },
+    "P26-I01-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "pyproject.toml",
+        "uv.lock",
+        "src/eawf/cli/commands/completion.py",
+        "tests/cli/test_completion_runtime.py"
+      ],
+      "id": "P26-I01-W28",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T18:11:30.839473Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "typer bumped to newest version whose completion runtime is compatible with click 8.3.x (prefer upgrade over pinning click down); uv.lock regenerated",
+        "the reproduce 'env _TYPER_COMPLETE_ARGS=\"eawf wave\" _EAWF_COMPLETE=complete_zsh eawf' no longer raises KeyError COMP_WORDS and emits completion candidates",
+        "new tests/cli/test_completion_runtime.py exercises the actual completion handshake (the _EAWF_COMPLETE runtime path not just the library) and asserts no crash + non-empty candidates",
+        "full suite + mypy + pre-commit green on the bumped deps (CLI goldens/help-panel snapshots regenerated if typer changed help rendering)"
+      ],
+      "title": "fix: bump typer to restore shell-completion runtime (typer 0.25.1/click 8.3.3 COMP_WORDS crash)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
