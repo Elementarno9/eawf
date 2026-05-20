@@ -1,10 +1,15 @@
 """``agent.*`` JSON-RPC methods: dispatch / session / kill.
 
-W07 wires only the **fresh-dispatch** path of ``agent.dispatch`` —
-``--continue`` resume (V8) and V5 runtime fallback land in a later
-phase. The dispatcher returns a :class:`DispatchPlan` payload (typed,
-JSON-serialisable) that W09 will turn into a real ``state.mutate``
-``AddSessionAttempt`` mutation + subprocess spawn. Until W09 lands the
+W07 wired only the **fresh-dispatch** path of ``agent.dispatch``. P26
+C04d (W13) layers the **skill -> adapter handshake** on top: when a
+caller supplies a :class:`~eawf.runtimes.plugin_manifest.SkillManifest`
+the dispatcher runs :func:`eawf.runtimes.dispatch.resolve_adapter` to
+pick the highest-preference runtime that the skill manifest can host
+*and* that resolves to a concrete adapter (rejecting an off-manifest
+``runtime`` override per C04d F-d01). The complementary V5 reactive
+switchover + V8 ``--continue`` fall-through *policy* lives in
+:mod:`eawf.runtimes.fallback`; the live subprocess spawn + ``state.mutate``
+``AddSessionAttempt`` wiring still lands later. Until that lands the
 method does **not** mutate state and does **not** spawn a subprocess —
 it computes the plan and returns it.
 
@@ -29,6 +34,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.daemon.methods import MethodContext, register
 from eawf.evidence._io import load_state
+from eawf.runtimes.dispatch import resolve_adapter
+from eawf.runtimes.plugin_manifest import SkillManifest
 from eawf.state.enums import DispatchNote
 from eawf.state.models import DispatchAnnotation, SessionAttempt
 
@@ -55,16 +62,27 @@ class DispatchParams(BaseModel):
         runtime: Optional runtime adapter override. When omitted, the
             dispatcher picks
             :class:`~eawf.state.models.Wave.runtime_preference[0]`
-            (W08 also wires a daemon-config default).
+            (W08 also wires a daemon-config default). When *skill_manifest*
+            is supplied, this override is validated against the manifest
+            ``runtime`` list (C04d F-d01).
         session_policy: V8 dispatch policy. Only ``"fresh"`` runs in
             W07 (the spec defers ``"continue"`` / V5 fallback to a
             later phase).
+        skill_manifest: Optional per-skill manifest (C04b
+            :class:`~eawf.runtimes.plugin_manifest.SkillManifest`). When
+            present the dispatcher runs the C04d skill -> adapter
+            handshake — it picks the highest-preference runtime that is
+            both hostable by the skill manifest *and* resolvable to an
+            adapter, and rejects an off-manifest *runtime* override
+            (F-d01). When omitted the legacy override-or-preference pick
+            (:func:`_pick_runtime`) runs unchanged.
     """
 
     model_config = ConfigDict(extra="forbid")
     wave_id: str = Field(min_length=1)
     runtime: str | None = None
     session_policy: SessionPolicy = "fresh"
+    skill_manifest: SkillManifest | None = None
 
 
 class DispatchPlan(BaseModel):
@@ -230,8 +248,13 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
 
     Raises:
         ValueError: When ``session_policy="continue"`` is requested
-            (the V8 continue path is deferred). The server maps this
-            to ``-32602 invalid params``.
+            (the V8 continue path is deferred); when a
+            ``skill_manifest`` is supplied and the ``runtime`` override
+            is not in its ``runtime`` list (C04d F-d01,
+            :class:`~eawf.runtimes.dispatch.AdapterManifestMismatchError`);
+            or when no manifest-listed runtime resolves to an adapter
+            (:class:`~eawf.runtimes.dispatch.AdapterResolutionError`).
+            The server maps all of these to ``-32602 invalid params``.
     """
     args = DispatchParams.model_validate(params)
     if args.session_policy == "continue":
@@ -247,7 +270,20 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
         if wave is None:
             raise ValueError(f"unknown wave: {args.wave_id!r}")
         preference = wave.runtime_preference
-    runtime = _pick_runtime(override=args.runtime, preference=preference)
+    if args.skill_manifest is not None:
+        # C04d skill -> adapter handshake: the manifest declares which
+        # runtimes can host the skill; the daemon picks the highest-
+        # preference resolvable one and rejects an off-manifest override
+        # (F-d01). ``AdapterManifestMismatchError`` subclasses
+        # ``ValueError`` so the server maps it to -32602 invalid params.
+        _adapter, handshake = resolve_adapter(
+            manifest=args.skill_manifest,
+            preference=preference,
+            override=args.runtime,
+        )
+        runtime = handshake.runtime_id
+    else:
+        runtime = _pick_runtime(override=args.runtime, preference=preference)
     plan = _build_plan(wave_id=args.wave_id, runtime=runtime, state_path=state_path)
     logger.info(
         f"dispatch wave={args.wave_id!r} runtime={runtime!r} "
