@@ -1530,7 +1530,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W15"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2950,7 +2952,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:34:32.370573Z",
+  "updated_at": "2026-05-20T13:35:07.141401Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9018,7 +9020,7 @@
       "blocks": [
         "P26-I01-W16"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w15-audit",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9041,14 +9043,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "iter P26-I01 close envelope emitted only after /audit + /polish + ship CI + PR review pass per iter-phase-close-timing"
       ],
       "title": "test: P26-I01 surfaces audit + verify-implements pass on C04+C05 deliverables",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W15-1779284107"
     },
     "P26-I01-W16": {
       "agent_role": "executor",
@@ -9862,6 +9864,17 @@
       "path": ".ea/worktrees/p26-w14",
       "status": "merged",
       "wave_id": "P26-I01-W14"
+    },
+    "WT-P26-I01-W15-1779284107": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w15",
+      "created_at": "2026-05-20T13:35:07.141401Z",
+      "id": "WT-P26-I01-W15-1779284107",
+      "merged_commit": null,
+      "owner_session_id": "p26-w15-audit",
+      "path": ".ea/worktrees/p26-w15",
+      "status": "active",
+      "wave_id": "P26-I01-W15"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
