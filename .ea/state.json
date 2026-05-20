@@ -1551,7 +1551,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W30"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2977,7 +2979,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T19:27:48.728170Z",
+  "updated_at": "2026-05-20T19:32:57.556231Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9608,7 +9610,7 @@
     "P26-I01-W30": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "op-p26-w30",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9624,7 +9626,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "heavy module-level imports relocated into command handlers (validate->state.models",
         "config->config.profile",
@@ -9642,7 +9644,7 @@
       "title": "perf: lazy-import heavy deps in CLI command handlers (completion startup ~2-3x)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W30-1779305577"
     }
   },
   "workspace": null,
@@ -10317,6 +10319,17 @@
       "path": ".ea/worktrees/p26-w29",
       "status": "merged",
       "wave_id": "P26-I01-W29"
+    },
+    "WT-P26-I01-W30-1779305577": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w30",
+      "created_at": "2026-05-20T19:32:57.556231Z",
+      "id": "WT-P26-I01-W30-1779305577",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w30",
+      "path": ".ea/worktrees/p26-w30",
+      "status": "active",
+      "wave_id": "P26-I01-W30"
     }
   }
 }
