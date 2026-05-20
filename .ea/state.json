@@ -2419,7 +2419,9 @@
         "P26-I01-W21",
         "P26-I01-W22",
         "P26-I01-W23",
-        "P26-I01-W24"
+        "P26-I01-W24",
+        "P26-I01-W25",
+        "P26-I01-W26"
       ]
     },
     "P27-I01": {
@@ -2952,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:35:07.141401Z",
+  "updated_at": "2026-05-20T13:44:29.893555Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8663,7 +8665,8 @@
     "P26-I01-W05": {
       "agent_role": "executor",
       "blocks": [
-        "P26-I01-W07"
+        "P26-I01-W07",
+        "P26-I01-W25"
       ],
       "claim_session_id": "p26-w05-exec",
       "closed_at": "2026-05-20T13:01:59.197220Z",
@@ -8872,7 +8875,8 @@
     "P26-I01-W11": {
       "agent_role": "executor",
       "blocks": [
-        "P26-I01-W15"
+        "P26-I01-W15",
+        "P26-I01-W26"
       ],
       "claim_session_id": "p26-w11-exec",
       "closed_at": "2026-05-20T13:14:35.597198Z",
@@ -9018,7 +9022,9 @@
     "P26-I01-W15": {
       "agent_role": "auditor",
       "blocks": [
-        "P26-I01-W16"
+        "P26-I01-W16",
+        "P26-I01-W25",
+        "P26-I01-W26"
       ],
       "claim_session_id": "p26-w15-audit",
       "closed_at": null,
@@ -9355,6 +9361,78 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W24-1779281347"
+    },
+    "P26-I01-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W05",
+        "P26-I01-W15"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/_mutation.py",
+        "tests/cli/test_daemon_escalation.py",
+        "tests/integration/test_surfaces_smoke.py"
+      ],
+      "id": "P26-I01-W25",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T13:44:29.309097Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "reject_daemonless_on_mutating wired at the state_transaction chokepoint (cli/_mutation.py) so all ~12 mutating verbs reject --daemonless (not just state rpc); the dead state_mutate wrapper is removed or its rejection routed into the live path",
+        "a representative mutating verb (e.g. roadmap/memory/worktree) invoked with --daemonless returns exit 1 data.kind=InvalidInput",
+        "read verbs still bypass (no regression); test_daemon_escalation extended",
+        "test_surfaces_smoke gains the daemonless-breadth assertion (now passing)"
+      ],
+      "title": "fix: wire daemonless rejection across all mutating verbs (C05 §5.5 dead-code gap)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W11",
+        "P26-I01-W15"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/render/envelope.py",
+        "src/eawf/render/skills.py",
+        "src/eawf/cli/commands/skill.py",
+        "src/eawf/skills/bodies/",
+        "tests/integration/test_surfaces_smoke.py"
+      ],
+      "id": "P26-I01-W26",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T13:44:29.893534Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CANONICAL_SKILL_NAMES (render/envelope.py) + SKILL_REGISTRY (render/skills.py) extended to all 17 skills; eawf skill list shows 17",
+        "each new skill (coauthor/memory/agent_dispatch/compress/wave_spec/security_review) has a typed body model in skills/bodies + description in cli/commands/skill.py",
+        "golden SKILL.md / skill-list goldens regenerated",
+        "test_surfaces_smoke catalog-parity assertion (len CANONICAL_SKILL_NAMES == registry count) now passing"
+      ],
+      "title": "fix: integrate 6 C04b skills into user-facing eawf skill list catalog (registry=17 catalog=11 drift)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
