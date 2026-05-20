@@ -1551,7 +1551,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W28"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2975,7 +2977,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T18:11:30.839499Z",
+  "updated_at": "2026-05-20T18:11:41.520578Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9541,7 +9543,7 @@
     "P26-I01-W28": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w28-exec",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9559,7 +9561,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "typer bumped to newest version whose completion runtime is compatible with click 8.3.x (prefer upgrade over pinning click down); uv.lock regenerated",
         "the reproduce 'env _TYPER_COMPLETE_ARGS=\"eawf wave\" _EAWF_COMPLETE=complete_zsh eawf' no longer raises KeyError COMP_WORDS and emits completion candidates",
@@ -9569,7 +9571,7 @@
       "title": "fix: bump typer to restore shell-completion runtime (typer 0.25.1/click 8.3.3 COMP_WORDS crash)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W28-1779300701"
     }
   },
   "workspace": null,
@@ -10222,6 +10224,17 @@
       "path": ".ea/worktrees/p26-w27",
       "status": "merged",
       "wave_id": "P26-I01-W27"
+    },
+    "WT-P26-I01-W28-1779300701": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w28",
+      "created_at": "2026-05-20T18:11:41.520578Z",
+      "id": "WT-P26-I01-W28-1779300701",
+      "merged_commit": null,
+      "owner_session_id": "p26-w28-exec",
+      "path": ".ea/worktrees/p26-w28",
+      "status": "active",
+      "wave_id": "P26-I01-W28"
     }
   }
 }
