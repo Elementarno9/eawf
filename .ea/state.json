@@ -1552,7 +1552,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W25",
       "P26-I01-W17"
     ],
     "iter_id": null,
@@ -2976,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:22:12.818424Z",
+  "updated_at": "2026-05-20T14:25:39.478774Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9392,7 +9391,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p26-w25-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T14:25:38.899765Z",
       "commit": null,
       "deps": [
         "P26-I01-W05",
@@ -9408,10 +9407,10 @@
       "id": "P26-I01-W25",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T13:44:29.309097Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "reject_daemonless_on_mutating wired at the state_transaction chokepoint (cli/_mutation.py) so all ~12 mutating verbs reject --daemonless (not just state rpc); the dead state_mutate wrapper is removed or its rejection routed into the live path",
         "a representative mutating verb (e.g. roadmap/memory/worktree) invoked with --daemonless returns exit 1 data.kind=InvalidInput",
@@ -10029,10 +10028,10 @@
       "branch": "feature/eawf-v0.1-p26-w25",
       "created_at": "2026-05-20T14:07:27.850113Z",
       "id": "WT-P26-I01-W25-1779286047",
-      "merged_commit": null,
+      "merged_commit": "92b4407",
       "owner_session_id": "p26-w25-exec",
       "path": ".ea/worktrees/p26-w25",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W25"
     }
   }
