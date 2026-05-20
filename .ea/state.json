@@ -2956,7 +2956,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T12:49:07.430631Z",
+  "updated_at": "2026-05-20T12:56:09.942722Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8782,11 +8782,8 @@
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
-        "src/eawf/workflow/research.py",
-        "src/eawf/workflow/roadmap.py",
-        "src/eawf/workflow/prep.py",
-        "src/eawf/workflow/flow.py",
-        "src/eawf/workflow/audit.py"
+        "src/eawf/skills/prep.py",
+        "tests/unit/test_skill_prep.py"
       ],
       "id": "P26-I01-W08",
       "iter_id": "P26-I01",
