@@ -2440,7 +2440,8 @@
         "P26-I01-W23",
         "P26-I01-W24",
         "P26-I01-W25",
-        "P26-I01-W26"
+        "P26-I01-W26",
+        "P26-I01-W27"
       ]
     },
     "P27-I01": {
@@ -2973,7 +2974,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T16:34:39.463074Z",
+  "updated_at": "2026-05-20T16:39:12.230070Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9498,6 +9499,43 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W26-1779287166"
+    },
+    "P26-I01-W27": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/",
+        "src/eawf/daemon/",
+        "src/eawf/runtimes/",
+        "src/eawf/skills/",
+        "src/eawf/tui_v2/",
+        "src/eawf/render/envelope.py"
+      ],
+      "id": "P26-I01-W27",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T16:39:12.230046Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "all bare cluster/decision/failure-mode ID tokens (C05/C04b/C06/C07a §refs",
+        "D8-D29",
+        "D-d2/D-b3",
+        "F-b02/F-d01) stripped from source comments + module docstrings across cli/daemon/runtimes/skills/tui_v2; WHY-prose preserved (AGENTS rule 25)",
+        "ship.py:214 log line rewritten to canonical '<funcname> key=value' form (drop leading colon + add !r)",
+        "no behavior change — full pytest suite + mypy + pre-commit green; grep for design-ID-in-source patterns returns zero new hits vs the documented set"
+      ],
+      "title": "chore: P26 polish — strip rule-25 design-ID tokens from source comments/docstrings + ship.py log-format fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
