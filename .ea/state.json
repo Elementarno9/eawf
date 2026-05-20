@@ -1551,7 +1551,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W19"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2973,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T14:57:39.265748Z",
+  "updated_at": "2026-05-20T14:57:56.614925Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9203,7 +9205,7 @@
         "P26-I01-W20",
         "P26-I01-W21"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w19-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9223,14 +9225,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "all keybindings fixed in code per D11 (arrows + PageUp/PageDown/Home/End + vim aliases h/j/k/l/gg/G); ? opens HelpScreen full keymap overlay"
       ],
       "title": "feat: C06 / palette + verb registry + modal stack (depth cap 3)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W19-1779289076"
     },
     "P26-I01-W20": {
       "agent_role": "executor",
@@ -10020,6 +10022,17 @@
       "path": ".ea/worktrees/p26-w18",
       "status": "merged",
       "wave_id": "P26-I01-W18"
+    },
+    "WT-P26-I01-W19-1779289076": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w19",
+      "created_at": "2026-05-20T14:57:56.614925Z",
+      "id": "WT-P26-I01-W19-1779289076",
+      "merged_commit": null,
+      "owner_session_id": "p26-w19-exec",
+      "path": ".ea/worktrees/p26-w19",
+      "status": "active",
+      "wave_id": "P26-I01-W19"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
