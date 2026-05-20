@@ -1533,7 +1533,6 @@
     "active_wave_ids": [
       "P26-I01-W08",
       "P26-I01-W11",
-      "P26-I01-W12",
       "P26-I01-W07"
     ],
     "iter_id": null,
@@ -2955,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:04:50.383949Z",
+  "updated_at": "2026-05-20T13:10:42.070278Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8915,7 +8914,7 @@
         "P26-I01-W13"
       ],
       "claim_session_id": "p26-w12-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:10:41.480376Z",
       "commit": null,
       "deps": [
         "P26-I01-W10"
@@ -8928,10 +8927,10 @@
       "id": "P26-I01-W12",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:13.015445Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/agents/test_report_append_only.py covers (a) append-on-retry",
         "(b) overwrite rejected with LifecycleError",
@@ -9829,10 +9828,10 @@
       "branch": "feature/eawf-v0.1-p26-w12",
       "created_at": "2026-05-20T13:01:07.217885Z",
       "id": "WT-P26-I01-W12-1779282067",
-      "merged_commit": null,
+      "merged_commit": "4408ba1",
       "owner_session_id": "p26-w12-exec",
       "path": ".ea/worktrees/p26-w12",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W12"
     },
     "WT-P26-I01-W23-1779235537": {
