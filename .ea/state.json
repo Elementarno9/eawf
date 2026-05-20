@@ -2443,7 +2443,8 @@
         "P26-I01-W26",
         "P26-I01-W27",
         "P26-I01-W28",
-        "P26-I01-W29"
+        "P26-I01-W29",
+        "P26-I01-W30"
       ]
     },
     "P27-I01": {
@@ -2976,7 +2977,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T19:18:09.574888Z",
+  "updated_at": "2026-05-20T19:27:48.728170Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9603,6 +9604,45 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W29-1779304162"
+    },
+    "P26-I01-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/",
+        "tests/perf/cli/test_import_budget.py"
+      ],
+      "id": "P26-I01-W30",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T19:27:48.728147Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "heavy module-level imports relocated into command handlers (validate->state.models",
+        "config->config.profile",
+        "daemon.* machinery",
+        "render/jinja2",
+        "store.kinds",
+        "sandbox.policy",
+        "mcp.installer); typer param annotations kept importable via from __future__ annotations + TYPE_CHECKING so signatures don't break",
+        "import eawf.cli.app no longer pulls the named offenders — verified absent from sys.modules after a completion-only invocation",
+        "completion latency drops measurably (target ~0.2s",
+        "~2-3x; record before/after via importtime + timed installed-bin completion)",
+        "new tests/perf/cli/test_import_budget.py asserts the offenders are NOT imported on the completion path + a startup self-time ceiling (mirrors W22 perf gate)",
+        "no behavior change — lazy imports only; full suite + mypy + pre-commit green; help/goldens unchanged"
+      ],
+      "title": "perf: lazy-import heavy deps in CLI command handlers (completion startup ~2-3x)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
