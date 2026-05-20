@@ -1533,7 +1533,8 @@
     "active_wave_ids": [
       "P26-I01-W08",
       "P26-I01-W11",
-      "P26-I01-W12"
+      "P26-I01-W12",
+      "P26-I01-W07"
     ],
     "iter_id": null,
     "phase_id": "P26",
@@ -2954,7 +2955,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:03:18.909590Z",
+  "updated_at": "2026-05-20T13:04:50.383949Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8738,7 +8739,7 @@
       "blocks": [
         "P26-I01-W15"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w07-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -8757,14 +8758,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "existing pytest suite + uv run pre-commit run --all-files pass without changes to test imports (re-exports preserved at package __init__.py)"
       ],
       "title": "refactor: C05 split god files per Q25 LOC cap — lifecycle.py + evidence.py + memory.py <=700 LOC per module",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W07-1779282290"
     },
     "P26-I01-W08": {
       "agent_role": "executor",
@@ -8922,10 +8923,7 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/agents/report.py",
-        "src/eawf/state/models.py",
-        "src/eawf/state/migrations/session_handle_migration.py",
-        "tests/agents/test_report_append_only.py"
+        "tests/unit/test_agent_report_store.py"
       ],
       "id": "P26-I01-W12",
       "iter_id": "P26-I01",
@@ -9781,6 +9779,17 @@
       "path": ".ea/worktrees/p26-w06",
       "status": "merged",
       "wave_id": "P26-I01-W06"
+    },
+    "WT-P26-I01-W07-1779282290": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w07",
+      "created_at": "2026-05-20T13:04:50.383949Z",
+      "id": "WT-P26-I01-W07-1779282290",
+      "merged_commit": null,
+      "owner_session_id": "p26-w07-exec",
+      "path": ".ea/worktrees/p26-w07",
+      "status": "active",
+      "wave_id": "P26-I01-W07"
     },
     "WT-P26-I01-W08-1779281345": {
       "base_branch": "feature/eawf-v0.3-p26",
