@@ -1551,7 +1551,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W20",
+      "P26-I01-W21"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2973,7 +2976,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T15:18:34.801308Z",
+  "updated_at": "2026-05-20T15:19:16.935255Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9249,7 +9252,7 @@
       "blocks": [
         "P26-I01-W22"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w20-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9261,7 +9264,8 @@
         "src/eawf/tui_v2/screens/overlays/plan_preview.py",
         "src/eawf/tui_v2/screens/overlays/needs_user.py",
         "src/eawf/tui_v2/screens/overlays/audit_running.py",
-        "src/eawf/tui_v2/screens/overlays/audit_failed.py"
+        "src/eawf/tui_v2/screens/overlays/audit_failed.py",
+        "src/eawf/tui_v2/palette/verbs.py"
       ],
       "id": "P26-I01-W20",
       "iter_id": "P26-I01",
@@ -9269,21 +9273,21 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "AuditFailedModal renders mutating menu (retry/split/land-partial/abandon/scope-change) per D17; each action dispatches via eawf agent dispatch; modal status line streams 'dispatching <action> -> <runtime> · attempt <n>' per D27"
       ],
       "title": "feat: C06 PlanPreviewModal + NeedsUserModal + AuditRunningModal + AuditFailedModal (D17 mutating)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W20-1779290356"
     },
     "P26-I01-W21": {
       "agent_role": "executor",
       "blocks": [
         "P26-I01-W22"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w21-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9295,7 +9299,8 @@
         "src/eawf/tui_v2/screens/overlays/metrics.py",
         "src/eawf/tui_v2/screens/overlays/pr_list.py",
         "src/eawf/tui_v2/screens/overlays/events.py",
-        "src/eawf/tui_v2/widgets/heartbeat.py"
+        "src/eawf/tui_v2/widgets/heartbeat.py",
+        "src/eawf/tui_v2/palette/verbs.py"
       ],
       "id": "P26-I01-W21",
       "iter_id": "P26-I01",
@@ -9303,14 +9308,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "runtime cell idle state: 'runtime: idle' muted per D29; flips muted->accent->warn(switched in last 60s)->err(every runtime in ladder failed)"
       ],
       "title": "feat: C06 /metrics 3x2 tile grid + /pr overlay + EventsModal ring buffer",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W21-1779290356"
     },
     "P26-I01-W22": {
       "agent_role": "executor",
@@ -10043,6 +10048,28 @@
       "path": ".ea/worktrees/p26-w19",
       "status": "merged",
       "wave_id": "P26-I01-W19"
+    },
+    "WT-P26-I01-W20-1779290356": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w20",
+      "created_at": "2026-05-20T15:19:16.110596Z",
+      "id": "WT-P26-I01-W20-1779290356",
+      "merged_commit": null,
+      "owner_session_id": "p26-w20-exec",
+      "path": ".ea/worktrees/p26-w20",
+      "status": "active",
+      "wave_id": "P26-I01-W20"
+    },
+    "WT-P26-I01-W21-1779290356": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w21",
+      "created_at": "2026-05-20T15:19:16.935255Z",
+      "id": "WT-P26-I01-W21-1779290356",
+      "merged_commit": null,
+      "owner_session_id": "p26-w21-exec",
+      "path": ".ea/worktrees/p26-w21",
+      "status": "active",
+      "wave_id": "P26-I01-W21"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
