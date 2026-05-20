@@ -45,7 +45,7 @@ from typing import Any, ClassVar, Literal
 from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.reactive import reactive
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 
 from eawf.state.enums import ScopeKind
 from eawf.state.models import State
@@ -85,6 +85,14 @@ class EaApp(App[None]):
     """
 
     CSS_PATH: ClassVar[str] = "theme.tcss"
+
+    #: Maximum number of stacked :class:`~textual.screen.ModalScreen`
+    #: overlays (command palette, detail card, confirm, help, and the
+    #: audit / plan-preview overlays of later waves). Per the C06 brief
+    #: §5.7 the cap is **3** — deep enough for the plan-mode → edit →
+    #: confirm flow, shallow enough to keep the stack legible. A fourth
+    #: push is rejected by :meth:`push_modal` with a toast.
+    MAX_MODAL_DEPTH: ClassVar[int] = 3
 
     #: Global key bindings shared across every scope screen. Arrow keys
     #: are primary navigation; vim ``hjkl`` are registered as hidden
@@ -137,6 +145,7 @@ class EaApp(App[None]):
         self._scope: ScopeName = scope
         self._state_path = state_path
         self._binding: StateBinding | None = None
+        self._help_open = False
 
     async def on_mount(self) -> None:
         """Bind state read-only, then push the resolved scope screen.
@@ -175,6 +184,77 @@ class EaApp(App[None]):
             return
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
+
+    def modal_depth(self) -> int:
+        """Return the number of :class:`ModalScreen` overlays on the stack.
+
+        Scope screens are plain :class:`~textual.screen.Screen` subclasses,
+        so only the stacked overlays (palette / detail / confirm / help /
+        later-wave overlays) count toward the cap.
+
+        Returns:
+            The current modal-overlay depth.
+        """
+        return sum(1 for screen in self.screen_stack if isinstance(screen, ModalScreen))
+
+    def push_modal(self, modal: ModalScreen[Any]) -> bool:
+        """Push *modal* unless the stack is already at :attr:`MAX_MODAL_DEPTH`.
+
+        The single modal-stack-cap gate (C06 §5.7 / failure mode F6): every
+        overlay-opening path (the ``/`` palette, the ``?`` help, the
+        row-drill DetailModal, the destructive ConfirmModal, and the
+        later-wave overlays) routes through here so the depth limit is
+        enforced in exactly one place. A rejected push toasts and mutates
+        nothing.
+
+        Args:
+            modal: The overlay screen to push.
+
+        Returns:
+            ``True`` when the modal was pushed, ``False`` when the cap
+            rejected it.
+        """
+        if self.modal_depth() >= self.MAX_MODAL_DEPTH:
+            logger.info(
+                f"push_modal rejected depth={self.modal_depth()} cap={self.MAX_MODAL_DEPTH}"
+            )
+            self.notify(
+                f"modal stack depth limit ({self.MAX_MODAL_DEPTH}) reached — close one first",
+                severity="warning",
+            )
+            return False
+        self.push_screen(modal)
+        return True
+
+    def action_open_palette(self) -> None:
+        """Open the ``/`` command palette (cap-checked).
+
+        Exposed on the App as well as the scope screen so the palette can
+        be opened from any focus context; routes through
+        :meth:`push_modal` for the depth cap.
+        """
+        from eawf.tui_v2.palette.command_palette import CommandPalette
+
+        self.push_modal(CommandPalette())
+
+    def action_open_help(self) -> None:
+        """Open the ``?`` help overlay (cap-checked, single-instance).
+
+        Per D31 a second ``?`` (or ``/help``) while the help overlay is
+        already open is a no-op — the :attr:`_help_open` guard suppresses
+        the duplicate push so the operator cannot exhaust the stack cap by
+        holding ``?``. The guard clears when the overlay dismisses.
+        """
+        from eawf.tui_v2.screens.help import HelpScreen
+
+        if self._help_open:
+            return
+        if self.push_modal(HelpScreen()):
+            self._help_open = True
+
+    def _on_help_closed(self) -> None:
+        """Clear the help-open guard when the help overlay dismisses."""
+        self._help_open = False
 
     async def on_unmount(self) -> None:
         """Tear the read-only binder down on app exit."""

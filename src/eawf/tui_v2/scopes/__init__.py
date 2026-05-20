@@ -38,8 +38,13 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.screen import Screen
 
+from eawf.tui_v2.palette.command_palette import open_palette
+from eawf.tui_v2.screens.help import open_help
+from eawf.tui_v2.screens.overlays.detail import DetailModal, resolve_detail
+from eawf.tui_v2.widgets.backlog_table import BacklogTable
 from eawf.tui_v2.widgets.footer import DEFAULT_HINTS, Footer
 from eawf.tui_v2.widgets.header import Header
+from eawf.tui_v2.widgets.roadmap_tree import RoadmapTree
 
 
 class ScopeScreen(Screen[None]):
@@ -95,6 +100,68 @@ class ScopeScreen(Screen[None]):
         """Apply the scope-specific footer hints once the chassis mounts."""
         if self.FOOTER_HINTS != DEFAULT_HINTS:
             self.query_one(Footer).set_hints(self.FOOTER_HINTS)
+
+    def action_open_palette(self) -> None:
+        """Open the ``/`` command palette overlay (cap-checked)."""
+        open_palette(self.app)
+
+    def action_open_help(self) -> None:
+        """Open the ``?`` help overlay (cap-checked, single-instance)."""
+        action = getattr(self.app, "action_open_help", None)
+        if callable(action):
+            action()
+            return
+        open_help(self.app)
+
+    def action_force_refresh(self) -> None:
+        """Acknowledge the ``r`` force-refresh (heartbeat ack).
+
+        The full force-tick + cache-invalidate path lands with the daemon
+        push wiring; this pulses the footer heartbeat so the operator sees
+        the keypress is live.
+        """
+        from eawf.tui_v2.widgets.footer import Heartbeat
+
+        heartbeats = self.query(Heartbeat)
+        if heartbeats:
+            heartbeats.first().ack()
+
+    def _open_detail(self, selection_id: str) -> None:
+        """Resolve *selection_id* against app state and push a DetailModal.
+
+        The single drill-in path shared by both selection messages: it
+        resolves the entity to a :class:`~eawf.tui_v2.screens.overlays.detail.DetailCard`
+        from the App's reactive ``state`` and pushes the overlay through
+        the modal-cap-aware helper so the stack-depth limit is honoured.
+
+        Args:
+            selection_id: The id carried by the selection message.
+        """
+        state = getattr(self.app, "state", None)
+        card = resolve_detail(state, selection_id)
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(DetailModal(card))
+            return
+        self.app.push_screen(DetailModal(card))
+
+    def on_backlog_table_row_activated(self, message: BacklogTable.RowActivated) -> None:
+        """Route a backlog Enter-selection to the DetailModal.
+
+        Args:
+            message: The W17 :class:`BacklogTable.RowActivated` message
+                carrying the activated item id.
+        """
+        self._open_detail(message.item_id)
+
+    def on_roadmap_tree_wave_selected(self, message: RoadmapTree.WaveSelected) -> None:
+        """Route a roadmap wave Enter-selection to the DetailModal.
+
+        Args:
+            message: The W17 :class:`RoadmapTree.WaveSelected` message
+                carrying the selected wave id.
+        """
+        self._open_detail(message.wave_id)
 
 
 from eawf.tui_v2.scopes.repo import RepoScreen  # noqa: E402  (after base def)
