@@ -1531,7 +1531,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W08",
       "P26-I01-W11",
       "P26-I01-W07",
       "P26-I01-W13"
@@ -2955,7 +2954,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:11:08.202881Z",
+  "updated_at": "2026-05-20T13:11:22.488072Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8773,7 +8772,7 @@
         "P26-I01-W09"
       ],
       "claim_session_id": "p26-w08-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:11:21.926362Z",
       "commit": null,
       "deps": [
         "P26-I01-W04"
@@ -8782,15 +8781,16 @@
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/skills/prep.py",
-        "tests/unit/test_skill_prep.py"
+        "tests/unit/test_skill_prep.py",
+        "src/eawf/skills/bodies/prep.py"
       ],
       "id": "P26-I01-W08",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:10.358181Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "/roadmap propose creates phase+iter with empty wave DAG; /roadmap apply rejects empty-wave DAG"
       ],
@@ -9796,10 +9796,10 @@
       "branch": "feature/eawf-v0.1-p26-w08",
       "created_at": "2026-05-20T12:49:05.699661Z",
       "id": "WT-P26-I01-W08-1779281345",
-      "merged_commit": null,
+      "merged_commit": "48cd9d6",
       "owner_session_id": "p26-w08-exec",
       "path": ".ea/worktrees/p26-w08",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W08"
     },
     "WT-P26-I01-W10-1779281346": {
