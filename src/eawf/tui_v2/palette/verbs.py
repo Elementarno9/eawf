@@ -39,6 +39,8 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from textual.app import App
 
+    from eawf.state.models import State
+
 logger = logging.getLogger(__name__)
 
 #: Scope names a verb may be allowed on. Mirrors the App scope names
@@ -122,6 +124,92 @@ def _handle_help(app: App[None], args: str) -> None:
         action()
         return
     app.notify("/help is not wired yet", severity="information")
+
+
+def _handle_audit(app: App[None], args: str) -> None:
+    """Open the live audit-progress overlay (the ``/audit`` verb).
+
+    Seeds an :class:`~eawf.tui_v2.screens.overlays.audit_running.AuditProgress`
+    snapshot for the audited scope and routes it through the App's
+    modal-cap-aware ``push_modal`` (via
+    :func:`~eawf.tui_v2.screens.overlays.audit_running.open_audit_running`).
+    The per-check rows fill in as the daemon streams ``check_*`` events to
+    the overlay's ``update_progress`` once the event subscription lands
+    (C06 §5.8); until then the overlay opens with the scope label parsed
+    from *args* and no checks. The ``audit_completed`` (verdict=fail) flow
+    that swaps in the audit-failed overlay is daemon-push driven.
+
+    Args:
+        app: The running App.
+        args: The audited scope urn / label the operator typed (display
+            only — empty falls back to ``"scope"``).
+    """
+    from eawf.tui_v2.screens.overlays.audit_running import AuditProgress, open_audit_running
+
+    scope_label = args.strip() or "scope"
+    audit_id = _active_audit_id(app)
+    progress = AuditProgress(audit_id=audit_id, scope_label=scope_label, checks=())
+    open_audit_running(app, progress)
+
+
+def _handle_roadmap(app: App[None], args: str) -> None:
+    """Open the plan-mode preview for ``/roadmap propose`` (the ``/roadmap`` verb).
+
+    The plan-mode surface (C06 §5.7 / D4): when the sub-verb is
+    ``propose`` (the path that returns ``status=needs_user``), this builds
+    the proposed phase's wave-DAG tree via
+    :func:`~eawf.tui_v2.screens.overlays.plan_preview.build_plan_tree` from
+    the App's bound state and opens
+    :class:`~eawf.tui_v2.screens.overlays.plan_preview.PlanPreviewModal`
+    through the modal-cap-aware ``push_modal``. Other ``/roadmap``
+    sub-verbs (``revise`` / ``apply`` / ``drop``) dispatch to their CLI
+    verbs in the wave that lands them; until then they toast.
+
+    Args:
+        app: The running App.
+        args: The ``/roadmap`` sub-verb plus its arguments (e.g.
+            ``propose P26``).
+    """
+    sub_verb, _, rest = args.strip().partition(" ")
+    if sub_verb != "propose":
+        logger.info(f"palette_verb_roadmap_unwired sub_verb={sub_verb!r}")
+        app.notify(f"/roadmap {sub_verb} is not wired yet", severity="information")
+        return
+    from eawf.tui_v2.screens.overlays.plan_preview import build_plan_tree, open_plan_preview
+
+    phase_id = rest.strip()
+    if not phase_id:
+        app.notify(
+            "/roadmap propose needs a phase id (e.g. /roadmap propose P26)", severity="warning"
+        )
+        return
+    plan = build_plan_tree(getattr(app, "state", None), phase_id)
+    open_plan_preview(app, plan)
+
+
+def _active_audit_id(app: App[None]) -> str:
+    """Resolve a best-effort audit id from the App's bound state.
+
+    Prefers the active iter's ``audit_id``, then any phase's, falling back
+    to ``"audit"`` so the overlay title always renders. Read-only; never
+    mutates state.
+
+    Args:
+        app: The running App.
+
+    Returns:
+        The resolved audit id, or ``"audit"`` when none is present.
+    """
+    state: State | None = getattr(app, "state", None)
+    if state is None:
+        return "audit"
+    for iteration in state.iters.values():
+        if iteration.audit_id:
+            return iteration.audit_id
+    for phase in state.phases.values():
+        if phase.audit_id:
+            return phase.audit_id
+    return "audit"
 
 
 #: The static verb registry (D13). Order is display order in the palette
@@ -242,7 +330,7 @@ VERBS: tuple[PaletteVerb, ...] = (
     PaletteVerb(
         "/roadmap",
         "roadmap action (sub-verb)",
-        _placeholder("/roadmap"),
+        _handle_roadmap,
         SCOPES_ALL,
         args_grammar="<sub-verb> ...",
     ),
@@ -269,9 +357,7 @@ VERBS: tuple[PaletteVerb, ...] = (
         requires_profile=("research",),
         args_grammar="<surface>",
     ),
-    PaletteVerb(
-        "/audit", "audit a scope", _placeholder("/audit"), SCOPES_ALL, args_grammar="<scope-urn>"
-    ),
+    PaletteVerb("/audit", "audit a scope", _handle_audit, SCOPES_ALL, args_grammar="<scope-urn>"),
     PaletteVerb("/ship", "ship phase", _placeholder("/ship"), SCOPES_ALL, args_grammar="<P##>"),
     PaletteVerb(
         "/review", "review PR", _placeholder("/review"), SCOPES_ALL, args_grammar="[--pr <url>]"
