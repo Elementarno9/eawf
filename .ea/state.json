@@ -2416,7 +2416,8 @@
         "P26-I01-W20",
         "P26-I01-W21",
         "P26-I01-W22",
-        "P26-I01-W23"
+        "P26-I01-W23",
+        "P26-I01-W24"
       ]
     },
     "P27-I01": {
@@ -2949,7 +2950,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T12:47:51.032376Z",
+  "updated_at": "2026-05-20T12:48:35.150174Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9330,6 +9331,34 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W23-1779235537"
+    },
+    "P26-I01-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/tui/layout.py",
+        "tests/integration/test_tui_weekly_eu.py"
+      ],
+      "id": "P26-I01-W24",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-20T12:48:35.150155Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "build_weekly_burn_line + build_footer_panel accept now= and thread it to compute_weekly_burn; test_tui_weekly_eu fixtures inject a fixed anchor so the trailing-7-day window is deterministic; both previously-failing tests pass; pre-commit + mypy + pytest green"
+      ],
+      "title": "fix: thread now= through tui/layout weekly-burn builders (test_tui_weekly_eu date bug)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
