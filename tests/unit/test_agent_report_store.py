@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.agent_report.store import (
     AgentReportRoleMismatchError,
@@ -146,4 +147,18 @@ def test_append_agent_report_rejects_unscrubbed_body(tmp_path: Path) -> None:
             session_id="SES-001",
             base_id="P18-I01-W04",
             body=_body("opened /tmp/local-file during execution"),
+        )
+
+
+def test_executor_report_body_verdict_outside_enum_raises_validationerror() -> None:
+    with pytest.raises(ValidationError):
+        ExecutorReportBody.model_validate(
+            {
+                "role": "executor",
+                "verdict": "approved",
+                "confidence": Confidence.HIGH,
+                "summary": "implemented report writer",
+                "wave_id": "P18-I01-W04",
+                "outcome": "done",
+            }
         )
