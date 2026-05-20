@@ -172,6 +172,7 @@ class BacklogTable(DataTable[str]):
             **kwargs: Forwarded to :class:`textual.widgets.DataTable`.
         """
         super().__init__(cursor_type="row", zebra_stripes=True, **kwargs)
+        self._rebuilding = False
 
     def on_mount(self) -> None:
         """Add columns, seed from app state, and watch for revisions."""
@@ -233,18 +234,32 @@ class BacklogTable(DataTable[str]):
         Columns are added once in :meth:`on_mount`; this only clears and
         re-adds rows so the header survives. Each row key is the item id so
         :meth:`on_data_table_row_selected` can resolve the selection.
+
+        The :attr:`_rebuilding` re-entrancy guard coalesces nested calls:
+        when the widget mounts with the app's reactive ``state`` already
+        populated, the ``state`` / ``sort_key`` / ``filter_text`` watchers
+        and the explicit ``on_mount`` call can all fire in the same flush.
+        Without the guard a watcher re-enters :meth:`_rebuild` mid
+        add-loop and re-adds a row key the outer loop is still iterating,
+        raising :class:`~textual.widgets._data_table.DuplicateKey`. The
+        guarded re-entrant call is a no-op; the outer call renders the
+        authoritative row set from the current reactive values.
         """
-        if not self.columns:
+        if not self.columns or self._rebuilding:
             return
-        self.clear()
-        for item in self.visible_items():
-            self.add_row(
-                item.id,
-                item.priority.value,
-                item.status.value,
-                item.title,
-                key=item.id,
-            )
+        self._rebuilding = True
+        try:
+            self.clear()
+            for item in self.visible_items():
+                self.add_row(
+                    item.id,
+                    item.priority.value,
+                    item.status.value,
+                    item.title,
+                    key=item.id,
+                )
+        finally:
+            self._rebuilding = False
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Post :class:`RowActivated` for the Enter-selected row.

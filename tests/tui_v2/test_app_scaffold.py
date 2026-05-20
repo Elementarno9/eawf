@@ -22,10 +22,10 @@ from eawf.tui_v2.app import (
     BRAND,
     DEFAULT_PROJECT_CODE,
     EaApp,
+    Header,
     RepoScreen,
     UserScreen,
     WorkspaceScreen,
-    _BrandHeader,
     _breadcrumb,
     resolve_scope,
 )
@@ -185,7 +185,8 @@ def test_eaapp_first_paint_renders_brand() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
         async with app.run_test() as pilot:
             await pilot.pause()
-            header = app.screen.query_one(_BrandHeader)
+            # The real RepoScreen now composes the shared chassis Header.
+            header = app.screen.query_one(Header)
             assert BRAND in str(header.render())
             # SVG screenshot is a true end-to-end paint proof.
             assert BRAND in app.export_screenshot()

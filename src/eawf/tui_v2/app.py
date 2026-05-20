@@ -42,15 +42,21 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
-from textual.app import App, ComposeResult
+from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Footer, Static
 
 from eawf.state.enums import ScopeKind
 from eawf.state.models import State
+from eawf.tui_v2.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.tui_v2.state_binding import StateBinding, StateBindingCallbacks
+from eawf.tui_v2.widgets.header import (
+    BRAND,
+    DEFAULT_PROJECT_CODE,
+    Header,
+    build_breadcrumb,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,89 +66,12 @@ logger = logging.getLogger(__name__)
 #: own (resolved from a populated ``~/.eawf/registry.json`` per D10).
 ScopeName = Literal["repo", "workspace", "user"]
 
-#: The brand string rendered outside-left of the scope breadcrumb.
-#: Literal ``Eä`` (capital E + a-umlaut) per the operator branding
-#: convention; bold-accent styling is applied via ``theme.tcss``.
-BRAND: str = "Eä"
-
-#: Fallback project code shown in the breadcrumb when no state is loaded
-#: yet (fresh workspace / daemon cold-spawn placeholder).
-DEFAULT_PROJECT_CODE: str = "EAWF"
-
-
-def _breadcrumb(state: State | None) -> str:
-    """Build the ``scope / code / phase`` breadcrumb from typed state.
-
-    Falls back to :data:`DEFAULT_PROJECT_CODE` when no state is loaded so
-    the header stays informative during the daemon cold-spawn window. The
-    separator matches the legacy surface (:func:`eawf.tui.layout.build_breadcrumb`)
-    so the brand-left placement is the only branding the rebuild changes.
-
-    Args:
-        state: The currently bound state, or ``None`` before first load.
-
-    Returns:
-        The breadcrumb string (without the brand prefix).
-    """
-    if state is None:
-        return DEFAULT_PROJECT_CODE
-    code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
-    parts: list[str] = [state.scope_kind.value, code]
-    if state.current.phase_id is not None:
-        parts.append(state.current.phase_id)
-    return " / ".join(parts)
-
-
-class _BrandHeader(Static):
-    """Single-line header: ``Eä`` brand outside-left of the breadcrumb.
-
-    Reads the App's reactive ``state`` so the breadcrumb tracks state
-    changes pushed by :class:`~eawf.tui_v2.state_binding.StateBinding`.
-    """
-
-    def render(self) -> str:
-        app = self.app
-        state = app.state if isinstance(app, EaApp) else None
-        return f"[b]{BRAND}[/b]  {_breadcrumb(state)}"
-
-
-class _ScopePlaceholderScreen(Screen[None]):
-    """Base scope screen — header + a labelled placeholder body + footer.
-
-    The concrete per-scope compositions (repo 2x2 quadrant, workspace
-    strip+zoom, user attention/effort/portfolio) land in later waves of
-    this band. This base establishes the header / footer chrome and the
-    reactive-state plumbing those waves extend.
-    """
-
-    #: Human label for the placeholder body; overridden per subclass.
-    SCOPE_LABEL: ClassVar[str] = "scope"
-
-    def compose(self) -> ComposeResult:
-        yield _BrandHeader()
-        yield Static(
-            f"{self.SCOPE_LABEL} screen — composition lands in a follow-up wave",
-            classes="scope-placeholder",
-        )
-        yield Footer()
-
-
-class RepoScreen(_ScopePlaceholderScreen):
-    """Repo-scope screen placeholder (2x2 quadrant lands later)."""
-
-    SCOPE_LABEL: ClassVar[str] = "repo"
-
-
-class WorkspaceScreen(_ScopePlaceholderScreen):
-    """Workspace-scope screen placeholder (strip + zoom lands later)."""
-
-    SCOPE_LABEL: ClassVar[str] = "workspace"
-
-
-class UserScreen(_ScopePlaceholderScreen):
-    """User-scope screen placeholder (portfolio sections land later)."""
-
-    SCOPE_LABEL: ClassVar[str] = "user"
+#: Backwards-compatible alias for the breadcrumb builder. The canonical
+#: definition (with the ``BRAND`` / ``DEFAULT_PROJECT_CODE`` constants)
+#: lives in :mod:`eawf.tui_v2.widgets.header` so the shared
+#: :class:`~eawf.tui_v2.widgets.header.Header` and this module share one
+#: source (DRY); this alias keeps the scaffold-test import path stable.
+_breadcrumb = build_breadcrumb
 
 
 class EaApp(App[None]):
@@ -290,10 +219,12 @@ __all__ = [
     "BRAND",
     "DEFAULT_PROJECT_CODE",
     "EaApp",
+    "Header",
     "RepoScreen",
     "ScopeName",
     "UserScreen",
     "WorkspaceScreen",
+    "build_breadcrumb",
     "resolve_scope",
     "run_app",
 ]

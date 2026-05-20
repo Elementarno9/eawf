@@ -22,24 +22,20 @@ Screen {
     color: $text;
 }
 
-/* --- header: Eä brand outside-left of the scope breadcrumb --- */
+/* --- header: Eä brand outside-left of the scope breadcrumb ---
+ * Brand accent + runtime/clock cell colours are carried inline by the
+ * Header widget's content markup ($accent / $muted) so the runtime
+ * theme swap stays a palette-var rebind; the dock + background live in
+ * the widget DEFAULT_CSS and are restated here for the global default.
+ */
 Header {
     height: 1;
     dock: top;
     background: $panel;
-}
-
-Header > .ea-brand {
-    color: $accent;
-    text-style: bold;
-    padding: 0 1 0 0;
-}
-
-Header > .ea-breadcrumb {
     color: $text;
 }
 
-/* --- footer: context key hints, full key names --- */
+/* --- footer: context key hints (full key names) + heartbeat dot --- */
 Footer {
     height: 1;
     dock: bottom;
@@ -47,17 +43,69 @@ Footer {
     color: $muted;
 }
 
-/* --- scope-screen body shells (panes land in later waves) --- */
-.scope-body {
+Footer .footer-hints {
+    color: $muted;
+}
+
+/* --- heartbeat: accent pulse, err when any pane degraded (D22) --- */
+Heartbeat {
+    color: $accent;
+}
+
+Heartbeat.-degraded {
+    color: $err;
+}
+
+/* --- scope-screen body shell (shared by every scope screen) --- */
+#body {
     height: 1fr;
+}
+
+/* --- quadrant / strip rows + bordered panes (RepoScreen / WorkspaceScreen) --- */
+.row {
+    height: 1fr;
+}
+
+.pane {
+    width: 1fr;
+    height: 1fr;
+    border: solid $accent;
     padding: 0 1;
 }
 
-.scope-placeholder {
-    height: 1fr;
+.pane.-focused {
+    border: solid $primary;
+}
+
+.pane-title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
+}
+
+/* --- UserScreen weighted sections (attention 3 : effort 2 : portfolio 5) --- */
+.section {
     width: 1fr;
-    content-align: center middle;
-    color: $muted;
+    border: solid $accent;
+    padding: 0 1;
+}
+
+#attention {
+    height: 3fr;
+}
+
+#effort {
+    height: 2fr;
+}
+
+#portfolio {
+    height: 5fr;
+}
+
+.section-title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
 }
 
 /* --- degraded banner (mtime-poll fallback active) --- */
