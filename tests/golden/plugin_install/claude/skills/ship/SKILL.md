@@ -24,10 +24,12 @@ disable-model-invocation: true
    green CI, re-request review until clean.
 7. **Bundle close in the final pre-merge commit.** Once CI is green
    and the review-passed branch is on the remote, emit a single
-   `[P<NN>-CORE] state: close iter + phase (audit=<id>)` commit
-   that bundles `eawf iter close P<NN>-I<MM>` +
-   `eawf phase close P<NN>` (no other touched files). The operator
-   merges that commit to end the phase.
+   `[P<NN>] state: close iter + phase (audit=<id>)` commit
+   (the legacy `[P<NN>-CORE] state: ...` form remains valid per the
+   `commit-prefix` block in AGENTS.md) that bundles
+   `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no
+   other touched files). The operator merges that commit to end the
+   phase.
 
 ## Pre-flight checklist
 

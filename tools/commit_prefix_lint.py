@@ -2,18 +2,48 @@
 
 Enforces:
 
-1. Subject line must match
-   ``^\\[P\\d{2}(-I\\d{2})?(-W\\d{2}|-CORE)\\]\\s+(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\\s+\\S.*$``.
-   The ``-W##`` or ``-CORE`` suffix is mandatory — bare ``[P##]`` /
-   ``[P##-I##]`` is rejected so every commit declares whether it advances
-   a planned wave or carries cross-wave bookkeeping (P19-W05). ``W00`` and
-   ``I00`` are rejected: wave / iter indices are 1-based by convention,
-   and reactive waves get the next available ``W##`` per the
-   feedback-commit-prefix-taxonomy memory.
-2. ``[P##-CORE]`` (and ``[P##-I##-CORE]``) commits MUST touch only
-   state-bookkeeping paths (``.ea/state.json``, ``.ea/store/event.jsonl``,
-   ``.ea/store/audit.jsonl``, ``.secrets.baseline``, and per-wave spec
-   files under ``.ea/specs/``). Touching anything else is rejected.
+1. Subject line must match one of two grammars:
+
+   - **Wave/CORE form** (planned wave deliverable or legacy phase-
+     bookkeeping alias):
+     ``^\\[P\\d{2}(-I\\d{2})?(-W\\d{2}|-CORE)\\]\\s+<type>:\\s+\\S.*$``
+     where ``<type>`` is one of ``feat|fix|chore|docs|refactor|test|
+     build|perf|ci|revert|state``. The ``-W##`` or ``-CORE`` suffix
+     declares whether the commit advances a planned wave or carries
+     cross-wave bookkeeping (P19-W05).
+
+   - **State-bookkeeping form** (post-P26-W23; ``type == "state"``
+     becomes the canonical signal for phase-scope bookkeeping commits):
+     ``^\\[P\\d{2}(-I\\d{2})?\\]\\s+state:\\s+\\S.*$``
+     The ``-CORE`` suffix is retained as a legacy alias on the
+     wave/CORE form so prior commits still validate, but new
+     bookkeeping commits MAY drop the suffix entirely — the ``state``
+     conventional-commit type IS the semantic signal.
+
+   ``W00`` and ``I00`` are rejected in both forms: wave / iter indices
+   are 1-based by convention, and reactive waves get the next
+   available ``W##`` per the feedback-commit-prefix-taxonomy memory.
+
+2. State-bookkeeping path whitelist applies to:
+
+   - any commit with ``type == "state"`` (the canonical semantic
+     signal — fires whether the subject carries ``[P##-CORE]``,
+     ``[P##-I##-CORE]``, or the bare ``[P##]`` / ``[P##-I##]`` form);
+     and
+   - any commit whose subject still carries the legacy ``-CORE``
+     suffix (back-compat with D16 — pre-P26-W23 lint enforced the
+     whitelist on the suffix; this keeps a hypothetical
+     ``[P##-CORE] feat: ...`` rejected when it touches non-state
+     paths).
+
+   State-scoped commits MUST touch only state-bookkeeping paths
+   (``.ea/state.json``, ``.ea/store/event.jsonl``,
+   ``.ea/store/audit.jsonl``, ``.secrets.baseline``, and per-wave
+   spec files under ``.ea/specs/``). Touching anything else is
+   rejected. The primary trigger is the conventional-commit
+   ``type``, not the subject-prefix ``-CORE`` suffix — ``type`` is
+   the semantic signal, ``-CORE`` is the legacy carrier.
+
 3. A recognized Claude or Codex ``Co-Authored-By`` trailer MUST be
    present (the ``prepare-commit-msg`` stage hook auto-inserts it when
    the active harness is detected; this backstop rejects commits where
@@ -44,14 +74,29 @@ from coauthor_policy import (
     has_supported_trailer,
 )
 
-# Subject grammar. The negative lookaheads ``(?!00)`` on both the iter
-# and wave digit pairs reject ``I00`` / ``W00``: wave and iter indices
-# are 1-based throughout the eawf state model, and reactive waves
-# append the next available ``W##`` per the
-# feedback-commit-prefix-taxonomy memory.
-_SUBJECT_RE = re.compile(
+_TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
+
+# Subject grammar — two accepted forms:
+#
+# 1. Wave/CORE form: ``[P##(-I##)?(-W##|-CORE)] <type>: ...`` — the
+#    pre-P26-W23 grammar; the ``-W##`` or ``-CORE`` suffix is
+#    mandatory.
+# 2. State-bookkeeping form: ``[P##(-I##)?] state: ...`` — post-
+#    P26-W23 grammar; valid only when the conventional-commit type is
+#    ``state``. The bare ``[P##]`` prefix is accepted because
+#    ``type == 'state'`` is the canonical bookkeeping signal.
+#
+# The negative lookaheads ``(?!00)`` on both the iter and wave digit
+# pairs reject ``I00`` / ``W00``: wave and iter indices are 1-based
+# throughout the eawf state model, and reactive waves append the next
+# available ``W##`` per the feedback-commit-prefix-taxonomy memory.
+_SUBJECT_WAVE_OR_CORE_RE = re.compile(
     r"^\[P\d{2}(-I(?!00)\d{2})?(-W(?!00)\d{2}|-CORE)\]\s+"
-    r"(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\s+\S.*$"
+    rf"(?P<type>{_TYPES}):\s+\S.*$"
+)
+_SUBJECT_STATE_BARE_RE = re.compile(
+    r"^\[P\d{2}(-I(?!00)\d{2})?\]\s+"
+    r"(?P<type>state):\s+\S.*$"
 )
 _CORE_TAG_RE = re.compile(r"^\[P\d{2}(-I(?!00)\d{2})?-CORE\]\s+")
 _STATE_ONLY_ALLOWED = (
@@ -64,7 +109,7 @@ _STATE_ONLY_ALLOWED = (
     # ``.secrets.baseline`` auto-tracks state.json line numbers; the
     # detect-secrets pre-commit hook regenerates it whenever state.json
     # mutates, and refuses to commit when baseline is left unstaged.
-    # CORE commits therefore always need it riding along.
+    # State-bookkeeping commits therefore always need it riding along.
     ".secrets.baseline",
 )
 _STATE_ONLY_PREFIXES = (".ea/specs/",)
@@ -113,22 +158,37 @@ def lint(
         break
     if not subject:
         return 1, "empty commit subject"
-    if not _SUBJECT_RE.match(subject):
+    wave_match = _SUBJECT_WAVE_OR_CORE_RE.match(subject)
+    state_match = _SUBJECT_STATE_BARE_RE.match(subject)
+    match = wave_match or state_match
+    if not match:
         return 1, (
             f"commit subject rejected: {subject!r}\n"
-            "expected '[P##-W##] <type>: <summary>' or "
-            "'[P##-CORE] <type>: <summary>' "
-            "(bare [P##] not allowed; -W## or -CORE suffix is mandatory; "
-            "W00 and I00 rejected — wave/iter indices are 1-based; "
-            "type ∈ feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state)"
+            "expected '[P##-W##] <type>: <summary>', "
+            "'[P##-CORE] <type>: <summary>' (legacy bookkeeping alias), "
+            "or '[P##] state: <summary>' (canonical bookkeeping form) "
+            "(W00 and I00 rejected — wave/iter indices are 1-based; "
+            "type ∈ feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state; "
+            "bare [P##] only accepted for type=state)"
         )
-    if _CORE_TAG_RE.match(subject):
+    commit_type = match.group("type")
+    # State-bookkeeping path whitelist primarily triggers on
+    # conventional-commit ``type == 'state'`` (the canonical semantic
+    # signal). The legacy ``-CORE`` subject suffix still triggers the
+    # whitelist for back-compat with D16 (CORE restricted to state-
+    # only commits) — pre-P26-W23 ``[P##-CORE] state: ...`` commits
+    # continue to validate, and a hypothetical ``[P##-CORE] feat: ...``
+    # is still rejected when it touches non-state paths.
+    is_state_scoped = commit_type == "state" or bool(_CORE_TAG_RE.match(subject))
+    if is_state_scoped:
         bad = [p for p in staged if not _is_state_only_path(p)]
         if bad:
+            trigger = "state-type" if commit_type == "state" else "[P##-CORE]"
             return 1, (
-                f"[P##-CORE] commit touches non-state paths: {bad}\n"
-                "CORE commits must mutate only .ea/state.json, "
-                ".ea/store/event.jsonl, or .ea/specs/**"
+                f"{trigger} commit touches non-state paths: {bad}\n"
+                "state-scoped commits must mutate only .ea/state.json, "
+                ".ea/store/event.jsonl, .ea/store/audit.jsonl, "
+                ".secrets.baseline, or .ea/specs/**"
             )
     env_map = {} if env is None else env
     if coauthor_disabled(env_map):

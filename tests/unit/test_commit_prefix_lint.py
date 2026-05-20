@@ -66,25 +66,72 @@ def test_accepts_both_supported_coauthor_trailers(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
-def test_rejects_bare_phase_prefix(tmp_path: Path, mod) -> None:
-    """P19-W05: bare [P##] is rejected; -W## or -CORE suffix is mandatory."""
+def test_rejects_bare_phase_prefix_non_state_type(tmp_path: Path, mod) -> None:
+    """P19-W05 + P26-W23: bare ``[P##]`` is rejected for non-state types.
+
+    Bare ``[P##]`` is accepted only when ``type == 'state'`` (the canonical
+    bookkeeping signal post-P26-W23). For ``docs`` / ``feat`` / etc. the
+    ``-W##`` or ``-CORE`` suffix remains mandatory.
+    """
     msg = _write_msg(tmp_path, "[P14] docs: update phase narrative\n")
     code, diag = mod.lint(msg, ["docs/x.md"])
     assert code == 1
-    assert "bare [P##] not allowed" in diag
+    assert "commit subject rejected" in diag
 
 
-def test_rejects_bare_phase_iter_prefix(tmp_path: Path, mod) -> None:
-    """P19-W05: [P##-I##] without trailing -W## or -CORE is rejected."""
+def test_rejects_bare_phase_iter_prefix_non_state_type(tmp_path: Path, mod) -> None:
+    """P19-W05: ``[P##-I##]`` without trailing -W## or -CORE rejected for non-state types."""
     msg = _write_msg(tmp_path, "[P14-I02] docs: iter-scope note\n")
     code, _diag = mod.lint(msg, ["docs/x.md"])
     assert code == 1
 
 
 def test_accepts_core_state_only_paths(tmp_path: Path, mod) -> None:
+    """Legacy ``[P##-CORE] state: ...`` form still validates (back-compat)."""
     msg = _write_msg(tmp_path, "[P14-CORE] state: close W01\n")
     code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
     assert code == 0, diag
+
+
+def test_accepts_bare_state_type_commit(tmp_path: Path, mod) -> None:
+    """P26-W23: bare ``[P##] state: ...`` (no -CORE suffix) is the canonical bookkeeping form.
+
+    ``type == 'state'`` is the semantic signal; the bare ``[P##]`` prefix
+    is accepted because the legacy ``-CORE`` carrier is now optional.
+    """
+    msg = _write_msg(tmp_path, "[P26] state: close iter + phase (audit=A31-P26)\n")
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 0, diag
+
+
+def test_accepts_bare_state_type_commit_with_iter_component(tmp_path: Path, mod) -> None:
+    """P26-W23: ``[P##-I##] state: ...`` (no -CORE) accepted; iter form valid for type=state."""
+    msg = _write_msg(tmp_path, "[P26-I02] state: close W01\n")
+    code, diag = mod.lint(msg, [".ea/state.json"])
+    assert code == 0, diag
+
+
+def test_rejects_bare_state_type_touching_src(tmp_path: Path, mod) -> None:
+    """P26-W23: bare ``[P##] state:`` triggers the whitelist via type=state.
+
+    The whitelist is bound to ``type == 'state'`` (the semantic signal),
+    not the legacy ``-CORE`` suffix. A bare ``[P##] state:`` commit
+    touching ``src/`` is rejected for the same reason
+    ``[P##-CORE] state:`` was previously rejected.
+    """
+    msg = _write_msg(tmp_path, "[P26] state: bogus state commit\n")
+    code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
+    assert code == 1
+    assert "non-state paths" in diag
+    assert "state-type" in diag
+
+
+def test_rejects_bare_state_type_touching_docs(tmp_path: Path, mod) -> None:
+    """P26-W23: bare ``[P##] state:`` triggers whitelist — docs are non-state."""
+    msg = _write_msg(tmp_path, "[P26] state: bogus state commit\n")
+    code, diag = mod.lint(msg, [".ea/state.json", "docs/architecture.md"])
+    assert code == 1
+    assert "non-state paths" in diag
 
 
 def test_rejects_missing_prefix(tmp_path: Path, mod) -> None:
@@ -149,6 +196,21 @@ def test_rejects_core_touching_src(tmp_path: Path, mod) -> None:
     code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
     assert code == 1
     assert "non-state paths" in diag
+
+
+def test_legacy_core_suffix_non_state_type_touching_src_rejected(tmp_path: Path, mod) -> None:
+    """P26-W23: legacy ``-CORE`` suffix still triggers whitelist for back-compat.
+
+    Pre-P26-W23 lint enforced the whitelist on the ``-CORE`` subject
+    suffix regardless of type. To preserve D16 (CORE restricted to
+    state-only commits), the legacy suffix remains a whitelist trigger
+    even when the type is not ``state``.
+    """
+    msg = _write_msg(tmp_path, "[P14-CORE] feat: hypothetical legacy mis-use\n")
+    code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
+    assert code == 1
+    assert "non-state paths" in diag
+    assert "[P##-CORE]" in diag
 
 
 def test_accepts_core_touching_specs(tmp_path: Path, mod) -> None:

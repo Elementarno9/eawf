@@ -242,21 +242,38 @@ the reason in the plan or handoff before dispatching worktrees or
 starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.1 hash=84f106dbb091ccc3 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.2 hash=2d0f7197ea6b63d3 -->
 ### Commit prefix
 
-``[P<NN>(-W<NN>|-CORE)] <type>: <summary>`` — types: ``feat``,
-``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``,
-``perf``, ``ci``, ``revert``, ``state``. Every commit MUST carry
-either ``-W<NN>`` (planned wave deliverable) or ``-CORE`` (phase-
-scope state bookkeeping); bare ``[P<NN>]`` is rejected by the
-``commit-prefix`` lint (P19-W05).
+``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types:
+``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``,
+``build``, ``perf``, ``ci``, ``revert``, ``state``.
 
-The ``state`` type is reserved for ``[P<NN>-CORE] state: ...``
-bookkeeping commits that touch only ``.ea/state.json``,
-``.ea/store/event.jsonl``, ``.ea/store/audit.jsonl``, and
-``.secrets.baseline``. Touching anything else under ``-CORE``
-is rejected by the lint.
+Subject grammar (post-P26-W23):
+
+- **Planned wave deliverable** — ``[P<NN>-W<NN>] <type>:`` (or
+  ``[P<NN>-I<NN>-W<NN>] <type>:`` when iter ≥ I02). The
+  ``-W<NN>`` suffix declares the wave the commit advances.
+- **State-bookkeeping** — ``[P<NN>] state:`` (or
+  ``[P<NN>-I<NN>] state:`` when iter ≥ I02). The ``state``
+  conventional-commit type IS the semantic signal for phase-
+  scope bookkeeping; no suffix needed. Allowed paths:
+  ``.ea/state.json``, ``.ea/store/event.jsonl``,
+  ``.ea/store/audit.jsonl``, ``.secrets.baseline``, and
+  ``.ea/specs/**``.
+- **Legacy ``-CORE`` alias** — ``[P<NN>-CORE] state:`` (or the
+  iter variant) remains valid for back-compat with pre-P26-W23
+  commits. New bookkeeping commits MAY drop the ``-CORE``
+  suffix; the lint accepts both forms identically.
+
+The path whitelist for state-bookkeeping commits triggers on
+``type == 'state'`` (the canonical semantic signal). The
+legacy ``-CORE`` suffix is also treated as a whitelist
+trigger so pre-P26-W23 commits continue to validate.
+
+Bare ``[P<NN>]`` is accepted only when ``type == 'state'``; for
+every other type the ``-W<NN>`` or ``-CORE`` suffix remains
+mandatory (P19-W05).
 
 Body: 3-6 bullets on what changed and why. Trailer: a recognized
 Claude or Codex ``Co-Authored-By`` trailer.
@@ -560,7 +577,7 @@ the operator-facing surface is always the rendered DAG, not
 raw mutator commands.
 
 <!-- END EAWF:managed id=prep-plan-mode -->
-<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.0 hash=1ece2b22bcb81974 -->
+<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.1 hash=8440075478e00422 -->
 ### Iter and phase close timing
 
 Iter close is gated on **audit + polish + ship CI + PR
@@ -582,10 +599,11 @@ follow-ups.
 **Phase close goes in the latest commit before merge.** Do
 not close the phase until ship CI is green AND the
 review-passed branch is on the remote. The phase-close
-mutation rides in a single ``[P<NN>-CORE] state: close iter
-+ phase (audit=<id>)`` commit that bundles iter close +
-phase close. Merging that commit ends the phase; pre-merge
-close keeps ``state.json`` in sync with what reviewers
-approved.
+mutation rides in a single ``[P<NN>] state: close iter +
+phase (audit=<id>)`` commit that bundles iter close + phase
+close (the legacy ``[P<NN>-CORE] state: ...`` form remains
+valid per the ``commit-prefix`` block). Merging that commit
+ends the phase; pre-merge close keeps ``state.json`` in sync
+with what reviewers approved.
 
 <!-- END EAWF:managed id=iter-phase-close-timing -->
