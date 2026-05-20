@@ -42,6 +42,7 @@ import logging
 import subprocess
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -147,7 +148,7 @@ def build_header_panel(state: dict[str, Any]) -> Panel:
     return Panel(build_brand_text(breadcrumb), title=None, border_style="dim")
 
 
-def build_weekly_burn_line(state: dict[str, Any]) -> str | None:
+def build_weekly_burn_line(state: dict[str, Any], *, now: datetime | None = None) -> str | None:
     """Return the ``weekly burn: <consumed> / <target>`` line, or None.
 
     The line is emitted only when ``state.project.weekly_eu_target`` is a
@@ -160,6 +161,10 @@ def build_weekly_burn_line(state: dict[str, Any]) -> str | None:
     Args:
         state: Loaded ``state.json`` dict (may be empty or missing
             ``project``).
+        now: Optional clock injection threaded to
+            :func:`~eawf.estimation.metrics.compute_weekly_burn` so the
+            trailing-7-day window is deterministic in tests. Production
+            callers leave this ``None`` to anchor on wall-clock.
 
     Returns:
         Formatted weekly-burn string when the target is set, else
@@ -181,13 +186,18 @@ def build_weekly_burn_line(state: dict[str, Any]) -> str | None:
         # fails schema validation (e.g. partial state, stale fixture).
         logger.debug("build_weekly_burn_line schema validation failed; suppressing line")
         return None
-    metric = compute_weekly_burn(typed_state)
+    metric = compute_weekly_burn(typed_state, now=now)
     if metric.target_eu is None:  # defensive — target gated above
         return None
     return f"weekly burn: {metric.consumed_eu:g} / {metric.target_eu:g} EU"
 
 
-def build_footer_panel(state: dict[str, Any] | None = None, *, keymap: str | None = None) -> Panel:
+def build_footer_panel(
+    state: dict[str, Any] | None = None,
+    *,
+    keymap: str | None = None,
+    now: datetime | None = None,
+) -> Panel:
     """Build the bottom-strip footer Panel with the keymap hint.
 
     The default keymap is :data:`FOOTER_KEYMAP` (quadrant keys). The
@@ -199,10 +209,18 @@ def build_footer_panel(state: dict[str, Any] | None = None, *, keymap: str | Non
     appends a ``weekly burn: <consumed> / <target> EU`` line below the
     keymap (per P20-I01-W09 success criterion 2). When the field is
     unset the panel renders only the keymap.
+
+    Args:
+        state: Loaded ``state.json`` dict, or ``None`` to render the
+            keymap-only footer.
+        keymap: Optional keymap-string override.
+        now: Optional clock injection threaded to
+            :func:`build_weekly_burn_line` for deterministic tests;
+            ``None`` anchors the burn window on wall-clock.
     """
     body = Text(keymap if keymap is not None else FOOTER_KEYMAP)
     if state is not None:
-        burn_line = build_weekly_burn_line(state)
+        burn_line = build_weekly_burn_line(state, now=now)
         if burn_line is not None:
             body.append(f"\n{burn_line}")
     return Panel(body, title=None, border_style="dim")
@@ -593,6 +611,7 @@ def build_frame(
     *,
     workspace: Path | None = None,
     footer_keymap: str | None = None,
+    now: datetime | None = None,
 ) -> Layout:
     """Assemble header + body (quadrant) + footer into one Layout.
 
@@ -610,12 +629,15 @@ def build_frame(
         footer_keymap: Optional override for the footer keymap string
             — set to :data:`FOOTER_KEYMAP_OVERLAY_PENDING` while the
             operator is mid-``o<letter>`` verb prefix.
+        now: Optional clock injection threaded to the weekly-burn
+            builders for deterministic tests; ``None`` anchors the
+            burn window on wall-clock.
     """
     # Bump the footer row by one when the weekly burn line is present;
     # otherwise the burn line and panel border collide on narrow
     # terminals. Stays at 3 rows when the field is unset so the
     # existing golden snapshot is byte-stable.
-    footer_size = 4 if build_weekly_burn_line(state) is not None else 3
+    footer_size = 4 if build_weekly_burn_line(state, now=now) is not None else 3
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
@@ -624,7 +646,7 @@ def build_frame(
     )
     layout["header"].update(build_header_panel(state))
     layout["body"].update(build_quadrant(repo_quadrant_panes(state, workspace=workspace)))
-    layout["footer"].update(build_footer_panel(state, keymap=footer_keymap))
+    layout["footer"].update(build_footer_panel(state, keymap=footer_keymap, now=now))
     return layout
 
 

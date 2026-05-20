@@ -169,7 +169,9 @@ def test_compute_weekly_burn_project_none_means_target_none() -> None:
 def test_build_weekly_burn_line_renders_when_target_set() -> None:
     """The helper returns the formatted line when the target is set."""
     state_dict = _state_dict(target=10.0, recent_eu=3.5, stale_eu=0.0)
-    line = build_weekly_burn_line(state_dict)
+    # Inject the fixture anchor so the trailing-7-day window includes the
+    # in-window actual regardless of wall-clock date.
+    line = build_weekly_burn_line(state_dict, now=_now())
     assert line is not None
     assert "weekly burn:" in line
     assert "10" in line  # target value present
@@ -215,7 +217,9 @@ def test_build_footer_panel_no_state_renders_keymap_only() -> None:
 def test_build_footer_panel_with_target_renders_burn_line() -> None:
     """When project.weekly_eu_target is set, the footer carries the burn line."""
     state_dict = _state_dict(target=10.0, recent_eu=3.5, stale_eu=99.0)
-    rendered = _render(build_footer_panel(state_dict))
+    # Inject the fixture anchor so the trailing-7-day window includes the
+    # in-window actual regardless of wall-clock date.
+    rendered = _render(build_footer_panel(state_dict, now=_now()))
     assert "weekly burn:" in rendered
     assert "3.5" in rendered
     assert "10" in rendered
@@ -248,7 +252,9 @@ def test_build_footer_panel_unset_renders_no_burn_line() -> None:
 def test_build_frame_with_target_carries_burn_line() -> None:
     """The full frame renders the burn line inside the footer row."""
     state_dict = _state_dict(target=10.0, recent_eu=3.5, stale_eu=99.0)
-    rendered = _render(build_frame(state_dict))
+    # Inject the fixture anchor so the trailing-7-day window includes the
+    # in-window actual regardless of wall-clock date.
+    rendered = _render(build_frame(state_dict, now=_now()))
     assert "weekly burn:" in rendered
     # P20-I03-W01: quadrant keymap leads with ``b board``; checking
     # the full leading two-word phrase keeps the assertion meaningful
