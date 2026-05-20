@@ -1551,7 +1551,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W22"
+    ],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2973,7 +2975,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T15:57:15.591081Z",
+  "updated_at": "2026-05-20T16:02:49.569962Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9328,7 +9330,7 @@
     "P26-I01-W22": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p26-w22-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9349,14 +9351,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "legacy src/eawf/tui/ migration verdict recorded per Codex C06-I010: parallel tree stays through P26 close; bare-eawf flips to tui_v2 default; EAWF_TUI_LEGACY=1 escape hatch documented; deletion deferred to follow-up phase (not P26)"
       ],
       "title": "test: C06 Pilot snapshot harness (ASCII text) + asciinema cast + perf budget CI gate + legacy tui/ migration verdict",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W22-1779292969"
     },
     "P26-I01-W23": {
       "agent_role": "executor",
@@ -10078,6 +10080,17 @@
       "path": ".ea/worktrees/p26-w21",
       "status": "abandoned",
       "wave_id": "P26-I01-W21"
+    },
+    "WT-P26-I01-W22-1779292969": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w22",
+      "created_at": "2026-05-20T16:02:49.569962Z",
+      "id": "WT-P26-I01-W22-1779292969",
+      "merged_commit": null,
+      "owner_session_id": "p26-w22-exec",
+      "path": ".ea/worktrees/p26-w22",
+      "status": "active",
+      "wave_id": "P26-I01-W22"
     },
     "WT-P26-I01-W23-1779235537": {
       "base_branch": "feature/eawf-v0.3-p26",
