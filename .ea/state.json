@@ -2974,7 +2974,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T16:39:12.230070Z",
+  "updated_at": "2026-05-20T17:29:07.969531Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9503,8 +9503,8 @@
     "P26-I01-W27": {
       "agent_role": "polisher",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p26-w27-polish",
+      "closed_at": "2026-05-20T17:29:07.378405Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9520,10 +9520,10 @@
       "id": "P26-I01-W27",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-20T16:39:12.230046Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "all bare cluster/decision/failure-mode ID tokens (C05/C04b/C06/C07a §refs",
         "D8-D29",
@@ -9535,7 +9535,7 @@
       "title": "chore: P26 polish — strip rule-25 design-ID tokens from source comments/docstrings + ship.py log-format fix",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W27-1779295160"
     }
   },
   "workspace": null,
@@ -10177,6 +10177,17 @@
       "path": ".ea/worktrees/p26-w26",
       "status": "merged",
       "wave_id": "P26-I01-W26"
+    },
+    "WT-P26-I01-W27-1779295160": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.1-p26-w27",
+      "created_at": "2026-05-20T16:39:20.319305Z",
+      "id": "WT-P26-I01-W27-1779295160",
+      "merged_commit": "6bdcfa8",
+      "owner_session_id": "p26-w27-polish",
+      "path": ".ea/worktrees/p26-w27",
+      "status": "merged",
+      "wave_id": "P26-I01-W27"
     }
   }
 }
