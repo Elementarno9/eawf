@@ -1530,9 +1530,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W15"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2954,7 +2952,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:44:29.893555Z",
+  "updated_at": "2026-05-20T14:05:15.365646Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9027,7 +9025,7 @@
         "P26-I01-W26"
       ],
       "claim_session_id": "p26-w15-audit",
-      "closed_at": null,
+      "closed_at": "2026-05-20T14:05:14.650535Z",
       "commit": null,
       "deps": [
         "P26-I01-W06",
@@ -9046,10 +9044,10 @@
       "id": "P26-I01-W15",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:15.105630Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "iter P26-I01 close envelope emitted only after /audit + /polish + ship CI + PR review pass per iter-phase-close-timing"
       ],
@@ -9948,10 +9946,10 @@
       "branch": "feature/eawf-v0.1-p26-w15",
       "created_at": "2026-05-20T13:35:07.141401Z",
       "id": "WT-P26-I01-W15-1779284107",
-      "merged_commit": null,
+      "merged_commit": "103c00d",
       "owner_session_id": "p26-w15-audit",
       "path": ".ea/worktrees/p26-w15",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W15"
     },
     "WT-P26-I01-W23-1779235537": {
