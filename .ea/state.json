@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W21"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2975,7 +2973,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T15:40:04.801758Z",
+  "updated_at": "2026-05-20T15:57:15.591081Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9293,8 +9291,8 @@
         "P26-I01-W22"
       ],
       "claim_session_id": "p26-w21-exec",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-20T15:57:10.136021Z",
+      "commit": "d756bb5923763d3d1afeb63b05923634c2a24a1c",
       "deps": [
         "P26-I01-W19"
       ],
@@ -9305,15 +9303,20 @@
         "src/eawf/tui_v2/screens/overlays/pr_list.py",
         "src/eawf/tui_v2/screens/overlays/events.py",
         "src/eawf/tui_v2/widgets/heartbeat.py",
-        "src/eawf/tui_v2/palette/verbs.py"
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/screens/overlays/__init__.py",
+        "tests/tui_v2/test_overlays_metrics.py",
+        "tests/tui_v2/test_overlays_events.py",
+        "tests/tui_v2/test_overlays_pr_list.py",
+        "tests/tui_v2/test_widgets_heartbeat.py"
       ],
       "id": "P26-I01-W21",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:19.130811Z",
-      "outcome": null,
+      "outcome": "C06 /metrics 3x2 + /pr overlay + EventsModal + standalone heartbeat; landed via manual cherry-pick conflict resolution (verbs.py + overlays/__init__.py additive merge with W20)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "runtime cell idle state: 'runtime: idle' muted per D29; flips muted->accent->warn(switched in last 60s)->err(every runtime in ladder failed)"
       ],
@@ -10073,7 +10076,7 @@
       "merged_commit": null,
       "owner_session_id": "p26-w21-exec",
       "path": ".ea/worktrees/p26-w21",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P26-I01-W21"
     },
     "WT-P26-I01-W23-1779235537": {
