@@ -26,6 +26,7 @@ End-to-end against a live socket is covered by
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -324,6 +325,119 @@ def test_state_mutate_daemonless_user_error_exit_code(
             verb="wave close",
         )
     assert excinfo.value.exit_code == exit_codes.USER_ERROR
+
+
+# ---- (c') chokepoint: state_transaction rejects mutating --daemonless ------
+# W25 wires the §5.5 rejection into the shared state_transaction chokepoint
+# so every mutating verb (roadmap / memory / worktree / session / evidence
+# / ...) inherits it, not just `state rpc`. The flag is recorded
+# process-wide by the root callback; reads opt out with read_only=True.
+
+
+@pytest.fixture(autouse=True)
+def _reset_daemonless_flag() -> Iterator[None]:
+    """Clear the process-wide --daemonless flag around every test.
+
+    The root callback sets it per invocation, but unit tests that poke
+    ``state_transaction`` directly bypass the callback, so reset here to
+    keep the module global from leaking across tests.
+    """
+    _mutation.set_daemonless_flag(False)
+    yield
+    _mutation.set_daemonless_flag(False)
+
+
+def test_state_transaction_rejects_when_daemonless_flag_set(
+    tmp_path: Path,
+) -> None:
+    """A mutating state_transaction refuses once the --daemonless flag is set."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _build_state(state_path)
+    _mutation.set_daemonless_flag(True)
+    with (
+        pytest.raises(cli_errors.InvalidInput) as excinfo,
+        _mutation.state_transaction(state_path),
+    ):
+        pytest.fail("mutating transaction must reject before yielding")
+    assert excinfo.value.exit_code == exit_codes.USER_ERROR
+    assert "--daemonless rejected" in str(excinfo.value)
+
+
+def test_state_transaction_read_only_bypasses_daemonless_rejection(
+    tmp_path: Path,
+) -> None:
+    """read_only=True keeps the daemon-bypass carve-out open for snapshot reads."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _build_state(state_path)
+    _mutation.set_daemonless_flag(True)
+    with _mutation.state_transaction(state_path, read_only=True) as state:
+        assert state.project is not None
+        assert state.project.code == "ABC"
+
+
+def test_state_transaction_no_flag_allows_mutation(
+    tmp_path: Path,
+) -> None:
+    """Without the --daemonless flag the mutating transaction proceeds normally."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _build_state(state_path)
+    _mutation.set_daemonless_flag(False)
+    from datetime import UTC, datetime
+
+    with _mutation.state_transaction(state_path) as state:
+        state.updated_at = datetime.now(UTC)  # touch; commits on exit
+    assert state_path.exists()
+
+
+def test_state_transaction_rejects_before_touching_missing_file(
+    tmp_path: Path,
+) -> None:
+    """The §5.5 gate fires before the file-exists check (InvalidInput, not NotFound)."""
+    missing = tmp_path / ".ea" / "state.json"  # never created
+    _mutation.set_daemonless_flag(True)
+    with (
+        pytest.raises(cli_errors.InvalidInput),
+        _mutation.state_transaction(missing),
+    ):
+        pytest.fail("must reject on the flag before the file-exists check")
+
+
+def test_cli_mutating_verb_rejects_daemonless_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`roadmap revise --daemonless` (mutating) exits 1 with kind=InvalidInput."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _build_state(state_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    monkeypatch.setattr(
+        "eawf.daemon.spawn.auto_spawn_daemon",
+        lambda _r: pytest.fail("mutating verb must reject before any spawn"),
+    )
+    result = runner.invoke(
+        app,
+        ["--daemonless", "--json", "roadmap", "revise", "P26", "--retitle", "X"],
+    )
+    assert result.exit_code == exit_codes.USER_ERROR, result.output
+    payload = orjson.loads(result.stdout)
+    assert payload["data"]["kind"] == "InvalidInput"
+    assert "--daemonless rejected" in payload["message"]
+
+
+def test_cli_read_verb_honours_daemonless_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`roadmap show --daemonless` (read-only) still works under the carve-out."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _build_state(state_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    monkeypatch.setattr(
+        "eawf.daemon.spawn.auto_spawn_daemon",
+        lambda _r: pytest.fail("read-only verb must not spawn the daemon"),
+    )
+    result = runner.invoke(app, ["--daemonless", "--json", "roadmap", "show"])
+    assert result.exit_code == exit_codes.OK, result.output
 
 
 # ---- dev-mode gate on the raw RPC passthrough verb -------------------------

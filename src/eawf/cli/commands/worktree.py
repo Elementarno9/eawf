@@ -219,7 +219,9 @@ def worktree_list_cmd(
     try:
         # Read-only listing: state_transaction held for a consistent
         # snapshot against concurrent cleanup/create mutations.
-        with state_transaction(state_path) as state:
+        # read_only=True bypasses the §5.5 --daemonless mutating-verb gate
+        # so this read still honours the daemon-bypass carve-out.
+        with state_transaction(state_path, read_only=True) as state:
             rows = list(list_worktrees(state, repo_root=repo_root, include_terminal=all_))
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)

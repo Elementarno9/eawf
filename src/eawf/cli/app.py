@@ -96,6 +96,13 @@ def _root(
         daemonless=daemonless,
         debug=debug,
     )
+    # Record the --daemonless flag process-wide so the shared
+    # state_transaction chokepoint can reject mutating verbs per C05
+    # §5.5 without each command threading the flag through. Always set
+    # (incl. False) so the record reflects only this invocation.
+    from eawf.cli._mutation import set_daemonless_flag
+
+    set_daemonless_flag(daemonless)
     if ctx.invoked_subcommand is None:
         # Bare ``eawf`` on a TTY routes to the Textual TUI
         # (config.ui.bare_command default: "tui") via the C06 scope-

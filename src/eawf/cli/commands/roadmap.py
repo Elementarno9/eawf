@@ -613,7 +613,9 @@ def roadmap_show_cmd(
         cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
         return
     try:
-        with state_transaction(state_path) as state:
+        # Read-only view: read_only=True bypasses the §5.5 --daemonless
+        # mutating-verb gate so `roadmap show --daemonless` still works.
+        with state_transaction(state_path, read_only=True) as state:
             phases = sorted(state.phases.values(), key=lambda p: p.id)
             if phase is not None:
                 phases = [p for p in phases if p.id == phase]

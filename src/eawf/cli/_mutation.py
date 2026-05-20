@@ -2,11 +2,17 @@
 
 Two entry points coexist in this module:
 
-* :func:`state_transaction` — the legacy in-process context manager.
+* :func:`state_transaction` — the legacy in-process context manager and
+  the common chokepoint every state-mutating CLI verb routes through.
   Acquires the sibling lock for ``state.json``, yields the typed
   :class:`~eawf.state.models.State` for the caller to mutate in place,
   then validates and atomically writes it back. The full read-modify-
   write runs under one lock acquisition so concurrent writers serialise.
+  Because it is the shared write path, the C05 §5.5 ``--daemonless``
+  rejection for mutating verbs lives here: when the operator passed the
+  ``--daemonless`` flag (recorded process-wide by the root callback via
+  :func:`set_daemonless_flag`) and the caller did not opt out with
+  ``read_only=True``, the transaction refuses before acquiring the lock.
 
 * :func:`state_mutate` (P24-W09) — the daemon-proxy entry point. Builds
   a typed :class:`~eawf.state.mutations.Mutation` payload and proxies it
@@ -50,16 +56,70 @@ from eawf.validate.strict import validate_state
 logger = logging.getLogger(__name__)
 
 
+# Process-wide record of whether the operator passed the ``--daemonless``
+# *flag* on this invocation. Set once per process by the Typer root
+# callback (:func:`eawf.cli.app._root`) from :class:`GlobalFlags`. The
+# chokepoint in :func:`state_transaction` reads it to enforce the C05
+# §5.5 rule that mutating verbs reject ``--daemonless``.
+#
+# This keys on the *flag* deliberately, NOT on ``EAWF_DAEMONLESS=1``:
+# the env hatch routes mutating verbs to the in-process fallback for the
+# V1 CI / one-shot / recovery carve-out (handled in :func:`_proxy_enabled`)
+# and must NOT hard-reject — the integration suite forces the env var
+# autouse precisely so its in-process mutating verbs keep working. The
+# explicit ``--daemonless`` flag, by contrast, is the operator asserting
+# "no daemon", which a mutating verb cannot honour.
+_DAEMONLESS_FLAG_REQUESTED: bool = False
+
+
+def set_daemonless_flag(requested: bool) -> None:
+    """Record whether the ``--daemonless`` flag was passed this invocation.
+
+    Called once by the Typer root callback after it builds
+    :class:`~eawf.cli.flags.GlobalFlags`. Always called (with ``False``
+    when the flag is absent) so the process-wide record reflects only the
+    current invocation and never leaks across CliRunner calls in tests.
+
+    Args:
+        requested: ``True`` when ``--daemonless`` was on the command line.
+    """
+    global _DAEMONLESS_FLAG_REQUESTED
+    _DAEMONLESS_FLAG_REQUESTED = requested
+
+
+def daemonless_flag_requested() -> bool:
+    """Return whether the ``--daemonless`` flag was passed this invocation.
+
+    Reads the process-wide record set by :func:`set_daemonless_flag`.
+    Distinct from :func:`eawf.cli._dispatch.daemonless_requested`, which
+    also returns ``True`` for the ``EAWF_DAEMONLESS=1`` env hatch — this
+    helper is flag-only because the chokepoint must reject the explicit
+    flag while letting the env hatch fall through to the in-process path.
+
+    Returns:
+        ``True`` when the operator passed ``--daemonless`` on this call.
+    """
+    return _DAEMONLESS_FLAG_REQUESTED
+
+
 @contextmanager
 def state_transaction(
     state_path: Path,
     *,
     timeout: float = 5.0,
+    read_only: bool = False,
 ) -> Iterator[State]:
     """Yield a typed :class:`State` under ``portalock(state_path)``.
 
     Procedure:
 
+    0. C05 §5.5 daemonless gate: when this is a mutating transaction
+       (``read_only=False``, the default) AND the operator passed the
+       ``--daemonless`` flag (per :func:`daemonless_flag_requested`),
+       refuse with :class:`~eawf.cli.errors.InvalidInput` *before*
+       touching the file — mutating verbs are daemon-only. Read-only
+       callers (``worktree list``, ``roadmap show``) pass
+       ``read_only=True`` to bypass this gate.
     1. Acquire :func:`eawf.lock.portalock.acquire` on *state_path* with
        *timeout* (default 5 s, matching the rest of the CLI).
     2. Read + decode + schema-validate the on-disk state. Schema errors
@@ -72,7 +132,18 @@ def state_transaction(
     5. ``atomic_write_json_locked`` persists the new payload while
        the lock is still held.
 
+    Args:
+        state_path: Absolute path to ``state.json``.
+        timeout: Lock-acquisition timeout in seconds.
+        read_only: When ``True`` the caller only reads the yielded state
+            for a consistent snapshot (e.g. listing / show verbs) and the
+            §5.5 ``--daemonless`` rejection is skipped. Defaults to
+            ``False`` (mutating) so every write path inherits the gate.
+
     Raises:
+        InvalidInput: When ``read_only=False`` and the ``--daemonless``
+            flag was passed (``data.kind="InvalidInput"``) — mutating
+            verbs cannot run daemonless per C05 §5.5 / F3.
         NotFound: When *state_path* does not exist.
         ValidationFailed: When the loaded payload fails schema
             validation, or the post-mutation payload fails schema
@@ -90,6 +161,11 @@ def state_transaction(
         already-loaded* :class:`State` *as a parameter and return mutations
         rather than acquiring the lock themselves.*
     """
+    if not read_only and daemonless_flag_requested():
+        raise cli_errors.InvalidInput(
+            "--daemonless rejected: this is a mutating verb "
+            "(requires daemon-mediated transactions per V1)"
+        )
     if not state_path.exists():
         raise cli_errors.NotFound(f"state file not found: {state_path}")
     try:
