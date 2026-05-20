@@ -1531,7 +1531,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W07",
       "P26-I01-W13",
       "P26-I01-W09"
     ],
@@ -2954,7 +2953,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:14:36.205470Z",
+  "updated_at": "2026-05-20T13:15:09.353450Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8739,7 +8738,7 @@
         "P26-I01-W15"
       ],
       "claim_session_id": "p26-w07-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:15:08.725671Z",
       "commit": null,
       "deps": [
         "P26-I01-W05"
@@ -8754,10 +8753,10 @@
       "id": "P26-I01-W07",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:09.625602Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "existing pytest suite + uv run pre-commit run --all-files pass without changes to test imports (re-exports preserved at package __init__.py)"
       ],
@@ -9784,10 +9783,10 @@
       "branch": "feature/eawf-v0.1-p26-w07",
       "created_at": "2026-05-20T13:04:50.383949Z",
       "id": "WT-P26-I01-W07-1779282290",
-      "merged_commit": null,
+      "merged_commit": "dbdca3a",
       "owner_session_id": "p26-w07-exec",
       "path": ".ea/worktrees/p26-w07",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W07"
     },
     "WT-P26-I01-W08-1779281345": {
