@@ -1530,9 +1530,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W14"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2952,7 +2950,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T13:25:18.092374Z",
+  "updated_at": "2026-05-20T13:34:32.370573Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -8984,7 +8982,7 @@
         "P26-I01-W15"
       ],
       "claim_session_id": "p26-w14-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-20T13:34:31.635115Z",
       "commit": null,
       "deps": [
         "P26-I01-W13"
@@ -9001,10 +8999,10 @@
       "id": "P26-I01-W14",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-19T23:53:14.422456Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tests/runtimes/test_cache_control.py covers (a) marker injection at adapter boundary",
         "(b) /compress event emit",
@@ -9859,10 +9857,10 @@
       "branch": "feature/eawf-v0.1-p26-w14",
       "created_at": "2026-05-20T13:25:18.092374Z",
       "id": "WT-P26-I01-W14-1779283518",
-      "merged_commit": null,
+      "merged_commit": "ac2e2de",
       "owner_session_id": "p26-w14-exec",
       "path": ".ea/worktrees/p26-w14",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W14"
     },
     "WT-P26-I01-W23-1779235537": {
