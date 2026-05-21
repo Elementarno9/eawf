@@ -1551,9 +1551,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W38"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2987,7 +2985,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T02:15:05.613168Z",
+  "updated_at": "2026-05-21T02:19:58.594210Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9909,7 +9907,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w38",
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:19:57.990072Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9922,10 +9920,10 @@
       "id": "P26-I01-W38",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T02:00:14.851596Z",
-      "outcome": null,
+      "outcome": "ConfigModal focus-zone nav: up/down traverse tab-bar<->fields, left/right + Space zone-sensitive (switch tab on tab-bar, cycle value on field), single-field runtime tab navigable, visible zone-aware key helper; 14 tests + 5 goldens; full suite green 4863 passed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ConfigModal footer key helper visibly lists every key — arrows move field and Space or left-right change the value and Enter edits and s saves and r resets and L cycles layer and a tab-switch key and Esc closes",
         "Space cycles a choice field value in addition to left-right and still toggles a bool so both keys change the value per operator request",
@@ -10705,10 +10703,10 @@
       "branch": "feature/eawf-v0.3-p26-w38",
       "created_at": "2026-05-21T02:00:15.908579Z",
       "id": "WT-P26-I01-W38-1779328815",
-      "merged_commit": null,
+      "merged_commit": "ab16b01",
       "owner_session_id": "op-p26-w38",
       "path": ".ea/worktrees/p26-w38",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W38"
     }
   }
