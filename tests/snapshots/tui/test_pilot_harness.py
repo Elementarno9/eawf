@@ -176,3 +176,36 @@ def test_assert_screen_snapshot_drift_raises(
                 assert_screen_snapshot(app, golden)
 
     asyncio.run(body())
+
+
+def test_assert_screen_snapshot_drift_message_includes_unified_diff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Regenerate the golden, then perturb a single row so the drift diff
+    # surfaces the exact differing line rather than a wholesale mismatch.
+    golden = tmp_path / "repo.txt"
+
+    async def body() -> str:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await pilot.pause()
+            monkeypatch.setenv(SNAPSHOT_REGEN_ENV, "1")
+            assert_screen_snapshot(app, golden)  # writes the true golden
+            monkeypatch.delenv(SNAPSHOT_REGEN_ENV)
+
+            rows = golden.read_text(encoding="utf-8").splitlines()
+            rows[0] = "TAMPERED HEADER ROW"
+            golden.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+            with pytest.raises(AssertionError) as exc:
+                assert_screen_snapshot(app, golden)
+            return str(exc.value)
+
+    message = asyncio.run(body())
+    # Unified-diff hunk markers + line-tagged sides are present.
+    assert "snapshot drift" in message
+    assert "repo.txt (expected)" in message
+    assert "repo.txt (actual)" in message
+    assert "@@" in message
+    assert "-TAMPERED HEADER ROW" in message

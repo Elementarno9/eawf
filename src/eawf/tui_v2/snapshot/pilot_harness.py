@@ -27,6 +27,8 @@ function of the bound (fixture) ``state.json``.
 
 from __future__ import annotations
 
+import difflib
+import itertools
 import os
 import re
 from typing import TYPE_CHECKING
@@ -58,6 +60,12 @@ _CLOCK_PLACEHOLDER: str = "HH:MM UTC"
 #: if a frame never stabilises (e.g. a live animation) while giving the
 #: async state-load + widget-seed handshake ample room.
 _SETTLE_MAX_CYCLES: int = 20
+
+#: Upper bound on unified-diff lines embedded in a drift ``AssertionError``.
+#: A full-screen frame is ~40 rows, so a real drift fits comfortably; the
+#: cap only guards against an unbounded log dump if the two frames diverge
+#: wholesale (e.g. an empty capture vs a populated golden).
+_DRIFT_DIFF_MAX_LINES: int = 200
 
 
 async def settle_screen(pilot: Pilot[object]) -> str:
@@ -153,7 +161,10 @@ def assert_screen_snapshot(app: App[object], golden_path: Path) -> None:
 
     Raises:
         AssertionError: When the normalised capture differs from the
-            golden and regeneration is not requested.
+            golden and regeneration is not requested. The message embeds a
+            line-tagged :func:`difflib.unified_diff` of golden (expected)
+            vs capture (actual), capped at :data:`_DRIFT_DIFF_MAX_LINES`
+            lines, so a residual CI drift shows the exact differing rows.
     """
     captured = normalize_snapshot(capture_screen_text(app))
     if os.environ.get(SNAPSHOT_REGEN_ENV) == "1":
@@ -161,9 +172,38 @@ def assert_screen_snapshot(app: App[object], golden_path: Path) -> None:
         golden_path.write_text(captured + "\n", encoding="utf-8")
         return
     expected = golden_path.read_text(encoding="utf-8").rstrip("\n")
-    assert captured == expected, (
+    if captured != expected:
+        raise AssertionError(_drift_message(golden_path, expected, captured))
+
+
+def _drift_message(golden_path: Path, expected: str, captured: str) -> str:
+    """Build the drift ``AssertionError`` message with a unified diff.
+
+    Args:
+        golden_path: Path to the golden fixture that drifted.
+        expected: The golden text (the ``---`` side of the diff).
+        captured: The live, normalised capture (the ``+++`` side).
+
+    Returns:
+        A multi-line message: a one-line header naming the fixture and the
+        regen hatch, followed by a line-tagged unified diff capped at
+        :data:`_DRIFT_DIFF_MAX_LINES` lines.
+    """
+    diff = difflib.unified_diff(
+        expected.splitlines(),
+        captured.splitlines(),
+        fromfile=f"{golden_path.name} (expected)",
+        tofile=f"{golden_path.name} (actual)",
+        lineterm="",
+    )
+    capped = list(itertools.islice(diff, _DRIFT_DIFF_MAX_LINES + 1))
+    if len(capped) > _DRIFT_DIFF_MAX_LINES:
+        capped[_DRIFT_DIFF_MAX_LINES] = f"... (diff truncated at {_DRIFT_DIFF_MAX_LINES} lines)"
+    body = "\n".join(capped)
+    return (
         f"snapshot drift for {golden_path.name!r}; "
-        f"regenerate with {SNAPSHOT_REGEN_ENV}=1 uv run pytest tests/snapshots/tui/"
+        f"regenerate with {SNAPSHOT_REGEN_ENV}=1 uv run pytest tests/snapshots/tui/\n"
+        f"{body}"
     )
 
 
