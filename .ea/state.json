@@ -16,6 +16,16 @@
     }
   },
   "artifacts": {
+    "A33-P26-tui-fixes-report": {
+      "created_at": "2026-05-21T10:26:56.308705Z",
+      "id": "A33-P26-tui-fixes-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-21-p26-i01-tui-fixes.md",
+      "urn": "urn:eawf:v1:artifact:P26/A33-P26-tui-fixes-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -846,10 +856,10 @@
       "id": "A33-P26-tui-fixes",
       "integrity_results": [],
       "kind": "review",
-      "report_artifact_id": null,
+      "report_artifact_id": "A33-P26-tui-fixes-report",
       "scope_id": "P26",
-      "status": "pending",
-      "verdict": null
+      "status": "complete",
+      "verdict": "minor"
     }
   },
   "backlog": {
@@ -2998,7 +3008,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T10:17:34.466999Z",
+  "updated_at": "2026-05-21T10:27:02.781437Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
