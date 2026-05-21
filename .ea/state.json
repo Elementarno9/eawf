@@ -1552,7 +1552,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W35",
       "P26-I01-W38"
     ],
     "iter_id": "P26-I01",
@@ -2988,7 +2987,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T02:00:15.908579Z",
+  "updated_at": "2026-05-21T02:15:05.613168Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9804,7 +9803,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w35",
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:15:04.988428Z",
       "commit": null,
       "deps": [
         "P26-I01-W31",
@@ -9825,10 +9824,10 @@
       "id": "P26-I01-W35",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T00:47:40.819188Z",
-      "outcome": null,
+      "outcome": "removed legacy Rich tui/ tree (9 modules + 19 tests); built tui_v2 non-TTY status emitter + workspace offline_render replacements, rewired cli/app.py + workspace.py + ship.py; grep-clean no eawf.tui refs; full suite green 4360 passed, mypy 401 clean, pre-commit green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tui_v2 owns the non-TTY and --plain and --no-input deterministic status fallback replacing legacy run_tui offline mode",
         "workspace offline_render replaced by a tui_v2 equivalent used by cli workspace command",
@@ -10673,10 +10672,10 @@
       "branch": "feature/eawf-v0.3-p26-w35",
       "created_at": "2026-05-21T01:58:05.264649Z",
       "id": "WT-P26-I01-W35-1779328685",
-      "merged_commit": null,
+      "merged_commit": "a74dbf5",
       "owner_session_id": "op-p26-w35",
       "path": ".ea/worktrees/p26-w35",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W35"
     },
     "WT-P26-I01-W36-1779326292": {
