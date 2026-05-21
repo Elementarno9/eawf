@@ -1552,8 +1552,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W31",
-      "P26-I01-W32"
+      "P26-I01-W31"
     ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
@@ -2985,7 +2984,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T01:06:03.620863Z",
+  "updated_at": "2026-05-21T01:07:23.417893Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9697,7 +9696,7 @@
         "P26-I01-W35"
       ],
       "claim_session_id": "op-p26-w32",
-      "closed_at": null,
+      "closed_at": "2026-05-21T01:07:22.638835Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9711,10 +9710,10 @@
       "id": "P26-I01-W32",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T00:47:40.063304Z",
-      "outcome": null,
+      "outcome": "TUI keybindings: raw w/r/u scope-switch, refresh moved r->F5 (affordance preserved), dead w-waveboard binding removed, c left for W34; footer/help/goldens updated; full gauntlet green 4780 passed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Raw w r u keys switch workspace/repo/user scope with the ctrl prefix dropped",
         "Dead no-op bindings removed namely b and the old w-to-waveboard binding that have no handler in tui_v2",
@@ -10539,10 +10538,10 @@
       "branch": "feature/eawf-v0.3-p26-w32",
       "created_at": "2026-05-21T00:55:03.759762Z",
       "id": "WT-P26-I01-W32-1779324903",
-      "merged_commit": null,
+      "merged_commit": "b549adc",
       "owner_session_id": "op-p26-w32",
       "path": ".ea/worktrees/p26-w32",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W32"
     },
     "WT-P26-I01-W33-1779324904": {
