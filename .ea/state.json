@@ -1572,7 +1572,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W43"
+    ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2477,7 +2479,8 @@
         "P26-I01-W39",
         "P26-I01-W40",
         "P26-I01-W41",
-        "P26-I01-W42"
+        "P26-I01-W42",
+        "P26-I01-W43"
       ]
     },
     "P27-I01": {
@@ -3010,7 +3013,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T11:26:49.495119Z",
+  "updated_at": "2026-05-21T11:38:35.145565Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10084,6 +10087,37 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W42-1779362058"
+    },
+    "P26-I01-W43": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p26-w43",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".github/workflows/ci.yaml",
+        "src/eawf/tui_v2/snapshot/pilot_harness.py",
+        "tests"
+      ],
+      "id": "P26-I01-W43",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T11:38:33.923921Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "ci.yaml runs tests/snapshots/tui and tests/perf/tui serially (-n0) while the rest stays -n auto so render/timing tests no longer flake under parallel CPU contention",
+        "pilot_harness assert_screen_snapshot raises with a unified diff of captured-vs-golden so any residual drift is visible in the CI log",
+        "both the parallel and serial pytest invocations pass locally and mypy and pre-commit green"
+      ],
+      "title": "ci: run TUI snapshot+perf tests serially (kill -n auto contention flake) + harness diff-dump",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P26-I01-W43-1779363515"
     }
   },
   "workspace": null,
@@ -10890,6 +10924,17 @@
       "path": ".ea/worktrees/p26-w42",
       "status": "merged",
       "wave_id": "P26-I01-W42"
+    },
+    "WT-P26-I01-W43-1779363515": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w43",
+      "created_at": "2026-05-21T11:38:35.145565Z",
+      "id": "WT-P26-I01-W43-1779363515",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w43",
+      "path": ".ea/worktrees/p26-w43",
+      "status": "active",
+      "wave_id": "P26-I01-W43"
     }
   }
 }
