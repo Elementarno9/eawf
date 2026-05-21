@@ -404,6 +404,22 @@ def test_roadmap_drop_archives_planned(workspace: Path) -> None:
     assert state["phases"]["P21"]["status"] == "archived"
 
 
+def test_roadmap_drop_cascades_pending_waves_to_abandoned(workspace: Path) -> None:
+    """Dropping a planned phase abandons its PENDING child waves + iter."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--add-wave", "W01", "--title", "feat: a", "--files", "src/"],
+    )
+    res = runner.invoke(app, ["roadmap", "drop", "P21"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["status"] == "archived"
+    assert state["waves"]["P21-I01-W01"]["status"] == "abandoned"
+    assert state["waves"]["P21-I01-W01"]["closed_at"] is not None
+    assert state["iters"]["P21-I01"]["status"] == "abandoned"
+
+
 def test_roadmap_show_renders_planned_queue(workspace: Path) -> None:
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
     res = runner.invoke(app, ["roadmap", "show"])

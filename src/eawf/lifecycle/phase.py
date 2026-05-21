@@ -18,6 +18,18 @@ from eawf.state.models import Phase, State
 
 logger = logging.getLogger(__name__)
 
+#: Wave statuses that are already terminal — :func:`archive_phase` leaves
+#: these untouched when cascading to ABANDONED.
+_TERMINAL_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
+    {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}
+)
+
+#: Iter statuses that are already terminal — :func:`archive_phase` leaves
+#: these untouched when cascading to ABANDONED.
+_TERMINAL_ITER_STATUSES: frozenset[IterStatus] = frozenset(
+    {IterStatus.CLOSED, IterStatus.ABANDONED}
+)
+
 
 def open_phase(
     state: State,
@@ -210,6 +222,14 @@ def activate_phase(state: State, *, phase_id: str) -> Phase:
 def archive_phase(state: State, *, phase_id: str) -> Phase:
     """Move a planned phase to archived. Used by ``eawf roadmap drop``.
 
+    Cascades to the phase's children so archiving never leaves zombie
+    non-terminal records behind: every wave under the phase's iters that
+    is not already terminal (``closed`` / ``failed`` / ``abandoned``) is
+    moved to :data:`WaveStatus.ABANDONED`, and every non-terminal iter
+    (``planned`` / ``active``) is moved to :data:`IterStatus.ABANDONED`.
+    Closure timestamps are stamped so the closure-timestamp invariant
+    holds for the now-terminal children.
+
     Raises:
         LifecycleError: when *phase_id* is unknown or not in PLANNED state.
     """
@@ -221,9 +241,29 @@ def archive_phase(state: State, *, phase_id: str) -> Phase:
             f"phase {phase_id!r} has status {phase.status.value!r}; "
             "only planned phases can be archived"
         )
+    now = datetime.now(UTC)
+    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    abandoned_waves = 0
+    for wave in state.waves.values():
+        if wave.iter_id in iter_ids_in_phase and wave.status not in _TERMINAL_WAVE_STATUSES:
+            wave.status = WaveStatus.ABANDONED
+            wave.closed_at = now
+            abandoned_waves += 1
+            if wave.id in state.current.active_wave_ids:
+                state.current.active_wave_ids.remove(wave.id)
+    abandoned_iters = 0
+    for iid in iter_ids_in_phase:
+        it = state.iters[iid]
+        if it.status not in _TERMINAL_ITER_STATUSES:
+            it.status = IterStatus.ABANDONED
+            it.closed_at = now
+            abandoned_iters += 1
     phase.status = PhaseStatus.ARCHIVED
-    phase.closed_at = datetime.now(UTC)
-    logger.info(f"archive_phase id={phase_id}")
+    phase.closed_at = now
+    logger.info(
+        f"archive_phase id={phase_id} abandoned_waves={abandoned_waves} "
+        f"abandoned_iters={abandoned_iters}"
+    )
     return phase
 
 

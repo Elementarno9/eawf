@@ -49,6 +49,58 @@ def _state_with_failed_wave() -> State:
     return State.model_validate(payload)
 
 
+def _state_with_archived_phase_pending_waves() -> State:
+    """Return the active fixture plus an archived phase holding pending waves.
+
+    Mirrors the production bug: an ``archived`` phase whose ``planned``
+    iter still owns PENDING waves. The active P01 phase keeps its single
+    in_progress wave; the archived P09 phase adds three PENDING zombies
+    that must NOT inflate the active-phase-scoped counters.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["phases"]["P09"] = {
+        "id": "P09",
+        "scope_id": payload["phases"]["P01"]["scope_id"],
+        "subproject_id": None,
+        "title": "dropped",
+        "status": "archived",
+        "iter_ids": ["P09-I01"],
+        "outcome_ids": [],
+        "depends_on": [],
+        "source_brief_ids": [],
+        "opened_at": opened,
+        "closed_at": opened,
+        "audit_id": None,
+    }
+    payload["iters"]["P09-I01"] = {
+        "id": "P09-I01",
+        "phase_id": "P09",
+        "title": "dropped iter",
+        "status": "planned",
+        "wave_ids": ["P09-I01-W01", "P09-I01-W02", "P09-I01-W03"],
+        "estimate_id": None,
+        "audit_id": None,
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    for n in (1, 2, 3):
+        wid = f"P09-I01-W0{n}"
+        payload["waves"][wid] = {
+            "id": wid,
+            "iter_id": "P09-I01",
+            "title": f"zombie {n}",
+            "status": "pending",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": [],
+            "success_criteria": [],
+            "opened_at": opened,
+            "closed_at": None,
+        }
+    return State.model_validate(payload)
+
+
 # --------------------------------------------------------------------------
 # summary_counts — boundary (None / empty) + populated
 # --------------------------------------------------------------------------
@@ -83,6 +135,71 @@ def test_summary_counts_failed_wave_counted_as_blocked() -> None:
     assert counts["waves_failed"] == 1
 
 
+def test_summary_counts_excludes_archived_phase_pending_waves() -> None:
+    """Pending waves under an archived phase do not inflate the live count.
+
+    The active P01 phase carries one in_progress wave; the archived P09
+    phase adds three PENDING zombies. The wave counters must reflect only
+    the active phase: 1 in_progress, 0 pending.
+    """
+    counts = summary_counts(_state_with_archived_phase_pending_waves())
+    assert counts["waves_in_progress"] == 1
+    assert counts["waves_pending"] == 0
+
+
+def test_summary_counts_scopes_to_current_pointer_phase() -> None:
+    """Counters scope to ``current.phase_id`` even with other active phases.
+
+    Build a state whose pointer targets P01 (in_progress wave) while a
+    second ACTIVE phase P02 carries a PENDING wave; only the pointer
+    phase's waves are counted.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["phases"]["P02"] = {
+        "id": "P02",
+        "scope_id": payload["phases"]["P01"]["scope_id"],
+        "subproject_id": None,
+        "title": "other active",
+        "status": "active",
+        "iter_ids": ["P02-I01"],
+        "outcome_ids": [],
+        "depends_on": [],
+        "source_brief_ids": [],
+        "opened_at": opened,
+        "closed_at": None,
+        "audit_id": None,
+    }
+    payload["iters"]["P02-I01"] = {
+        "id": "P02-I01",
+        "phase_id": "P02",
+        "title": "other iter",
+        "status": "active",
+        "wave_ids": ["P02-I01-W01"],
+        "estimate_id": None,
+        "audit_id": None,
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    payload["waves"]["P02-I01-W01"] = {
+        "id": "P02-I01-W01",
+        "iter_id": "P02-I01",
+        "title": "other pending",
+        "status": "pending",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    state = State.model_validate(payload)
+    assert state.current.phase_id == "P01"
+    counts = summary_counts(state)
+    assert counts["waves_in_progress"] == 1
+    assert counts["waves_pending"] == 0
+
+
 # --------------------------------------------------------------------------
 # build_status_lines — placeholder frame + populated + blocked
 # --------------------------------------------------------------------------
@@ -114,6 +231,13 @@ def test_build_status_lines_blocked_line_present_on_failed_wave() -> None:
 def test_build_status_lines_empty_repo_no_blocked_line() -> None:
     lines = build_status_lines(_load(_EMPTY_REPO))
     assert not any(line.startswith("blocked:") for line in lines)
+
+
+def test_build_status_lines_waves_line_scoped_to_active_phase() -> None:
+    """The rendered waves line shows the active-phase count, not the global one."""
+    lines = build_status_lines(_state_with_archived_phase_pending_waves())
+    waves_line = next(line for line in lines if line.startswith("waves:"))
+    assert "1 active · 0 pending" in waves_line
 
 
 # --------------------------------------------------------------------------

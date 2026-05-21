@@ -567,6 +567,44 @@ def test_archive_phase_active_rejected() -> None:
         archive_phase(state, phase_id="P01")
 
 
+def test_archive_phase_cascades_pending_waves_to_abandoned() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["a"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["b"])
+    archive_phase(state, phase_id="P01")
+    assert state.waves["P01-I01-W01"].status == WaveStatus.ABANDONED
+    assert state.waves["P01-I01-W02"].status == WaveStatus.ABANDONED
+    # Closure timestamp is stamped so the closure-timestamp invariant holds.
+    assert state.waves["P01-I01-W01"].closed_at is not None
+    assert state.waves["P01-I01-W02"].closed_at is not None
+
+
+def test_archive_phase_cascades_planned_iter_to_abandoned() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["a"])
+    archive_phase(state, phase_id="P01")
+    assert state.iters["P01-I01"].status == IterStatus.ABANDONED
+    assert state.iters["P01-I01"].closed_at is not None
+
+
+def test_archive_phase_leaves_no_pending_waves_validates() -> None:
+    """After cascade, the candidate state passes closure-timestamp invariants."""
+    from eawf.validate.strict import validate_state
+
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["a"])
+    archive_phase(state, phase_id="P01")
+    report = validate_state(state.model_dump(mode="json"))
+    assert report.state is not None
+    assert report.violations == []
+
+
 def test_plan_iter_creates_planned_status() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")

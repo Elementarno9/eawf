@@ -45,11 +45,37 @@ DASH: str = "—"
 DEFAULT_PROJECT_CODE: str = "EAWF"
 
 
+def _active_phase_id(state: State) -> str | None:
+    """Resolve the id of the phase whose waves the pane should count.
+
+    Prefers the ``current.phase_id`` pointer (the operator's focused
+    phase). Falls back to the single phase whose ``status`` is ACTIVE so
+    a state with an active phase but an unset pointer still scopes
+    correctly. Returns ``None`` when no phase is active — the wave
+    counters then read zero rather than counting archived/closed-phase
+    leftovers.
+    """
+    pointer = state.current.phase_id
+    if pointer is not None and pointer in state.phases:
+        return pointer
+    for phase_id, phase in state.phases.items():
+        if phase.status is PhaseStatus.ACTIVE:
+            return phase_id
+    return None
+
+
 def summary_counts(state: State | None) -> dict[str, int]:
     """Tally the lifecycle counters the status pane surfaces.
 
     All keys are present and zero for a ``None`` / empty state so the pane
     renders a deterministic frame before any roadmap activity.
+
+    The wave counters (``waves_pending`` / ``waves_in_progress`` /
+    ``waves_failed``) are scoped to the **active phase** (resolved via
+    :func:`_active_phase_id`): only waves whose iter belongs to that
+    phase are tallied. Archived/closed-phase waves left in a non-terminal
+    status (e.g. zombie PENDING rows under a dropped phase) therefore do
+    not inflate the live counts.
 
     Args:
         state: The bound state, or ``None``.
@@ -70,15 +96,17 @@ def summary_counts(state: State | None) -> dict[str, int]:
             "audits_total": 0,
             "worktrees_active": 0,
         }
-    waves = state.waves.values()
+    active_phase_id = _active_phase_id(state)
+    active_iter_ids = {iid for iid, it in state.iters.items() if it.phase_id == active_phase_id}
+    scoped_waves = [w for w in state.waves.values() if w.iter_id in active_iter_ids]
     audits = (state.audits or {}).values()
     worktrees = (state.worktrees or {}).values()
     return {
         "phases_active": sum(1 for p in state.phases.values() if p.status is PhaseStatus.ACTIVE),
         "iters_active": sum(1 for it in state.iters.values() if it.status is IterStatus.ACTIVE),
-        "waves_pending": sum(1 for w in waves if w.status is WaveStatus.PENDING),
-        "waves_in_progress": sum(1 for w in waves if w.status is WaveStatus.IN_PROGRESS),
-        "waves_failed": sum(1 for w in waves if w.status is WaveStatus.FAILED),
+        "waves_pending": sum(1 for w in scoped_waves if w.status is WaveStatus.PENDING),
+        "waves_in_progress": sum(1 for w in scoped_waves if w.status is WaveStatus.IN_PROGRESS),
+        "waves_failed": sum(1 for w in scoped_waves if w.status is WaveStatus.FAILED),
         "audits_running": sum(1 for a in audits if a.status is AuditStatus.RUNNING),
         "audits_total": len(state.audits or {}),
         "worktrees_active": sum(1 for wt in worktrees if wt.status is WorktreeStatus.ACTIVE),
