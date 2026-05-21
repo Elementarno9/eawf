@@ -1551,7 +1551,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W35"
+    ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2984,7 +2986,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T01:51:36.070073Z",
+  "updated_at": "2026-05-21T01:58:05.264649Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9799,7 +9801,7 @@
     "P26-I01-W35": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "op-p26-w35",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -9824,7 +9826,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "tui_v2 owns the non-TTY and --plain and --no-input deterministic status fallback replacing legacy run_tui offline mode",
         "workspace offline_render replaced by a tui_v2 equivalent used by cli workspace command",
@@ -9835,7 +9837,7 @@
       "title": "refactor: remove legacy tui/ tree (build tui_v2 non-TTY + offline_render replacements)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W35-1779328685"
     },
     "P26-I01-W36": {
       "agent_role": "executor",
@@ -10630,6 +10632,17 @@
       "path": ".ea/worktrees/p26-w34",
       "status": "merged",
       "wave_id": "P26-I01-W34"
+    },
+    "WT-P26-I01-W35-1779328685": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w35",
+      "created_at": "2026-05-21T01:58:05.264649Z",
+      "id": "WT-P26-I01-W35-1779328685",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w35",
+      "path": ".ea/worktrees/p26-w35",
+      "status": "active",
+      "wave_id": "P26-I01-W35"
     },
     "WT-P26-I01-W36-1779326292": {
       "base_branch": "feature/eawf-v0.3-p26",
