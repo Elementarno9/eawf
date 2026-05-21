@@ -1573,7 +1573,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W43",
       "P26-I01-W44"
     ],
     "iter_id": "P26-I01",
@@ -3015,7 +3014,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T11:42:17.162048Z",
+  "updated_at": "2026-05-21T11:43:20.466550Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10094,7 +10093,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w43",
-      "closed_at": null,
+      "closed_at": "2026-05-21T11:43:19.859391Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10107,10 +10106,10 @@
       "id": "P26-I01-W43",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T11:38:33.923921Z",
-      "outcome": null,
+      "outcome": "ci.yaml runs tests/snapshots/tui + tests/perf/tui serially (-n0) outside the -n auto parallel pass — kills the contention flake (serial first-paint p99 ~197ms vs 600ms); harness dumps a unified diff on snapshot drift; both invocations green locally",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ci.yaml runs tests/snapshots/tui and tests/perf/tui serially (-n0) while the rest stays -n auto so render/timing tests no longer flake under parallel CPU contention",
         "pilot_harness assert_screen_snapshot raises with a unified diff of captured-vs-golden so any residual drift is visible in the CI log",
@@ -10965,10 +10964,10 @@
       "branch": "feature/eawf-v0.3-p26-w43",
       "created_at": "2026-05-21T11:38:35.145565Z",
       "id": "WT-P26-I01-W43-1779363515",
-      "merged_commit": null,
+      "merged_commit": "e2726f8",
       "owner_session_id": "op-p26-w43",
       "path": ".ea/worktrees/p26-w43",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W43"
     },
     "WT-P26-I01-W44-1779363737": {
