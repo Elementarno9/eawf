@@ -129,25 +129,38 @@ def _handle_help(app: App[None], args: str) -> None:
 def _handle_audit(app: App[None], args: str) -> None:
     """Open the live audit-progress overlay (the ``/audit`` verb).
 
-    Seeds an :class:`~eawf.tui_v2.screens.overlays.audit_running.AuditProgress`
-    snapshot for the audited scope and routes it through the App's
-    modal-cap-aware ``push_modal`` (via
+    The audit always targets the **current scope** — the audit id is
+    derived from the App's bound state by :func:`_active_audit_id`, never
+    typed. ``/audit`` therefore takes no argument: when the operator types
+    a trailing token it is rejected with a one-line hint (rather than
+    silently ignored, which is the confusing behaviour this surface
+    replaces). With no argument it seeds an
+    :class:`~eawf.tui_v2.screens.overlays.audit_running.AuditProgress`
+    snapshot for the resolved scope + audit id and routes it through the
+    App's modal-cap-aware ``push_modal`` (via
     :func:`~eawf.tui_v2.screens.overlays.audit_running.open_audit_running`).
     The per-check rows fill in as the daemon streams ``check_*`` events to
-    the overlay's ``update_progress`` once the event subscription lands;
-    until then the overlay opens with the scope label parsed from *args*
-    and no checks. The ``audit_completed`` (verdict=fail) flow
-    that swaps in the audit-failed overlay is daemon-push driven.
+    the overlay's ``update_progress`` once the event subscription lands.
+    The ``audit_completed`` (verdict=fail) flow that swaps in the
+    audit-failed overlay is daemon-push driven.
 
     Args:
         app: The running App.
-        args: The audited scope urn / label the operator typed (display
-            only — empty falls back to ``"scope"``).
+        args: Must be empty — ``/audit`` runs the current scope's audit
+            and takes no id. A non-empty value is rejected with a hint.
     """
     from eawf.tui_v2.screens.overlays.audit_running import AuditProgress, open_audit_running
 
-    scope_label = args.strip() or "scope"
+    trailing = args.strip()
+    if trailing:
+        logger.info(f"palette_verb_audit_rejected_arg arg={trailing!r}")
+        app.notify(
+            f"/audit takes no id — it audits the current scope (drop {trailing!r})",
+            severity="warning",
+        )
+        return
     audit_id = _active_audit_id(app)
+    scope_label = _active_scope_label(app)
     progress = AuditProgress(audit_id=audit_id, scope_label=scope_label, checks=())
     open_audit_running(app, progress)
 
@@ -210,6 +223,27 @@ def _active_audit_id(app: App[None]) -> str:
         if phase.audit_id:
             return phase.audit_id
     return "audit"
+
+
+def _active_scope_label(app: App[None]) -> str:
+    """Resolve a non-typeable scope label for the audit overlay title.
+
+    Reads the App's resolved scope name (the same value the palette
+    filters verbs by) so the overlay always shows which scope's audit is
+    running. Read-only; never mutates state and never reflects operator
+    free-text.
+
+    Args:
+        app: The running App.
+
+    Returns:
+        The resolved scope name, or ``"scope"`` when the App exposes none
+        (a bare test harness).
+    """
+    scope = getattr(app, "_scope", None)
+    if isinstance(scope, str) and scope:
+        return scope
+    return "scope"
 
 
 def _handle_metrics(app: App[None], args: str) -> None:
@@ -422,7 +456,7 @@ VERBS: tuple[PaletteVerb, ...] = (
         requires_profile=("research",),
         args_grammar="<surface>",
     ),
-    PaletteVerb("/audit", "audit a scope", _handle_audit, SCOPES_ALL, args_grammar="<scope-urn>"),
+    PaletteVerb("/audit", "audit the current scope", _handle_audit, SCOPES_ALL),
     PaletteVerb("/ship", "ship phase", _placeholder("/ship"), SCOPES_ALL, args_grammar="<P##>"),
     PaletteVerb(
         "/review", "review PR", _placeholder("/review"), SCOPES_ALL, args_grammar="[--pr <url>]"

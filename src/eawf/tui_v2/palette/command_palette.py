@@ -252,7 +252,11 @@ class CommandPalette(ModalScreen[None]):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Run the resolved verb on ``Enter`` and dismiss the palette.
 
-        Resolves ``(verb, args)`` from the current input via
+        An empty input (blank, or just the seeded ``/`` prefix) on
+        ``Enter`` dismisses the palette — there is no verb to run and the
+        operator is signalling "never mind", so closing is the least
+        surprising response. Otherwise resolves ``(verb, args)`` from the
+        current input via
         :func:`~eawf.tui_v2.palette.verbs.split_verb_args`, then matches
         the verb name against the visible registry for the active scope. A
         match dismisses the palette and runs the handler; an unknown verb
@@ -261,6 +265,10 @@ class CommandPalette(ModalScreen[None]):
         Args:
             event: The Textual input-submitted event carrying the value.
         """
+        if event.value.strip() in ("", PALETTE_PREFIX):
+            logger.info("palette_submit_empty dismiss=1")
+            self.dismiss(None)
+            return
         verb_name, args = split_verb_args(event.value)
         verb = self._match_verb(verb_name)
         if verb is None:

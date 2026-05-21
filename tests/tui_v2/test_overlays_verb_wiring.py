@@ -28,9 +28,47 @@ def test_audit_verb_opens_audit_running_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            _handle_audit(app, "urn:eawf:v1:repo:eawf")
+            # /audit takes no id — it audits the current scope.
+            _handle_audit(app, "")
             await pilot.pause()
             assert isinstance(app.screen, AuditRunningModal)
+
+    asyncio.run(body())
+
+
+def test_audit_verb_with_arg_is_rejected_no_modal() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # A trailing free-text token is rejected (no URN-lookup
+            # contract); the overlay must not open.
+            _handle_audit(app, "urn:eawf:v1:repo:eawf")
+            await pilot.pause()
+            assert app.modal_depth() == 0
+
+    asyncio.run(body())
+
+
+def test_audit_verb_titles_with_scope_derived_id() -> None:
+    async def body() -> None:
+        from textual.widgets import Static
+
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            _handle_audit(app, "")
+            await pilot.pause()
+            modal = app.screen
+            assert isinstance(modal, AuditRunningModal)
+            title = modal.query_one("#audit-running-title", Static)
+            text = str(title.render())
+            # The overlay surfaces the scope-derived audit id (from state),
+            # not any operator-typed string, plus the resolved scope name.
+            from eawf.tui_v2.palette.verbs import _active_audit_id
+
+            assert _active_audit_id(app) in text
+            assert "repo" in text
 
     asyncio.run(body())
 
@@ -85,7 +123,7 @@ def test_audit_verb_routes_through_push_modal_cap() -> None:
                 app.push_modal(AuditRunningModal(empty))
                 await pilot.pause()
             assert app.modal_depth() == 3
-            _handle_audit(app, "scope")
+            _handle_audit(app, "")
             await pilot.pause()
             # Cap holds — the verb's push is rejected, not stacked.
             assert app.modal_depth() == 3

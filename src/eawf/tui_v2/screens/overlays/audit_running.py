@@ -83,9 +83,10 @@ class AuditProgress:
     """A snapshot of a running audit's per-check progress.
 
     Attributes:
-        audit_id: The audit id (e.g. ``A19-P14``).
-        scope_label: A short scope label shown in the title (e.g. the
-            wave / iter / phase the audit covers).
+        audit_id: The audit id (e.g. ``A19-P14``) — derived from state
+            for the current scope, never operator-typed.
+        scope_label: A short scope label shown in the title (the resolved
+            scope the audit covers). Derived, not operator-typed.
         checks: Ordered per-check rows.
     """
 

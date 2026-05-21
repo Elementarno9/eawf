@@ -169,6 +169,42 @@ def test_palette_unknown_verb_keeps_palette_open() -> None:
     asyncio.run(body())
 
 
+def test_palette_empty_enter_dismisses() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("slash")
+            await pilot.pause()
+            # Palette opens seeded with just "/"; Enter on the bare prefix
+            # closes it instead of toasting an "unknown verb".
+            assert isinstance(app.screen, CommandPalette)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.modal_depth() == 0
+            assert app._exit is False
+
+    asyncio.run(body())
+
+
+def test_palette_cleared_then_enter_dismisses() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("slash")
+            await pilot.pause()
+            # Clear the seeded "/" to an empty input, then Enter dismisses.
+            palette_input = app.screen.query_one("#palette-input", Input)
+            palette_input.value = ""
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.modal_depth() == 0
+
+    asyncio.run(body())
+
+
 # --------------------------------------------------------------------------
 # Esc closes without executing
 # --------------------------------------------------------------------------
