@@ -2475,7 +2475,8 @@
         "P26-I01-W37",
         "P26-I01-W38",
         "P26-I01-W39",
-        "P26-I01-W40"
+        "P26-I01-W40",
+        "P26-I01-W41"
       ]
     },
     "P27-I01": {
@@ -3008,7 +3009,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T10:27:02.781437Z",
+  "updated_at": "2026-05-21T10:30:16.699786Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10020,6 +10021,34 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W40-1779357874"
+    },
+    "P26-I01-W41": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p26-w41",
+      "closed_at": "2026-05-21T10:30:16.699290Z",
+      "commit": "4096d47faf914e7f164f94c44caf0c89659e4122",
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/artifacts/audits/2026-05-21-p26-i01-tui-fixes.md"
+      ],
+      "id": "P26-I01-W41",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T10:30:15.904388Z",
+      "outcome": "A33-P26-tui-fixes audit report promoted + verdict=minor; landed inline as 4096d47",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "A33 review report artifact promoted chassis-valid and scrub-clean",
+        "A33 verdict stamped minor (ship-clearing) covering the W30-W40 sweep"
+      ],
+      "title": "audit: A33-P26-tui-fixes review report + verdict (W30-W40 sweep)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
