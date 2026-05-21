@@ -1,8 +1,8 @@
 """Textual ``EaApp`` — the operator-surface entry point (tui_v2).
 
 The v0.3+ TUI is **Textual** (reversing the prior ``rich`` pick); the
-legacy ``src/eawf/tui/`` tree stays untouched until its cutover is
-ratified in a later wave. This module ships the App shell:
+legacy ``src/eawf/tui/`` tree has been removed and ``tui_v2`` is now the
+sole TUI surface. This module ships the App shell:
 
 * :class:`EaApp` — a :class:`textual.app.App` subclass that resolves to
   one of three scope screens (``repo`` / ``workspace`` / ``user``) on
