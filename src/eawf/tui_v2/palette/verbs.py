@@ -270,20 +270,23 @@ def _handle_metrics(app: App[None], args: str) -> None:
 def _handle_pr(app: App[None], args: str) -> None:
     """Open the ``/pr`` open-PRs overlay (the ``/pr`` verb).
 
-    Opens :class:`~eawf.tui_v2.screens.overlays.pr_list.PrListModal`
-    through the modal-cap-aware ``push_modal`` (via
-    :func:`~eawf.tui_v2.screens.overlays.pr_list.open_pr_list`). The list
-    opens empty with the ``gh``-shell-out placeholder; the lazy
-    ``gh pr list --json`` fetch + 60 s cache lands later this band —
-    the overlay degrades gracefully when ``gh`` is absent. Read-only.
+    Lazily fetches the repo's open PRs via
+    :func:`~eawf.tui_v2.screens.overlays.pr_list.fetch_open_prs` (a
+    read-only ``gh pr list --json`` shell-out cached for 60 s) and opens
+    :class:`~eawf.tui_v2.screens.overlays.pr_list.PrListModal` through the
+    modal-cap-aware ``push_modal`` (via
+    :func:`~eawf.tui_v2.screens.overlays.pr_list.open_pr_list`). The fetch
+    degrades gracefully when ``gh`` is missing or errors — the overlay then
+    renders the ``gh``-unavailable placeholder. Read-only.
 
     Args:
         app: The running App.
-        args: The raw ``/pr`` arg string (unused this wave).
+        args: The raw ``/pr`` arg string (unused).
     """
-    from eawf.tui_v2.screens.overlays.pr_list import open_pr_list
+    from eawf.tui_v2.screens.overlays.pr_list import fetch_open_prs, open_pr_list
 
-    open_pr_list(app, ())
+    fetch = fetch_open_prs()
+    open_pr_list(app, fetch.rows, status=fetch.status)
 
 
 def _handle_config(app: App[None], args: str) -> None:

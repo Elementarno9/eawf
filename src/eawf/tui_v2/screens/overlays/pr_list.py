@@ -6,28 +6,30 @@ per-repo PR rows, ``Enter`` opens the highlighted PR via
 ``gh pr list`` cost, and the overlay degrades gracefully when ``gh`` is
 absent. ``Esc`` closes.
 
-**Shell-out seam.** The data source is a lazy ``gh pr list --json``
-shell-out cached for 60 s. The subprocess plumbing (spawn, timeout, cache
-TTL) belongs to the daemon-mediated command surface that lands later in
-this band; wiring a raw ``subprocess`` call here would duplicate that and
-sidestep the daemon authority boundary. So this wave lands the **overlay
-structure + the pure JSON parser** (:func:`parse_pr_rows`, which decodes
-exactly the ``gh pr list --json number,title,author,state,url`` shape) and
-the ``gh``-missing degraded path: the modal is constructed with a
-pre-fetched row tuple (empty until the shell-out lands) and renders the
-"run the gh shell-out" placeholder otherwise. The ``Enter`` →
-``gh pr view --web <number>`` handler records the target and is a no-op
-until the same shell-out wave wires the spawn.
+**Read-only ``gh`` shell-out.** The data source is a lazy
+``gh pr list --json`` shell-out cached for 60 s. ``gh pr list`` is
+read-only, so per the daemon-authority rule (reads bypass the daemon) a
+raw ``subprocess`` mirroring :func:`~eawf.tui_v2.widgets.git_pane._git_run`
+is the correct, consistent pattern: :func:`fetch_open_prs` spawns the
+probe with a short timeout, decodes the JSON via :func:`parse_pr_rows`,
+and degrades to an ``unavailable`` status (rather than raising) when
+``gh`` is missing, unauthenticated, slow, or returns junk. A module-level
+TTL cache keyed by cwd reuses the result within :data:`PR_CACHE_TTL_S`.
 
 The row model (:class:`PrRow`) + the parser are pure so decoding +
 truncation are unit-testable without a live ``gh``; the modal is a thin
-scrollable view over them.
+scrollable view over them and the :class:`PrFetch` status it renders.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
+import time
 from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import ComposeResult
@@ -46,8 +48,31 @@ logger = logging.getLogger(__name__)
 #: against the ~200-500 ms ``gh pr list`` cost per repo.
 PR_CACHE_TTL_S: float = 60.0
 
+#: Per-call timeout (seconds) for the ``gh`` subprocess — short enough
+#: that a stuck command can never freeze the overlay open.
+GH_TIMEOUT_S: float = 5.0
+
+#: Upper bound on the rows ``gh pr list`` returns — the overlay only shows
+#: open PRs, so a high cap is plenty without an unbounded fetch.
+GH_PR_LIMIT: int = 50
+
 #: The ``gh pr list --json`` field set the parser expects.
 GH_PR_FIELDS: tuple[str, ...] = ("number", "title", "author", "state", "url")
+
+
+class PrFetchStatus(StrEnum):
+    """Outcome of a :func:`fetch_open_prs` shell-out.
+
+    Attributes:
+        OK: ``gh`` ran and returned a (possibly empty) list — empty rows
+            mean genuinely zero open PRs.
+        UNAVAILABLE: ``gh`` was missing, unauthenticated, timed out, or
+            returned undecodable output — the rows are empty but unknown,
+            not known-zero.
+    """
+
+    OK = "ok"
+    UNAVAILABLE = "unavailable"
 
 
 @dataclass(frozen=True)
@@ -67,6 +92,33 @@ class PrRow:
     author: str
     state: str
     url: str
+
+
+@dataclass(frozen=True)
+class PrFetch:
+    """The result of a :func:`fetch_open_prs` shell-out.
+
+    Attributes:
+        rows: The decoded open-PR rows (empty when ``gh`` returned no PRs
+            or when the fetch was unavailable).
+        status: Whether ``gh`` ran (:attr:`PrFetchStatus.OK`) or the fetch
+            degraded (:attr:`PrFetchStatus.UNAVAILABLE`).
+    """
+
+    rows: tuple[PrRow, ...]
+    status: PrFetchStatus
+
+
+#: Module-level TTL cache keyed by the resolved cwd. Maps the working
+#: directory to ``(monotonic_ts, PrFetch)``; reused within
+#: :data:`PR_CACHE_TTL_S`. Only the ``/pr`` verb path populates it, so
+#: unrelated tests never observe a stale or cross-test entry.
+_PR_CACHE: dict[Path, tuple[float, PrFetch]] = {}
+
+
+def reset_pr_cache() -> None:
+    """Clear the open-PR TTL cache (force a fresh fetch on next open)."""
+    _PR_CACHE.clear()
 
 
 def _author_login(author: Any) -> str:
@@ -124,6 +176,89 @@ def parse_pr_rows(records: list[dict[str, Any]]) -> tuple[PrRow, ...]:
     return tuple(rows)
 
 
+def _gh_list_open_prs(cwd: Path) -> PrFetch:
+    """Run ``gh pr list --json`` once and decode it into a :class:`PrFetch`.
+
+    Mirrors :func:`~eawf.tui_v2.widgets.git_pane._git_run`: a missing ``gh``
+    binary, a non-zero exit (not authenticated / not a gh repo), a timeout,
+    or undecodable output each return an
+    :attr:`PrFetchStatus.UNAVAILABLE` fetch with empty rows rather than
+    raising, so the overlay opens on any path.
+
+    Args:
+        cwd: The repo working directory to query.
+
+    Returns:
+        An :attr:`PrFetchStatus.OK` fetch with the decoded rows on
+        success, else an :attr:`PrFetchStatus.UNAVAILABLE` fetch.
+    """
+    try:
+        completed = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--limit",
+                str(GH_PR_LIMIT),
+                "--json",
+                ",".join(GH_PR_FIELDS),
+            ],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=GH_TIMEOUT_S,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug(f"_gh_list_open_prs cwd={cwd!s} failed cause={exc!r}")
+        return PrFetch(rows=(), status=PrFetchStatus.UNAVAILABLE)
+    if completed.returncode != 0:
+        logger.debug(
+            f"_gh_list_open_prs cwd={cwd!s} nonzero rc={completed.returncode} "
+            f"stderr={completed.stderr.strip()!r}"
+        )
+        return PrFetch(rows=(), status=PrFetchStatus.UNAVAILABLE)
+    try:
+        records = json.loads(completed.stdout)
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.debug(f"_gh_list_open_prs cwd={cwd!s} bad json cause={exc!r}")
+        return PrFetch(rows=(), status=PrFetchStatus.UNAVAILABLE)
+    if not isinstance(records, list):
+        logger.debug(f"_gh_list_open_prs cwd={cwd!s} non-list payload type={type(records)!r}")
+        return PrFetch(rows=(), status=PrFetchStatus.UNAVAILABLE)
+    return PrFetch(rows=parse_pr_rows(records), status=PrFetchStatus.OK)
+
+
+def fetch_open_prs(cwd: Path | None = None, *, force: bool = False) -> PrFetch:
+    """Fetch the repo's open PRs via ``gh`` (lazy, cached for 60 s).
+
+    Reuses the cached :class:`PrFetch` for *cwd* when the last fetch is
+    younger than :data:`PR_CACHE_TTL_S`; otherwise shells out via
+    :func:`_gh_list_open_prs` and caches the result. The shell-out is
+    read-only — it mutates nothing and never raises (a missing or errored
+    ``gh`` degrades to an :attr:`PrFetchStatus.UNAVAILABLE` fetch).
+
+    Args:
+        cwd: The repo working directory to query; defaults to the process
+            cwd when ``None``.
+        force: When ``True``, bypass the TTL cache and re-fetch.
+
+    Returns:
+        The open-PR fetch (rows + status).
+    """
+    resolved = (cwd if cwd is not None else Path.cwd()).resolve()
+    now = time.monotonic()
+    if not force:
+        cached = _PR_CACHE.get(resolved)
+        if cached is not None and now - cached[0] < PR_CACHE_TTL_S:
+            return cached[1]
+    fetch = _gh_list_open_prs(resolved)
+    _PR_CACHE[resolved] = (now, fetch)
+    return fetch
+
+
 def _render_row(row: PrRow) -> str:
     """Render one :class:`PrRow` as a single content-markup line.
 
@@ -137,14 +272,23 @@ def _render_row(row: PrRow) -> str:
     return f"[$accent]#{row.number}[/]  {row.title}{author}"
 
 
+#: Placeholder shown when ``gh`` ran and returned zero open PRs.
+_EMPTY_OK_TEXT: str = "no open pull requests"
+
+#: Placeholder shown when the ``gh`` fetch was unavailable.
+_EMPTY_UNAVAILABLE_TEXT: str = "gh unavailable — install + authenticate gh to list PRs"
+
+
 class PrListModal(ModalScreen[None]):
     """Scrollable open-PR list (Enter opens web, Esc closes).
 
-    Built with a pre-fetched tuple of :class:`PrRow` (the host resolves
-    them from the ``gh pr list`` shell-out once it lands) so the overlay
-    never spawns a subprocess itself. ``Enter`` records the highlighted
-    PR's ``gh pr view --web`` target; ``Esc`` closes. When the row set is
-    empty the overlay shows the ``gh``-shell-out placeholder.
+    Built with a pre-fetched tuple of :class:`PrRow` and the
+    :class:`PrFetchStatus` that produced them (the host resolves both from
+    :func:`fetch_open_prs`) so the overlay never spawns the list probe
+    itself. ``Enter`` opens the highlighted PR via ``gh pr view --web``;
+    ``Esc`` closes. When the row set is empty the overlay shows a
+    status-aware placeholder: "no open pull requests" when ``gh`` ran and
+    found none, or the ``gh``-unavailable hint when the fetch degraded.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -197,15 +341,30 @@ class PrListModal(ModalScreen[None]):
     #: Index of the highlighted PR row (``-1`` when the list is empty).
     selected: reactive[int] = reactive(0)
 
-    def __init__(self, rows: tuple[PrRow, ...]) -> None:
+    def __init__(
+        self,
+        rows: tuple[PrRow, ...],
+        status: PrFetchStatus = PrFetchStatus.OK,
+    ) -> None:
         """Construct the overlay for a pre-fetched PR row set.
 
         Args:
-            rows: The open PRs (built by the host from the ``gh pr list``
-                shell-out; empty until that shell-out lands).
+            rows: The open PRs (built by the host from
+                :func:`fetch_open_prs`).
+            status: Whether the ``gh`` fetch ran
+                (:attr:`PrFetchStatus.OK`) or degraded
+                (:attr:`PrFetchStatus.UNAVAILABLE`); selects the empty-list
+                placeholder.
         """
         super().__init__()
         self._rows = rows
+        self._status = status
+
+    def _empty_text(self) -> str:
+        """Return the status-aware placeholder for an empty row set."""
+        if self._status is PrFetchStatus.UNAVAILABLE:
+            return _EMPTY_UNAVAILABLE_TEXT
+        return _EMPTY_OK_TEXT
 
     def compose(self) -> ComposeResult:
         """Yield the titled card, the PR list (or placeholder), and hint."""
@@ -220,11 +379,7 @@ class PrListModal(ModalScreen[None]):
                             id=f"pr-row-{index}",
                         )
                 else:
-                    yield Static(
-                        "no PRs cached yet — the gh pr list shell-out lands later "
-                        "this band (degrades gracefully if gh is missing)",
-                        classes="pr-empty",
-                    )
+                    yield Static(self._empty_text(), classes="pr-empty")
             yield Static("[ Enter open in browser · Esc to close ]", classes="pr-hint")
 
     def on_mount(self) -> None:
@@ -256,24 +411,40 @@ class PrListModal(ModalScreen[None]):
         self.selected = max(0, min(self.selected + delta, len(self._rows) - 1))
 
     def action_open_web(self) -> None:
-        """Open the highlighted PR via ``gh pr view --web`` (seamed).
+        """Open the highlighted PR in the browser via ``gh pr view --web``.
 
-        Records the target PR url; the actual ``gh pr view --web <number>``
-        spawn rides the same shell-out wave that fetches the list (the
-        subprocess surface is daemon-mediated, not spawned from the
-        overlay). A no-op when the list is empty.
+        Fire-and-forget: spawns ``gh pr view --web <number>`` with a short
+        timeout and swallows a missing binary / timeout / error (logged at
+        debug) so the overlay never crashes on a bad ``gh``. A no-op when
+        the list is empty.
         """
         if not self._rows or not (0 <= self.selected < len(self._rows)):
             return
         target = self._rows[self.selected]
         logger.info(f"pr_open_web number={target.number} url={target.url!r}")
+        try:
+            subprocess.run(
+                ["gh", "pr", "view", "--web", str(target.number)],
+                cwd=str(Path.cwd()),
+                capture_output=True,
+                text=True,
+                timeout=GH_TIMEOUT_S,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+            logger.debug(f"action_open_web number={target.number} failed cause={exc!r}")
 
     def action_close(self) -> None:
         """Dismiss the PR-list overlay (``Esc``)."""
         self.dismiss(None)
 
 
-def open_pr_list(app: App[None], rows: tuple[PrRow, ...]) -> bool:
+def open_pr_list(
+    app: App[None],
+    rows: tuple[PrRow, ...],
+    *,
+    status: PrFetchStatus = PrFetchStatus.OK,
+) -> bool:
     """Push the PR-list overlay onto *app* (modal-cap-aware).
 
     Routes through the App's ``push_modal`` helper so the modal-stack
@@ -282,14 +453,15 @@ def open_pr_list(app: App[None], rows: tuple[PrRow, ...]) -> bool:
 
     Args:
         app: The running App.
-        rows: The pre-fetched open-PR rows (empty until the shell-out
-            lands).
+        rows: The pre-fetched open-PR rows.
+        status: Whether the ``gh`` fetch ran or degraded; threaded into the
+            modal so the empty-list placeholder matches the cause.
 
     Returns:
         ``True`` when the modal was pushed, ``False`` when the cap
         rejected it.
     """
-    modal = PrListModal(rows)
+    modal = PrListModal(rows, status)
     push_modal = getattr(app, "push_modal", None)
     if callable(push_modal):
         return bool(push_modal(modal))
@@ -299,9 +471,15 @@ def open_pr_list(app: App[None], rows: tuple[PrRow, ...]) -> bool:
 
 __all__ = [
     "GH_PR_FIELDS",
+    "GH_PR_LIMIT",
+    "GH_TIMEOUT_S",
     "PR_CACHE_TTL_S",
+    "PrFetch",
+    "PrFetchStatus",
     "PrListModal",
     "PrRow",
+    "fetch_open_prs",
     "open_pr_list",
     "parse_pr_rows",
+    "reset_pr_cache",
 ]
