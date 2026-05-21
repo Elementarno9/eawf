@@ -1572,9 +1572,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W44"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3014,7 +3012,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T11:43:20.466550Z",
+  "updated_at": "2026-05-21T11:53:44.345968Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10124,7 +10122,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w44",
-      "closed_at": null,
+      "closed_at": "2026-05-21T11:53:43.668788Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10137,10 +10135,10 @@
       "id": "P26-I01-W44",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T11:42:15.955341Z",
-      "outcome": null,
+      "outcome": "wired read-only gh pr list --json fetch for the /pr overlay (60s cwd-keyed cache, ok-vs-unavailable graceful degrade, status-aware placeholders) + Enter->gh pr view --web; GitPane subprocess pattern (rule-4 read); all gh mocked in tests, no real network; full suite green 4400 passed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "The /pr overlay lazily runs gh pr list --json number title author state url on open with a 60s cache and renders the real open PRs",
         "gh missing or errored or timed-out degrades gracefully to a clear unavailable placeholder distinct from a genuine zero-open-PRs message",
@@ -10975,10 +10973,10 @@
       "branch": "feature/eawf-v0.3-p26-w44",
       "created_at": "2026-05-21T11:42:17.162048Z",
       "id": "WT-P26-I01-W44-1779363737",
-      "merged_commit": null,
+      "merged_commit": "c8f43a2",
       "owner_session_id": "op-p26-w44",
       "path": ".ea/worktrees/p26-w44",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W44"
     }
   }
