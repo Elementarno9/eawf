@@ -1552,8 +1552,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W34",
-      "P26-I01-W36"
+      "P26-I01-W34"
     ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
@@ -2986,7 +2985,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T01:18:12.063736Z",
+  "updated_at": "2026-05-21T01:32:29.966995Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9843,7 +9842,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w36",
-      "closed_at": null,
+      "closed_at": "2026-05-21T01:32:29.357233Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9858,10 +9857,10 @@
       "id": "P26-I01-W36",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T01:18:09.725387Z",
-      "outcome": null,
+      "outcome": "status-pane wave counters scoped to active phase (P26 reads 0 active 2 pending not 18); archive_phase cascade-abandons child waves+iters; idempotent abandon_orphaned_waves transform added (no on-load migration framework exists -> parent backfills P21 via canonical writer); full suite green 4801 passed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Status pane wave counters (pending in_progress failed) scope to the active phase so archived and closed phase waves no longer inflate the count",
         "archive_phase cascades non-terminal child waves (pending and planned) to ABANDONED so archiving never leaves zombie pending waves",
@@ -10607,10 +10606,10 @@
       "branch": "feature/eawf-v0.3-p26-w36",
       "created_at": "2026-05-21T01:18:12.063736Z",
       "id": "WT-P26-I01-W36-1779326292",
-      "merged_commit": null,
+      "merged_commit": "8a8d847",
       "owner_session_id": "op-p26-w36",
       "path": ".ea/worktrees/p26-w36",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W36"
     }
   }
