@@ -1572,9 +1572,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W42"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3012,7 +3010,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T11:14:18.464741Z",
+  "updated_at": "2026-05-21T11:26:49.495119Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10057,7 +10055,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w42",
-      "closed_at": null,
+      "closed_at": "2026-05-21T11:26:48.862399Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10072,10 +10070,10 @@
       "id": "P26-I01-W42",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T11:14:17.259020Z",
-      "outcome": null,
+      "outcome": "hermetic git-pane stub in screen-snapshot fixture (fixes ubuntu xdist workspace_screen drift, goldens byte-unchanged, non-tautological regression test) + archive_phase pointer-clear + status_pane active-phase status gate + vestigial TYPE_CHECKING removed; pytest -n auto 4384 passed, mypy + pre-commit green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Screen snapshots mock the git probe so GitPane renders DASH deterministically immune to cwd/xdist/platform with goldens unchanged",
         "archive_phase clears current.phase_id when archiving the pointed-at phase mirroring close_phase",
@@ -10887,10 +10885,10 @@
       "branch": "feature/eawf-v0.3-p26-w42",
       "created_at": "2026-05-21T11:14:18.464741Z",
       "id": "WT-P26-I01-W42-1779362058",
-      "merged_commit": null,
+      "merged_commit": "a6e1ab5",
       "owner_session_id": "op-p26-w42",
       "path": ".ea/worktrees/p26-w42",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W42"
     }
   }
