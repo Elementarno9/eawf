@@ -92,6 +92,20 @@ def _labels(tree: RoadmapTree) -> list[str]:
     return out
 
 
+def _node_by_data(tree: RoadmapTree, data: str) -> object:
+    """Return the first tree node whose ``data`` payload equals *data*."""
+    found: list[object] = []
+
+    def walk(node: object) -> None:
+        for child in node.children:  # type: ignore[attr-defined]
+            if child.data == data:  # type: ignore[attr-defined]
+                found.append(child)
+            walk(child)
+
+    walk(tree.root)
+    return found[0]
+
+
 # --------------------------------------------------------------------------
 # Glyph maps — V12 schema completeness (pure)
 # --------------------------------------------------------------------------
@@ -251,3 +265,179 @@ def test_enter_on_branch_does_not_post_wave_selected() -> None:
 
     asyncio.run(body())
     assert captured == []
+
+
+# --------------------------------------------------------------------------
+# Plain left / right collapse-expand (P26-W37)
+# --------------------------------------------------------------------------
+
+
+def test_right_expands_a_collapsed_branch() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            phase = _node_by_data(tree, "P01")
+            phase.collapse()  # type: ignore[attr-defined]
+            tree.move_cursor(phase)  # type: ignore[arg-type]
+            await pilot.pause()
+            assert not phase.is_expanded  # type: ignore[attr-defined]
+            await pilot.press("right")
+            await pilot.pause()
+            assert phase.is_expanded  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_right_on_expanded_branch_descends_to_first_child() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            phase = _node_by_data(tree, "P01")
+            tree.move_cursor(phase)  # type: ignore[arg-type]
+            await pilot.pause()
+            assert phase.is_expanded  # active phase auto-expands  # type: ignore[attr-defined]
+            await pilot.press("right")
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01-I01"  # descended to first child
+
+    asyncio.run(body())
+
+
+def test_left_collapses_an_expanded_branch() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            iter_node = _node_by_data(tree, "P01-I01")
+            tree.move_cursor(iter_node)  # type: ignore[arg-type]
+            await pilot.pause()
+            assert iter_node.is_expanded  # active iter auto-expands  # type: ignore[attr-defined]
+            await pilot.press("left")
+            await pilot.pause()
+            assert not iter_node.is_expanded  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_left_on_leaf_moves_cursor_to_parent() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            wave = _node_by_data(tree, "P01-I01-W01")
+            assert not wave.allow_expand  # it is a leaf  # type: ignore[attr-defined]
+            tree.move_cursor(wave)  # type: ignore[arg-type]
+            await pilot.pause()
+            await pilot.press("left")
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01-I01"  # ascended to iter parent
+
+    asyncio.run(body())
+
+
+def test_left_on_collapsed_branch_moves_cursor_to_parent() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            iter_node = _node_by_data(tree, "P01-I01")
+            iter_node.collapse()  # type: ignore[attr-defined]
+            tree.move_cursor(iter_node)  # type: ignore[arg-type]
+            await pilot.pause()
+            assert not iter_node.is_expanded  # type: ignore[attr-defined]
+            await pilot.press("left")
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01"  # ascended to phase parent
+
+    asyncio.run(body())
+
+
+def test_left_on_top_level_collapsed_node_is_safe() -> None:
+    """``←`` on a collapsed top-level node never lands the cursor on root."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            phase = _node_by_data(tree, "P01")
+            phase.collapse()  # type: ignore[attr-defined]
+            tree.move_cursor(phase)  # type: ignore[arg-type]
+            await pilot.pause()
+            await pilot.press("left")
+            await pilot.pause()
+            # Parent is the hidden root, which is skipped; cursor stays put.
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01"
+
+    asyncio.run(body())
+
+
+def test_right_on_leaf_is_noop() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            wave = _node_by_data(tree, "P01-I01-W01")
+            tree.move_cursor(wave)  # type: ignore[arg-type]
+            await pilot.pause()
+            await pilot.press("right")
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01-I01-W01"  # leaf, cursor unmoved
+
+    asyncio.run(body())
+
+
+def test_shift_arrow_parent_navigation_still_works() -> None:
+    """W37 extends, not clobbers, Textual's inherited ``shift+left``."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            tree.focus()
+            wave = _node_by_data(tree, "P01-I01-W01")
+            tree.move_cursor(wave)  # type: ignore[arg-type]
+            await pilot.pause()
+            await pilot.press("shift+left")  # inherited cursor_parent
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01-I01"
+
+    asyncio.run(body())

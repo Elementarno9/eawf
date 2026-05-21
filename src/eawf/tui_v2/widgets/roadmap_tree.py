@@ -40,6 +40,7 @@ import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.text import Text
+from textual.binding import Binding, BindingType
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Tree
@@ -209,7 +210,18 @@ class RoadmapTree(Tree[str]):
     The tree data payload (``Tree[str]``) is the row's stable id (phase /
     iter / wave id) so a host screen can resolve the selection without
     re-walking the label. Wave-row ``Enter`` posts :class:`WaveSelected`.
+
+    Textual's ``Tree`` binds only ``shift+left`` / ``shift+right`` for
+    cursor-to-parent navigation; plain ``←`` / ``→`` are unbound (and no
+    longer scroll horizontally now that ``overflow-x`` is hidden). These
+    BINDINGS wire plain ``←`` / ``→`` to standard collapse / expand so the
+    operator keymap (arrows primary) matches the docstring above.
     """
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("right", "expand_or_descend", "Expand", show=False),
+        Binding("left", "collapse_or_ascend", "Collapse", show=False),
+    ]
 
     DEFAULT_CSS: ClassVar[str] = """
     RoadmapTree {
@@ -375,6 +387,40 @@ class RoadmapTree(Tree[str]):
         if wave_id is None or node.allow_expand:
             return
         self.post_message(self.WaveSelected(wave_id))
+
+    def action_expand_or_descend(self) -> None:
+        """Handle plain ``→``: expand a collapsed branch, else descend.
+
+        On a collapsed branch (it has children and is not yet expanded)
+        the node expands. On an already-expanded branch the cursor moves
+        to its first child. On a leaf (a wave row, ``allow_expand`` False)
+        this is a no-op.
+        """
+        node = self.cursor_node
+        if node is None or not node.allow_expand:
+            return
+        if node.is_expanded:
+            if node.children:
+                self.move_cursor(node.children[0])
+        else:
+            node.expand()
+
+    def action_collapse_or_ascend(self) -> None:
+        """Handle plain ``←``: collapse an expanded branch, else ascend.
+
+        On an expanded branch the node collapses. On an already-collapsed
+        branch (or a leaf) the cursor moves to the node's parent; a parent
+        that is the hidden root is skipped so the cursor never lands on it.
+        """
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.allow_expand and node.is_expanded:
+            node.collapse()
+            return
+        parent = node.parent
+        if parent is not None and not parent.is_root:
+            self.move_cursor(parent)
 
 
 __all__ = [
