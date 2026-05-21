@@ -839,6 +839,17 @@
       "scope_id": "P26-I01",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A33-P26-tui-fixes": {
+      "check_results": [],
+      "created_at": "2026-05-21T02:40:08.333388Z",
+      "id": "A33-P26-tui-fixes",
+      "integrity_results": [],
+      "kind": "review",
+      "report_artifact_id": null,
+      "scope_id": "P26",
+      "status": "pending",
+      "verdict": null
     }
   },
   "backlog": {
@@ -1551,7 +1562,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W39"
+    ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2452,7 +2465,8 @@
         "P26-I01-W31",
         "P26-I01-W36",
         "P26-I01-W37",
-        "P26-I01-W38"
+        "P26-I01-W38",
+        "P26-I01-W39"
       ]
     },
     "P27-I01": {
@@ -2985,7 +2999,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T02:19:58.594210Z",
+  "updated_at": "2026-05-21T02:40:09.740548Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9935,6 +9949,37 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W38-1779328815"
+    },
+    "P26-I01-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p26-w39",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/golden/tui",
+        "src/eawf/tui_v2",
+        "tests/tui_v2"
+      ],
+      "id": "P26-I01-W39",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T02:40:08.704777Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "Orphaned tests/golden/tui fixtures with zero live consumers deleted and enumerated in the commit body per the deletion rule",
+        "P26 tui_v2 surfaces swept for naming and docstring and log-field consistency with no behavior change",
+        "Full suite and mypy and pre-commit green"
+      ],
+      "title": "chore: polish — delete orphaned tests/golden/tui fixtures + P26 tui_v2 consistency sweep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P26-I01-W39-1779331209"
     }
   },
   "workspace": null,
@@ -10708,6 +10753,17 @@
       "path": ".ea/worktrees/p26-w38",
       "status": "merged",
       "wave_id": "P26-I01-W38"
+    },
+    "WT-P26-I01-W39-1779331209": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w39",
+      "created_at": "2026-05-21T02:40:09.740548Z",
+      "id": "WT-P26-I01-W39-1779331209",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w39",
+      "path": ".ea/worktrees/p26-w39",
+      "status": "active",
+      "wave_id": "P26-I01-W39"
     }
   }
 }
