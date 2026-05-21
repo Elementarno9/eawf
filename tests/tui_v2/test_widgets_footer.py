@@ -69,11 +69,16 @@ def test_format_hints_many_joined_with_bullet() -> None:
 def test_footer_paints_default_hints() -> None:
     async def body() -> None:
         app = _Harness()
-        async with app.run_test(size=(80, 6)) as pilot:
+        # Wide canvas: the default hint strip now carries the global
+        # w/r/u scope-switch + F5 refresh affordances and overflows 80
+        # cols; the real scope screens render at 120.
+        async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
             rendered = app.export_screenshot()
             assert "quit" in rendered
             assert "palette" in rendered
+            assert "scope" in rendered
+            assert "refresh" in rendered
 
     asyncio.run(body())
 

@@ -36,17 +36,18 @@ from eawf.tui_v2.palette.verbs import ScopeName, visible_verbs
 logger = logging.getLogger(__name__)
 
 #: Global keybinding rows (key, action) — the "Global" table. Full
-#: key names.
+#: key names. Scope switch is the raw ``w`` / ``r`` / ``u`` keys; the
+#: ``Ctrl-`` chords are listed as muscle-memory aliases.
 _GLOBAL_KEYS: tuple[tuple[str, str], ...] = (
     ("q", "quit"),
     ("Esc", "close overlay / clear filter / drop palette"),
-    ("r", "force refresh (offline)"),
-    ("R", "force refresh + git fetch (online)"),
+    ("w", "switch to workspace scope"),
+    ("r", "switch to repo scope"),
+    ("u", "switch to user scope"),
+    ("Ctrl-W / Ctrl-R / Ctrl-U", "scope switch (aliases)"),
+    ("F5", "force refresh"),
     ("?", "open help"),
     ("/", "open palette"),
-    ("Ctrl-R", "switch to repo scope"),
-    ("Ctrl-W", "switch to workspace scope"),
-    ("Ctrl-U", "switch to user scope"),
     ("Tab", "next pane"),
     ("Shift-Tab", "previous pane"),
 )
@@ -67,7 +68,7 @@ _PANE_NAV: tuple[tuple[str, str, str], ...] = (
 
 #: Per-scope extra keys — the "Per-screen extras".
 _SCOPE_KEYS: dict[ScopeName, tuple[tuple[str, str], ...]] = {
-    "repo": (("w", "open wave board"), ("c", "open config")),
+    "repo": (("c", "open config"),),
     "workspace": (("z", "zoom focused repo to repo screen"),),
     "user": (),
     "wave_board": (("f", "cycle filter (all / active-only)"),),

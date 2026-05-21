@@ -49,10 +49,30 @@ def test_pane_nav_rows_carry_vim_aliases() -> None:
     assert {"h", "j", "k", "l"} <= aliases
 
 
-def test_scope_key_rows_repo_has_wave_board() -> None:
+def test_global_key_rows_have_raw_scope_switch() -> None:
+    # The W32 keybinding fix: raw w/r/u switch scope (no ctrl). The
+    # dead wave-board ``w`` repo-scope binding was removed.
+    rows = dict(global_key_rows())
+    assert "switch to workspace scope" in rows["w"]
+    assert "switch to repo scope" in rows["r"]
+    assert "switch to user scope" in rows["u"]
+
+
+def test_global_key_rows_document_moved_refresh() -> None:
+    # Refresh moved off raw ``r`` (now repo scope-switch) onto F5; the
+    # affordance must stay documented (daemon-push / heartbeat-ack ref).
+    rows = dict(global_key_rows())
+    assert "F5" in rows
+    assert "refresh" in rows["F5"]
+
+
+def test_scope_key_rows_repo_keeps_config() -> None:
+    # The dead wave-board ``w`` row is gone; ``c`` config stays (W34
+    # wires the ConfigModal to it).
     rows = scope_key_rows("repo")
     keys = {key for key, _ in rows}
-    assert "w" in keys
+    assert "w" not in keys
+    assert "c" in keys
 
 
 def test_scope_key_rows_user_is_empty() -> None:

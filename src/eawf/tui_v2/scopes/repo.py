@@ -18,9 +18,9 @@ screen only declares the layout — it holds no per-widget state plumbing.
 This screen overrides **only** :meth:`compose_body`; the brand,
 breadcrumb, runtime cell, clock, heartbeat, and quit/help/palette
 bindings are inherited from :class:`~eawf.tui_v2.scopes.ScopeScreen`
-(zero-duplication chassis). The ``w`` wave-board / ``c`` config bindings
-the brief lists for this screen target screens that land in later waves;
-they are added here as the navigation seam those waves wire up.
+(zero-duplication chassis). The ``c`` config binding the brief lists for
+this screen targets the config window that lands in a later wave; it is
+the navigation seam that wave wires up.
 """
 
 from __future__ import annotations
@@ -43,6 +43,8 @@ _REPO_HINTS: tuple[str, ...] = (
     "↑↓ move",
     "←→ collapse",
     "Enter open",
+    "w/r/u scope",
+    "F5 refresh",
     "/ palette",
     "? help",
     "q quit",
@@ -56,11 +58,11 @@ class RepoScreen(ScopeScreen):
     :class:`GitPane` · :class:`BacklogTable` inside the shared chassis.
     """
 
-    #: Scope-switch + sub-screen bindings layered on the chassis chrome.
-    #: ``w`` / ``c`` target the wave-board / config screens that land in
-    #: later waves; declared here as the navigation seam.
+    #: Sub-screen bindings layered on the chassis chrome. ``c`` targets
+    #: the config window wired up in a later wave; declared here as the
+    #: navigation seam. (Raw ``w`` is the app-wide workspace scope-switch,
+    #: so no wave-board binding lives here.)
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("w", "open_wave_board", "wave board", show=False),
         Binding("c", "open_config", "config", show=False),
     ]
 

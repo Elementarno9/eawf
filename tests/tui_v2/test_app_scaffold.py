@@ -141,7 +141,17 @@ def test_eaapp_arrow_and_vim_bindings_present() -> None:
     # Vim aliases declared app-wide; arrow keys are bound per-screen but
     # the scope-switch + quit chords live here.
     assert {"h", "j", "k", "l"} <= keys
-    assert "ctrl+r" in keys and "ctrl+w" in keys and "ctrl+u" in keys
+    # Scope switch is the raw w/r/u keys (the W32 keybinding fix); the
+    # ctrl+ chords remain as hidden muscle-memory aliases.
+    assert {"w", "r", "u"} <= keys
+    assert {"ctrl+r", "ctrl+w", "ctrl+u"} <= keys
+
+
+def test_eaapp_raw_scope_switch_bindings_target_switch_scope() -> None:
+    actions = {b.key: b.action for b in EaApp.BINDINGS}  # type: ignore[union-attr]
+    assert actions["w"] == "switch_scope('workspace')"
+    assert actions["r"] == "switch_scope('repo')"
+    assert actions["u"] == "switch_scope('user')"
 
 
 # --------------------------------------------------------------------------

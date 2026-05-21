@@ -40,6 +40,8 @@ from eawf.tui_v2.widgets.status_pane import StatusPane
 _USER_HINTS: tuple[str, ...] = (
     "↑↓ move",
     "Enter open",
+    "w/r/u scope",
+    "F5 refresh",
     "/ palette",
     "? help",
     "q quit",

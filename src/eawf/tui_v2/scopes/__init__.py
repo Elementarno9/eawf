@@ -62,7 +62,7 @@ class ScopeScreen(Screen[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("slash", "open_palette", "palette", show=False),
         Binding("question_mark", "open_help", "help", show=False),
-        Binding("r", "force_refresh", "refresh", show=False),
+        Binding("f5", "force_refresh", "refresh", show=False),
         Binding("q", "quit", "quit"),
         Binding("escape", "quit", "quit", show=False),
     ]
@@ -113,11 +113,13 @@ class ScopeScreen(Screen[None]):
         open_help(self.app)
 
     def action_force_refresh(self) -> None:
-        """Acknowledge the ``r`` force-refresh (heartbeat ack).
+        """Acknowledge the ``F5`` force-refresh (heartbeat ack).
 
-        The full force-tick + cache-invalidate path lands with the daemon
-        push wiring; this pulses the footer heartbeat so the operator sees
-        the keypress is live.
+        Refresh moved off raw ``r`` (now the repo scope-switch) onto
+        ``F5`` so the scope-switch and refresh affordances no longer
+        collide. The full force-tick + cache-invalidate path lands with
+        the daemon push wiring; this pulses the footer heartbeat so the
+        operator sees the keypress is live.
         """
         from eawf.tui_v2.widgets.footer import Heartbeat
 

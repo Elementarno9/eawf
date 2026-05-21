@@ -44,10 +44,13 @@ HEARTBEAT_INTERVAL_S: float = 1.0
 
 #: Default footer key hints (full key names). Screens may pass a
 #: scope-specific override via :meth:`Footer.set_hints`; this is the base
-#: chrome shared by every scope.
+#: chrome shared by every scope. ``w/r/u`` scope-switch + ``F5`` refresh
+#: are surfaced so the operator sees the global affordances.
 DEFAULT_HINTS: tuple[str, ...] = (
     "↑↓ move",
     "Enter open",
+    "w/r/u scope",
+    "F5 refresh",
     "/ palette",
     "? help",
     "q quit",

@@ -44,6 +44,8 @@ _WORKSPACE_HINTS: tuple[str, ...] = (
     "↑↓ row",
     "z zoom",
     "Enter open",
+    "w/r/u scope",
+    "F5 refresh",
     "/ palette",
     "? help",
     "q quit",

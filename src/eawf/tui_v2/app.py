@@ -93,13 +93,18 @@ class EaApp(App[None]):
     #: :meth:`push_modal` with a toast.
     MAX_MODAL_DEPTH: ClassVar[int] = 3
 
-    #: Global key bindings shared across every scope screen. Arrow keys
-    #: are primary navigation; vim ``hjkl`` are registered as hidden
-    #: aliases (``show=False``) so the footer advertises arrows only, per
-    #: the operator keymap convention.
+    #: Global key bindings shared across every scope screen. Scope switch
+    #: is the raw ``w`` / ``r`` / ``u`` keys (workspace / repo / user); the
+    #: ``ctrl+`` chords stay as hidden aliases for muscle-memory back-
+    #: compat. Arrow keys are primary navigation; vim ``hjkl`` are
+    #: registered as hidden aliases (``show=False``) so the footer
+    #: advertises arrows only, per the operator keymap convention.
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("ctrl+r", "switch_scope('repo')", "repo", show=False),
+        Binding("w", "switch_scope('workspace')", "workspace", show=False),
+        Binding("r", "switch_scope('repo')", "repo", show=False),
+        Binding("u", "switch_scope('user')", "user", show=False),
         Binding("ctrl+w", "switch_scope('workspace')", "workspace", show=False),
+        Binding("ctrl+r", "switch_scope('repo')", "repo", show=False),
         Binding("ctrl+u", "switch_scope('user')", "user", show=False),
         Binding("q", "quit", "quit"),
         Binding("escape", "quit", "quit", show=False),
@@ -173,7 +178,10 @@ class EaApp(App[None]):
         self.degraded = degraded
 
     def action_switch_scope(self, scope: str) -> None:
-        """Switch the active scope screen (Ctrl-R / Ctrl-W / Ctrl-U).
+        """Switch the active scope screen (raw ``w`` / ``r`` / ``u``).
+
+        The ``ctrl+w`` / ``ctrl+r`` / ``ctrl+u`` chords route here too as
+        hidden muscle-memory aliases.
 
         Args:
             scope: Target scope name; must be a key of :attr:`SCREENS`.
