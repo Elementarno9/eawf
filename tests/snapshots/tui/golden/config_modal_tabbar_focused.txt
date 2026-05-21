@@ -4,11 +4,11 @@
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
       │  Configuration                                                                                           │
-      │  save layer: repo  (L cycles: global local)  ·  1 unsaved                                                │
+      │  save layer: repo  (L cycles: global local)                                                              │
       │                                                                                                          │
       │   audit  estimation  planning  research  runtime  ship  ui  vcs  worktrees                               │
       │  ╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >* audit.fix_safe                             [bool]         true                                       │
+      │     audit.fix_safe                             [bool]         false                                      │
       │     audit.flaky_retry_count                    [int]          1                                          │
       │                                                                                                          │
       │                                                                                                          │
@@ -32,6 +32,6 @@
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
-      │  [ ↑/↓ field · ←/→ or Space change · Enter edit · s save · r reset · L layer · Esc close ]               │
+      │  [ ←/→ switch tab · ↓ fields · s save · r reset · L layer · Esc close ]                                  │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

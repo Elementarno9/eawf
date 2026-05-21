@@ -30,6 +30,7 @@ from eawf.tui_v2.app import EaApp
 from eawf.tui_v2.screens.overlays.config_modal import (
     ConfigModal,
     ConfigModalState,
+    change_value,
     current_value,
     cycle_choice,
     format_value,
@@ -104,6 +105,28 @@ def test_cycle_choice_backward() -> None:
     assert entry is not None
     merged = {"planning": {"approval": "ask"}}
     assert cycle_choice(entry, merged, {}, step=-1) == {"planning.approval": "never"}
+
+
+def test_change_value_toggles_bool() -> None:
+    """``change_value`` flips a bool (the unified Space semantics)."""
+    entry = registry_lookup("audit.fix_safe")
+    assert entry is not None
+    assert change_value(entry, {"audit": {"fix_safe": False}}, {}) == {"audit.fix_safe": True}
+
+
+def test_change_value_cycles_choice() -> None:
+    """``change_value`` cycles a choice forward by one (same as ``→``)."""
+    entry = registry_lookup("planning.approval")  # ("ask", "auto", "never")
+    assert entry is not None
+    merged = {"planning": {"approval": "ask"}}
+    assert change_value(entry, merged, {}, step=1) == {"planning.approval": "auto"}
+
+
+def test_change_value_noop_on_scalar() -> None:
+    """``change_value`` is a no-op on a scalar (those edit via the editor)."""
+    entry = registry_lookup("audit.flaky_retry_count")  # int
+    assert entry is not None
+    assert change_value(entry, {}, {"audit.flaky_retry_count": 3}) == {"audit.flaky_retry_count": 3}
 
 
 def test_format_value_bool_lowercase() -> None:
@@ -245,6 +268,243 @@ def test_config_arrows_cycle_enum() -> None:
             assert entry.key in modal._view.dirty
             staged = modal._view.dirty[entry.key]
             assert staged in (entry.choices or ())
+
+    asyncio.run(body())
+
+
+# ---------------------------------------------------------------------------
+# Focus-zone navigation (P26-W38) — ↑/↓ traverse tab bar ↔ fields, ←/→ +
+# Space are focus-sensitive, single-field tabs are reachable + cyclable.
+# ---------------------------------------------------------------------------
+
+
+def test_config_opens_focused_on_first_field() -> None:
+    """The modal opens with the cursor on field 0 (immediately actionable)."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            assert modal.focus_zone == "fields"
+            assert modal.field_index == 0
+
+    asyncio.run(body())
+
+
+def test_config_up_on_first_field_focuses_tab_bar() -> None:
+    """``↑`` on the first field climbs out of the field list to the tab bar."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            assert modal.focus_zone == "fields" and modal.field_index == 0
+            await pilot.press("up")
+            await pilot.pause()
+            assert modal.focus_zone == "tabs"
+
+    asyncio.run(body())
+
+
+def test_config_down_on_tab_bar_focuses_first_field() -> None:
+    """``↓`` on the tab bar drops the cursor onto the first field."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            await pilot.press("up")  # to the tab bar
+            await pilot.pause()
+            assert modal.focus_zone == "tabs"
+            await pilot.press("down")  # back onto the fields
+            await pilot.pause()
+            assert modal.focus_zone == "fields"
+            assert modal.field_index == 0
+
+    asyncio.run(body())
+
+
+def test_config_arrows_on_tab_bar_switch_tabs() -> None:
+    """``←`` / ``→`` switch the active tab while the tab bar is focused."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            await pilot.press("up")  # focus the tab bar
+            await pilot.pause()
+            first = modal._active_tab()
+            assert first == tabs_sorted()[0]
+            await pilot.press("right")
+            await pilot.pause()
+            assert modal.focus_zone == "tabs"  # still on the tab bar
+            assert modal._active_tab() == tabs_sorted()[1]
+            await pilot.press("left")
+            await pilot.pause()
+            assert modal._active_tab() == tabs_sorted()[0]
+
+    asyncio.run(body())
+
+
+def test_config_arrows_on_field_cycle_and_do_not_switch_tab() -> None:
+    """``←`` / ``→`` on a focused choice cycle its value, never switch tabs."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            # Move to the "planning" tab via the tab bar, then drop to its
+            # first field (a choice) — entirely via the keyboard.
+            await pilot.press("up")  # tab bar
+            await pilot.pause()
+            tabs = modal.query_one("#config-tabs", TabbedContent)
+            tabs.active = modal._tab_pane_id("planning")
+            modal.set_focus(None)
+            await pilot.pause()
+            tab_before = modal._active_tab()
+            await pilot.press("down")  # onto planning's first field
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.type == "choice", entry
+            await pilot.press("right")
+            await pilot.pause()
+            # The choice cycled and the active tab did NOT change.
+            assert entry.key in modal._view.dirty
+            assert modal._view.dirty[entry.key] in (entry.choices or ())
+            assert modal._active_tab() == tab_before
+            assert modal.focus_zone == "fields"
+
+    asyncio.run(body())
+
+
+def test_config_space_cycles_focused_choice() -> None:
+    """``Space`` on a focused choice cycles its value (not just bools)."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            tabs = modal.query_one("#config-tabs", TabbedContent)
+            tabs.active = modal._tab_pane_id("planning")
+            modal.set_focus(None)
+            modal.field_index = 0
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.type == "choice"
+            await pilot.press("space")
+            await pilot.pause()
+            assert entry.key in modal._view.dirty
+            assert modal._view.dirty[entry.key] in (entry.choices or ())
+
+    asyncio.run(body())
+
+
+def test_config_hint_is_zone_aware() -> None:
+    """The footer hint lists the keys for the CURRENT focus zone.
+
+    On a field it advertises field nav + value change + edit; on the tab
+    bar it advertises tab switching + the drop-to-fields key.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            hint = modal.query_one("#config-hint", Static)
+            # Field zone (default): change/edit keys present, tab-switch absent.
+            field_hint = str(hint.render())
+            assert "Space change" in field_hint
+            assert "Enter edit" in field_hint
+            assert "switch tab" not in field_hint
+            await pilot.press("up")  # to the tab bar
+            await pilot.pause()
+            tab_hint = str(hint.render())
+            assert "switch tab" in tab_hint
+            assert "fields" in tab_hint
+            assert "Enter edit" not in tab_hint
+
+    asyncio.run(body())
+
+
+def test_config_tab_bar_keeps_caret_off_all_fields() -> None:
+    """When the tab bar is focused, no field row carries the ``>`` caret."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            await pilot.press("up")  # focus the tab bar
+            await pilot.pause()
+            tab = modal._active_tab()
+            for index in range(len(keys_for_tab(tab))):
+                row = modal.query_one(f"#{modal._field_row_id(tab, index)}", Static)
+                assert not str(row.render()).lstrip().startswith(">")
+
+    asyncio.run(body())
+
+
+def test_config_single_field_runtime_tab_is_navigable() -> None:
+    """The single-field ``runtime`` tab: its lone choice is reachable + cyclable.
+
+    Regression for the operator-reported trap — on a tab with exactly one
+    choice field, ``←`` / ``→`` used to be stuck cycling the value with no
+    keyboard escape. The focus-zone model fixes it: ``↓`` from the tab bar
+    selects the lone field, ``←`` / ``→`` / ``Space`` cycle it, and ``↑``
+    returns to the tab bar to leave.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            # Land on the runtime tab via the tab bar.
+            await pilot.press("up")  # tab bar
+            await pilot.pause()
+            tabs = modal.query_one("#config-tabs", TabbedContent)
+            tabs.active = modal._tab_pane_id("runtime")
+            modal.set_focus(None)
+            await pilot.pause()
+            assert modal._active_tab() == "runtime"
+            fields = keys_for_tab("runtime")
+            assert len(fields) == 1 and fields[0].type == "choice"
+            # ↓ from the tab bar selects the lone field (reachable).
+            await pilot.press("down")
+            await pilot.pause()
+            assert modal.focus_zone == "fields" and modal.field_index == 0
+            entry = modal._active_field()
+            assert entry is not None and entry.key == "runtime.default"
+            # The row renders the focus caret (highlighted in plain text).
+            row = modal.query_one(f"#{modal._field_row_id('runtime', 0)}", Static)
+            assert str(row.render()).lstrip().startswith(">")
+            # ←/→ cycle the lone choice (no tab switch — runtime is the tab).
+            await pilot.press("right")
+            await pilot.pause()
+            assert entry.key in modal._view.dirty
+            assert modal._active_tab() == "runtime"
+            cycled = modal._view.dirty[entry.key]
+            assert cycled in (entry.choices or ())
+            # ↑ returns to the tab bar to leave the single-field tab.
+            await pilot.press("up")
+            await pilot.pause()
+            assert modal.focus_zone == "tabs"
 
     asyncio.run(body())
 

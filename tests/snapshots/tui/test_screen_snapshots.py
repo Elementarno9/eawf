@@ -218,6 +218,51 @@ def test_config_modal_planning_tab_snapshot() -> None:
     asyncio.run(body())
 
 
+def test_config_modal_tabbar_focused_snapshot() -> None:
+    """``↑`` from the first field focuses the tab bar (zone-aware hint).
+
+    The footer hint flips to the tab-bar keys and no field row carries the
+    ``>`` cursor caret — the plain-text proof that focus left the field
+    list for the tab selector.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            await pilot.press("up")  # field 0 -> tab bar
+            await settle_screen(pilot)
+            assert modal.focus_zone == "tabs"  # type: ignore[attr-defined]
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_tabbar_focused.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_runtime_single_field_snapshot() -> None:
+    """The single-field ``runtime`` tab: its lone choice row is reachable.
+
+    Regression-proof for the operator's trapped-arrows report — the lone
+    ``runtime.default`` choice carries the ``>`` cursor caret (selected via
+    ``↓`` from the tab bar), showing it is keyboard-reachable.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            modal.query_one("#config-tabs").active = modal._tab_pane_id("runtime")  # type: ignore[attr-defined]
+            modal.set_focus(None)
+            modal.field_index = 0
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_runtime.txt")
+
+    asyncio.run(body())
+
+
 def test_config_modal_dirty_layer_snapshot() -> None:
     """After a toggle, the layer line shows the unsaved-count + dirty marker."""
 

@@ -8,14 +8,26 @@ auto-covers any key added to the registry later — the registry is the
 single source of truth shared with the ``eawf config`` CLI menu, so the
 two cannot drift.
 
-Per-type interaction (keymap conventions — arrows primary, full key
-names; ``Space`` toggles a flag, ``←`` / ``→`` cycle an enum):
+Navigation model (keymap conventions — arrows primary, full key names).
+The modal carries a **focus zone** that sits either on the **tab bar**
+or on a **field** inside the active tab; ``↑`` / ``↓`` traverse between
+the two zones and ``←`` / ``→`` are interpreted relative to the current
+zone. This focus-zone model (rather than the field's *type*) decides what
+``←`` / ``→`` do, so a tab whose only field is a ``choice`` (e.g.
+``runtime``) is never trapped cycling its value — ``↑`` always returns to
+the tab bar.
 
-* ``↑`` / ``↓`` — move the field cursor inside the active tab.
-* ``←`` / ``→`` — on a ``choice`` / ``multichoice`` field, cycle its
-  value; otherwise they switch the active tab.
-* ``Space`` — toggle a ``bool`` field in place.
-* ``Enter`` — open the
+* ``↑`` / ``↓`` — traverse the zones / the field list. On the tab bar,
+  ``↓`` drops onto the first field. On the first field, ``↑`` climbs back
+  to the tab bar. Between fields they step the cursor; ``↓`` on the last
+  field is a no-op.
+* ``←`` / ``→`` — zone-sensitive. On the tab bar they switch the active
+  tab (previous / next); on a field they cycle a ``choice`` /
+  ``multichoice`` value (and never switch tabs while a field is focused).
+* ``Space`` — on a field, change its value: toggle a ``bool`` or cycle a
+  ``choice`` / ``multichoice`` (same as ``←`` / ``→`` on a choice). On
+  the tab bar it switches to the next tab.
+* ``Enter`` — on a field, open the
   :class:`~eawf.tui_v2.screens.overlays.edit_field.EditFieldModal` for a
   ``str`` / ``int`` / ``float`` / path field (the scalar editor).
 * ``s`` — save: flush every dirty field through the layered-config writer.
@@ -40,7 +52,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from textual.app import ComposeResult
@@ -73,8 +85,17 @@ logger = logging.getLogger(__name__)
 
 #: Field types that toggle / cycle in place inside the modal (never open
 #: the scalar :class:`EditFieldModal`). ``bool`` toggles on ``Space``;
-#: ``choice`` / ``multichoice`` cycle on ``←`` / ``→``.
+#: ``choice`` / ``multichoice`` cycle on ``←`` / ``→`` / ``Space``.
 _INLINE_TYPES: frozenset[str] = frozenset({"bool", "choice", "multichoice"})
+
+#: Field types whose value cycles (``←`` / ``→`` / ``Space``) through a
+#: closed option set rather than opening the scalar editor.
+_CHOICE_TYPES: frozenset[str] = frozenset({"choice", "multichoice"})
+
+#: The two focus zones the modal cursor can occupy. ``"tabs"`` puts the
+#: cursor on the tab bar (``←`` / ``→`` switch tabs); ``"fields"`` puts it
+#: on a field row (``←`` / ``→`` cycle that field's value).
+FocusZone = Literal["tabs", "fields"]
 
 
 def writable_layers_for(workspace: Path | None, repo: Path | None) -> tuple[str, ...]:
@@ -233,6 +254,37 @@ def cycle_choice(
     return {**dirty, entry.key: [cycled, *items[1:]]}
 
 
+def change_value(
+    entry: ConfigKey,
+    merged: dict[str, Any],
+    dirty: dict[str, Any],
+    *,
+    step: int = 1,
+) -> dict[str, Any]:
+    """Return a new dirty map advancing *entry*'s value (``Space`` semantics).
+
+    Unifies the in-place value change so one key serves every inline type:
+    a ``bool`` flips, a ``choice`` / ``multichoice`` cycles by *step*. A
+    scalar (``str`` / ``int`` / ``float`` / path) is a no-op here — those
+    edit through the scalar :class:`EditFieldModal`.
+
+    Args:
+        entry: The field to advance.
+        merged: The merged config (resolves the pre-change value).
+        dirty: The current staged-edit map.
+        step: Cycle direction for choice fields (``+1`` next, ``-1``
+            previous); ignored for ``bool``.
+
+    Returns:
+        A new dirty map (the input is not mutated).
+    """
+    if entry.type == "bool":
+        return toggle_bool(entry, merged, dirty)
+    if entry.type in _CHOICE_TYPES:
+        return cycle_choice(entry, merged, dirty, step=step)
+    return dict(dirty)
+
+
 def merged_config(workspace: Path | None, repo: Path | None) -> dict[str, Any]:
     """Best-effort load of the merged layered config.
 
@@ -312,11 +364,14 @@ class ConfigModal(ModalScreen[None]):
     """Registry-driven tabbed config window (Esc/dirty-guard to close).
 
     Renders every :data:`CONFIG_REGISTRY` key in alphabetical tabs
-    (alphabetical fields per tab). ``Space`` toggles a bool, ``←`` / ``→``
-    cycle an enum (or switch tabs on a non-enum field), ``Enter`` opens
-    the scalar :class:`EditFieldModal`, ``s`` saves through the layered
-    writer, ``r`` resets staged edits, ``L`` cycles the writable layer,
-    and ``Esc`` closes (prompting first when there are staged edits).
+    (alphabetical fields per tab). A focus zone (:attr:`focus_zone`) sits
+    on the tab bar or on a field row: ``↑`` / ``↓`` traverse the zones and
+    the field list, ``←`` / ``→`` switch tabs (tab bar) or cycle a value
+    (field), ``Space`` advances a value (toggle bool / cycle choice),
+    ``Enter`` opens the scalar :class:`EditFieldModal`, ``s`` saves
+    through the layered writer, ``r`` resets staged edits, ``L`` cycles
+    the writable layer, and ``Esc`` closes (prompting first when there are
+    staged edits).
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -351,26 +406,32 @@ class ConfigModal(ModalScreen[None]):
     ConfigModal .config-field.-dirty {
         color: $warning;
     }
+    ConfigModal #config-tabs.-tabbar-focused Tabs {
+        text-style: bold;
+    }
     ConfigModal .config-hint {
+        dock: bottom;
         color: $text-muted;
         height: 1;
         margin-top: 1;
     }
     """
 
-    #: Keymap (arrows primary; full key names in the footer hint). ``space``
-    #: toggles, ``left`` / ``right`` cycle-or-switch-tab, ``enter`` edits,
-    #: ``s`` saves, ``r`` resets, ``L`` cycles the layer, ``escape`` closes
-    #: (dirty-guarded). ``↑`` / ``↓`` move the field cursor; ``j`` / ``k``
-    #: ride them as aliases.
+    #: Keymap (arrows primary; full key names in the footer hint).
+    #: ``up`` / ``down`` traverse the focus zones (tab bar ↔ field list),
+    #: ``left`` / ``right`` switch tabs (on the tab bar) or cycle a value
+    #: (on a field), ``space`` advances a value, ``enter`` edits a scalar,
+    #: ``s`` saves, ``r`` resets, ``L`` cycles the layer, and ``escape``
+    #: closes (dirty-guarded). ``j`` / ``k`` ride ``down`` / ``up`` as vim
+    #: aliases.
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("up", "move_field(-1)", "up", show=False),
-        Binding("down", "move_field(1)", "down", show=False),
-        Binding("k", "move_field(-1)", "up", show=False),
-        Binding("j", "move_field(1)", "down", show=False),
-        Binding("left", "cycle_or_tab(-1)", "prev", show=False),
-        Binding("right", "cycle_or_tab(1)", "next", show=False),
-        Binding("space", "toggle_bool", "toggle", show=False),
+        Binding("up", "focus_up", "up", show=False),
+        Binding("down", "focus_down", "down", show=False),
+        Binding("k", "focus_up", "up", show=False),
+        Binding("j", "focus_down", "down", show=False),
+        Binding("left", "horizontal(-1)", "prev", show=False),
+        Binding("right", "horizontal(1)", "next", show=False),
+        Binding("space", "change_value", "change", show=False),
         Binding("enter", "edit", "edit", show=False),
         Binding("s", "save", "save", show=False),
         Binding("r", "reset", "reset", show=False),
@@ -378,7 +439,13 @@ class ConfigModal(ModalScreen[None]):
         Binding("escape", "close", "close", show=False),
     ]
 
-    #: Index of the highlighted field inside the active tab.
+    #: Which focus zone the cursor occupies: the tab bar or a field row.
+    #: Opens on the first field (immediately actionable); ``↑`` from there
+    #: climbs to the tab bar, ``↓`` from the tab bar drops back onto it.
+    focus_zone: reactive[FocusZone] = reactive[FocusZone]("fields")
+
+    #: Index of the highlighted field inside the active tab (only the
+    #: cursor when :attr:`focus_zone` is ``"fields"``).
     field_index: reactive[int] = reactive(0)
 
     def __init__(
@@ -426,20 +493,32 @@ class ConfigModal(ModalScreen[None]):
                                 id=self._field_row_id(tab, index),
                                 markup=False,
                             )
-            yield Static(self._hint_line(), classes="config-hint")
+            yield Static(self._hint_line(), classes="config-hint", id="config-hint")
 
     def on_mount(self) -> None:
         """Paint the initial highlight; keep key focus on the screen.
 
         :class:`TabbedContent` auto-focuses its internal tab bar, whose
         own ``←`` / ``→`` bindings would otherwise steal the arrows the
-        modal needs for in-place enum cycling. Clearing focus routes every
+        modal needs for the focus-zone model. Clearing focus routes every
         keystroke to this screen's bindings so the modal owns the full
-        interaction model (and drives tab switching itself via
-        :meth:`action_cycle_or_tab`).
+        interaction model (it drives tab switching and field cycling itself
+        via :meth:`action_horizontal`).
         """
         self.set_focus(None)
         self._repaint_fields()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Repaint rows + chrome whenever the active tab changes.
+
+        Fires for both the keyboard tab switch (:meth:`_switch_tab`) and a
+        programmatic ``tabs.active = ...`` assignment, so the cursor caret /
+        ``-selected`` style always tracks the active tab's field list rather
+        than going stale on the previously-active pane.
+        """
+        event.stop()
+        if self.is_mounted:
+            self._repaint_fields()
 
     # -- id helpers (stable widget ids) ------------------------------------
 
@@ -463,17 +542,33 @@ class ConfigModal(ModalScreen[None]):
         dirty_note = f"  ·  {dirty_count} unsaved" if dirty_count else ""
         return f"save layer: {self._view.layer}{suffix}{dirty_note}"
 
-    def _field_line(self, entry: ConfigKey) -> str:
-        """Render one field row: dirty marker + key + type + value."""
+    def _field_line(self, entry: ConfigKey, *, selected: bool = False) -> str:
+        """Render one field row: focus caret + dirty marker + key + type + value.
+
+        Args:
+            entry: The registry entry the row renders.
+            selected: ``True`` when this row is the focused field — adds a
+                ``>`` caret so the cursor is visible even in a plain-text
+                capture (the CSS ``-selected`` style adds the colour on a
+                live terminal).
+        """
         value = current_value(entry, self._merged, self._view.dirty)
+        caret = ">" if selected else " "
         dirty_mark = "*" if entry.key in self._view.dirty else " "
         type_cell = f"[{entry.type}]"
-        return f"{dirty_mark} {entry.key:<42} {type_cell:<14} {format_value(entry, value)}"
+        return f"{caret}{dirty_mark} {entry.key:<42} {type_cell:<14} {format_value(entry, value)}"
 
     def _hint_line(self) -> str:
-        """Render the footer keymap hint (full key names; arrows primary)."""
+        """Render the footer keymap hint for the current focus zone.
+
+        The hint is zone-aware so the operator always sees what ``←`` /
+        ``→`` and ``Space`` will do *right now*: switch tabs while the tab
+        bar is focused, or change a value while a field is focused.
+        """
+        if self.focus_zone == "tabs":
+            return "[ ←/→ switch tab · ↓ fields · s save · r reset · L layer · Esc close ]"
         return (
-            "[ ↑/↓ field · ←/→ tab/cycle · Space toggle · Enter edit · "
+            "[ ↑/↓ field · ←/→ or Space change · Enter edit · "
             "s save · r reset · L layer · Esc close ]"
         )
 
@@ -505,55 +600,105 @@ class ConfigModal(ModalScreen[None]):
         return fields[index]
 
     def _repaint_fields(self) -> None:
-        """Repaint every field row of the active tab (cursor + dirty marks)."""
+        """Repaint the active tab's rows + chrome for the current focus zone.
+
+        Only a field row in the ``"fields"`` zone shows the cursor caret /
+        ``-selected`` style; the tab bar carries a ``-tabbar-focused`` class
+        in the ``"tabs"`` zone. The footer hint is repainted too so it
+        always matches the zone.
+        """
         tab = self._active_tab()
         if not tab:
             return
+        on_fields = self.focus_zone == "fields"
         fields = keys_for_tab(tab)
         for index, entry in enumerate(fields):
             try:
                 row = self.query_one(f"#{self._field_row_id(tab, index)}", Static)
             except Exception:  # pragma: no cover - mid-mount guard
                 continue
-            row.update(self._field_line(entry))
-            row.set_class(index == self.field_index, "-selected")
+            selected = on_fields and index == self.field_index
+            row.update(self._field_line(entry, selected=selected))
+            row.set_class(selected, "-selected")
             row.set_class(entry.key in self._view.dirty, "-dirty")
         self.query_one("#config-layer", Static).update(self._layer_line())
+        self._repaint_chrome()
+
+    def _repaint_chrome(self) -> None:
+        """Repaint the tab-bar focus class + the zone-aware footer hint."""
+        try:
+            tabs = self.query_one("#config-tabs", TabbedContent)
+        except Exception:  # pragma: no cover - mid-mount guard
+            return
+        tabs.set_class(self.focus_zone == "tabs", "-tabbar-focused")
+        try:
+            self.query_one("#config-hint", Static).update(self._hint_line())
+        except Exception:  # pragma: no cover - mid-mount guard
+            return
 
     def watch_field_index(self) -> None:
         """Repaint the field rows when the cursor moves."""
         if self.is_mounted:
             self._repaint_fields()
 
+    def watch_focus_zone(self) -> None:
+        """Repaint rows + chrome when the focus zone flips (tab bar ↔ fields)."""
+        if self.is_mounted:
+            self._repaint_fields()
+
     # -- actions ------------------------------------------------------------
 
-    def action_move_field(self, delta: int) -> None:
-        """Move the field cursor by *delta*, clamped to the tab's bounds.
+    def action_focus_up(self) -> None:
+        """Move focus up (``↑``): tab bar ← first field ← later fields.
 
-        Args:
-            delta: ``-1`` for the previous field, ``+1`` for the next.
+        On a later field the cursor steps to the previous field; on the
+        first field it climbs out of the field list back to the tab bar. On
+        the tab bar (or an empty tab) it is a no-op — the tab bar is the
+        top of the modal.
+        """
+        if self.focus_zone == "tabs":
+            return
+        if self.field_index <= 0:
+            self.focus_zone = "tabs"
+            return
+        self.field_index -= 1
+
+    def action_focus_down(self) -> None:
+        """Move focus down (``↓``): tab bar → first field → later fields.
+
+        On the tab bar this drops onto the first field of the active tab
+        (a no-op when the tab has no fields). On a field it steps to the
+        next field; the last field is a no-op (the cursor stays put rather
+        than wrapping — the least-surprising default).
         """
         fields = self._active_fields()
+        if self.focus_zone == "tabs":
+            if fields:
+                self.field_index = min(self.field_index, len(fields) - 1)
+                self.focus_zone = "fields"
+            return
         if not fields:
             return
-        self.field_index = max(0, min(len(fields) - 1, self.field_index + delta))
+        self.field_index = min(len(fields) - 1, self.field_index + 1)
 
-    def action_cycle_or_tab(self, step: int) -> None:
-        """Cycle an enum field's value, or switch tabs for a non-enum field.
+    def action_horizontal(self, step: int) -> None:
+        """Handle ``←`` / ``→`` for the current focus zone.
 
-        ``←`` / ``→`` cycle a ``choice`` / ``multichoice`` field through
-        its options; on any other field type they switch the active tab so
-        the arrows stay useful everywhere.
+        On the tab bar they switch the active tab; on a field they cycle a
+        ``choice`` / ``multichoice`` value in place (and never switch tabs,
+        which is the fix for a single-choice tab trapping the arrows). On a
+        scalar field they are a no-op (the scalar edits via ``Enter``).
 
         Args:
             step: ``-1`` for previous, ``+1`` for next.
         """
+        if self.focus_zone == "tabs":
+            self._switch_tab(step)
+            return
         entry = self._active_field()
-        if entry is not None and entry.type in ("choice", "multichoice"):
+        if entry is not None and entry.type in _CHOICE_TYPES:
             self._view.dirty = cycle_choice(entry, self._merged, self._view.dirty, step=step)
             self._repaint_fields()
-            return
-        self._switch_tab(step)
 
     def _switch_tab(self, step: int) -> None:
         """Switch the active tab by *step* (wrapping), resetting the cursor.
@@ -569,32 +714,46 @@ class ConfigModal(ModalScreen[None]):
         except ValueError:
             index = 0
         next_tab = self._tabs[(index + step) % len(self._tabs)]
-        self.query_one("#config-tabs", TabbedContent).active = self._tab_pane_id(next_tab)
-        # Activating a tab re-focuses the tab bar; clear it so the modal's
-        # own arrow bindings keep winning over the tab bar's.
-        self.set_focus(None)
+        # Rewind the field cursor so the next ↓ lands on field 0; the
+        # TabActivated handler repaints the rows for the new pane.
         self.field_index = 0
+        self.query_one("#config-tabs", TabbedContent).active = self._tab_pane_id(next_tab)
+        # Activating a tab re-focuses the tab bar widget; clear it so the
+        # modal's own arrow bindings keep winning (the modal stays in the
+        # "tabs" zone).
+        self.set_focus(None)
         self._repaint_fields()
 
-    def action_toggle_bool(self) -> None:
-        """Toggle the selected ``bool`` field in place (``Space``).
+    def action_change_value(self) -> None:
+        """Advance the focused field's value in place (``Space``).
 
-        Named ``toggle_bool`` (not ``toggle``) to avoid clashing with the
+        On a field this toggles a ``bool`` or cycles a ``choice`` /
+        ``multichoice`` (forward) — the unified value-change. On the tab bar
+        ``Space`` advances to the next tab so it stays useful there too. A
+        scalar field is a no-op here (it edits via ``Enter``).
+
+        Named ``change_value`` (not ``toggle``) to avoid clashing with the
         Textual ``DOMNode.action_toggle(attribute_name)`` reactive helper.
         """
-        entry = self._active_field()
-        if entry is None or entry.type != "bool":
+        if self.focus_zone == "tabs":
+            self._switch_tab(1)
             return
-        self._view.dirty = toggle_bool(entry, self._merged, self._view.dirty)
+        entry = self._active_field()
+        if entry is None or entry.type not in _INLINE_TYPES:
+            return
+        self._view.dirty = change_value(entry, self._merged, self._view.dirty, step=1)
         self._repaint_fields()
 
     def action_edit(self) -> None:
-        """Open the scalar :class:`EditFieldModal` for the selected field.
+        """Open the scalar :class:`EditFieldModal` for the focused field.
 
-        Only ``str`` / ``int`` / ``float`` / path fields open the editor;
-        ``bool`` / ``choice`` / ``multichoice`` mutate in place (``Space``
-        / ``←`` / ``→``) so ``Enter`` on them is a no-op.
+        Only fires while a field is focused; on the tab bar ``Enter`` is a
+        no-op. Only ``str`` / ``int`` / ``float`` / path fields open the
+        editor; ``bool`` / ``choice`` / ``multichoice`` mutate in place
+        (``Space`` / ``←`` / ``→``) so ``Enter`` on them is a no-op.
         """
+        if self.focus_zone != "fields":
+            return
         entry = self._active_field()
         if entry is None or entry.type in _INLINE_TYPES:
             return
@@ -742,6 +901,8 @@ __all__ = [
     "CONFIG_REGISTRY",
     "ConfigModal",
     "ConfigModalState",
+    "FocusZone",
+    "change_value",
     "current_value",
     "cycle_choice",
     "format_value",
