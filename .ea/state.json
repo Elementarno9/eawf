@@ -2444,7 +2444,12 @@
         "P26-I01-W27",
         "P26-I01-W28",
         "P26-I01-W29",
-        "P26-I01-W30"
+        "P26-I01-W30",
+        "P26-I01-W33",
+        "P26-I01-W32",
+        "P26-I01-W34",
+        "P26-I01-W35",
+        "P26-I01-W31"
       ]
     },
     "P27-I01": {
@@ -2977,7 +2982,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-20T22:37:52.572002Z",
+  "updated_at": "2026-05-21T00:49:32.209661Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9643,6 +9648,192 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W30-1779305577"
+    },
+    "P26-I01-W31": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W35"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/roadmap_tree.py",
+        "src/eawf/tui_v2/widgets/backlog_table.py",
+        "src/eawf/tui_v2/screens/overlays/detail.py",
+        "src/eawf/tui_v2/screens/overlays/events.py",
+        "src/eawf/tui_v2/theme.tcss",
+        "tests/snapshots/tui"
+      ],
+      "id": "P26-I01-W31",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T00:49:31.832562Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Roadmap and Backlog disable horizontal scroll and truncate overlong cells with ellipsis so arrow keys stay free for navigation",
+        "Detail msgbox renders label:value pairs space-padded and aligned matching StatusPane",
+        "Roadmap cursors and scrolls to the active phase node on mount via state.current.phase_id",
+        "Events overlay normalizes all timestamps to one UTC format in a fixed-width column so rows align",
+        "Status glyphs are tinted by lifecycle status via the theme.tcss palette so the V12 glyph stays the primary signal across phase iter and wave rows",
+        "Snapshot tests updated and perf gate green with no behavior change beyond display"
+      ],
+      "title": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap pre-scroll, events ts, glyph color)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W32": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W35"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui_v2/app.py",
+        "src/eawf/tui_v2/scopes",
+        "src/eawf/tui_v2/widgets/footer.py",
+        "tests/snapshots/tui"
+      ],
+      "id": "P26-I01-W32",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T00:47:40.063304Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Raw w r u keys switch workspace/repo/user scope with the ctrl prefix dropped",
+        "Dead no-op bindings removed namely b and the old w-to-waveboard binding that have no handler in tui_v2",
+        "Footer and help keymap reflect the new bindings and snapshot tests updated"
+      ],
+      "title": "fix: TUI keybindings — raw w/r/u scope-switch + drop dead bindings",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W33": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W35"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui_v2/palette/command_palette.py",
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/screens/overlays",
+        "tests/snapshots/tui"
+      ],
+      "id": "P26-I01-W33",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T00:44:09.382664Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Command palette empty input plus Enter dismisses the palette",
+        "Audit overlay free-text URN input removed and the overlay shows the audit derived from current scope",
+        "Snapshot and unit tests updated"
+      ],
+      "title": "fix: TUI palette empty-Enter exit + remove audit overlay free-text input",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W34": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I01-W35"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/config_modal.py",
+        "src/eawf/tui_v2/screens/overlays/edit_field.py",
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/app.py",
+        "tests/snapshots/tui"
+      ],
+      "id": "P26-I01-W34",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T00:47:40.436247Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ConfigModal at screens/overlays/config_modal.py opens on global key c and palette /config and is registry-driven rendering ALL CONFIG_REGISTRY keys across every tab with no hardcoded subset",
+        "Tabbed surface with alphabetical tabs and alphabetical fields sourced from eawf.config.registry so the TUI modal and eawf config cannot drift",
+        "Interactions per C06 — Space toggles bool / left-right cycles enum / Enter opens EditFieldModal for str int float path / s save / r reset / L cycles writable layer",
+        "EditFieldModal at screens/overlays/edit_field.py is a per-type input with inline validator messages and Esc cancels and Enter accepts",
+        "Esc on a dirty modal prompts before discard per V15 and saves route through the daemon layered-config writer never touching state.json per rule 4",
+        "Snapshot and unit tests cover every tab and field type and mypy and pre-commit green"
+      ],
+      "title": "feat: tui_v2 ConfigModal + EditFieldModal (registry-driven config window on c / /config)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I01-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I01-W31",
+        "P26-I01-W32",
+        "P26-I01-W33",
+        "P26-I01-W34"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui",
+        "src/eawf/cli/app.py",
+        "src/eawf/cli/commands/workspace.py",
+        "src/eawf/tui_v2",
+        "src/eawf/skills/ship.py",
+        "tests"
+      ],
+      "id": "P26-I01-W35",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T00:47:40.819188Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tui_v2 owns the non-TTY and --plain and --no-input deterministic status fallback replacing legacy run_tui offline mode",
+        "workspace offline_render replaced by a tui_v2 equivalent used by cli workspace command",
+        "EAWF_TUI_LEGACY hatch removed and cli/app.py no longer imports eawf.tui",
+        "legacy src/eawf/tui 9 modules and legacy tui tests deleted and skills/ship.py docstring ref fixed",
+        "full pytest and mypy and pre-commit green and eawf tui works on TTY and piped"
+      ],
+      "title": "refactor: remove legacy tui/ tree (build tui_v2 non-TTY + offline_render replacements)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
