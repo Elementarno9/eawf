@@ -1562,9 +1562,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W39"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2999,7 +2997,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T02:40:09.740548Z",
+  "updated_at": "2026-05-21T02:51:18.196659Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9954,7 +9952,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w39",
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:51:17.628447Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9967,10 +9965,10 @@
       "id": "P26-I01-W39",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T02:40:08.704777Z",
-      "outcome": null,
+      "outcome": "polish: deleted 23 orphaned tests/golden/tui legacy goldens (consumers removed in W35) + updated tui_v2 __init__/app docstrings to reflect legacy removal; full suite green 4374 passed, mypy 401 clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Orphaned tests/golden/tui fixtures with zero live consumers deleted and enumerated in the commit body per the deletion rule",
         "P26 tui_v2 surfaces swept for naming and docstring and log-field consistency with no behavior change",
@@ -10759,10 +10757,10 @@
       "branch": "feature/eawf-v0.3-p26-w39",
       "created_at": "2026-05-21T02:40:09.740548Z",
       "id": "WT-P26-I01-W39-1779331209",
-      "merged_commit": null,
+      "merged_commit": "85a4bf4",
       "owner_session_id": "op-p26-w39",
       "path": ".ea/worktrees/p26-w39",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W39"
     }
   }
