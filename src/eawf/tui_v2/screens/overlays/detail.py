@@ -194,11 +194,19 @@ class DetailModal(ModalScreen[None]):
         self._card = card
 
     def compose(self) -> ComposeResult:
-        """Yield the scrollable card: title, field rows, close hint."""
+        """Yield the scrollable card: title, field rows, close hint.
+
+        Labels are space-padded to the widest label in the card so the
+        ``label: value`` colons line up in a single column (the same
+        mechanism :class:`~eawf.tui_v2.widgets.status_pane.StatusPane`
+        uses for its counter block).
+        """
         with VerticalScroll(id="detail-card"):
             yield Static(self._card.title, classes="detail-title")
+            label_width = max((len(label) for label, _ in self._card.rows), default=0)
             for label, value in self._card.rows:
-                yield Static(f"{label}: {value}", classes="detail-row")
+                padded = f"{label}:".ljust(label_width + 1)
+                yield Static(f"{padded} {value}", classes="detail-row")
             yield Static("[ Esc to close ]", classes="detail-hint")
 
     def action_close(self) -> None:

@@ -39,6 +39,8 @@ import pytest
 
 from eawf.tui_v2.app import EaApp
 from eawf.tui_v2.screens.overlays.confirm import ConfirmModal
+from eawf.tui_v2.screens.overlays.detail import DetailModal, resolve_detail
+from eawf.tui_v2.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
 from eawf.tui_v2.snapshot import assert_screen_snapshot, settle_screen
 
 
@@ -135,5 +137,65 @@ def test_confirm_overlay_snapshot() -> None:
             app.push_modal(ConfirmModal("Abandon wave P01-I01-W01?"))
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "confirm_overlay.txt")
+
+    asyncio.run(body())
+
+
+def test_detail_overlay_snapshot() -> None:
+    """The detail card aligns its ``label: value`` colons in one column."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            state = app.state
+            assert state is not None
+            wave_id = next(iter(state.waves))
+            app.push_modal(DetailModal(resolve_detail(state, wave_id)))
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "detail_overlay.txt")
+
+    asyncio.run(body())
+
+
+def _event_row(timestamp: str, event_type: str, status: str, summary: str) -> EventRow:
+    """Build an :class:`EventRow` through the real envelope-flattening path.
+
+    Routing the raw (possibly mixed-format) *timestamp* through
+    :func:`_row_from_envelope` exercises the UTC normalization the overlay
+    applies, so the golden captures the normalized + aligned columns.
+    """
+    row = _row_from_envelope(
+        {
+            "id": "EV",
+            "summary": summary,
+            "payload": {"timestamp": timestamp, "event_type": event_type, "status": status},
+        }
+    )
+    assert row is not None
+    return row
+
+
+def test_events_overlay_snapshot() -> None:
+    """Events rows render one UTC timestamp format, columns aligned.
+
+    The seeded rows deliberately mix the two on-disk ISO spellings
+    (trailing ``Z`` and a ``+00:00`` offset, with fractional seconds); the
+    golden must show them collapsed to a single ``...Z`` form with the
+    following columns lined up.
+    """
+
+    async def body() -> None:
+        rows = (
+            _event_row("2026-05-10T12:49:10.250985Z", "wave close", "ok", "closed W01"),
+            _event_row("2026-05-10T12:49:25.190872+00:00", "dispatch cost", "fail", "boom"),
+            _event_row("2026-05-10T12:49:35.093906Z", "executor report", "ok", "report body"),
+        )
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            app.push_modal(EventsModal(rows))
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "events_overlay.txt")
 
     asyncio.run(body())

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal
 
@@ -58,6 +59,43 @@ _OK_STATUS: str = "ok"
 #: reports-only filter (report events carry ``report`` in their type).
 _REPORT_MARKER: str = "report"
 
+#: The single UTC timestamp format every row is normalized to. The event
+#: store mixes two ISO-8601 spellings (``...Z`` and ``...+00:00``, with or
+#: without microseconds); collapsing them to one fixed-width form keeps the
+#: rendered columns aligned.
+_TS_FORMAT: str = "%Y-%m-%dT%H:%M:%SZ"
+
+#: Rendered width of a normalized timestamp (``YYYY-MM-DDTHH:MM:SSZ`` = 20).
+#: Used to width-pad the column so the following columns line up even when a
+#: row carries an unparseable / empty timestamp.
+_TS_WIDTH: int = 20
+
+
+def _normalize_timestamp(raw: str) -> str:
+    """Normalize an ISO-8601 timestamp string to one UTC ``...Z`` form.
+
+    Parses the two spellings the event store emits — a trailing ``Z`` and a
+    ``+00:00`` offset, each with or without fractional seconds — converts to
+    UTC, and reformats to second precision as :data:`_TS_FORMAT`. An empty
+    or unparseable value is returned unchanged so a malformed row still
+    renders (the width-pad in :func:`_render_row` keeps columns aligned).
+
+    Args:
+        raw: The raw timestamp string from the event payload.
+
+    Returns:
+        The ``YYYY-MM-DDTHH:MM:SSZ`` form, or *raw* when it cannot be
+        parsed.
+    """
+    if not raw:
+        return raw
+    candidate = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return raw
+    return parsed.astimezone(UTC).strftime(_TS_FORMAT)
+
 
 @dataclass(frozen=True)
 class EventRow:
@@ -65,7 +103,8 @@ class EventRow:
 
     Attributes:
         event_id: The envelope id (``EV-...``).
-        timestamp: The ISO-8601 event timestamp string (as stored).
+        timestamp: The event timestamp, normalized to one UTC ``...Z`` form
+            (:data:`_TS_FORMAT`) by :func:`_row_from_envelope`.
         event_type: The human ``event_type`` label (e.g. ``wave close``).
         status: The event status (``ok`` / an error token).
         summary: The envelope summary line.
@@ -107,7 +146,7 @@ def _row_from_envelope(record: dict[str, object]) -> EventRow | None:
         return None
     return EventRow(
         event_id=str(record.get("id", "")),
-        timestamp=str(payload.get("timestamp", "")),
+        timestamp=_normalize_timestamp(str(payload.get("timestamp", ""))),
         event_type=str(payload.get("event_type", "")),
         status=str(payload.get("status", "")),
         summary=str(record.get("summary", "")),
@@ -203,7 +242,7 @@ def _render_row(row: EventRow) -> str:
     Returns:
         A content-markup string for a single :class:`~textual.widgets.Static`.
     """
-    head = f"{row.timestamp}  {row.event_type:<24} {row.status}"
+    head = f"{row.timestamp:<{_TS_WIDTH}}  {row.event_type:<24} {row.status}"
     body = f"{head}  {row.summary}" if row.summary else head
     if row.is_error:
         return f"[$error]{body}[/]"

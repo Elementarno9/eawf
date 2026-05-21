@@ -23,12 +23,15 @@ mtime-poll) state revision rebuilds the tree in place. For standalone
 unit tests, assign :attr:`state` directly and the same rebuild fires.
 
 The status signal is the **glyph** (``- > ~ # x !``) per the V12 schema —
-deliberately colour-independent so the tree stays legible under the Wong
-deuteranopia-safe palette without relying on hue. Tree node labels are
-parsed by Rich (not Textual content markup), so labels are built as plain
-:class:`~rich.text.Text` to avoid the Rich-vs-Textual markup mismatch on
-the ``$`` palette vars; per-row colour is a follow-up that rides Tree's
-own styling hooks.
+the glyph stays the primary, colour-independent signal so the tree is
+legible without relying on hue. Colour is *additive* on top of the glyph
+(colour-blind safe): the leading glyph is tinted by its lifecycle status
+from the Wong deuteranopia-safe palette. Tree node labels are parsed by
+Rich (not Textual content markup) and cannot resolve the ``$`` palette
+vars, so the glyph tint is applied as a concrete-colour Rich span sourced
+from :data:`STATUS_COLOURS` — the same hex set ``theme.tcss`` carries as
+``$status-*`` vars (Rich-label colours mirror the CSS vars, as the inline
+EU bar's plain renderer already does).
 """
 
 from __future__ import annotations
@@ -90,6 +93,42 @@ ITER_GLYPHS: dict[IterStatus, str] = {
 #: tree stays total even if the enums grow.
 UNKNOWN_GLYPH: str = "?"
 
+#: Lifecycle-status → concrete glyph colour (Wong deuteranopia-safe set).
+#: Mirrors the ``$status-*`` palette vars in ``theme.tcss``: Tree node
+#: labels are Rich-parsed and cannot resolve the ``$`` vars, so the tint
+#: is applied as a concrete-colour Rich span here (same approach the
+#: inline EU bar's plain renderer takes). Colour is additive on top of the
+#: glyph — the glyph stays the primary signal. Keyed by the string status
+#: ``.value`` so the three enums (phase / iter / wave) share one map.
+STATUS_COLOURS: dict[str, str] = {
+    "pending": "#6c6c6c",
+    "planned": "#6c6c6c",
+    "claimed": "#56b6c2",
+    "in_progress": "#e69f00",
+    "active": "#e69f00",
+    "closed": "#009e73",
+    "abandoned": "#6c6c6c",
+    "archived": "#6c6c6c",
+    "failed": "#d55e00",
+}
+
+
+def _status_colour(status: object) -> str | None:
+    """Return the glyph tint for *status*, or ``None`` when unmapped.
+
+    Args:
+        status: A lifecycle status enum member (its ``.value`` keys the
+            shared :data:`STATUS_COLOURS` map).
+
+    Returns:
+        A concrete hex colour string, or ``None`` so an unmapped status
+        falls back to the default (uncoloured) glyph.
+    """
+    value = getattr(status, "value", None)
+    if not isinstance(value, str):
+        return None
+    return STATUS_COLOURS.get(value)
+
 
 def _glyph_for(status: object, table: dict[Any, str]) -> str:
     """Return the glyph for *status* from *table*, or the sentinel.
@@ -105,21 +144,29 @@ def _glyph_for(status: object, table: dict[Any, str]) -> str:
     return table.get(status, UNKNOWN_GLYPH)
 
 
-def _row_label(glyph: str, body: str) -> Text:
-    """Compose a plain ``<glyph> <body>`` tree row label.
+def _row_label(glyph: str, body: str, glyph_colour: str | None = None) -> Text:
+    """Compose a ``<glyph> <body>`` tree row label with a tinted glyph.
 
     Returns a Rich :class:`~rich.text.Text` (not a markup string) so the
     body renders literally regardless of any ``[`` it contains and the
-    label never trips Rich markup parsing inside the Tree.
+    label never trips Rich markup parsing inside the Tree. When
+    *glyph_colour* is given, only the leading glyph carries the colour
+    span — the body stays the theme's default text colour so colour is
+    additive on top of the glyph signal (colour-blind safe).
 
     Args:
         glyph: The leading status glyph.
         body: The trailing row text (id + title, etc).
+        glyph_colour: Optional concrete colour for the glyph span; ``None``
+            renders the glyph in the default text colour.
 
     Returns:
-        A plain :class:`~rich.text.Text` for the tree row label.
+        A :class:`~rich.text.Text` for the tree row label.
     """
-    return Text(f"{glyph} {body}")
+    label = Text()
+    label.append(glyph, style=glyph_colour or "")
+    label.append(f" {body}")
+    return label
 
 
 def _iter_eu_suffix(state: State, iter_obj: Iter) -> str | None:
@@ -169,6 +216,7 @@ class RoadmapTree(Tree[str]):
         height: 1fr;
         width: 1fr;
         background: $surface;
+        overflow-x: hidden;
     }
     """
 
@@ -237,6 +285,29 @@ class RoadmapTree(Tree[str]):
         for phase_id in sorted(state.phases):
             phase = state.phases[phase_id]
             self._add_phase(state, phase)
+        self._scroll_to_active_phase(state)
+
+    def _scroll_to_active_phase(self, state: State) -> None:
+        """Move the cursor to the current phase's node so it starts in view.
+
+        The roadmap can outgrow the pane; without this the tree opens
+        scrolled to the top (oldest phase) and the operator has to scroll
+        down to the work in flight. Moving the cursor to the node whose
+        data matches ``state.current.phase_id`` also scrolls it into view.
+        A ``None`` pointer (or a phase with no matching node) leaves the
+        cursor at its default top position.
+
+        Args:
+            state: The bound state (its ``current.phase_id`` names the
+                active phase).
+        """
+        active_phase_id = state.current.phase_id
+        if active_phase_id is None:
+            return
+        for node in self.root.children:
+            if node.data == active_phase_id:
+                self.move_cursor(node)
+                return
 
     def _add_phase(self, state: State, phase: Phase) -> None:
         """Add a phase node and recurse into its iters.
@@ -246,7 +317,7 @@ class RoadmapTree(Tree[str]):
             phase: The phase to add.
         """
         glyph = _glyph_for(phase.status, PHASE_GLYPHS)
-        label = _row_label(glyph, f"{phase.id}  {phase.title}")
+        label = _row_label(glyph, f"{phase.id}  {phase.title}", _status_colour(phase.status))
         node = self.root.add(label, data=phase.id, expand=phase.status is PhaseStatus.ACTIVE)
         for iter_id in phase.iter_ids:
             iter_obj = state.iters.get(iter_id)
@@ -262,7 +333,9 @@ class RoadmapTree(Tree[str]):
             iter_obj: The iter to add.
         """
         glyph = _glyph_for(iter_obj.status, ITER_GLYPHS)
-        label = _row_label(glyph, f"{iter_obj.id}  {iter_obj.title}")
+        label = _row_label(
+            glyph, f"{iter_obj.id}  {iter_obj.title}", _status_colour(iter_obj.status)
+        )
         eu_suffix = _iter_eu_suffix(state, iter_obj)
         if eu_suffix is not None:
             label.append(f"  {eu_suffix}")
@@ -284,7 +357,7 @@ class RoadmapTree(Tree[str]):
             wave: The wave to add.
         """
         glyph = _glyph_for(wave.status, WAVE_GLYPHS)
-        label = _row_label(glyph, f"{wave.id}  {wave.title}")
+        label = _row_label(glyph, f"{wave.id}  {wave.title}", _status_colour(wave.status))
         parent.add_leaf(label, data=wave.id)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
@@ -307,6 +380,7 @@ class RoadmapTree(Tree[str]):
 __all__ = [
     "ITER_GLYPHS",
     "PHASE_GLYPHS",
+    "STATUS_COLOURS",
     "UNKNOWN_GLYPH",
     "WAVE_GLYPHS",
     "RoadmapTree",

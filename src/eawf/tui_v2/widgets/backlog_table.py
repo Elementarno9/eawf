@@ -54,10 +54,37 @@ _PRIORITY_RANK: dict[BacklogPriority, int] = {
 #: Column ids in display order.
 _COLUMNS: tuple[str, ...] = ("id", "priority", "status", "title")
 
+#: Max rendered width for the free-text ``title`` cell. Overlong titles are
+#: truncated with an ellipsis so a long title cannot push the table wider
+#: than the pane (horizontal scroll is disabled so ←/→ stay free for nav).
+_TITLE_MAX_WIDTH: int = 48
+
+#: The single-character ellipsis appended to a truncated title.
+_ELLIPSIS: str = "…"
+
 
 def _priority_rank(priority: BacklogPriority) -> int:
     """Return the numeric rank for *priority* (``P0`` lowest = first)."""
     return _PRIORITY_RANK.get(priority, len(_PRIORITY_RANK))
+
+
+def _truncate(text: str, max_width: int = _TITLE_MAX_WIDTH) -> str:
+    """Return *text* clipped to *max_width* with a trailing ellipsis.
+
+    Strings within *max_width* are returned unchanged; longer strings are
+    cut to ``max_width - 1`` characters plus the single-cell ellipsis so
+    the result never exceeds *max_width* cells.
+
+    Args:
+        text: The cell text to clip.
+        max_width: The maximum rendered width (≥ 1).
+
+    Returns:
+        The original text, or a truncated ``…``-suffixed copy.
+    """
+    if len(text) <= max_width:
+        return text
+    return text[: max_width - 1] + _ELLIPSIS
 
 
 def sort_items(items: list[BacklogItem], sort_key: str) -> list[BacklogItem]:
@@ -138,6 +165,7 @@ class BacklogTable(DataTable[str]):
     BacklogTable {
         height: 1fr;
         width: 1fr;
+        overflow-x: hidden;
     }
     """
 
@@ -255,7 +283,7 @@ class BacklogTable(DataTable[str]):
                     item.id,
                     item.priority.value,
                     item.status.value,
-                    item.title,
+                    _truncate(item.title),
                     key=item.id,
                 )
         finally:
