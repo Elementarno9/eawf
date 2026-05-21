@@ -1551,7 +1551,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I01-W34",
+      "P26-I01-W36"
+    ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2449,7 +2452,8 @@
         "P26-I01-W32",
         "P26-I01-W34",
         "P26-I01-W35",
-        "P26-I01-W31"
+        "P26-I01-W31",
+        "P26-I01-W36"
       ]
     },
     "P27-I01": {
@@ -2982,7 +2986,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T01:09:30.816648Z",
+  "updated_at": "2026-05-21T01:18:12.063736Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9761,7 +9765,7 @@
       "blocks": [
         "P26-I01-W35"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p26-w34",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9780,7 +9784,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "ConfigModal at screens/overlays/config_modal.py opens on global key c and palette /config and is registry-driven rendering ALL CONFIG_REGISTRY keys across every tab with no hardcoded subset",
         "Tabbed surface with alphabetical tabs and alphabetical fields sourced from eawf.config.registry so the TUI modal and eawf config cannot drift",
@@ -9792,7 +9796,7 @@
       "title": "feat: tui_v2 ConfigModal + EditFieldModal (registry-driven config window on c / /config)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W34-1779326291"
     },
     "P26-I01-W35": {
       "agent_role": "executor",
@@ -9834,6 +9838,40 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
+    },
+    "P26-I01-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p26-w36",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/status_pane.py",
+        "src/eawf/lifecycle/phase.py",
+        "src/eawf/state",
+        "tests",
+        "tests/snapshots/tui"
+      ],
+      "id": "P26-I01-W36",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T01:18:09.725387Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "Status pane wave counters (pending in_progress failed) scope to the active phase so archived and closed phase waves no longer inflate the count",
+        "archive_phase cascades non-terminal child waves (pending and planned) to ABANDONED so archiving never leaves zombie pending waves",
+        "A one-time idempotent migration through the canonical state path backfills the 16 P21-I01 pending waves to ABANDONED kept for history marked archived",
+        "Tests cover the scoped counter and the archive cascade and the backfill migration and snapshots regenerate and mypy and pre-commit green"
+      ],
+      "title": "fix: scope status-pane wave counters to active phase + abandon-cascade archived-phase waves",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P26-I01-W36-1779326292"
     }
   },
   "workspace": null,
@@ -10552,6 +10590,28 @@
       "path": ".ea/worktrees/p26-w33",
       "status": "merged",
       "wave_id": "P26-I01-W33"
+    },
+    "WT-P26-I01-W34-1779326291": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w34",
+      "created_at": "2026-05-21T01:18:11.359035Z",
+      "id": "WT-P26-I01-W34-1779326291",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w34",
+      "path": ".ea/worktrees/p26-w34",
+      "status": "active",
+      "wave_id": "P26-I01-W34"
+    },
+    "WT-P26-I01-W36-1779326292": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w36",
+      "created_at": "2026-05-21T01:18:12.063736Z",
+      "id": "WT-P26-I01-W36-1779326292",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w36",
+      "path": ".ea/worktrees/p26-w36",
+      "status": "active",
+      "wave_id": "P26-I01-W36"
     }
   }
 }
