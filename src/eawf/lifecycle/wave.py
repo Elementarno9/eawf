@@ -283,6 +283,16 @@ def claim_wave(
       where multiple waves of the same dep-frontier are intentionally
       claimed at once.
 
+    Lifecycle guard: once every gate above passes, a PLANNED parent
+    iter is activated as part of the same claim mutation so waves
+    never run under a PLANNED iter. The activation is inlined rather
+    than delegated to :func:`eawf.lifecycle.iter_.activate_iter`
+    because that helper resets ``current.active_wave_ids`` — which
+    would clobber sibling waves already on the active pointer. An
+    already-ACTIVE iter is left untouched (idempotent); a terminal
+    iter is unreachable here because the wave's own PENDING gate
+    already rejects claims under a closed/abandoned iter.
+
     Raises:
         LifecycleError: when *wave_id* is unknown, wave is not
             PENDING, dep waves are not CLOSED, or a lower-numbered
@@ -317,6 +327,16 @@ def claim_wave(
     wave.claim_session_id = session_id
     if wave_id not in state.current.active_wave_ids:
         state.current.active_wave_ids.append(wave_id)
+    # Lifecycle guard: a wave must never run under a PLANNED iter, so the
+    # first claim activates the parent iter (status flip + current pointer)
+    # atomically with the claim. ACTIVE iters are left as-is (idempotent);
+    # terminal iters are unreachable because the PENDING gate above already
+    # rejects claims under a closed iter's now-non-pending waves.
+    it = state.iters.get(wave.iter_id)
+    if it is not None and it.status == IterStatus.PLANNED:
+        it.status = IterStatus.ACTIVE
+        state.current.iter_id = it.id
+        logger.info(f"claim_wave auto-activated iter={it.id} on first claim wave={wave_id}")
     logger.info(f"claim_wave id={wave_id} session={session_id} out_of_order={out_of_order}")
     return wave
 

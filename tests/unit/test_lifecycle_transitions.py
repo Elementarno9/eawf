@@ -910,3 +910,101 @@ def test_edit_wave_plan_under_active_phase_rejects_closed_wave() -> None:
     close_wave(state, wave_id="P01-I01-W01", outcome="done")
     with pytest.raises(LifecycleError, match="not pending"):
         edit_wave_plan(state, wave_id="P01-I01-W01", title="late edit")
+
+
+# ---- P26-W40: claim auto-activates a PLANNED parent iter --------------------
+
+
+def test_claim_wave_activates_planned_iter() -> None:
+    """First claim under a PLANNED iter flips it ACTIVE + sets the pointer.
+
+    Guards against the lifecycle gap where waves ran/closed while the
+    parent iter never left PLANNED (no ACTIVE->PLANNED reversion exists).
+    """
+    state = _empty_state()
+    # Reproduce the bug shape: ACTIVE phase, PLANNED child iter (activate_phase
+    # does not cascade-activate the iter), current.iter_id cleared.
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    activate_phase(state, phase_id="P01")
+    assert state.phases["P01"].status == PhaseStatus.ACTIVE
+    assert state.iters["P01-I01"].status == IterStatus.PLANNED
+    assert state.current.iter_id is None
+    w = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    assert w.status == WaveStatus.CLAIMED
+    assert state.iters["P01-I01"].status == IterStatus.ACTIVE
+    assert state.current.iter_id == "P01-I01"
+    assert "P01-I01-W01" in state.current.active_wave_ids
+
+
+def test_claim_wave_active_iter_unchanged() -> None:
+    """Claiming under an already-ACTIVE iter does not churn iter state.
+
+    The iter stays ACTIVE, ``current.iter_id`` keeps pointing at it, and
+    a previously-active sibling wave on the pointer is preserved (the
+    activation path must not reset ``active_wave_ids``).
+    """
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="i")  # ACTIVE iter
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w1", file_scopes=["x"])
+    plan_wave(state, wave_id="P01-I01-W02", iter_id="P01-I01", title="w2", file_scopes=["x"])
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    claim_wave(state, wave_id="P01-I01-W02", session_id="SES-2")
+    assert state.iters["P01-I01"].status == IterStatus.ACTIVE
+    assert state.current.iter_id == "P01-I01"
+    assert state.current.active_wave_ids == ["P01-I01-W01", "P01-I01-W02"]
+
+
+def test_claim_wave_rejected_claim_does_not_activate_iter() -> None:
+    """A claim rejected by the monotonic/dep gates leaves the iter PLANNED.
+
+    Auto-activation is a side-effect of the *successful*-claim path only,
+    so a gate rejection must not flip the parent iter.
+    """
+    state = _empty_state()
+    plan_phase(state, phase_id="P20", title="t")
+    plan_iter(state, iter_id="P20-I01", phase_id="P20", title="i")
+    plan_wave(state, wave_id="P20-I01-W01", iter_id="P20-I01", title="a", file_scopes=["x"])
+    plan_wave(state, wave_id="P20-I01-W02", iter_id="P20-I01", title="b", file_scopes=["x"])
+    activate_phase(state, phase_id="P20")
+    assert state.iters["P20-I01"].status == IterStatus.PLANNED
+    # W02 skips the lower-numbered ready sibling W01 -> monotonic gate rejects.
+    with pytest.raises(LifecycleError, match="lower-numbered ready siblings"):
+        claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
+    assert state.iters["P20-I01"].status == IterStatus.PLANNED
+    assert state.current.iter_id is None
+    # A dep-gate rejection likewise leaves the iter PLANNED.
+    plan_wave(
+        state,
+        wave_id="P20-I01-W03",
+        iter_id="P20-I01",
+        title="c",
+        file_scopes=["x"],
+        deps=["P20-I01-W01"],
+    )
+    with pytest.raises(LifecycleError, match="un-closed dep waves"):
+        claim_wave(state, wave_id="P20-I01-W03", session_id="SES-3", out_of_order=True)
+    assert state.iters["P20-I01"].status == IterStatus.PLANNED
+    assert state.current.iter_id is None
+
+
+def test_claim_wave_under_terminal_iter_rejected_and_not_activated() -> None:
+    """A wave under a CLOSED iter cannot be claimed and the iter is untouched.
+
+    The wave's PENDING gate is the load-bearing reject (a CLOSED iter only
+    holds non-PENDING waves); the activation guard additionally only fires
+    for PLANNED iters, so a terminal iter is never resurrected.
+    """
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(state, wave_id="P01-I01-W01", iter_id="P01-I01", title="w", file_scopes=["x"])
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    assert state.iters["P01-I01"].status == IterStatus.CLOSED
+    with pytest.raises(LifecycleError, match="cannot be claimed"):
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-2")
+    assert state.iters["P01-I01"].status == IterStatus.CLOSED
