@@ -260,6 +260,10 @@ def archive_phase(state: State, *, phase_id: str) -> Phase:
             abandoned_iters += 1
     phase.status = PhaseStatus.ARCHIVED
     phase.closed_at = now
+    if state.current.phase_id == phase_id:
+        state.current.phase_id = None
+        state.current.iter_id = None
+        state.current.active_wave_ids = []
     logger.info(
         f"archive_phase id={phase_id} abandoned_waves={abandoned_waves} "
         f"abandoned_iters={abandoned_iters}"

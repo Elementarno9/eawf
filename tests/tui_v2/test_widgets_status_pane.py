@@ -19,6 +19,7 @@ from eawf.tui_v2.widgets.status_pane import (
     DASH,
     DEFAULT_PROJECT_CODE,
     StatusPane,
+    _active_phase_id,
     build_status_lines,
     summary_counts,
 )
@@ -198,6 +199,100 @@ def test_summary_counts_scopes_to_current_pointer_phase() -> None:
     counts = summary_counts(state)
     assert counts["waves_in_progress"] == 1
     assert counts["waves_pending"] == 0
+
+
+# --------------------------------------------------------------------------
+# _active_phase_id — pointer must be ACTIVE before it is honoured
+# --------------------------------------------------------------------------
+
+
+def _state_with_stale_pointer_and_active_phase() -> State:
+    """Pointer at a closed P01; a separate ACTIVE P02 owns the live wave.
+
+    The pointer must NOT win (P01 is closed); resolution falls through to
+    the ACTIVE-phase scan and lands on P02.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    # Demote the pointer phase to a non-ACTIVE (closed) status; its wave
+    # becomes a closed leftover that must not be counted.
+    payload["phases"]["P01"]["status"] = "closed"
+    payload["phases"]["P01"]["closed_at"] = opened
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = opened
+    payload["iters"]["P01-I01"]["status"] = "closed"
+    payload["iters"]["P01-I01"]["closed_at"] = opened
+    payload["phases"]["P02"] = {
+        "id": "P02",
+        "scope_id": payload["phases"]["P01"]["scope_id"],
+        "subproject_id": None,
+        "title": "active",
+        "status": "active",
+        "iter_ids": ["P02-I01"],
+        "outcome_ids": [],
+        "depends_on": [],
+        "source_brief_ids": [],
+        "opened_at": opened,
+        "closed_at": None,
+        "audit_id": None,
+    }
+    payload["iters"]["P02-I01"] = {
+        "id": "P02-I01",
+        "phase_id": "P02",
+        "title": "active iter",
+        "status": "active",
+        "wave_ids": ["P02-I01-W01"],
+        "estimate_id": None,
+        "audit_id": None,
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    payload["waves"]["P02-I01-W01"] = {
+        "id": "P02-I01-W01",
+        "iter_id": "P02-I01",
+        "title": "live pending",
+        "status": "pending",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    return State.model_validate(payload)
+
+
+def test_active_phase_id_ignores_non_active_pointer() -> None:
+    """A pointer at a closed phase is not returned; the ACTIVE scan wins."""
+    state = _state_with_stale_pointer_and_active_phase()
+    assert state.current.phase_id == "P01"
+    assert _active_phase_id(state) == "P02"
+
+
+def test_active_phase_id_non_active_pointer_no_active_phase_returns_none() -> None:
+    """A non-ACTIVE pointer with no ACTIVE phase anywhere resolves to None."""
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["phases"]["P01"]["status"] = "archived"
+    payload["phases"]["P01"]["closed_at"] = opened
+    payload["waves"]["P01-I01-W01"]["status"] = "abandoned"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = opened
+    payload["iters"]["P01-I01"]["status"] = "abandoned"
+    payload["iters"]["P01-I01"]["closed_at"] = opened
+    state = State.model_validate(payload)
+    assert state.current.phase_id == "P01"
+    assert _active_phase_id(state) is None
+
+
+def test_summary_counts_ignores_non_active_pointer_waves() -> None:
+    """Counts scope to the ACTIVE phase, not the stale (closed) pointer.
+
+    The closed P01 leftover wave must not be counted; only P02's single
+    PENDING wave is in scope.
+    """
+    counts = summary_counts(_state_with_stale_pointer_and_active_phase())
+    assert counts["waves_pending"] == 1
+    assert counts["waves_in_progress"] == 0
 
 
 # --------------------------------------------------------------------------

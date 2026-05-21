@@ -20,10 +20,13 @@ Determinism note: the repo / workspace screens carry a ``GitPane`` that
 probes the **live** working tree (``git status`` count, branch, recent
 commit subjects, ahead/behind). That output varies run-to-run and would
 leak the real branch / commit text into a golden. The autouse
-:func:`_isolated_cwd` fixture chdir's every test into a fresh non-git
-temp dir, so the pane resolves to deterministic dashes — stable *and*
-scrub-safe. The fixture state itself comes from the absolute fixture
-paths above, unaffected by the cwd switch.
+:func:`_isolated_cwd` fixture stubs ``git_pane._git_run`` to ``None`` so
+every git field resolves to a deterministic dash regardless of cwd,
+platform, or ``pytest -n auto`` worker — stable *and* scrub-safe. (The
+chdir into a non-git temp dir stays as a belt-and-suspenders guard; the
+stub is what makes the dashes immune to a cross-worker cwd leak.) The
+fixture state itself comes from the absolute fixture paths above,
+unaffected by the cwd switch.
 
 Regenerate the goldens after an intentional layout change with::
 
@@ -49,14 +52,20 @@ from eawf.tui_v2.snapshot import assert_screen_snapshot, settle_screen
 
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Chdir into a non-git temp dir + disable Textual animations.
+    """Force the git pane to dashes + disable Textual animations.
 
-    Two determinism guards for the goldens:
+    Three determinism guards for the goldens:
 
-    * The git pane probes ``Path.cwd()``; pointing it at a fresh non-git
-      directory makes every git field resolve to a dash, which keeps the
-      golden stable across working-tree changes and free of real branch /
-      commit text.
+    * The git pane shells out via ``git_pane._git_run``; stubbing it to
+      return ``None`` makes ``gather_git_fields`` resolve every field to a
+      dash regardless of cwd, platform, or ``pytest -n auto`` worker. This
+      is the load-bearing guard — a parallel test can leak the repo cwd
+      into the worker, and probing a real repo would otherwise render the
+      live branch / status into the golden and drift it (the ubuntu CI
+      symptom). The stub keeps the dashes deterministic everywhere.
+    * Chdir into a fresh non-git temp dir as belt-and-suspenders: the pane
+      probes ``Path.cwd()`` on construction, so even if the stub were
+      bypassed the cwd points away from any repo.
     * Disabling animations settles time-driven chrome (notably the
       ``TabbedContent`` underline marker the config overlay uses) to its
       final position immediately, so a capture under scheduler load cannot
@@ -68,6 +77,7 @@ def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import textual.constants as _tc
 
     monkeypatch.setattr(_tc, "TEXTUAL_ANIMATIONS", "none")
+    monkeypatch.setattr("eawf.tui_v2.widgets.git_pane._git_run", lambda *a, **k: None)
     monkeypatch.chdir(tmp_path)
 
 
@@ -113,6 +123,42 @@ def test_workspace_screen_snapshot() -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "workspace_screen.txt")
+
+    asyncio.run(body())
+
+
+def test_workspace_git_pane_dashes_from_repo_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The git-pane stub — not the chdir — is what guarantees the DASH golden.
+
+    Regression for the ubuntu ``pytest -n auto`` drift: a parallel test can
+    leak the repo cwd into the worker, so the workspace git pane probes a
+    real repo and renders the live branch instead of dashes. This test
+    undoes the autouse fixture's chdir (pointing cwd back at the repo root,
+    a genuine git work tree) while keeping the ``_git_run`` stub active, and
+    asserts the GIT pane still resolves to dashes. With the stub gone the
+    pane would render the real branch — so a green assertion here proves the
+    stub neutralizes the cwd leak.
+
+    The function-scoped ``monkeypatch.chdir`` is unwound at teardown, so the
+    test does not itself leak the repo cwd into a sibling worker.
+    """
+    from eawf.tui_v2.widgets.git_pane import DASH as GIT_DASH
+    from eawf.tui_v2.widgets.git_pane import GitPane
+
+    repo_root = Path(__file__).resolve().parents[3]
+    assert (repo_root / ".git").exists(), f"expected a git work tree at {repo_root}"
+    monkeypatch.chdir(repo_root)
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            pane = app.screen.query_one(GitPane)
+            assert pane._fields is not None
+            assert pane._fields.branch == GIT_DASH
+            assert pane._fields.dirty == GIT_DASH
+            assert pane._fields.ahead_behind == GIT_DASH
+            assert pane._fields.recent_commits == ()
 
     asyncio.run(body())
 

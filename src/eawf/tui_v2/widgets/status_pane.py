@@ -49,14 +49,20 @@ def _active_phase_id(state: State) -> str | None:
     """Resolve the id of the phase whose waves the pane should count.
 
     Prefers the ``current.phase_id`` pointer (the operator's focused
-    phase). Falls back to the single phase whose ``status`` is ACTIVE so
-    a state with an active phase but an unset pointer still scopes
-    correctly. Returns ``None`` when no phase is active — the wave
-    counters then read zero rather than counting archived/closed-phase
-    leftovers.
+    phase) but only when the pointed-to phase is itself ACTIVE — a stale
+    pointer at a closed/archived phase would otherwise mis-scope the live
+    counts, so it falls through to the scan below. Failing that, returns
+    the single phase whose ``status`` is ACTIVE so a state with an active
+    phase but an unset pointer still scopes correctly. Returns ``None``
+    when no phase is active — the wave counters then read zero rather than
+    counting archived/closed-phase leftovers.
     """
     pointer = state.current.phase_id
-    if pointer is not None and pointer in state.phases:
+    if (
+        pointer is not None
+        and pointer in state.phases
+        and state.phases[pointer].status is PhaseStatus.ACTIVE
+    ):
         return pointer
     for phase_id, phase in state.phases.items():
         if phase.status is PhaseStatus.ACTIVE:

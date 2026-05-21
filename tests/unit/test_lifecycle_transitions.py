@@ -567,6 +567,33 @@ def test_archive_phase_active_rejected() -> None:
         archive_phase(state, phase_id="P01")
 
 
+def test_archive_phase_clears_current_pointer() -> None:
+    """Archiving the phase under the current pointer nulls the pointer.
+
+    Mirrors :func:`close_phase`: a stale pointer at an archived phase would
+    otherwise mis-scope downstream readers (e.g. the status pane counters).
+    """
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    state.current.phase_id = "P01"
+    state.current.iter_id = "P01-I01"
+    state.current.active_wave_ids = ["P01-I01-W01"]
+    archive_phase(state, phase_id="P01")
+    assert state.current.phase_id is None
+    assert state.current.iter_id is None
+    assert state.current.active_wave_ids == []
+
+
+def test_archive_phase_leaves_other_pointer_untouched() -> None:
+    """Archiving a non-pointer phase leaves ``current.phase_id`` alone."""
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    open_phase(state, phase_id="P02", title="active")
+    assert state.current.phase_id == "P02"
+    archive_phase(state, phase_id="P01")
+    assert state.current.phase_id == "P02"
+
+
 def test_archive_phase_cascades_pending_waves_to_abandoned() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")

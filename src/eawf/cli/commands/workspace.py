@@ -38,7 +38,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 import orjson
 import typer
@@ -52,9 +52,6 @@ from eawf.state.enums import ProjectStatus, ScopeKind
 from eawf.state.ids import is_project_code
 from eawf.state.urn import build as build_urn
 from eawf.state.writer import atomic_write_json_locked
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
