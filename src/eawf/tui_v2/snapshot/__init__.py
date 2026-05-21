@@ -23,28 +23,19 @@ alike — so a single capture path serves screen + overlay fixtures.
 Legacy ``src/eawf/tui/`` migration verdict
 ------------------------------------------
 
-This module closes the TUI band. The migration verdict for the
-legacy ``src/eawf/tui/`` parallel tree is recorded here as the band's
-single source of truth:
+The TUI band is closed and ``tui_v2`` is the sole TUI surface:
 
-1. **The legacy ``src/eawf/tui/`` tree STAYS through the close of this
-   phase.** It is not deleted in this band — it remains a parallel,
-   working surface so an operator who hits a regression in ``tui_v2``
-   can fall back.
-2. **Bare ``eawf`` defaults to ``tui_v2``.** The interactive bare-command
+1. **The legacy ``src/eawf/tui/`` tree has been REMOVED.** Per the
+   operator decision to defer the legacy TUI entirely, the parallel
+   Rich tree (and its ``EAWF_TUI_LEGACY=1`` escape hatch) is gone; the
+   content stays recoverable in git history.
+2. **Bare ``eawf`` launches ``tui_v2``.** The interactive bare-command
    dispatch (:func:`eawf.cli.app._dispatch_tui`) launches the Textual
-   :class:`~eawf.tui_v2.app.EaApp`; this flip already landed earlier in
-   the band and is confirmed by this band's tests.
-3. **``EAWF_TUI_LEGACY=1`` is the escape hatch.** Setting it routes the
-   interactive bare-``eawf`` path back to the legacy
-   :func:`eawf.tui.app.run_tui` for one alpha cycle. The non-TTY /
-   ``--plain`` / ``--no-input`` fallback continues to use the legacy
-   deterministic status renderer regardless of the flag.
-4. **Deletion of ``src/eawf/tui/`` is DEFERRED to a follow-up phase.**
-   The "delete the legacy tree" step does **not** run in this phase —
-   the deletion (and the salvage of any shared constants) moves to a
-   later phase, keeping the defense-in-depth fallback available for the
-   alpha cycle.
+   :class:`~eawf.tui_v2.app.EaApp`.
+3. **The non-TTY / ``--plain`` / ``--no-input`` fallback uses the
+   ``tui_v2`` deterministic status emitter**
+   (:func:`eawf.tui_v2.offline.emit_status`); the workspace dashboard
+   text frame is rendered by :func:`eawf.tui_v2.offline.offline_render`.
 """
 
 from __future__ import annotations

@@ -60,8 +60,8 @@ _VALID_PR_ACTIONS: tuple[str, ...] = ("open", "ready", "draft", "close", "none")
 
 #: Audit verdicts that clear the ship gate. ``pass`` is clean; ``minor``
 #: carries triage-later findings but does not block ship (mirrors the
-#: ``AgentReportVerdict.PASS_WITH_FOLLOWUPS`` semantics surfaced by
-#: ``eawf.tui.audit_overlay``). ``major`` and a missing verdict both block.
+#: ``AgentReportVerdict.PASS_WITH_FOLLOWUPS`` semantics surfaced by the
+#: TUI audit overlay). ``major`` and a missing verdict both block.
 _SHIP_ALLOWED_VERDICTS: frozenset[AuditVerdict] = frozenset({AuditVerdict.PASS, AuditVerdict.MINOR})
 
 

@@ -642,7 +642,7 @@ def workspace_registry_status_cmd(
         read_registry,
         registry_mtime,
     )
-    from eawf.tui.workspace import offline_render
+    from eawf.tui_v2.offline import offline_render
 
     flags: GlobalFlags = ctx.obj
     rendered = offline_render(registry_path=registry_path, width=width)

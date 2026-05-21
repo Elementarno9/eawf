@@ -126,14 +126,13 @@ def _dispatch_tui(
     determines ``repo`` vs ``workspace``) and launches the Textual
     :class:`~eawf.tui_v2.app.EaApp`. When ``--plain`` / ``--no-input`` is
     set or stdout is not a TTY it falls back to the deterministic
-    single-frame status emission so headless callers stay script-stable.
+    single-frame status emission (:func:`eawf.tui_v2.offline.emit_status`)
+    so headless callers stay script-stable.
 
-    The bare-``eawf`` default is the new ``tui_v2`` surface; the legacy
-    ``src/eawf/tui/`` tree stays as a parallel artifact for one alpha
-    cycle and is reachable via the ``EAWF_TUI_LEGACY=1`` escape hatch
-    (an operator who hits a regression in ``tui_v2`` can opt back).
-    Deletion of the legacy tree is deferred to a follow-up phase, not
-    this one — see :mod:`eawf.tui_v2.snapshot` for migration safety.
+    ``tui_v2`` is the only TUI surface — the legacy ``src/eawf/tui/`` tree
+    has been removed (operator decision to defer the legacy TUI), so both
+    the interactive launch and the non-TTY fallback route through
+    ``tui_v2``.
 
     Args:
         workspace: Optional workspace root from ``-w/--workspace``.
@@ -143,16 +142,12 @@ def _dispatch_tui(
     Returns:
         Process exit code (``0`` on a clean quit).
     """
-    import os
     import sys
 
-    from eawf.tui.app import run_tui
+    from eawf.tui_v2.offline import emit_status
 
     if no_input or plain or not sys.stdout.isatty():
-        return run_tui(workspace=workspace, no_input=no_input, plain=plain)
-
-    if os.environ.get("EAWF_TUI_LEGACY") == "1":
-        return run_tui(workspace=workspace, no_input=no_input, plain=plain)
+        return emit_status(workspace=workspace, no_input=no_input, plain=plain)
 
     from eawf.state.enums import ScopeKind
     from eawf.state.resolve import resolve_with_reason
