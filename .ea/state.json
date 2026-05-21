@@ -1552,7 +1552,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I01-W35"
+      "P26-I01-W35",
+      "P26-I01-W38"
     ],
     "iter_id": "P26-I01",
     "phase_id": "P26",
@@ -2453,7 +2454,8 @@
         "P26-I01-W35",
         "P26-I01-W31",
         "P26-I01-W36",
-        "P26-I01-W37"
+        "P26-I01-W37",
+        "P26-I01-W38"
       ]
     },
     "P27-I01": {
@@ -2986,7 +2988,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T01:58:05.264649Z",
+  "updated_at": "2026-05-21T02:00:15.908579Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9903,6 +9905,39 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W37-1779327308"
+    },
+    "P26-I01-W38": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p26-w38",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/config_modal.py",
+        "tests/tui_v2",
+        "tests/snapshots/tui"
+      ],
+      "id": "P26-I01-W38",
+      "iter_id": "P26-I01",
+      "opened_at": "2026-05-21T02:00:14.851596Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "ConfigModal footer key helper visibly lists every key — arrows move field and Space or left-right change the value and Enter edits and s saves and r resets and L cycles layer and a tab-switch key and Esc closes",
+        "Space cycles a choice field value in addition to left-right and still toggles a bool so both keys change the value per operator request",
+        "Dedicated tab-switch keys independent of left-right (which now change the value) so navigation works even on a single-choice tab like runtime",
+        "A tab with a single field such as runtime highlights and selects its lone row so Space and Enter act on it",
+        "Unit tests and snapshots cover the helper text and space choice-cycle and single-row selection and tab switching and mypy and pre-commit green"
+      ],
+      "title": "fix: ConfigModal UX — visible key helper, Space cycles choices, single-row tab selectable, tab-switch keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P26-I01-W38-1779328815"
     }
   },
   "workspace": null,
@@ -10665,6 +10700,17 @@
       "path": ".ea/worktrees/p26-w37",
       "status": "merged",
       "wave_id": "P26-I01-W37"
+    },
+    "WT-P26-I01-W38-1779328815": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w38",
+      "created_at": "2026-05-21T02:00:15.908579Z",
+      "id": "WT-P26-I01-W38-1779328815",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w38",
+      "path": ".ea/worktrees/p26-w38",
+      "status": "active",
+      "wave_id": "P26-I01-W38"
     }
   }
 }
