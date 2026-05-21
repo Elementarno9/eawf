@@ -2266,12 +2266,12 @@
     },
     "P21-I01": {
       "audit_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "estimate_id": null,
       "id": "P21-I01",
       "opened_at": "2026-05-15T14:44:37.910326Z",
       "phase_id": "P21",
-      "status": "planned",
+      "status": "abandoned",
       "title": "Profiles + MCP/sandbox + domain bodies",
       "wave_ids": [
         "P21-I01-W01",
@@ -6596,7 +6596,7 @@
         "P21-I01-W02"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -6611,7 +6611,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "P14 leftovers closed or reopened with rationale",
         "backlog rows aligned"
@@ -6632,7 +6632,7 @@
         "P21-I01-W11"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W01"
@@ -6649,7 +6649,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "instruments resolved through composed profile",
         "hardcoded defaults removed",
@@ -6664,7 +6664,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W02"
@@ -6680,7 +6680,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "stub warnings surface at install",
         "collision warnings annotate render output"
@@ -6697,7 +6697,7 @@
         "P21-I01-W14"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W02"
@@ -6713,7 +6713,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "quant body complete",
         "golden render",
@@ -6731,7 +6731,7 @@
         "P21-I01-W14"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W02"
@@ -6747,7 +6747,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "ml body complete",
         "golden render",
@@ -6764,7 +6764,7 @@
         "P21-I01-W14"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W02"
@@ -6780,7 +6780,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "six minimal bodies registered",
         "goldens cover render path",
@@ -6797,7 +6797,7 @@
         "P21-I01-W08"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W04",
@@ -6815,7 +6815,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "URN routing covers domain artefact kinds",
         "sha256 policy enforced per kind"
@@ -6832,7 +6832,7 @@
         "P21-I01-W14"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W07"
@@ -6850,7 +6850,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "uiux + web bodies complete",
         "visual_artifacts state extension",
@@ -6865,7 +6865,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W08"
@@ -6881,7 +6881,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "six stub bodies registered",
         "doctor surfaces stub status",
@@ -6898,7 +6898,7 @@
         "P21-I01-W14"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W02"
@@ -6914,7 +6914,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "rust go typescript bodies complete",
         "language probes registered",
@@ -6931,7 +6931,7 @@
         "P21-I01-W12"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W02"
@@ -6949,7 +6949,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "manifests record skill + hook refs",
         "install wizard validates references",
@@ -6967,7 +6967,7 @@
         "P21-I01-W16"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W11"
@@ -6985,7 +6985,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "mcp_grants typed field",
         "render hooks emit per-wave scope",
@@ -7002,7 +7002,7 @@
         "P21-I01-W14"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W12"
@@ -7019,7 +7019,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "sandbox policy cannot weaken audit-check execution",
         "command_exit_zero respects policy",
@@ -7036,7 +7036,7 @@
         "P21-I01-W15"
       ],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W04",
@@ -7058,7 +7058,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "profile docs cover quant/ml/uiux/web/cross-lang",
         "golden snapshots stable across runs"
@@ -7072,7 +7072,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W14"
@@ -7089,7 +7089,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "ship-gate verdict=pass",
         "P14/P15/P16 leftovers closed",
@@ -7105,7 +7105,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": null,
-      "closed_at": null,
+      "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [
         "P21-I01-W12"
@@ -7124,7 +7124,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "abandoned",
       "success_criteria": [
         "Claude .mcp.json + Codex TOML + OpenCode opencode.json emit consistent",
         "plugin doctor surfaces drift",
