@@ -1551,8 +1551,12 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
+    "active_wave_ids": [
+      "P26-I01-W31",
+      "P26-I01-W32",
+      "P26-I01-W33"
+    ],
+    "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
     "subproject_id": null
@@ -2412,7 +2416,7 @@
       "id": "P26-I01",
       "opened_at": "2026-05-18T19:45:11.036158Z",
       "phase_id": "P26",
-      "status": "planned",
+      "status": "active",
       "title": "P26-I01: surfaces waves",
       "wave_ids": [
         "P26-I01-W01",
@@ -2982,7 +2986,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T00:49:32.209661Z",
+  "updated_at": "2026-05-21T00:55:04.443174Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9654,7 +9658,7 @@
       "blocks": [
         "P26-I01-W35"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p26-w31",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9674,7 +9678,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Roadmap and Backlog disable horizontal scroll and truncate overlong cells with ellipsis so arrow keys stay free for navigation",
         "Detail msgbox renders label:value pairs space-padded and aligned matching StatusPane",
@@ -9686,14 +9690,14 @@
       "title": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap pre-scroll, events ts, glyph color)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W31-1779324903"
     },
     "P26-I01-W32": {
       "agent_role": "executor",
       "blocks": [
         "P26-I01-W35"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p26-w32",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9711,7 +9715,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Raw w r u keys switch workspace/repo/user scope with the ctrl prefix dropped",
         "Dead no-op bindings removed namely b and the old w-to-waveboard binding that have no handler in tui_v2",
@@ -9720,14 +9724,14 @@
       "title": "fix: TUI keybindings — raw w/r/u scope-switch + drop dead bindings",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W32-1779324903"
     },
     "P26-I01-W33": {
       "agent_role": "executor",
       "blocks": [
         "P26-I01-W35"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p26-w33",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -9745,7 +9749,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Command palette empty input plus Enter dismisses the palette",
         "Audit overlay free-text URN input removed and the overlay shows the audit derived from current scope",
@@ -9754,7 +9758,7 @@
       "title": "fix: TUI palette empty-Enter exit + remove audit overlay free-text input",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I01-W33-1779324904"
     },
     "P26-I01-W34": {
       "agent_role": "executor",
@@ -10519,6 +10523,39 @@
       "path": ".ea/worktrees/p26-w30",
       "status": "merged",
       "wave_id": "P26-I01-W30"
+    },
+    "WT-P26-I01-W31-1779324903": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w31",
+      "created_at": "2026-05-21T00:55:03.096921Z",
+      "id": "WT-P26-I01-W31-1779324903",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w31",
+      "path": ".ea/worktrees/p26-w31",
+      "status": "active",
+      "wave_id": "P26-I01-W31"
+    },
+    "WT-P26-I01-W32-1779324903": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w32",
+      "created_at": "2026-05-21T00:55:03.759762Z",
+      "id": "WT-P26-I01-W32-1779324903",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w32",
+      "path": ".ea/worktrees/p26-w32",
+      "status": "active",
+      "wave_id": "P26-I01-W32"
+    },
+    "WT-P26-I01-W33-1779324904": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-w33",
+      "created_at": "2026-05-21T00:55:04.443174Z",
+      "id": "WT-P26-I01-W33-1779324904",
+      "merged_commit": null,
+      "owner_session_id": "op-p26-w33",
+      "path": ".ea/worktrees/p26-w33",
+      "status": "active",
+      "wave_id": "P26-I01-W33"
     }
   }
 }
