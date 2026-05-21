@@ -1562,9 +1562,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I01-W40"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I01",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3000,7 +2998,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T10:04:34.221194Z",
+  "updated_at": "2026-05-21T10:17:34.466999Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9986,7 +9984,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p26-w40",
-      "closed_at": null,
+      "closed_at": "2026-05-21T10:17:33.874028Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -9999,10 +9997,10 @@
       "id": "P26-I01-W40",
       "iter_id": "P26-I01",
       "opened_at": "2026-05-21T10:04:32.853905Z",
-      "outcome": null,
+      "outcome": "lifecycle guard: claim_wave auto-activates a PLANNED parent iter (+ sets current.iter_id) after the gates pass; inlined not activate_iter (avoids active_wave_ids reset); 4 tests incl bug-shape repro; full suite green 4378 passed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Claiming a wave whose parent iter is PLANNED transitions that iter to ACTIVE and sets current.iter_id as part of the claim so waves never run under a PLANNED iter",
         "Claiming under an already-ACTIVE iter is unchanged and the W-number ordering and dep gates still apply",
@@ -10802,10 +10800,10 @@
       "branch": "feature/eawf-v0.3-p26-w40",
       "created_at": "2026-05-21T10:04:34.221194Z",
       "id": "WT-P26-I01-W40-1779357874",
-      "merged_commit": null,
+      "merged_commit": "ca56d55",
       "owner_session_id": "op-p26-w40",
       "path": ".ea/worktrees/p26-w40",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I01-W40"
     }
   }
