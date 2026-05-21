@@ -19,7 +19,7 @@
       │                                                                                                          │
       │  Pane navigation (vim alias)                                                                             │
       │    ↑          line up  (k)                                                                               │
-      │    ↓          line down  (j)                                                                         ▅▅  │
+      │    ↓          line down  (j)                                                                         ▇▇  │
       │    ←          collapse row / scroll left  (h)                                                            │
       │    →          expand row / scroll right  (l)                                                             │
       │    PageUp     half-page up  (Ctrl-u)                                                                     │

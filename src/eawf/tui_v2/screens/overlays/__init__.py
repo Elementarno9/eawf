@@ -28,12 +28,18 @@ from eawf.tui_v2.screens.overlays.audit_running import (
     CheckState,
     open_audit_running,
 )
+from eawf.tui_v2.screens.overlays.config_modal import (
+    ConfigModal,
+    ConfigModalState,
+    open_config,
+)
 from eawf.tui_v2.screens.overlays.confirm import ConfirmModal
 from eawf.tui_v2.screens.overlays.detail import (
     DetailCard,
     DetailModal,
     resolve_detail,
 )
+from eawf.tui_v2.screens.overlays.edit_field import EditFieldModal, open_edit_field
 from eawf.tui_v2.screens.overlays.events import (
     EventRow,
     EventsModal,
@@ -68,9 +74,12 @@ __all__ = [
     "AuditRunningModal",
     "CheckRow",
     "CheckState",
+    "ConfigModal",
+    "ConfigModalState",
     "ConfirmModal",
     "DetailCard",
     "DetailModal",
+    "EditFieldModal",
     "EventRow",
     "EventsModal",
     "MetricsArgs",
@@ -87,6 +96,8 @@ __all__ = [
     "load_recent_events",
     "open_audit_failed",
     "open_audit_running",
+    "open_config",
+    "open_edit_field",
     "open_events",
     "open_metrics",
     "open_needs_user",

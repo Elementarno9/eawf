@@ -112,6 +112,23 @@ class ScopeScreen(Screen[None]):
             return
         open_help(self.app)
 
+    def action_open_config(self) -> None:
+        """Open the ``c`` registry-driven config window (cap-checked).
+
+        Delegates to the App's ``action_open_config`` so the keypress and
+        the ``/config`` palette verb share one cap-checked path; falls
+        back to the module-level
+        :func:`~eawf.tui_v2.screens.overlays.config_modal.open_config`
+        under a bare harness.
+        """
+        action = getattr(self.app, "action_open_config", None)
+        if callable(action):
+            action()
+            return
+        from eawf.tui_v2.screens.overlays.config_modal import open_config
+
+        open_config(self.app)
+
     def action_force_refresh(self) -> None:
         """Acknowledge the ``F5`` force-refresh (heartbeat ack).
 

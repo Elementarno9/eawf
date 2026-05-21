@@ -286,6 +286,25 @@ def _handle_pr(app: App[None], args: str) -> None:
     open_pr_list(app, ())
 
 
+def _handle_config(app: App[None], args: str) -> None:
+    """Open the registry-driven config window (the ``/config`` verb).
+
+    Opens :class:`~eawf.tui_v2.screens.overlays.config_modal.ConfigModal`
+    through the modal-cap-aware ``push_modal`` (via
+    :func:`~eawf.tui_v2.screens.overlays.config_modal.open_config`). The
+    window renders every operator-tunable key from the config registry in
+    alphabetical tabs and saves through the layered-config writer (never
+    ``state.json``). Takes no argument.
+
+    Args:
+        app: The running App.
+        args: Unused — ``/config`` opens the full window with no argument.
+    """
+    from eawf.tui_v2.screens.overlays.config_modal import open_config
+
+    open_config(app)
+
+
 def _handle_events(app: App[None], args: str) -> None:
     """Open the ``/events`` last-50 event overlay (the ``/events`` verb).
 
@@ -348,6 +367,7 @@ VERBS: tuple[PaletteVerb, ...] = (
         SCOPES_ALL,
         args_grammar="<name>",
     ),
+    PaletteVerb("/config", "config window (registry-driven)", _handle_config, SCOPES_ALL),
     PaletteVerb("/events", "last 50 events overlay", _handle_events, SCOPES_ALL),
     PaletteVerb(
         "/metrics",

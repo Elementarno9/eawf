@@ -37,22 +37,37 @@ from pathlib import Path
 
 import pytest
 
+from eawf.config.registry import registry_lookup
 from eawf.tui_v2.app import EaApp
+from eawf.tui_v2.screens.overlays.config_modal import ConfigModal
 from eawf.tui_v2.screens.overlays.confirm import ConfirmModal
 from eawf.tui_v2.screens.overlays.detail import DetailModal, resolve_detail
+from eawf.tui_v2.screens.overlays.edit_field import EditFieldModal
 from eawf.tui_v2.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
 from eawf.tui_v2.snapshot import assert_screen_snapshot, settle_screen
 
 
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Chdir into a non-git temp dir so ``GitPane`` renders deterministically.
+    """Chdir into a non-git temp dir + disable Textual animations.
 
-    The git pane probes ``Path.cwd()``; pointing it at a fresh non-git
-    directory makes every git field resolve to a dash, which keeps the
-    golden stable across working-tree changes and free of real branch /
-    commit text.
+    Two determinism guards for the goldens:
+
+    * The git pane probes ``Path.cwd()``; pointing it at a fresh non-git
+      directory makes every git field resolve to a dash, which keeps the
+      golden stable across working-tree changes and free of real branch /
+      commit text.
+    * Disabling animations settles time-driven chrome (notably the
+      ``TabbedContent`` underline marker the config overlay uses) to its
+      final position immediately, so a capture under scheduler load cannot
+      catch a mid-animation frame and flake the snapshot. Textual reads
+      ``constants.TEXTUAL_ANIMATIONS`` once at import, so the env var is
+      already cached by test time — patch the constant directly (the App
+      copies it into ``self.animation_level`` at construction).
     """
+    import textual.constants as _tc
+
+    monkeypatch.setattr(_tc, "TEXTUAL_ANIMATIONS", "none")
     monkeypatch.chdir(tmp_path)
 
 
@@ -154,6 +169,101 @@ def test_detail_overlay_snapshot() -> None:
             app.push_modal(DetailModal(resolve_detail(state, wave_id)))
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "detail_overlay.txt")
+
+    asyncio.run(body())
+
+
+def _open_config(app: EaApp) -> ConfigModal:
+    """Push a ConfigModal with a fixed repo anchor and clear tab-bar focus.
+
+    The ``_isolated_cwd`` fixture chdir's into a fresh non-git temp dir, so
+    the layered merge resolves to the built-in defaults — the rendered
+    field values are therefore deterministic (the registry defaults), and
+    no machine path or YAML-layer value leaks into the golden.
+    """
+    modal = ConfigModal(workspace=None, repo=Path("/repo"))
+    app.push_screen(modal)
+    return modal
+
+
+def test_config_modal_audit_tab_snapshot() -> None:
+    """Default tab (audit): a bool + a ranged int row, plus the layer line."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            _open_config(app)
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_audit.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_planning_tab_snapshot() -> None:
+    """Planning tab exercises a choice + bool + int mix in one pane."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            modal.query_one("#config-tabs").active = modal._tab_pane_id("planning")  # type: ignore[attr-defined]
+            modal.set_focus(None)
+            modal.field_index = 0
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_planning.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_dirty_layer_snapshot() -> None:
+    """After a toggle, the layer line shows the unsaved-count + dirty marker."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            _open_config(app)
+            await settle_screen(pilot)
+            await pilot.press("space")  # toggle the first bool — stages a dirty edit
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_dirty.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_dirty_discard_prompt_snapshot() -> None:
+    """Esc on a dirty modal raises the V15 discard confirm prompt."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            _open_config(app)
+            await settle_screen(pilot)
+            await pilot.press("space")
+            await settle_screen(pilot)
+            await pilot.press("escape")
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_discard_prompt.txt")
+
+    asyncio.run(body())
+
+
+def test_edit_field_modal_int_snapshot() -> None:
+    """The scalar editor seeds the input + shows the type/range meta line."""
+
+    async def body() -> None:
+        entry = registry_lookup("audit.flaky_retry_count")
+        assert entry is not None
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(EditFieldModal(entry, 2))
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "edit_field_int.txt")
 
     asyncio.run(body())
 

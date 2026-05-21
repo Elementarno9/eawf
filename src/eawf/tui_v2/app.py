@@ -243,6 +243,18 @@ class EaApp(App[None]):
 
         self.push_modal(CommandPalette())
 
+    def action_open_config(self) -> None:
+        """Open the ``c`` registry-driven config window (cap-checked).
+
+        Exposed on the App so the ``c`` binding (declared on the repo
+        scope screen) and the ``/config`` palette verb open the same
+        window through the modal-cap-aware
+        :func:`~eawf.tui_v2.screens.overlays.config_modal.open_config`.
+        """
+        from eawf.tui_v2.screens.overlays.config_modal import open_config
+
+        open_config(self)
+
     def action_open_help(self) -> None:
         """Open the ``?`` help overlay (cap-checked, single-instance).
 
