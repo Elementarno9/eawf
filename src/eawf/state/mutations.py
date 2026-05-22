@@ -6,13 +6,13 @@ transition (or kindred state edit) the daemon should apply. Each kind
 maps onto exactly one apply function inside
 :mod:`eawf.daemon.methods.state` so the dispatch is closed + auditable.
 
-W09 ships the **MVP subset** — the kinds whose underlying lifecycle
-transition is already implemented in :mod:`eawf.lifecycle.transitions`
-(``claim_wave``, ``close_wave``, ``open_phase``, ``activate_phase``,
-``close_phase``, ``open_iter``, ``close_iter``, ``fail_wave``). Other
-kinds enumerated in :class:`MutationKind` are reserved for the C03-IMPL
-phase: the daemon rejects them with ``NotImplementedError`` so callers
-hit the daemonless fallback path until C03 wires the apply function.
+Every kind in :class:`MutationKind` resolves to a real apply function in
+:mod:`eawf.daemon.methods.state` — the wave / phase / iter kinds delegate
+to :mod:`eawf.lifecycle.transitions`; the roadmap kinds map onto the
+planner transitions (``plan_wave`` / ``remove_wave_plan`` /
+``set_wave_deps`` / ``edit_wave_plan`` / ``archive_phase``); and
+``EVENT_APPEND`` is an append-only audit row with no structural state
+change.
 
 Per the spike brief (`.ea/local/research/2026-05-19-p24-c02-impl-waves.md`
 §4 "W09") this module deliberately uses a **loose discriminated union**:
@@ -39,13 +39,12 @@ class MutationKind(StrEnum):
 
     Each variant names exactly one CLI verb that mutates ``state.json``;
     the daemon's :func:`state.mutate` apply table maps each kind onto
-    the corresponding :mod:`eawf.lifecycle.transitions` function.
-
-    Per the W09 MVP carve-out the apply functions for
-    :attr:`ROADMAP_REVISE`, :attr:`ROADMAP_APPLY`, :attr:`ROADMAP_DROP`,
-    and :attr:`EVENT_APPEND` raise ``NotImplementedError`` — callers fall
-    back to the in-process ``state_transaction`` path (rule 4 V1
-    carve-out) until C03-IMPL wires the per-kind apply.
+    the corresponding :mod:`eawf.lifecycle.transitions` function. Every
+    kind now resolves to a real apply function — the roadmap kinds
+    (:attr:`ROADMAP_REVISE`, :attr:`ROADMAP_APPLY`, :attr:`ROADMAP_DROP`)
+    dispatch to the planner transitions, :attr:`WAVE_RELEASE` un-claims a
+    wave back to PENDING, and :attr:`EVENT_APPEND` records an append-only
+    audit row with no structural state change.
     """
 
     WAVE_CLAIM = "wave_claim"

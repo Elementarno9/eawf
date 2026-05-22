@@ -423,3 +423,48 @@ def fail_wave(state: State, *, wave_id: str, reason: str) -> Wave:
         state.current.active_wave_ids.remove(wave_id)
     logger.info(f"fail_wave id={wave_id} reason={reason!r}")
     return wave
+
+
+def release_wave(state: State, *, wave_id: str, reason: str | None = None) -> Wave:
+    """Release a claimed/in-progress wave back to ``pending`` (un-claim).
+
+    The inverse of :func:`claim_wave`: a runtime that claimed a wave but
+    cannot finish it relinquishes the claim so another runtime can pick it
+    up. Clears the claim binding (``claim_session_id``, ``worktree_id``)
+    and drops the wave from ``current.active_wave_ids``. The parent iter's
+    status is left untouched — releasing one wave does not de-activate an
+    iter that other waves may still be running under.
+
+    Re-releasing an already-PENDING wave is a no-op (idempotent) so a
+    double-release across runtimes does not fault.
+
+    Args:
+        state: State to mutate in place.
+        wave_id: Id of the wave to release.
+        reason: Optional human-readable reason recorded in the log line;
+            not persisted on the wave (the wave returns to a clean
+            PENDING state with no outcome stamp).
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown or the wave is in a
+            terminal status (closed/failed/abandoned) that cannot be
+            un-claimed.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise LifecycleError(f"unknown wave {wave_id!r}")
+    if wave.status == WaveStatus.PENDING:
+        logger.debug(f"release_wave idempotent wave={wave_id} already pending")
+        return wave
+    if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+        raise LifecycleError(
+            f"wave {wave_id!r} is not claimed/in_progress "
+            f"(status={wave.status.value!r}); cannot release"
+        )
+    wave.status = WaveStatus.PENDING
+    wave.claim_session_id = None
+    wave.worktree_id = None
+    if wave_id in state.current.active_wave_ids:
+        state.current.active_wave_ids.remove(wave_id)
+    logger.info(f"release_wave wave={wave_id} reason={reason!r}")
+    return wave

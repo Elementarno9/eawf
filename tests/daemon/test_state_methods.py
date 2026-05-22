@@ -124,6 +124,90 @@ def _build_state_payload(
     }
 
 
+def _build_planned_phase_payload(
+    *,
+    phase_id: str = "P50",
+    iter_status: str = "planned",
+    waves: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Construct a minimal valid State with one PLANNED phase + iter.
+
+    The roadmap mutation kinds (``ROADMAP_REVISE`` / ``ROADMAP_APPLY`` /
+    ``ROADMAP_DROP``) operate on the PLANNED queue, so they need a
+    PLANNED phase rather than the ACTIVE one :func:`_build_state_payload`
+    builds. ``waves`` lets a caller seed the phase's iter with waves
+    (e.g. so ``ROADMAP_APPLY``'s ≥1-wave gate passes).
+    """
+    iter_id = f"{phase_id}-I01"
+    wave_map = waves or {}
+    return {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:ABC",
+        "updated_at": _now().isoformat(),
+        "project": {
+            "code": "ABC",
+            "slug": "abc",
+            "title": "ABC",
+            "description": None,
+            "domains": ["x"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:ABC",
+        },
+        "current": {"project_code": "ABC"},
+        "workspace": None,
+        "phases": {
+            phase_id: {
+                "id": phase_id,
+                "scope_id": "ABC",
+                "subproject_id": None,
+                "title": phase_id,
+                "status": "planned",
+                "iter_ids": [iter_id],
+                "outcome_ids": [],
+                "opened_at": _now().isoformat(),
+                "closed_at": None,
+                "audit_id": None,
+            }
+        },
+        "iters": {
+            iter_id: {
+                "id": iter_id,
+                "phase_id": phase_id,
+                "title": "I01",
+                "status": iter_status,
+                "wave_ids": list(wave_map),
+                "estimate_id": None,
+                "audit_id": None,
+                "opened_at": _now().isoformat(),
+                "closed_at": None,
+            }
+        },
+        "waves": dict(wave_map),
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
+def _pending_wave(
+    wave_id: str, iter_id: str, *, deps: list[str] | None = None
+) -> dict[str, object]:
+    """Build one minimal PENDING wave dict for a seeded planned phase."""
+    return {
+        "id": wave_id,
+        "iter_id": iter_id,
+        "title": "seed wave",
+        "status": "pending",
+        "deps": list(deps or []),
+        "claim_session_id": None,
+        "opened_at": _now().isoformat(),
+        "sessions": {},
+    }
+
+
 def _write_state(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
@@ -376,19 +460,330 @@ def test_mutate_missing_required_param_rejected(tmp_path: Path) -> None:
     _run(body)
 
 
-def test_mutate_reserved_kind_raises_not_implemented(tmp_path: Path) -> None:
-    """A MutationKind whose apply is reserved for C03-IMPL raises cleanly."""
-    ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)
+def test_apply_registry_has_no_stub_kinds() -> None:
+    """Every MutationKind resolves to a real apply fn (no not-yet-wired stub)."""
+    from eawf.daemon.methods import state as state_methods
+
+    # The not-yet-wired stub was removed once every kind was wired; assert
+    # it is gone so a regression that re-introduces it fails loudly.
+    assert not hasattr(state_methods, "_apply_not_yet_wired")
+    registry = state_methods._APPLY_REGISTRY
+    # All 13 enum members are registered, and each resolves to a callable.
+    assert set(registry) == set(MutationKind)
+    for kind in MutationKind:
+        func = state_methods._resolve_apply(kind)
+        assert callable(func)
+
+
+# ---- state.mutate (newly-wired kinds: WAVE_RELEASE) ------------------------
+
+
+def test_mutate_wave_release_returns_wave_to_pending(tmp_path: Path) -> None:
+    """WAVE_RELEASE un-claims a claimed wave back to pending + clears the claim."""
+    ctx, state_path, event_path, _ = _build_ctx(tmp_path=tmp_path)
     mutation = Mutation(
-        kind=MutationKind.ROADMAP_REVISE,
-        scope_id="P24",
+        kind=MutationKind.WAVE_RELEASE,
+        scope_id="P24-I01-W09",
         mutation_id=uuid.uuid4().hex,
-        params={},
+        params={"wave_id": "P24-I01-W09", "reason": "runtime swap"},
     )
 
     async def body() -> None:
-        with pytest.raises(NotImplementedError, match="not yet wired"):
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert result["before_version"] != result["after_version"]
+        new_state = orjson.loads(state_path.read_bytes())
+        wave = new_state["waves"]["P24-I01-W09"]
+        assert wave["status"] == "pending"
+        assert wave["claim_session_id"] is None
+        # Event row appended for the release.
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+
+    _run(body)
+
+
+def test_mutate_wave_release_unknown_wave_rejected(tmp_path: Path) -> None:
+    """WAVE_RELEASE on an unknown wave id raises validation_failed; state intact."""
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_RELEASE,
+        scope_id="P24-I01-W99",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W99"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before_bytes
+
+    _run(body)
+
+
+# ---- state.mutate (newly-wired kinds: EVENT_APPEND) ------------------------
+
+
+def test_mutate_event_append_writes_event_no_state_change(tmp_path: Path) -> None:
+    """EVENT_APPEND appends an event row without a structural state change."""
+    ctx, state_path, event_path, _ = _build_ctx(tmp_path=tmp_path)
+    mutation = Mutation(
+        kind=MutationKind.EVENT_APPEND,
+        scope_id="P24",
+        mutation_id=uuid.uuid4().hex,
+        params={"event_type": "note.recorded", "message": "manual audit row"},
+    )
+
+    async def body() -> None:
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        # Exactly one event row appended.
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+        envelope = result["event"]
+        assert envelope["scope_id"] == "P24"
+        # No structural change: the wave keeps its pre-append status +
+        # claim binding and the phase keeps its status (the apply is a
+        # deliberate no-op on State beyond the updated_at bump). Comparing
+        # the on-disk dict to the raw seed is unsafe because the State
+        # round-trip canonicalises default fields, so assert the
+        # load-bearing fields instead.
+        after = orjson.loads(state_path.read_bytes())
+        wave = after["waves"]["P24-I01-W09"]
+        assert wave["status"] == "claimed"
+        assert wave["claim_session_id"] == "session-abc"
+        assert after["phases"]["P24"]["status"] == "active"
+        assert list(after["waves"]) == ["P24-I01-W09"]
+
+    _run(body)
+
+
+def test_mutate_event_append_missing_event_type_rejected(tmp_path: Path) -> None:
+    """EVENT_APPEND without a non-empty event_type raises validation_failed."""
+    ctx, state_path, event_path, _ = _build_ctx(tmp_path=tmp_path)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.EVENT_APPEND,
+        scope_id="P24",
+        mutation_id=uuid.uuid4().hex,
+        params={"event_type": "   "},  # blank-only
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        # No state change + no event row from the rejected append.
+        assert state_path.read_bytes() == before_bytes
+        assert not event_path.exists() or event_path.read_text() == ""
+
+    _run(body)
+
+
+# ---- state.mutate (newly-wired kinds: ROADMAP_REVISE) ----------------------
+
+
+def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=add_wave plans a new PENDING wave under the iter."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "op": "add_wave",
+            "wave_id": "P50-I01-W01",
+            "iter_id": "P50-I01",
+            "title": "feat: new wave",
+            "file_scopes": ["src/eawf/x.py"],
+            "success_criteria": ["does x"],
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert "P50-I01-W01" in new_state["waves"]
+        assert new_state["waves"]["P50-I01-W01"]["status"] == "pending"
+        assert "P50-I01-W01" in new_state["iters"]["P50-I01"]["wave_ids"]
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_remove_wave_drops_pending_wave(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=remove_wave deletes a PENDING wave from the plan."""
+    waves = {"P50-I01-W01": _pending_wave("P50-I01-W01", "P50-I01")}
+    payload = _build_planned_phase_payload(waves=waves)
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"op": "remove_wave", "wave_id": "P50-I01-W01"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert "P50-I01-W01" not in new_state["waves"]
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_set_deps_rewrites_deps(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=set_deps replaces a PENDING wave's dep set."""
+    waves = {
+        "P50-I01-W01": _pending_wave("P50-I01-W01", "P50-I01"),
+        "P50-I01-W02": _pending_wave("P50-I01-W02", "P50-I01"),
+    }
+    payload = _build_planned_phase_payload(waves=waves)
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"op": "set_deps", "wave_id": "P50-I01-W02", "deps": ["P50-I01-W01"]},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert new_state["waves"]["P50-I01-W02"]["deps"] == ["P50-I01-W01"]
+        assert "P50-I01-W02" in new_state["waves"]["P50-I01-W01"]["blocks"]
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_retitle_rewrites_title(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=retitle rewrites a PENDING wave's title."""
+    waves = {"P50-I01-W01": _pending_wave("P50-I01-W01", "P50-I01")}
+    payload = _build_planned_phase_payload(waves=waves)
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"op": "retitle", "wave_id": "P50-I01-W01", "title": "fix: retitled"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert new_state["waves"]["P50-I01-W01"]["title"] == "fix: retitled"
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_unknown_op_rejected(tmp_path: Path) -> None:
+    """ROADMAP_REVISE with an unknown op raises validation_failed; state intact."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"op": "frobnicate", "wave_id": "P50-I01-W01"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before_bytes
+
+    _run(body)
+
+
+# ---- state.mutate (newly-wired kinds: ROADMAP_APPLY) -----------------------
+
+
+def test_mutate_roadmap_apply_passes_for_planned_phase_with_waves(tmp_path: Path) -> None:
+    """ROADMAP_APPLY succeeds for a PLANNED phase with ≥1 wave; state unchanged."""
+    waves = {"P50-I01-W01": _pending_wave("P50-I01-W01", "P50-I01")}
+    payload = _build_planned_phase_payload(waves=waves)
+    ctx, state_path, event_path, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_APPLY,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"phase_id": "P50"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        # apply is informational: phase stays PLANNED, the wave stays
+        # PENDING (no structural edit beyond the updated_at bump).
+        after = orjson.loads(state_path.read_bytes())
+        assert after["phases"]["P50"]["status"] == "planned"
+        assert list(after["waves"]) == ["P50-I01-W01"]
+        assert after["waves"]["P50-I01-W01"]["status"] == "pending"
+        # An audit event row still lands.
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+
+    _run(body)
+
+
+def test_mutate_roadmap_apply_no_waves_rejected(tmp_path: Path) -> None:
+    """ROADMAP_APPLY on a PLANNED phase with zero waves raises validation_failed."""
+    payload = _build_planned_phase_payload()  # no waves seeded
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_APPLY,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"phase_id": "P50"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before_bytes
+
+    _run(body)
+
+
+# ---- state.mutate (newly-wired kinds: ROADMAP_DROP) ------------------------
+
+
+def test_mutate_roadmap_drop_archives_planned_phase(tmp_path: Path) -> None:
+    """ROADMAP_DROP archives a PLANNED phase + abandons its child waves."""
+    waves = {"P50-I01-W01": _pending_wave("P50-I01-W01", "P50-I01")}
+    payload = _build_planned_phase_payload(waves=waves)
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_DROP,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"phase_id": "P50"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert new_state["phases"]["P50"]["status"] == "archived"
+        assert new_state["iters"]["P50-I01"]["status"] == "abandoned"
+        assert new_state["waves"]["P50-I01-W01"]["status"] == "abandoned"
+
+    _run(body)
+
+
+def test_mutate_roadmap_drop_unknown_phase_rejected(tmp_path: Path) -> None:
+    """ROADMAP_DROP on an unknown phase id raises validation_failed; state intact."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_DROP,
+        scope_id="P99",
+        mutation_id=uuid.uuid4().hex,
+        params={"phase_id": "P99"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before_bytes
 
     _run(body)
 

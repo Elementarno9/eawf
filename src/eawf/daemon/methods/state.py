@@ -32,11 +32,14 @@ The per-kind apply registry is loose-typed (the
 :attr:`Mutation.params` dict is the contract). A later wave hardens each
 variant into a Pydantic subclass per MutationKind.
 
-The current apply table covers ``wave_close`` end-to-end (the canary
-callsite); other lifecycle kinds dispatch to existing
-:mod:`eawf.lifecycle.transitions` functions. Not-yet-wired kinds raise
-:class:`NotImplementedError` so the CLI falls back to the daemonless
-``state_transaction`` path.
+Every :class:`MutationKind` now resolves to a real apply function — the
+wave / phase / iter lifecycle kinds delegate to
+:mod:`eawf.lifecycle.transitions`; ``ROADMAP_REVISE`` dispatches one of
+the ``plan_wave`` / ``remove_wave_plan`` / ``set_wave_deps`` /
+``edit_wave_plan`` transitions on its ``params['op']`` discriminator;
+``ROADMAP_APPLY`` is a readiness check; ``ROADMAP_DROP`` archives the
+phase; and ``EVENT_APPEND`` is a no-op on :class:`State` whose side
+effect is the canonical event row the mutator always appends.
 """
 
 from __future__ import annotations
@@ -59,15 +62,21 @@ from eawf.daemon.wal import WalRecord
 from eawf.lifecycle.transitions import (
     LifecycleError,
     activate_phase,
+    archive_phase,
     claim_wave,
     close_iter,
     close_phase,
     close_wave,
+    edit_wave_plan,
     fail_wave,
     open_iter,
     open_phase,
+    plan_wave,
+    release_wave,
+    remove_wave_plan,
+    set_wave_deps,
 )
-from eawf.state.enums import StoreKind
+from eawf.state.enums import AgentSessionRole, EffortBucket, PhaseStatus, StoreKind
 from eawf.state.models import State
 from eawf.state.mutations import Mutation, MutationKind
 from eawf.state.writer import atomic_write_json_locked
@@ -249,10 +258,10 @@ def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
     if _ANCHOR_FALLBACK_WARN_EMITTED:
         return
     logger.warning(
-        f"daemon_anchor_fallback caller omitted 'repo_root' param; "
-        f"resolving against boot-time state_path={ctx.state_path!r}. "
-        f"Update the caller to pass repo_root explicitly — the boot-"
-        f"time fallback will be removed in a future wave."
+        f"daemon_anchor_fallback state_path={ctx.state_path!r}; "
+        f"caller omitted 'repo_root' param, resolving against the boot-time "
+        f"state_path — update the caller to pass repo_root explicitly "
+        f"(the boot-time fallback will be removed in a future wave)"
     )
     _ANCHOR_FALLBACK_WARN_EMITTED = True
 
@@ -453,36 +462,137 @@ def _apply_iter_close(state: State, mutation: Mutation) -> None:
     )
 
 
-def _apply_not_yet_wired(state: State, mutation: Mutation) -> None:
-    """Apply stub for kinds whose lifecycle helper is not yet wired.
+def _apply_wave_release(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.WAVE_RELEASE` — delegate to ``release_wave``.
 
-    Raises :class:`NotImplementedError` so the CLI wrapper detects the
-    gap and falls back to the in-process ``state_transaction`` path
-    (daemonless carve-out). ``WAVE_RELEASE`` falls here because the
-    lifecycle helper itself is unimplemented; the roadmap- and event-
-    append kinds fall here because their multi-step compositions need
-    the spec catalogue before they can be wired.
+    Releases a claimed/in-progress wave back to ``pending`` so another
+    runtime can re-claim it (the inverse of ``WAVE_CLAIM``). The
+    optional ``reason`` is recorded on the lifecycle log line only.
     """
-    raise NotImplementedError(
-        f"mutation kind {mutation.kind.value!r} not yet wired in W09 MVP; "
-        "falls back to daemonless in-process state_transaction"
+    params = mutation.params
+    release_wave(
+        state,
+        wave_id=str(params["wave_id"]),
+        reason=str(params["reason"]) if params.get("reason") is not None else None,
     )
+
+
+def _apply_phase_archive(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.ROADMAP_DROP` — delegate to ``archive_phase``.
+
+    ``roadmap drop`` archives a PLANNED phase (PLANNED → ARCHIVED) and
+    cascades its non-terminal child iters / waves to ABANDONED.
+    """
+    archive_phase(state, phase_id=str(mutation.params["phase_id"]))
+
+
+def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.ROADMAP_REVISE` — dispatch one revise op.
+
+    ``roadmap revise`` is the structured-flag editor for PENDING waves
+    under a PLANNED or ACTIVE phase. Exactly one operation per mutation,
+    keyed by ``params['op']`` (one of ``add_wave`` / ``remove_wave`` /
+    ``set_deps`` / ``retitle``), delegating to the matching
+    :mod:`eawf.lifecycle.wave` transition. The CLI side resolves bare
+    ``W##`` ids to full ``P##-I##-W##`` ids before calling the daemon, so
+    the apply works with already-canonical ids.
+
+    Raises:
+        LifecycleError: when ``op`` is missing or unknown, or the
+            underlying wave transition rejects the edit.
+    """
+    params = mutation.params
+    op = params.get("op")
+    if op == "add_wave":
+        role = AgentSessionRole(params["agent_role"]) if params.get("agent_role") else None
+        bucket = EffortBucket(params["effort_bucket"]) if params.get("effort_bucket") else None
+        plan_wave(
+            state,
+            wave_id=str(params["wave_id"]),
+            iter_id=str(params["iter_id"]),
+            title=str(params["title"]),
+            file_scopes=list(params.get("file_scopes", [])),
+            deps=list(params["deps"]) if params.get("deps") is not None else None,
+            success_criteria=(
+                list(params["success_criteria"])
+                if params.get("success_criteria") is not None
+                else None
+            ),
+            agent_role=role,
+            effort_bucket=bucket,
+        )
+    elif op == "remove_wave":
+        remove_wave_plan(state, wave_id=str(params["wave_id"]))
+    elif op == "set_deps":
+        set_wave_deps(state, wave_id=str(params["wave_id"]), deps=list(params["deps"]))
+    elif op == "retitle":
+        edit_wave_plan(state, wave_id=str(params["wave_id"]), title=str(params["title"]))
+    else:
+        raise LifecycleError(f"unknown roadmap revise op: {op!r}")
+
+
+def _apply_roadmap_apply(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.ROADMAP_APPLY` — validate apply readiness.
+
+    ``roadmap apply`` is informational: ``roadmap propose`` already
+    persists the PLANNED scope, so this op only confirms the phase is
+    PLANNED with at least one wave before ``/prep`` activates it. It
+    makes no structural state change beyond the ``updated_at`` bump the
+    mutator stamps on every call.
+
+    Raises:
+        LifecycleError: when the phase is unknown, not PLANNED, or has no
+            waves planned under it.
+    """
+    phase_id = str(mutation.params["phase_id"])
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status != PhaseStatus.PLANNED:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; only planned phases can apply"
+        )
+    iter_ids = set(phase.iter_ids)
+    wave_count = sum(1 for w in state.waves.values() if w.iter_id in iter_ids)
+    if wave_count == 0:
+        raise LifecycleError(f"phase {phase_id!r} has no waves; revise --add-wave before apply")
+
+
+def _apply_event_append(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.EVENT_APPEND` — append-only audit row.
+
+    EVENT_APPEND records an out-of-band audit event without any
+    structural ``state.json`` change. The canonical event envelope the
+    mutator always builds + appends to ``event.jsonl`` *is* the side
+    effect, so this apply is a deliberate no-op on the :class:`State`
+    (the ``updated_at`` bump the mutator stamps afterwards keeps the
+    before/after digests distinct). Validating ``event_type`` here gives
+    a clear rejection for a malformed append rather than a silent empty
+    row.
+
+    Raises:
+        LifecycleError: when the required ``event_type`` param is missing
+            or empty.
+    """
+    event_type = mutation.params.get("event_type")
+    if not event_type or not str(event_type).strip():
+        raise LifecycleError("event_append requires a non-empty 'event_type' param")
 
 
 _APPLY_REGISTRY: Final[dict[MutationKind, ApplyFunc]] = {
     MutationKind.WAVE_CLAIM: _apply_wave_claim,
     MutationKind.WAVE_CLOSE: _apply_wave_close,
     MutationKind.WAVE_FAIL: _apply_wave_fail,
-    MutationKind.WAVE_RELEASE: _apply_not_yet_wired,
+    MutationKind.WAVE_RELEASE: _apply_wave_release,
     MutationKind.PHASE_OPEN: _apply_phase_open,
     MutationKind.PHASE_ACTIVATE: _apply_phase_activate,
     MutationKind.PHASE_CLOSE: _apply_phase_close,
     MutationKind.ITER_OPEN: _apply_iter_open,
     MutationKind.ITER_CLOSE: _apply_iter_close,
-    MutationKind.EVENT_APPEND: _apply_not_yet_wired,
-    MutationKind.ROADMAP_REVISE: _apply_not_yet_wired,
-    MutationKind.ROADMAP_APPLY: _apply_not_yet_wired,
-    MutationKind.ROADMAP_DROP: _apply_not_yet_wired,
+    MutationKind.EVENT_APPEND: _apply_event_append,
+    MutationKind.ROADMAP_REVISE: _apply_roadmap_revise,
+    MutationKind.ROADMAP_APPLY: _apply_roadmap_apply,
+    MutationKind.ROADMAP_DROP: _apply_phase_archive,
 }
 
 

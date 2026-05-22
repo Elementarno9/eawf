@@ -54,6 +54,7 @@ from eawf.lifecycle.wave import (
     edit_wave_plan,
     fail_wave,
     plan_wave,
+    release_wave,
     remove_wave_plan,
     set_wave_deps,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "plan_iter",
     "plan_phase",
     "plan_wave",
+    "release_wave",
     "remove_wave_plan",
     "reopen_phase",
     "set_wave_deps",
