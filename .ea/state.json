@@ -3080,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T12:12:09.713273Z",
+  "updated_at": "2026-05-22T12:14:56.145682Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10852,9 +10852,9 @@
     "P26-I02-W20": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-p26i02-w20",
+      "closed_at": "2026-05-22T12:14:56.144676Z",
+      "commit": "fb2734e6a87b4dde53043d6d991dbda87405ca8c",
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "S",
@@ -10870,10 +10870,10 @@
       "id": "P26-I02-W20",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T12:11:58.286410Z",
-      "outcome": null,
+      "outcome": "SWITCH_MANUAL on no-error runtime override (SWITCH_ON_ERROR reserved for fallback.py); 4 manifests reuse->continue; dispatch note + canonical session_policy tests; pytest+mypy green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "agent.dispatch manual runtime-override emits DispatchNote.SWITCH_MANUAL (SWITCH_ON_ERROR reserved for fallback.py error-driven switch)",
         "no skill manifest declares off-vocabulary session_policy (reuse->continue across compress/memory/coauthor/wave_spec)",
