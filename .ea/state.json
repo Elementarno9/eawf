@@ -2542,7 +2542,11 @@
         "P26-I02-W14",
         "P26-I02-W17",
         "P26-I02-W18",
-        "P26-I02-W19"
+        "P26-I02-W19",
+        "P26-I02-W20",
+        "P26-I02-W21",
+        "P26-I02-W22",
+        "P26-I02-W23"
       ]
     },
     "P27-I01": {
@@ -3076,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T11:23:13.958759Z",
+  "updated_at": "2026-05-22T12:12:09.713273Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10841,6 +10845,148 @@
         "auto re-applies within the poll interval when OS appearance flips; explicit themes untouched; safe no-op when appearance undetectable"
       ],
       "title": "feat: /theme auto follows live system light/dark switch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W20": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/daemon/methods/agent.py",
+        "src/eawf/skills/compress.py",
+        "src/eawf/skills/memory.py",
+        "src/eawf/skills/coauthor.py",
+        "src/eawf/skills/wave_spec.py",
+        "tests/daemon/test_agent_methods.py",
+        "tests/runtimes/test_plugin_manifest.py"
+      ],
+      "id": "P26-I02-W20",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T12:11:58.286410Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "agent.dispatch manual runtime-override emits DispatchNote.SWITCH_MANUAL (SWITCH_ON_ERROR reserved for fallback.py error-driven switch)",
+        "no skill manifest declares off-vocabulary session_policy (reuse->continue across compress/memory/coauthor/wave_spec)",
+        "unit tests assert SWITCH_MANUAL vs SWITCH_ON_ERROR selection + canonical manifest session_policy",
+        "pytest + mypy green"
+      ],
+      "title": "dispatch-note + session-policy vocabulary fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/streaming.py",
+        "src/eawf/cli/_mutation.py",
+        "tests/cli/test_streaming.py",
+        "tests/cli/test_mutation_proxy.py"
+      ],
+      "id": "P26-I02-W21",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T12:12:08.876816Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "cli/streaming _write flushes per frame so a block-buffered pipe streams progressively",
+        "render_human_line collapses embedded newlines so one frame is one human line",
+        "state_mutate maps daemon-down transport errors (OSError family) to DaemonUnreachable exit 4 not 5",
+        "tests cover flush + newline-collapse + exit-4 mapping; green"
+      ],
+      "title": "CLI streaming flush + daemon-unreachable exit code",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/git_pane.py",
+        "src/eawf/tui_v2/screens/overlays/pr_list.py",
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/state_binding.py",
+        "src/eawf/tui_v2/snapshot/pilot_harness.py",
+        "tests/tui_v2/test_widgets_git_pane.py",
+        "tests/tui_v2/test_overlays_pr_list.py"
+      ],
+      "id": "P26-I02-W22",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T12:12:09.305964Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "git_pane on_mount probe runs off the event loop via a worker (no sync subprocess on mount)",
+        "/pr fetch + action_open_web offloaded to workers (UI stays responsive while gh runs)",
+        "state_binding _poll_loop survives a mid-poll file deletion (OSError-guarded stat)",
+        "settle_screen waits for workers; Pilot snapshot tests pass; green"
+      ],
+      "title": "TUI event-loop offload (git/gh shell-outs)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W23": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/footer.py",
+        "src/eawf/tui_v2/widgets/heartbeat.py",
+        "src/eawf/tui_v2/palette/command_palette.py",
+        "src/eawf/tui_v2/screens/overlays/metrics.py",
+        "src/eawf/tui_v2/screens/overlays/needs_user.py",
+        "src/eawf/runtimes/capabilities.yaml",
+        "src/eawf/render/envelope.py",
+        "src/eawf/skills/bodies/__init__.py"
+      ],
+      "id": "P26-I02-W23",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T12:12:09.713243Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "footer degraded heartbeat carries the .-degraded rule via one consolidated Heartbeat class (footer imports it)",
+        "no Q<N>/D<N>/F<N>/[n:nn-nn] decision tokens remain in touched tui_v2 + capabilities.yaml source",
+        "stale docstrings current (envelope 17 bodies; bodies __init__ drops CORE/v0.1; Heartbeat r->F5)",
+        "needs_user action_move guards empty list; pre-commit + mypy green"
+      ],
+      "title": "polish sweep (heartbeat, rule-25, stale docstrings)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
