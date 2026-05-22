@@ -1,0 +1,129 @@
+{
+  "counts": {
+    "events": 200,
+    "phases": 1,
+    "waves": 10
+  },
+  "phases": [
+    {
+      "id": "P01",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T01:00:00Z",
+      "status": "active",
+      "title": "Bench phase 1"
+    }
+  ],
+  "schema_version": "1.0",
+  "scope_kind": "repo",
+  "size": "small",
+  "waves": [
+    {
+      "deps": [],
+      "effort_bucket": "M",
+      "id": "W01",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:41:00Z",
+      "status": "closed",
+      "title": "Bench wave 1"
+    },
+    {
+      "deps": [
+        "W01"
+      ],
+      "effort_bucket": "XS",
+      "id": "W02",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:42:00Z",
+      "status": "closed",
+      "title": "Bench wave 2"
+    },
+    {
+      "deps": [
+        "W02"
+      ],
+      "effort_bucket": "S",
+      "id": "W03",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:43:00Z",
+      "status": "closed",
+      "title": "Bench wave 3"
+    },
+    {
+      "deps": [
+        "W01"
+      ],
+      "effort_bucket": "XS",
+      "id": "W04",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:44:00Z",
+      "status": "closed",
+      "title": "Bench wave 4"
+    },
+    {
+      "deps": [
+        "W02"
+      ],
+      "effort_bucket": "S",
+      "id": "W05",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:45:00Z",
+      "status": "closed",
+      "title": "Bench wave 5"
+    },
+    {
+      "deps": [
+        "W05"
+      ],
+      "effort_bucket": "XS",
+      "id": "W06",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:46:00Z",
+      "status": "closed",
+      "title": "Bench wave 6"
+    },
+    {
+      "deps": [
+        "W01"
+      ],
+      "effort_bucket": "XL",
+      "id": "W07",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:47:00Z",
+      "status": "closed",
+      "title": "Bench wave 7"
+    },
+    {
+      "deps": [
+        "W02"
+      ],
+      "effort_bucket": "XL",
+      "id": "W08",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:48:00Z",
+      "status": "closed",
+      "title": "Bench wave 8"
+    },
+    {
+      "deps": [
+        "W07"
+      ],
+      "effort_bucket": "XS",
+      "id": "W09",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:49:00Z",
+      "status": "closed",
+      "title": "Bench wave 9"
+    },
+    {
+      "deps": [
+        "W04"
+      ],
+      "effort_bucket": "XL",
+      "id": "W10",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T16:50:00Z",
+      "status": "closed",
+      "title": "Bench wave 10"
+    }
+  ]
+}

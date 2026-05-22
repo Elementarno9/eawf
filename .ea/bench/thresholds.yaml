@@ -1,0 +1,13 @@
+# Per-OS regression thresholds for `eawf bench compare`.
+#
+# A harness regresses when `after >= before * (1 + threshold)`. Thresholds
+# are per-OS because cross-OS wall-clock spread dwarfs any single sane
+# threshold (a shared threshold would either mask Linux regressions or
+# false-positive on macOS). Values are fractions (0.10 == 10%).
+#
+# Provisional values; tighten as per-OS baselines accumulate signal.
+# Override per-invocation via `--threshold` or `EAWF_BENCH_THRESHOLD`.
+thresholds:
+  linux: 0.10
+  macos: 0.20
+  windows: 0.15

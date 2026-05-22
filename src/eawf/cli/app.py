@@ -476,6 +476,12 @@ from eawf.cli.commands.spec import spec_app  # noqa: E402
 app.add_typer(spec_app, name="spec", rich_help_panel=panel_for("spec"))
 # --- end P25 W03 ---
 
+# --- P27 W18 bench registration ---
+from eawf.cli.commands.bench import bench_app  # noqa: E402
+
+app.add_typer(bench_app, name="bench", rich_help_panel=panel_for("bench"))
+# --- end P27 W18 ---
+
 # --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402
