@@ -1572,12 +1572,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W01",
-      "P26-I02-W03",
-      "P26-I02-W06",
-      "P26-I02-W07"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3038,7 +3033,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T01:18:55.871545Z",
+  "updated_at": "2026-05-22T01:35:51.673604Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10181,7 +10176,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:35:46.061437Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10198,10 +10193,10 @@
       "id": "P26-I02-W01",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:31.338080Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "up/down move field cursor and left/right switch tabs (focus-zone model removed)",
         "Enter is sole mutator: bool toggles / choice cycles forward a-b-c-a / int-float-str open inline in-row edit",
@@ -10256,7 +10251,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:35:47.806304Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10269,10 +10264,10 @@
       "id": "P26-I02-W03",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:32.080241Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "/find <q> fuzzy-ranks waves+backlog by id+title (reuse fuzzy_score) then opens DetailModal on pick",
         "/filter backlog <needle> calls apply_filter and /sort <pane> calls cycle_sort",
@@ -10356,7 +10351,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:35:49.406800Z",
       "commit": null,
       "deps": [
         "P26-I02-W05"
@@ -10372,10 +10367,10 @@
       "id": "P26-I02-W06",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:33.207057Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "iter/phase inline completion bars in RoadmapTree render_bar_plain path + StatusPane summary line reusing W05 helper with no wave-row bars",
         "tree wave/iter/phase row titles width-aware ellipsis (currently none)",
@@ -10390,7 +10385,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:35:51.110094Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10404,10 +10399,10 @@
       "id": "P26-I02-W07",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:33.599404Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "new CLI verb eawf skill resume <pause-urn> --choice <label>",
         "TUI subscribes needs_user_pause push and auto-opens NeedsUserModal for active scope/session",
@@ -11279,10 +11274,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w01",
       "created_at": "2026-05-22T01:18:53.943587Z",
       "id": "WT-P26-I02-W01-1779412733",
-      "merged_commit": null,
+      "merged_commit": "c038576",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w01",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W01"
     },
     "WT-P26-I02-W02-1779408661": {
@@ -11301,10 +11296,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w03",
       "created_at": "2026-05-22T01:18:54.576945Z",
       "id": "WT-P26-I02-W03-1779412734",
-      "merged_commit": null,
+      "merged_commit": "a3267c7",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w03",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W03"
     },
     "WT-P26-I02-W04-1779408661": {
@@ -11334,10 +11329,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w06",
       "created_at": "2026-05-22T01:18:55.224091Z",
       "id": "WT-P26-I02-W06-1779412735",
-      "merged_commit": null,
+      "merged_commit": "677ce5d",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w06",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W06"
     },
     "WT-P26-I02-W07-1779412735": {
@@ -11345,10 +11340,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w07",
       "created_at": "2026-05-22T01:18:55.871545Z",
       "id": "WT-P26-I02-W07-1779412735",
-      "merged_commit": null,
+      "merged_commit": "d2202a6",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w07",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W07"
     }
   }
