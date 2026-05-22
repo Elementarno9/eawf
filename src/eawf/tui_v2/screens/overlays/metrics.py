@@ -178,6 +178,7 @@ class MetricsModal(ModalScreen[None]):
     MetricsModal .metrics-hint {
         color: $text-muted;
         height: 1;
+        margin-top: 1;
     }
     """
 

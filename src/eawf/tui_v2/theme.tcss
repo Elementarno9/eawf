@@ -32,9 +32,11 @@ Header {
     color: $text;
 }
 
-/* --- footer: context key hints (full key names) + heartbeat dot --- */
+/* --- footer: two rows — context key hints (row 1, full width so the
+ * longest scope hint set never clips at 120 cols) + weekly-burn cell and
+ * heartbeat dot (row 2). --- */
 Footer {
-    height: 1;
+    height: 2;
     dock: bottom;
     background: $panel;
     color: $muted;

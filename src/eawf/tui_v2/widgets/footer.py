@@ -36,6 +36,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from eawf.estimation.metrics import compute_weekly_burn
+from eawf.tui_v2.widgets.eu_bar import EMPTY_STATE
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -68,8 +69,10 @@ DEFAULT_HINTS: tuple[str, ...] = (
 #: has no ``weekly_eu_target`` set or no actuals have rolled up yet — the
 #: EU estimation surface is unpopulated scaffolding today, so a graceful
 #: "surface now, data later" placeholder is shown rather than a misleading
-#: ``0 / 0`` figure.
-WEEKLY_BURN_EMPTY: str = "— no data"
+#: ``0 / 0`` figure. Sourced from the canonical
+#: :data:`~eawf.tui_v2.widgets.eu_bar.EMPTY_STATE` sentinel so every
+#: "no data" surface stays in lockstep (kept as the footer's public name).
+WEEKLY_BURN_EMPTY: str = EMPTY_STATE
 
 #: Static label prefixing the weekly-burn line in both the populated and
 #: empty-state forms.
@@ -178,11 +181,13 @@ class Footer(Static):
     """Shared chassis footer: key hints + weekly-burn cell + heartbeat dot.
 
     Reused verbatim by every per-scope screen (shared chassis). The
-    footer composes a flex hint strip, a weekly-burn cell, and a
-    :class:`Heartbeat` on one row; a host screen may override the hints
-    via :meth:`set_hints` without touching the chrome. The burn cell is
-    driven by the host :class:`~eawf.tui_v2.app.EaApp` reactive ``state``
-    (seeded on mount, watched for revisions) and falls back to the
+    footer is **two rows**: row 1 is the full-width key-hint strip
+    (so the longest scope hint set never clips at 120 cols), row 2 is
+    the weekly-burn cell + the :class:`Heartbeat` dot. A host screen may
+    override the hints via :meth:`set_hints` without touching the chrome.
+    The burn cell is driven by the host
+    :class:`~eawf.tui_v2.app.EaApp` reactive ``state`` (seeded on mount,
+    watched for revisions) and falls back to the
     :data:`WEEKLY_BURN_EMPTY` placeholder when no target / actuals exist.
     Standalone tests assign :attr:`state` directly. Standalone-testable
     via the Pilot harness.
@@ -190,22 +195,21 @@ class Footer(Static):
 
     DEFAULT_CSS: ClassVar[str] = """
     Footer {
-        height: 1;
+        height: 2;
         dock: bottom;
         background: $panel;
         padding: 0 1;
-    }
-    Footer > Horizontal {
-        height: 1;
     }
     Footer .footer-hints {
         width: 1fr;
         height: 1;
     }
-    Footer .footer-burn {
-        width: auto;
+    Footer .footer-status {
         height: 1;
-        margin-left: 1;
+    }
+    Footer .footer-burn {
+        width: 1fr;
+        height: 1;
         color: $text-muted;
     }
     """
@@ -218,9 +222,9 @@ class Footer(Static):
     state: reactive[State | None] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        """Lay out hint strip (left, flex) + burn cell + heartbeat dot."""
-        with Horizontal():
-            yield Static(format_hints(self.hints), classes="footer-hints")
+        """Lay out the hint strip (row 1) above the burn cell + heartbeat (row 2)."""
+        yield Static(format_hints(self.hints), classes="footer-hints")
+        with Horizontal(classes="footer-status"):
             yield Static(build_weekly_burn_line(self.state), classes="footer-burn")
             yield Heartbeat(id="heartbeat")
 

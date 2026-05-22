@@ -202,11 +202,15 @@ def _handle_roadmap(app: App[None], args: str) -> None:
 
 
 def _active_audit_id(app: App[None]) -> str:
-    """Resolve a best-effort audit id from the App's bound state.
+    """Resolve the most relevant audit id from the App's bound state.
 
-    Prefers the active iter's ``audit_id``, then any phase's, falling back
-    to ``"audit"`` so the overlay title always renders. Read-only; never
-    mutates state.
+    Resolves the newest audit (by ``created_at``) whose ``scope_id``
+    matches the current phase — either exactly (``P26``) or as a
+    descendant prefix (``P26-...``) so an iter- or wave-scoped audit under
+    the phase still counts. Falls back to the newest audit overall when no
+    audit matches the current phase, and to the ``"audit"`` placeholder
+    when no state or no audits are present so the overlay title always
+    renders. Read-only; never mutates state.
 
     Args:
         app: The running App.
@@ -217,13 +221,18 @@ def _active_audit_id(app: App[None]) -> str:
     state: State | None = getattr(app, "state", None)
     if state is None:
         return "audit"
-    for iteration in state.iters.values():
-        if iteration.audit_id:
-            return iteration.audit_id
-    for phase in state.phases.values():
-        if phase.audit_id:
-            return phase.audit_id
-    return "audit"
+    audits = state.audits or {}
+    if not audits:
+        return "audit"
+    phase_id = state.current.phase_id
+    scoped = [
+        audit
+        for audit in audits.values()
+        if phase_id and (audit.scope_id == phase_id or audit.scope_id.startswith(f"{phase_id}-"))
+    ]
+    pool = scoped if scoped else list(audits.values())
+    chosen = max(pool, key=lambda audit: audit.created_at)
+    return chosen.id
 
 
 def _active_scope_label(app: App[None]) -> str:

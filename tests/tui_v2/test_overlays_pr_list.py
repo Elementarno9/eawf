@@ -496,3 +496,18 @@ def test_pr_fetch_is_frozen() -> None:
     fetch = PrFetch(rows=(), status=PrFetchStatus.OK)
     with pytest.raises((AttributeError, TypeError)):
         fetch.status = PrFetchStatus.UNAVAILABLE  # type: ignore[misc]
+
+
+def test_pr_hint_has_top_margin() -> None:
+    # W15 polish: the close-hint gets a top margin so it no longer sits
+    # flush against the PR rows (mirrors the DetailModal hint gap).
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(PrListModal(_ROWS))
+            await pilot.pause()
+            hint = app.screen.query_one(".pr-hint", Static)
+            assert hint.styles.margin.top == 1
+
+    asyncio.run(body())

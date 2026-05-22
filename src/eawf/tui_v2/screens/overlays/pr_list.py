@@ -324,6 +324,7 @@ class PrListModal(ModalScreen[None]):
     PrListModal .pr-hint {
         color: $text-muted;
         height: 1;
+        margin-top: 1;
     }
     """
 

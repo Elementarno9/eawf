@@ -166,3 +166,18 @@ def test_metrics_verb_args_split() -> None:
     name, args = split_verb_args("/metrics --window 30d")
     assert name == "/metrics"
     assert args == "--window 30d"
+
+
+def test_metrics_hint_has_top_margin() -> None:
+    # W15 polish: the close-hint sits flush against the tile grid without a
+    # gap; a top margin separates it (mirrors the DetailModal hint gap).
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(MetricsModal())
+            await pilot.pause()
+            hint = app.screen.query_one(".metrics-hint", Static)
+            assert hint.styles.margin.top == 1
+
+    asyncio.run(body())

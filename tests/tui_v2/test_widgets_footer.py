@@ -18,6 +18,7 @@ from textual.widgets import Static
 
 from eawf.state.enums import ActualStatus
 from eawf.state.models import ActualSummary, State
+from eawf.tui_v2.widgets import eu_bar
 from eawf.tui_v2.widgets.footer import (
     DEFAULT_HINTS,
     HEARTBEAT_GLYPH,
@@ -337,5 +338,96 @@ def test_heartbeat_ack_forces_lit_frame() -> None:
             await pilot.pause()
             assert hb._lit is True
             assert HEARTBEAT_GLYPH in app.export_screenshot()
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# WEEKLY_BURN_EMPTY DRY — sourced from the canonical eu_bar sentinel
+# --------------------------------------------------------------------------
+
+
+def test_weekly_burn_empty_is_canonical_eu_bar_sentinel() -> None:
+    # The footer's empty marker must be the SAME object as the canonical
+    # eu_bar sentinel (DRY): both "no data" surfaces stay in lockstep.
+    assert WEEKLY_BURN_EMPTY is eu_bar.EMPTY_STATE
+
+
+# --------------------------------------------------------------------------
+# Two-row footer — hints (row 1) never clip at 120 cols (the W15 fix)
+# --------------------------------------------------------------------------
+
+
+def test_footer_is_two_rows_tall() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            # The two-row layout: the footer occupies two terminal rows so
+            # the full-width hint strip never shares a row with the burn cell.
+            assert footer.size.height == 2
+
+    asyncio.run(body())
+
+
+def _hint_cell_width(app: App[None]) -> int:
+    """Return the rendered content width of the footer hint Static."""
+    return app.query_one(".footer-hints", Static).content_size.width
+
+
+def test_footer_hints_fit_repo_set_uncliped_at_120() -> None:
+    async def body() -> None:
+        from eawf.tui_v2.scopes.repo import _REPO_HINTS
+
+        app = _Harness()
+        # The repo hint set (103 cells) is the longest; on a single-row
+        # footer it lost ~94 cells to the burn cell and clipped ``q quit``.
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            footer.set_hints(_REPO_HINTS)
+            await pilot.pause()
+            rendered = format_hints(_REPO_HINTS)
+            # The hint lane spans the full inner width, so the whole strip
+            # (incl. the trailing ``q quit``) fits without truncation.
+            assert _hint_cell_width(app) >= len(rendered)
+            assert "q quit" in str(footer.query_one(".footer-hints", Static).render())
+
+    asyncio.run(body())
+
+
+def test_footer_hints_fit_workspace_set_uncliped_at_120() -> None:
+    async def body() -> None:
+        from eawf.tui_v2.scopes.workspace import _WORKSPACE_HINTS
+
+        app = _Harness()
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            footer.set_hints(_WORKSPACE_HINTS)
+            await pilot.pause()
+            rendered = format_hints(_WORKSPACE_HINTS)
+            assert _hint_cell_width(app) >= len(rendered)
+            assert "q quit" in str(footer.query_one(".footer-hints", Static).render())
+
+    asyncio.run(body())
+
+
+def test_footer_burn_and_heartbeat_share_second_row() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            footer.state = _state(weekly_eu_target=10.0, actual_eu=3.5)
+            await pilot.pause()
+            # The burn cell + heartbeat live below the hint strip, so the
+            # full hint row stays intact while the status line still renders.
+            hints = app.query_one(".footer-hints", Static)
+            burn = app.query_one(".footer-burn", Static)
+            assert burn.region.y > hints.region.y
+            assert "/ 10 EU" in str(burn.render())
+            assert footer.query(Heartbeat)
 
     asyncio.run(body())

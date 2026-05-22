@@ -311,3 +311,18 @@ def test_filter_rows_known_filters_total(bad_filter: str) -> None:
     # Every declared filter returns a (possibly empty) tuple, never raises.
     result = filter_rows(_SAMPLE, bad_filter)  # type: ignore[arg-type]
     assert isinstance(result, tuple)
+
+
+def test_events_hint_has_top_margin() -> None:
+    # W15 polish: the close-hint gets a top margin so it no longer sits
+    # flush against the event rows (mirrors the DetailModal hint gap).
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(EventsModal(_SAMPLE))
+            await pilot.pause()
+            hint = app.screen.query_one(".events-hint", Static)
+            assert hint.styles.margin.top == 1
+
+    asyncio.run(body())
