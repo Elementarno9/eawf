@@ -17,11 +17,16 @@ from textual.app import ComposeResult
 
 from eawf.state.models import BacklogItem, State
 from eawf.tui_v2.widgets.backlog_table import (
+    _ELLIPSIS,
+    _TITLE_MIN_WIDTH,
     SORT_KEYS,
     BacklogTable,
+    _fixed_columns_width,
+    _truncate,
     filter_items,
     next_sort_key,
     sort_items,
+    title_budget,
 )
 
 from ._palette_harness import PaletteHarnessApp
@@ -231,5 +236,133 @@ def test_table_empty_when_no_backlog() -> None:
             await pilot.pause()
             assert table.row_count == 0
             assert table.visible_items() == []
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# _truncate — width-aware clip with ellipsis
+# --------------------------------------------------------------------------
+
+
+def test_truncate_short_text_untouched() -> None:
+    assert _truncate("short", 48) == "short"
+
+
+def test_truncate_exact_width_untouched() -> None:
+    text = "x" * 10
+    assert _truncate(text, 10) == text
+
+
+def test_truncate_long_text_ellipsised_to_width() -> None:
+    clipped = _truncate("abcdefghij", 5)
+    assert clipped == "abcd" + _ELLIPSIS
+    assert len(clipped) == 5
+
+
+def test_truncate_width_one_yields_only_ellipsis() -> None:
+    assert _truncate("abc", 1) == _ELLIPSIS
+
+
+def test_truncate_width_below_one_floors_to_one() -> None:
+    assert _truncate("abc", 0) == _ELLIPSIS
+
+
+# --------------------------------------------------------------------------
+# title_budget — content area minus fixed columns + padding, floored
+# --------------------------------------------------------------------------
+
+
+def test_title_budget_subtracts_fixed_columns_and_padding() -> None:
+    # content 80, fixed cols 30, padding 1*2 per col * 4 cols = 8 -> 42.
+    assert title_budget(80, 30, 1, 4) == 42
+
+
+def test_title_budget_floors_at_minimum() -> None:
+    # A narrow pane can drive the raw budget negative; the floor holds.
+    assert title_budget(10, 30, 1, 4) == _TITLE_MIN_WIDTH
+
+
+def test_title_budget_custom_floor() -> None:
+    assert title_budget(10, 30, 1, 4, floor=3) == 3
+
+
+def test_title_budget_zero_padding() -> None:
+    assert title_budget(50, 20, 0, 4) == 30
+
+
+def test_fixed_columns_width_uses_header_floor_when_empty() -> None:
+    # With no rows the fixed columns size to their header labels.
+    assert _fixed_columns_width([]) == len("id") + len("priority") + len("status")
+
+
+def test_fixed_columns_width_grows_with_widest_cell() -> None:
+    items = [_item("BL-LONG-0001", "P0", "in_progress", "t")]
+    width = _fixed_columns_width(items)
+    # id widens to the 12-char id; status widens to "in_progress" (11).
+    assert width == len("BL-LONG-0001") + len("priority") + len("in_progress")
+
+
+# --------------------------------------------------------------------------
+# Widget — width-aware title rendering + reactive re-truncate on resize
+# --------------------------------------------------------------------------
+
+_LONG_TITLE = "A very long backlog title that overflows any reasonable column"
+
+
+def _rendered_title(table: BacklogTable, item_id: str) -> str:
+    return str(table.get_cell(item_id, "title"))
+
+
+def test_table_renders_short_title_untouched() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog([_item("BL-001", "P0", "open", "Wire init")])
+            await pilot.pause()
+            assert _rendered_title(table, "BL-001") == "Wire init"
+
+    asyncio.run(body())
+
+
+def test_table_truncates_long_title_to_column_width() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog([_item("BL-001", "P0", "open", _LONG_TITLE)])
+            await pilot.pause()
+            rendered = _rendered_title(table, "BL-001")
+            assert rendered.endswith(_ELLIPSIS)
+            assert len(rendered) < len(_LONG_TITLE)
+            # The rendered title fits inside the title budget for this width.
+            budget = table._title_budget(table.visible_items())
+            assert len(rendered) == budget
+
+    asyncio.run(body())
+
+
+def test_table_resize_narrower_re_truncates_title() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog([_item("BL-001", "P0", "open", _LONG_TITLE)])
+            await pilot.pause()
+            wide = _rendered_title(table, "BL-001")
+            wide_budget = table._title_budget(table.visible_items())
+            # Shrink the terminal: the resize watcher rebuilds with a
+            # smaller title budget, so the rendered title gets shorter.
+            await pilot.resize_terminal(50, 12)
+            await pilot.pause()
+            narrow = _rendered_title(table, "BL-001")
+            narrow_budget = table._title_budget(table.visible_items())
+            assert narrow_budget < wide_budget
+            assert len(narrow) < len(wide)
+            assert narrow.endswith(_ELLIPSIS)
 
     asyncio.run(body())

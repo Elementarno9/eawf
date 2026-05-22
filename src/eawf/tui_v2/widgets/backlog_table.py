@@ -24,6 +24,7 @@ daemon-pushed revisions rebuild the rows; standalone tests assign
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.message import Message
@@ -33,7 +34,11 @@ from textual.widgets import DataTable
 from eawf.state.enums import BacklogPriority
 
 if TYPE_CHECKING:
+    from textual.events import Resize
+
     from eawf.state.models import BacklogItem, State
+
+logger = logging.getLogger(__name__)
 
 #: The sort keys the table cycles through (the ``priority / id /
 #: target`` row; ``target`` maps onto ``status`` for backlog rows, which
@@ -51,13 +56,21 @@ _PRIORITY_RANK: dict[BacklogPriority, int] = {
     BacklogPriority.P3: 3,
 }
 
-#: Column ids in display order.
+#: Column ids in display order. The free-text ``title`` is last so the
+#: three fixed-shape columns (id / priority / status) absorb a deterministic
+#: width and the title takes the remaining budget.
 _COLUMNS: tuple[str, ...] = ("id", "priority", "status", "title")
 
-#: Max rendered width for the free-text ``title`` cell. Overlong titles are
-#: truncated with an ellipsis so a long title cannot push the table wider
-#: than the pane (horizontal scroll is disabled so ←/→ stay free for nav).
-_TITLE_MAX_WIDTH: int = 48
+#: The non-title columns whose rendered width is subtracted from the
+#: content area to size the ``title`` budget. Kept in sync with
+#: :data:`_COLUMNS` (every column except the trailing free-text one).
+_FIXED_COLUMNS: tuple[str, ...] = ("id", "priority", "status")
+
+#: Floor for the computed ``title`` budget. The title column is normally
+#: sized to the *rendered* column width (content area minus the fixed
+#: columns + cell padding), but never below this so an extremely narrow
+#: pane still shows a usable, ellipsised stub rather than a bare ``…``.
+_TITLE_MIN_WIDTH: int = 8
 
 #: The single-character ellipsis appended to a truncated title.
 _ELLIPSIS: str = "…"
@@ -68,23 +81,58 @@ def _priority_rank(priority: BacklogPriority) -> int:
     return _PRIORITY_RANK.get(priority, len(_PRIORITY_RANK))
 
 
-def _truncate(text: str, max_width: int = _TITLE_MAX_WIDTH) -> str:
+def _truncate(text: str, max_width: int) -> str:
     """Return *text* clipped to *max_width* with a trailing ellipsis.
 
     Strings within *max_width* are returned unchanged; longer strings are
     cut to ``max_width - 1`` characters plus the single-cell ellipsis so
-    the result never exceeds *max_width* cells.
+    the result never exceeds *max_width* cells. A *max_width* below ``1`` is
+    floored to ``1`` so the result is always at least the ellipsis.
 
     Args:
         text: The cell text to clip.
-        max_width: The maximum rendered width (≥ 1).
+        max_width: The maximum rendered width.
 
     Returns:
         The original text, or a truncated ``…``-suffixed copy.
     """
-    if len(text) <= max_width:
+    width = max(max_width, 1)
+    if len(text) <= width:
         return text
-    return text[: max_width - 1] + _ELLIPSIS
+    if width == 1:
+        return _ELLIPSIS
+    return text[: width - 1] + _ELLIPSIS
+
+
+def title_budget(
+    content_width: int,
+    fixed_columns_width: int,
+    cell_padding: int,
+    column_count: int,
+    *,
+    floor: int = _TITLE_MIN_WIDTH,
+) -> int:
+    """Return the rendered cell budget for the trailing ``title`` column.
+
+    The :class:`~textual.widgets.DataTable` lays the columns out across the
+    widget's content area: every column carries *cell_padding* on each side,
+    so the available text width is the content area minus the fixed columns'
+    text widths and the total padding. The remainder is the title's budget,
+    floored at *floor* so a very narrow pane still renders a usable stub.
+
+    Args:
+        content_width: The widget's content-area width in cells.
+        fixed_columns_width: Combined text width of the non-title columns.
+        cell_padding: Padding cells on *each* side of every column.
+        column_count: Total number of columns (fixed + title).
+        floor: Minimum budget; the result is never below this.
+
+    Returns:
+        The title column's cell budget (≥ *floor*).
+    """
+    padding_total = cell_padding * 2 * column_count
+    available = content_width - fixed_columns_width - padding_total
+    return max(available, floor)
 
 
 def sort_items(items: list[BacklogItem], sort_key: str) -> list[BacklogItem]:
@@ -130,6 +178,27 @@ def filter_items(items: list[BacklogItem], needle: str) -> list[BacklogItem]:
     if not trimmed:
         return list(items)
     return [it for it in items if trimmed in it.id.lower() or trimmed in it.title.lower()]
+
+
+def _fixed_columns_width(items: list[BacklogItem]) -> int:
+    """Return the combined text width of the id / priority / status columns.
+
+    Each fixed column auto-sizes to the wider of its header label and its
+    widest cell value across *items*. Summing these gives the width the
+    three fixed columns claim, which is subtracted from the content area to
+    size the trailing ``title`` column.
+
+    Args:
+        items: The rows whose id / priority / status values drive the
+            per-column max (empty falls back to the header-label widths).
+
+    Returns:
+        The total text width claimed by the fixed columns.
+    """
+    id_width = max([len("id"), *(len(it.id) for it in items)])
+    priority_width = max([len("priority"), *(len(it.priority.value) for it in items)])
+    status_width = max([len("status"), *(len(it.status.value) for it in items)])
+    return id_width + priority_width + status_width
 
 
 def next_sort_key(current: str) -> str:
@@ -229,6 +298,20 @@ class BacklogTable(DataTable[str]):
         """Rebuild rows when the filter changes."""
         self._rebuild()
 
+    def on_resize(self, event: Resize) -> None:
+        """Re-truncate titles when the pane width changes.
+
+        The ``title`` column is sized to the rendered column width, so a
+        resize must rebuild the rows for the new budget. Width-only resizes
+        and height-only resizes both arrive here; the rebuild is cheap and
+        idempotent, so it runs unconditionally.
+
+        Args:
+            event: The Textual resize event (unused beyond triggering the
+                rebuild).
+        """
+        self._rebuild()
+
     def cycle_sort(self) -> None:
         """Advance the sort key to the next member of the cycle."""
         self.sort_key = next_sort_key(self.sort_key)
@@ -278,16 +361,45 @@ class BacklogTable(DataTable[str]):
         self._rebuilding = True
         try:
             self.clear()
-            for item in self.visible_items():
+            items = self.visible_items()
+            budget = self._title_budget(items)
+            for item in items:
                 self.add_row(
                     item.id,
                     item.priority.value,
                     item.status.value,
-                    _truncate(item.title),
+                    _truncate(item.title, budget),
                     key=item.id,
                 )
         finally:
             self._rebuilding = False
+
+    def _title_budget(self, items: list[BacklogItem]) -> int:
+        """Return the current cell budget for the ``title`` column.
+
+        Sizes the title to the rendered column width: the content area
+        minus the fixed columns' text widths (driven by *items* + the
+        header labels) and the per-cell padding. Before the widget is laid
+        out (zero content width, e.g. pre-mount) this falls back to the
+        floor so the first build still truncates sanely.
+
+        Args:
+            items: The rows about to be rendered (their id / priority /
+                status drive the fixed columns' widths).
+
+        Returns:
+            The title column's cell budget (≥ :data:`_TITLE_MIN_WIDTH`).
+        """
+        content_width = self.content_size.width
+        if content_width <= 0:
+            return _TITLE_MIN_WIDTH
+        fixed_width = _fixed_columns_width(items)
+        return title_budget(
+            content_width=content_width,
+            fixed_columns_width=fixed_width,
+            cell_padding=self.cell_padding,
+            column_count=len(_COLUMNS),
+        )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Post :class:`RowActivated` for the Enter-selected row.
@@ -307,4 +419,5 @@ __all__ = [
     "filter_items",
     "next_sort_key",
     "sort_items",
+    "title_budget",
 ]

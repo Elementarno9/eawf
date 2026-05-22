@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from textual.app import App
 
     from eawf.state.models import State
+    from eawf.tui_v2.widgets.backlog_table import BacklogTable
 
 logger = logging.getLogger(__name__)
 
@@ -383,6 +384,172 @@ def _persist_theme_choice(app: App[None], name: str) -> None:
         app.notify(f"theme applied (not saved: {exc})", severity="warning")
 
 
+def rank_find_hits(state: State | None, query: str) -> list[str]:
+    """Fuzzy-rank wave + backlog ids by *query* against their id and title.
+
+    Pools every wave and backlog item, scoring each against *query* with
+    :func:`fuzzy_score` over **both** its id and its title and keeping the
+    better (lower) of the two. Entities that match neither field are
+    dropped. Survivors sort by ascending score (best first) with the id as
+    a stable tie-break so equal scores order deterministically. An empty /
+    whitespace *query* returns no hits (a ``/find`` with no text has nothing
+    to drill into).
+
+    Args:
+        state: The bound state, or ``None`` when no state is loaded.
+        query: The operator's search text.
+
+    Returns:
+        The matching entity ids, best fuzzy match first.
+    """
+    trimmed = query.strip()
+    if state is None or not trimmed:
+        return []
+    scored: list[tuple[int, str]] = []
+    candidates: list[tuple[str, str]] = [(wave.id, wave.title) for wave in state.waves.values()]
+    if state.backlog is not None:
+        candidates.extend((item.id, item.title) for item in state.backlog.values())
+    for entity_id, title in candidates:
+        id_score = fuzzy_score(trimmed, entity_id)
+        title_score = fuzzy_score(trimmed, title)
+        best = _best_score(id_score, title_score)
+        if best is None:
+            continue
+        scored.append((best, entity_id))
+    scored.sort(key=lambda row: (row[0], row[1]))
+    return [entity_id for _, entity_id in scored]
+
+
+def _best_score(left: int | None, right: int | None) -> int | None:
+    """Return the better (lower) of two :func:`fuzzy_score` results.
+
+    Args:
+        left: A score, or ``None`` when that field did not match.
+        right: A score, or ``None`` when that field did not match.
+
+    Returns:
+        The lower score, or ``None`` when both inputs are ``None``.
+    """
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return min(left, right)
+
+
+def _handle_find(app: App[None], args: str) -> None:
+    """Fuzzy-search waves + backlog and drill into the best hit (``/find``).
+
+    Ranks every wave and backlog item against the typed query by id + title
+    (:func:`rank_find_hits`) and opens the existing
+    :class:`~eawf.tui_v2.screens.overlays.detail.DetailModal` for the
+    top-ranked entity, resolved through
+    :func:`~eawf.tui_v2.screens.overlays.detail.resolve_detail`. The modal
+    routes through the App's modal-cap-aware ``push_modal`` (falling back to
+    ``push_screen`` on a bare host) so the drill-in honours the stack-depth
+    limit. An empty query or a query that matches nothing toasts a hint and
+    opens nothing. Read-only — searching mutates no state.
+
+    Args:
+        app: The running App.
+        args: The raw ``/find`` query text.
+    """
+    from eawf.tui_v2.screens.overlays.detail import DetailModal, resolve_detail
+
+    query = args.strip()
+    if not query:
+        app.notify("/find needs a query (e.g. /find W19)", severity="warning")
+        return
+    state = getattr(app, "state", None)
+    hits = rank_find_hits(state, query)
+    if not hits:
+        logger.info(f"palette_verb_find_no_match query={query!r}")
+        app.notify(f"no waves or backlog match {query!r}", severity="information")
+        return
+    card = resolve_detail(state, hits[0])
+    logger.info(f"palette_verb_find query={query!r} hit={hits[0]!r}")
+    push_modal = getattr(app, "push_modal", None)
+    if callable(push_modal):
+        push_modal(DetailModal(card))
+        return
+    app.push_screen(DetailModal(card))
+
+
+def _handle_filter(app: App[None], args: str) -> None:
+    """Apply a substring filter to the named pane (the ``/filter`` verb).
+
+    The only filterable pane is ``backlog`` — ``/filter backlog <needle>``
+    drives :meth:`~eawf.tui_v2.widgets.backlog_table.BacklogTable.apply_filter`.
+    An empty needle clears the filter (restores all rows). An unknown pane
+    or a missing backlog widget (e.g. on a scope that does not mount it)
+    toasts a hint and changes nothing.
+
+    Args:
+        app: The running App.
+        args: ``<pane> <needle>`` — the first token is the pane name, the
+            remainder the substring to match.
+    """
+    pane, _, needle = args.strip().partition(" ")
+    if pane != "backlog":
+        logger.info(f"palette_verb_filter_unknown_pane pane={pane!r}")
+        app.notify(f"/filter only supports the backlog pane (got {pane!r})", severity="warning")
+        return
+    table = _backlog_table(app)
+    if table is None:
+        app.notify("/filter backlog: no backlog pane on this screen", severity="warning")
+        return
+    table.apply_filter(needle.strip())
+
+
+def _handle_sort(app: App[None], args: str) -> None:
+    """Cycle the sort key of the named pane (the ``/sort`` verb).
+
+    The only sortable pane is ``backlog`` — ``/sort backlog`` advances
+    :meth:`~eawf.tui_v2.widgets.backlog_table.BacklogTable.cycle_sort` to
+    the next sort key (priority → id → status → wrap). An unknown pane or a
+    missing backlog widget toasts a hint and changes nothing.
+
+    Args:
+        app: The running App.
+        args: ``<pane>`` — the pane name to cycle (only ``backlog``).
+    """
+    pane = args.strip().split()[0] if args.strip() else ""
+    if pane != "backlog":
+        logger.info(f"palette_verb_sort_unknown_pane pane={pane!r}")
+        app.notify(f"/sort only supports the backlog pane (got {pane!r})", severity="warning")
+        return
+    table = _backlog_table(app)
+    if table is None:
+        app.notify("/sort backlog: no backlog pane on this screen", severity="warning")
+        return
+    table.cycle_sort()
+
+
+def _backlog_table(app: App[None]) -> BacklogTable | None:
+    """Return the mounted :class:`BacklogTable`, or ``None`` when absent.
+
+    The backlog pane lives on the scope screen, which may sit beneath an
+    open overlay (the palette itself, or a stacked modal), so this walks
+    the whole screen stack rather than only the topmost screen. It is only
+    mounted on scopes that render it (the repo scope today); on any other
+    scope no screen yields a match and the caller degrades to a hint rather
+    than raising.
+
+    Args:
+        app: The running App to query.
+
+    Returns:
+        The first mounted :class:`BacklogTable`, or ``None``.
+    """
+    from eawf.tui_v2.widgets.backlog_table import BacklogTable
+
+    for screen in app.screen_stack:
+        tables = screen.query(BacklogTable)
+        if tables:
+            return tables.first()
+    return None
+
+
 #: The static verb registry. Order is display order in the palette
 #: before fuzzy ranking. Handlers that land in a later wave use
 #: :func:`_placeholder` so the registry is complete now and the follow-up
@@ -392,20 +559,18 @@ VERBS: tuple[PaletteVerb, ...] = (
     PaletteVerb(
         "/find",
         "fuzzy ID + title search",
-        _placeholder("/find"),
+        _handle_find,
         SCOPES_ALL,
         args_grammar="<query>",
     ),
     PaletteVerb(
         "/filter",
         "filter pane contents",
-        _placeholder("/filter"),
+        _handle_filter,
         SCOPES_ALL,
         args_grammar="<pane> <key>",
     ),
-    PaletteVerb(
-        "/sort", "cycle sort key", _placeholder("/sort"), SCOPES_ALL, args_grammar="<pane> <col>"
-    ),
+    PaletteVerb("/sort", "cycle sort key", _handle_sort, SCOPES_ALL, args_grammar="<pane> <col>"),
     PaletteVerb(
         "/switch",
         "switch scope",
@@ -684,6 +849,7 @@ __all__ = [
     "ScopeName",
     "VerbHandler",
     "fuzzy_score",
+    "rank_find_hits",
     "rank_verbs",
     "split_verb_args",
     "visible_verbs",
