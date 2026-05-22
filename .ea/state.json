@@ -1572,7 +1572,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I02-W09"
+    ],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2499,7 +2501,8 @@
         "P26-I02-W05",
         "P26-I02-W06",
         "P26-I02-W07",
-        "P26-I02-W08"
+        "P26-I02-W08",
+        "P26-I02-W09"
       ]
     },
     "P27-I01": {
@@ -3033,7 +3036,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T01:40:23.782777Z",
+  "updated_at": "2026-05-22T02:12:27.097777Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10437,6 +10440,37 @@
         "record B014 met by the 4-pane RepoScreen with resolution note and backlog status closed"
       ],
       "title": "close B014 as satisfied",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/config/layered.py",
+        "tests/unit/test_config_layered.py"
+      ],
+      "id": "P26-I02-W09",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T02:12:26.711150Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "EAWF_BLITZ_DEPTH and EAWF_BLITZ_DEPTH_COUNTER added to _RESERVED_ENV_VARS so the config env-layer skips them",
+        "config validate no longer fails when a blitz recursion counter is set in os.environ",
+        "regression test asserts the two blitz knobs inject no phantom config key",
+        "full unit + integration suite green in serial collection order"
+      ],
+      "title": "reserve blitz recursion env knobs from config env-layer",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
