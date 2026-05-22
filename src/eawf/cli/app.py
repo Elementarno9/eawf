@@ -488,6 +488,12 @@ from eawf.cli.commands.telemetry import telemetry_app  # noqa: E402
 app.add_typer(telemetry_app, name="telemetry", rich_help_panel=panel_for("telemetry"))
 # --- end P27 W11 ---
 
+# --- P27 W19 snapshot registration ---
+from eawf.cli.commands.snapshot import snapshot_app  # noqa: E402
+
+app.add_typer(snapshot_app, name="snapshot", rich_help_panel=panel_for("snapshot"))
+# --- end P27 W19 ---
+
 # --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402

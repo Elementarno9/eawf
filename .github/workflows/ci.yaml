@@ -43,3 +43,25 @@ jobs:
         run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui --cov=eawf --cov-report=xml --cov-fail-under=0
       - name: Pytest (serial TUI render/timing)
         run: uv run pytest -n0 tests/snapshots/tui tests/perf/tui --cov=eawf --cov-append --cov-report=xml --cov-fail-under=0
+
+  snapshot-pairing:
+    name: Snapshot pairing gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Snapshot pairing gate
+        run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
