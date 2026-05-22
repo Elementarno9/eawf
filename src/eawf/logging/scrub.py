@@ -1,10 +1,12 @@
 """Emit-time sensitive-data scrubber for the logging pipeline.
 
 :class:`SensitiveScrubber` is a :class:`logging.Filter` that rewrites
-home-directory paths, email addresses, and API-key-shaped tokens out
-of every log record *before* the formatter runs. It is wired as a
-filter on the root handler (CLI sink) and the daemon's rotating-file
-handler so no sink ever serialises raw secrets.
+home-directory paths, IP addresses, email addresses, and
+API-key-shaped tokens out of every log record *before* the formatter
+runs. It is wired as a filter on the CLI root handler and on both of
+the daemon's logging branches (the foreground stderr stream and the
+non-foreground ``eawfd.log`` file handler) so no sink ever serialises
+raw secrets.
 
 The email allowlist preserves the canonical ``pyproject.toml``
 ``[project].authors`` address (the project's own author block, which
@@ -99,17 +101,32 @@ class SensitiveScrubber(logging.Filter):
     """
 
     PATTERNS: tuple[re.Pattern[str], ...] = (
-        re.compile(r"/Users/[^/\s]+"),  # macOS home
+        re.compile(r"/Users/[^/\s]+"),  # macOS home  # pragma: allowlist secret
         re.compile(r"[A-Za-z]:\\Users\\[^\\\s]+", re.IGNORECASE),  # Windows home
-        re.compile(r"/home/[^/\s]+"),  # Linux home
+        re.compile(r"/home/[^/\s]+"),  # Linux home  # pragma: allowlist secret
+        # Bare ``~/`` home reference (shell-expanded path that still
+        # leaks the project tree layout even without the username).
+        re.compile(r"~/[^\s]+"),  # tilde home
         # API-key shapes: the Anthropic-specific prefix is listed before
         # the generic ``sk-`` shape so the longer match is attempted
         # first and the prefix is never left dangling.
         re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}"),  # Anthropic-shaped key
         re.compile(r"sk-[A-Za-z0-9_-]{20,}"),  # OpenAI-shaped key
         re.compile(r"ghp_[A-Za-z0-9]{36,}"),  # GitHub PAT
+        # IPv6 before IPv4 so an IPv6 literal is matched whole rather
+        # than its trailing dotted-quad tail being clipped by the IPv4
+        # pattern. Word boundaries keep dotted version strings intact.
+        re.compile(r"\b(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}\b"),  # IPv6
+        re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),  # IPv4
         re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),  # email
     )
+
+    #: Format string for the per-match placeholder used to shield
+    #: allowlisted email addresses from redaction. NUL bytes never occur
+    #: in rendered log text and the body matches no entry in
+    #: :data:`PATTERNS`, so the placeholder survives the substitution
+    #: loop and is restored to its exact original position afterwards.
+    _ALLOWLIST_PLACEHOLDER = "\x00EAWF-ALLOW-{index}\x00"
 
     def __init__(self, name: str = "", allowed_emails: frozenset[str] | None = None) -> None:
         """Build the scrubber.
@@ -135,19 +152,38 @@ class SensitiveScrubber(logging.Filter):
     def scrub(self, message: str) -> str:
         """Return ``message`` with every sensitive pattern redacted.
 
-        Allowlisted email addresses are re-inserted after redaction so
-        only non-canonical addresses are masked.
+        Allowlisted email addresses are shielded *before* redaction by
+        swapping each one for a unique positional placeholder, then
+        restored verbatim after the substitution loop. Shielding first
+        (rather than restoring the first ``<scrubbed>`` slot afterwards)
+        keeps an allowlisted email in its own position even when an
+        earlier token in the line — for example an absolute path — is
+        itself redacted to ``<scrubbed>``.
         """
-        preserved: list[str] = [
-            match.group(0)
+        # Shield each allowlisted email occurrence with a unique
+        # positional placeholder. ``preserved[i]`` is the i-th
+        # allowlisted email in left-to-right order; the spans are
+        # rewritten right-to-left so earlier match offsets stay valid as
+        # the string is mutated in place.
+        matches = [
+            match
             for match in self._email_pattern.finditer(message)
             if match.group(0).casefold() in self._allowed_emails
         ]
-        scrubbed = message
+        preserved: list[str] = [match.group(0) for match in matches]
+        shielded = message
+        for index in range(len(matches) - 1, -1, -1):
+            match = matches[index]
+            placeholder = self._ALLOWLIST_PLACEHOLDER.format(index=index)
+            shielded = shielded[: match.start()] + placeholder + shielded[match.end() :]
+
+        scrubbed = shielded
         for pattern in self.PATTERNS:
             scrubbed = pattern.sub(REDACTION, scrubbed)
-        for original in preserved:
-            scrubbed = scrubbed.replace(REDACTION, original, 1)
+
+        for index, original in enumerate(preserved):
+            placeholder = self._ALLOWLIST_PLACEHOLDER.format(index=index)
+            scrubbed = scrubbed.replace(placeholder, original)
         return scrubbed
 
     def filter(self, record: logging.LogRecord) -> bool:

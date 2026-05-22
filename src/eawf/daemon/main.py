@@ -30,6 +30,7 @@ from eawf.daemon.recovery import replay_wal
 from eawf.daemon.runtime_dir import log_path, pid_path, runtime_dir, socket_path
 from eawf.daemon.server import process_frame_bytes, serve_unix
 from eawf.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
+from eawf.logging.scrub import SensitiveScrubber
 from eawf.state.enums import StoreKind
 from eawf.state.resolve import resolve_with_reason
 from eawf.store.paths import store_path
@@ -167,18 +168,28 @@ def _write_pid_file(path: Path, pid: int, started_at: str) -> None:
 def _configure_logging(foreground: bool) -> None:
     """Wire stderr-or-file logging for the daemon.
 
+    Both branches attach a :class:`~eawf.logging.scrub.SensitiveScrubber`
+    so neither the foreground stderr stream nor the ``eawfd.log`` file
+    ever serialises raw machine paths, IP addresses, or secret-shaped
+    tokens (an unscrubbed ``error_detail`` / ``session_log_path`` would
+    otherwise leak the operator's absolute paths into the log).
+
     Args:
         foreground: When True, logs go to stderr; otherwise to
             ``<runtime_dir>/eawfd.log``.
     """
     fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
     if foreground:
-        logging.basicConfig(level=logging.INFO, format=fmt, stream=sys.stderr)
+        handler: logging.Handler = logging.StreamHandler(stream=sys.stderr)
+        handler.setFormatter(logging.Formatter(fmt))
+        handler.addFilter(SensitiveScrubber())
+        logging.basicConfig(level=logging.INFO, handlers=[handler])
         return
     log_file = log_path()
     log_file.parent.mkdir(parents=True, exist_ok=True)
     handler = logging.FileHandler(log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter(fmt))
+    handler.addFilter(SensitiveScrubber())
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.addHandler(handler)

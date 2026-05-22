@@ -46,8 +46,9 @@ def _canonical_author_email() -> str:
 
 def test_scrub_macos_home_path() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub("create_worktree path=/Users/jdoe/Workspace/repo done")
-    assert "/Users/jdoe" not in out
+    line = "create_worktree path=/Users/jdoe/Workspace/repo done"  # pragma: allowlist secret
+    out = scrubber.scrub(line)
+    assert "/Users/jdoe" not in out  # pragma: allowlist secret
     assert REDACTION in out
     # Trailing path segments are split on '/', so only the home root is
     # masked; the redaction marker must be present.
@@ -56,15 +57,15 @@ def test_scrub_macos_home_path() -> None:
 
 def test_scrub_windows_home_path() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub(r"open path=C:\Users\jdoe done")
-    assert r"C:\Users\jdoe" not in out
+    out = scrubber.scrub(r"open path=C:\Users\jdoe done")  # pragma: allowlist secret
+    assert r"C:\Users\jdoe" not in out  # pragma: allowlist secret
     assert REDACTION in out
 
 
 def test_scrub_linux_home_path() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub("read path=/home/jdoe done")
-    assert "/home/jdoe" not in out
+    out = scrubber.scrub("read path=/home/jdoe done")  # pragma: allowlist secret
+    assert "/home/jdoe" not in out  # pragma: allowlist secret
     assert REDACTION in out
 
 
@@ -102,6 +103,35 @@ def test_scrub_github_pat() -> None:
     assert REDACTION in out
 
 
+def test_scrub_ipv4_address() -> None:
+    scrubber = _scrubber()
+    out = scrubber.scrub("peer connect addr=192.168.0.1 ok")
+    assert "192.168.0.1" not in out
+    assert REDACTION in out
+
+
+def test_scrub_ipv6_address() -> None:
+    scrubber = _scrubber()
+    out = scrubber.scrub("peer connect addr=2001:0db8:85a3:0000:0000:8a2e:0370:7334 ok")
+    assert "2001:0db8" not in out
+    assert REDACTION in out
+
+
+def test_scrub_tilde_home_path() -> None:
+    scrubber = _scrubber()
+    out = scrubber.scrub("load cfg=~/.eawf/state.json done")
+    assert "~/.eawf" not in out
+    assert REDACTION in out
+
+
+def test_scrub_dotted_version_string_not_clobbered_by_ipv4() -> None:
+    # A three-segment dotted version is not an IPv4 dotted-quad, so the
+    # IPv4 pattern's word-boundary anchors must leave it intact.
+    scrubber = _scrubber()
+    msg = "boot version=0.3.0 ready"
+    assert scrubber.scrub(msg) == msg
+
+
 # --- allowlist ------------------------------------------------------------
 
 
@@ -115,8 +145,8 @@ def test_canonical_author_email_preserved_by_allowlist() -> None:
 
 def test_non_canonical_email_scrubbed_even_with_default_allowlist() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub("author email=outsider@elsewhere.org ok")
-    assert "outsider@elsewhere.org" not in out
+    out = scrubber.scrub("author email=outsider@elsewhere.org ok")  # pragma: allowlist secret
+    assert "outsider@elsewhere.org" not in out  # pragma: allowlist secret
     assert REDACTION in out
 
 
@@ -134,6 +164,43 @@ def test_noreply_coauthor_addresses_preserved_by_default() -> None:
     assert "noreply@anthropic.com" in out
     assert "noreply@openai.com" in out
     assert REDACTION not in out
+
+
+def test_scrub_allowlisted_email_after_path_survives_in_position() -> None:
+    # Regression: a redacted path occupies the first ``<scrubbed>`` slot,
+    # so first-occurrence restoration would drop the allowlisted email
+    # into the path's slot. Positional placeholders keep each token put.
+    scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
+    out = scrubber.scrub("path=/Users/jdoe email=keep@allow.test end")  # pragma: allowlist secret
+    assert out == "path=<scrubbed> email=keep@allow.test end"
+
+
+def test_scrub_path_redacted_while_allowlisted_email_preserved() -> None:
+    scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
+    out = scrubber.scrub("open path=/Users/secret mail=keep@allow.test")  # pragma: allowlist secret
+    assert "/Users/secret" not in out  # pragma: allowlist secret
+    assert "keep@allow.test" in out
+    assert REDACTION in out
+
+
+def test_scrub_multiple_paths_and_one_email_each_restored_to_right_slot() -> None:
+    scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
+    out = scrubber.scrub("a=/Users/x b=keep@allow.test c=/home/y")  # pragma: allowlist secret
+    assert out == "a=<scrubbed> b=keep@allow.test c=<scrubbed>"
+
+
+def test_scrub_two_allowlisted_emails_interleaved_with_path() -> None:
+    scrubber = SensitiveScrubber(allowed_emails=frozenset({"a@allow.test", "b@allow.test"}))
+    out = scrubber.scrub("p=/Users/z m1=a@allow.test m2=b@allow.test")  # pragma: allowlist secret
+    assert out == "p=<scrubbed> m1=a@allow.test m2=b@allow.test"
+
+
+def test_scrub_allowlisted_preserved_while_other_email_scrubbed() -> None:
+    scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
+    out = scrubber.scrub("good=keep@allow.test bad=stranger@evil.test")
+    assert "keep@allow.test" in out
+    assert "stranger@evil.test" not in out
+    assert REDACTION in out
 
 
 # --- filter() integration -------------------------------------------------

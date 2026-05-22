@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import sys
 from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime, timedelta
@@ -34,6 +35,7 @@ from eawf.daemon.methods import MethodContext
 from eawf.daemon.session import reset_registry
 from eawf.daemon.session_ttl import DEFAULT_TTL_SECONDS
 from eawf.daemon.wal import WalRecord, mark_applied, write_pending
+from eawf.logging.scrub import REDACTION, SensitiveScrubber
 from eawf.state.enums import StoreKind
 from eawf.state.models import SessionAttempt, Wave
 from eawf.store.envelope import Envelope
@@ -333,3 +335,93 @@ def test_resolve_session_ttl_seconds_non_positive_falls_back(
     assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
     monkeypatch.setenv("EAWF_DAEMON_SESSION_TTL", "-5")
     assert daemon_main._resolve_session_ttl_seconds() == DEFAULT_TTL_SECONDS
+
+
+# ---------------------------------------------------------------------------
+# Logging wiring — SensitiveScrubber attached to every sink (P27-I02-W02)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _restore_root_logging() -> Iterator[None]:
+    """Snapshot + restore the root logger so wiring tests stay isolated."""
+    root = logging.getLogger()
+    saved_handlers = list(root.handlers)
+    saved_level = root.level
+    try:
+        yield
+    finally:
+        root.handlers = saved_handlers
+        root.setLevel(saved_level)
+
+
+def _has_scrubber(handler: logging.Handler) -> bool:
+    """Return True when *handler* carries a :class:`SensitiveScrubber`."""
+    return any(isinstance(f, SensitiveScrubber) for f in handler.filters)
+
+
+def test_configure_logging_foreground_attaches_scrubber(_restore_root_logging: None) -> None:
+    """The foreground stderr handler carries the scrubber filter."""
+    logging.getLogger().handlers = []
+    daemon_main._configure_logging(foreground=True)
+    handlers = logging.getLogger().handlers
+    assert handlers
+    assert all(_has_scrubber(h) for h in handlers)
+
+
+def test_configure_logging_file_handler_attaches_scrubber(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_root_logging: None
+) -> None:
+    """The non-foreground ``eawfd.log`` file handler carries the scrubber."""
+    log_file = tmp_path / "runtime" / "eawfd.log"
+    monkeypatch.setattr(daemon_main, "log_path", lambda: log_file)
+    logging.getLogger().handlers = []
+    daemon_main._configure_logging(foreground=False)
+    file_handlers = [h for h in logging.getLogger().handlers if isinstance(h, logging.FileHandler)]
+    assert file_handlers
+    assert all(_has_scrubber(h) for h in file_handlers)
+
+
+def test_configure_logging_file_handler_scrubs_seeded_leak(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_root_logging: None
+) -> None:
+    """A seeded absolute-path leak never reaches ``eawfd.log`` on disk."""
+    log_file = tmp_path / "runtime" / "eawfd.log"
+    monkeypatch.setattr(daemon_main, "log_path", lambda: log_file)
+    logging.getLogger().handlers = []
+    daemon_main._configure_logging(foreground=False)
+
+    log = logging.getLogger("eawf.test.daemon.leak")
+    leak_line = (
+        "error_detail session_log_path=/Users/operator/.ea/state.json"  # pragma: allowlist secret
+    )
+    log.info(leak_line)
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    written = log_file.read_text(encoding="utf-8")
+    assert "/Users/" not in written  # pragma: allowlist secret
+    assert REDACTION in written
+
+
+def test_cli_main_log_sink_attaches_scrubber(_restore_root_logging: None) -> None:
+    """The CLI's root log sink carries the scrubber filter."""
+    from eawf.cli.app import _configure_logging as cli_configure_logging
+
+    logging.getLogger().handlers = []
+    cli_configure_logging()
+    handlers = logging.getLogger().handlers
+    assert handlers
+    assert all(_has_scrubber(h) for h in handlers)
+
+
+def test_cli_main_log_sink_does_not_clobber_existing_handlers(
+    _restore_root_logging: None,
+) -> None:
+    """A pre-configured root logger is left untouched by the CLI sink."""
+    from eawf.cli.app import _configure_logging as cli_configure_logging
+
+    sentinel = logging.NullHandler()
+    logging.getLogger().handlers = [sentinel]
+    cli_configure_logging()
+    assert logging.getLogger().handlers == [sentinel]

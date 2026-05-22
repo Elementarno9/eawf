@@ -527,5 +527,32 @@ app.add_typer(help_app, name="help", rich_help_panel=panel_for("help"))
 # --- end completion + help registrations ---
 
 
+def _configure_logging() -> None:
+    """Install a scrubbed stderr log sink for the CLI process.
+
+    Attaches a :class:`~eawf.logging.scrub.SensitiveScrubber` to the
+    root handler so any library log line the CLI emits (error details,
+    resolved state paths) is redacted before it reaches the terminal —
+    the CLI is the operator-facing surface and would otherwise print raw
+    machine paths and secret-shaped tokens. Skips installation when the
+    root logger already has handlers so a caller (test harness, embedding
+    process) that configured logging first is not clobbered.
+    """
+    import logging
+    import sys
+
+    from eawf.logging.scrub import SensitiveScrubber
+
+    root = logging.getLogger()
+    if root.handlers:
+        return
+    handler = logging.StreamHandler(stream=sys.stderr)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    handler.addFilter(SensitiveScrubber())
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
 def main() -> None:
+    _configure_logging()
     app()
