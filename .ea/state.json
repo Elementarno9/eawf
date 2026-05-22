@@ -1572,7 +1572,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I02-W02",
+      "P26-I02-W04",
+      "P26-I02-W05"
+    ],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3033,7 +3037,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T00:02:33.969488Z",
+  "updated_at": "2026-05-22T00:11:02.678524Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10212,7 +10216,7 @@
     "P26-I02-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -10233,7 +10237,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "/theme dark|light|cb|auto swaps App.theme at runtime via register_theme + reactive app.theme",
         "dark = current Wong palette no visual regression / cb = new distinct CB-safe / light = textual-light / auto = terminal-detect",
@@ -10245,7 +10249,7 @@
       "title": "/theme swap + per-theme var migration + ui.theme persist",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I02-W02-1779408661"
     },
     "P26-I02-W03": {
       "agent_role": "executor",
@@ -10282,7 +10286,7 @@
     "P26-I02-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -10299,7 +10303,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "footer renders weekly-burn from compute_weekly_burn with graceful no-data empty-state when weekly_eu_target unset or actuals empty",
         "closes backlog B050",
@@ -10308,14 +10312,14 @@
       "title": "footer weekly-burn empty-state + close B050",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I02-W04-1779408661"
     },
     "P26-I02-W05": {
       "agent_role": "executor",
       "blocks": [
         "P26-I02-W06"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -10333,7 +10337,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "resolve_detail gains iter + phase resolvers (currently wave+backlog only)",
         "sectioned cards per entity and h/d/m/e/dp tabs via TabbedContent with Tab/Shift+Tab cycle and arrows scroll",
@@ -10345,7 +10349,7 @@
       "title": "DetailModal prettify + completion/size bars + dp tab + larger box",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I02-W05-1779408662"
     },
     "P26-I02-W06": {
       "agent_role": "executor",
@@ -11268,6 +11272,39 @@
       "path": ".ea/worktrees/p26-w44",
       "status": "merged",
       "wave_id": "P26-I01-W44"
+    },
+    "WT-P26-I02-W02-1779408661": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-i02-w02",
+      "created_at": "2026-05-22T00:11:01.292647Z",
+      "id": "WT-P26-I02-W02-1779408661",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p26-i02-w02",
+      "status": "active",
+      "wave_id": "P26-I02-W02"
+    },
+    "WT-P26-I02-W04-1779408661": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-i02-w04",
+      "created_at": "2026-05-22T00:11:01.977387Z",
+      "id": "WT-P26-I02-W04-1779408661",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p26-i02-w04",
+      "status": "active",
+      "wave_id": "P26-I02-W04"
+    },
+    "WT-P26-I02-W05-1779408662": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-i02-w05",
+      "created_at": "2026-05-22T00:11:02.678524Z",
+      "id": "WT-P26-I02-W05-1779408662",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p26-i02-w05",
+      "status": "active",
+      "wave_id": "P26-I02-W05"
     }
   }
 }
