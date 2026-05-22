@@ -1573,7 +1573,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P26-I01",
+    "iter_id": null,
     "phase_id": "P26",
     "project_code": "EAWF",
     "subproject_id": null
@@ -2427,13 +2427,13 @@
       ]
     },
     "P26-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A33-P26-tui-fixes",
+      "closed_at": "2026-05-22T00:00:34.608417Z",
       "estimate_id": null,
       "id": "P26-I01",
       "opened_at": "2026-05-18T19:45:11.036158Z",
       "phase_id": "P26",
-      "status": "active",
+      "status": "closed",
       "title": "P26-I01: surfaces waves",
       "wave_ids": [
         "P26-I01-W01",
@@ -3012,7 +3012,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-21T11:53:44.345968Z",
+  "updated_at": "2026-05-22T00:00:34.608445Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
