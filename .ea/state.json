@@ -2539,7 +2539,10 @@
         "P26-I02-W13",
         "P26-I02-W15",
         "P26-I02-W16",
-        "P26-I02-W14"
+        "P26-I02-W14",
+        "P26-I02-W17",
+        "P26-I02-W18",
+        "P26-I02-W19"
       ]
     },
     "P27-I01": {
@@ -3073,7 +3076,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T03:57:36.887570Z",
+  "updated_at": "2026-05-22T11:21:29.079988Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10752,6 +10755,95 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I02-W16-1779420126"
+    },
+    "P26-I02-W17": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/detail.py",
+        "tests/tui_v2/test_overlays_detail.py",
+        "tests/snapshots/tui/golden/detail_overlay.txt",
+        "tests/snapshots/tui/golden/detail_overlay_iter_metrics.txt",
+        "tests/snapshots/tui/golden/detail_overlay_wave_size.txt"
+      ],
+      "id": "P26-I02-W17",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T11:21:28.228408Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "dp tab labels its real p hotkey; wave files render as a collapsed file tree; footer drops the h/d/m/e/p list since tab labels carry hotkeys"
+      ],
+      "title": "fix: DetailModal review — p-dispatch label + file-tree files + footer hotkey dedup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W18": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/config_modal.py",
+        "tests/tui_v2/test_overlays_config_modal.py",
+        "tests/snapshots/tui/golden/config_modal_inline_int.txt"
+      ],
+      "id": "P26-I02-W18",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T11:21:28.653045Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "inline-edit type cell + input share the static row columns (no squish); committing a value equal to persisted stages no dirty edit"
+      ],
+      "title": "fix: config inline-edit column alignment + drop dirty mark on unchanged value",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W19": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/theme.py",
+        "src/eawf/tui_v2/app.py",
+        "tests/tui_v2/test_theme_auto.py"
+      ],
+      "id": "P26-I02-W19",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T11:21:29.079965Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "auto re-applies within the poll interval when OS appearance flips; explicit themes untouched; safe no-op when appearance undetectable"
+      ],
+      "title": "feat: /theme auto follows live system light/dark switch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
