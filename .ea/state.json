@@ -1573,7 +1573,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I02-W02",
       "P26-I02-W04",
       "P26-I02-W05"
     ],
@@ -3037,7 +3036,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T00:11:02.678524Z",
+  "updated_at": "2026-05-22T01:08:13.453914Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10217,7 +10216,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:08:12.904285Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10234,10 +10233,10 @@
       "id": "P26-I02-W02",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:31.708479Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "/theme dark|light|cb|auto swaps App.theme at runtime via register_theme + reactive app.theme",
         "dark = current Wong palette no visual regression / cb = new distinct CB-safe / light = textual-light / auto = terminal-detect",
@@ -11278,10 +11277,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w02",
       "created_at": "2026-05-22T00:11:01.292647Z",
       "id": "WT-P26-I02-W02-1779408661",
-      "merged_commit": null,
+      "merged_commit": "1270a4f",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w02",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W02"
     },
     "WT-P26-I02-W04-1779408661": {
