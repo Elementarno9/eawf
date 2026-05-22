@@ -587,10 +587,10 @@ def resume_cmd(
 
     Raises:
         NotFound: When *pause_urn* names no open pause (it never existed
-            or was already resolved) — exit non-zero.
+            or was already resolved), or the resolved ``state.json`` does
+            not exist — exit non-zero.
         InvalidInput: When *choice* is not one of the question's option
             labels — exit non-zero.
-        NotFound: When the resolved ``state.json`` does not exist.
     """
     from eawf.skills.needs_user import PauseError, find_open_pause, resolve_pause
 
