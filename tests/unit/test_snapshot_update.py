@@ -69,13 +69,19 @@ def test_inventory_kinds_are_unique_and_sorted_paths() -> None:
 
 
 def test_inventory_covers_spec_locked_kinds() -> None:
-    """The §5.6 locked surface set is present (boundary: full inventory)."""
+    """The §5.6 locked surface set is present (boundary: full inventory).
+
+    ``tui_config_modal`` extends the locked set: its committed bytes live
+    at ``tests/golden/tui_config_modal/`` and must be guarded by the
+    pairing gate alongside the primary ``tui`` surface.
+    """
     expected = {
         "state",
         "envelope",
         "dispatch",
         "plan_view",
         "tui",
+        "tui_config_modal",
         "spec",
         "agent_report",
         "plugin_install",
@@ -86,6 +92,29 @@ def test_inventory_covers_spec_locked_kinds() -> None:
         "agents_md",
     }
     assert set(SNAPSHOT_SURFACES) == expected
+
+
+def test_inventory_tui_golden_dir_points_at_real_bytes() -> None:
+    """The ``tui`` surface watches the real Textual golden tree on disk.
+
+    The pre-fix value ``tests/golden/tui`` does not exist, so the gate
+    watched an empty set and never fired for the primary TUI surface.
+    The bytes actually live under ``tests/snapshots/tui/golden/``.
+    """
+    surface = resolve_surface("tui")
+    assert surface.golden_dir == "tests/snapshots/tui/golden"
+    bytes_dir = _REPO_ROOT / surface.golden_dir
+    assert bytes_dir.is_dir(), f"tui golden dir missing on disk: {surface.golden_dir!r}"
+
+
+def test_inventory_tui_config_modal_is_guarded() -> None:
+    """The ``tui_config_modal`` surface is in the inventory and on disk."""
+    surface = resolve_surface("tui_config_modal")
+    assert surface.golden_dir == "tests/golden/tui_config_modal"
+    bytes_dir = _REPO_ROOT / surface.golden_dir
+    assert bytes_dir.is_dir(), (
+        f"tui_config_modal golden dir missing on disk: {surface.golden_dir!r}"
+    )
 
 
 def test_resolve_surface_returns_typed_surface() -> None:
@@ -312,6 +341,70 @@ def test_gate_passes_on_paired_golden_mutation(
     _git(repo, "commit", "-q", "-m", "[P27-W19] test: snapshot update dispatch")
     monkeypatch.chdir(repo)
     assert gate.find_unpaired(base, _head(repo)) == []
+
+
+def test_gate_fails_on_unpaired_tui_golden_mutation(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A TUI snapshot byte change under ``feat:`` → gate fails.
+
+    Regression for the primary failure mode: before the fix the ``tui``
+    surface watched the non-existent ``tests/golden/tui`` dir, so a
+    Textual golden byte change at ``tests/snapshots/tui/golden/`` rode
+    in unpaired and the gate never fired.
+    """
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/snapshots/tui/golden/repo_screen.txt", "screen v1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W18] test: seed tui golden")
+    base = _head(repo)
+    _write_golden(repo, "tests/snapshots/tui/golden/repo_screen.txt", "screen v2\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W19] feat: sneak tui golden drift")
+    monkeypatch.chdir(repo)
+    offenders = gate.find_unpaired(base, _head(repo))
+    assert len(offenders) == 1
+    assert "feat: sneak tui golden drift" in offenders[0][1]
+
+
+def test_gate_passes_on_paired_tui_golden_mutation(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A TUI golden byte change paired with a wave-form ``test:`` → passes."""
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/snapshots/tui/golden/help_overlay.txt", "v1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W18] test: seed tui golden")
+    base = _head(repo)
+    _write_golden(repo, "tests/snapshots/tui/golden/help_overlay.txt", "v2\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W19] test: snapshot update tui")
+    monkeypatch.chdir(repo)
+    assert gate.find_unpaired(base, _head(repo)) == []
+
+
+def test_gate_fails_on_unpaired_tui_config_modal_mutation(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``tui_config_modal`` golden byte change under ``feat:`` → gate fails."""
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/golden/tui_config_modal/modal_default.txt", "modal v1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W18] test: seed config modal golden")
+    base = _head(repo)
+    _write_golden(repo, "tests/golden/tui_config_modal/modal_default.txt", "modal v2\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W19] feat: sneak config modal drift")
+    monkeypatch.chdir(repo)
+    offenders = gate.find_unpaired(base, _head(repo))
+    assert len(offenders) == 1
+    assert "feat: sneak config modal drift" in offenders[0][1]
+
+
+def test_watched_dirs_include_both_tui_surfaces(gate: Any) -> None:
+    """The gate's watch set covers both TUI golden trees (boundary)."""
+    assert "tests/snapshots/tui/golden/" in gate._WATCHED_DIRS
+    assert "tests/golden/tui_config_modal/" in gate._WATCHED_DIRS
 
 
 def test_gate_exempts_pure_addition_under_feat(

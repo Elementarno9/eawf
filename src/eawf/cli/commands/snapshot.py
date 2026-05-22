@@ -94,9 +94,15 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
         ),
         SnapshotSurface(
             kind="tui",
-            golden_dir="tests/golden/tui",
+            golden_dir="tests/snapshots/tui/golden",
             regen_target="tests/snapshots/tui",
             description="Textual screen capture (.txt) per screen x state.",
+        ),
+        SnapshotSurface(
+            kind="tui_config_modal",
+            golden_dir="tests/golden/tui_config_modal",
+            regen_target="tests/snapshots/tui",
+            description="Tabbed config-modal overlay capture (.txt) per modal state.",
         ),
         SnapshotSurface(
             kind="spec",

@@ -1,4 +1,4 @@
-"""CI snapshot-pairing gate for ``tests/golden/**`` mutations.
+"""CI snapshot-pairing gate for managed golden-surface mutations.
 
 Per the C09 §5.6 snapshot-update flow: an operator regenerates a golden
 surface with ``eawf snapshot update --kind <surface>``, diffs the tree,
@@ -10,11 +10,15 @@ an unrelated ``feat:`` / ``fix:`` commit.
 
 The watched directories are sourced from the same C09 §5.6 surface
 inventory the CLI drives (:data:`eawf.cli.commands.snapshot.SNAPSHOT_SURFACES`)
-so the gate and ``eawf snapshot update --kind`` cannot drift. Golden
-trees *not* in the inventory (e.g. ``tests/golden/cli/`` help-panel
-snapshots, which refresh as a side-effect of any wave that adds a CLI
-command) are deliberately out of scope — they have their own per-wave
-refresh path and need no paired ``test:`` commit.
+so the gate and ``eawf snapshot update --kind`` cannot drift. Most
+surfaces live under ``tests/golden/<kind>/`` but the watch set follows
+each surface's declared ``golden_dir`` verbatim, so a surface whose
+bytes live elsewhere (e.g. the Textual ``tui`` surface under
+``tests/snapshots/tui/golden/``) is guarded too. Golden trees *not*
+in the inventory (e.g. ``tests/golden/cli/`` help-panel snapshots,
+which refresh as a side-effect of any wave that adds a CLI command)
+are deliberately out of scope — they have their own per-wave refresh
+path and need no paired ``test:`` commit.
 
 The gate walks the commits between the PR base and head. The contract
 targets *mutations* of already-committed goldens (status ``M`` / ``D`` /
@@ -23,7 +27,7 @@ paired ``test:`` commit. Pure *additions* (status ``A``) are exempt: a
 brand-new surface ships its fixtures alongside the ``feat:`` wave that
 introduces it.
 
-For each commit that *modifies / deletes / renames* a ``tests/golden/**``
+For each commit that *modifies / deletes / renames* a managed golden
 file, the subject must match one of:
 
 - ``[P##-W##] test: <summary>`` (planned wave deliverable);
@@ -139,7 +143,7 @@ def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
     """Return ``(sha, subject)`` for every unpaired golden-mutating commit.
 
     A commit is *unpaired* when it modifies / deletes / renames a
-    ``tests/golden/**`` file but its subject does not match the wave-form
+    managed golden file but its subject does not match the wave-form
     ``test:`` grammar.
 
     Args:
@@ -179,8 +183,8 @@ def main(argv: list[str]) -> int:
         return 0
 
     print(
-        "snapshot pairing gate: unpaired tests/golden/** mutation(s) detected.\n"
-        "Every commit that touches a golden fixture must carry a wave-form\n"
+        "snapshot pairing gate: unpaired golden-surface mutation(s) detected.\n"
+        "Every commit that touches a managed golden fixture must carry a wave-form\n"
         "'test:' subject, e.g. '[P27-W19] test: snapshot update <kind>'\n"
         "(regenerate with `eawf snapshot update --kind <kind>` first).\n"
         "Offending commits:",
