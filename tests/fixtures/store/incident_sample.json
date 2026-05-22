@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "id": "INC-001-CLOSE",
+  "kind": "incident",
+  "scope_id": "QR",
+  "created_at": "2026-05-08T00:00:00+00:00",
+  "updated_at": "2026-05-08T00:05:00+00:00",
+  "summary": "incident INC-001 closed",
+  "payload": {
+    "severity": "high",
+    "timeline": [
+      {"at": "2026-05-08T00:00:00+00:00", "entry": "opened: cache stampede"},
+      {"at": "2026-05-08T00:05:00+00:00", "entry": "closed: layered config write skipped cache write"}
+    ],
+    "cause": "cache_mislayer",
+    "corrective_action_ids": ["B-100"]
+  },
+  "blob_refs": [],
+  "artifact_ids": []
+}

@@ -150,7 +150,9 @@ def test_close_incident_happy_with_complete_audit(tmp_path: Path) -> None:
     assert inc.root_cause == "config bug"
     assert inc.corrective_action_ids == ["B-100"]
     assert inc.closed_at is not None
-    assert record.payload["root_cause"] == "config bug"
+    assert record.payload["cause"] == "unknown"
+    assert "root_cause" not in record.payload
+    assert record.payload["timeline"][0]["entry"] == "closed: config bug"
     assert event.payload["event_type"] == "incident.close"
 
 

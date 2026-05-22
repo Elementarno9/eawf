@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from eawf.cli.errors import InvalidInput, NotFound
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
-from eawf.state.enums import IncidentSeverity, IncidentStatus, StoreKind
+from eawf.state.enums import IncidentCause, IncidentSeverity, IncidentStatus, StoreKind
 from eawf.state.models import Incident, State
 from eawf.store.envelope import Envelope
 
@@ -65,7 +65,7 @@ def open_incident(
             "timeline": [
                 {"at": now.isoformat(), "entry": f"opened: {title}"},
             ],
-            "root_cause": None,
+            "cause": IncidentCause.UNKNOWN.value,
             "corrective_action_ids": [],
         },
     )
@@ -126,7 +126,10 @@ def close_incident(
             "timeline": [
                 {"at": now.isoformat(), "entry": f"closed: {root_cause}"},
             ],
-            "root_cause": root_cause,
+            # The operator-supplied prose stays on Incident.root_cause and in
+            # the timeline entry above; the typed payload cause is left
+            # unclassified until a --cause CLI surface lands.
+            "cause": IncidentCause.UNKNOWN.value,
             "corrective_action_ids": list(corrective_action_ids),
         },
     )

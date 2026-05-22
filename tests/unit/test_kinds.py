@@ -13,6 +13,7 @@ from eawf.state.enums import (
     AuditKind,
     AuditVerdict,
     Confidence,
+    IncidentCause,
     IncidentSeverity,
     StoreKind,
 )
@@ -102,19 +103,22 @@ def test_incident_valid_round_trip() -> None:
     raw = {
         "severity": IncidentSeverity.HIGH,
         "timeline": [{"at": "2026-01-01T00:00:00+00:00", "entry": "started"}],
-        "root_cause": None,
+        "cause": IncidentCause.RUNTIME_TIMEOUT,
         "corrective_action_ids": [],
     }
     env = _make_envelope(StoreKind.INCIDENT, raw)
     loaded = Envelope.model_validate_json(env.model_dump_json())
     payload = IncidentPayload.model_validate(loaded.payload)
     assert payload.severity == IncidentSeverity.HIGH
+    assert payload.cause is IncidentCause.RUNTIME_TIMEOUT
     assert len(payload.timeline) == 1
 
 
 def test_incident_invalid_payload_bad_severity() -> None:
     with pytest.raises(ValidationError):
-        IncidentPayload.model_validate({"severity": "ultra", "timeline": []})
+        IncidentPayload.model_validate(
+            {"severity": "ultra", "timeline": [], "cause": IncidentCause.UNKNOWN}
+        )
 
 
 # ---------------------------------------------------------------------------

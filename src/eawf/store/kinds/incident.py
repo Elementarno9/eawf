@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.enums import IncidentSeverity
+from eawf.state.enums import IncidentCause, IncidentSeverity
 
 
 class TimelineEntry(BaseModel):
@@ -25,5 +25,5 @@ class IncidentPayload(BaseModel):
 
     severity: IncidentSeverity
     timeline: list[TimelineEntry]
-    root_cause: str | None = None
+    cause: IncidentCause = Field(..., description="Typed incident cause taxonomy member")
     corrective_action_ids: list[str] = Field(default_factory=list)
