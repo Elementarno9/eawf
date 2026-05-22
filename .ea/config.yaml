@@ -2,6 +2,8 @@ acceptance:
   lint: true
   tests: true
   typecheck: true
+audit:
+  fix_safe: true
 flow:
   auto_accept:
     audit: true
@@ -9,6 +11,8 @@ flow:
     research: true
 mcp:
   enabled: []
+planning:
+  max_parallel_waves: 10
 polish:
   auto_apply_safe: true
 profiles:
@@ -16,6 +20,9 @@ profiles:
   - core
   - python
   - research
+research:
+  agent_count: 10
+  default_depth: deep
 runtime:
   adapters:
   - claude-code
