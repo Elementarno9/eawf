@@ -168,7 +168,9 @@ def render_decisions_section(
 
         <rationale>
 
-    Rows missing alternatives drop the "Alternatives considered:" line. Rows
+    Rows missing alternatives drop the "Alternatives considered:" line; the
+    Nygard-ADR "Consequences:" block renders the same way (bulleted list,
+    omitted when empty). Rows
     marked ``status=superseded`` or ``status=reversed`` carry a leading status
     badge on their heading so the reader knows the record is historical:
 
@@ -220,6 +222,12 @@ def render_decisions_section(
             parts.append("")
             for alt in decision.alternatives:
                 parts.append(f"- {alt}")
+        if decision.consequences:
+            parts.append("")
+            parts.append("Consequences:")
+            parts.append("")
+            for consequence in decision.consequences:
+                parts.append(f"- {consequence}")
     logger.info(f"render_decisions_section scope_id={scope_id!r} count={len(selected)} result=ok")
     return "\n".join(parts)
 

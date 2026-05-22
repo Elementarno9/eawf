@@ -378,6 +378,10 @@ class Decision(_StrictModel):
     summary: str
     rationale: str
     alternatives: list[str] = Field(default_factory=list)
+    # Nygard-ADR "Consequences" — what becomes easier/harder after the
+    # decision. Default-empty so pre-existing decision rows (written before
+    # the field existed) still validate without a schema bump.
+    consequences: list[str] = Field(default_factory=list)
     status: DecisionStatus
     created_at: UtcDatetime
     superseded_by: str | None = None

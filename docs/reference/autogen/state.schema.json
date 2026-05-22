@@ -551,6 +551,13 @@
           "title": "Alternatives",
           "type": "array"
         },
+        "consequences": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Consequences",
+          "type": "array"
+        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",

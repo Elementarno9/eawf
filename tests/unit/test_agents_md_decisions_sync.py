@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render import regions
@@ -54,6 +55,7 @@ def _decision(
     summary: str | None = None,
     rationale: str | None = None,
     alternatives: list[str] | None = None,
+    consequences: list[str] | None = None,
     status: DecisionStatus = DecisionStatus.ACTIVE,
 ) -> Decision:
     """Build a :class:`Decision` fixture with sane defaults for tests."""
@@ -63,6 +65,7 @@ def _decision(
         summary=summary if summary is not None else f"{id_} summary text",
         rationale=rationale if rationale is not None else f"{id_} rationale paragraph.",
         alternatives=alternatives if alternatives is not None else [],
+        consequences=consequences if consequences is not None else [],
         status=status,
         created_at=datetime.now(UTC),
         superseded_by=None,
@@ -169,6 +172,36 @@ def test_render_decisions_section_omits_alternatives_block_when_empty() -> None:
     }
     body = render_decisions_section(pool)
     assert "Alternatives considered:" not in body
+
+
+def test_render_decisions_section_consequences_block_when_present() -> None:
+    """Consequences list renders as a bulleted ``Consequences:`` block."""
+    pool = {
+        "D14": _decision(
+            "D14",
+            summary="Adopt the daemon as sole writer",
+            rationale="Single mutator removes write races.",
+            consequences=["state writes serialise", "CLI gains a daemon dep"],
+        )
+    }
+    body = render_decisions_section(pool)
+    assert "Consequences:" in body
+    assert "- state writes serialise" in body
+    assert "- CLI gains a daemon dep" in body
+
+
+def test_render_decisions_section_omits_consequences_block_when_empty() -> None:
+    """Missing consequences means no ``Consequences:`` line at all."""
+    pool = {
+        "D15": _decision(
+            "D15",
+            summary="No-consequences decision",
+            rationale="One reason.",
+            consequences=[],
+        )
+    }
+    body = render_decisions_section(pool)
+    assert "Consequences:" not in body
 
 
 def test_render_decisions_section_sorts_by_id_lexicographically() -> None:
@@ -442,3 +475,36 @@ def test_render_decisions_section_rejects_invalid_decision_shape() -> None:
     # emitting garbage if a stale shim leaks an untyped dict through).
     with pytest.raises(AttributeError):
         render_decisions_section({"D-BAD": "not-a-decision"})  # type: ignore[dict-item]
+
+
+# ---- Decision.consequences model contract -----------------------------------
+
+
+def test_decision_consequences_round_trips() -> None:
+    """A Decision with consequences validates, serializes, and re-loads stably."""
+    decision = _decision("D20", consequences=["x", "y"])
+    dumped = decision.model_dump(mode="json")
+    assert dumped["consequences"] == ["x", "y"]
+    reloaded = Decision.model_validate(dumped)
+    assert reloaded.consequences == ["x", "y"]
+    assert reloaded == decision
+
+
+def test_decision_consequences_defaults_empty_when_omitted() -> None:
+    """A decision dict lacking the field still validates (back-compat default)."""
+    legacy = {
+        "id": "D21",
+        "scope_id": "QR",
+        "summary": "Pre-consequences decision",
+        "rationale": "Written before the field existed.",
+        "status": DecisionStatus.ACTIVE.value,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    decision = Decision.model_validate(legacy)
+    assert decision.consequences == []
+
+
+def test_decision_consequences_rejects_non_list() -> None:
+    """A scalar consequences value fails validation (list[str] contract)."""
+    with pytest.raises(ValidationError):
+        _decision("D22", consequences="not-a-list")  # type: ignore[arg-type]
