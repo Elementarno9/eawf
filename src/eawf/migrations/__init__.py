@@ -29,6 +29,8 @@ from eawf.migrations._base import (
     MigrationStepError,
     build_migration_chain,
     current_target_version,
+    guard_target_supported,
+    model_supported_max_version,
     run_chain,
     write_canonical,
 )
@@ -40,6 +42,8 @@ __all__ = [
     "MigrationStepError",
     "build_migration_chain",
     "current_target_version",
+    "guard_target_supported",
+    "model_supported_max_version",
     "run_chain",
     "write_canonical",
 ]

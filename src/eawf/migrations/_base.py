@@ -40,9 +40,10 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, get_args, runtime_checkable
 
 from eawf.lock import portalock
+from eawf.state.models import State
 from eawf.state.writer import atomic_write_json_locked
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,60 @@ class Migration(Protocol):
 def current_target_version() -> str:
     """Return the default migration target for the bare ``eawf migrate``."""
     return _DEFAULT_TARGET_VERSION
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Return a sortable integer tuple for a dotted ``MAJOR.MINOR`` version.
+
+    Schema versions are simple dotted-numeric strings (``"1.0"``,
+    ``"1.1"``) so a plain ``tuple(int, ...)`` orders them correctly
+    without a third-party version parser.
+
+    Raises:
+        ValueError: When *version* is not a dotted run of integers.
+    """
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except ValueError as exc:
+        raise ValueError(f"unparseable schema version: {version!r}") from exc
+
+
+def model_supported_max_version() -> str:
+    """Return the highest ``schema_version`` the live ``State`` model loads.
+
+    Derived from :class:`eawf.state.models.State`'s ``schema_version``
+    ``Literal`` args so the migrate guard never advances past a version
+    the model cannot re-validate. Read-only: bumping the supported set is
+    owned by the model, not this helper.
+    """
+    supported: tuple[str, ...] = tuple(
+        str(arg) for arg in get_args(State.model_fields["schema_version"].annotation)
+    )
+    return max(supported, key=_version_key)
+
+
+def guard_target_supported(to_version: str) -> None:
+    """Refuse a migration target the live ``State`` model cannot load.
+
+    The bare ``eawf migrate`` default target may run ahead of the live
+    model while a later wave advances the model's ``schema_version``
+    ``Literal``. Migrating to such a target writes a payload every
+    subsequent read rejects with a ``ValidationError`` — bricking the
+    repo. This fail-fast boundary refuses that target *before* any write.
+
+    Args:
+        to_version: The requested target ``schema_version``.
+
+    Raises:
+        MigrationError: When *to_version* exceeds the model-supported max.
+            Caught by the CLI and surfaced as ``MIGRATION_TARGET_UNKNOWN``.
+    """
+    supported_max = model_supported_max_version()
+    if _version_key(to_version) > _version_key(supported_max):
+        raise MigrationError(
+            f"migration target {to_version!r} exceeds model-supported max "
+            f"{supported_max!r}; the live State model cannot load it"
+        )
 
 
 def build_migration_chain(
@@ -259,15 +314,18 @@ def run_chain(
 
     Procedure:
 
-    1. Read + decode the raw on-disk state dict.
-    2. When ``backup`` and not ``dry_run``: snapshot the pre-migration
+    1. Refuse a *to_version* the live ``State`` model cannot load
+       (:func:`guard_target_supported`) — before any read or write so a
+       bricking target never touches disk.
+    2. Read + decode the raw on-disk state dict.
+    3. When ``backup`` and not ``dry_run``: snapshot the pre-migration
        payload to :func:`backup_path_for` (gitignored).
-    3. For each step: run the pre-condition, apply, then the
+    4. For each step: run the pre-condition, apply, then the
        post-condition (:func:`_run_step`). The candidate dict threads
        through the chain.
-    4. When ``dry_run``: skip the write entirely and return the result
+    5. When ``dry_run``: skip the write entirely and return the result
        dict (the caller reports what *would* change).
-    5. Otherwise persist the result through :func:`write_canonical` (the
+    6. Otherwise persist the result through :func:`write_canonical` (the
        daemon canonical-writer path) and return it.
 
     On a mid-chain :class:`MigrationStepError`, when a backup was taken,
@@ -287,10 +345,13 @@ def run_chain(
         The migrated state dict (whether or not it was persisted).
 
     Raises:
+        MigrationError: When *to_version* exceeds the model-supported max;
+            no read, backup, or write occurs.
         MigrationStepError: When a step fails; the on-disk state is
             restored from the backup first when one was taken.
         FileNotFoundError: When *state_path* does not exist.
     """
+    guard_target_supported(to_version)
     if not state_path.exists():
         raise FileNotFoundError(f"state file not found: {state_path!r}")
     raw = state_path.read_bytes()
@@ -347,6 +408,8 @@ __all__ = [
     "backup_path_for",
     "build_migration_chain",
     "current_target_version",
+    "guard_target_supported",
+    "model_supported_max_version",
     "run_chain",
     "write_canonical",
 ]

@@ -41,6 +41,7 @@ from eawf.migrations import (
     MigrationStepError,
     build_migration_chain,
     current_target_version,
+    guard_target_supported,
     run_chain,
 )
 from eawf.state.resolve import resolve_with_reason
@@ -115,6 +116,19 @@ def migrate_cmd(
         return
 
     to_version = to or current_target_version()
+
+    # Refuse a target the live State model cannot re-validate before any
+    # chain build or write — migrating past the model-supported max writes a
+    # payload every subsequent read rejects, bricking the repo.
+    try:
+        guard_target_supported(to_version)
+    except MigrationError as exc:
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(str(exc)),
+            flags=flags,
+            error_code=ErrorCode.MIGRATION_TARGET_UNKNOWN,
+        )
+        return
 
     try:
         chain = build_migration_chain(
