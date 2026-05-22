@@ -3108,7 +3108,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T15:47:00.958660Z",
+  "updated_at": "2026-05-22T16:02:50.390054Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11088,8 +11088,8 @@
       "blocks": [
         "P27-I01-W04"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w03",
+      "closed_at": "2026-05-22T16:02:34.466015Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11103,17 +11103,17 @@
       "id": "P27-I01-W03",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:10.685696Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "SensitiveScrubber strips each PATTERN (home paths/email/sk-/sk-ant-/ghp_) with one test per pattern; the canonical pyproject authors email is preserved by the allowlist; EAWF001 flags a non-conforming logger call and passes a conforming one"
       ],
       "title": "feat: SensitiveScrubber log filter + EAWF001 log-format ruff rule",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W03-1779465008"
     },
     "P27-I01-W04": {
       "agent_role": "executor",
@@ -11254,8 +11254,8 @@
         "P27-I01-W21",
         "P27-I01-W22"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w08",
+      "closed_at": "2026-05-22T16:02:36.452977Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11269,17 +11269,17 @@
       "id": "P27-I01-W08",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:12.634869Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "IncidentCause StrEnum carries the ~30 section 5.10 values including LEGACY_FREE_TEXT and UNKNOWN; IncidentPayload.cause is required and root_cause is removed verified by a ValidationError test on a missing-cause payload; all incident test fixtures migrate to carry cause in the same commit"
       ],
       "title": "feat: IncidentCause enum + required IncidentPayload.cause (clean break)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W08-1779465010"
     },
     "P27-I01-W09": {
       "agent_role": "executor",
@@ -11288,8 +11288,8 @@
         "P27-I01-W11",
         "P27-I01-W22"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w09",
+      "closed_at": "2026-05-22T16:02:38.506997Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11304,17 +11304,17 @@
       "id": "P27-I01-W09",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:13.014517Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "RuntimeSwitched/SessionContinued/SessionFailover/DispatchCost/CacheMislayerAlarm payloads each validate via the event_type discriminator and reject a wrong-shape body with ValidationError; trace_request_id/trace_wave_id/trace_attempt_id are present on the union base; a C09-local union dispatches the correct sub-class per event_type"
       ],
       "title": "feat: typed EventPayload discriminated-union sub-classes + trace ids",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W09-1779465011"
     },
     "P27-I01-W10": {
       "agent_role": "executor",
@@ -11565,8 +11565,8 @@
     "P27-I01-W17": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w17",
+      "closed_at": "2026-05-22T16:02:41.170527Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11580,23 +11580,23 @@
       "id": "P27-I01-W17",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:16.364278Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "invariants consume a pre-built per-validation index instead of O(n*m) State scans; existing INV.* invariant codes are unchanged verified by the invariant fixture suite; validate_state stays at or below ~1.1 ms on the medium fixture asserted by the bench"
       ],
       "title": "perf: KISS-006 indexed validation context for invariants",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W17-1779465014"
     },
     "P27-I01-W18": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w18",
+      "closed_at": "2026-05-22T16:02:45.045107Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11611,17 +11611,17 @@
       "id": "P27-I01-W18",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:16.755291Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf bench fixture seed --size small|medium|large writes deterministic corpora (same seed -> byte-identical output) verified by a re-seed test; eawf bench run + compare flag a regression when after >= before times one-plus-threshold; per-OS baseline files + thresholds.yaml (Linux .10 / macOS .20 / Windows .15) land"
       ],
       "title": "feat: bench fixture seed + eawf bench list/run/compare + per-OS baselines",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W18-1779465016"
     },
     "P27-I01-W19": {
       "agent_role": "executor",
@@ -11655,8 +11655,8 @@
     "P27-I01-W20": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w20",
+      "closed_at": "2026-05-22T16:02:47.395258Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11670,17 +11670,17 @@
       "id": "P27-I01-W20",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:17.557517Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "plugin doctor --strict exits 8 on a seeded checksum drift and 0 on a clean tree; per-runtime dispatch goldens exist for CC across research/prep/audit/ship/flow and a Codex subset; doctor + sync share a portalock verified by a concurrent-access test"
       ],
       "title": "feat: eawf plugin doctor --strict + per-runtime dispatch goldens",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W20-1779465018"
     },
     "P27-I01-W21": {
       "agent_role": "executor",
@@ -11790,8 +11790,8 @@
     "P27-I01-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w24",
+      "closed_at": "2026-05-22T16:02:49.641832Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11805,17 +11805,17 @@
       "id": "P27-I01-W24",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:19.212992Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "flow.budget.enforce defaults soft (warn+continue) and hard opt-in fails the wave at cap verified by both classification tests; flow.budget.multiplier default 1.5 scales the cap; the SIGTERM-to-SIGKILL ladder is exercised by a fake-process test asserting SIGKILL only after the grace window"
       ],
       "title": "feat: budget enforce + multiplier + SIGTERM/SIGKILL ladder",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W24-1779465020"
     },
     "P27-I01-W25": {
       "agent_role": "executor",
@@ -12889,6 +12889,83 @@
       "path": ".ea/worktrees/p27-w01",
       "status": "merged",
       "wave_id": "P27-I01-W01"
+    },
+    "WT-P27-I01-W03-1779465008": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w03",
+      "created_at": "2026-05-22T15:50:08.162920Z",
+      "id": "WT-P27-I01-W03-1779465008",
+      "merged_commit": "cd076cd",
+      "owner_session_id": "p27-w03",
+      "path": ".ea/worktrees/p27-w03",
+      "status": "merged",
+      "wave_id": "P27-I01-W03"
+    },
+    "WT-P27-I01-W08-1779465010": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w08",
+      "created_at": "2026-05-22T15:50:10.007893Z",
+      "id": "WT-P27-I01-W08-1779465010",
+      "merged_commit": "ee2708f",
+      "owner_session_id": "p27-w08",
+      "path": ".ea/worktrees/p27-w08",
+      "status": "merged",
+      "wave_id": "P27-I01-W08"
+    },
+    "WT-P27-I01-W09-1779465011": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w09",
+      "created_at": "2026-05-22T15:50:11.710392Z",
+      "id": "WT-P27-I01-W09-1779465011",
+      "merged_commit": "9b5eee0",
+      "owner_session_id": "p27-w09",
+      "path": ".ea/worktrees/p27-w09",
+      "status": "merged",
+      "wave_id": "P27-I01-W09"
+    },
+    "WT-P27-I01-W17-1779465014": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w17",
+      "created_at": "2026-05-22T15:50:14.568313Z",
+      "id": "WT-P27-I01-W17-1779465014",
+      "merged_commit": "59d7909",
+      "owner_session_id": "p27-w17",
+      "path": ".ea/worktrees/p27-w17",
+      "status": "merged",
+      "wave_id": "P27-I01-W17"
+    },
+    "WT-P27-I01-W18-1779465016": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w18",
+      "created_at": "2026-05-22T15:50:16.501369Z",
+      "id": "WT-P27-I01-W18-1779465016",
+      "merged_commit": "7b04cbb",
+      "owner_session_id": "p27-w18",
+      "path": ".ea/worktrees/p27-w18",
+      "status": "merged",
+      "wave_id": "P27-I01-W18"
+    },
+    "WT-P27-I01-W20-1779465018": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w20",
+      "created_at": "2026-05-22T15:50:18.015473Z",
+      "id": "WT-P27-I01-W20-1779465018",
+      "merged_commit": "2588f02",
+      "owner_session_id": "p27-w20",
+      "path": ".ea/worktrees/p27-w20",
+      "status": "merged",
+      "wave_id": "P27-I01-W20"
+    },
+    "WT-P27-I01-W24-1779465020": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w24",
+      "created_at": "2026-05-22T15:50:20.086316Z",
+      "id": "WT-P27-I01-W24-1779465020",
+      "merged_commit": "f25fdee",
+      "owner_session_id": "p27-w24",
+      "path": ".ea/worktrees/p27-w24",
+      "status": "merged",
+      "wave_id": "P27-I01-W24"
     }
   }
 }
