@@ -67,13 +67,22 @@ def test_global_key_rows_document_moved_refresh() -> None:
     assert "refresh" in rows["F5"]
 
 
-def test_scope_key_rows_repo_keeps_config() -> None:
-    # The dead wave-board ``w`` row is gone; ``c`` config stays (W34
-    # wires the ConfigModal to it).
+def test_global_key_rows_document_config_any_scope() -> None:
+    # W14: ``c`` opens config from every scope, so the help lists it as a
+    # global key (not a repo-only per-screen extra) and frames it as
+    # scope-agnostic.
+    rows = dict(global_key_rows())
+    assert "c" in rows
+    assert "config" in rows["c"]
+    assert "any scope" in rows["c"]
+
+
+def test_scope_key_rows_repo_is_empty() -> None:
+    # W14: config moved to the global table; the repo screen no longer
+    # carries a repo-only ``c`` extra (it is not repo-specific anymore).
     rows = scope_key_rows("repo")
     keys = {key for key, _ in rows}
-    assert "w" not in keys
-    assert "c" in keys
+    assert "c" not in keys
 
 
 def test_scope_key_rows_user_is_empty() -> None:

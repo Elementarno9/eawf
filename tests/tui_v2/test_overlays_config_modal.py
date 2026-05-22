@@ -503,6 +503,68 @@ def test_config_inline_edit_commit_stages_value() -> None:
     asyncio.run(body())
 
 
+def test_config_inline_edit_input_renders_wider_than_one_cell() -> None:
+    """The inline ``Input`` keeps a usable width so the seeded value is visible.
+
+    Regression for W14 issue 5a: the meta-line label had no CSS width and
+    grew to the full row, starving the ``1fr`` input down to a single cell
+    (the value was present but clipped to invisibility). With the label
+    constrained to ``width: auto`` the input must claim the remaining row.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            modal.field_index = 1  # audit.flaky_retry_count (int)
+            await pilot.pause()
+            await pilot.press("enter")  # open inline editor
+            await pilot.pause()
+            input_width = modal.query_one("#config-inline-input", Input).size.width
+            assert input_width > 1
+
+    asyncio.run(body())
+
+
+def test_config_inline_edit_label_aligns_with_static_row() -> None:
+    """The inline meta-line key column matches the static field row's key column.
+
+    Regression for W14 issue 5b: the static row reserves caret + dirty
+    marker + space (three cells) ahead of the key, but the inline meta line
+    started the key at column 0, so opening the editor jumped the key three
+    columns left. The 3-space prefix realigns them.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            modal.field_index = 1  # audit.flaky_retry_count (int)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None
+            static_line = modal._field_line(entry, selected=True)
+            meta_line = modal._meta_line(entry)
+            # Both lines place the key at the same column.
+            assert static_line.index(entry.key) == meta_line.index(entry.key)
+
+    asyncio.run(body())
+
+
+def test_meta_line_prefixes_three_spaces_for_alignment() -> None:
+    """``_meta_line`` leads with three spaces (caret + dirty + separator)."""
+    entry = registry_lookup("audit.flaky_retry_count")
+    assert entry is not None
+    line = ConfigModal._meta_line(entry)
+    assert line.startswith("   audit.flaky_retry_count")
+    # The key column matches the static row (caret + dirty + space = 3).
+    assert line.index("audit.flaky_retry_count") == 3
+
+
 def test_config_inline_edit_esc_cancels_without_mutation() -> None:
     """``Esc`` in the inline input aborts the edit and stages nothing."""
 

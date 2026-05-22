@@ -14,6 +14,7 @@ from pathlib import Path
 
 from eawf.tui_v2.app import EaApp
 from eawf.tui_v2.scopes import ScopeScreen, WorkspaceScreen
+from eawf.tui_v2.screens.overlays.config_modal import ConfigModal
 from eawf.tui_v2.widgets.backlog_table import BacklogTable
 from eawf.tui_v2.widgets.footer import Footer, Heartbeat
 from eawf.tui_v2.widgets.git_pane import GitPane
@@ -86,6 +87,34 @@ def test_workspace_screen_footer_hints_applied() -> None:
             assert footer.hints == WorkspaceScreen.FOOTER_HINTS
             # Scope-specific "zoom" hint reaches the strip.
             assert "zoom" in app.export_screenshot()
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W14 — config opens from the workspace scope (c binding + footer advert)
+# --------------------------------------------------------------------------
+
+
+def test_workspace_screen_advertises_config_hint() -> None:
+    assert "c config" in WorkspaceScreen.FOOTER_HINTS
+
+
+def test_workspace_screen_binds_c_to_open_config() -> None:
+    actions = {binding.action for binding in WorkspaceScreen.BINDINGS}
+    assert "open_config" in actions
+    # The pre-existing zoom binding is untouched.
+    assert "zoom_focused" in actions
+
+
+def test_workspace_c_keypress_opens_config_modal() -> None:
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("c")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigModal)
 
     asyncio.run(body())
 

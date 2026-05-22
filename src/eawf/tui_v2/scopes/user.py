@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from textual.app import ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.widgets import Static
 
@@ -41,6 +42,7 @@ _USER_HINTS: tuple[str, ...] = (
     "↑↓ move",
     "Enter open",
     "w/r/u scope",
+    "c config",
     "F5 refresh",
     "/ palette",
     "? help",
@@ -55,6 +57,15 @@ class UserScreen(ScopeScreen):
     :class:`BacklogTable` (portfolio) weighted ``3:2:5`` inside the
     shared chassis.
     """
+
+    #: ``c`` opens the registry-driven config window via the shared
+    #: ``action_open_config`` on the base chassis. Config is scope-agnostic
+    #: — the user scope has no repo anchor, so the modal opens on the
+    #: global layer only (``open_config`` resolves the available writable
+    #: layers per scope).
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("c", "open_config", "config", show=False),
+    ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _USER_HINTS
 

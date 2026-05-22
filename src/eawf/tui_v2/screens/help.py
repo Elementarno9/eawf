@@ -45,6 +45,7 @@ _GLOBAL_KEYS: tuple[tuple[str, str], ...] = (
     ("r", "switch to repo scope"),
     ("u", "switch to user scope"),
     ("Ctrl-W / Ctrl-R / Ctrl-U", "scope switch (aliases)"),
+    ("c", "open config (any scope)"),
     ("F5", "force refresh"),
     ("?", "open help"),
     ("/", "open palette"),
@@ -66,9 +67,12 @@ _PANE_NAV: tuple[tuple[str, str, str], ...] = (
     ("Enter", "drill into row (modal)", "—"),
 )
 
-#: Per-scope extra keys — the "Per-screen extras".
+#: Per-scope extra keys — the "Per-screen extras". ``c`` (open config) is
+#: scope-agnostic and lives in :data:`_GLOBAL_KEYS`; only genuinely
+#: scope-local keys (workspace ``z`` zoom, wave-board ``f`` filter) belong
+#: here.
 _SCOPE_KEYS: dict[ScopeName, tuple[tuple[str, str], ...]] = {
-    "repo": (("c", "open config"),),
+    "repo": (),
     "workspace": (("z", "zoom focused repo to repo screen"),),
     "user": (),
     "wave_board": (("f", "cycle filter (all / active-only)"),),

@@ -45,6 +45,7 @@ _WORKSPACE_HINTS: tuple[str, ...] = (
     "z zoom",
     "Enter open",
     "w/r/u scope",
+    "c config",
     "F5 refresh",
     "/ palette",
     "? help",
@@ -62,9 +63,13 @@ class WorkspaceScreen(ScopeScreen):
 
     #: ``z`` zooms the focused strip row into the quadrant (the focus →
     #: reload wiring lands with the ``WorkspaceTopStrip`` sub-widget in a
-    #: later wave); declared here as the navigation seam.
+    #: later wave); declared here as the navigation seam. ``c`` opens the
+    #: registry-driven config window via the shared ``action_open_config``
+    #: on the base chassis (config is scope-agnostic — the modal resolves
+    #: whatever anchors the scope has).
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("z", "zoom_focused", "zoom", show=False),
+        Binding("c", "open_config", "config", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _WORKSPACE_HINTS

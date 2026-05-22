@@ -11,12 +11,13 @@
       │    r          switch to repo scope                                                                       │
       │    u          switch to user scope                                                                       │
       │    Ctrl-W / Ctrl-R / Ctrl-U scope switch (aliases)                                                       │
+      │    c          open config (any scope)                                                                    │
       │    F5         force refresh                                                                              │
       │    ?          open help                                                                                  │
       │    /          open palette                                                                               │
       │    Tab        next pane                                                                                  │
-      │    Shift-Tab  previous pane                                                                              │
-      │                                                                                                      ▁▁  │
+      │    Shift-Tab  previous pane                                                                          ▂▂  │
+      │                                                                                                          │
       │  Pane navigation (vim alias)                                                                             │
       │    ↑          line up  (k)                                                                               │
       │    ↓          line down  (j)                                                                             │
@@ -29,10 +30,9 @@
       │    Enter      drill into row (modal)  (—)                                                                │
       │                                                                                                          │
       │  Repo screen keys                                                                                        │
-      │    c          open config                                                                                │
+      │    (none)                                                                                                │
       │                                                                                                          │
       │  Config overlay (arrows nav, Enter edits)                                                                │
       │    ↑ / ↓      move field cursor (vim: k / j)                                                             │
-      │    ← / →      switch tab                                                                                 │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

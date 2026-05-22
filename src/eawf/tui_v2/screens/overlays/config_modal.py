@@ -444,6 +444,10 @@ class ConfigModal(ModalScreen[None]):
     ConfigModal .config-edit-row {
         height: 1;
     }
+    ConfigModal .config-edit-label {
+        width: auto;
+        height: 1;
+    }
     ConfigModal .config-edit-row #config-inline-input {
         width: 1fr;
         height: 1;
@@ -842,7 +846,11 @@ class ConfigModal(ModalScreen[None]):
         """Render the dotted key + type + range hint shown beside the inline input.
 
         Mirrors the popup editor's meta line so the inline editor surfaces
-        the same type / range affordance.
+        the same type / range affordance. The return is prefixed with three
+        spaces so the key column lines up with the static field row, whose
+        :meth:`_field_line` reserves a caret + dirty marker + separating
+        space (three cells) ahead of the key — without the prefix the key
+        visibly jumps three columns left when the inline editor opens.
 
         Args:
             entry: The field being edited.
@@ -852,7 +860,7 @@ class ConfigModal(ModalScreen[None]):
             low = "" if entry.min_value is None else f"{entry.min_value:g}"
             high = "" if entry.max_value is None else f"{entry.max_value:g}"
             parts.append(f"range {low}..{high}")
-        return "  ".join(parts) + "  "
+        return "   " + "  ".join(parts) + "  "
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """Commit the inline edit on ``Enter`` (the Input's ``Submitted``).
