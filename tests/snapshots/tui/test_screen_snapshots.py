@@ -177,6 +177,64 @@ def test_user_screen_snapshot() -> None:
     asyncio.run(body())
 
 
+def _make_wave(wave_id: str, title: str) -> dict[str, object]:
+    """Build a minimal pending-wave payload dict for fixture composition."""
+    return {
+        "id": wave_id,
+        "iter_id": "P01-I01",
+        "title": title,
+        "status": "pending",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": "2026-05-08T00:00:00Z",
+        "closed_at": None,
+    }
+
+
+def _long_iter_many_waves_state(tmp_path: Path) -> Path:
+    """Write the repo fixture mutated to a long iter title + 39 waves.
+
+    The committed goldens carry short titles + a single wave, so no
+    scrollbar ever appears and the row budget never had to reserve its
+    gutter. This case forces the vertical scrollbar (39 waves overflow the
+    40-row pane) and a long iter title, so the iter row's trailing
+    completion-bar count lands at the right edge — exactly where a missing
+    gutter would clip it.
+    """
+    payload = orjson.loads(_REPO_STATE.read_bytes())
+    ids = [f"P01-I01-W{n:02d}" for n in range(1, 40)]
+    payload["iters"]["P01-I01"]["wave_ids"] = ids
+    payload["iters"]["P01-I01"]["title"] = (
+        "First iteration with an extremely long descriptive title that overflows"
+    )
+    payload["waves"] = {wid: _make_wave(wid, f"wave {n} title") for n, wid in enumerate(ids, 1)}
+    State.model_validate(payload)  # fail fast on a malformed mutation
+    out = tmp_path / "long_iter_state.json"
+    out.write_bytes(orjson.dumps(payload))
+    return out
+
+
+def test_roadmap_scrolled_long_iter_snapshot(tmp_path: Path) -> None:
+    """A scrolled roadmap keeps the iter row's completion count on screen.
+
+    Regression golden for the W12 review issue: with the vertical scrollbar
+    showing, the iter row's ``0/39`` count must render in full — a missing
+    scrollbar gutter in the row budget clipped the trailing digits under
+    ``overflow-x: hidden``.
+    """
+
+    async def body() -> None:
+        state_path = _long_iter_many_waves_state(tmp_path)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "roadmap_scrolled_long_iter.txt")
+
+    asyncio.run(body())
+
+
 # --------------------------------------------------------------------------
 # Overlays — exercise the topmost-modal capture path
 # --------------------------------------------------------------------------

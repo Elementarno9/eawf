@@ -17,8 +17,15 @@ from textual.app import ComposeResult
 
 from eawf.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.state.models import State
+from eawf.tui_v2.app import EaApp
+from eawf.tui_v2.snapshot.pilot_harness import capture_screen_text, settle_screen
 from eawf.tui_v2.widgets.eu_bar import EMPTY_STATE
 from eawf.tui_v2.widgets.roadmap_tree import (
+    _GLYPH_PREFIX_WIDTH,
+    _GUIDE_INDENT_PER_DEPTH,
+    _ROW_TOGGLE_WIDTH,
+    _SCROLLBAR_GUTTER,
+    _UNSIZED_BUDGET,
     ELLIPSIS,
     ITER_GLYPHS,
     PHASE_GLYPHS,
@@ -99,6 +106,27 @@ def _state_long_titles() -> State:
     payload["phases"]["P01"]["title"] = long
     payload["iters"]["P01-I01"]["title"] = long
     payload["waves"]["P01-I01-W01"]["title"] = long
+    return State.model_validate(payload)
+
+
+def _state_long_iter_many_waves() -> State:
+    """Return the fixture with a long iter title and ~40 waves.
+
+    Enough child waves that the tree's content outgrows a 40-row pane and
+    Textual shows the vertical scrollbar; the long iter title forces the
+    iter row to truncate so its trailing completion-bar count sits at the
+    right edge — the cell the scrollbar gutter would otherwise clip.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    ids = [f"P01-I01-W{n:02d}" for n in range(1, 40)]
+    payload["iters"]["P01-I01"]["wave_ids"] = ids
+    payload["iters"]["P01-I01"]["title"] = (
+        "First iteration with an extremely long descriptive title that overflows"
+    )
+    payload["waves"] = {
+        wid: _make_wave(wid, "P01-I01", "pending", title=f"wave {n} title")
+        for n, wid in enumerate(ids, start=1)
+    }
     return State.model_validate(payload)
 
 
@@ -603,5 +631,81 @@ def test_tree_re_truncates_on_resize() -> None:
             narrow_label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
             assert len(narrow_label) < wide_len
             assert narrow_label.endswith(ELLIPSIS)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Scrollbar-gutter budget (P26-I02-W12)
+# --------------------------------------------------------------------------
+
+
+def test_body_budget_reserves_scrollbar_gutter() -> None:
+    """A sized row budget subtracts the full chrome, gutter included.
+
+    For a measured content width the budget must equal
+    ``width - (2*depth + toggle + glyph + scrollbar_gutter)`` so a row
+    sized before the vertical scrollbar appears still fits the narrower
+    post-scrollbar content region.
+    """
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            width = tree.size.width
+            assert width > 0  # laid out
+            for depth in (0, 1, 2):
+                chrome = (
+                    _GUIDE_INDENT_PER_DEPTH * depth
+                    + _ROW_TOGGLE_WIDTH
+                    + _GLYPH_PREFIX_WIDTH
+                    + _SCROLLBAR_GUTTER
+                )
+                assert tree._body_budget(depth) == width - chrome
+
+    asyncio.run(body())
+
+
+def test_body_budget_unsized_path_unchanged() -> None:
+    """A tree with no measured width still falls back to the unsized budget."""
+    tree = RoadmapTree(id="rt")
+    assert tree.size.width == 0  # never laid out
+    assert tree._body_budget(0) == _UNSIZED_BUDGET
+    assert tree._body_budget(2) == _UNSIZED_BUDGET
+
+
+def test_scrolled_iter_row_completion_count_not_clipped(tmp_path: Path) -> None:
+    """A long iter title + a scrolling tree keeps its bar count on screen.
+
+    Regression for the W12 review issue: at 120x40 a long iter title plus
+    ~39 child waves forces the vertical scrollbar; before the gutter was
+    reserved the iter row was sized for the pre-scrollbar width and
+    ``overflow-x: hidden`` clipped the trailing ``N/M`` count. Mount the
+    real :class:`EaApp` over the mutated state and assert the rendered iter
+    row carries the full ``0/39`` count and no rendered roadmap line
+    exceeds the tree's content width.
+    """
+    state = _state_long_iter_many_waves()
+    state_path = tmp_path / "state.json"
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            tree = app.screen.query_one(RoadmapTree)
+            # Precondition: the geometry actually forces the scrollbar.
+            assert tree.show_vertical_scrollbar
+            assert tree.scrollbar_size_vertical == _SCROLLBAR_GUTTER
+            iter_label = str(_node_by_data(tree, "P01-I01").label)  # type: ignore[attr-defined]
+            assert iter_label.endswith("0/39")  # count present, not clipped
+            assert ELLIPSIS in iter_label  # the long title did truncate
+            text = capture_screen_text(app)
+            iter_row = next(line for line in text.splitlines() if "P01-I01  First iter" in line)
+            assert "0/39" in iter_row  # the on-screen render keeps the count
 
     asyncio.run(body())

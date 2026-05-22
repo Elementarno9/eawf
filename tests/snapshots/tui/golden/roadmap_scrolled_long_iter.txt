@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
+┌──────────────────────────────────────────────────────────┐┌──────────────────────────────────────────────────────────┐
+│ ROADMAP                                                  ││ STATUS                                                   │
+│ ▼ ~ P01  Bootstrap  -----  0/39                          ││ project:   QR                                            │
+│ └ ▼ ~ P01-I01  First iteration with an e…  -----  0/39   ││ phase:     P01                                           │
+│   ├ - P01-I01-W01  wave 1 title                          ││ iter:      P01-I01                                       │
+│   ├ - P01-I01-W02  wave 2 title                          ││ waves:     0 active · 39 pending                         │
+│   ├ - P01-I01-W03  wave 3 title                          ││ progress:  ----------  0/39                              │
+│   ├ - P01-I01-W04  wave 4 title                          ││ audits:    0 running · 0 total                           │
+│   ├ - P01-I01-W05  wave 5 title                       ▆▆ ││ worktrees: 0 active                                      │
+│   ├ - P01-I01-W06  wave 6 title                          ││                                                          │
+│   ├ - P01-I01-W07  wave 7 title                          ││                                                          │
+│   ├ - P01-I01-W08  wave 8 title                          ││                                                          │
+│   ├ - P01-I01-W09  wave 9 title                          ││                                                          │
+│   ├ - P01-I01-W10  wave 10 title                         ││                                                          │
+│   ├ - P01-I01-W11  wave 11 title                         ││                                                          │
+│   ├ - P01-I01-W12  wave 12 title                         ││                                                          │
+│   ├ - P01-I01-W13  wave 13 title                         ││                                                          │
+│   ├ - P01-I01-W14  wave 14 title                         ││                                                          │
+└──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐┌──────────────────────────────────────────────────────────┐
+│ GIT                                                      ││ BACKLOG                                                  │
+│ branch:   —                                              ││  id  priority  status  title                             │
+│ status:   —                                              ││                                                          │
+│ upstream: —                                              ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+└──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
+ ↑↓ move  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  / palette  ·  ? help   weekly burn: — no data•

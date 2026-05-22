@@ -88,6 +88,17 @@ _ROW_TOGGLE_WIDTH: int = 2
 #: status glyph plus its trailing space), counted against the budget.
 _GLYPH_PREFIX_WIDTH: int = 2
 
+#: Width of the vertical scrollbar Textual reserves on the right edge when
+#: the tree's content outgrows the pane height. Folded into the truncation
+#: budget so a row sized before the scrollbar appears still fits the
+#: narrower content region afterwards — otherwise ``overflow-x: hidden``
+#: clips the row's trailing completion-bar count. The first layout has no
+#: scrollbar (content width = full interior) and adding enough rows shows
+#: the scrollbar without firing a second resize, so reserving the gutter
+#: up front is what keeps the budget correct across that transition.
+#: Matches Textual's default 2-cell scrollbar.
+_SCROLLBAR_GUTTER: int = 2
+
 #: Minimum number of body characters kept when a row is truncated, so an
 #: extremely narrow pane still shows a sliver of the id rather than
 #: collapsing the body to just the ellipsis.
@@ -378,11 +389,15 @@ class RoadmapTree(Tree[str]):
         """Return the cell budget a row body may occupy at *depth*.
 
         Subtracts the guide chrome Textual prepends — the depth-scaled
-        guide indent, the expand/collapse toggle, and the ``<glyph> ``
-        prefix — from the tree's measured content width. Falls back to
-        :data:`_UNSIZED_BUDGET` when the width is not yet known (pre-layout
-        or a bare harness), so short titles never truncate before a real
-        width arrives via :meth:`on_resize`.
+        guide indent, the expand/collapse toggle, the ``<glyph> `` prefix,
+        and the reserved vertical-scrollbar gutter — from the tree's
+        measured content width. Reserving the scrollbar gutter up front
+        keeps the budget correct even on the first (pre-scrollbar) layout,
+        so a row stays inside the narrower content region once the
+        scrollbar appears. Falls back to :data:`_UNSIZED_BUDGET` when the
+        width is not yet known (pre-layout or a bare harness), so short
+        titles never truncate before a real width arrives via
+        :meth:`on_resize`.
 
         Args:
             depth: The row's depth below the hidden root (phase ``0``,
@@ -394,7 +409,12 @@ class RoadmapTree(Tree[str]):
         width = self.size.width
         if width <= 0:
             return _UNSIZED_BUDGET
-        chrome = _GUIDE_INDENT_PER_DEPTH * depth + _ROW_TOGGLE_WIDTH + _GLYPH_PREFIX_WIDTH
+        chrome = (
+            _GUIDE_INDENT_PER_DEPTH * depth
+            + _ROW_TOGGLE_WIDTH
+            + _GLYPH_PREFIX_WIDTH
+            + _SCROLLBAR_GUTTER
+        )
         return max(width - chrome, _MIN_BODY_CHARS)
 
     def _rebuild(self, state: State | None) -> None:
