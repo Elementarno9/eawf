@@ -592,9 +592,17 @@ class Principal(_StrictModel):
 
 
 class State(_StrictModel):
-    """Top-level eawf state document."""
+    """Top-level eawf state document.
 
-    schema_version: Literal["1.0"]
+    ``schema_version`` accepts both ``"1.0"`` and ``"1.1"`` so an on-disk
+    state written before the v1.1 bump still re-validates after the model
+    advances — the migrate chain rewrites the version string in place, but
+    a read of an un-migrated state must never reject. The accepted set
+    drives the migrate guard's model-supported max, so both literals must
+    move in lockstep with the ``v1_0_to_v1_1`` migration step.
+    """
+
+    schema_version: Literal["1.0", "1.1"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime

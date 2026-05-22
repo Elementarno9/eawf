@@ -2366,7 +2366,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Top-level eawf state document.",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts both ``\"1.0\"`` and ``\"1.1\"`` so an on-disk\nstate written before the v1.1 bump still re-validates after the model\nadvances — the migrate chain rewrites the version string in place, but\na read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so both literals must\nmove in lockstep with the ``v1_0_to_v1_1`` migration step.",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -2620,7 +2620,10 @@
       "title": "Sandbox Policies"
     },
     "schema_version": {
-      "const": "1.0",
+      "enum": [
+        "1.0",
+        "1.1"
+      ],
       "title": "Schema Version",
       "type": "string"
     },

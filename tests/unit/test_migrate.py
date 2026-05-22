@@ -1,19 +1,24 @@
 """Unit tests for the ``eawf migrate`` chain runner + canonical writer.
 
-The live :class:`eawf.state.models.State` model is pinned at
-``schema_version="1.0"``, so every test drives a **fixture** state dict
-(not the live ``state.json``). The fixture exercises:
+The first migration edge (v1.0 -> v1.1) is a pure ``schema_version``
+bump: the field deltas land in a later wave. The live
+:class:`eawf.state.models.State` model accepts both ``"1.0"`` and
+``"1.1"``, so a migrated state re-loads under the live model. The suite
+exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
+* a full v1.0 state migrating to a re-loadable v1.1 state;
+* idempotency — re-running against an already-1.1 state is a no-op;
+* a long-title v1.0 state migrating cleanly (no cap on this edge yet);
 * the canonical-writer route (``portalock`` + ``atomic_write_json_locked``)
   with an assertion that the ``atomic_write_json`` bypass is never called;
 * ``--dry-run`` writing nothing;
 * a mid-chain failure restoring from the gitignored backup;
-* the model-supported-max guard that refuses a target the live ``State``
-  model cannot re-validate before any write.
+* the model-supported-max guard that now permits ``1.1`` (the model
+  advanced) but still refuses a target the live model cannot re-validate.
 
-The chain-machinery tests target ``1.1``/``1.2`` payloads (versions the
-live model does not yet load), so they lift the guard ceiling via the
+The mid-chain-failure test targets a ``1.2`` payload (a version the live
+model does not yet load), so it lifts the guard ceiling via the
 ``lift_model_max`` fixture; the guard itself is covered by dedicated
 tests that exercise the real (un-lifted) model-supported max.
 """
@@ -39,38 +44,80 @@ from eawf.migrations import (
 )
 from eawf.migrations._base import backup_path_for
 from eawf.migrations.v1_0_to_v1_1 import MigrationV10ToV11
+from eawf.state.models import State
 
 
 @pytest.fixture
 def lift_model_max(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Lift the model-supported-max ceiling so chain-machinery tests run.
 
-    The live ``State`` model is pinned at ``"1.0"``; the chain-machinery
-    tests write ``1.1``/``1.2`` fixture payloads to exercise the runner's
-    write/backup/restore paths. Stubbing the max to ``"9.9"`` lets those
-    tests reach :func:`run_chain`'s write path without the guard firing —
-    the guard's own behaviour is covered separately against the real max.
+    The live ``State`` model accepts up to ``"1.1"``; the mid-chain
+    failure test writes a ``1.2`` fixture payload to exercise the runner's
+    backup/restore path. Stubbing the max to ``"9.9"`` lets that test
+    reach :func:`run_chain`'s write path without the guard firing — the
+    guard's own behaviour is covered separately against the real max.
     """
     monkeypatch.setattr(_base, "model_supported_max_version", lambda: "9.9")
     yield
 
 
 def _fixture_state_v1_0() -> dict[str, Any]:
-    """Return a minimal raw v1.0 state dict carrying a bare ``scope`` key.
+    """Return a minimal raw v1.0 state dict with assorted pass-through keys.
 
-    The lean invariant models read only ``schema_version`` (pre) and
-    ``schema_version`` + ``principal_id`` (post); the extra keys ride
-    through so the rename-``scope`` transform has something to act on.
+    The lean invariant models read only ``schema_version``; the extra keys
+    ride through unchanged so the identity-transform assertions have a body
+    to verify is left untouched.
     """
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",
-        "events": [{"scope": "P27-W22", "kind": "demo"}],
+        "events": [{"scope_id": "P27-W22", "kind": "demo"}],
+    }
+
+
+def _minimal_state_v1_0() -> dict[str, Any]:
+    """Return a full v1.0 state payload that re-loads under the live model.
+
+    Mirrors the minimal-keys root in ``tests.unit.test_models`` so the
+    migration + guard tests can assert ``State.model_validate`` round-trips
+    after a supported-target write.
+    """
+    return {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": "2026-05-08T00:00:00Z",
+        "project": {
+            "code": "QR",
+            "slug": "quant-research",
+            "title": "Quant Research",
+            "description": "",
+            "domains": ["quant"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {
+            "project_code": "QR",
+            "subproject_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
     }
 
 
 def _write_fixture(path: Path) -> dict[str, Any]:
-    """Write the v1.0 fixture to *path* and return the dict."""
+    """Write the minimal raw v1.0 fixture to *path* and return the dict."""
     payload = _fixture_state_v1_0()
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
@@ -92,8 +139,6 @@ def test_build_migration_chain_same_version_is_empty() -> None:
 
 
 def test_build_migration_chain_unknown_target_raises() -> None:
-    from eawf.migrations import MigrationError
-
     with pytest.raises(MigrationError, match="no migration from version"):
         build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="9.9")
 
@@ -101,19 +146,20 @@ def test_build_migration_chain_unknown_target_raises() -> None:
 # --- Step transform + invariants -------------------------------------------
 
 
-def test_v1_0_to_v1_1_apply_bumps_version_and_adds_principal() -> None:
+def test_v1_0_to_v1_1_apply_bumps_version() -> None:
     step = MigrationV10ToV11()
     out = step.apply(_fixture_state_v1_0())
     assert out["schema_version"] == "1.1"
-    assert out["principal_id"] == "operator:local"
 
 
-def test_v1_0_to_v1_1_apply_renames_scope_to_scope_id() -> None:
+def test_v1_0_to_v1_1_apply_is_identity_apart_from_version() -> None:
+    """The transform touches only ``schema_version`` — every other key rides through."""
     step = MigrationV10ToV11()
-    out = step.apply(_fixture_state_v1_0())
-    event = out["events"][0]
-    assert "scope" not in event
-    assert event["scope_id"] == "P27-W22"
+    src = _fixture_state_v1_0()
+    out = step.apply(src)
+    expected = dict(src)
+    expected["schema_version"] = "1.1"
+    assert out == expected
 
 
 def test_v1_0_to_v1_1_apply_does_not_mutate_input() -> None:
@@ -121,7 +167,15 @@ def test_v1_0_to_v1_1_apply_does_not_mutate_input() -> None:
     src = _fixture_state_v1_0()
     step.apply(src)
     assert src["schema_version"] == "1.0"
-    assert "principal_id" not in src
+
+
+def test_v1_0_to_v1_1_apply_deep_copies_nested_nodes() -> None:
+    """The deep copy means mutating the output never bleeds into the input."""
+    step = MigrationV10ToV11()
+    src = _fixture_state_v1_0()
+    out = step.apply(src)
+    out["events"][0]["kind"] = "tampered"
+    assert src["events"][0]["kind"] == "demo"
 
 
 def test_v1_0_to_v1_1_check_pre_rejects_wrong_version() -> None:
@@ -130,18 +184,16 @@ def test_v1_0_to_v1_1_check_pre_rejects_wrong_version() -> None:
         step.check_pre({"schema_version": "1.1"})
 
 
-def test_v1_0_to_v1_1_check_post_rejects_missing_principal() -> None:
+def test_v1_0_to_v1_1_check_post_rejects_unbumped_version() -> None:
     step = MigrationV10ToV11()
-    with pytest.raises(Exception):  # noqa: B017 — missing principal_id
-        step.check_post({"schema_version": "1.1"})
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_post({"schema_version": "1.0"})
 
 
 # --- Fixture migration: end-to-end run_chain -------------------------------
 
 
-def test_run_chain_migrates_fixture_state_v1_0_to_v1_1(
-    tmp_path: Path, lift_model_max: None
-) -> None:
+def test_run_chain_migrates_fixture_state_v1_0_to_v1_1(tmp_path: Path) -> None:
     state_path = tmp_path / "state.json"
     _write_fixture(state_path)
 
@@ -157,10 +209,69 @@ def test_run_chain_migrates_fixture_state_v1_0_to_v1_1(
     # The on-disk file was actually rewritten through the canonical writer.
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     assert on_disk["schema_version"] == "1.1"
-    assert on_disk["principal_id"] == "operator:local"
 
 
-def test_run_chain_writes_backup_adjacent_to_state(tmp_path: Path, lift_model_max: None) -> None:
+def test_run_chain_migrates_full_state_to_reloadable_v1_1(tmp_path: Path) -> None:
+    """A full v1.0 state migrates to a v1.1 state that the live model re-loads."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.1"
+
+
+def test_run_chain_migrate_is_idempotent_on_already_v1_1(tmp_path: Path) -> None:
+    """Migrating an already-1.1 state is an empty-chain no-op — content unchanged.
+
+    An empty chain (source == target) applies no step, so the persisted
+    dict is value-identical to the input: re-running the migrate on an
+    already-1.1 state neither errors nor mutates the state.
+    """
+    state_path = tmp_path / "state.json"
+    payload = _minimal_state_v1_0()
+    payload["schema_version"] = "1.1"
+    state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.1", to_version="1.1")
+    assert chain == []
+    result = run_chain(state_path, chain=chain, from_version="1.1", to_version="1.1")
+
+    assert result["schema_version"] == "1.1"
+    # The persisted dict is value-identical to the input — a true no-op.
+    assert json.loads(state_path.read_text(encoding="utf-8")) == payload
+    # It still re-loads under the live model.
+    reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert reloaded.schema_version == "1.1"
+
+
+def test_run_chain_long_title_state_migrates_without_cap(tmp_path: Path) -> None:
+    """Boundary: a v1.0 state with a >72-char title migrates + re-loads (no cap yet).
+
+    This edge is a pure version bump; the title-cap tightening lands in a
+    later wave. A long-title state must NOT be bricked here.
+    """
+    state_path = tmp_path / "state.json"
+    payload = _minimal_state_v1_0()
+    long_title = "Q" * 120
+    payload["project"]["title"] = long_title
+    state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.1"
+    # The long title rides through untouched — no truncation on this edge.
+    assert reloaded.project is not None
+    assert reloaded.project.title == long_title
+
+
+def test_run_chain_writes_backup_adjacent_to_state(tmp_path: Path) -> None:
     state_path = tmp_path / "state.json"
     _write_fixture(state_path)
 
@@ -178,7 +289,7 @@ def test_run_chain_writes_backup_adjacent_to_state(tmp_path: Path, lift_model_ma
 
 
 def test_run_chain_routes_write_through_canonical_writer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, lift_model_max: None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The write MUST go through portalock + atomic_write_json_locked.
 
@@ -228,7 +339,7 @@ def test_run_chain_routes_write_through_canonical_writer(
 # --- Dry-run: no write -----------------------------------------------------
 
 
-def test_run_chain_dry_run_makes_no_write(tmp_path: Path, lift_model_max: None) -> None:
+def test_run_chain_dry_run_makes_no_write(tmp_path: Path) -> None:
     state_path = tmp_path / "state.json"
     original = _write_fixture(state_path)
     original_bytes = state_path.read_bytes()
@@ -284,7 +395,6 @@ def test_run_chain_mid_chain_failure_restores_from_backup(
     # The on-disk state was restored to the pre-migration v1.0 payload.
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     assert on_disk["schema_version"] == "1.0"
-    assert "principal_id" not in on_disk
     # The backup file remains for forensic recovery.
     backup = backup_path_for(state_path, from_version="1.0", to_version="1.2")
     assert backup.exists()
@@ -294,49 +404,8 @@ def test_run_chain_mid_chain_failure_restores_from_backup(
 # --- Model-supported-max guard ---------------------------------------------
 
 
-def _minimal_state_v1_0() -> dict[str, Any]:
-    """Return a full v1.0 state payload that re-loads under the live model.
-
-    Mirrors the minimal-keys root in ``tests.unit.test_models`` so the
-    guard tests can assert ``State.model_validate`` round-trips after a
-    supported-target write.
-    """
-    return {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:QR",
-        "updated_at": "2026-05-08T00:00:00Z",
-        "project": {
-            "code": "QR",
-            "slug": "quant-research",
-            "title": "Quant Research",
-            "description": "",
-            "domains": ["quant"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:QR",
-        },
-        "current": {
-            "project_code": "QR",
-            "subproject_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-
-
 class _IdentityStepV10:
-    """A step whose ``run_chain`` target stays at the supported max ``1.0``.
+    """A step whose ``run_chain`` target stays at ``1.0`` (a supported version).
 
     Keeps ``schema_version="1.0"`` while touching another field so a
     supported-target ``run_chain`` exercises the real write path and the
@@ -361,7 +430,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.0"
+    assert model_supported_max_version() == "1.1"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -369,31 +438,34 @@ def test_guard_target_supported_allows_target_equal_to_max() -> None:
     guard_target_supported(model_supported_max_version())
 
 
+def test_guard_target_supported_permits_v1_1_now_model_advanced() -> None:
+    """The guard permits 1.1 now the live model accepts it (W22 advanced the Literal)."""
+    guard_target_supported("1.1")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.1")
+        guard_target_supported("1.2")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
-    """An unsupported target raises before any write or backup touches disk."""
+    """An unsupported target (>max) raises before any write or backup touches disk."""
     state_path = tmp_path / "state.json"
     _write_fixture(state_path)
     before = state_path.read_bytes()
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.2")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.1")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.2")
     assert not backup.exists()
 
 
 def test_run_chain_supported_target_writes_reloadable_state(tmp_path: Path) -> None:
-    """A supported target (== max) writes a state the live model re-loads."""
-    from eawf.state.models import State
-
+    """A supported target (== 1.0) writes a state the live model re-loads."""
     state_path = tmp_path / "state.json"
     state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
 
@@ -406,7 +478,7 @@ def test_run_chain_supported_target_writes_reloadable_state(tmp_path: Path) -> N
 
     assert result["schema_version"] == "1.0"
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
-    # The persisted state re-loads under the pinned live model — no brick.
+    # The persisted state re-loads under the live model — no brick.
     reloaded = State.model_validate(on_disk)
     assert reloaded.schema_version == "1.0"
     assert on_disk["updated_at"] == "2026-05-09T00:00:00Z"
@@ -429,18 +501,22 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.1"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "1.2"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
-    # No write: the state file is byte-for-byte unchanged and re-loads.
+    # No write: the state file is byte-for-byte unchanged.
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_refused_until_model_advances(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.1) is refused, not bricking."""
+    """The bare ``eawf migrate`` default target (1.1) now succeeds + re-loads.
+
+    Previously refused (the model was pinned at 1.0); W22 advanced the
+    Literal so the default target lands a re-loadable v1.1 state.
+    """
     from typer.testing import CliRunner
 
     from eawf.cli.app import app
@@ -448,13 +524,13 @@ def test_migrate_cmd_default_target_refused_until_model_advances(
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
-    before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
     result = CliRunner().invoke(app, ["migrate"])
 
-    assert result.exit_code != 0
-    assert state_path.read_bytes() == before
+    assert result.exit_code == 0, result.output
+    reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert reloaded.schema_version == "1.1"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -464,7 +540,6 @@ def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
     from typer.testing import CliRunner
 
     from eawf.cli.app import app
-    from eawf.state.models import State
 
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)

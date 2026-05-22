@@ -22,11 +22,13 @@ routes through :func:`write_canonical`, which acquires
 :func:`eawf.lock.portalock.acquire` and then calls
 :func:`eawf.state.writer.atomic_write_json_locked` — the exact lock +
 write primitive the daemon ``state.mutate`` handler and the
-``state_transaction`` chokepoint use. The live ``State`` model is pinned
-at ``schema_version="1.0"`` so a v1.1 payload cannot be re-validated
-against it inside ``state_transaction``; routing through the shared
-lock + ``atomic_write_json_locked`` primitive keeps the migration on the
-canonical writer path without forcing a load against the wrong schema.
+``state_transaction`` chokepoint use. Routing through the shared lock +
+``atomic_write_json_locked`` primitive keeps the migration on the
+canonical writer path without forcing a full ``State.model_validate``
+inside ``state_transaction`` — a later migration edge will introduce a
+breaking field change whose intermediate output cannot load against the
+post-edge model, so the migration runner deliberately stays off the
+model-validating chokepoint.
 
 **Backup discipline.** Before any write, :func:`run_chain` snapshots the
 pre-migration payload to ``state.json.bak.v<from>.v<to>`` adjacent to the
@@ -50,10 +52,11 @@ logger = logging.getLogger(__name__)
 
 
 #: Target ``schema_version`` the bare ``eawf migrate`` (no ``--to``) bumps
-#: toward. The live :class:`eawf.state.models.State` model is pinned at
-#: ``"1.0"``; the v1.1 step ships against a fixture state until the live
-#: model advances. Kept here (not on the live model) so the migrate verb
-#: has a stable default target independent of the schema literal.
+#: toward. Kept here (not derived from the live model's ``Literal``) so the
+#: migrate verb has a stable default target: a future edge may advance the
+#: default ahead of the model's accepted set during a multi-wave bump, and
+#: the guard (:func:`guard_target_supported`) is the boundary that refuses
+#: a default running past what the model can re-load.
 _DEFAULT_TARGET_VERSION = "1.1"
 
 
