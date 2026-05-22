@@ -9,8 +9,12 @@ Surface contract:
   (use the CC marketplace export instead).
 - ``eawf plugin update <runtime> [--scope ...]`` re-renders the tree,
   aborting on hand-edits (exit 8 / ``INTEGRITY_VIOLATION``).
-- ``eawf plugin doctor <runtime> [--scope ...]`` reports drift /
-  missing files; clean exits 0, dirty exits 8.
+- ``eawf plugin doctor <runtime> [--scope ...] [--strict]`` reports
+  drift / missing files; clean exits 0, dirty exits 8. ``--strict``
+  runs the Claude checksum sweep under the shared sync/doctor
+  portalock so the drift gate reads the post-``plugin sync`` checksum
+  from the same lock-scope (closes the sync-then-doctor race per the
+  C09 F19 mitigation).
 
 Idempotent: re-running ``install`` against an unchanged source tree
 produces a byte-identical tree. Hand-edits abort with exit 8 unless
@@ -868,15 +872,53 @@ def doctor_cmd(
             help="Install location to inspect: 'project' (default) or 'user'.",
         ),
     ] = "project",
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            help=(
+                "Run the Claude checksum sweep under the shared sync/doctor "
+                "portalock so the drift gate reads the post-'plugin sync' "
+                "checksum from the same lock-scope. CI uses this to fail a PR "
+                "on a stale build/<runtime>-plugin/ tree without flaking."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
-    from eawf.runtimes.claude.plugin_doctor import doctor_plugin
+    from eawf.runtimes.claude.plugin_doctor import doctor_plugin, doctor_plugin_strict
     from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
     from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
     from eawf.runtimes.plugin_doctor import run_doctor
 
     flags: GlobalFlags = ctx.obj
     target = _resolve_target(flags)
+    if strict and runtime not in (None, "claude"):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(
+                f"--strict applies to the claude checksum sweep only; "
+                f"drop --strict or pass 'claude' (got {runtime!r})"
+            ),
+            flags=flags,
+        )
+        return
+    if strict:
+        # ``--strict`` is the checksum-level drift gate: it runs the
+        # Claude per-file sweep under the shared sync/doctor portalock so
+        # the checksum read is the post-``plugin sync`` checksum from the
+        # same lock-scope. It deliberately bypasses the 4-kind
+        # multi-runtime sweep (which is the no-arg default) — the strict
+        # gate is CI's "build/<runtime>-plugin/ is stale" check, which is
+        # checksum-level by construction.
+        strict_report = doctor_plugin_strict(target)
+        emit_json_or_text(
+            _doctor_payload(strict_report),
+            _doctor_text(strict_report),
+            flags=flags,
+        )
+        if not strict_report.clean:
+            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+        return
     if runtime is None:
         # Multi-kind sweep (no runtime arg) — enumerates the 4 drift
         # kinds across all three runtimes. ``capability-vs-probe`` is

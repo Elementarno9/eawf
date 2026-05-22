@@ -14,11 +14,23 @@ Exit code mapping (the CLI surface in
 - Clean (no drift, no missing) → exit 0.
 - Any drift or missing entry → exit 8 (``INTEGRITY_VIOLATION``).
 
+``--strict`` mode (:func:`doctor_plugin_strict`) runs the same
+hash-equality sweep but under the shared sync/doctor advisory lock so
+the checksum it reads is the post-``plugin sync`` checksum from the
+same lock-scope — closing the sync-then-doctor race where a concurrent
+edit to a managed file (or to ``AGENTS.md``) lands between a successful
+``plugin sync`` and the drift gate. ``plugin sync`` acquires the same
+lock target (:func:`plugin_sync_lock_path`) before regenerating the
+tree, so the two verbs serialise.
+
 Public API::
 
     DoctorReport                          # dataclass with summary lists
     DoctorEntry                           # one line of the sweep
     doctor_plugin(target_dir) -> DoctorReport
+    doctor_plugin_strict(target_dir) -> DoctorReport   # under shared lock
+    plugin_sync_lock_path(repo_root) -> Path           # shared lock target
+    plugin_sync_lock(repo_root) -> ContextManager      # shared lock CM
 """
 
 from __future__ import annotations
@@ -26,9 +38,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eawf.lock import portalock
 from eawf.render.manifest import Manifest, ManifestEntry
 from eawf.runtimes.claude.plugin_install import (
     _event_type_for,
@@ -37,6 +52,50 @@ from eawf.runtimes.claude.plugin_install import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def plugin_sync_lock_path(repo_root: Path) -> Path:
+    """Return the shared sync/doctor advisory-lock target under ``.ea/locks/``.
+
+    Both ``eawf plugin sync`` and ``eawf plugin doctor --strict`` acquire
+    this lock so the strict drift gate reads the post-sync checksum from
+    the same lock-scope (closing the race in which a concurrent edit
+    lands between a successful sync and the doctor sweep). The parent
+    directory is created on demand; the flock file is materialised by
+    :func:`portalock.acquire` and removed on release.
+
+    Args:
+        repo_root: Repository root (the directory containing ``.ea/``).
+
+    Returns:
+        ``<repo_root>/.ea/locks/plugin-sync.lock`` — gitignored per the
+        ``.ea/`` commit policy (only ``state.json`` / config / store are
+        committed; ``.ea/locks/`` is not).
+    """
+    return Path(repo_root) / ".ea" / "locks" / "plugin-sync.lock"
+
+
+@contextmanager
+def plugin_sync_lock(repo_root: Path, *, timeout: float = 5.0) -> Iterator[None]:
+    """Acquire the shared ``plugin sync`` / ``plugin doctor --strict`` lock.
+
+    The lock is a :func:`eawf.lock.portalock.acquire` on
+    :func:`plugin_sync_lock_path`. ``flock`` is non-recursive, so callers
+    must hold the lock at exactly one nesting level per invocation.
+
+    Args:
+        repo_root: Repository root (the directory containing ``.ea/``).
+        timeout: Seconds to wait before raising :class:`LockTimeout`.
+
+    Raises:
+        LockTimeout: When the lock cannot be acquired within *timeout*.
+    """
+    lock_target = plugin_sync_lock_path(repo_root)
+    lock_target.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"plugin_sync_lock acquiring target={lock_target}")
+    with portalock.acquire(lock_target, timeout=timeout):
+        yield
+    logger.debug(f"plugin_sync_lock released target={lock_target}")
 
 
 @dataclass(frozen=True)
@@ -220,6 +279,39 @@ def doctor_plugin(target_dir: Path) -> DoctorReport:
     return DoctorReport(target_dir=target_dir, ok=ok, drifted=drifted, missing=missing)
 
 
+def doctor_plugin_strict(target_dir: Path, *, timeout: float = 5.0) -> DoctorReport:
+    """Run :func:`doctor_plugin` under the shared sync/doctor advisory lock.
+
+    The ``--strict`` drift gate is byte-for-byte identical to the default
+    sweep; the difference is the *lock-scope*. Holding
+    :func:`plugin_sync_lock` for the duration of the sweep guarantees no
+    concurrent ``plugin sync`` (or managed-file edit mediated through the
+    same lock) interleaves with the checksum read, so a green strict
+    doctor means the on-disk tree matched the renderer at a single
+    serialised instant — the property CI needs to fail a PR on a stale
+    ``build/<runtime>-plugin/`` tree without flaking.
+
+    Args:
+        target_dir: Workspace root that hosts ``.claude/`` and ``.ea/``.
+        timeout: Seconds to wait for the shared lock before raising
+            :class:`~eawf.lock.portalock.LockTimeout`.
+
+    Returns:
+        :class:`DoctorReport` — same shape as :func:`doctor_plugin`.
+
+    Raises:
+        LockTimeout: When the shared lock cannot be acquired in *timeout*.
+    """
+    target_dir = Path(target_dir).resolve()
+    with plugin_sync_lock(target_dir, timeout=timeout):
+        report = doctor_plugin(target_dir)
+    logger.info(
+        f"doctor_plugin_strict target={target_dir} clean={report.clean} "
+        f"drifted={len(report.drifted)} missing={len(report.missing)}"
+    )
+    return report
+
+
 def _expected_bytes_for_region(region_id: str) -> bytes:
     """Wrapper around :func:`plugin_install._expected_bytes_for` (re-exported)."""
     # Indirection so tests can monkeypatch a single resolution point.
@@ -233,4 +325,7 @@ __all__ = [
     "DoctorEntry",
     "DoctorReport",
     "doctor_plugin",
+    "doctor_plugin_strict",
+    "plugin_sync_lock",
+    "plugin_sync_lock_path",
 ]

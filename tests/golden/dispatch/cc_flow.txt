@@ -1,0 +1,52 @@
+# Wave P07-I01-W05: flow surface
+
+## Wave tags
+
+- agent_role: executor
+- effort_bucket: L
+- success_criteria:
+  - autonomous execute loop drains the ready frontier
+
+## Scope
+
+src/eawf/, tests/
+
+Scope is anchored on iter P07-I01 under scope ABC. Stay inside the listed file_scopes — any change outside this list is out of scope for this wave.
+
+## Dependencies
+
+None.
+
+## Decisions
+
+None.
+
+## Hypotheses
+
+None.
+
+## Recent audits
+
+None.
+
+## Working tree
+
+Worktree path: inline
+
+## Workflow
+
+1. cd into the wave's worktree (see `## Working tree` above).
+2. Implement edits in dependency order: schemas → logic → CLI → tests.
+3. Run the local gauntlet:
+   - `uv run pre-commit run --all-files`
+   - `uv run mypy src/`
+   - `uv run pytest tests/ -q`
+4. Commit with prefix `[P07-W05] <type>: <summary>` (3-6 bullet body) and the
+   recognized Claude or Codex `Co-Authored-By` trailer.
+
+## Out of scope
+
+- Do **not** push the branch.
+- Do **not** open a PR.
+- Do **not** edit `.ea/state.json` or `.ea/store/event.jsonl` directly — every mutation goes through `uv run eawf state ...`.
+- Never `git commit --no-verify`; root-cause the hook instead.
