@@ -3108,7 +3108,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T16:37:09.495273Z",
+  "updated_at": "2026-05-22T17:03:03.299851Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11393,8 +11393,8 @@
       "blocks": [
         "P27-I01-W15"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w12",
+      "closed_at": "2026-05-22T17:02:58.179497Z",
       "commit": null,
       "deps": [
         "P27-I01-W11"
@@ -11410,25 +11410,25 @@
       "id": "P27-I01-W12",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:14.361936Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "AbstractMetricsStore protocol has SQLite + DuckDB impls with init_schema idempotent (second call no-ops) verified by a round-trip test; DDL is generated from the Pydantic row models; an ImportError on duckdb auto-falls-back to SQLite verified by a monkeypatched-import test"
       ],
       "title": "feat: AbstractMetricsStore + SQLite default + DuckDB opt-in + auto-fallback",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W12-1779468648"
     },
     "P27-I01-W13": {
       "agent_role": "executor",
       "blocks": [
         "P27-I01-W15"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w13",
+      "closed_at": "2026-05-22T17:03:00.670463Z",
       "commit": null,
       "deps": [
         "P27-I01-W11"
@@ -11444,17 +11444,17 @@
       "id": "P27-I01-W13",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:14.760525Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the event_jsonl adapter yields rows from event + audit + role_report fixtures and skips a corrupt line with a logged warning; the claude_session adapter parses a fixture session log into TelemetrySession rows; both implement the SessionSource protocol verified by isinstance"
       ],
       "title": "feat: telemetry source adapters — event_jsonl + claude_session",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W13-1779468650"
     },
     "P27-I01-W14": {
       "agent_role": "executor",
@@ -11723,8 +11723,8 @@
         "P27-I01-W23",
         "P27-I01-W27"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w22",
+      "closed_at": "2026-05-22T17:03:02.625092Z",
       "commit": null,
       "deps": [
         "P27-I01-W08",
@@ -11743,17 +11743,17 @@
       "id": "P27-I01-W22",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:18.394754Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf migrate runs a v1.0-to-v1.1 chain with pre/post Pydantic-load invariants per step verified by a fixture migration; writes route through the daemon canonical writer with no direct atomic_write_json verified by asserting the writer call path; --dry-run makes no write and a mid-chain failure restores from the gitignored state.json.bak.* backup"
       ],
       "title": "feat: eawf migrate + Migration protocol + chain runner via daemon writer",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W22-1779468652"
     },
     "P27-I01-W23": {
       "agent_role": "executor",
@@ -12967,6 +12967,28 @@
       "status": "merged",
       "wave_id": "P27-I01-W11"
     },
+    "WT-P27-I01-W12-1779468648": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w12",
+      "created_at": "2026-05-22T16:50:48.298163Z",
+      "id": "WT-P27-I01-W12-1779468648",
+      "merged_commit": "7fd9c5d",
+      "owner_session_id": "p27-w12",
+      "path": ".ea/worktrees/p27-w12",
+      "status": "merged",
+      "wave_id": "P27-I01-W12"
+    },
+    "WT-P27-I01-W13-1779468650": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w13",
+      "created_at": "2026-05-22T16:50:50.309683Z",
+      "id": "WT-P27-I01-W13-1779468650",
+      "merged_commit": "7072730",
+      "owner_session_id": "p27-w13",
+      "path": ".ea/worktrees/p27-w13",
+      "status": "merged",
+      "wave_id": "P27-I01-W13"
+    },
     "WT-P27-I01-W17-1779465014": {
       "base_branch": "feature/eawf-v0.3-p27",
       "branch": "feature/eawf-v0.3-p27-w17",
@@ -13021,6 +13043,17 @@
       "path": ".ea/worktrees/p27-w21",
       "status": "merged",
       "wave_id": "P27-I01-W21"
+    },
+    "WT-P27-I01-W22-1779468652": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w22",
+      "created_at": "2026-05-22T16:50:52.387257Z",
+      "id": "WT-P27-I01-W22-1779468652",
+      "merged_commit": "f715373",
+      "owner_session_id": "p27-w22",
+      "path": ".ea/worktrees/p27-w22",
+      "status": "merged",
+      "wave_id": "P27-I01-W22"
     },
     "WT-P27-I01-W24-1779465020": {
       "base_branch": "feature/eawf-v0.3-p27",
