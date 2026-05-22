@@ -358,6 +358,32 @@ def _allowed_emails() -> frozenset[str]:
     return frozenset(e.casefold() for e in (_DEFAULT_ALLOWED_EMAILS | _eawf_author_emails()))
 
 
+# RFC 2606 / 6761 reserved domains used in fixtures + docs; never real PII.
+_RESERVED_EMAIL_DOMAINS = frozenset({"example.com", "example.org", "example.net", "example.edu"})
+_RESERVED_EMAIL_TLDS = (".example", ".invalid", ".localhost", ".test")
+
+
+def _is_placeholder_or_nonemail(addr: str) -> bool:
+    """Return ``True`` for reserved placeholders and ``@``-refs that are not emails.
+
+    Guards the email-leak gate against two false-positive classes the
+    scrubber's loose address-shaped pattern would otherwise flag:
+
+    - RFC 2606 / 6761 reserved example domains (test fixtures, docs) such
+      as ``test@example.com``; and
+    - version / action pins like ``setup-uv@v8.1.0`` whose top-level
+      label is not an alphabetic TLD.
+    """
+    _, _, domain = addr.partition("@")
+    domain = domain.casefold()
+    if not domain:
+        return True
+    if domain in _RESERVED_EMAIL_DOMAINS or domain.endswith(_RESERVED_EMAIL_TLDS):
+        return True
+    tld = domain.rsplit(".", 1)[-1]
+    return not (tld.isalpha() and len(tld) >= 2)
+
+
 def _read_text_lines(path: Path) -> list[str] | None:
     """Return ``path``'s text lines, or ``None`` for unreadable/binary files.
 
@@ -403,6 +429,8 @@ def _scan_email_leaks(paths: list[str], *, cwd: Path) -> list[LeakFinding]:
                 continue
             for match in pattern.finditer(line):
                 if match.group(0).casefold() in allowed:
+                    continue
+                if _is_placeholder_or_nonemail(match.group(0)):
                     continue
                 findings.append(LeakFinding(path=rel, lineno=lineno, snippet=match.group(0)))
     return findings

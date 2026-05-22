@@ -203,10 +203,27 @@ def test_path_leak_lint_staged_fallback_flags_staged_leak(tmp_path: Path) -> Non
 
 def test_email_leak_lint_exits_one_on_seeded_leak(tmp_path: Path) -> None:
     leak = tmp_path / "leak.md"
-    body = "contact person@example.com for details\n"  # pragma: allowlist secret
+    body = "contact person@acmecorp.io for details\n"  # pragma: allowlist secret
     leak.write_text(body, encoding="utf-8")
     result = runner.invoke(app, ["hook", "email-leak-lint", str(leak)])
     assert result.exit_code == 1, result.stdout
+
+
+def test_email_leak_lint_skips_reserved_example_domain(tmp_path: Path) -> None:
+    # RFC 2606 reserved domains are standard placeholders, never real PII.
+    ok = tmp_path / "fixture.py"
+    ok.write_text('addr = "test@example.com"\n', encoding="utf-8")
+    result = runner.invoke(app, ["hook", "email-leak-lint", str(ok)])
+    assert result.exit_code == 0, result.stdout
+
+
+def test_email_leak_lint_skips_action_version_ref(tmp_path: Path) -> None:
+    # A version / action pin like ``setup-uv@v8.1.0`` is not an email
+    # (its top-level label is not an alphabetic TLD).
+    ok = tmp_path / "ci.yaml"
+    ok.write_text("      - uses: astral-sh/setup-uv@v8.1.0\n", encoding="utf-8")
+    result = runner.invoke(app, ["hook", "email-leak-lint", str(ok)])
+    assert result.exit_code == 0, result.stdout
 
 
 def test_email_leak_lint_allowlists_noreply(tmp_path: Path) -> None:
