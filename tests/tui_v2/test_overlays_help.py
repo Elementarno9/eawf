@@ -14,6 +14,7 @@ from pathlib import Path
 from eawf.tui_v2.app import EaApp
 from eawf.tui_v2.screens.help import (
     HelpScreen,
+    config_overlay_rows,
     global_key_rows,
     pane_nav_rows,
     scope_key_rows,
@@ -79,6 +80,32 @@ def test_scope_key_rows_user_is_empty() -> None:
     assert scope_key_rows("user") == ()
 
 
+def test_config_overlay_rows_describe_arrows_and_enter() -> None:
+    # The config-overlay redesign: arrows navigate, Enter is the sole
+    # mutator. Space (the old cycler) must not appear as a primary key.
+    rows = config_overlay_rows()
+    keys = [key for key, _ in rows]
+    actions = " ".join(action for _, action in rows)
+    assert "↑ / ↓" in keys
+    assert "← / →" in keys
+    assert "Enter" in keys
+    # Vim keys are aliases only — surfaced in the action text, never as the
+    # primary key column.
+    assert "j" not in keys
+    assert "k" not in keys
+    assert "vim: k / j" in actions
+
+
+def test_config_overlay_rows_enter_is_sole_mutator() -> None:
+    # Enter carries the toggle / cycle / edit affordance; the legacy Space
+    # cycler is gone from the keymap.
+    rows = dict(config_overlay_rows())
+    assert "toggle" in rows["Enter"]
+    assert "cycle" in rows["Enter"]
+    assert "edit" in rows["Enter"]
+    assert "Space" not in rows
+
+
 # --------------------------------------------------------------------------
 # Pilot behaviour
 # --------------------------------------------------------------------------
@@ -114,14 +141,19 @@ def test_help_second_question_mark_is_noop() -> None:
 
 def test_help_renders_keymap_and_verbs() -> None:
     async def body() -> None:
+        from textual.containers import VerticalScroll
+
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
             await pilot.press("question_mark")
             await pilot.pause()
-            rendered = app.export_screenshot()
-            assert "PageUp" in rendered
-            assert "/find" in rendered
+            # The pane-nav keys sit at the top; the palette verbs scroll
+            # below the fold (the keymap now also lists the config overlay).
+            assert "PageUp" in app.export_screenshot()
+            app.screen.query_one("#help-container", VerticalScroll).scroll_end(animate=False)
+            await pilot.pause()
+            assert "/find" in app.export_screenshot()
 
     asyncio.run(body())
 

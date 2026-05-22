@@ -74,6 +74,19 @@ _SCOPE_KEYS: dict[ScopeName, tuple[tuple[str, str], ...]] = {
     "wave_board": (("f", "cycle filter (all / active-only)"),),
 }
 
+#: Config-overlay keys (key, action) — the "Config overlay" table. Arrows
+#: navigate (``↑`` / ``↓`` fields, ``←`` / ``→`` tabs) and ``Enter`` is
+#: the sole mutator; vim ``j`` / ``k`` ride ``↓`` / ``↑`` as aliases.
+_CONFIG_OVERLAY_KEYS: tuple[tuple[str, str], ...] = (
+    ("↑ / ↓", "move field cursor (vim: k / j)"),
+    ("← / →", "switch tab"),
+    ("Enter", "toggle bool / cycle choice / edit value"),
+    ("s", "save staged edits"),
+    ("r", "reset staged edits"),
+    ("L", "cycle writable layer"),
+    ("Esc", "cancel inline edit / close"),
+)
+
 
 def global_key_rows() -> tuple[tuple[str, str], ...]:
     """Return the global key rows (key, action) for the help table."""
@@ -83,6 +96,11 @@ def global_key_rows() -> tuple[tuple[str, str], ...]:
 def pane_nav_rows() -> tuple[tuple[str, str, str], ...]:
     """Return the pane-navigation rows (key, action, vim-alias)."""
     return _PANE_NAV
+
+
+def config_overlay_rows() -> tuple[tuple[str, str], ...]:
+    """Return the config-overlay key rows (key, action) for the help table."""
+    return _CONFIG_OVERLAY_KEYS
 
 
 def scope_key_rows(scope: ScopeName) -> tuple[tuple[str, str], ...]:
@@ -165,6 +183,9 @@ class HelpScreen(ModalScreen[None]):
                     yield Static(f"  {key:<10} {action}", classes="help-row")
             else:
                 yield Static("  (none)", classes="help-row")
+            yield Static("Config overlay (arrows nav, Enter edits)", classes="help-section")
+            for key, action in config_overlay_rows():
+                yield Static(f"  {key:<10} {action}", classes="help-row")
             yield Static("Palette verbs", classes="help-section")
             for verb in visible_verbs(self._scope):
                 yield Static(f"  {verb.name:<16} {verb.hint}", classes="help-row")
@@ -217,6 +238,7 @@ def open_help(app: object) -> None:
 
 __all__ = [
     "HelpScreen",
+    "config_overlay_rows",
     "global_key_rows",
     "open_help",
     "pane_nav_rows",

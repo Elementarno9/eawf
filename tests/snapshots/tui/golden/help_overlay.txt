@@ -16,10 +16,10 @@
       │    /          open palette                                                                               │
       │    Tab        next pane                                                                                  │
       │    Shift-Tab  previous pane                                                                              │
-      │                                                                                                          │
+      │                                                                                                      ▁▁  │
       │  Pane navigation (vim alias)                                                                             │
       │    ↑          line up  (k)                                                                               │
-      │    ↓          line down  (j)                                                                         ▇▇  │
+      │    ↓          line down  (j)                                                                             │
       │    ←          collapse row / scroll left  (h)                                                            │
       │    →          expand row / scroll right  (l)                                                             │
       │    PageUp     half-page up  (Ctrl-u)                                                                     │
@@ -31,8 +31,8 @@
       │  Repo screen keys                                                                                        │
       │    c          open config                                                                                │
       │                                                                                                          │
-      │  Palette verbs                                                                                           │
-      │    /find            fuzzy ID + title search                                                              │
-      │    /filter          filter pane contents                                                                 │
+      │  Config overlay (arrows nav, Enter edits)                                                                │
+      │    ↑ / ↓      move field cursor (vim: k / j)                                                             │
+      │    ← / →      switch tab                                                                                 │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

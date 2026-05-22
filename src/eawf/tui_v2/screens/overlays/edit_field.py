@@ -1,10 +1,11 @@
 """``EditFieldModal`` — per-type single-field editor overlay.
 
-The scalar-edit surface the :class:`~eawf.tui_v2.screens.overlays.config_modal.ConfigModal`
-opens when the operator presses ``Enter`` on a ``str`` / ``int`` /
-``float`` / path field (``bool`` toggles in place with ``Space`` and
-``choice`` / ``multichoice`` cycle in place with ``←`` / ``→`` — those
-never reach this overlay). The modal presents a single
+The larger scalar-edit surface the
+:class:`~eawf.tui_v2.screens.overlays.config_modal.ConfigModal` opens for
+a ``str`` field whose value is multi-line or wider than its row (a
+``bool`` toggles in place on ``Enter``, a ``choice`` forward-cycles on
+``Enter``, and a short ``str`` / ``int`` / ``float`` edits inline in its
+row — none of those reach this overlay). The modal presents a single
 :class:`~textual.widgets.Input` seeded with the field's current value;
 ``Enter`` validates the buffer against the field's declared type / range
 and dismisses with the typed value, ``Esc`` cancels (dismisses ``None``).

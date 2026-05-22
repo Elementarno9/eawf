@@ -32,6 +32,6 @@
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
-      │  [ ↑/↓ field · ←/→ or Space change · Enter edit · s save · r reset · L layer · Esc close ]               │
+      │  [ ↑/↓ field · ←/→ tab · Enter edit · s save · r reset · L layer · Esc close ]                           │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

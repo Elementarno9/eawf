@@ -9,32 +9,30 @@ single source of truth shared with the ``eawf config`` CLI menu, so the
 two cannot drift.
 
 Navigation model (keymap conventions — arrows primary, full key names).
-The modal carries a **focus zone** that sits either on the **tab bar**
-or on a **field** inside the active tab; ``↑`` / ``↓`` traverse between
-the two zones and ``←`` / ``→`` are interpreted relative to the current
-zone. This focus-zone model (rather than the field's *type*) decides what
-``←`` / ``→`` do, so a tab whose only field is a ``choice`` (e.g.
-``runtime``) is never trapped cycling its value — ``↑`` always returns to
-the tab bar.
+The field cursor sits on one row of the active tab; the field's *type*
+(not a focus zone) decides what ``Enter`` does, so every key is
+unambiguous regardless of which field is highlighted.
 
-* ``↑`` / ``↓`` — traverse the zones / the field list. On the tab bar,
-  ``↓`` drops onto the first field. On the first field, ``↑`` climbs back
-  to the tab bar. Between fields they step the cursor; ``↓`` on the last
-  field is a no-op.
-* ``←`` / ``→`` — zone-sensitive. On the tab bar they switch the active
-  tab (previous / next); on a field they cycle a ``choice`` /
-  ``multichoice`` value (and never switch tabs while a field is focused).
-* ``Space`` — on a field, change its value: toggle a ``bool`` or cycle a
-  ``choice`` / ``multichoice`` (same as ``←`` / ``→`` on a choice). On
-  the tab bar it switches to the next tab.
-* ``Enter`` — on a field, open the
-  :class:`~eawf.tui_v2.screens.overlays.edit_field.EditFieldModal` for a
-  ``str`` / ``int`` / ``float`` / path field (the scalar editor).
+* ``↑`` / ``↓`` — move the field cursor up / down within the active tab,
+  clamped to the first / last field (no wrap; ``↑`` on the first field
+  and ``↓`` on the last are no-ops).
+* ``←`` / ``→`` — switch the active tab (previous / next, wrapping). The
+  cursor resets to the first field of the new tab.
+* ``Enter`` — the **sole mutator**, dispatching on the field's type: a
+  ``bool`` toggles in place; a ``choice`` forward-cycles its options
+  (``a → b → c → a``); a ``str`` / ``int`` / ``float`` field edits
+  **inline** — an :class:`~textual.widgets.Input` mounts in the row,
+  ``Enter`` commits the validated value and ``Esc`` cancels. A ``str``
+  field that already holds a newline (or whose value is wider than the
+  row) routes to the popup
+  :class:`~eawf.tui_v2.screens.overlays.edit_field.EditFieldModal`
+  instead, which gives the operator more room.
 * ``s`` — save: flush every dirty field through the layered-config writer.
 * ``r`` — reset: drop every staged (dirty) edit.
 * ``L`` — cycle the writable layer the save targets.
-* ``Esc`` — on a dirty modal, prompt before discarding (V15 dirty-guard);
-  on a clean modal, close immediately.
+* ``Esc`` — cancels an active inline edit; otherwise on a dirty modal it
+  prompts before discarding (V15 dirty-guard) and on a clean modal it
+  closes immediately.
 
 **Save path (AGENTS rule 4).** Saving routes through the layered-config
 writer — :func:`eawf.cli.commands.config._save_value_to_layer`, the same
@@ -57,11 +55,12 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Static, TabbedContent, TabPane
+from textual.widgets import Input, Static, TabbedContent, TabPane
 
+from eawf.cli.errors import InvalidInput
 from eawf.config.defaults import built_in_defaults
 from eawf.config.layered import (
     WRITABLE_LAYERS,
@@ -83,19 +82,83 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Field types that toggle / cycle in place inside the modal (never open
-#: the scalar :class:`EditFieldModal`). ``bool`` toggles on ``Space``;
-#: ``choice`` / ``multichoice`` cycle on ``←`` / ``→`` / ``Space``.
-_INLINE_TYPES: frozenset[str] = frozenset({"bool", "choice", "multichoice"})
+#: The action ``Enter`` performs on a field, resolved from the field's
+#: declared type (and, for ``str``, the current value's shape):
+#:
+#: * ``"toggle"`` — flip a ``bool`` in place.
+#: * ``"cycle"`` — forward-cycle a ``choice`` through its options.
+#: * ``"inline"`` — edit a scalar (``int`` / ``float`` / short ``str``)
+#:   via an :class:`~textual.widgets.Input` mounted in the row.
+#: * ``"popup"`` — edit via the larger
+#:   :class:`~eawf.tui_v2.screens.overlays.edit_field.EditFieldModal`
+#:   (a ``str`` that is multi-line or wider than the row).
+#: * ``"none"`` — no edit affordance (e.g. the dead ``multichoice``
+#:   scaffold, which has zero registry entries).
+EnterAction = Literal["toggle", "cycle", "inline", "popup", "none"]
 
-#: Field types whose value cycles (``←`` / ``→`` / ``Space``) through a
-#: closed option set rather than opening the scalar editor.
-_CHOICE_TYPES: frozenset[str] = frozenset({"choice", "multichoice"})
+#: Field types edited via a text buffer (the inline :class:`Input` or the
+#: popup editor) rather than toggled / cycled in place.
+_SCALAR_TYPES: frozenset[str] = frozenset({"int", "float", "str"})
 
-#: The two focus zones the modal cursor can occupy. ``"tabs"`` puts the
-#: cursor on the tab bar (``←`` / ``→`` switch tabs); ``"fields"`` puts it
-#: on a field row (``←`` / ``→`` cycle that field's value).
-FocusZone = Literal["tabs", "fields"]
+
+def needs_popup_edit(entry: ConfigKey, value: Any, *, row_width: int) -> bool:
+    """Return ``True`` when a ``str`` field must use the popup editor.
+
+    A ``str`` edits inline by default, but routes to the larger popup
+    :class:`EditFieldModal` when the current value would not fit / read
+    well in a single-line in-row input: the registry marks the field
+    :attr:`ConfigKey.multiline`, the value already contains a newline, or
+    the rendered value is wider than the row. Non-``str`` types never use
+    the popup (``bool`` / ``choice`` mutate in place; ``int`` / ``float``
+    always edit inline), so this returns ``False`` for them.
+
+    Args:
+        entry: The registry entry describing the field.
+        value: The field's currently-resolved value.
+        row_width: The width (in cells) available for an inline input —
+            typically the rendered field-row width. A non-positive width
+            disables the width check (only the newline / multiline hints
+            then route to the popup).
+
+    Returns:
+        ``True`` to route to the popup editor, ``False`` to edit inline.
+    """
+    if entry.type != "str":
+        return False
+    if entry.multiline:
+        return True
+    text = "" if value is None else str(value)
+    if "\n" in text:
+        return True
+    return row_width > 0 and len(text) > row_width
+
+
+def enter_action(entry: ConfigKey, value: Any, *, row_width: int) -> EnterAction:
+    """Resolve the action ``Enter`` performs on *entry* given its value.
+
+    The dispatch is the heart of the Enter-as-sole-mutator model: it maps
+    a field's declared :attr:`ConfigKey.type` (and, for ``str``, the
+    value's shape via :func:`needs_popup_edit`) onto one
+    :data:`EnterAction`. Keeping it a pure function makes the keymap
+    unit-testable without mounting Textual.
+
+    Args:
+        entry: The registry entry describing the field.
+        value: The field's currently-resolved value (drives ``str``
+            inline-vs-popup routing).
+        row_width: The inline-input width budget passed through to
+            :func:`needs_popup_edit`.
+
+    Returns:
+        The :data:`EnterAction` for the field.
+    """
+    if entry.type == "bool":
+        return "toggle"
+    if entry.type == "choice":
+        return "cycle"
+    if entry.type in _SCALAR_TYPES:
+        return "popup" if needs_popup_edit(entry, value, row_width=row_width) else "inline"
+    return "none"
 
 
 def writable_layers_for(workspace: Path | None, repo: Path | None) -> tuple[str, ...]:
@@ -193,7 +256,8 @@ def toggle_bool(entry: ConfigKey, merged: dict[str, Any], dirty: dict[str, Any])
     """Return a new dirty map with *entry*'s bool value flipped.
 
     No-op (returns *dirty* unchanged) when *entry* is not a ``bool`` field
-    so the caller can route every ``Space`` press through here.
+    so the caller can route every ``Enter`` on a non-bool through here
+    harmlessly.
 
     Args:
         entry: The field to toggle.
@@ -219,9 +283,10 @@ def cycle_choice(
     """Return a new dirty map with *entry*'s choice cycled by *step*.
 
     Cycles a ``choice`` field through its declared :attr:`ConfigKey.choices`
-    (wrapping at both ends). For ``multichoice`` the *first* current item
-    is cycled (a minimal in-place affordance; full multi-select edits go
-    through the scalar editor). No-op for other types.
+    (wrapping at both ends). The ``Enter`` mutator forward-cycles with
+    ``step=+1`` (``a → b → c → a``). For the dead ``multichoice`` scaffold
+    the *first* current item is cycled — no registry entry exercises this
+    today. No-op for other types.
 
     Args:
         entry: The field to cycle.
@@ -252,37 +317,6 @@ def cycle_choice(
         index = 0
     cycled = choices[(index + step) % len(choices)]
     return {**dirty, entry.key: [cycled, *items[1:]]}
-
-
-def change_value(
-    entry: ConfigKey,
-    merged: dict[str, Any],
-    dirty: dict[str, Any],
-    *,
-    step: int = 1,
-) -> dict[str, Any]:
-    """Return a new dirty map advancing *entry*'s value (``Space`` semantics).
-
-    Unifies the in-place value change so one key serves every inline type:
-    a ``bool`` flips, a ``choice`` / ``multichoice`` cycles by *step*. A
-    scalar (``str`` / ``int`` / ``float`` / path) is a no-op here — those
-    edit through the scalar :class:`EditFieldModal`.
-
-    Args:
-        entry: The field to advance.
-        merged: The merged config (resolves the pre-change value).
-        dirty: The current staged-edit map.
-        step: Cycle direction for choice fields (``+1`` next, ``-1``
-            previous); ignored for ``bool``.
-
-    Returns:
-        A new dirty map (the input is not mutated).
-    """
-    if entry.type == "bool":
-        return toggle_bool(entry, merged, dirty)
-    if entry.type in _CHOICE_TYPES:
-        return cycle_choice(entry, merged, dirty, step=step)
-    return dict(dirty)
 
 
 def merged_config(workspace: Path | None, repo: Path | None) -> dict[str, Any]:
@@ -364,14 +398,15 @@ class ConfigModal(ModalScreen[None]):
     """Registry-driven tabbed config window (Esc/dirty-guard to close).
 
     Renders every :data:`CONFIG_REGISTRY` key in alphabetical tabs
-    (alphabetical fields per tab). A focus zone (:attr:`focus_zone`) sits
-    on the tab bar or on a field row: ``↑`` / ``↓`` traverse the zones and
-    the field list, ``←`` / ``→`` switch tabs (tab bar) or cycle a value
-    (field), ``Space`` advances a value (toggle bool / cycle choice),
-    ``Enter`` opens the scalar :class:`EditFieldModal`, ``s`` saves
-    through the layered writer, ``r`` resets staged edits, ``L`` cycles
-    the writable layer, and ``Esc`` closes (prompting first when there are
-    staged edits).
+    (alphabetical fields per tab). The cursor sits on one field row:
+    ``↑`` / ``↓`` move it within the tab (clamped to first / last),
+    ``←`` / ``→`` switch tabs, and ``Enter`` is the **sole mutator** —
+    it toggles a ``bool``, forward-cycles a ``choice``, or edits a scalar
+    (``int`` / ``float`` / ``str``) inline (a long / multi-line ``str``
+    routes to the popup :class:`EditFieldModal`). ``s`` saves through the
+    layered writer, ``r`` resets staged edits, ``L`` cycles the writable
+    layer, and ``Esc`` cancels an inline edit or else closes (prompting
+    first when there are staged edits).
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -406,8 +441,20 @@ class ConfigModal(ModalScreen[None]):
     ConfigModal .config-field.-dirty {
         color: $warning;
     }
-    ConfigModal #config-tabs.-tabbar-focused Tabs {
-        text-style: bold;
+    ConfigModal .config-edit-row {
+        height: 1;
+    }
+    ConfigModal .config-edit-row #config-inline-input {
+        width: 1fr;
+        height: 1;
+        border: none;
+        padding: 0;
+        background: $surface;
+        color: $accent;
+    }
+    ConfigModal .config-edit-error {
+        color: $error;
+        height: 1;
     }
     ConfigModal .config-hint {
         dock: bottom;
@@ -418,20 +465,19 @@ class ConfigModal(ModalScreen[None]):
     """
 
     #: Keymap (arrows primary; full key names in the footer hint).
-    #: ``up`` / ``down`` traverse the focus zones (tab bar ↔ field list),
-    #: ``left`` / ``right`` switch tabs (on the tab bar) or cycle a value
-    #: (on a field), ``space`` advances a value, ``enter`` edits a scalar,
-    #: ``s`` saves, ``r`` resets, ``L`` cycles the layer, and ``escape``
-    #: closes (dirty-guarded). ``j`` / ``k`` ride ``down`` / ``up`` as vim
-    #: aliases.
+    #: ``up`` / ``down`` move the field cursor within the active tab
+    #: (clamped), ``left`` / ``right`` switch tabs, ``enter`` mutates the
+    #: focused field (toggle / cycle / inline-edit), ``s`` saves, ``r``
+    #: resets, ``L`` cycles the layer, and ``escape`` cancels an inline
+    #: edit or closes (dirty-guarded). ``j`` / ``k`` ride ``down`` / ``up``
+    #: as vim aliases.
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("up", "focus_up", "up", show=False),
-        Binding("down", "focus_down", "down", show=False),
-        Binding("k", "focus_up", "up", show=False),
-        Binding("j", "focus_down", "down", show=False),
-        Binding("left", "horizontal(-1)", "prev", show=False),
-        Binding("right", "horizontal(1)", "next", show=False),
-        Binding("space", "change_value", "change", show=False),
+        Binding("up", "cursor_up", "up", show=False),
+        Binding("down", "cursor_down", "down", show=False),
+        Binding("k", "cursor_up", "up", show=False),
+        Binding("j", "cursor_down", "down", show=False),
+        Binding("left", "switch_tab(-1)", "prev tab", show=False),
+        Binding("right", "switch_tab(1)", "next tab", show=False),
         Binding("enter", "edit", "edit", show=False),
         Binding("s", "save", "save", show=False),
         Binding("r", "reset", "reset", show=False),
@@ -439,13 +485,9 @@ class ConfigModal(ModalScreen[None]):
         Binding("escape", "close", "close", show=False),
     ]
 
-    #: Which focus zone the cursor occupies: the tab bar or a field row.
-    #: Opens on the first field (immediately actionable); ``↑`` from there
-    #: climbs to the tab bar, ``↓`` from the tab bar drops back onto it.
-    focus_zone: reactive[FocusZone] = reactive[FocusZone]("fields")
-
-    #: Index of the highlighted field inside the active tab (only the
-    #: cursor when :attr:`focus_zone` is ``"fields"``).
+    #: Index of the highlighted field inside the active tab — the field
+    #: cursor. Opens on field 0 (immediately actionable); ``↑`` / ``↓``
+    #: clamp it to the first / last field of the active tab.
     field_index: reactive[int] = reactive(0)
 
     def __init__(
@@ -473,6 +515,11 @@ class ConfigModal(ModalScreen[None]):
         default_layer = "repo" if "repo" in self._layers else self._layers[0]
         self._view = ConfigModalState(layer=default_layer)
         self._merged: dict[str, Any] = merged_config(workspace, repo)
+        #: The field key whose row currently hosts an inline ``Input``, or
+        #: ``None`` when no inline edit is open. Only one row edits at a
+        #: time; while set, ``↑`` / ``↓`` / ``←`` / ``→`` are inert and the
+        #: Input owns ``Enter`` (commit) / ``Esc`` (cancel).
+        self._editing_key: str | None = None
 
     # -- composition --------------------------------------------------------
 
@@ -500,21 +547,22 @@ class ConfigModal(ModalScreen[None]):
 
         :class:`TabbedContent` auto-focuses its internal tab bar, whose
         own ``←`` / ``→`` bindings would otherwise steal the arrows the
-        modal needs for the focus-zone model. Clearing focus routes every
+        modal needs for its own tab switching. Clearing focus routes every
         keystroke to this screen's bindings so the modal owns the full
-        interaction model (it drives tab switching and field cycling itself
-        via :meth:`action_horizontal`).
+        interaction model (it drives tab switching via
+        :meth:`action_switch_tab`). The exception is while an inline edit
+        is open: focus then belongs to the mounted :class:`Input`.
         """
         self.set_focus(None)
         self._repaint_fields()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        """Repaint rows + chrome whenever the active tab changes.
+        """Repaint rows whenever the active tab changes.
 
-        Fires for both the keyboard tab switch (:meth:`_switch_tab`) and a
-        programmatic ``tabs.active = ...`` assignment, so the cursor caret /
-        ``-selected`` style always tracks the active tab's field list rather
-        than going stale on the previously-active pane.
+        Fires for both the keyboard tab switch (:meth:`action_switch_tab`)
+        and a programmatic ``tabs.active = ...`` assignment, so the cursor
+        caret / ``-selected`` style always tracks the active tab's field
+        list rather than going stale on the previously-active pane.
         """
         event.stop()
         if self.is_mounted:
@@ -559,18 +607,16 @@ class ConfigModal(ModalScreen[None]):
         return f"{caret}{dirty_mark} {entry.key:<42} {type_cell:<14} {format_value(entry, value)}"
 
     def _hint_line(self) -> str:
-        """Render the footer keymap hint for the current focus zone.
+        """Render the footer keymap hint.
 
-        The hint is zone-aware so the operator always sees what ``←`` /
-        ``→`` and ``Space`` will do *right now*: switch tabs while the tab
-        bar is focused, or change a value while a field is focused.
+        The hint reflects the type-dispatched keymap: arrows navigate
+        (``↑`` / ``↓`` fields, ``←`` / ``→`` tabs) and ``Enter`` is the
+        sole mutator. While an inline edit is open the hint flips to the
+        commit / cancel keys the mounted :class:`Input` owns.
         """
-        if self.focus_zone == "tabs":
-            return "[ ←/→ switch tab · ↓ fields · s save · r reset · L layer · Esc close ]"
-        return (
-            "[ ↑/↓ field · ←/→ or Space change · Enter edit · "
-            "s save · r reset · L layer · Esc close ]"
-        )
+        if self._editing_key is not None:
+            return "[ Enter commit · Esc cancel ]"
+        return "[ ↑/↓ field · ←/→ tab · Enter edit · s save · r reset · L layer · Esc close ]"
 
     # -- active-context resolution -----------------------------------------
 
@@ -600,37 +646,34 @@ class ConfigModal(ModalScreen[None]):
         return fields[index]
 
     def _repaint_fields(self) -> None:
-        """Repaint the active tab's rows + chrome for the current focus zone.
+        """Repaint the active tab's field rows, layer line, and footer hint.
 
-        Only a field row in the ``"fields"`` zone shows the cursor caret /
-        ``-selected`` style; the tab bar carries a ``-tabbar-focused`` class
-        in the ``"tabs"`` zone. The footer hint is repainted too so it
-        always matches the zone.
+        The cursor field carries the ``>`` caret + ``-selected`` style; a
+        dirty field carries ``-dirty``. A row currently hosting an inline
+        :class:`Input` is skipped — that row was swapped out of the static
+        layout in :meth:`_begin_inline_edit` and is restored on commit /
+        cancel.
         """
         tab = self._active_tab()
         if not tab:
             return
-        on_fields = self.focus_zone == "fields"
         fields = keys_for_tab(tab)
         for index, entry in enumerate(fields):
+            if entry.key == self._editing_key:
+                continue
             try:
                 row = self.query_one(f"#{self._field_row_id(tab, index)}", Static)
-            except Exception:  # pragma: no cover - mid-mount guard
+            except Exception:  # pragma: no cover - mid-mount / editing guard
                 continue
-            selected = on_fields and index == self.field_index
+            selected = index == self.field_index
             row.update(self._field_line(entry, selected=selected))
             row.set_class(selected, "-selected")
             row.set_class(entry.key in self._view.dirty, "-dirty")
         self.query_one("#config-layer", Static).update(self._layer_line())
-        self._repaint_chrome()
+        self._repaint_hint()
 
-    def _repaint_chrome(self) -> None:
-        """Repaint the tab-bar focus class + the zone-aware footer hint."""
-        try:
-            tabs = self.query_one("#config-tabs", TabbedContent)
-        except Exception:  # pragma: no cover - mid-mount guard
-            return
-        tabs.set_class(self.focus_zone == "tabs", "-tabbar-focused")
+    def _repaint_hint(self) -> None:
+        """Repaint the footer hint (navigation vs inline-edit form)."""
         try:
             self.query_one("#config-hint", Static).update(self._hint_line())
         except Exception:  # pragma: no cover - mid-mount guard
@@ -641,71 +684,44 @@ class ConfigModal(ModalScreen[None]):
         if self.is_mounted:
             self._repaint_fields()
 
-    def watch_focus_zone(self) -> None:
-        """Repaint rows + chrome when the focus zone flips (tab bar ↔ fields)."""
-        if self.is_mounted:
-            self._repaint_fields()
-
     # -- actions ------------------------------------------------------------
 
-    def action_focus_up(self) -> None:
-        """Move focus up (``↑``): tab bar ← first field ← later fields.
+    def action_cursor_up(self) -> None:
+        """Move the field cursor up (``↑``), clamped to the first field.
 
-        On a later field the cursor steps to the previous field; on the
-        first field it climbs out of the field list back to the tab bar. On
-        the tab bar (or an empty tab) it is a no-op — the tab bar is the
-        top of the modal.
+        Inert while an inline edit is open (the mounted :class:`Input`
+        owns the keyboard). On the first field it is a no-op — the cursor
+        does not wrap, the least-surprising default.
         """
-        if self.focus_zone == "tabs":
+        if self._editing_key is not None:
             return
-        if self.field_index <= 0:
-            self.focus_zone = "tabs"
-            return
-        self.field_index -= 1
+        if self.field_index > 0:
+            self.field_index -= 1
 
-    def action_focus_down(self) -> None:
-        """Move focus down (``↓``): tab bar → first field → later fields.
+    def action_cursor_down(self) -> None:
+        """Move the field cursor down (``↓``), clamped to the last field.
 
-        On the tab bar this drops onto the first field of the active tab
-        (a no-op when the tab has no fields). On a field it steps to the
-        next field; the last field is a no-op (the cursor stays put rather
-        than wrapping — the least-surprising default).
+        Inert while an inline edit is open. On the last field it is a
+        no-op (no wrap), mirroring :meth:`action_cursor_up`.
         """
+        if self._editing_key is not None:
+            return
         fields = self._active_fields()
-        if self.focus_zone == "tabs":
-            if fields:
-                self.field_index = min(self.field_index, len(fields) - 1)
-                self.focus_zone = "fields"
-            return
         if not fields:
             return
         self.field_index = min(len(fields) - 1, self.field_index + 1)
 
-    def action_horizontal(self, step: int) -> None:
-        """Handle ``←`` / ``→`` for the current focus zone.
-
-        On the tab bar they switch the active tab; on a field they cycle a
-        ``choice`` / ``multichoice`` value in place (and never switch tabs,
-        which is the fix for a single-choice tab trapping the arrows). On a
-        scalar field they are a no-op (the scalar edits via ``Enter``).
-
-        Args:
-            step: ``-1`` for previous, ``+1`` for next.
-        """
-        if self.focus_zone == "tabs":
-            self._switch_tab(step)
-            return
-        entry = self._active_field()
-        if entry is not None and entry.type in _CHOICE_TYPES:
-            self._view.dirty = cycle_choice(entry, self._merged, self._view.dirty, step=step)
-            self._repaint_fields()
-
-    def _switch_tab(self, step: int) -> None:
+    def action_switch_tab(self, step: int) -> None:
         """Switch the active tab by *step* (wrapping), resetting the cursor.
+
+        Bound to ``←`` (``step=-1``) / ``→`` (``step=+1``). Inert while an
+        inline edit is open so the keystroke reaches the :class:`Input`.
 
         Args:
             step: ``-1`` for the previous tab, ``+1`` for the next.
         """
+        if self._editing_key is not None:
+            return
         if not self._tabs:
             return
         tab = self._active_tab()
@@ -714,56 +730,192 @@ class ConfigModal(ModalScreen[None]):
         except ValueError:
             index = 0
         next_tab = self._tabs[(index + step) % len(self._tabs)]
-        # Rewind the field cursor so the next ↓ lands on field 0; the
+        # Rewind the field cursor so the new pane opens on field 0; the
         # TabActivated handler repaints the rows for the new pane.
         self.field_index = 0
         self.query_one("#config-tabs", TabbedContent).active = self._tab_pane_id(next_tab)
         # Activating a tab re-focuses the tab bar widget; clear it so the
-        # modal's own arrow bindings keep winning (the modal stays in the
-        # "tabs" zone).
+        # modal's own arrow bindings keep winning.
         self.set_focus(None)
         self._repaint_fields()
 
-    def action_change_value(self) -> None:
-        """Advance the focused field's value in place (``Space``).
-
-        On a field this toggles a ``bool`` or cycles a ``choice`` /
-        ``multichoice`` (forward) — the unified value-change. On the tab bar
-        ``Space`` advances to the next tab so it stays useful there too. A
-        scalar field is a no-op here (it edits via ``Enter``).
-
-        Named ``change_value`` (not ``toggle``) to avoid clashing with the
-        Textual ``DOMNode.action_toggle(attribute_name)`` reactive helper.
-        """
-        if self.focus_zone == "tabs":
-            self._switch_tab(1)
-            return
-        entry = self._active_field()
-        if entry is None or entry.type not in _INLINE_TYPES:
-            return
-        self._view.dirty = change_value(entry, self._merged, self._view.dirty, step=1)
-        self._repaint_fields()
-
     def action_edit(self) -> None:
-        """Open the scalar :class:`EditFieldModal` for the focused field.
+        """Mutate the focused field (``Enter`` — the sole mutator).
 
-        Only fires while a field is focused; on the tab bar ``Enter`` is a
-        no-op. Only ``str`` / ``int`` / ``float`` / path fields open the
-        editor; ``bool`` / ``choice`` / ``multichoice`` mutate in place
-        (``Space`` / ``←`` / ``→``) so ``Enter`` on them is a no-op.
+        Dispatches on the field type via :func:`enter_action`: a ``bool``
+        toggles, a ``choice`` forward-cycles (``a → b → c → a``), and a
+        scalar (``int`` / ``float`` / ``str``) edits inline — a multi-line
+        / over-wide ``str`` routes to the popup :class:`EditFieldModal`
+        instead. Inert while an inline edit is already open and a no-op on
+        an empty tab.
         """
-        if self.focus_zone != "fields":
+        if self._editing_key is not None:
             return
         entry = self._active_field()
-        if entry is None or entry.type in _INLINE_TYPES:
+        if entry is None:
             return
+        value = current_value(entry, self._merged, self._view.dirty)
+        action = enter_action(entry, value, row_width=self._row_width())
+        if action == "toggle":
+            self._view.dirty = toggle_bool(entry, self._merged, self._view.dirty)
+            self._repaint_fields()
+        elif action == "cycle":
+            self._view.dirty = cycle_choice(entry, self._merged, self._view.dirty, step=1)
+            self._repaint_fields()
+        elif action == "inline":
+            self._begin_inline_edit(entry, value)
+        elif action == "popup":
+            self._open_popup_edit(entry, value)
+
+    def _row_width(self) -> int:
+        """Return the content width of a field row (inline-input budget).
+
+        Falls back to ``0`` (disables the over-wide-``str`` popup check)
+        when the row width cannot be resolved pre-layout, so a ``str``
+        still edits inline unless it is multi-line.
+        """
+        entry = self._active_field()
+        if entry is None:
+            return 0
+        try:
+            tab = self._active_tab()
+            row = self.query_one(f"#{self._field_row_id(tab, self.field_index)}", Static)
+        except Exception:  # pragma: no cover - pre-layout guard
+            return 0
+        return int(row.content_size.width)
+
+    def _open_popup_edit(self, entry: ConfigKey, value: Any) -> None:
+        """Push the popup :class:`EditFieldModal` for a multi-line ``str``.
+
+        Args:
+            entry: The field to edit.
+            value: The field's currently-resolved value (seeds the editor).
+        """
         from eawf.tui_v2.screens.overlays.edit_field import EditFieldModal
 
-        value = current_value(entry, self._merged, self._view.dirty)
         self.app.push_screen(EditFieldModal(entry, value), self._make_edit_callback(entry))
 
+    def _begin_inline_edit(self, entry: ConfigKey, value: Any) -> None:
+        """Swap the focused row for an inline :class:`Input` editor.
+
+        Mounts an :class:`Input` (seeded from *value*) plus an empty error
+        row in place of the static field row, then focuses the input.
+        ``Enter`` validates + commits via :meth:`on_input_submitted`;
+        ``Esc`` cancels via :meth:`_cancel_inline_edit`. Only one row edits
+        at a time.
+
+        Args:
+            entry: The field being edited.
+            value: The field's currently-resolved value (seeds the buffer).
+        """
+        tab = self._active_tab()
+        try:
+            row = self.query_one(f"#{self._field_row_id(tab, self.field_index)}", Static)
+        except Exception:  # pragma: no cover - pre-layout guard
+            return
+        self._editing_key = entry.key
+        seed = "" if value is None else str(value)
+        edit_row = Horizontal(
+            Static(self._meta_line(entry), classes="config-edit-label", markup=False),
+            Input(value=seed, id="config-inline-input"),
+            classes="config-edit-row",
+            id="config-edit-row",
+        )
+        error_row = Static("", classes="config-edit-error", id="config-edit-error", markup=False)
+        row.display = False
+        self.mount(edit_row, after=row)
+        self.mount(error_row, after=edit_row)
+        # The mount is processed on the next message-pump cycle, so the
+        # Input is not queryable yet — focus it once the refresh lands.
+        self.call_after_refresh(self._focus_inline_input)
+        self._repaint_hint()
+
+    def _focus_inline_input(self) -> None:
+        """Focus the mounted inline :class:`Input` (deferred post-mount)."""
+        try:
+            self.query_one("#config-inline-input", Input).focus()
+        except Exception:  # pragma: no cover - edit torn down before refresh
+            return
+
+    @staticmethod
+    def _meta_line(entry: ConfigKey) -> str:
+        """Render the dotted key + type + range hint shown beside the inline input.
+
+        Mirrors the popup editor's meta line so the inline editor surfaces
+        the same type / range affordance.
+
+        Args:
+            entry: The field being edited.
+        """
+        parts = [entry.key, f"[{entry.type}]"]
+        if entry.min_value is not None or entry.max_value is not None:
+            low = "" if entry.min_value is None else f"{entry.min_value:g}"
+            high = "" if entry.max_value is None else f"{entry.max_value:g}"
+            parts.append(f"range {low}..{high}")
+        return "  ".join(parts) + "  "
+
+    def on_input_submitted(self, message: Input.Submitted) -> None:
+        """Commit the inline edit on ``Enter`` (the Input's ``Submitted``).
+
+        Validates the buffer through :func:`coerce_and_validate`; on
+        success folds the typed value into the dirty map and tears the
+        inline editor down, on failure renders the error inline and keeps
+        the editor open so the operator can correct the value.
+        """
+        if self._editing_key is None:
+            return
+        message.stop()
+        entry = registry_lookup(self._editing_key)
+        if entry is None:  # pragma: no cover - editing key always resolves
+            self._teardown_inline_edit()
+            return
+        raw = message.value
+        try:
+            coerced = coerce_and_validate(entry, raw)
+        except InvalidInput as exc:
+            self._report_inline_error(str(exc))
+            return
+        self._view.dirty = {**self._view.dirty, entry.key: coerced}
+        logger.info(f"config_modal inline_commit key={entry.key!r} type={entry.type}")
+        self._teardown_inline_edit()
+
+    def _cancel_inline_edit(self) -> None:
+        """Abort the inline edit (``Esc``) without mutating the dirty map."""
+        if self._editing_key is None:
+            return
+        logger.info(f"config_modal inline_cancel key={self._editing_key!r}")
+        self._teardown_inline_edit()
+
+    def _report_inline_error(self, message: str) -> None:
+        """Render *message* in the inline error row below the edited row.
+
+        Args:
+            message: The validation error to surface.
+        """
+        try:
+            self.query_one("#config-edit-error", Static).update(message)
+        except Exception:  # pragma: no cover - editor teardown race
+            return
+
+    def _teardown_inline_edit(self) -> None:
+        """Remove the inline editor widgets and restore the static row."""
+        for widget_id in ("#config-edit-row", "#config-edit-error"):
+            try:
+                self.query_one(widget_id).remove()
+            except Exception:  # pragma: no cover - already removed
+                continue
+        tab = self._active_tab()
+        try:
+            row = self.query_one(f"#{self._field_row_id(tab, self.field_index)}", Static)
+            row.display = True
+        except Exception:  # pragma: no cover - tab switched mid-edit
+            pass
+        self._editing_key = None
+        self.set_focus(None)
+        self._repaint_fields()
+
     def _make_edit_callback(self, entry: ConfigKey) -> Callable[[Any], None]:
-        """Build the dismiss callback that folds an edited value into dirty.
+        """Build the dismiss callback that folds a popup-edited value into dirty.
 
         Args:
             entry: The field that was edited.
@@ -820,13 +972,18 @@ class ConfigModal(ModalScreen[None]):
         self.query_one("#config-layer", Static).update(self._layer_line())
 
     def action_close(self) -> None:
-        """Close the modal (``Esc``); prompt first when there are staged edits.
+        """Handle ``Esc``: cancel an inline edit, else close (dirty-guarded).
 
-        On a clean modal this dismisses immediately. On a dirty modal it
-        pushes a :class:`~eawf.tui_v2.screens.overlays.confirm.ConfirmModal`
-        (V15 dirty-guard) and only dismisses when the operator confirms
+        While an inline edit is open ``Esc`` aborts just that edit (the
+        modal stays open). Otherwise on a clean modal this dismisses
+        immediately, and on a dirty modal it pushes a
+        :class:`~eawf.tui_v2.screens.overlays.confirm.ConfirmModal` (V15
+        dirty-guard), dismissing only when the operator confirms
         discarding the staged edits.
         """
+        if self._editing_key is not None:
+            self._cancel_inline_edit()
+            return
         if not self._view.dirty:
             self.dismiss(None)
             return
@@ -901,12 +1058,13 @@ __all__ = [
     "CONFIG_REGISTRY",
     "ConfigModal",
     "ConfigModalState",
-    "FocusZone",
-    "change_value",
+    "EnterAction",
     "current_value",
     "cycle_choice",
+    "enter_action",
     "format_value",
     "merged_config",
+    "needs_popup_edit",
     "open_config",
     "save_dirty_fields",
     "toggle_bool",

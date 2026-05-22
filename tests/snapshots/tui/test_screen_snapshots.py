@@ -325,34 +325,12 @@ def test_config_modal_planning_tab_snapshot() -> None:
     asyncio.run(body())
 
 
-def test_config_modal_tabbar_focused_snapshot() -> None:
-    """``↑`` from the first field focuses the tab bar (zone-aware hint).
-
-    The footer hint flips to the tab-bar keys and no field row carries the
-    ``>`` cursor caret — the plain-text proof that focus left the field
-    list for the tab selector.
-    """
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_REPO_STATE)
-        async with app.run_test(size=_SIZE) as pilot:
-            await settle_screen(pilot)
-            modal = _open_config(app)
-            await settle_screen(pilot)
-            await pilot.press("up")  # field 0 -> tab bar
-            await settle_screen(pilot)
-            assert modal.focus_zone == "tabs"  # type: ignore[attr-defined]
-            assert_screen_snapshot(app, _GOLDEN / "config_modal_tabbar_focused.txt")
-
-    asyncio.run(body())
-
-
 def test_config_modal_runtime_single_field_snapshot() -> None:
-    """The single-field ``runtime`` tab: its lone choice row is reachable.
+    """The single-field ``runtime`` tab: its lone choice row carries the caret.
 
-    Regression-proof for the operator's trapped-arrows report — the lone
-    ``runtime.default`` choice carries the ``>`` cursor caret (selected via
-    ``↓`` from the tab bar), showing it is keyboard-reachable.
+    The lone ``runtime.default`` choice carries the ``>`` cursor caret
+    (field 0 of the tab), showing it is keyboard-reachable; ``←`` / ``→``
+    leave this tab and ``Enter`` cycles the choice in place.
     """
 
     async def body() -> None:
@@ -371,7 +349,7 @@ def test_config_modal_runtime_single_field_snapshot() -> None:
 
 
 def test_config_modal_dirty_layer_snapshot() -> None:
-    """After a toggle, the layer line shows the unsaved-count + dirty marker."""
+    """After an ``Enter`` toggle, the layer line shows the unsaved-count + marker."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
@@ -379,7 +357,7 @@ def test_config_modal_dirty_layer_snapshot() -> None:
             await settle_screen(pilot)
             _open_config(app)
             await settle_screen(pilot)
-            await pilot.press("space")  # toggle the first bool — stages a dirty edit
+            await pilot.press("enter")  # toggle the first bool — stages a dirty edit
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "config_modal_dirty.txt")
 
@@ -395,11 +373,35 @@ def test_config_modal_dirty_discard_prompt_snapshot() -> None:
             await settle_screen(pilot)
             _open_config(app)
             await settle_screen(pilot)
-            await pilot.press("space")
+            await pilot.press("enter")  # toggle the first bool — stages a dirty edit
             await settle_screen(pilot)
             await pilot.press("escape")
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "config_modal_discard_prompt.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_inline_edit_int_snapshot() -> None:
+    """``Enter`` on the int field mounts the inline editor in the row.
+
+    The inline input replaces the static ``audit.flaky_retry_count`` row
+    with a meta line (key + type + range) and the seeded buffer, and the
+    footer hint flips to the commit / cancel form.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            modal.field_index = 1  # audit.flaky_retry_count (int)
+            await settle_screen(pilot)
+            await pilot.press("enter")  # open the inline editor
+            await settle_screen(pilot)
+            assert modal._editing_key == "audit.flaky_retry_count"  # type: ignore[attr-defined]
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_inline_int.txt")
 
     asyncio.run(body())
 

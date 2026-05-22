@@ -94,6 +94,11 @@ class ConfigKey(BaseModel):
             disables the check.
         max_value: Inclusive upper bound for ``int`` / ``float``. ``None``
             disables the check.
+        multiline: Hint that a ``str`` field may hold a multi-line value.
+            The TUI config surface routes such a field to the popup
+            single-field editor rather than the inline in-row input so the
+            operator gets room to type; scalar ``str`` fields without the
+            hint edit in place. Ignored for non-``str`` types.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -107,6 +112,7 @@ class ConfigKey(BaseModel):
     choices: tuple[str, ...] | None = None
     min_value: float | None = None
     max_value: float | None = None
+    multiline: bool = False
 
     @field_validator("choices")
     @classmethod
