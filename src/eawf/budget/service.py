@@ -78,7 +78,7 @@ def set_budget(state: State, wave_id: str, budget: int) -> Wave:
         raise ValueError(f"budget must be non-negative; got {budget}")
     wave = _get_wave_or_raise(state, wave_id)
     wave.token_budget = budget
-    logger.info(f"set_budget id={wave_id} budget={budget}")
+    logger.info(f"set_budget wave={wave_id} budget={budget}")
     return wave
 
 
@@ -110,7 +110,7 @@ def record_consumption(
     wave.tokens_consumed += tokens
     tag = classify(wave.tokens_consumed, wave.token_budget)
     logger.info(
-        f"record_consumption id={wave_id} delta={tokens} "
+        f"record_consumption wave={wave_id} delta={tokens} "
         f"consumed={wave.tokens_consumed} budget={wave.token_budget} tag={tag}"
     )
     return wave, tag

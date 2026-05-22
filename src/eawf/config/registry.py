@@ -967,7 +967,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="literal",
         default="prom",
         writable_layers=("global",),
-        choices=("prom", "otlp", "json", "csv"),
+        choices=("prom", "json", "csv"),
     ),
     LeafKey(
         key="telemetry.window_default",

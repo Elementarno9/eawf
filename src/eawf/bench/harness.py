@@ -244,7 +244,7 @@ def load_thresholds(path: Path) -> dict[str, float]:
             ``thresholds`` mapping, or a threshold is not a number.
     """
     if not path.exists():
-        logger.debug(f"load_thresholds missing path={path} (using defaults)")
+        logger.debug(f"load_thresholds path={str(path)!r} missing=true using_defaults=true")
         return {alias: _DEFAULT_THRESHOLDS[osname] for osname, alias in _OS_ALIASES.items()}
 
     parsed = yaml.safe_load(path.read_text(encoding="utf-8"))

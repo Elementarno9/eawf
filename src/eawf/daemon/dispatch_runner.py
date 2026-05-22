@@ -45,6 +45,7 @@ from eawf.store.kinds.events import (
     RuntimeSwitchedPayload,
 )
 from eawf.store.kinds.events.base import RuntimeTriple, TracedEventPayload
+from eawf.telemetry.models import RuntimeErrorClass
 
 if TYPE_CHECKING:
     from eawf.daemon.methods import MethodContext
@@ -174,7 +175,7 @@ def emit_runtime_switched(
     attempt_id_to: str,
     runtime_from: RuntimeTriple,
     runtime_to: RuntimeTriple,
-    cause: str,
+    cause: RuntimeErrorClass,
     error_detail: str,
     idempotency_key: str,
     trace_request_id: str | None = None,
@@ -188,7 +189,8 @@ def emit_runtime_switched(
         attempt_id_to: Attempt id minted for the replacement runtime.
         runtime_from: Runtime switched away from.
         runtime_to: Runtime switched to.
-        cause: Error-class string that triggered the switch (scrubbed).
+        cause: Typed :class:`~eawf.telemetry.models.RuntimeErrorClass`
+            member that triggered the switch (scrubbed).
         error_detail: Scrubbed stderr / failure detail for diagnosis.
         idempotency_key: De-dup key so a retried emit does not
             double-count the switchover.
@@ -276,7 +278,7 @@ def run_dispatch(
     fallback_runtime: RuntimeTriple,
     model: str,
     pricing_version: str,
-    primary_error: str | None,
+    primary_error: RuntimeErrorClass | None,
     tokens: DispatchTokens,
     cost_usd: Decimal,
     trace_request_id: str | None = None,
@@ -297,9 +299,10 @@ def run_dispatch(
         fallback_runtime: Runtime the V5 ladder falls through to.
         model: Model the serving runtime priced its cost against.
         pricing_version: ``PRICING`` snapshot version pinning the cost.
-        primary_error: Error-class string when the primary runtime fails
-            (triggers a V5 fallback), or ``None`` when the primary serves
-            the dispatch with no switch.
+        primary_error: Typed
+            :class:`~eawf.telemetry.models.RuntimeErrorClass` member when
+            the primary runtime fails (triggers a V5 fallback), or ``None``
+            when the primary serves the dispatch with no switch.
         tokens: Token tally the serving attempt accrued.
         cost_usd: Priced cost in USD for the serving attempt.
         trace_request_id: Optional daemon RPC request id.

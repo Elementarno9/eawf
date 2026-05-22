@@ -40,6 +40,7 @@ from eawf.store.kinds.events import (
     DispatchCostPayload,
     RuntimeSwitchedPayload,
 )
+from eawf.telemetry.models import RuntimeErrorClass
 
 _UNION_ADAPTER: TypeAdapter[object] = TypeAdapter(C09EventPayloadUnion)
 
@@ -98,7 +99,7 @@ def test_run_dispatch_v5_fallback_emits_runtime_switched_and_cost(tmp_path: Path
         fallback_runtime="claude",
         model="claude-opus-4-7",
         pricing_version="2026.05.17",
-        primary_error="RUNTIME_RATE_LIMIT",
+        primary_error=RuntimeErrorClass.RUNTIME_RATE_LIMIT,
         tokens=_tokens(),
         cost_usd=Decimal("0.123456"),
     )
@@ -161,7 +162,7 @@ def test_emitted_events_route_through_canonical_writer_and_bus(tmp_path: Path) -
         fallback_runtime="claude",
         model="claude-opus-4-7",
         pricing_version="2026.05.17",
-        primary_error="RUNTIME_SERVER_ERROR",
+        primary_error=RuntimeErrorClass.RUNTIME_SERVER_ERROR,
         tokens=_tokens(),
         cost_usd=Decimal("0.2"),
     )
@@ -186,7 +187,7 @@ def test_emitted_payloads_pass_discriminated_union_validation(tmp_path: Path) ->
         fallback_runtime="claude",
         model="claude-opus-4-7",
         pricing_version="2026.05.17",
-        primary_error="RUNTIME_TIMEOUT",
+        primary_error=RuntimeErrorClass.RUNTIME_TIMEOUT,
         tokens=_tokens(),
         cost_usd=Decimal("0.3"),
     )

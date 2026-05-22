@@ -16,8 +16,7 @@ alongside the rows that consume them:
   retyped from the upstream free-string ``error_kind``.
 - :class:`RuntimeErrorClass` — 5-class runtime-fallback cause enum (C07a
   §5.5). :class:`~eawf.store.kinds.events.runtime_switched.RuntimeSwitchedPayload`
-  carries ``cause`` as a bare ``str`` pending a follow-up wave that tightens
-  it onto this enum.
+  carries ``cause`` as a typed member of this enum.
 
 :class:`~eawf.state.enums.IncidentSeverity` and
 :class:`~eawf.state.enums.IncidentCause` already live in

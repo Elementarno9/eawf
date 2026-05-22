@@ -28,6 +28,7 @@ from eawf.daemon.dispatch_runner import (
 )
 from eawf.daemon.methods import MethodContext
 from eawf.store.envelope import Envelope
+from eawf.telemetry.models import RuntimeErrorClass
 
 
 def _ctx(event_path: Path) -> MethodContext:
@@ -113,7 +114,7 @@ def test_dispatch_cost_recorded_on_runtime_fallback_when_disabled(tmp_path: Path
         fallback_runtime="codex",
         model="codex-model",
         pricing_version="2026.05.17",
-        primary_error="RUNTIME_RATE_LIMIT",
+        primary_error=RuntimeErrorClass.RUNTIME_RATE_LIMIT,
         tokens=DispatchTokens(
             input_tokens=2000,
             output_tokens=900,
