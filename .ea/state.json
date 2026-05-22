@@ -1,5 +1,16 @@
 {
-  "actuals": null,
+  "actuals": {
+    "P27-I02-W26": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W26-close-20260522T231537Z",
+      "elapsed_eu": 6.62,
+      "id": "ACT-P27-I02-W26",
+      "scope_id": "P27-I02-W26",
+      "status": "done",
+      "updated_at": "2026-05-22T23:15:37.898787Z"
+    }
+  },
   "agent_sessions": {
     "SES-20260510T214731Z-operator-claude": {
       "artifact_ids": [],
@@ -1615,10 +1626,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I02-W18",
-      "P27-I02-W25"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I03",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -3244,7 +3252,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T22:43:09.507364Z",
+  "updated_at": "2026-05-22T23:15:38.518626Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -12592,7 +12600,7 @@
         "P27-I03-W19"
       ],
       "claim_session_id": "flow-p27i02",
-      "closed_at": null,
+      "closed_at": "2026-05-22T23:09:52.330059Z",
       "commit": null,
       "deps": [
         "P27-I02-W17",
@@ -12609,10 +12617,10 @@
       "id": "P27-I02-W18",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:03.111944Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "all mutating verbs proxy when the daemon is up; the in-process fallback is state-first and WAL-backed; an injected-crash test leaves no phantom event; Rule 4 is realized"
       ],
@@ -12813,7 +12821,7 @@
         "P27-I02-W26"
       ],
       "claim_session_id": "flow-p27i02",
-      "closed_at": null,
+      "closed_at": "2026-05-22T23:09:54.353956Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12826,10 +12834,10 @@
       "id": "P27-I02-W25",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:05.790318Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "closing a wave writes an ActualSummary from opened_at/closed_at; claim writes a default EstimateSummary from effort_bucket; metrics variance returns a non-empty sample"
       ],
@@ -12841,8 +12849,8 @@
     "P27-I02-W26": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T23:15:37.898787Z",
       "commit": null,
       "deps": [
         "P27-I02-W25"
@@ -12856,17 +12864,17 @@
       "id": "P27-I02-W26",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:06.189233Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "closed waves get retroactive idempotent ActualSummary rows; metrics variance and calibrate buckets report fitted values from real samples; double-write is guarded"
       ],
       "title": "Backfill actuals from history",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W26-1779491419"
     },
     "P27-I03-W01": {
       "agent_role": "executor",
@@ -15121,10 +15129,10 @@
       "branch": "feature/eawf-v0.1-p27-w18",
       "created_at": "2026-05-22T22:41:57.274995Z",
       "id": "WT-P27-I02-W18-1779489717",
-      "merged_commit": null,
+      "merged_commit": "9f7cfcf",
       "owner_session_id": "flow-p27i02",
       "path": ".ea/worktrees/p27-w18",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P27-I02-W18"
     },
     "WT-P27-I02-W19-1779488103": {
@@ -15165,11 +15173,22 @@
       "branch": "feature/eawf-v0.1-p27-w25",
       "created_at": "2026-05-22T22:41:58.456437Z",
       "id": "WT-P27-I02-W25-1779489718",
-      "merged_commit": null,
+      "merged_commit": "fb66d02",
       "owner_session_id": "flow-p27i02",
       "path": ".ea/worktrees/p27-w25",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P27-I02-W25"
+    },
+    "WT-P27-I02-W26-1779491419": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w26",
+      "created_at": "2026-05-22T23:10:19.383158Z",
+      "id": "WT-P27-I02-W26-1779491419",
+      "merged_commit": "4e6006d",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w26",
+      "status": "merged",
+      "wave_id": "P27-I02-W26"
     }
   }
 }
