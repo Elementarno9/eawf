@@ -1604,9 +1604,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W15"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3075,7 +3073,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T03:36:12.703705Z",
+  "updated_at": "2026-05-22T03:45:48.671813Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10687,7 +10685,7 @@
         "P26-I02-W14"
       ],
       "claim_session_id": "w15-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-22T03:45:48.212315Z",
       "commit": null,
       "deps": [
         "P26-I02-W12"
@@ -10708,10 +10706,10 @@
       "id": "P26-I02-W15",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T03:02:47.685370Z",
-      "outcome": null,
+      "outcome": "/audit newest-for-scope (A34-P26 not stale A09-P08); margin-top on metrics/events/pr_list hints; two-row footer (no 120-col clip); WEEKLY_BURN_EMPTY DRYed to eu_bar.EMPTY_STATE",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "/audit resolves the newest audit for the current scope (fallback newest overall) not the first unordered-dict entry",
         "flush hint bars (metrics/events/pr_list) gain a margin-top for consistency",
@@ -11687,10 +11685,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w15",
       "created_at": "2026-05-22T03:36:12.703705Z",
       "id": "WT-P26-I02-W15-1779420972",
-      "merged_commit": null,
+      "merged_commit": "e434f97",
       "owner_session_id": "w15-exec",
       "path": ".ea/worktrees/p26-i02-w15",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W15"
     },
     "WT-P26-I02-W16-1779420126": {
