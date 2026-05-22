@@ -22,7 +22,9 @@ hook is registered the result list is empty and the exit code is
 from __future__ import annotations
 
 import logging
+import re
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, cast
@@ -34,6 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
+from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
@@ -273,6 +276,185 @@ def _runtime_default() -> HookRuntime:
     return "generic"
 
 
+# --- Diff-scoped lint gates (hooks 16-19 per C09 §5.3) ---------------------
+# Each gate is a thin CLI dispatcher: it resolves the files to inspect
+# (explicit args, else the conditional diff scan) and delegates the
+# actual detection to a library surface (the scrubber patterns reused
+# from ``eawf.logging.scrub`` for leaks, the EAWF001 rule for log
+# format, ``plugin doctor --strict`` for plugin drift). The conditional
+# diff scan keeps each gate a no-op when nothing relevant changed.
+
+# Suffixes the leak gates skip — binary-ish blobs are not text-scanned.
+_BINARY_SUFFIXES: frozenset[str] = frozenset(
+    {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".whl"}
+)
+
+# Inline marker that exempts a single line from the leak gates. Reuses
+# the established ``detect-secrets`` allowlist phrasing so a line that is
+# already acknowledged as a by-design fixture / pattern definition (a
+# scrub-test sample path, the scrubber's own regex source) is exempt
+# from both the path gate and the email gate without a brittle per-file
+# path exclude list.
+_LEAK_ALLOW_MARKER = "pragma: allowlist secret"
+
+
+def _line_is_allowlisted(line: str) -> bool:
+    """Return ``True`` when ``line`` carries the inline leak-allow marker."""
+    return _LEAK_ALLOW_MARKER in line
+
+
+@dataclass(frozen=True)
+class LeakFinding:
+    """One path/email leak hit inside a scanned file.
+
+    Attributes:
+        path: Repo-relative file path the hit was found in.
+        lineno: 1-based line number of the hit.
+        snippet: The matched substring (already a sensitive literal —
+            surfaced verbatim so the operator can locate and scrub it).
+    """
+
+    path: str
+    lineno: int
+    snippet: str
+
+    def render(self) -> str:
+        """Return a ``path:line: snippet`` one-liner."""
+        return f"{self.path}:{self.lineno}: {self.snippet}"
+
+
+def _path_leak_patterns() -> tuple[re.Pattern[str], ...]:
+    """Return the home-directory path patterns reused from the scrubber.
+
+    The three home-directory anchors (macOS, Windows, Linux) are the
+    leak shapes the path gate rejects; they are sourced from
+    :data:`eawf.logging.scrub.SensitiveScrubber.PATTERNS` so the gate
+    and the emit-time scrubber never drift.
+    """
+    from eawf.logging.scrub import SensitiveScrubber
+
+    return tuple(
+        p for p in SensitiveScrubber.PATTERNS if "Users" in p.pattern or "home" in p.pattern
+    )
+
+
+def _email_leak_pattern() -> re.Pattern[str]:
+    """Return the email pattern reused from the scrubber."""
+    from eawf.logging.scrub import SensitiveScrubber
+
+    return next(p for p in SensitiveScrubber.PATTERNS if "@" in p.pattern)
+
+
+def _allowed_emails() -> frozenset[str]:
+    """Return the canonical email allowlist (no-reply + pyproject authors).
+
+    Reuses the scrubber's allowlist derivation so the gate accepts
+    exactly the addresses the emit-time filter preserves: the no-reply
+    co-author addresses plus the canonical ``pyproject.toml`` author
+    rows.
+    """
+    from eawf.logging.scrub import _DEFAULT_ALLOWED_EMAILS, _eawf_author_emails
+
+    return frozenset(e.casefold() for e in (_DEFAULT_ALLOWED_EMAILS | _eawf_author_emails()))
+
+
+def _read_text_lines(path: Path) -> list[str] | None:
+    """Return ``path``'s text lines, or ``None`` for unreadable/binary files.
+
+    Files with a binary-ish suffix or that fail UTF-8 decode are
+    skipped (return ``None``) so the leak scan never chokes on a blob.
+    """
+    if path.suffix.lower() in _BINARY_SUFFIXES:
+        return None
+    try:
+        return path.read_text(encoding="utf-8").splitlines()
+    except OSError, UnicodeDecodeError:
+        return None
+
+
+def _scan_path_leaks(paths: list[str], *, cwd: Path) -> list[LeakFinding]:
+    """Return home-directory path-literal findings across ``paths``."""
+    patterns = _path_leak_patterns()
+    findings: list[LeakFinding] = []
+    for rel in paths:
+        lines = _read_text_lines(cwd / rel)
+        if lines is None:
+            continue
+        for lineno, line in enumerate(lines, start=1):
+            if _line_is_allowlisted(line):
+                continue
+            for pattern in patterns:
+                for match in pattern.finditer(line):
+                    findings.append(LeakFinding(path=rel, lineno=lineno, snippet=match.group(0)))
+    return findings
+
+
+def _scan_email_leaks(paths: list[str], *, cwd: Path) -> list[LeakFinding]:
+    """Return non-allowlisted email findings across ``paths``."""
+    pattern = _email_leak_pattern()
+    allowed = _allowed_emails()
+    findings: list[LeakFinding] = []
+    for rel in paths:
+        lines = _read_text_lines(cwd / rel)
+        if lines is None:
+            continue
+        for lineno, line in enumerate(lines, start=1):
+            if _line_is_allowlisted(line):
+                continue
+            for match in pattern.finditer(line):
+                if match.group(0).casefold() in allowed:
+                    continue
+                findings.append(LeakFinding(path=rel, lineno=lineno, snippet=match.group(0)))
+    return findings
+
+
+def _resolve_scan_paths(
+    files: list[str] | None,
+    *,
+    hook_name: str,
+    base: str,
+    cwd: Path,
+) -> list[str]:
+    """Resolve the repo-relative paths a pre-commit gate should inspect.
+
+    Explicit ``files`` (passed by a test) win; when none are supplied
+    the gate falls back to the conditional **staged** scan via
+    :func:`eawf.lint._conditional.relevant_for_hook` (``staged=True``),
+    which yields only the staged files relevant to ``hook_name``. The
+    staged scope makes a real ``git commit`` scan only its delta and
+    ``pre-commit run --all-files`` (nothing staged) a clean no-op
+    rather than re-scanning the whole tree. The early-exit signal is an
+    empty list.
+    """
+    from eawf.lint._conditional import relevant_for_hook
+
+    if files:
+        return files
+    return relevant_for_hook(hook_name, base, cwd=cwd, staged=True)
+
+
+def _emit_leak_result(
+    *,
+    hook_name: str,
+    findings: list[LeakFinding],
+    scanned: int,
+    flags: GlobalFlags,
+) -> None:
+    """Emit the leak-gate result and exit 1 when findings are present."""
+    payload: dict[str, object] = {
+        "hook": hook_name,
+        "scanned": scanned,
+        "clean": not findings,
+        "findings": [{"path": f.path, "lineno": f.lineno, "snippet": f.snippet} for f in findings],
+    }
+    if findings:
+        body_lines = [f"{hook_name}: {len(findings)} leak(s) across {scanned} file(s)"]
+        body_lines.extend(f"  {f.render()}" for f in findings)
+        emit_json_or_text(payload, "\n".join(body_lines), flags=flags)
+        raise typer.Exit(exit_codes.USER_ERROR)
+    emit_json_or_text(payload, f"{hook_name}: clean ({scanned} file(s) scanned)", flags=flags)
+
+
 @hook_app.command(name="run")
 def run(
     ctx: typer.Context,
@@ -413,6 +595,164 @@ def run(
     _emit_envelope(envelope)
     if any(r.block for r in results):
         raise typer.Exit(exit_codes.HOOK_BLOCKED)
+
+
+_FilesArg = Annotated[
+    list[str] | None,
+    typer.Argument(
+        help="Files to scan. When omitted, the conditional diff scan "
+        "(git diff <base>...HEAD) selects only the relevant changed files.",
+    ),
+]
+_BaseOpt = Annotated[
+    str,
+    typer.Option(
+        "--base",
+        help="Diff base ref for the conditional scan (default origin/main).",
+    ),
+]
+
+
+@hook_app.command(name="path-leak-lint")
+def path_leak_lint(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject home-directory path literals (macOS, Windows, and Linux home roots).
+
+    Scans the given files (or, when none are given, only the staged
+    files relevant to this gate per the conditional scan). A line
+    carrying the ``pragma: allowlist secret`` marker is exempt (for
+    by-design fixtures / pattern source). Exits 1 when a leak is found,
+    0 on a clean scan.
+    """
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="path-leak-lint", base=base, cwd=cwd)
+    findings = _scan_path_leaks(paths, cwd=cwd)
+    _emit_leak_result(
+        hook_name="path-leak-lint", findings=findings, scanned=len(paths), flags=flags
+    )
+
+
+@hook_app.command(name="email-leak-lint")
+def email_leak_lint(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject email addresses outside the canonical author/no-reply allowlist.
+
+    Scans the given files (or, when none are given, only the changed
+    files relevant to this gate per the conditional diff scan). The
+    allowlist is the no-reply co-author addresses plus the
+    ``pyproject.toml`` author rows. Exits 1 on a leak, 0 on a clean scan.
+    """
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="email-leak-lint", base=base, cwd=cwd)
+    findings = _scan_email_leaks(paths, cwd=cwd)
+    _emit_leak_result(
+        hook_name="email-leak-lint", findings=findings, scanned=len(paths), flags=flags
+    )
+
+
+@hook_app.command(name="log-format-lint")
+def log_format_lint(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Run the EAWF001 log-format rule over changed library modules.
+
+    Scans the given Python files (or, when none are given, only the
+    changed ``src/eawf/**/*.py`` modules per the conditional diff
+    scan). Each ``logger.<level>(...)`` call site must match the
+    canonical ``<funcname> key=value`` shape. Exits 1 when a violation
+    is found, 0 when clean. Files that fail to parse are skipped (an
+    authoring bug surfaced by ruff elsewhere).
+    """
+    from eawf.lint.eawf001 import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="log-format-lint", base=base, cwd=cwd)
+    rows: list[str] = []
+    violation_count = 0
+    for rel in paths:
+        if not rel.endswith(".py"):
+            continue
+        target = cwd / rel
+        try:
+            source = target.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        try:
+            violations = check_source(source, filename=rel)
+        except SyntaxError:
+            continue
+        for violation in violations:
+            violation_count += 1
+            rows.append(f"  {rel}:{violation.render()}")
+    payload: dict[str, object] = {
+        "hook": "log-format-lint",
+        "scanned": len(paths),
+        "clean": violation_count == 0,
+        "violations": violation_count,
+    }
+    if violation_count:
+        body = "\n".join(
+            [f"log-format-lint: {violation_count} violation(s) across {len(paths)} file(s)", *rows]
+        )
+        emit_json_or_text(payload, body, flags=flags)
+        raise typer.Exit(exit_codes.USER_ERROR)
+    emit_json_or_text(
+        payload, f"log-format-lint: clean ({len(paths)} file(s) scanned)", flags=flags
+    )
+
+
+@hook_app.command(name="plugin-doctor-drift")
+def plugin_doctor_drift(
+    ctx: typer.Context,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Fail when ``plugin doctor --strict`` reports drift in the plugin tree.
+
+    Conditional-skip per C09 §5.3: when the diff between ``base`` and
+    ``HEAD`` touches no AGENTS.md / skill / runtime / build path the
+    gate exits 0 immediately (the drift surface cannot have moved).
+    Otherwise it runs the Claude checksum sweep and exits 1 on drift.
+    """
+    from eawf.lint._conditional import relevant_for_hook
+    from eawf.runtimes.claude.plugin_doctor import doctor_plugin_strict
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    relevant = relevant_for_hook("plugin-doctor-drift", base, cwd=cwd)
+    if not relevant:
+        emit_json_or_text(
+            {"hook": "plugin-doctor-drift", "skipped": True, "clean": True},
+            "plugin-doctor-drift: skipped (no plugin-surface change)",
+            flags=flags,
+        )
+        return
+    report = doctor_plugin_strict(cwd)
+    payload: dict[str, object] = {
+        "hook": "plugin-doctor-drift",
+        "skipped": False,
+        "clean": report.clean,
+        "drifted": [entry.region_id for entry in report.drifted],
+        "missing": [entry.region_id for entry in report.missing],
+    }
+    if not report.clean:
+        body = (
+            f"plugin-doctor-drift: drift detected "
+            f"(drifted={len(report.drifted)} missing={len(report.missing)}) — run eawf plugin sync"
+        )
+        emit_json_or_text(payload, body, flags=flags)
+        raise typer.Exit(exit_codes.USER_ERROR)
+    emit_json_or_text(payload, "plugin-doctor-drift: clean", flags=flags)
 
 
 __all__ = [

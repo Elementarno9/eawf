@@ -78,3 +78,37 @@ repos:
         language: system
         files: '^\.ea/specs/.*\.md$'
         stages: [pre-commit]
+      - id: path-leak-lint
+        name: path-leak-lint
+        entry: uv run eawf hook path-leak-lint
+        language: system
+        # Diff-scoped to the staged delta (git diff --cached): a real
+        # commit scans only its staged files; `--all-files` (nothing
+        # staged) is a clean no-op, so the gate never flags the tree's
+        # documented example paths / golden fixtures / scrubber source.
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: email-leak-lint
+        name: email-leak-lint
+        entry: uv run eawf hook email-leak-lint
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: log-format-lint
+        name: log-format-lint
+        entry: uv run eawf hook log-format-lint
+        language: system
+        # EAWF001 over the staged src/eawf/**/*.py delta only (git diff
+        # --cached), not the whole tree — pre-existing log lines are not
+        # retroactively rejected.
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: plugin-doctor-drift
+        name: plugin-doctor-drift
+        entry: uv run eawf hook plugin-doctor-drift
+        language: system
+        # Conditional skip on the branch diff (git diff origin/main...HEAD):
+        # bails fast unless it touches AGENTS.md, a skill, a runtime, or
+        # build/ (drops ~5s → ~50ms on no-op pushes).
+        pass_filenames: false
+        stages: [pre-push]
