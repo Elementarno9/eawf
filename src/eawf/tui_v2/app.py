@@ -36,6 +36,7 @@ W22 Pilot harness enforces.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -53,7 +54,9 @@ from eawf.tui_v2.state_binding import StateBinding, StateBindingCallbacks
 from eawf.tui_v2.theme import (
     DEFAULT_THEME,
     EA_THEMES,
+    THEME_POLL_INTERVAL_S,
     detect_auto_theme,
+    detect_os_appearance,
     resolve_theme_name,
 )
 from eawf.tui_v2.widgets.header import (
@@ -193,6 +196,14 @@ class EaApp(App[None]):
         # with no further TTY access. Under run_test()/non-TTY this returns
         # the dark baseline, keeping the TUI tests deterministic.
         self._auto_logical: str = detect_auto_theme()
+        # The operator-facing logical theme name currently in force (``dark``
+        # / ``light`` / ``cb`` / ``auto``); the live appearance poll only acts
+        # while this is ``auto``. Set authoritatively by apply_theme below.
+        self._logical_theme: str = DEFAULT_THEME
+        # Baseline for the live OS light/dark watch (:meth:`_poll_os_appearance`).
+        # ``None`` until the first poll seeds it, so the startup OSC 11 verdict
+        # in ``_auto_logical`` stands until the OS appearance actually flips.
+        self._os_appearance: str | None = None
         # Register the custom themes and apply the persisted one here, in
         # __init__, NOT in on_mount: Textual builds the App stylesheet
         # (which resolves every $var the structural CSS references) from
@@ -224,6 +235,12 @@ class EaApp(App[None]):
         )
         await self._binding.connect()
         self.push_screen(self._scope)
+        # Follow a live system light/dark flip for /theme auto. The OSC 11
+        # background probe can only run before .run() captured stdin, so the
+        # running App tracks the system theme by polling the OS appearance
+        # setting off-thread (no stdin contention). First probe is deferred a
+        # full interval, so it never competes with first paint.
+        self.set_interval(THEME_POLL_INTERVAL_S, self._poll_os_appearance)
 
     async def _on_state(self, new_state: State) -> None:
         """Receive a fresh state revision from the binder.
@@ -334,6 +351,32 @@ class EaApp(App[None]):
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
 
+    async def _poll_os_appearance(self) -> None:
+        """Re-apply ``/theme auto`` when the OS light/dark appearance flips.
+
+        Runs on the :data:`THEME_POLL_INTERVAL_S` interval. The OS appearance
+        is read off-thread (a subprocess that never touches the App's stdin),
+        so it is safe while Textual owns the terminal — unlike the OSC 11
+        background probe, which can only run before ``.run()`` captured stdin.
+
+        Acts only when the freshly-read appearance both changed since the last
+        poll **and** differs from the theme currently shown, and only while
+        ``auto`` is the active logical theme (an explicit ``dark`` / ``light``
+        / ``cb`` pick is left untouched). When OSC 11 and the OS agree the
+        first poll is a no-op; when they disagree (e.g. the startup probe fell
+        back to dark on a non-answering terminal) the first poll corrects
+        ``auto`` to the real appearance within one interval. An undetermined
+        read (``None``) is a no-op.
+        """
+        appearance = await asyncio.to_thread(detect_os_appearance)
+        if appearance is None or appearance == self._os_appearance:
+            return
+        self._os_appearance = appearance
+        if self._logical_theme == "auto" and self._auto_logical != appearance:
+            self._auto_logical = appearance
+            self.apply_theme("auto")
+            logger.info(f"_poll_os_appearance reapplied auto appearance={appearance!r}")
+
     def apply_theme(self, logical: str) -> bool:
         """Apply an operator-facing logical theme name to the live App.
 
@@ -361,6 +404,7 @@ class EaApp(App[None]):
             logger.info(f"apply_theme rejected logical={logical!r}")
             return False
         self.theme = registered
+        self._logical_theme = logical
         logger.info(f"apply_theme logical={logical!r} effective={effective!r} theme={registered!r}")
         return True
 

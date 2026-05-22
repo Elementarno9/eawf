@@ -41,6 +41,7 @@ import os
 import select
 import sys
 import time
+from collections.abc import Callable
 from typing import IO, Final
 
 from textual.theme import Theme
@@ -386,6 +387,145 @@ def detect_auto_theme() -> str:
     return resolve_auto_theme(query_terminal_background())
 
 
+#: Poll interval (seconds) for the live OS light/dark appearance watch. The
+#: OSC 11 terminal-background probe (:func:`detect_auto_theme`) can only run
+#: before ``.run()`` captures stdin, so once the App is running the system
+#: theme is followed by polling the OS appearance off-thread on this cadence
+#: — small enough to feel near-instant, large enough to stay cheap.
+THEME_POLL_INTERVAL_S: Final[float] = 2.0
+
+
+def classify_macos_appearance(stdout: str, returncode: int) -> str:
+    """Classify the macOS system appearance from a ``defaults`` read result.
+
+    ``defaults read -g AppleInterfaceStyle`` prints ``Dark`` in Dark mode and
+    exits non-zero (the key is absent) in Light mode.
+
+    Args:
+        stdout: The command's stdout.
+        returncode: The command's exit status.
+
+    Returns:
+        ``"dark"`` when the style reports Dark, ``"light"`` otherwise.
+    """
+    if returncode == 0 and "dark" in stdout.strip().lower():
+        return "dark"
+    return "light"
+
+
+def classify_linux_appearance(stdout: str) -> str | None:
+    """Classify the GNOME ``color-scheme`` gsettings value.
+
+    Maps ``'prefer-dark'`` → dark and ``'default'`` / ``'prefer-light'`` →
+    light (the value arrives single-quoted). An unrecognised value yields
+    ``None`` so the caller leaves the theme untouched.
+
+    Args:
+        stdout: The ``gsettings get`` stdout.
+
+    Returns:
+        ``"dark"`` / ``"light"``, or ``None`` when unrecognised.
+    """
+    text = stdout.strip().strip("'\"").lower()
+    if "dark" in text:
+        return "dark"
+    if text in ("default", "prefer-light", "light"):
+        return "light"
+    return None
+
+
+def classify_windows_appearance(stdout: str, returncode: int) -> str | None:
+    """Classify the Windows ``AppsUseLightTheme`` registry DWORD.
+
+    ``reg query`` prints ``... REG_DWORD    0x1`` in Light mode and ``0x0``
+    in Dark mode.
+
+    Args:
+        stdout: The ``reg query`` stdout.
+        returncode: The command's exit status.
+
+    Returns:
+        ``"dark"`` / ``"light"``, or ``None`` when the read failed / did not
+        parse.
+    """
+    if returncode != 0:
+        return None
+    text = stdout.lower()
+    if "0x0" in text:
+        return "dark"
+    if "0x1" in text:
+        return "light"
+    return None
+
+
+def _run_appearance_probe(cmd: list[str]) -> tuple[str, int] | None:
+    """Run *cmd* with a short timeout; return ``(stdout, returncode)`` or ``None``.
+
+    Returns ``None`` on any failure (missing binary, timeout, OS error) so
+    the caller treats an unprobeable platform as "appearance unknown" rather
+    than crashing the poll.
+
+    Args:
+        cmd: The argv to run.
+
+    Returns:
+        ``(stdout, returncode)``, or ``None`` on failure.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1.0)
+    except OSError, subprocess.SubprocessError:
+        return None
+    return proc.stdout, proc.returncode
+
+
+def detect_os_appearance(
+    *,
+    runner: Callable[[list[str]], tuple[str, int] | None] | None = None,
+) -> str | None:
+    """Best-effort live read of the OS light/dark appearance — no TTY access.
+
+    Unlike the OSC 11 terminal-background probe, this shells out to the
+    platform's appearance setting (macOS ``defaults``, GNOME ``gsettings``,
+    Windows ``reg``), so it is safe to call repeatedly while Textual owns
+    stdin. It powers the live ``/theme auto`` follow: when the operator flips
+    the system theme, the next poll observes the change.
+
+    Returns ``None`` (appearance unknown — caller leaves the theme alone) when
+    ``CI`` is set, the platform is unsupported, or the probe fails.
+
+    Args:
+        runner: Test seam — runs an argv and returns ``(stdout, returncode)``
+            or ``None``. Defaults to :func:`_run_appearance_probe`.
+
+    Returns:
+        ``"light"`` / ``"dark"``, or ``None`` when undetermined.
+    """
+    if os.environ.get("CI"):
+        return None
+    run = runner if runner is not None else _run_appearance_probe
+    platform = sys.platform
+    if platform == "darwin":
+        result = run(["defaults", "read", "-g", "AppleInterfaceStyle"])
+        return None if result is None else classify_macos_appearance(result[0], result[1])
+    if platform.startswith("linux"):
+        result = run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"])
+        return None if result is None else classify_linux_appearance(result[0])
+    if platform.startswith("win"):
+        result = run(
+            [
+                "reg",
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ]
+        )
+        return None if result is None else classify_windows_appearance(result[0], result[1])
+    return None
+
+
 __all__ = [
     "DEFAULT_THEME",
     "EA_CB",
@@ -395,7 +535,12 @@ __all__ = [
     "LOGICAL_THEMES",
     "OSC11_QUERY",
     "THEME_CHOICES",
+    "THEME_POLL_INTERVAL_S",
+    "classify_linux_appearance",
+    "classify_macos_appearance",
+    "classify_windows_appearance",
     "detect_auto_theme",
+    "detect_os_appearance",
     "query_terminal_background",
     "resolve_auto_theme",
     "resolve_theme_name",
