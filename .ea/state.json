@@ -1615,7 +1615,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I02-W18",
+      "P27-I02-W25"
+    ],
     "iter_id": "P27-I03",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -1624,6 +1627,7 @@
   "decisions": {
     "D-SUP-01": {
       "alternatives": [],
+      "consequences": [],
       "created_at": "2026-05-18T19:09:29.934741Z",
       "id": "D-SUP-01",
       "rationale": "Per audit XB09 + operator Q2 2026-05-18. Roadmap-synthesis brief deferred daemon; V1 ratified 2026-05-16 reverses to daemon Day-1 with smart-spawn + daemonless reader exemption. Migration cost grows monotonically with codebase size; cheapest to pay now.",
@@ -1634,6 +1638,7 @@
     },
     "D-SUP-02": {
       "alternatives": [],
+      "consequences": [],
       "created_at": "2026-05-18T19:09:30.478228Z",
       "id": "D-SUP-02",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Manifesto Rule 6 allowed multiple dispatchers; V1 narrows to single daemon dispatcher.",
@@ -1644,6 +1649,7 @@
     },
     "D-SUP-03": {
       "alternatives": [],
+      "consequences": [],
       "created_at": "2026-05-18T19:09:30.994652Z",
       "id": "D-SUP-03",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Manifesto Rule 5 plan-before-execute; V8 narrows to session-reuse on retry (fresh on new dispatch + continue on retry).",
@@ -1654,6 +1660,7 @@
     },
     "D-SUP-04": {
       "alternatives": [],
+      "consequences": [],
       "created_at": "2026-05-18T19:09:31.499178Z",
       "id": "D-SUP-04",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Roadmap-synthesis rejected BYOK; C07a D2 keeps BYOK supported with subscription as default.",
@@ -1664,6 +1671,7 @@
     },
     "D-SUP-05": {
       "alternatives": [],
+      "consequences": [],
       "created_at": "2026-05-18T19:09:31.992909Z",
       "id": "D-SUP-05",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Halt-only pattern superseded by reactive runtime fallback (V5) + session-reuse on retry (V8).",
@@ -1674,6 +1682,7 @@
     },
     "D-SUP-TUI-01": {
       "alternatives": [],
+      "consequences": [],
       "created_at": "2026-05-18T19:09:32.534673Z",
       "id": "D-SUP-TUI-01",
       "rationale": "Per audit BOT-01 + operator Q6 2026-05-18. P14-era P20-direction-brief picked rich; C06 v0.3+ rebuilds TUI on Textual. Memory project_p14_direction superseded by project_tui_textual_v03.",
@@ -1687,6 +1696,7 @@
         "Keep plan §4 P06 scope verbatim; defer spec internalization to v0.1.1",
         "Split into P06=spec internalization + P07=hardening"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T13:25:45.960934Z",
       "id": "D01",
       "rationale": "Plan §4 lists P06 as Hardening + GA (Linux polish, golden scenarios, release tag). Phase 6 reframed to (a) internalize the v0.1 design spec into docs/, (b) dogfood eawf on its own repo, (c) ship the v0.1 PR. The displaced hardening work is captured in v0.2 backlog items B001 (Linux CI matrix), B009 (golden scenarios), B010 (v0.1.0 release tag).",
@@ -1701,6 +1711,7 @@
         "hybrid (yaml + python escape hatch)",
         "defer to v0.2.1"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T19:48:55.001291Z",
       "id": "D02",
       "rationale": "Bottleneck is non-coders authoring audits, not expressing arbitrary logic. YAML + registry of built-in kinds (file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) lets check-authors stay in YAML; new kinds are a code change. Hybrid escape hatch can come later if real example pushes against the registry.",
@@ -1714,6 +1725,7 @@
         "audit link required at hypothesis open time",
         "audit link fully optional"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T19:49:01.231132Z",
       "id": "D03",
       "rationale": "Audit link gates the commitment, not the exploration. Forcing audit at hypothesis open time forces premature audit design; making it fully optional fails the verify-before-claim rule. Permissive open + required audit on set-verdict matches the dogfood workflow.",
@@ -1728,6 +1740,7 @@
         "fully optional",
         "defer to v0.2.1"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T19:49:06.729261Z",
       "id": "D04",
       "rationale": "Local file integrity is cheap to enforce; URL integrity is a different problem (provenance + fetch policy). Mandatory-everywhere couples the registry to network state at registration. eawf artifact verify recomputes on demand for both cases.",
@@ -1742,6 +1755,7 @@
         "manual-only (no auto trigger)",
         "defer to v0.2.1"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T19:49:13.099461Z",
       "id": "D05",
       "rationale": "Phase close is the natural integrity boundary; manual run is the escape hatch for debugging. Every-mutation is too slow on hot paths like wave dispatch; manual-only is easy to forget. Failures block phase close; --force requires audit reason so the bypass is recorded.",
@@ -1755,6 +1769,7 @@
         "hand-edit state.json now",
         "ship the verbs as a P06 follow-up commit before tagging v0.1.0"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T19:49:20.589570Z",
       "id": "D06",
       "rationale": "v0.1 CLI lacks 'eawf audit set-verdict' and 'eawf backlog set-priority' verbs. Hand-editing state.json would violate AGENTS.md rule 4 (state CLI is the only mutator). Safer to ship the verbs in P07 and do the retro-stamping (A01..A06 verdicts; B015/B017 P2->P1) at P07 closeout in one pass.",
@@ -1768,6 +1783,7 @@
         "squash-merge (collapses history; rejected — incident 2026-05-10 PR #3 squashed by ship skill, reverted via force-push, redone as rebase-merge in PR #4)",
         "merge-commit (disabled at repo level)"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T20:35:25.648863Z",
       "id": "D07",
       "rationale": "Squash collapses per-wave/per-commit history into a single fat commit on main, losing the symbol-prefixed audit trail (e.g. [P06-W05] [P06-CORE]) that AGENTS.md commit-prefix rule and the wave/audit chain depend on for reconstructibility from git log. Rebase-merge preserves linear, individual commits with their original messages — matches the cherry-pick discipline that already feeds the long-running phase branch. Merge-commits forbidden by repo settings (mergeCommitAllowed=false). Default for all phase PRs unless explicitly overridden.",
@@ -1781,6 +1797,7 @@
         "Adopt review-driven PR cadence immediately (rejected: mid-game policy churn)",
         "Lock per-phase PR forever (rejected: pre-decides v0.2.0 retro)"
       ],
+      "consequences": [],
       "created_at": "2026-05-10T21:26:53.450950Z",
       "id": "D08",
       "rationale": "User proposed shifting from per-phase PR to review-driven + version-bump PR mid-v0.2. Mid-stream workflow change = state-of-record drift risk; defer re-evaluation to v0.2.0 cut, when iter/phase aggregation pattern is fully exercised.",
@@ -1793,6 +1810,7 @@
       "alternatives": [
         "Ship PyPI in P13 alongside tag v0.2.0 (rejected: scope creep)"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T14:12:02.809171Z",
       "id": "D09",
       "rationale": "v0.2 scope locked at P13; PyPI publish needs maintainer-track decision + CI release gating + tag-driven workflow not yet in place. Park behind tag v0.2.0 ship and reopen as v0.3 epic.",
@@ -1805,6 +1823,7 @@
       "alternatives": [
         "Multi-phase rolling PR (rejected: rebase history becomes noisy, hard to revert one phase)"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T14:12:08.585562Z",
       "id": "D10",
       "rationale": "D08 deferred the cadence policy revisit to v0.2.0 ship. Reviewed at P13 open: one-PR-per-phase produced clean rebase-merge history across P07..P12 and aligns with AGENTS.md phase lifecycle. Keep cadence; reopen for v0.3 only if multi-phase PRs become necessary.",
@@ -1817,6 +1836,7 @@
       "alternatives": [
         "Roll v0.3 features into P13 (rejected: violates phase-bounded scope, delays tag)"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T14:12:12.008221Z",
       "id": "D11",
       "rationale": "P13 is the v0.2.0 ship-gate phase. Scope = backlog hygiene (W01) + 4 net-new features (W02 B009, W04 B019, W05 B015, W07 B017) + B042 (W03) + version bump (W06) + CORE final. Additional waves block tag and re-trigger CI; add via decision ADR only.",
@@ -1830,6 +1850,7 @@
         "Add 4th adapter slot (Goose/Aider)",
         "Codex only (drop OpenCode to v0.4)"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:38.441970Z",
       "id": "D12",
       "rationale": "Goose/Aider/Cursor/Cline deferred to v0.4 to lock P14 at 11 waves; OpenCode and Codex are highest-demand harnesses per operator priority.",
@@ -1843,6 +1864,7 @@
         "Emit .ts with vendored type stubs",
         "Emit .ts with user-supplied node_modules"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:40.501195Z",
       "id": "D13",
       "rationale": "Avoid tsx/build-step rabbit hole + @opencode-ai/plugin type-stub churn risk; revisit when OpenCode publishes stable types.",
@@ -1855,6 +1877,7 @@
       "alternatives": [
         "Keep runtime.kind only; force per-repo single runtime"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:41.902963Z",
       "id": "D14",
       "rationale": "Multi-runtime repos need list of adapters; runtime.kind kept as deprecated alias mapped to first element; schema_version 1.1.",
@@ -1868,19 +1891,21 @@
         "Textual full-stack",
         "blessed / urwid"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:43.808082Z",
       "id": "D15",
       "rationale": "rich already pinned; no new runtime dep; accepts weaker keyboard focus vs Textual; matches P05 anti-Textual precedent.",
       "scope_id": "EAWF",
-      "status": "active",
+      "status": "superseded",
       "summary": "TUI stack: rich (rich.live + rich.layout); Textual rejected",
-      "superseded_by": null
+      "superseded_by": "D-SUP-TUI-01"
     },
     "D16": {
       "alternatives": [
         "Keep [P##-CORE] catch-all",
         "Introduce [P##-RFX] review-fix prefix"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:45.721863Z",
       "id": "D16",
       "rationale": "Any code/test/doc edit must live in a (possibly reactive) wave; pre-commit linter enforces in P14 W02; review-rework no longer wears [P##-CORE].",
@@ -1894,6 +1919,7 @@
         "Always show iter in prefix",
         "Never show iter in prefix"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:47.489792Z",
       "id": "D17",
       "rationale": "Happy path stays terse; repair cycles visible at git log level; matches existing schema (I01 always opens, I02+ opens on repair triggers).",
@@ -1907,6 +1933,7 @@
         "User > workspace > builtin",
         "Builtin-only (reject custom)"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:53.894577Z",
       "id": "D18",
       "rationale": "Workspace > user > builtin override matches existing config layering; mtime-based cache invalidation (drop @functools.cache); validates via ProfileBody.model_validate at load.",
@@ -1920,6 +1947,7 @@
         "Sign profiles cryptographically",
         "No trust gate (always accept)"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:55.827748Z",
       "id": "D19",
       "rationale": "First use of non-bundled profile prompts via AskUserQuestion + persists sha256; hash drift re-prompts; bundled shipped-with-wheel auto-trusted.",
@@ -1933,6 +1961,7 @@
         "Include a11y baseline in uiux profile",
         "Ship a11y as full profile body in v0.3"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:47:57.767578Z",
       "id": "D20",
       "rationale": "Encoding non-negotiable a11y rules without a consumer creates rule-drift; WCAG 2.2 public+stable so baseline can be lifted within one wave when triggered.",
@@ -1947,6 +1976,7 @@
         "Read-only eawf mcp serve --read-only",
         "Both emit-and-serve"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:48:00.453179Z",
       "id": "D21",
       "rationale": "Operator priority is harness coverage, not new server runtime; hardens existing emit path (Claude .mcp.json + Codex TOML + OpenCode opencode.json mcp block); plugin doctor verifies drift; own MCP server deferred to v0.4.",
@@ -1960,6 +1990,7 @@
         "User-only /blitz (no auto-chain)",
         "Opt-in via --blitz flag on /research"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:48:02.319590Z",
       "id": "D22",
       "rationale": "Tight clarification-loop integration; recursion guard via EAWF_BLITZ_DEPTH env var; max-rounds safety cap default 8.",
@@ -1973,6 +2004,7 @@
         "Require explicit eawf tui subcommand",
         "Config-gated default to status"
       ],
+      "consequences": [],
       "created_at": "2026-05-11T20:48:03.873356Z",
       "id": "D23",
       "rationale": "config.bare_command='tui' already wired; non-TTY/--plain/--no-input falls back to deterministic status output; matches workspace+user TUI brief dispatch ladder.",
@@ -1986,6 +2018,7 @@
         "Per-file coverage thresholds (rejected: churn on every refactor)",
         "Single overall fail_under only (rejected: hides per-package regressions)"
       ],
+      "consequences": [],
       "created_at": "2026-05-22T17:44:17.196430Z",
       "id": "D24",
       "rationale": "F-008/G-19 picks the nine load-bearing architectural layers (daemon, telemetry, skills, cli, render, store, state, lock, runtimes plugin_install) as the coverage-gate grain over per-file (churns on refactor) or per-subpackage (too coarse). Each per-package threshold is set ~1 point below coverage measured 2026-05-22 so the CI gate catches regressions immediately without redding the current tree; tui_v2 line coverage is waived (Textual async render misreports it). Overall floor is 60 via coverage fail_under; current total sits ~86%.",
@@ -3211,7 +3244,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T19:57:16.303041Z",
+  "updated_at": "2026-05-22T22:43:09.507364Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -12056,8 +12089,8 @@
     "P27-I02-W01": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:00:56.914003Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12070,23 +12103,23 @@
       "id": "P27-I02-W01",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:56.527091Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "git status never shows telemetry.db; *.db is gitignored; runtime dir chmod 0700 and socket 0600 verified on POSIX"
       ],
       "title": "Gitignore telemetry.db + harden runtime-dir/socket perms",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W01-1779486957"
     },
     "P27-I02-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:13:57.452013Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12098,23 +12131,23 @@
       "id": "P27-I02-W02",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:56.938589Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "addFilter(SensitiveScrubber()) present on every handler (asserted in test); restoration uses indexed placeholders so an allowlisted email survives while a path is scrubbed; eawfd.log shows no /Users/ after a seeded leak; IPv4/IPv6 and bare ~/ patterns added"
       ],
       "title": "Install + repair the SensitiveScrubber",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W02-1779487302"
     },
     "P27-I02-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:13:59.308292Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12125,23 +12158,23 @@
       "id": "P27-I02-W03",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:57.337089Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "with telemetry.enabled=False the metrics rebuild/export/info verbs create no telemetry.db and write nothing (test asserts no file)"
       ],
       "title": "Fix telemetry opt-in bypass",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W03-1779487303"
     },
     "P27-I02-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:14:01.267045Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12154,23 +12187,23 @@
       "id": "P27-I02-W04",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:57.734580Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a fixture session with known tokens and model yields non-zero total_cost_usd matching the pricing snapshot; zero-token rows guarded against div-by-zero"
       ],
       "title": "Wire pricing into the projector",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W04-1779487304"
     },
     "P27-I02-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:27:09.138554Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12181,17 +12214,17 @@
       "id": "P27-I02-W05",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:58.118255Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "rebuild over an event log containing one malformed incident completes and projects all good rows; the bad row is logged and skipped"
       ],
       "title": "Guard malformed incidents in the aggregator",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W05-1779488097"
     },
     "P27-I02-W06": {
       "agent_role": "executor",
@@ -12200,8 +12233,8 @@
         "P27-I03-W09",
         "P27-I03-W10"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:14:03.425059Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12214,23 +12247,23 @@
       "id": "P27-I02-W06",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:58.524967Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "store compact over an event.jsonl containing C09 dispatch rows round-trips cleanly; RuntimeSwitched/DispatchCost payloads validate via a discriminated union (or skip-revalidate) without ValidationError"
       ],
       "title": "Fix C09 payload / compaction incompatibility",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W06-1779487305"
     },
     "P27-I02-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:14:05.546685Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12241,17 +12274,17 @@
       "id": "P27-I02-W07",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:58.910484Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "an interrupted restore leaves state.json fully old or fully new (injected-failure test); restore writes via atomic_write_json_locked under portalock; a concurrent daemon write does not corrupt"
       ],
       "title": "Atomic + locked backup restore",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W07-1779487306"
     },
     "P27-I02-W08": {
       "agent_role": "executor",
@@ -12259,8 +12292,8 @@
         "P27-I02-W22",
         "P27-I02-W23"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:14:07.689514Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12273,23 +12306,23 @@
       "id": "P27-I02-W08",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:59.302183Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "migrate to an unsupported target errors cleanly with no write; migrate to a supported target writes a re-loadable state"
       ],
       "title": "Migrate target guard",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W08-1779487307"
     },
     "P27-I02-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:27:10.927617Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12300,23 +12333,23 @@
       "id": "P27-I02-W09",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:56:59.686494Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "--ts ../x and absolute paths are rejected against the timestamp pattern before path-join; valid timestamps work"
       ],
       "title": "Backup --ts path-traversal guard",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W09-1779488098"
     },
     "P27-I02-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:01:04.957342Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12328,23 +12361,23 @@
       "id": "P27-I02-W10",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:00.073381Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the tui golden_dir points at tests/snapshots/tui/golden and tui_config_modal is in the inventory; a TUI snapshot change without a paired test update is flagged by the gate (test)"
       ],
       "title": "Fix snapshot-pairing gate tui golden_dir",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W10-1779486959"
     },
     "P27-I02-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:41:27.667596Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12355,23 +12388,23 @@
       "id": "P27-I02-W11",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:00.453136Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a rotated or truncated source re-projects from offset 0; fold-whole-file adapters force a FULL re-read so a session row is not truncated; one bad upsert is logged and skipped without losing the rebuild"
       ],
       "title": "Projector robustness (rotation, tail-slice, per-row skip)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W11-1779488975"
     },
     "P27-I02-W12": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:14:09.599954Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12386,17 +12419,17 @@
       "id": "P27-I02-W12",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:00.835496Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "cli_error_for_rpc threads _kind so LockConflict/RuntimeUnavailable specificity survives; the wheel gate reds on a broken build and only skips when uv is absent; DuckDB upsert uses ON CONFLICT DO UPDATE; opencode queries are wrapped; eawf001 is narrowed for non-logger .log; each sub-fix has a regression test"
       ],
       "title": "I01 review minor bundle (L5/M6/T7/T9/L6)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W12-1779487308"
     },
     "P27-I02-W13": {
       "agent_role": "executor",
@@ -12405,8 +12438,8 @@
         "P27-I02-W15",
         "P27-I03-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:14:11.429154Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12417,23 +12450,23 @@
       "id": "P27-I02-W13",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:01.214874Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "10-20 subprocess tests run the real eawf binary and spawn a real eawfd; they assert real stdout/stderr; exit codes; eawfd.log scrubbing; PID lifecycle and the daemon socket; the tier is marked e2e and green in CI"
       ],
       "title": "Real-process E2E test tier",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W13-1779487309"
     },
     "P27-I02-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:27:12.959103Z",
       "commit": null,
       "deps": [
         "P27-I02-W13"
@@ -12446,25 +12479,25 @@
       "id": "P27-I02-W14",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:01.597594Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "/audit on a wave with a seeded behavioral regression returns fail with the offending criterion; it dispatches a fresh-context auditor; no check returns skipped by default"
       ],
       "title": "Make /audit run real checks",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W14-1779488099"
     },
     "P27-I02-W15": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W13"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:27:14.945264Z",
       "commit": null,
       "deps": [
         "P27-I02-W13"
@@ -12477,25 +12510,25 @@
       "id": "P27-I02-W15",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:01.968940Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "/ship runs the real gauntlet via subprocess (pre-commit/mypy/pytest/ruff) and aborts on any red (injected-failure test); the per-gate _gate_failure shape is kept"
       ],
       "title": "Make /ship run the real gauntlet",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W15-1779488100"
     },
     "P27-I02-W16": {
       "agent_role": "executor",
       "blocks": [
         "P27-I02-W17"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:27:17.094632Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12508,25 +12541,25 @@
       "id": "P27-I02-W16",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:02.350108Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "all 13 MutationKinds resolve to a real apply fn; daemon state.mutate handles EVENT_APPEND and ROADMAP_REVISE/APPLY/DROP and WAVE_RELEASE (test per kind)"
       ],
       "title": "Wire the stub MutationKinds",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W16-1779488102"
     },
     "P27-I02-W17": {
       "agent_role": "executor",
       "blocks": [
         "P27-I02-W18"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:41:29.499672Z",
       "commit": null,
       "deps": [
         "P27-I02-W16"
@@ -12541,24 +12574,24 @@
       "id": "P27-I02-W17",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:02.731995Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "_mutate_via_daemon drives a proxied mutation end-to-end and falls back when the daemon is down (both tested); the dead state_mutate is removed; tests green"
       ],
       "title": "Generic daemon-proxy shim",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W17-1779488977"
     },
     "P27-I02-W18": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W19"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "flow-p27i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -12579,22 +12612,22 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "all mutating verbs proxy when the daemon is up; the in-process fallback is state-first and WAL-backed; an injected-crash test leaves no phantom event; Rule 4 is realized"
       ],
       "title": "Route all 15 verbs through daemon + WAL-safe fallback",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W18-1779489717"
     },
     "P27-I02-W19": {
       "agent_role": "executor",
       "blocks": [
         "P27-I02-W20"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:27:19.007871Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -12606,25 +12639,25 @@
       "id": "P27-I02-W19",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:03.498613Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Decision accepts a consequences list (additive default-empty; no schema bump); the Decisions render shows them"
       ],
       "title": "Add Decision.consequences",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W19-1779488103"
     },
     "P27-I02-W20": {
       "agent_role": "executor",
       "blocks": [
         "P27-I02-W21"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:41:31.313524Z",
       "commit": null,
       "deps": [
         "P27-I02-W19"
@@ -12638,23 +12671,23 @@
       "id": "P27-I02-W20",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:03.884911Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf decision supersede <old> --by <new> flips status and sets superseded_by via the daemon; an invariant rejects an unlinked superseded row and requires status=superseded with the link set"
       ],
       "title": "Decision supersede verb + validator",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W20-1779488978"
     },
     "P27-I02-W21": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:43:09.507190Z",
       "commit": null,
       "deps": [
         "P27-I02-W20"
@@ -12667,10 +12700,10 @@
       "id": "P27-I02-W21",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:04.268209Z",
-      "outcome": null,
+      "outcome": "supersede D15 -> D-SUP-TUI-01 (Textual reverses rich pick); F2 verb + invariant from W20",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "D15 has status=superseded and superseded_by=D-SUP-TUI-01 set via the F2 verb; no contradictory active pair remains"
       ],
@@ -12685,8 +12718,8 @@
         "P27-I02-W23",
         "P27-I02-W24"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-22T22:41:33.179603Z",
       "commit": null,
       "deps": [
         "P27-I02-W08"
@@ -12700,17 +12733,17 @@
       "id": "P27-I02-W22",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:04.646930Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "State.schema_version literal advances to 1.0/1.1 in lockstep with the migrate guard; migrate advances a 1.0 state to a re-loadable 1.1 state; the chain is idempotent"
       ],
       "title": "Advance schema_version 1.0->1.1 + migration step",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W22-1779488979"
     },
     "P27-I02-W23": {
       "agent_role": "executor",
@@ -12779,7 +12812,7 @@
       "blocks": [
         "P27-I02-W26"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "flow-p27i02",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -12796,14 +12829,14 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "closing a wave writes an ActualSummary from opened_at/closed_at; claim writes a default EstimateSummary from effort_bucket; metrics variance returns a non-empty sample"
       ],
       "title": "Auto-record actuals on close + default estimates",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W25-1779489718"
     },
     "P27-I02-W26": {
       "agent_role": "executor",
@@ -14895,6 +14928,248 @@
       "path": ".ea/worktrees/p27-w28",
       "status": "merged",
       "wave_id": "P27-I01-W28"
+    },
+    "WT-P27-I02-W01-1779486957": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w01",
+      "created_at": "2026-05-22T21:55:57.995541Z",
+      "id": "WT-P27-I02-W01-1779486957",
+      "merged_commit": "5617753",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w01",
+      "status": "merged",
+      "wave_id": "P27-I02-W01"
+    },
+    "WT-P27-I02-W02-1779487302": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w02",
+      "created_at": "2026-05-22T22:01:42.135522Z",
+      "id": "WT-P27-I02-W02-1779487302",
+      "merged_commit": "9cab783",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w02",
+      "status": "merged",
+      "wave_id": "P27-I02-W02"
+    },
+    "WT-P27-I02-W03-1779487303": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w03",
+      "created_at": "2026-05-22T22:01:43.190086Z",
+      "id": "WT-P27-I02-W03-1779487303",
+      "merged_commit": "9708294",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w03",
+      "status": "merged",
+      "wave_id": "P27-I02-W03"
+    },
+    "WT-P27-I02-W04-1779487304": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w04",
+      "created_at": "2026-05-22T22:01:44.258078Z",
+      "id": "WT-P27-I02-W04-1779487304",
+      "merged_commit": "dd48c09",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w04",
+      "status": "merged",
+      "wave_id": "P27-I02-W04"
+    },
+    "WT-P27-I02-W05-1779488097": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w05",
+      "created_at": "2026-05-22T22:14:57.288997Z",
+      "id": "WT-P27-I02-W05-1779488097",
+      "merged_commit": "5a3a250",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w05",
+      "status": "merged",
+      "wave_id": "P27-I02-W05"
+    },
+    "WT-P27-I02-W06-1779487305": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w06",
+      "created_at": "2026-05-22T22:01:45.336704Z",
+      "id": "WT-P27-I02-W06-1779487305",
+      "merged_commit": "42f4fd2",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w06",
+      "status": "merged",
+      "wave_id": "P27-I02-W06"
+    },
+    "WT-P27-I02-W07-1779487306": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w07",
+      "created_at": "2026-05-22T22:01:46.420462Z",
+      "id": "WT-P27-I02-W07-1779487306",
+      "merged_commit": "b929533",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w07",
+      "status": "merged",
+      "wave_id": "P27-I02-W07"
+    },
+    "WT-P27-I02-W08-1779487307": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w08",
+      "created_at": "2026-05-22T22:01:47.496534Z",
+      "id": "WT-P27-I02-W08-1779487307",
+      "merged_commit": "ce31404",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w08",
+      "status": "merged",
+      "wave_id": "P27-I02-W08"
+    },
+    "WT-P27-I02-W09-1779488098": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w09",
+      "created_at": "2026-05-22T22:14:58.517807Z",
+      "id": "WT-P27-I02-W09-1779488098",
+      "merged_commit": "49fee63",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w09",
+      "status": "merged",
+      "wave_id": "P27-I02-W09"
+    },
+    "WT-P27-I02-W10-1779486959": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w10",
+      "created_at": "2026-05-22T21:55:59.070035Z",
+      "id": "WT-P27-I02-W10-1779486959",
+      "merged_commit": "e18a9b9",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w10",
+      "status": "merged",
+      "wave_id": "P27-I02-W10"
+    },
+    "WT-P27-I02-W11-1779488975": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w11",
+      "created_at": "2026-05-22T22:29:35.834644Z",
+      "id": "WT-P27-I02-W11-1779488975",
+      "merged_commit": "6142d08",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w11",
+      "status": "merged",
+      "wave_id": "P27-I02-W11"
+    },
+    "WT-P27-I02-W12-1779487308": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w12",
+      "created_at": "2026-05-22T22:01:48.564388Z",
+      "id": "WT-P27-I02-W12-1779487308",
+      "merged_commit": "9139e3c",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w12",
+      "status": "merged",
+      "wave_id": "P27-I02-W12"
+    },
+    "WT-P27-I02-W13-1779487309": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w13",
+      "created_at": "2026-05-22T22:01:49.678667Z",
+      "id": "WT-P27-I02-W13-1779487309",
+      "merged_commit": "66a934a",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w13",
+      "status": "merged",
+      "wave_id": "P27-I02-W13"
+    },
+    "WT-P27-I02-W14-1779488099": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w14",
+      "created_at": "2026-05-22T22:14:59.656174Z",
+      "id": "WT-P27-I02-W14-1779488099",
+      "merged_commit": "9fb3911",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w14",
+      "status": "merged",
+      "wave_id": "P27-I02-W14"
+    },
+    "WT-P27-I02-W15-1779488100": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w15",
+      "created_at": "2026-05-22T22:15:00.809306Z",
+      "id": "WT-P27-I02-W15-1779488100",
+      "merged_commit": "25b93e7",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w15",
+      "status": "merged",
+      "wave_id": "P27-I02-W15"
+    },
+    "WT-P27-I02-W16-1779488102": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w16",
+      "created_at": "2026-05-22T22:15:02.015827Z",
+      "id": "WT-P27-I02-W16-1779488102",
+      "merged_commit": "5cdd0e3",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w16",
+      "status": "merged",
+      "wave_id": "P27-I02-W16"
+    },
+    "WT-P27-I02-W17-1779488977": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w17",
+      "created_at": "2026-05-22T22:29:37.042313Z",
+      "id": "WT-P27-I02-W17-1779488977",
+      "merged_commit": "a99a32f",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w17",
+      "status": "merged",
+      "wave_id": "P27-I02-W17"
+    },
+    "WT-P27-I02-W18-1779489717": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w18",
+      "created_at": "2026-05-22T22:41:57.274995Z",
+      "id": "WT-P27-I02-W18-1779489717",
+      "merged_commit": null,
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w18",
+      "status": "active",
+      "wave_id": "P27-I02-W18"
+    },
+    "WT-P27-I02-W19-1779488103": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w19",
+      "created_at": "2026-05-22T22:15:03.182009Z",
+      "id": "WT-P27-I02-W19-1779488103",
+      "merged_commit": "9590ed3",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w19",
+      "status": "merged",
+      "wave_id": "P27-I02-W19"
+    },
+    "WT-P27-I02-W20-1779488978": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w20",
+      "created_at": "2026-05-22T22:29:38.250414Z",
+      "id": "WT-P27-I02-W20-1779488978",
+      "merged_commit": "1a109b5",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w20",
+      "status": "merged",
+      "wave_id": "P27-I02-W20"
+    },
+    "WT-P27-I02-W22-1779488979": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w22",
+      "created_at": "2026-05-22T22:29:39.477056Z",
+      "id": "WT-P27-I02-W22-1779488979",
+      "merged_commit": "bf12460",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w22",
+      "status": "merged",
+      "wave_id": "P27-I02-W22"
+    },
+    "WT-P27-I02-W25-1779489718": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w25",
+      "created_at": "2026-05-22T22:41:58.456437Z",
+      "id": "WT-P27-I02-W25-1779489718",
+      "merged_commit": null,
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w25",
+      "status": "active",
+      "wave_id": "P27-I02-W25"
     }
   }
 }
