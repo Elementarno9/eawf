@@ -26,6 +26,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-21-p26-i01-tui-fixes.md",
       "urn": "urn:eawf:v1:artifact:P26/A33-P26-tui-fixes-report"
     },
+    "A34-P26-tui-qol-report": {
+      "created_at": "2026-05-22T02:28:42.631582Z",
+      "id": "A34-P26-tui-qol-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-22-p26-i02-tui-qol.md",
+      "urn": "urn:eawf:v1:artifact:P26/A34-P26-tui-qol-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -860,6 +870,17 @@
       "scope_id": "P26",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A34-P26-tui-qol": {
+      "check_results": [],
+      "created_at": "2026-05-22T02:28:43.004773Z",
+      "id": "A34-P26-tui-qol",
+      "integrity_results": [],
+      "kind": "review",
+      "report_artifact_id": "A34-P26-tui-qol-report",
+      "scope_id": "P26",
+      "status": "complete",
+      "verdict": "minor"
     }
   },
   "backlog": {
@@ -1566,13 +1587,26 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Native eawfd launcher binary so macOS Activity Monitor shows 'eawfd' instead of 'python3'"
+    },
+    "B068": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-22T02:30:50.787064Z",
+      "id": "B068",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Wire real needs_user_pause push subscription when daemon push bus lands (TUI auto-open currently rides StateBinding refresh; P26-I02-W07 + audit A34)"
     }
   },
   "current": {
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I02-W10"
+    ],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -2500,7 +2534,8 @@
         "P26-I02-W06",
         "P26-I02-W07",
         "P26-I02-W08",
-        "P26-I02-W09"
+        "P26-I02-W09",
+        "P26-I02-W10"
       ]
     },
     "P27-I01": {
@@ -3034,7 +3069,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T02:13:19.228956Z",
+  "updated_at": "2026-05-22T02:30:59.930102Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10469,6 +10504,35 @@
         "full unit + integration suite green in serial collection order"
       ],
       "title": "reserve blitz recursion env knobs from config env-layer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W10": {
+      "agent_role": "auditor",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/audits/2026-05-22-p26-i02-tui-qol.md"
+      ],
+      "id": "P26-I02-W10",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T02:30:59.555542Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "fresh-context auditor verifies all 9 I02 waves against declared success criteria",
+        "verdict minor recorded as A34-P26-tui-qol (report-bearing complete)",
+        "two non-blocking followups triaged (W06 defer + W07 backlog B068)"
+      ],
+      "title": "audit: A34-P26-tui-qol review report + minor verdict",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
