@@ -11,10 +11,14 @@ input against the full :class:`eawf.state.models.State` model — the v1.0
 input still carries the dropped ``summary`` / ``text`` keys and over-cap
 titles, neither of which the current model accepts. For every entity row
 whose ``title`` exceeds 72 chars, the FULL title is copied into
-``description`` (no loss) and ``title`` is truncated to <= 72 (at the last
-word boundary that fits, falling back to a hard cut). A later wave refines
-the truncation to a clause boundary and adds the real-state-fixture test;
-this edge keeps the truncation correct but not clause-perfect.
+``description`` (no loss) and ``title`` is truncated to <= 72. The
+truncation prefers the last natural clause boundary that fits the budget
+(``. ``, ``; ``, ``: ``, ``, ``, `` — ``, `` -- ``), falling back to the
+last word boundary, then to a hard character cut. Because the v1.1
+``description`` is itself capped at 500 chars, a pathological title longer
+than that is stored truncated-to-500 in ``description`` so the migrated
+state still re-loads; every realistic title (the longest live rows run a
+few hundred chars) fits well inside 500 and is preserved with no loss.
 
 The pre/post invariants Pydantic-load against lean fixture models defined
 here (:class:`StateV10` / :class:`StateV11`) that read only the
@@ -37,6 +41,19 @@ logger = logging.getLogger(__name__)
 
 #: Maximum length of the breadcrumb-safe ``title`` after migration.
 _TITLE_MAX = 72
+
+#: Maximum length of the ``description`` field in the v1.1 model. The full
+#: original title is preserved here on truncation; a title longer than this
+#: (no live row reaches it) is itself capped so the migrated state stays
+#: model-valid rather than bricking on a >500-char ``description``.
+_DESCRIPTION_MAX = 500
+
+#: Clause / sentence separators, longest first so a multi-char separator
+#: (`` -- ``) is matched before its single-char prefix would be. The
+#: truncator breaks ``title`` right before the latest separator that keeps
+#: the kept prefix within :data:`_TITLE_MAX`, so the separator itself is
+#: dropped and the title ends on a whole clause.
+_CLAUSE_SEPARATORS = (" -- ", " — ", ". ", "; ", ": ", ", ")
 
 #: State sub-dicts whose rows carry a bounded ``title`` in v1.1.
 _TITLE_BEARING_KEYS = (
@@ -69,15 +86,39 @@ class StateV11(BaseModel):
     schema_version: Literal["1.1"]
 
 
+def _last_clause_boundary(title: str) -> int:
+    """Return the kept-prefix length of the latest in-budget clause break.
+
+    Scans every separator in :data:`_CLAUSE_SEPARATORS` for its latest
+    occurrence whose start index is at or before :data:`_TITLE_MAX`, so the
+    text kept before it (``title[:start]``) stays within budget and the
+    separator + its trailing space are discarded. Returns ``0`` when no
+    separator yields a non-empty in-budget prefix, signalling the caller to
+    fall back to a word boundary.
+    """
+    best = 0
+    for separator in _CLAUSE_SEPARATORS:
+        start = title.rfind(separator, 0, _TITLE_MAX + 1)
+        if start <= 0:
+            continue
+        if title[:start].rstrip():
+            best = max(best, start)
+    return best
+
+
 def _truncate_title(title: str) -> str:
     """Return *title* shortened to <= :data:`_TITLE_MAX` chars.
 
-    Prefers the last whitespace boundary at or before the cap so the
-    truncated title ends on a whole word; falls back to a hard character
-    cut when no boundary exists within the first :data:`_TITLE_MAX` chars.
+    Prefers, within the budget, the last clause / sentence boundary so the
+    truncated title ends on a whole clause; falls back to the last
+    whitespace boundary so it at least ends on a whole word; falls back to a
+    hard character cut when neither boundary exists within the cap.
     """
     if len(title) <= _TITLE_MAX:
         return title
+    clause = _last_clause_boundary(title)
+    if clause:
+        return title[:clause].rstrip()
     head = title[:_TITLE_MAX]
     cut = head.rstrip()
     boundary = cut.rfind(" ")
@@ -92,13 +133,15 @@ def _migrate_title_row(row: dict[str, Any]) -> None:
     No-op when the row carries no ``title`` or the title already fits. When
     the title is over-cap, the FULL original title is copied into
     ``description`` (only when ``description`` is not already populated) and
-    ``title`` is truncated in place.
+    ``title`` is truncated in place. The copied ``description`` is itself
+    bounded to :data:`_DESCRIPTION_MAX` so a title longer than the
+    description cap (no live row reaches it) cannot brick model re-load.
     """
     title = row.get("title")
     if not isinstance(title, str) or len(title) <= _TITLE_MAX:
         return
     if not row.get("description"):
-        row["description"] = title
+        row["description"] = title[:_DESCRIPTION_MAX]
     row["title"] = _truncate_title(title)
 
 

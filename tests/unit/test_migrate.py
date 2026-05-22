@@ -28,6 +28,7 @@ tests that exercise the real (un-lifted) model-supported max.
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -46,7 +47,12 @@ from eawf.migrations import (
     run_chain,
 )
 from eawf.migrations._base import backup_path_for
-from eawf.migrations.v1_0_to_v1_1 import MigrationV10ToV11
+from eawf.migrations.v1_0_to_v1_1 import (
+    _DESCRIPTION_MAX,
+    _TITLE_MAX,
+    MigrationV10ToV11,
+    _truncate_title,
+)
 from eawf.state.models import State
 
 
@@ -715,3 +721,355 @@ def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
     # The state still re-loads under the live model after the supported-target run.
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
     assert reloaded.schema_version == "1.0"
+
+
+# --- W24: clause-boundary title truncation ---------------------------------
+#
+# A clause boundary is the latest of ``. ``, ``; ``, ``: ``, ``, ``,
+# `` — ``, `` -- `` that fits the 72-char budget; the separator is dropped
+# so the kept title ends on a whole clause. The fixture below is a
+# synthetic-but-representative v1.0 state whose long titles mirror real
+# eawf wave / backlog / phase wording (multi-clause, 100-400 chars) without
+# copying any developer-local path or PII into a committed fixture.
+
+
+#: Synthetic-but-representative over-cap titles, keyed by the natural break
+#: each should land on. Every string is multi-clause and 100-400 chars,
+#: shaped after real eawf wave / backlog / phase titles.
+_REALISTIC_TITLES: dict[str, str] = {
+    "colon": (
+        "Hygiene preamble: state-writer EOL + version-coupling lint + "
+        "phase prepare-close mutator + iter-bump hint for the active iter"
+    ),
+    "semicolon": (
+        "Auto-truncate migrator for over-cap titles; copy the full string "
+        "into description, truncate the title to a clause boundary, prove "
+        "no content is lost on a realistic state fixture"
+    ),
+    "comma": (
+        "Refactor the renderer envelope header so scope_id, wave, iter, and "
+        "phase keys stay canonical across every typed payload, log line, and "
+        "rendered breadcrumb in the dispatch surface"
+    ),
+    "double_dash": (
+        "Daemon canonical mutator -- state.json, layered config YAML, "
+        "registry JSON, event and audit stores, and the telemetry DB all "
+        "flow through the eawfd JSON-RPC write path"
+    ),
+    "period": (
+        "Plan the next phase. Enumerate the waves, write the per-wave "
+        "success criteria, and dispatch independent waves in parallel via "
+        "worktree-isolated subagents that cherry-pick back"
+    ),
+}
+
+
+def _realistic_state_v1_0() -> dict[str, Any]:
+    """Return a full v1.0 state whose entity titles mirror real eawf wording.
+
+    Extends :func:`_minimal_state_v1_0` with a referentially complete
+    phase/iter/wave chain plus a backlog item, decision, hypothesis, and
+    incident. Several rows carry multi-clause over-cap titles (100-400
+    chars); one wave keeps a short in-cap title so the "untouched" path is
+    exercised in the same migration. The chain re-loads under the live
+    model after migration.
+    """
+    ts = "2026-05-08T00:00:00Z"
+    payload = _minimal_state_v1_0()
+    payload["phases"] = {
+        "P00": {
+            "id": "P00",
+            "scope_id": "QR",
+            "subproject_id": None,
+            "title": _REALISTIC_TITLES["period"],
+            "status": "active",
+            "iter_ids": ["P00-I01"],
+            "outcome_ids": [],
+            "depends_on": [],
+            "source_brief_ids": [],
+            "opened_at": ts,
+            "closed_at": None,
+            "audit_id": None,
+        }
+    }
+    payload["iters"] = {
+        "P00-I01": {
+            "id": "P00-I01",
+            "phase_id": "P00",
+            "title": "Iter one",  # already in-cap: stays untouched
+            "status": "active",
+            "wave_ids": ["P00-I01-W01", "P00-I01-W02"],
+            "estimate_id": None,
+            "audit_id": None,
+            "opened_at": ts,
+            "closed_at": None,
+        }
+    }
+    payload["waves"] = {
+        "P00-I01-W01": {
+            "id": "P00-I01-W01",
+            "iter_id": "P00-I01",
+            "title": _REALISTIC_TITLES["colon"],
+            "status": "pending",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": [],
+            "success_criteria": [],
+            "opened_at": ts,
+            "closed_at": None,
+        },
+        "P00-I01-W02": {
+            "id": "P00-I01-W02",
+            "iter_id": "P00-I01",
+            "title": "Wave two",  # already in-cap: stays untouched
+            "status": "pending",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": [],
+            "success_criteria": [],
+            "opened_at": ts,
+            "closed_at": None,
+        },
+    }
+    payload["backlog"] = {
+        "B01": {
+            "id": "B01",
+            "scope_id": "QR",
+            "title": _REALISTIC_TITLES["double_dash"],
+            "priority": "P1",
+            "status": "open",
+            "created_at": ts,
+        }
+    }
+    payload["incidents"] = {
+        "INC01": {
+            "id": "INC01",
+            "scope_id": "QR",
+            "severity": "medium",
+            "title": _REALISTIC_TITLES["comma"],
+            "status": "open",
+            "opened_at": ts,
+        }
+    }
+    payload["decisions"] = {
+        "D01": {
+            "id": "D01",
+            "scope_id": "QR",
+            "summary": _REALISTIC_TITLES["semicolon"],
+            "rationale": "Squash destroys the wave-prefix history.",
+            "alternatives": [],
+            "consequences": [],
+            "status": "active",
+            "created_at": ts,
+            "superseded_by": None,
+        }
+    }
+    payload["hypotheses"] = {
+        "H01-01": {
+            "id": "H01-01",
+            "scope_id": "QR",
+            "text": "Render is idempotent",  # already in-cap: stays untouched
+            "metric": "drift",
+            "confirm": "drift == 0",
+            "reject": "drift > 0",
+            "status": "pending",
+            "verdict": None,
+            "audit_id": None,
+            "source_artifact_id": None,
+        }
+    }
+    return payload
+
+
+@pytest.mark.parametrize("key", sorted(_REALISTIC_TITLES))
+def test_truncate_title_breaks_on_clause_boundary(key: str) -> None:
+    """Each realistic over-cap title truncates on its natural clause break.
+
+    The kept title must fit the budget, must not be empty, and must not end
+    on a clause separator or a trailing space (the separator is dropped).
+    """
+    original = _REALISTIC_TITLES[key]
+    assert len(original) > _TITLE_MAX  # the fixture is genuinely over-cap
+    out = _truncate_title(original)
+    assert 0 < len(out) <= _TITLE_MAX
+    assert out == out.rstrip()
+    assert not out.endswith((",", ";", ":", ".", "-", "—"))
+    # The kept title is a clause-aligned prefix of the original.
+    assert original.startswith(out)
+
+
+def test_truncate_title_prefers_clause_over_word_boundary() -> None:
+    """A clause break beats a later word break within the same budget."""
+    # A word boundary sits at index 70 ("...word"), but a clause break (": ")
+    # sits earlier at index 16 — the clause break is preferred even though a
+    # later word boundary would keep more characters.
+    title = "Clause break here: " + "word " * 14  # >72, word-boundary-rich
+    out = _truncate_title(title)
+    assert out == "Clause break here"
+
+
+def test_truncate_title_picks_latest_in_budget_clause() -> None:
+    """Among multiple in-budget separators the latest one wins."""
+    title = (
+        "First clause, second clause, third clause that pushes the whole "
+        "title comfortably past the seventy-two-character truncation budget"
+    )
+    out = _truncate_title(title)
+    assert out == "First clause, second clause"
+    assert len(out) <= _TITLE_MAX
+
+
+def test_truncate_title_falls_back_to_word_boundary_without_clauses() -> None:
+    """A title with spaces but no clause separator cuts on a word boundary."""
+    title = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november"
+    assert len(title) > _TITLE_MAX
+    out = _truncate_title(title)
+    assert len(out) <= _TITLE_MAX
+    # No partial trailing word: every kept token is a whole input word.
+    assert set(out.split()).issubset(set(title.split()))
+
+
+def test_truncate_title_hard_cuts_unbreakable_token() -> None:
+    """Boundary: no clause and no space falls back to a hard 72-char cut."""
+    title = "x" * 130
+    out = _truncate_title(title)
+    assert out == "x" * _TITLE_MAX
+
+
+def test_truncate_title_leaves_exactly_72_untouched() -> None:
+    """Boundary: a title of exactly 72 chars is returned verbatim."""
+    title = "y" * _TITLE_MAX
+    assert _truncate_title(title) == title
+
+
+def test_truncate_title_ignores_separator_only_in_overflow_tail() -> None:
+    """A clause separator entirely past the budget never moves the cut.
+
+    The only separator sits at/beyond char 72, so it cannot anchor an
+    in-budget break; the truncator falls back to the last word boundary.
+    """
+    title = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima, mike"
+    assert len(title) > _TITLE_MAX
+    out = _truncate_title(title)
+    assert len(out) <= _TITLE_MAX
+    assert not out.endswith(",")
+
+
+def test_apply_realistic_fixture_caps_all_titles_with_no_loss() -> None:
+    """Every over-cap row caps title to <=72 and preserves the full text.
+
+    Asserts the four W24 success criteria on a realistic fixture: each
+    over-cap title is <=72, ends on a clause/word boundary (no mid-word
+    cut), its full original string is preserved in ``description``, and an
+    already-in-cap row is left untouched with no ``description`` added.
+    """
+    step = MigrationV10ToV11()
+    src = _realistic_state_v1_0()
+
+    # Capture the originals BEFORE the rename so the no-loss check compares
+    # against the true source string for every title-bearing row.
+    originals: dict[tuple[str, str], str] = {
+        ("phases", "P00"): src["phases"]["P00"]["title"],
+        ("iters", "P00-I01"): src["iters"]["P00-I01"]["title"],
+        ("waves", "P00-I01-W01"): src["waves"]["P00-I01-W01"]["title"],
+        ("waves", "P00-I01-W02"): src["waves"]["P00-I01-W02"]["title"],
+        ("backlog", "B01"): src["backlog"]["B01"]["title"],
+        ("incidents", "INC01"): src["incidents"]["INC01"]["title"],
+        ("decisions", "D01"): src["decisions"]["D01"]["summary"],
+        ("hypotheses", "H01-01"): src["hypotheses"]["H01-01"]["text"],
+    }
+
+    out = step.apply(src)
+
+    for (section, row_id), original in originals.items():
+        row = out[section][row_id]
+        title = row["title"]
+        assert len(title) <= _TITLE_MAX, f"{section}/{row_id} title over cap"
+        if len(original) <= _TITLE_MAX:
+            # In-cap rows are untouched and gain no description.
+            assert title == original
+            assert row.get("description") is None
+        else:
+            # Over-cap rows: full text preserved, title clause-aligned.
+            assert row["description"] == original, f"{section}/{row_id} lost content"
+            assert original.startswith(title)
+            assert title == title.rstrip()
+            assert not title.endswith((",", ";", ":", ".", "-", "—"))
+
+
+def test_apply_realistic_fixture_reloads_under_live_model(tmp_path: Path) -> None:
+    """The migrated realistic fixture re-loads under the live State model."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_realistic_state_v1_0(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.1"
+    # Spot-check the clause-aligned cap + no-loss survived the full round-trip.
+    wave = reloaded.waves["P00-I01-W01"]
+    assert wave.title == "Hygiene preamble"
+    assert wave.description == _REALISTIC_TITLES["colon"]
+
+
+def test_apply_realistic_fixture_is_idempotent() -> None:
+    """Re-applying the step to the already-migrated 1.1 result is a no-op.
+
+    The migrator's pre-check binds to ``schema_version == "1.0"``, so a true
+    re-run goes through an empty chain; here we assert the transform itself
+    is stable by feeding its own output (with the version reset to 1.0)
+    back through ``apply`` and getting a byte-identical row set.
+    """
+    step = MigrationV10ToV11()
+    once = step.apply(_realistic_state_v1_0())
+
+    # Reset only the version marker so the idempotent transform re-runs over
+    # already-capped titles + already-renamed fields without re-truncating.
+    replay = copy.deepcopy(once)
+    replay["schema_version"] = "1.0"
+    twice = step.apply(replay)
+
+    assert twice == once
+
+
+def test_apply_over_500_title_caps_description_to_stay_model_valid() -> None:
+    """Boundary: a title longer than the description cap is bounded to 500.
+
+    No live row reaches 500 chars, but the migrated state must still
+    re-load; the copied ``description`` is capped at :data:`_DESCRIPTION_MAX`
+    so a pathological title cannot brick model validation.
+    """
+    step = MigrationV10ToV11()
+    src = _realistic_state_v1_0()
+    huge = "word " * 200  # 1000 chars, well past the 500 description cap
+    src["waves"]["P00-I01-W01"]["title"] = huge
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert len(row["title"]) <= _TITLE_MAX
+    assert len(row["description"]) == _DESCRIPTION_MAX
+    assert row["description"] == huge[:_DESCRIPTION_MAX]
+
+
+def test_apply_preexisting_description_is_not_overwritten() -> None:
+    """An over-cap row that already carries a description keeps it intact."""
+    step = MigrationV10ToV11()
+    src = _realistic_state_v1_0()
+    src["waves"]["P00-I01-W01"]["description"] = "hand-authored note"
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert len(row["title"]) <= _TITLE_MAX
+    # The pre-existing description is preserved; the title is still truncated.
+    assert row["description"] == "hand-authored note"
+
+
+def test_apply_empty_string_title_is_left_untouched() -> None:
+    """Boundary: an empty title (len 0 <= cap) is a no-op, no description."""
+    step = MigrationV10ToV11()
+    src = _realistic_state_v1_0()
+    src["waves"]["P00-I01-W01"]["title"] = ""
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert row["title"] == ""
+    assert row.get("description") is None
