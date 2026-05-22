@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from eawf.state.enums import StoreKind
+from eawf.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.store.envelope import Envelope
 from eawf.telemetry.models import (
     TelemetryFileMeta,
@@ -78,10 +78,12 @@ class _EventFileSource:
     Mirrors the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
     over :class:`~eawf.store.envelope.Envelope` rows so the projector's
     incident path and offset bookkeeping are exercised on a line-per-row
-    store.
+    store. It reports ``source_name = "event_jsonl"`` so the projector treats
+    it as a *line-independent* source and exercises the incremental tail-slice
+    path (a fold-whole-file source would instead force a full re-read).
     """
 
-    source_name = "test_events"
+    source_name = "event_jsonl"
 
     def discover(self, root: Path) -> Iterator[Path]:
         path = root / "events.jsonl"
@@ -154,6 +156,90 @@ class _PricedSessionSource:
             total_cache_write=800,
             end_marker="other",
         )
+
+
+class _FoldWholeFileSource:
+    """In-test fold-whole-file source modelling claude/codex/opencode.
+
+    Folds the WHOLE discovered file into exactly one
+    :class:`~eawf.telemetry.models.TelemetrySession` row whose ``turn_count``
+    equals the number of non-blank lines and whose ``session_id`` is the file
+    stem. This is the shape that makes tail-slicing unsafe: a partial tail
+    re-fold would yield a row with a *smaller* turn_count keyed on the same
+    session id, overwriting the complete row.
+
+    It reports a non-allowlisted ``source_name`` so the projector classifies
+    it as fold-whole-file and forces a full re-read in incremental mode.
+    """
+
+    source_name = "fold_whole_file"
+
+    def discover(self, root: Path) -> Iterator[Path]:
+        if root.is_dir():
+            yield from sorted(root.glob("*.session"))
+
+    def iter_rows(self, path: Path) -> Iterator[TelemetrySession]:
+        if not path.is_file():
+            return
+        lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        if not lines:
+            return
+        yield TelemetrySession(
+            session_id=path.stem,
+            project_id="",
+            runtime="claude",
+            wave_id=None,
+            attempt_id=None,
+            session_log_path=str(path),
+            started_at=_TS,
+            ended_at=_TS,
+            duration_ms=0,
+            model_primary="claude-opus",
+            turn_count=len(lines),
+            end_marker="other",
+        )
+
+
+class _BadRowSource:
+    """In-test source yielding two good incidents around one bad row.
+
+    The bad row is an unhandled type, so the projector's per-row upsert raises
+    and the row is logged + skipped — the two good incident rows around it must
+    still commit.
+    """
+
+    source_name = "bad_row_source"
+
+    def discover(self, root: Path) -> Iterator[Path]:
+        if root.is_dir():
+            yield from sorted(root.glob("*.bad"))
+
+    def iter_rows(self, path: Path) -> Iterator[object]:
+        if not path.is_file():
+            return
+        yield _incident_row("GOOD-1")
+        yield object()  # unhandled row type -> _upsert_row raises TypeError
+        yield _incident_row("GOOD-2")
+
+
+def _incident_row(incident_id: str) -> TelemetryIncident:
+    return TelemetryIncident(
+        incident_id=incident_id,
+        severity=IncidentSeverity.LOW,
+        cause=IncidentCause.RUNTIME_TIMEOUT,
+        ts=_TS,
+        summary=f"incident {incident_id}",
+    )
+
+
+def _write_lines(path: Path, lines: list[str]) -> None:
+    path.write_text("".join(f"{ln}\n" for ln in lines), encoding="utf-8")
+
+
+def _append_lines(path: Path, lines: list[str]) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        for ln in lines:
+            handle.write(f"{ln}\n")
 
 
 def _open_store(tmp_path: Path) -> SqliteMetricsStore:
@@ -389,3 +475,153 @@ def test_full_reproject_overwrites_incremental_edits(tmp_path: Path) -> None:
     (back,) = _incidents(store)
     assert back.summary.startswith("runtime_switched EV-1")
     store.close()
+
+
+# --------------------------------------------------------------------------- #
+# Rotation / truncation detection.
+# --------------------------------------------------------------------------- #
+
+
+def test_incremental_reprojects_rotated_source_from_zero(tmp_path: Path) -> None:
+    # A source that shrinks below the recorded last_offset (rotated / truncated
+    # log) must be re-projected from offset 0 rather than skipped forever.
+    path = tmp_path / "events.jsonl"
+    _write_event_file(path, ["EV-1", "EV-2", "EV-3"])
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_EventFileSource(), root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+    big_offset = _file_meta(store, path).last_offset
+    assert _incident_count(store) == 3
+
+    # Rotate: replace the file with a smaller fresh one (size now below the
+    # recorded cursor). The single new row must be picked up from offset 0.
+    _write_event_file(path, ["EV-9"])
+    assert path.stat().st_size < big_offset
+
+    report = rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+
+    # The fresh row was re-projected from the start (scanned, not skipped).
+    assert report.files_scanned == 1
+    assert report.files_skipped == 0
+    assert report.incidents == 1
+    ids = {i.incident_id for i in _incidents(store)}
+    assert "EV-9" in ids
+    # Cursor reset then advanced to the new (smaller) end-of-file.
+    assert _file_meta(store, path).last_offset == path.stat().st_size
+    store.close()
+
+
+def test_incremental_reprojects_truncated_to_empty_then_regrown(tmp_path: Path) -> None:
+    # Truncating to empty and re-growing must re-project the new content from
+    # offset 0 (the recorded cursor pointed past the truncated end-of-file).
+    path = tmp_path / "events.jsonl"
+    _write_event_file(path, ["EV-1", "EV-2"])
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_EventFileSource(), root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+    assert _incident_count(store) == 2
+
+    # Truncate to a single fresh row (smaller than the recorded cursor).
+    _write_event_file(path, ["EV-7"])
+    report = rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+
+    assert report.incidents == 1
+    assert report.files_scanned == 1
+    assert "EV-7" in {i.incident_id for i in _incidents(store)}
+    store.close()
+
+
+# --------------------------------------------------------------------------- #
+# Tail-slice safety for fold-whole-file adapters.
+# --------------------------------------------------------------------------- #
+
+
+def test_incremental_fold_whole_file_keeps_session_row_complete(tmp_path: Path) -> None:
+    # A fold-whole-file adapter (claude/codex/opencode) folds the WHOLE file
+    # into one session row. On an incremental re-run after the file grows, the
+    # projector must force a FULL re-read so the session row reflects every
+    # line — NOT a partial tail that would truncate the row.
+    src = _FoldWholeFileSource()
+    path = tmp_path / "s1.session"
+    _write_lines(path, ["t0", "t1", "t2"])
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=src, root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+    (row,) = _sessions(store)
+    assert row.turn_count == 3  # folded from all three lines
+
+    # Append one line. A naive tail-slice would re-fold only "t3" and replace
+    # the complete row with turn_count == 1; the full re-read keeps it == 4.
+    _append_lines(path, ["t3"])
+    report = rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+
+    (row,) = _sessions(store)
+    assert row.turn_count == 4
+    assert report.files_scanned == 1
+    store.close()
+
+
+def test_incremental_line_independent_source_still_tail_slices(tmp_path: Path) -> None:
+    # The dual of the fold-whole-file guard: a line-independent source
+    # (event_jsonl) must still tail-slice — a head row mutated in the store is
+    # NOT re-read on the incremental pass that picks up only the appended tail.
+    path = tmp_path / "events.jsonl"
+    _write_event_file(path, ["EV-1"])
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_EventFileSource(), root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+    (ev1,) = _incidents(store)
+    store.upsert("telemetry_incidents", ev1.model_copy(update={"summary": "head-untouched"}))
+    store.commit()
+
+    _append_event_lines(path, ["EV-2"])
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+
+    incidents = {i.incident_id: i for i in _incidents(store)}
+    # The head row was past the offset and not re-read: the edit survives.
+    assert incidents["EV-1"].summary == "head-untouched"
+    assert "EV-2" in incidents
+    store.close()
+
+
+# --------------------------------------------------------------------------- #
+# Per-row skip on a bad upsert.
+# --------------------------------------------------------------------------- #
+
+
+def test_rebuild_skips_bad_row_and_commits_good_rows(tmp_path: Path) -> None:
+    # One row that fails to upsert (an unhandled row type) must be logged and
+    # skipped without discarding the rest of the rebuild: the good rows around
+    # it still commit.
+    (tmp_path / "x.bad").write_text("x", encoding="utf-8")
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_BadRowSource(), root=tmp_path, project_id="p1")
+
+    report = rebuild(store, [spec], mode=RebuildMode.FULL)
+
+    # The good incident rows committed despite the bad row in the middle.
+    ids = {i.incident_id for i in _incidents(store)}
+    assert ids == {"GOOD-1", "GOOD-2"}
+    assert report.incidents == 2
+    assert report.rows_skipped == 1
+    store.close()
+
+
+def test_rebuild_bad_row_skip_persists_across_reopen(tmp_path: Path) -> None:
+    # The good rows are committed (durable), not merely buffered: re-opening
+    # the store sees them after the rebuild that skipped a bad row.
+    (tmp_path / "x.bad").write_text("x", encoding="utf-8")
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_BadRowSource(), root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.FULL)
+    store.close()
+
+    reopened = SqliteMetricsStore(tmp_path / "m.db")
+    ids = {i.incident_id for i in _incidents(reopened)}
+    assert ids == {"GOOD-1", "GOOD-2"}
+    reopened.close()

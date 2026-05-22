@@ -25,6 +25,23 @@ sliced by the projector and handed to the same adapter parser the full
 path uses, so the line-per-row stores (event / audit / report JSONL)
 project only their appended suffix without re-reading the head.
 
+Incremental projection guards three failure modes:
+
+* **Rotation / truncation** — when a source file has shrunk below its
+  recorded ``last_offset`` (a rotated or truncated log), the cursor is
+  reset to ``0`` and the fresh content is re-projected from the start,
+  rather than the file being skipped forever.
+* **Tail-slice safety** — only *line-independent* sources (every line a
+  complete row, e.g. ``event_jsonl``) are tail-sliced. The per-runtime
+  session adapters (``claude`` / ``codex`` / ``opencode``) fold the whole
+  file into one row, so they always force a full re-read; a partial tail
+  would re-fold a fragment and overwrite the complete session row with a
+  truncated one.
+* **Per-row isolation** — one row whose upsert fails is logged + skipped
+  (counted in ``RebuildReport.rows_skipped``); the good rows already
+  accumulated still commit, so a single bad row never discards the
+  rebuild.
+
 Every adapter is driven one file at a time so the projector keeps a
 bounded working set (C09 §5.9.4 bounded-memory invariant).
 """
@@ -54,6 +71,27 @@ logger = logging.getLogger(__name__)
 _SESSIONS_TABLE = "telemetry_sessions"
 _INCIDENTS_TABLE = "telemetry_incidents"
 _FILE_META_TABLE = "telemetry_file_meta"
+
+#: Source adapters whose files are line-independent: every line parses to a
+#: complete, self-contained row, so the incremental tail slice (bytes past the
+#: recorded offset) can be re-parsed in isolation without corrupting any row.
+#: Adapters absent from this set fold the *whole* file into one row (the
+#: per-runtime session adapters: ``claude`` / ``codex`` / ``opencode``) and so
+#: MUST be re-read whole — a partial tail would re-fold a fragment and
+#: ``INSERT OR REPLACE`` the complete session row with a truncated one. The set
+#: is a positive allowlist so an unknown future adapter defaults to the safe
+#: (full re-read) path rather than risking row truncation.
+_LINE_INDEPENDENT_SOURCES: frozenset[str] = frozenset({"event_jsonl"})
+
+
+def _is_line_independent(source: SessionSource[object]) -> bool:
+    """Return whether *source* yields one self-contained row per line.
+
+    Line-independent sources are the only ones the projector may tail-slice in
+    incremental mode; fold-whole-file adapters force a full re-read so a
+    partial tail never overwrites a complete row.
+    """
+    return source.source_name in _LINE_INDEPENDENT_SOURCES
 
 
 class RebuildMode(StrEnum):
@@ -96,12 +134,15 @@ class RebuildReport:
         files_scanned: Number of source files read (head + tail).
         files_skipped: Number of files skipped in incremental mode
             because their size was unchanged since the last scan.
+        rows_skipped: Number of individual rows that failed to upsert and
+            were logged + skipped (the good rows still committed).
     """
 
     sessions: int = 0
     incidents: int = 0
     files_scanned: int = 0
     files_skipped: int = 0
+    rows_skipped: int = 0
 
 
 @dataclass(slots=True)
@@ -160,7 +201,7 @@ def rebuild(
     logger.info(
         f"rebuild mode={mode.value} sessions={report.sessions} "
         f"incidents={report.incidents} scanned={report.files_scanned} "
-        f"skipped={report.files_skipped}"
+        f"skipped={report.files_skipped} rows_skipped={report.rows_skipped}"
     )
     return report
 
@@ -188,17 +229,79 @@ def _project_file(
     index: _FileMetaIndex,
     report: RebuildReport,
 ) -> None:
-    """Project a single discovered file, honouring the offset in incremental mode."""
+    """Project a single discovered file, honouring the offset in incremental mode.
+
+    Three incremental-mode subtleties are handled here:
+
+    * **Rotation / truncation** — when the file has shrunk below the recorded
+      ``last_offset`` (a rotated or truncated source), the cursor is reset to
+      ``0`` so the fresh content is re-projected from the start instead of
+      being skipped forever.
+    * **Unchanged file** — when the file size matches the recorded cursor
+      exactly, nothing has changed since the last scan, so it is skipped
+      (the bounded-rebuild fast path).
+    * **Fold-whole-file adapters** — only line-independent sources may
+      tail-slice; fold-whole-file adapters force a full re-read so a partial
+      tail never truncates the session row keyed on the whole file.
+    """
     size = path.stat().st_size
-    start_offset = 0 if mode is RebuildMode.FULL else index.offset_for(str(path))
-    if start_offset >= size and mode is RebuildMode.INCREMENTAL:
+    if mode is RebuildMode.INCREMENTAL and index.offset_for(str(path)) == size:
+        # An unchanged file (cursor already at end-of-file) contributes
+        # nothing on a re-scan. A shrunk file falls through to the rotation
+        # reset below; a grown file falls through to the tail / full re-read.
         report.files_skipped += 1
         return
 
+    start_offset = _start_offset_for(spec.source, path, size=size, mode=mode, index=index)
     report.files_scanned += 1
     for row in _iter_rows_from(spec.source, path, start_offset=start_offset):
-        _upsert_row(store, spec, row, report)
+        _upsert_row_safe(store, spec, row, path, report)
     _stamp_file_meta(store, path, size=size, index=index)
+
+
+def _start_offset_for(
+    source: SessionSource[object],
+    path: Path,
+    *,
+    size: int,
+    mode: RebuildMode,
+    index: _FileMetaIndex,
+) -> int:
+    """Resolve the byte offset to start projecting *path* from.
+
+    A FULL rebuild always starts at ``0``. In incremental mode the recorded
+    ``last_offset`` is honoured unless one of two conditions forces a full
+    re-read from ``0``:
+
+    * the file has shrunk below the recorded offset — a rotated or truncated
+      source whose old cursor now points past end-of-file; or
+    * the source folds the whole file into one row rather than emitting one
+      row per line, so a tail slice would re-parse a partial fragment and
+      overwrite the complete row with a truncated one.
+
+    Args:
+        source: The adapter being driven (its ``source_name`` decides whether
+            tail-slicing is safe).
+        path: The source file being projected.
+        size: The current file size in bytes.
+        mode: The rebuild mode.
+        index: The in-memory file-meta cursor cache.
+
+    Returns:
+        The byte offset to begin projection at.
+    """
+    if mode is RebuildMode.FULL:
+        return 0
+    recorded = index.offset_for(str(path))
+    if recorded > size:
+        logger.info(
+            f"_start_offset_for source={source.source_name} path={str(path)!r} "
+            f"recorded={recorded} size={size} reset offset rotated source"
+        )
+        return 0
+    if not _is_line_independent(source):
+        return 0
+    return recorded
 
 
 def _iter_rows_from(
@@ -213,6 +316,11 @@ def _iter_rows_from(
     offset the tail bytes are sliced into a temporary file and parsed
     through the same adapter, so the line-per-row stores project only the
     appended suffix without re-reading the head.
+
+    The caller (:func:`_start_offset_for`) only ever passes a non-zero
+    ``start_offset`` for line-independent sources, so the tail slice here is
+    always re-parseable in isolation; fold-whole-file adapters always arrive
+    with ``start_offset == 0``.
     """
     if start_offset <= 0:
         yield from source.iter_rows(path)
@@ -228,6 +336,32 @@ def _iter_rows_from(
         tmp.write(tail)
         tmp.flush()
         yield from source.iter_rows(Path(tmp.name))
+
+
+def _upsert_row_safe(
+    store: AbstractMetricsStore,
+    spec: SourceSpec,
+    row: object,
+    path: Path,
+    report: RebuildReport,
+) -> None:
+    """Upsert one row, logging + skipping it if the upsert fails.
+
+    A single malformed or unhandled row must not discard the whole rebuild:
+    the per-row upsert is isolated so a failure is logged, counted in
+    ``report.rows_skipped``, and the scan continues — the good rows already
+    accumulated stay in the pending transaction and commit at the end of the
+    :func:`rebuild`. Without this isolation an exception would unwind past the
+    single ``store.commit()`` and drop every projected row.
+    """
+    try:
+        _upsert_row(store, spec, row, report)
+    except Exception as exc:
+        report.rows_skipped += 1
+        logger.warning(
+            f"_upsert_row_safe source={spec.source.source_name} path={str(path)!r} "
+            f"row_type={type(row).__name__!r} error={exc!r} skipped bad row"
+        )
 
 
 def _upsert_row(
