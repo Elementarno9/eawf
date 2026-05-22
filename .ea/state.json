@@ -1573,7 +1573,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P26-I02-W04",
       "P26-I02-W05"
     ],
     "iter_id": "P26-I02",
@@ -3036,7 +3035,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T01:08:13.453914Z",
+  "updated_at": "2026-05-22T01:15:42.823918Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10286,7 +10285,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:15:42.277679Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10299,10 +10298,10 @@
       "id": "P26-I02-W04",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:32.461409Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "footer renders weekly-burn from compute_weekly_burn with graceful no-data empty-state when weekly_eu_target unset or actuals empty",
         "closes backlog B050",
@@ -11288,10 +11287,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w04",
       "created_at": "2026-05-22T00:11:01.977387Z",
       "id": "WT-P26-I02-W04-1779408661",
-      "merged_commit": null,
+      "merged_commit": "ad9de25",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w04",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W04"
     },
     "WT-P26-I02-W05-1779408662": {
