@@ -15,12 +15,12 @@
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
             │                                                                                              │
             │  wave P01-I01-W01                                                                            │
-            │   h history  d detail  m metrics  dp dispatch                                                │
+            │   h history  d detail  m metrics  p dispatch                                                 │
             │  ━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
             │  size:   L                                                                                   │
             │  eu:     — no data                                                                           │
             │  tokens: — no data                                                                           │
             │                                                                                              │
-            │  [ h/d/m/e/p tabs · Tab/Shift+Tab cycle · Esc close ]                                        │
+            │  [ Tab/Shift+Tab cycle · Esc close ]                                                         │
             │                                                                                              │
             └──────────────────────────────────────────────────────────────────────────────────────────────┘

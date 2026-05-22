@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -63,7 +63,7 @@ _TAB_LABELS: dict[str, str] = {
     "d": "d detail",
     "m": "m metrics",
     "e": "e events",
-    "dp": "dp dispatch",
+    "dp": "p dispatch",
 }
 
 
@@ -111,6 +111,56 @@ def _fmt_dt(value: object) -> str:
     if value is None:
         return "—"
     return str(value)
+
+
+def render_file_tree(paths: list[str]) -> str:
+    """Render *paths* (file globs / paths) as an indented directory tree.
+
+    Builds a trie over the ``/``-split path segments and renders it with a
+    two-space indent per level, collapsing single-child directory chains
+    into one segment (``src/eawf/`` rather than ``src`` → ``eawf``) so glob
+    scopes like ``src/eawf/dispatch/**`` stay compact while shared prefixes
+    group under one parent. Pure (no I/O) so the resolver stays unit-testable
+    without mounting Textual.
+
+    Args:
+        paths: The wave's ``file_scopes`` (path globs / files).
+
+    Returns:
+        The tree as a newline-joined block (no trailing newline); an empty
+        *paths* yields ``""``.
+    """
+    trie: dict[str, Any] = {}
+    for path in paths:
+        node = trie
+        for segment in (seg for seg in path.split("/") if seg):
+            node = node.setdefault(segment, {})
+    lines: list[str] = []
+    _emit_tree(trie, depth=0, lines=lines)
+    return "\n".join(lines)
+
+
+def _emit_tree(node: dict[str, Any], *, depth: int, lines: list[str]) -> None:
+    """Append the indented tree rows for *node* (collapsing single-child dirs).
+
+    Args:
+        node: The current trie level (segment → child level).
+        depth: The current indent depth (two spaces per level).
+        lines: The accumulator the rendered rows are appended to.
+    """
+    for name in sorted(node):
+        child = node[name]
+        label = name
+        # Collapse a single-child directory chain (a/ → b/ → c) into one
+        # ``a/b/c`` label so a deep glob path renders as one compact row.
+        while len(child) == 1:
+            (only,) = child
+            label = f"{label}/{only}"
+            child = child[only]
+        suffix = "/" if child else ""
+        lines.append(f"{'  ' * depth}{label}{suffix}")
+        if child:
+            _emit_tree(child, depth=depth + 1, lines=lines)
 
 
 def _wave_metrics(wave: Wave) -> tuple[tuple[str, str], ...]:
@@ -179,7 +229,12 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
     if wave.deps:
         rows.append(("deps", ", ".join(wave.deps)))
     if wave.file_scopes:
-        rows.append(("files", ", ".join(wave.file_scopes)))
+        # Render the scopes as a file tree on its own lines under the label
+        # (a leading newline drops the tree below "files:", each row indented
+        # two cells to nest under it) rather than a flat comma-joined list.
+        tree = render_file_tree(wave.file_scopes)
+        indented = "\n".join(f"  {line}" for line in tree.split("\n"))
+        rows.append(("files", f"\n{indented}"))
     for criterion in wave.success_criteria:
         rows.append(("criterion", criterion))
 
@@ -525,7 +580,7 @@ class DetailModal(ModalScreen[None]):
                     with TabPane(_TAB_LABELS[tab_id], id=f"detail-tab-{tab_id}"):
                         yield from self._compose_pane(tab_id)
             yield Static(
-                "[ h/d/m/e/p tabs · Tab/Shift+Tab cycle · Esc close ]",
+                "[ Tab/Shift+Tab cycle · Esc close ]",
                 classes="detail-hint",
             )
 
@@ -596,5 +651,6 @@ class DetailModal(ModalScreen[None]):
 __all__ = [
     "DetailCard",
     "DetailModal",
+    "render_file_tree",
     "resolve_detail",
 ]

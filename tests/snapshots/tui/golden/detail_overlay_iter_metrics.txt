@@ -15,12 +15,12 @@
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
             │                                                                                              │
             │  iter P01-I01                                                                                │
-            │   h history  d detail  m metrics  dp dispatch                                                │
+            │   h history  d detail  m metrics  p dispatch                                                 │
             │  ━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
             │  completion: ----------  0/1                                                                 │
             │  eu:         — no data                                                                       │
             │  tokens:     — no data                                                                       │
             │                                                                                              │
-            │  [ h/d/m/e/p tabs · Tab/Shift+Tab cycle · Esc close ]                                        │
+            │  [ Tab/Shift+Tab cycle · Esc close ]                                                         │
             │                                                                                              │
             └──────────────────────────────────────────────────────────────────────────────────────────────┘

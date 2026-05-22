@@ -12,14 +12,16 @@ import asyncio
 from pathlib import Path
 
 import orjson
-from textual.widgets import Markdown, TabbedContent
+from textual.widgets import Markdown, Static, TabbedContent
 
 from eawf.state.enums import EffortBucket
 from eawf.state.models import State
 from eawf.tui_v2.app import EaApp
 from eawf.tui_v2.screens.overlays.detail import (
+    _TAB_LABELS,
     DetailCard,
     DetailModal,
+    render_file_tree,
     resolve_detail,
 )
 from eawf.tui_v2.snapshot import capture_screen_text
@@ -100,6 +102,49 @@ def test_resolve_detail_wave_includes_success_criteria_rows() -> None:
     card = resolve_detail(state, wave.id)
     criterion_rows = [value for label, value in card.rows if label == "criterion"]
     assert criterion_rows == list(wave.success_criteria)
+
+
+# --------------------------------------------------------------------------
+# render_file_tree — wave file_scopes render as a collapsed tree (review fix)
+# --------------------------------------------------------------------------
+
+
+def test_render_file_tree_single_path_collapses_to_one_row() -> None:
+    assert render_file_tree(["src/eawf/validate/"]) == "src/eawf/validate"
+
+
+def test_render_file_tree_empty_is_blank() -> None:
+    assert render_file_tree([]) == ""
+
+
+def test_render_file_tree_groups_shared_prefix_and_collapses_tails() -> None:
+    tree = render_file_tree(
+        [
+            "src/eawf/dispatch/**",
+            "src/eawf/cli/commands/wave_dispatch.py",
+            "tests/dispatch/**",
+        ]
+    )
+    assert tree == ("src/eawf/\n  cli/commands/wave_dispatch.py\n  dispatch/**\ntests/dispatch/**")
+
+
+def test_wave_card_files_row_renders_as_tree() -> None:
+    """A wave's ``files`` detail row carries the indented tree, not a CSV list."""
+    state = _load(_PHASE_ITER_WAVE)
+    wave = next((w for w in state.waves.values() if w.file_scopes), None)
+    if wave is None:
+        return
+    card = resolve_detail(state, wave.id)
+    files_value = next((value for label, value in card.rows if label == "files"), None)
+    assert files_value is not None
+    # The tree drops below the label (leading newline) and indents each row.
+    assert files_value.startswith("\n")
+    assert ", ".join(wave.file_scopes) not in files_value
+
+
+def test_dp_tab_label_advertises_p_hotkey_not_dp() -> None:
+    """The dispatch tab labels its real ``p`` hotkey (one keypress is not ``dp``)."""
+    assert _TAB_LABELS["dp"] == "p dispatch"
 
 
 # --------------------------------------------------------------------------
@@ -488,6 +533,28 @@ def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
                 await pilot.press(key)
                 await pilot.pause()
                 assert tabs.active == "detail-tab-d"
+
+    asyncio.run(body())
+
+
+def test_detail_modal_footer_omits_tab_hotkey_list() -> None:
+    """The footer hint drops the ``h/d/m/e/p`` list — the tabs already show them.
+
+    Each tab pane label carries its own mnemonic (``h history`` / ``p
+    dispatch`` / …), so repeating the per-letter list in the footer hint is
+    redundant. The footer keeps only the cycle + close affordances.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(DetailModal(_full_card()))
+            await pilot.pause()
+            hint = str(app.screen.query_one(".detail-hint", Static).render())
+            assert "h/d/m/e/p" not in hint
+            assert "Tab/Shift+Tab cycle" in hint
+            assert "Esc close" in hint
 
     asyncio.run(body())
 
