@@ -160,6 +160,31 @@ def test_stream_events_no_terminal_event_ends_ok() -> None:
     assert orjson.loads(buf.getvalue().strip().split("\n")[-1])["status"] == "ok"
 
 
+class _FlushCountingSink(io.StringIO):
+    """A ``StringIO`` that counts ``flush()`` calls (block-buffered-pipe stand-in)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.flush_count = 0
+
+    def flush(self) -> None:
+        self.flush_count += 1
+        super().flush()
+
+
+def test_stream_events_flushes_each_frame() -> None:
+    """Every emitted frame is flushed so a block-buffered pipe streams live."""
+    sink = _FlushCountingSink()
+    stream_events(
+        _MOCK_EVENTS,
+        scope_id="urn:eawf:v1:state:QR/W01",
+        json_output=True,
+        out=sink,
+    )
+    # start + 3 events + end = 5 frames, each flushed as it lands.
+    assert sink.flush_count == 5
+
+
 # --- streaming: human shape -------------------------------------------------
 
 
@@ -190,6 +215,15 @@ def test_render_human_line_truncates_log_without_verbose() -> None:
     assert "truncated; pass --verbose for full" in terse
     assert "truncated" not in full
     assert long_line in full
+
+
+def test_render_human_line_collapses_embedded_newlines() -> None:
+    """A multi-line ``dispatch_log`` body renders on one human line (no fan-out)."""
+    frame = event_frame(kind="dispatch_log", line="line one\nline two\nline three")
+    rendered = render_human_line(frame, verbose=True)
+    # One frame → one line: no embedded newline survives into the output.
+    assert "\n" not in rendered
+    assert "line one line two line three" in rendered
 
 
 def test_render_human_line_start_and_end() -> None:

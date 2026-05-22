@@ -274,10 +274,10 @@ def state_mutate(
       reachable: marshal the mutation across the daemon ``state.mutate``
       RPC. The daemon owns the WAL + event-append + bus-publish
       ordering; the CLI gets back the event envelope verbatim.
-    * When ``daemon.proxy_enabled`` is ``true`` AND the daemon is
-      **not** reachable AND the mutation is a writer: refuse with
-      :class:`cli_errors.IntegrityViolation` — the daemon-required
-      envelope keeps the daemonless-write path closed.
+    * When ``daemon.proxy_enabled`` is ``true`` AND the daemon cannot be
+      reached (the connect / mutate raises a transport error): refuse
+      with :class:`cli_errors.DaemonUnreachable` (exit 4) — the
+      daemon-required envelope keeps the daemonless-write path closed.
     * When ``daemon.proxy_enabled`` is ``false`` (CI carve-out) OR
       the daemon refuses the kind with ``NotImplementedError``: fall
       back to the in-process path. The *apply* callable receives the
@@ -317,8 +317,9 @@ def state_mutate(
     Raises:
         UserError: When ``daemonless=True`` — mutating verbs reject the
             daemon-bypass carve-out (``data.kind="InvalidInput"``).
-        IntegrityViolation: When ``daemon.proxy_enabled=true`` AND the
-            daemon is unreachable AND the mutation is a writer.
+        DaemonUnreachable: When ``daemon.proxy_enabled=true`` AND the
+            connect / mutate raises a transport error (the daemon is
+            down or dropped the connection); mapped to exit 4.
         ValidationFailed: When the daemon rejects the mutation with
             ``-32002 validation_failed`` or the in-process post-
             mutation validation fails.
@@ -333,11 +334,6 @@ def state_mutate(
 
     proxy_enabled = _proxy_enabled(workspace)
     if proxy_enabled:
-        if not _daemon_reachable():
-            raise cli_errors.IntegrityViolation(
-                "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out"
-            )
         repo_root = str((workspace or Path.cwd()).resolve())
         try:
             with DaemonClient() as client:
@@ -346,6 +342,18 @@ def state_mutate(
                     idempotency_key=idempotency_key,
                     repo_root=repo_root,
                 )
+        except OSError as exc:
+            # Transport-layer failure: the daemon was unreachable or dropped the
+            # connection mid-mutate (``ConnectionError`` / ``TimeoutError`` are
+            # ``OSError`` subclasses). The ``with`` connect auto-spawns the
+            # daemon, so this fires only when spawn + connect genuinely cannot
+            # reach it — map to DAEMON_UNREACHABLE (exit 4) rather than letting an
+            # opaque transport error fall through to INTERNAL_ERROR (exit 5).
+            raise cli_errors.DaemonUnreachable(
+                "daemon_required: daemon.proxy_enabled=true but the mutate could not reach "
+                "the daemon; run `eawf daemon start` or unset daemon.proxy_enabled for the "
+                "V1 carve-out"
+            ) from exc
         except DaemonRpcError as exc:
             if exc.code == -32601:  # method not found — daemon predates W09
                 logger.debug(

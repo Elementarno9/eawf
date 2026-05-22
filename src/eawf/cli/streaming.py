@@ -225,7 +225,10 @@ def render_human_line(frame: StreamFrame, *, verbose: bool = False) -> str:
         return f"[{clock}] done: {frame.status}"
     # event
     if frame.line is not None:
-        body = frame.line
+        # Collapse embedded newlines so one frame stays one human line — a
+        # multi-line ``dispatch_log`` body must not fan out into N terminal
+        # rows (the NDJSON branch is already safe: JSON escapes ``\n``).
+        body = " ".join(frame.line.splitlines())
         if not verbose and len(body) > 80:
             body = f"{body[:80]}... (truncated; pass --verbose for full)"
         return f"[{clock}]   {frame.kind}: {body}"
@@ -317,6 +320,9 @@ def stream_events(
             sink.write(render_ndjson_line(frame) + "\n")
         else:
             sink.write(render_human_line(frame, verbose=verbose) + "\n")
+        # Flush per frame so a block-buffered pipe (``eawf ... | cat``) sees
+        # each frame as it lands instead of one dump at process exit.
+        sink.flush()
 
     _write(start_frame(scope_id=scope_id, correlation_id=correlation_id))
 
@@ -343,6 +349,7 @@ def stream_events(
         _write(end_frame(status=status, correlation_id=correlation_id))
     else:
         sink.write("\n")
+        sink.flush()
     return _STATUS_EXIT_CODE[status]
 
 

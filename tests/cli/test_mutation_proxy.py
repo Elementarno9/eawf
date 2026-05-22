@@ -10,9 +10,10 @@ this suite exercises four scenarios per the wave spec:
    :func:`state_transaction`.
 2. ``daemon.proxy_enabled=true`` + daemon up — the call MUST proxy
    through ``state.mutate`` and the in-process apply MUST NOT run.
-3. ``daemon.proxy_enabled=true`` + daemon down + writer verb — the
-   call MUST refuse with :class:`cli_errors.IntegrityViolation`
-   carrying the ``daemon_required`` envelope per F20.
+3. ``daemon.proxy_enabled=true`` + daemon unreachable (transport error)
+   + writer verb — the call MUST refuse with
+   :class:`cli_errors.DaemonUnreachable` (exit 4) carrying the
+   ``daemon_required`` envelope.
 4. ``daemon.proxy_enabled=true`` + daemon down + READ-only verb —
    bypass the daemon per the V1 carve-out (no error). The read-path
    bypass lives directly on the CLI surface (config get / state
@@ -35,7 +36,7 @@ from typing import Any
 import orjson
 import pytest
 
-from eawf.cli import _mutation
+from eawf.cli import _mutation, exit_codes
 from eawf.cli import errors as cli_errors
 from eawf.state.mutations import Mutation, MutationKind
 
@@ -244,18 +245,33 @@ def test_state_mutate_proxy_up_routes_through_daemon(
     assert on_disk["waves"]["P24-I01-W09"]["status"] == "claimed"
 
 
-# ---- Scenario 3: proxy_enabled=True + daemon DOWN + writer verb ------------
+# ---- Scenario 3: proxy_enabled=True + daemon unreachable + writer verb -----
 
 
-def test_state_mutate_proxy_down_writer_raises_daemon_required(
+class _DownClient:
+    """DaemonClient stand-in whose connect fails like a down daemon."""
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        pass
+
+    def __enter__(self) -> _DownClient:
+        # ConnectionRefusedError is an OSError subclass — the transport error a
+        # real connect raises when the daemon socket has no listener.
+        raise ConnectionRefusedError("daemon socket not listening")
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+
+def test_state_mutate_proxy_down_writer_raises_daemon_unreachable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """proxy_enabled=True + daemon unreachable + writer verb → IntegrityViolation."""
+    """proxy_enabled=True + connect fails + writer verb → DaemonUnreachable (exit 4)."""
     state_path = tmp_path / "state.json"
     _build_state(state_path)
     monkeypatch.setattr(_mutation, "_proxy_enabled", lambda _ws: True)
-    monkeypatch.setattr(_mutation, "_daemon_reachable", lambda *a, **k: False)
+    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _DownClient)
 
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
@@ -265,10 +281,54 @@ def test_state_mutate_proxy_down_writer_raises_daemon_required(
     )
 
     def _apply(_state: Any) -> None:
-        pytest.fail("apply should not run when proxy is required but down")
+        pytest.fail("apply should not run when the proxy is required but unreachable")
 
-    with pytest.raises(cli_errors.IntegrityViolation, match="daemon_required"):
+    with pytest.raises(cli_errors.DaemonUnreachable, match="daemon_required") as excinfo:
         _mutation.state_mutate(state_path, mutation, apply=_apply, workspace=None)
+    assert excinfo.value.exit_code == exit_codes.DAEMON_UNREACHABLE
+
+
+class _MidMutateDropClient:
+    """DaemonClient stand-in that connects but drops the mutate mid-flight."""
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        pass
+
+    def __enter__(self) -> _MidMutateDropClient:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def state_mutate(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        # TimeoutError is an OSError subclass — the transport error a real call
+        # raises when the daemon dies between the connect and the reply.
+        raise TimeoutError("daemon call exceeded timeout")
+
+
+def test_state_mutate_transport_error_mid_mutate_maps_to_exit_4(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transport error during the mutate maps to DaemonUnreachable (exit 4 not 5)."""
+    state_path = tmp_path / "state.json"
+    _build_state(state_path)
+    monkeypatch.setattr(_mutation, "_proxy_enabled", lambda _ws: True)
+    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _MidMutateDropClient)
+
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "x"},
+    )
+
+    def _apply(_state: Any) -> None:
+        pytest.fail("apply should not run when the daemon drops the mutate")
+
+    with pytest.raises(cli_errors.DaemonUnreachable) as excinfo:
+        _mutation.state_mutate(state_path, mutation, apply=_apply, workspace=None)
+    assert excinfo.value.exit_code == exit_codes.DAEMON_UNREACHABLE
 
 
 # ---- Scenario 4: read-only verb under proxy_enabled=True + daemon DOWN -----
