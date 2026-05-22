@@ -1020,45 +1020,49 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:38.253644Z",
+      "description": "Multi-repo workspace polish (cross-repo state aggregation, workspace dashboard, multi-repo PR coordination)",
       "id": "B011",
       "priority": "P1",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Multi-repo workspace polish (cross-repo state aggregation, workspace dashboard, multi-repo PR coordination)"
+      "title": "Multi-repo workspace polish (cross-repo state aggregation, workspace"
     },
     "B012": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:38.608711Z",
+      "description": "Telemetry / metrics emit (eawf metrics: EU estimate vs actual variance, audit pass rate, lock contention)",
       "id": "B012",
       "priority": "P1",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Telemetry / metrics emit (eawf metrics: EU estimate vs actual variance, audit pass rate, lock contention)"
+      "title": "Telemetry / metrics emit (eawf metrics: EU estimate vs actual"
     },
     "B013": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:38.955852Z",
+      "description": "Other-harness support investigation (Codex, Cursor, Aider) — reuse runtimes/<name>/ pattern; main cost: hook-event mapping + settings schema",
       "id": "B013",
       "priority": "P1",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Other-harness support investigation (Codex, Cursor, Aider) — reuse runtimes/<name>/ pattern; main cost: hook-event mapping + settings schema"
+      "title": "Other-harness support investigation (Codex, Cursor, Aider) — reuse"
     },
     "B014": {
       "closed_at": "2026-05-22T01:40:23.363025Z",
       "commit": "78c5db5",
       "created_at": "2026-05-10T13:47:07.026954Z",
+      "description": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap show' (rich table — phases/iters/waves with collapsible done branches, in-progress + planned work, EU estimate vs actual), then build the bare-'eawf' multi-pane TUI on the same data model (state pane + roadmap pane + git pane + memory pane); per fixed-decisions.md the Textual-style dashboard is deferred beyond v0.1",
       "id": "B014",
       "priority": "P1",
       "resolution": "satisfied by the 4-pane RepoScreen (ROADMAP + STATUS + GIT + BACKLOG) shipped in P26-I01 C06 plus read-only eawf roadmap show; the originally-proposed memory pane is dropped per the P26-I02 scope decision (YAGNI)",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap show' (rich table — phases/iters/waves with collapsible done branches, in-progress + planned work, EU estimate vs actual), then build the bare-'eawf' multi-pane TUI on the same data model (state pane + roadmap pane + git pane + memory pane); per fixed-decisions.md the Textual-style dashboard is deferred beyond v0.1"
+      "title": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap"
     },
     "B015": {
       "closed_at": null,
@@ -1086,298 +1090,325 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T18:50:46.575905Z",
+      "description": "User-scope eawf install + plugin auto-update: 'uv tool install eawf' (or pipx) for global binary; 'eawf plugin update' detects packaged plugin tree drift after eawf upgrade and offers (or auto-applies) re-emit + CC marketplace refresh; resolves the 'one global eawf vs per-project pin' tension by making the global install the primary path",
       "id": "B017",
       "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "User-scope eawf install + plugin auto-update: 'uv tool install eawf' (or pipx) for global binary; 'eawf plugin update' detects packaged plugin tree drift after eawf upgrade and offers (or auto-applies) re-emit + CC marketplace refresh; resolves the 'one global eawf vs per-project pin' tension by making the global install the primary path"
+      "title": "User-scope eawf install + plugin auto-update: 'uv tool install eawf'"
     },
     "B018": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:06:54.237098Z",
+      "description": "Statusline parity with hand-rolled wrapper: rows: rich (multi-line), ctx/5h/7d progress bars, async stale-while-revalidate cache + prewarm wiring, glyph_mode/color_mode/rows config, module toggles + 'eawf global install' wizard per docs/architecture/statusline.md",
       "id": "B018",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Statusline parity with hand-rolled wrapper: rows: rich (multi-line), ctx/5h/7d progress bars, async stale-while-revalidate cache + prewarm wiring, glyph_mode/color_mode/rows config, module toggles + 'eawf global install' wizard per docs/architecture/statusline.md"
+      "title": "Statusline parity with hand-rolled wrapper: rows: rich (multi-line),"
     },
     "B019": {
       "closed_at": "2026-05-15T15:08:07.915816Z",
       "commit": "9391b8b",
       "created_at": "2026-05-10T19:49:40.083539Z",
+      "description": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) — locks D02; target P09 evidence cluster",
       "id": "B019",
       "priority": "P2",
       "resolution": "delivered by P13-W04 audit-check DSL skeleton",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) — locks D02; target P09 evidence cluster"
+      "title": "Audit-check DSL runner (yaml + registry of check-kinds: file_exists,"
     },
     "B020": {
       "closed_at": "2026-05-15T15:08:25.945626Z",
       "commit": "3172aa6",
       "created_at": "2026-05-10T19:49:40.490366Z",
+      "description": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis set-verdict' requires --audit <AID> — locks D03; target P09",
       "id": "B020",
       "priority": "P1",
       "resolution": "delivered by P16-W10 evidence + hypothesis lifecycle CLI",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis set-verdict' requires --audit <AID> — locks D03; target P09"
+      "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis"
     },
     "B021": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:49:40.903684Z",
+      "description": "Artifact registry: sha256 mandatory for local files, optional for URL artifacts; 'eawf artifact verify' recomputes on demand — locks D04; target P09",
       "id": "B021",
       "priority": "P1",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Artifact registry: sha256 mandatory for local files, optional for URL artifacts; 'eawf artifact verify' recomputes on demand — locks D04; target P09"
+      "title": "Artifact registry: sha256 mandatory for local files, optional for URL"
     },
     "B022": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:49:41.318125Z",
+      "description": "Integrity-check runner: auto-runs on 'eawf phase close'; 'eawf validate --integrity' opt-in manual; failures block close (--force requires audit reason) — locks D05; target P09",
       "id": "B022",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Integrity-check runner: auto-runs on 'eawf phase close'; 'eawf validate --integrity' opt-in manual; failures block close (--force requires audit reason) — locks D05; target P09"
+      "title": "Integrity-check runner: auto-runs on 'eawf phase close'; 'eawf"
     },
     "B023": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:49:41.727797Z",
+      "description": "Cross-language profile bodies (rust, go, ts) — pytest_pass analogue per language; target P09 runtime cluster",
       "id": "B023",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Cross-language profile bodies (rust, go, ts) — pytest_pass analogue per language; target P09 runtime cluster"
+      "title": "Cross-language profile bodies (rust, go, ts) — pytest_pass analogue"
     },
     "B024": {
       "closed_at": "2026-05-15T15:08:54.140596Z",
       "commit": "4e83f8a",
       "created_at": "2026-05-10T19:49:55.658260Z",
+      "description": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them — target P10 distribution cluster",
       "id": "B024",
       "priority": "P1",
       "resolution": "superseded by B061 (layered skill registry + user catalogue)",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Skill registry / discovery API: enumerate skills regardless of which agent harness consumes them — target P10 distribution cluster"
+      "title": "Skill registry / discovery API: enumerate skills regardless of which"
     },
     "B025": {
       "closed_at": "2026-05-11T14:13:36.067709Z",
       "commit": "9bdf5c5",
       "created_at": "2026-05-10T19:49:56.068438Z",
+      "description": "Subagent prompt renderer ('wave dispatch'): render wave-spec block + relevant decisions/hypotheses/audits into self-contained prompt for the agent harness — target P08 orchestration",
       "id": "B025",
       "priority": "P1",
       "resolution": "P08-W01 subagent prompt renderer landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block + relevant decisions/hypotheses/audits into self-contained prompt for the agent harness — target P08 orchestration"
+      "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block +"
     },
     "B026": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:49:56.478547Z",
+      "description": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch — target P08 orchestration",
       "id": "B026",
       "priority": "P1",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch — target P08 orchestration"
+      "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by),"
     },
     "B027": {
       "closed_at": "2026-05-11T14:13:36.476093Z",
       "commit": "235db765",
       "created_at": "2026-05-10T19:49:56.888900Z",
+      "description": "Cherry-pick automation ('wave land'): cherry-pick worktree commits back into parent feature branch, mark wave landed in state — target P08 orchestration",
       "id": "B027",
       "priority": "P1",
       "resolution": "P08-W03 wave land cherry-pick landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits back into parent feature branch, mark wave landed in state — target P08 orchestration"
+      "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits"
     },
     "B028": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:49:57.303775Z",
+      "description": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08 observability",
       "id": "B028",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08 observability"
+      "title": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08"
     },
     "B029": {
       "closed_at": "2026-05-11T14:13:36.892041Z",
       "commit": "7fa0d43",
       "created_at": "2026-05-10T19:50:07.282092Z",
+      "description": "Decision-graph viz (text + dot/mermaid): render decisions/hypotheses/audits/backlog as a graph for human review — target P11 observability",
       "id": "B029",
       "priority": "P2",
       "resolution": "P12-W01 decision graph render landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Decision-graph viz (text + dot/mermaid): render decisions/hypotheses/audits/backlog as a graph for human review — target P11 observability"
+      "title": "Decision-graph viz (text + dot/mermaid): render"
     },
     "B030": {
       "closed_at": "2026-05-11T14:13:37.323985Z",
       "commit": "d73d138",
       "created_at": "2026-05-10T19:50:07.697320Z",
+      "description": "Memory GC + summarisation: compact/decay project memory and event log past a threshold; surface canonical summaries to agents — target P11 observability",
       "id": "B030",
       "priority": "P2",
       "resolution": "P12-W02 memory GC + tiered memory landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Memory GC + summarisation: compact/decay project memory and event log past a threshold; surface canonical summaries to agents — target P11 observability"
+      "title": "Memory GC + summarisation: compact/decay project memory and event log"
     },
     "B031": {
       "closed_at": "2026-05-11T14:13:37.755671Z",
       "commit": "685d764",
       "created_at": "2026-05-10T19:50:08.113757Z",
+      "description": "Doc-drift linter ('eawf doc verify'): detect when rendered docs disagree with state.json (closed phases referenced as active, missing audits, etc.) — target P11",
       "id": "B031",
       "priority": "P2",
       "resolution": "P12-W03 doc-drift linter landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Doc-drift linter ('eawf doc verify'): detect when rendered docs disagree with state.json (closed phases referenced as active, missing audits, etc.) — target P11"
+      "title": "Doc-drift linter ('eawf doc verify'): detect when rendered docs"
     },
     "B032": {
       "closed_at": "2026-05-11T14:13:38.224729Z",
       "commit": "ad9f625",
       "created_at": "2026-05-10T19:50:08.523474Z",
+      "description": "PR-body generator from state: 'eawf pr render' produces phase PR body (Summary + Test plan + Phase deliverables) from state.json — target P11",
       "id": "B032",
       "priority": "P2",
       "resolution": "P12-W04 PR-body + wiki landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "PR-body generator from state: 'eawf pr render' produces phase PR body (Summary + Test plan + Phase deliverables) from state.json — target P11"
+      "title": "PR-body generator from state: 'eawf pr render' produces phase PR body"
     },
     "B033": {
       "closed_at": "2026-05-11T14:13:38.625668Z",
       "commit": "01e9591",
       "created_at": "2026-05-10T19:50:08.940895Z",
+      "description": "Skill eval harness (golden envelopes): regression tests for the dispatcher itself; measure dispatch quality across model/version changes — target P11",
       "id": "B033",
       "priority": "P2",
       "resolution": "P12-W05 skill eval harness landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Skill eval harness (golden envelopes): regression tests for the dispatcher itself; measure dispatch quality across model/version changes — target P11"
+      "title": "Skill eval harness (golden envelopes): regression tests for the"
     },
     "B034": {
       "closed_at": "2026-05-11T14:13:39.036641Z",
       "commit": "28ae78f",
       "created_at": "2026-05-10T19:50:19.505518Z",
+      "description": "Sandbox/permission policy module: TDAD-style bounded autonomy — explicit policy declares what an agent may do per wave/profile — target P11 runtime",
       "id": "B034",
       "priority": "P2",
       "resolution": "P12-W06 sandbox/permission policy table landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Sandbox/permission policy module: TDAD-style bounded autonomy — explicit policy declares what an agent may do per wave/profile — target P11 runtime"
+      "title": "Sandbox/permission policy module: TDAD-style bounded autonomy —"
     },
     "B035": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:50:19.922171Z",
+      "description": "Per-wave/profile MCP scoping: Composio-style capability narrowing — bind MCP tools to scopes — target P10 distribution",
       "id": "B035",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Per-wave/profile MCP scoping: Composio-style capability narrowing — bind MCP tools to scopes — target P10 distribution"
+      "title": "Per-wave/profile MCP scoping: Composio-style capability narrowing —"
     },
     "B036": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:50:20.336797Z",
+      "description": "Non-Eä migration helper: import a foreign repo into eawf (detect language, scaffold .ea/, seed phase plan) — target v0.4 migration",
       "id": "B036",
       "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Non-Eä migration helper: import a foreign repo into eawf (detect language, scaffold .ea/, seed phase plan) — target v0.4 migration"
+      "title": "Non-Eä migration helper: import a foreign repo into eawf (detect"
     },
     "B037": {
       "closed_at": "2026-05-11T14:13:39.448781Z",
       "commit": "d73d138",
       "created_at": "2026-05-10T19:50:20.750046Z",
+      "description": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers; decay + summarisation hooks — target P11 observability",
       "id": "B037",
       "priority": "P2",
       "resolution": "P12-W02 tiered memory landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers; decay + summarisation hooks — target P11 observability"
+      "title": "Tiered memory (Letta/Mem0 pattern): working/archival/retrieval tiers;"
     },
     "B038": {
       "closed_at": "2026-05-11T14:13:39.861053Z",
       "commit": "ad9f625",
       "created_at": "2026-05-10T19:50:21.169681Z",
+      "description": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki pattern — distil state.json into a human-readable narrative project wiki — target P11",
       "id": "B038",
       "priority": "P2",
       "resolution": "P12-W04 wiki render landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki pattern — distil state.json into a human-readable narrative project wiki — target P11"
+      "title": "Project-wiki distillation ('eawf wiki render'): Karpathy LLM-Wiki"
     },
     "B039": {
       "closed_at": "2026-05-11T14:13:40.266966Z",
       "commit": "b6639a0",
       "created_at": "2026-05-10T19:50:30.775755Z",
+      "description": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to source files; show what state-changes touch which files — target P11",
       "id": "B039",
       "priority": "P2",
       "resolution": "P12-W07 file-impact graph landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to source files; show what state-changes touch which files — target P11"
+      "title": "File-impact graph ('eawf impact'): map decisions/hypotheses/audits to"
     },
     "B040": {
       "closed_at": "2026-05-11T14:13:40.695493Z",
       "commit": "3037dbf",
       "created_at": "2026-05-10T19:50:31.188663Z",
+      "description": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up wave to address failures, repeat until green — target P08 orchestration",
       "id": "B040",
       "priority": "P2",
       "resolution": "P08-W05 CI-fix loop landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up wave to address failures, repeat until green — target P08 orchestration"
+      "title": "CI-fix loop ('wave fix-ci'): open PR, watch CI, dispatch follow-up"
     },
     "B041": {
       "closed_at": "2026-05-11T14:13:41.104676Z",
       "commit": "9b13be921",
       "created_at": "2026-05-10T19:50:31.601134Z",
+      "description": "PR review automation: dispatch reviewer subagent against the diff, attach findings as 'audit add --kind review' — target P08 orchestration",
       "id": "B041",
       "priority": "P2",
       "resolution": "P08-W06 wave review landed",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "PR review automation: dispatch reviewer subagent against the diff, attach findings as 'audit add --kind review' — target P08 orchestration"
+      "title": "PR review automation: dispatch reviewer subagent against the diff,"
     },
     "B042": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T19:50:32.019320Z",
+      "description": "Self-eval benchmark harness: score dispatcher's wave outputs against golden traces; CI-gates regression — target P12 observability",
       "id": "B042",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Self-eval benchmark harness: score dispatcher's wave outputs against golden traces; CI-gates regression — target P12 observability"
+      "title": "Self-eval benchmark harness: score dispatcher's wave outputs against"
     },
     "B043": {
       "closed_at": "2026-05-15T15:08:54.614842Z",
       "commit": "4e83f8a",
       "created_at": "2026-05-10T19:50:32.427338Z",
+      "description": "User-skill registry: per-user skill catalogue independent of project's plugin tree — target P09 distribution",
       "id": "B043",
       "priority": "P2",
       "resolution": "superseded by B061 (layered skill registry + user catalogue)",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "User-skill registry: per-user skill catalogue independent of project's plugin tree — target P09 distribution"
+      "title": "User-skill registry: per-user skill catalogue independent of project's"
     },
     "B044": {
       "closed_at": null,
@@ -1394,34 +1425,37 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T08:42:26.353668Z",
+      "description": "wave-close SHA normalisation (--commit accepts full SHA; store as 7-char or exclude commit-keys from secrets baseline)",
       "id": "B045",
       "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "wave-close SHA normalisation (--commit accepts full SHA; store as 7-char or exclude commit-keys from secrets baseline)"
+      "title": "wave-close SHA normalisation (--commit accepts full SHA; store as"
     },
     "B046": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T08:42:27.135528Z",
+      "description": "wave update --files verb (allow editing Wave.file_scopes post-plan to reflect implementation reality)",
       "id": "B046",
       "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "wave update --files verb (allow editing Wave.file_scopes post-plan to reflect implementation reality)"
+      "title": "wave update --files verb (allow editing Wave.file_scopes post-plan to"
     },
     "B047": {
       "closed_at": "2026-05-15T15:08:26.424287Z",
       "commit": "5252c6a",
       "created_at": "2026-05-11T08:42:27.602406Z",
+      "description": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix docstring (worktree.py:393)",
       "id": "B047",
       "priority": "P3",
       "resolution": "delivered by P09-W03 /Users scrub",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix docstring (worktree.py:393)"
+      "title": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix"
     },
     "B048": {
       "closed_at": null,
@@ -1449,177 +1483,193 @@
       "closed_at": "2026-05-22T01:40:04.884756Z",
       "commit": "ad9de25",
       "created_at": "2026-05-11T20:21:10.738617Z",
+      "description": "Add weekly_eu_target field to state.project for TUI cross-repo totals divisor",
       "id": "B050",
       "priority": "P2",
       "resolution": "weekly_eu_target field present on state.project and consumed end-to-end by the TUI footer weekly-burn line (P26-I02-W04) with a graceful no-data empty-state",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Add weekly_eu_target field to state.project for TUI cross-repo totals divisor"
+      "title": "Add weekly_eu_target field to state.project for TUI cross-repo totals"
     },
     "B054": {
       "closed_at": "2026-05-15T15:08:26.875358Z",
       "commit": "96affde",
       "created_at": "2026-05-11T20:47:23.928223Z",
+      "description": "P14 W01-W02 hygiene preamble: state-writer EOL fix + version-coupling lint + phase prepare-close mutator + iter-bump hint",
       "id": "B054",
       "priority": "P1",
       "resolution": "delivered by P14-W01 phase prepare-close + version-coupling",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "P14 W01-W02 hygiene preamble: state-writer EOL fix + version-coupling lint + phase prepare-close mutator + iter-bump hint"
+      "title": "P14 W01-W02 hygiene preamble: state-writer EOL fix + version-coupling"
     },
     "B055": {
       "closed_at": "2026-05-15T15:08:27.359834Z",
       "commit": "2e3ed20",
       "created_at": "2026-05-11T20:47:24.571000Z",
+      "description": "Pre-commit hygiene: secrets-baseline content-hash + commit-prefix linter ([P##-CORE] state-only) + doc verify --strict gate",
       "id": "B055",
       "priority": "P1",
       "resolution": "delivered by P14-W02 pre-commit hygiene + commit-prefix linter",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Pre-commit hygiene: secrets-baseline content-hash + commit-prefix linter ([P##-CORE] state-only) + doc verify --strict gate"
+      "title": "Pre-commit hygiene: secrets-baseline content-hash + commit-prefix"
     },
     "B056": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T20:47:25.292989Z",
+      "description": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind deprecated alias)",
       "id": "B056",
       "priority": "P1",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind deprecated alias)"
+      "title": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind"
     },
     "B057": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T20:47:26.443210Z",
+      "description": "Custom-profile discovery roots: .ea/profiles workspace > ~/.eawf/profiles user > builtin; override semantics + mtime cache invalidation",
       "id": "B057",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Custom-profile discovery roots: .ea/profiles workspace > ~/.eawf/profiles user > builtin; override semantics + mtime cache invalidation"
+      "title": "Custom-profile discovery roots: .ea/profiles workspace >"
     },
     "B058": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T20:47:27.610276Z",
+      "description": "eawf profile new --inherit scaffold + profile validate CLI + TOFU content-hash trust ledger in .ea/config.yaml profiles.trusted",
       "id": "B058",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "eawf profile new --inherit scaffold + profile validate CLI + TOFU content-hash trust ledger in .ea/config.yaml profiles.trusted"
+      "title": "eawf profile new --inherit scaffold + profile validate CLI + TOFU"
     },
     "B059": {
       "closed_at": "2026-05-15T15:08:27.785224Z",
       "commit": "5412d9b",
       "created_at": "2026-05-11T20:47:28.717784Z",
+      "description": "Artifact-kind enum expansion: notebook/dataset/model/backtest/strategy/binary/scene/playtest_session/cve_ref + URN routing + sha256 policy",
       "id": "B059",
       "priority": "P1",
       "resolution": "delivered by P14-W11 artifact-kind enum expansion",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Artifact-kind enum expansion: notebook/dataset/model/backtest/strategy/binary/scene/playtest_session/cve_ref + URN routing + sha256 policy"
+      "title": "Artifact-kind enum expansion:"
     },
     "B060": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T20:47:29.892674Z",
+      "description": "uiux/web/mobile/a11y profile bodies + visual_artifacts state extension + PR-body visual evidence conditional render block",
       "id": "B060",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "uiux/web/mobile/a11y profile bodies + visual_artifacts state extension + PR-body visual evidence conditional render block"
+      "title": "uiux/web/mobile/a11y profile bodies + visual_artifacts state extension"
     },
     "B061": {
       "closed_at": "2026-05-15T15:08:28.622258Z",
       "commit": "4e83f8a",
       "created_at": "2026-05-11T20:47:30.661752Z",
+      "description": "Skill registry / discovery API across runtimes + user-skill catalogue (~/.eawf/skills); supersedes B024+B043",
       "id": "B061",
       "priority": "P1",
       "resolution": "delivered by P14-W09 layered skill registry + user catalogue",
       "scope_id": "EAWF",
       "status": "closed",
-      "title": "Skill registry / discovery API across runtimes + user-skill catalogue (~/.eawf/skills); supersedes B024+B043"
+      "title": "Skill registry / discovery API across runtimes + user-skill catalogue"
     },
     "B062": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T20:47:31.748840Z",
+      "description": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML) / OpenCode (opencode.json) + plugin doctor MCP drift check + idempotence goldens",
       "id": "B062",
       "priority": "P0",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML) / OpenCode (opencode.json) + plugin doctor MCP drift check + idempotence goldens"
+      "title": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML)"
     },
     "B063": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-15T14:33:42.834123Z",
+      "description": "AGENTS.md markdown-style rule: no manual line-wrap in generated/rendered .md (prose one-line-per-paragraph; commit messages exempt). Codify under style section + extend research/render skill output contracts so wrap habit doesn't leak into briefs, manifestos, audit reports.",
       "id": "B063",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "AGENTS.md markdown-style rule: no manual line-wrap in generated/rendered .md (prose one-line-per-paragraph; commit messages exempt). Codify under style section + extend research/render skill output contracts so wrap habit doesn't leak into briefs, manifestos, audit reports."
+      "title": "AGENTS.md markdown-style rule: no manual line-wrap in"
     },
     "B064": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-15T14:42:24.153590Z",
+      "description": "Commit-msg hook normalize-coauthor.py: dedupe Co-Authored-By by email + collapse 'Claude <model variant> <email>' → 'Claude <email>' (and Codex symmetrically); idempotent; ships under ~/.claude/git-hooks/ via global hooks bundle. Defense-in-depth alongside operator's .claude/settings.json includeCoAuthoredBy=false change.",
       "id": "B064",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Commit-msg hook normalize-coauthor.py: dedupe Co-Authored-By by email + collapse 'Claude <model variant> <email>' → 'Claude <email>' (and Codex symmetrically); idempotent; ships under ~/.claude/git-hooks/ via global hooks bundle. Defense-in-depth alongside operator's .claude/settings.json includeCoAuthoredBy=false change."
+      "title": "Commit-msg hook normalize-coauthor.py: dedupe Co-Authored-By by email"
     },
     "B065": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-15T14:42:24.687836Z",
+      "description": "Backlog defer:publication tag marker — applied to B001/B002/B004/B005/B010/B016/B017/B048 indicating publication-deferred per D34. Tag is documentation only; backlog rows stay open and explicitly do not block any release until operator un-defers.",
       "id": "B065",
       "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Backlog defer:publication tag marker — applied to B001/B002/B004/B005/B010/B016/B017/B048 indicating publication-deferred per D34. Tag is documentation only; backlog rows stay open and explicitly do not block any release until operator un-defers."
+      "title": "Backlog defer:publication tag marker — applied to"
     },
     "B066": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-15T14:42:25.200839Z",
+      "description": "Per-wave token-budget cap enforcement (warn 75% / block 100%). Wave.token_budget field already present (B028); only enforcement layer remains. Targets v0.4 KERNEL budget governor scope.",
       "id": "B066",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Per-wave token-budget cap enforcement (warn 75% / block 100%). Wave.token_budget field already present (B028); only enforcement layer remains. Targets v0.4 KERNEL budget governor scope."
+      "title": "Per-wave token-budget cap enforcement (warn 75% / block 100%)."
     },
     "B067": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-19T19:07:20.948384Z",
+      "description": "Native eawfd launcher binary so macOS Activity Monitor shows 'eawfd' instead of 'python3'",
       "id": "B067",
       "priority": "P3",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Native eawfd launcher binary so macOS Activity Monitor shows 'eawfd' instead of 'python3'"
+      "title": "Native eawfd launcher binary so macOS Activity Monitor shows 'eawfd'"
     },
     "B068": {
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-22T02:30:50.787064Z",
+      "description": "Wire real needs_user_pause push subscription when daemon push bus lands (TUI auto-open currently rides StateBinding refresh; P26-I02-W07 + audit A34)",
       "id": "B068",
       "priority": "P2",
       "resolution": null,
       "scope_id": "EAWF",
       "status": "open",
-      "title": "Wire real needs_user_pause push subscription when daemon push bus lands (TUI auto-open currently rides StateBinding refresh; P26-I02-W07 + audit A34)"
+      "title": "Wire real needs_user_pause push subscription when daemon push bus"
     }
   },
   "current": {
@@ -1644,8 +1694,8 @@
       "rationale": "Per audit XB09 + operator Q2 2026-05-18. Roadmap-synthesis brief deferred daemon; V1 ratified 2026-05-16 reverses to daemon Day-1 with smart-spawn + daemonless reader exemption. Migration cost grows monotonically with codebase size; cheapest to pay now.",
       "scope_id": "urn:eawf:v1:repo:eawf",
       "status": "active",
-      "summary": "V1 daemon-Day-1 reverses roadmap-synthesis daemon-deferred",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "V1 daemon-Day-1 reverses roadmap-synthesis daemon-deferred"
     },
     "D-SUP-02": {
       "alternatives": [],
@@ -1655,8 +1705,8 @@
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Manifesto Rule 6 allowed multiple dispatchers; V1 narrows to single daemon dispatcher.",
       "scope_id": "urn:eawf:v1:repo:eawf",
       "status": "active",
-      "summary": "V1 narrows manifesto Rule 6 to single dispatcher (daemon)",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "V1 narrows manifesto Rule 6 to single dispatcher (daemon)"
     },
     "D-SUP-03": {
       "alternatives": [],
@@ -1666,8 +1716,8 @@
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Manifesto Rule 5 plan-before-execute; V8 narrows to session-reuse on retry (fresh on new dispatch + continue on retry).",
       "scope_id": "urn:eawf:v1:repo:eawf",
       "status": "active",
-      "summary": "V8 narrows manifesto Rule 5 to session-reuse on retry",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "V8 narrows manifesto Rule 5 to session-reuse on retry"
     },
     "D-SUP-04": {
       "alternatives": [],
@@ -1677,8 +1727,8 @@
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Roadmap-synthesis rejected BYOK; C07a D2 keeps BYOK supported with subscription as default.",
       "scope_id": "urn:eawf:v1:repo:eawf",
       "status": "active",
-      "summary": "C07a D2 supersedes roadmap-synthesis BYOK rejection",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "C07a D2 supersedes roadmap-synthesis BYOK rejection"
     },
     "D-SUP-05": {
       "alternatives": [],
@@ -1688,8 +1738,8 @@
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Halt-only pattern superseded by reactive runtime fallback (V5) + session-reuse on retry (V8).",
       "scope_id": "urn:eawf:v1:repo:eawf",
       "status": "active",
-      "summary": "V5 + V8 supersede 429-vendor-pause halt-only pattern",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "V5 + V8 supersede 429-vendor-pause halt-only pattern"
     },
     "D-SUP-TUI-01": {
       "alternatives": [],
@@ -1699,8 +1749,8 @@
       "rationale": "Per audit BOT-01 + operator Q6 2026-05-18. P14-era P20-direction-brief picked rich; C06 v0.3+ rebuilds TUI on Textual. Memory project_p14_direction superseded by project_tui_textual_v03.",
       "scope_id": "urn:eawf:v1:repo:eawf",
       "status": "active",
-      "summary": "C06 Q6 supersedes P14 rich pick with Textual",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "C06 Q6 supersedes P14 rich pick with Textual"
     },
     "D01": {
       "alternatives": [
@@ -1709,12 +1759,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T13:25:45.960934Z",
+      "description": "P06 rescope: spec internalization + dogfood instead of plan §4 'Hardening + GA'",
       "id": "D01",
       "rationale": "Plan §4 lists P06 as Hardening + GA (Linux polish, golden scenarios, release tag). Phase 6 reframed to (a) internalize the v0.1 design spec into docs/, (b) dogfood eawf on its own repo, (c) ship the v0.1 PR. The displaced hardening work is captured in v0.2 backlog items B001 (Linux CI matrix), B009 (golden scenarios), B010 (v0.1.0 release tag).",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "P06 rescope: spec internalization + dogfood instead of plan §4 'Hardening + GA'",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "P06 rescope: spec internalization + dogfood instead of plan §4"
     },
     "D02": {
       "alternatives": [
@@ -1728,8 +1779,8 @@
       "rationale": "Bottleneck is non-coders authoring audits, not expressing arbitrary logic. YAML + registry of built-in kinds (file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) lets check-authors stay in YAML; new kinds are a code change. Hybrid escape hatch can come later if real example pushes against the registry.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "B019 audit-check DSL: yaml declarative + check-kind registry",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "B019 audit-check DSL: yaml declarative + check-kind registry"
     },
     "D03": {
       "alternatives": [
@@ -1742,8 +1793,8 @@
       "rationale": "Audit link gates the commitment, not the exploration. Forcing audit at hypothesis open time forces premature audit design; making it fully optional fails the verify-before-claim rule. Permissive open + required audit on set-verdict matches the dogfood workflow.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "B020 hypothesis lifecycle: audit-link required at set-verdict only",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "B020 hypothesis lifecycle: audit-link required at set-verdict only"
     },
     "D04": {
       "alternatives": [
@@ -1757,8 +1808,8 @@
       "rationale": "Local file integrity is cheap to enforce; URL integrity is a different problem (provenance + fetch policy). Mandatory-everywhere couples the registry to network state at registration. eawf artifact verify recomputes on demand for both cases.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "B021 artifact registry: sha256 mandatory for files, optional for URLs",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "B021 artifact registry: sha256 mandatory for files, optional for URLs"
     },
     "D05": {
       "alternatives": [
@@ -1768,12 +1819,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T19:49:13.099461Z",
+      "description": "B022 integrity runner: auto on phase close + opt-in eawf validate --integrity",
       "id": "D05",
       "rationale": "Phase close is the natural integrity boundary; manual run is the escape hatch for debugging. Every-mutation is too slow on hot paths like wave dispatch; manual-only is easy to forget. Failures block phase close; --force requires audit reason so the bypass is recorded.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "B022 integrity runner: auto on phase close + opt-in eawf validate --integrity",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "B022 integrity runner: auto on phase close + opt-in eawf validate"
     },
     "D06": {
       "alternatives": [
@@ -1782,12 +1834,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T19:49:20.589570Z",
+      "description": "Defer retro audit-verdict + backlog priority-bumps to P07 CLI completeness",
       "id": "D06",
       "rationale": "v0.1 CLI lacks 'eawf audit set-verdict' and 'eawf backlog set-priority' verbs. Hand-editing state.json would violate AGENTS.md rule 4 (state CLI is the only mutator). Safer to ship the verbs in P07 and do the retro-stamping (A01..A06 verdicts; B015/B017 P2->P1) at P07 closeout in one pass.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Defer retro audit-verdict + backlog priority-bumps to P07 CLI completeness",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Defer retro audit-verdict + backlog priority-bumps to P07 CLI"
     },
     "D07": {
       "alternatives": [
@@ -1800,8 +1853,8 @@
       "rationale": "Squash collapses per-wave/per-commit history into a single fat commit on main, losing the symbol-prefixed audit trail (e.g. [P06-W05] [P06-CORE]) that AGENTS.md commit-prefix rule and the wave/audit chain depend on for reconstructibility from git log. Rebase-merge preserves linear, individual commits with their original messages — matches the cherry-pick discipline that already feeds the long-running phase branch. Merge-commits forbidden by repo settings (mergeCommitAllowed=false). Default for all phase PRs unless explicitly overridden.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "PR merge strategy: rebase-and-merge; never squash, never merge-commit",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "PR merge strategy: rebase-and-merge; never squash, never merge-commit"
     },
     "D08": {
       "alternatives": [
@@ -1814,8 +1867,8 @@
       "rationale": "User proposed shifting from per-phase PR to review-driven + version-bump PR mid-v0.2. Mid-stream workflow change = state-of-record drift risk; defer re-evaluation to v0.2.0 cut, when iter/phase aggregation pattern is fully exercised.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Defer PR-cadence policy change until v0.2.0 ship",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Defer PR-cadence policy change until v0.2.0 ship"
     },
     "D09": {
       "alternatives": [
@@ -1827,8 +1880,8 @@
       "rationale": "v0.2 scope locked at P13; PyPI publish needs maintainer-track decision + CI release gating + tag-driven workflow not yet in place. Park behind tag v0.2.0 ship and reopen as v0.3 epic.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Defer B005 PyPI publish to v0.3",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Defer B005 PyPI publish to v0.3"
     },
     "D10": {
       "alternatives": [
@@ -1840,8 +1893,8 @@
       "rationale": "D08 deferred the cadence policy revisit to v0.2.0 ship. Reviewed at P13 open: one-PR-per-phase produced clean rebase-merge history across P07..P12 and aligns with AGENTS.md phase lifecycle. Keep cadence; reopen for v0.3 only if multi-phase PRs become necessary.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Revisit D08 — keep one-PR-per-phase cadence through v0.2 close",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Revisit D08 — keep one-PR-per-phase cadence through v0.2 close"
     },
     "D11": {
       "alternatives": [
@@ -1853,8 +1906,8 @@
       "rationale": "P13 is the v0.2.0 ship-gate phase. Scope = backlog hygiene (W01) + 4 net-new features (W02 B009, W04 B019, W05 B015, W07 B017) + B042 (W03) + version bump (W06) + CORE final. Additional waves block tag and re-trigger CI; add via decision ADR only.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "P13 scope lock: 7 waves (W01-W07); no further adds without ADR",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "P13 scope lock: 7 waves (W01-W07); no further adds without ADR"
     },
     "D12": {
       "alternatives": [
@@ -1867,8 +1920,8 @@
       "rationale": "Goose/Aider/Cursor/Cline deferred to v0.4 to lock P14 at 11 waves; OpenCode and Codex are highest-demand harnesses per operator priority.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "v0.3 harness scope: Claude + Codex + OpenCode only",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "v0.3 harness scope: Claude + Codex + OpenCode only"
     },
     "D13": {
       "alternatives": [
@@ -1881,8 +1934,8 @@
       "rationale": "Avoid tsx/build-step rabbit hole + @opencode-ai/plugin type-stub churn risk; revisit when OpenCode publishes stable types.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "OpenCode plugin shipped as untyped .js (no TS build dep)",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "OpenCode plugin shipped as untyped .js (no TS build dep)"
     },
     "D14": {
       "alternatives": [
@@ -1890,12 +1943,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:41.902963Z",
+      "description": "Profile-config schema bump: runtime.adapters list[str] supersedes runtime.kind",
       "id": "D14",
       "rationale": "Multi-runtime repos need list of adapters; runtime.kind kept as deprecated alias mapped to first element; schema_version 1.1.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Profile-config schema bump: runtime.adapters list[str] supersedes runtime.kind",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Profile-config schema bump: runtime.adapters list[str] supersedes"
     },
     "D15": {
       "alternatives": [
@@ -1908,8 +1962,8 @@
       "rationale": "rich already pinned; no new runtime dep; accepts weaker keyboard focus vs Textual; matches P05 anti-Textual precedent.",
       "scope_id": "EAWF",
       "status": "superseded",
-      "summary": "TUI stack: rich (rich.live + rich.layout); Textual rejected",
-      "superseded_by": "D-SUP-TUI-01"
+      "superseded_by": "D-SUP-TUI-01",
+      "title": "TUI stack: rich (rich.live + rich.layout); Textual rejected"
     },
     "D16": {
       "alternatives": [
@@ -1918,12 +1972,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:45.721863Z",
+      "description": "[P##-CORE] restricted to state-only commits; reactive waves append chronologically",
       "id": "D16",
       "rationale": "Any code/test/doc edit must live in a (possibly reactive) wave; pre-commit linter enforces in P14 W02; review-rework no longer wears [P##-CORE].",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "[P##-CORE] restricted to state-only commits; reactive waves append chronologically",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "[P##-CORE] restricted to state-only commits; reactive waves append"
     },
     "D17": {
       "alternatives": [
@@ -1932,12 +1987,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:47.489792Z",
+      "description": "Iter-bump triggers: audit fail / PR >3 blockers / mid-phase scope expansion; iter-in-prefix only when >I01",
       "id": "D17",
       "rationale": "Happy path stays terse; repair cycles visible at git log level; matches existing schema (I01 always opens, I02+ opens on repair triggers).",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Iter-bump triggers: audit fail / PR >3 blockers / mid-phase scope expansion; iter-in-prefix only when >I01",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Iter-bump triggers: audit fail / PR >3 blockers / mid-phase scope"
     },
     "D18": {
       "alternatives": [
@@ -1946,12 +2002,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:53.894577Z",
+      "description": "Custom-profile discovery: .ea/profiles (workspace) > ~/.eawf/profiles (user) > eawf.profiles.data (builtin)",
       "id": "D18",
       "rationale": "Workspace > user > builtin override matches existing config layering; mtime-based cache invalidation (drop @functools.cache); validates via ProfileBody.model_validate at load.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Custom-profile discovery: .ea/profiles (workspace) > ~/.eawf/profiles (user) > eawf.profiles.data (builtin)",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Custom-profile discovery: .ea/profiles (workspace) > ~/.eawf/profiles"
     },
     "D19": {
       "alternatives": [
@@ -1960,12 +2017,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:55.827748Z",
+      "description": "Profile trust: TOFU content-hash ledger in .ea/config.yaml profiles.trusted; bundled auto-trusted",
       "id": "D19",
       "rationale": "First use of non-bundled profile prompts via AskUserQuestion + persists sha256; hash drift re-prompts; bundled shipped-with-wheel auto-trusted.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Profile trust: TOFU content-hash ledger in .ea/config.yaml profiles.trusted; bundled auto-trusted",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Profile trust: TOFU content-hash ledger in .ea/config.yaml"
     },
     "D20": {
       "alternatives": [
@@ -1974,12 +2032,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:57.767578Z",
+      "description": "A11y deferred until first UI-touching real project or jurisdictional trigger; a11y.yaml stub-only in v0.3",
       "id": "D20",
       "rationale": "Encoding non-negotiable a11y rules without a consumer creates rule-drift; WCAG 2.2 public+stable so baseline can be lifted within one wave when triggered.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "A11y deferred until first UI-touching real project or jurisdictional trigger; a11y.yaml stub-only in v0.3",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "A11y deferred until first UI-touching real project or jurisdictional"
     },
     "D21": {
       "alternatives": [
@@ -1993,8 +2052,8 @@
       "rationale": "Operator priority is harness coverage, not new server runtime; hardens existing emit path (Claude .mcp.json + Codex TOML + OpenCode opencode.json mcp block); plugin doctor verifies drift; own MCP server deferred to v0.4.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "MCP at v0.3: Eä emits MCP configs into harness trees (no own MCP server)",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "MCP at v0.3: Eä emits MCP configs into harness trees (no own MCP server)"
     },
     "D22": {
       "alternatives": [
@@ -2007,8 +2066,8 @@
       "rationale": "Tight clarification-loop integration; recursion guard via EAWF_BLITZ_DEPTH env var; max-rounds safety cap default 8.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "/blitz auto-invokes from /research when residual unknowns >1",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "/blitz auto-invokes from /research when residual unknowns >1"
     },
     "D23": {
       "alternatives": [
@@ -2017,12 +2076,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:48:03.873356Z",
+      "description": "Bare eawf on TTY auto-launches TUI by cwd resolve (workspace > repo > user > status)",
       "id": "D23",
       "rationale": "config.bare_command='tui' already wired; non-TTY/--plain/--no-input falls back to deterministic status output; matches workspace+user TUI brief dispatch ladder.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Bare eawf on TTY auto-launches TUI by cwd resolve (workspace > repo > user > status)",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Bare eawf on TTY auto-launches TUI by cwd resolve (workspace > repo >"
     },
     "D24": {
       "alternatives": [
@@ -2031,12 +2091,13 @@
       ],
       "consequences": [],
       "created_at": "2026-05-22T17:44:17.196430Z",
+      "description": "Adopt C09 §5.2 nine-layer per-package coverage gates as a measured ratchet with overall floor 60 (F-008)",
       "id": "D24",
       "rationale": "F-008/G-19 picks the nine load-bearing architectural layers (daemon, telemetry, skills, cli, render, store, state, lock, runtimes plugin_install) as the coverage-gate grain over per-file (churns on refactor) or per-subpackage (too coarse). Each per-package threshold is set ~1 point below coverage measured 2026-05-22 so the CI gate catches regressions immediately without redding the current tree; tui_v2 line coverage is waived (Textual async render misreports it). Overall floor is 60 via coverage fail_under; current total sits ~86%.",
       "scope_id": "EAWF",
       "status": "active",
-      "summary": "Adopt C09 §5.2 nine-layer per-package coverage gates as a measured ratchet with overall floor 60 (F-008)",
-      "superseded_by": null
+      "superseded_by": null,
+      "title": "Adopt C09 §5.2 nine-layer per-package coverage gates as a measured"
     }
   },
   "estimates": {
@@ -2840,6 +2901,7 @@
       "audit_id": "A06-P05",
       "closed_at": "2026-05-10T12:50:20.603525Z",
       "depends_on": [],
+      "description": "Worktree + flow resume + memory authoritative + MCP + plan show + self-apply",
       "id": "P05",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:50:19.902417Z",
@@ -2848,7 +2910,7 @@
       "source_brief_ids": [],
       "status": "closed",
       "subproject_id": null,
-      "title": "Worktree + flow resume + memory authoritative + MCP + plan show + self-apply"
+      "title": "Worktree + flow resume + memory authoritative + MCP + plan show +"
     },
     "P06": {
       "audit_id": "A07-P06",
@@ -2868,6 +2930,7 @@
       "audit_id": "A08-P07",
       "closed_at": "2026-05-10T21:18:29.418817Z",
       "depends_on": [],
+      "description": "v0.2 P07: state-CLI verbs (audit set-verdict, backlog set-priority) + retro-stamp v0.1 verdicts",
       "id": "P07",
       "iter_ids": [],
       "opened_at": "2026-05-10T21:01:17.854978Z",
@@ -2876,12 +2939,13 @@
       "source_brief_ids": [],
       "status": "closed",
       "subproject_id": null,
-      "title": "v0.2 P07: state-CLI verbs (audit set-verdict, backlog set-priority) + retro-stamp v0.1 verdicts"
+      "title": "v0.2 P07: state-CLI verbs (audit set-verdict, backlog set-priority) +"
     },
     "P08": {
       "audit_id": "A09-P08",
       "closed_at": "2026-05-10T23:05:36.191527Z",
       "depends_on": [],
+      "description": "Orchestration core (wave dispatch + DAG + land + budgets + fix-ci + review)",
       "id": "P08",
       "iter_ids": [
         "P08-I01"
@@ -2892,12 +2956,13 @@
       "source_brief_ids": [],
       "status": "closed",
       "subproject_id": null,
-      "title": "Orchestration core (wave dispatch + DAG + land + budgets + fix-ci + review)"
+      "title": "Orchestration core (wave dispatch + DAG + land + budgets + fix-ci +"
     },
     "P09": {
       "audit_id": "A10-P09",
       "closed_at": "2026-05-11T08:36:32.030331Z",
       "depends_on": [],
+      "description": "Backlog cleanups deferred from P08 (refactor, validators, cross-platform, envelopes)",
       "id": "P09",
       "iter_ids": [
         "P09-I01"
@@ -2908,7 +2973,7 @@
       "source_brief_ids": [],
       "status": "closed",
       "subproject_id": null,
-      "title": "Backlog cleanups deferred from P08 (refactor, validators, cross-platform, envelopes)"
+      "title": "Backlog cleanups deferred from P08 (refactor, validators,"
     },
     "P10": {
       "audit_id": "A11-P10",
@@ -2930,6 +2995,7 @@
       "audit_id": "A12-P11",
       "closed_at": "2026-05-11T11:50:52.911860Z",
       "depends_on": [],
+      "description": "Workflow ergonomics: plan-mode prep + interactive flow gates + auto-accept config",
       "id": "P11",
       "iter_ids": [
         "P11-I01"
@@ -2940,7 +3006,7 @@
       "source_brief_ids": [],
       "status": "closed",
       "subproject_id": null,
-      "title": "Workflow ergonomics: plan-mode prep + interactive flow gates + auto-accept config"
+      "title": "Workflow ergonomics: plan-mode prep + interactive flow gates +"
     },
     "P12": {
       "audit_id": "A13-P12",
@@ -3154,6 +3220,7 @@
       "depends_on": [
         "P23"
       ],
+      "description": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock writer",
       "id": "P24",
       "iter_ids": [
         "P24-I01",
@@ -3170,7 +3237,7 @@
       ],
       "status": "closed",
       "subproject_id": null,
-      "title": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock writer"
+      "title": "C02-IMPL daemon keystone: eawfd + JSON-RPC + smart-spawn + portalock"
     },
     "P25": {
       "audit_id": "A31-P25-ship-gate",
@@ -3178,6 +3245,7 @@
       "depends_on": [
         "P24"
       ],
+      "description": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS events + profiles",
       "id": "P25",
       "iter_ids": [
         "P25-I01"
@@ -3194,7 +3262,7 @@
       ],
       "status": "closed",
       "subproject_id": null,
-      "title": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS events + profiles"
+      "title": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS"
     },
     "P26": {
       "audit_id": "A34-P26-tui-qol",
@@ -3202,6 +3270,7 @@
       "depends_on": [
         "P25"
       ],
+      "description": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime + operator TUI",
       "id": "P26",
       "iter_ids": [
         "P26-I01",
@@ -3222,7 +3291,7 @@
       ],
       "status": "closed",
       "subproject_id": null,
-      "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime + operator TUI"
+      "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime +"
     },
     "P27": {
       "audit_id": null,
@@ -3230,6 +3299,7 @@
       "depends_on": [
         "P26"
       ],
+      "description": "C09+C10 observability + operations: quality DSL + telemetry + release/migration ops",
       "id": "P27",
       "iter_ids": [
         "P27-I01",
@@ -3246,7 +3316,7 @@
       ],
       "status": "active",
       "subproject_id": null,
-      "title": "C09+C10 observability + operations: quality DSL + telemetry + release/migration ops"
+      "title": "C09+C10 observability + operations: quality DSL + telemetry +"
     }
   },
   "plugins": {},
@@ -3279,7 +3349,7 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
   "updated_at": "2026-05-22T23:18:28.500487Z",
@@ -4217,6 +4287,7 @@
       "closed_at": "2026-05-11T21:27:58.133113Z",
       "commit": null,
       "deps": [],
+      "description": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4233,7 +4304,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
+      "title": "Hygiene preamble: state-writer EOL + version-coupling lint + phase",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -4589,6 +4660,7 @@
       "closed_at": "2026-05-12T18:58:48.589880Z",
       "commit": null,
       "deps": [],
+      "description": "codex doctor folder display + marketplace path + opencode agents/skills emission",
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4610,7 +4682,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "codex doctor folder display + marketplace path + opencode agents/skills emission",
+      "title": "codex doctor folder display + marketplace path + opencode",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -5972,6 +6044,7 @@
       "closed_at": "2026-05-15T15:18:57.190971Z",
       "commit": null,
       "deps": [],
+      "description": "fix: activate-gate completeness (wave count + branch currency + clean worktree)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5990,7 +6063,7 @@
         "activate_phase rejects stale branch",
         "activate_phase rejects dirty worktree"
       ],
-      "title": "fix: activate-gate completeness (wave count + branch currency + clean worktree)",
+      "title": "fix: activate-gate completeness (wave count + branch currency + clean",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -6070,6 +6143,7 @@
       "closed_at": "2026-05-15T15:17:41.002945Z",
       "commit": null,
       "deps": [],
+      "description": "chore: coauthor verification (CC settings change test commit + docs note)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6088,7 +6162,7 @@
         "docs note added",
         "no AGENTS.md change"
       ],
-      "title": "chore: coauthor verification (CC settings change test commit + docs note)",
+      "title": "chore: coauthor verification (CC settings change test commit + docs",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -6104,6 +6178,7 @@
       "deps": [
         "P19-I02-W14"
       ],
+      "description": "feat: B064 commit-msg hook normalize-coauthor.py (variant collapse + dedupe)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6123,7 +6198,7 @@
         "idempotent",
         "unit tests cover both runtimes"
       ],
-      "title": "feat: B064 commit-msg hook normalize-coauthor.py (variant collapse + dedupe)",
+      "title": "feat: B064 commit-msg hook normalize-coauthor.py (variant collapse +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P19-I02-W15-1778858364"
@@ -6137,6 +6212,7 @@
       "closed_at": "2026-05-15T15:17:41.485183Z",
       "commit": null,
       "deps": [],
+      "description": "chore: backlog audit + bulk close stale (B019/B020/B047/B054/B055/B059/B061 delivered; B024/B043 superseded by B061; tag B001/B002/B004/B005/B010/B016/B017/B048 defer-publication)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6155,7 +6231,7 @@
         "supersession links recorded",
         "publication-cluster items tagged"
       ],
-      "title": "chore: backlog audit + bulk close stale (B019/B020/B047/B054/B055/B059/B061 delivered; B024/B043 superseded by B061; tag B001/B002/B004/B005/B010/B016/B017/B048 defer-publication)",
+      "title": "chore: backlog audit + bulk close stale",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -6337,6 +6413,7 @@
       "closed_at": "2026-05-15T16:59:40.385437Z",
       "commit": "7a8e0b1dba25a6db592940fa57501f0c1b50438e",
       "deps": [],
+      "description": "feat: eawf roadmap show rich-table renderer (phases/iters/waves/stale items)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6353,7 +6430,7 @@
         "rich-table render covers phases iters waves",
         "stale items annotated muted"
       ],
-      "title": "feat: eawf roadmap show rich-table renderer (phases/iters/waves/stale items)",
+      "title": "feat: eawf roadmap show rich-table renderer (phases/iters/waves/stale",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -6567,6 +6644,7 @@
       "closed_at": "2026-05-15T17:15:52.681457Z",
       "commit": "fc693de084948326c6c634338e14683ee5b9d0ed",
       "deps": [],
+      "description": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed, planned vs reactive split)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6585,7 +6663,7 @@
         "JSON envelope schema_version=1",
         "shared renderer feeds CLI + TUI overlay + release notes"
       ],
-      "title": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed, planned vs reactive split)",
+      "title": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed,",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -6767,6 +6845,7 @@
       "deps": [
         "P20-I01-W13"
       ],
+      "description": "docs: spike-workflow convention sweep (AGENTS.md addendum + skill prompt updates)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6785,7 +6864,7 @@
         "/prep + /research skill prompts updated",
         "dispatch renderer hint"
       ],
-      "title": "docs: spike-workflow convention sweep (AGENTS.md addendum + skill prompt updates)",
+      "title": "docs: spike-workflow convention sweep (AGENTS.md addendum + skill",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -6999,6 +7078,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "description": "feat: B006 quant.yaml body (instruments, backtest/strategy artefacts, reproducibility gates)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7016,7 +7096,7 @@
         "golden render",
         "reproducibility gates documented"
       ],
-      "title": "feat: B006 quant.yaml body (instruments, backtest/strategy artefacts, reproducibility gates)",
+      "title": "feat: B006 quant.yaml body (instruments, backtest/strategy artefacts,",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7033,6 +7113,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "description": "feat: B007 ml.yaml body (notebooks/datasets/models, sha256 policy, smoke checks)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7050,7 +7131,7 @@
         "golden render",
         "smoke-check audit-DSL hooks"
       ],
-      "title": "feat: B007 ml.yaml body (notebooks/datasets/models, sha256 policy, smoke checks)",
+      "title": "feat: B007 ml.yaml body (notebooks/datasets/models, sha256 policy,",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7100,6 +7181,7 @@
         "P21-I01-W04",
         "P21-I01-W05"
       ],
+      "description": "feat: artifact-kind expansion + URN routing + sha256 policy (closes B059 if not closed in W16-audit)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7117,7 +7199,7 @@
         "URN routing covers domain artefact kinds",
         "sha256 policy enforced per kind"
       ],
-      "title": "feat: artifact-kind expansion + URN routing + sha256 policy (closes B059 if not closed in W16-audit)",
+      "title": "feat: artifact-kind expansion + URN routing + sha256 policy (closes",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7200,6 +7282,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "description": "feat: B023 cross-language profile bodies (rust/go/typescript) — pytest_pass analogue per language",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7217,7 +7300,7 @@
         "language probes registered",
         "golden coverage"
       ],
-      "title": "feat: B023 cross-language profile bodies (rust/go/typescript) — pytest_pass analogue per language",
+      "title": "feat: B023 cross-language profile bodies (rust/go/typescript) —",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7233,6 +7316,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "description": "feat: wire skills_referenced + hooks_referenced into plugin/skill install manifests",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7252,7 +7336,7 @@
         "install wizard validates references",
         "goldens updated"
       ],
-      "title": "feat: wire skills_referenced + hooks_referenced into plugin/skill install manifests",
+      "title": "feat: wire skills_referenced + hooks_referenced into plugin/skill",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7269,6 +7353,7 @@
       "deps": [
         "P21-I01-W11"
       ],
+      "description": "feat: B035 per-wave/per-profile MCP scoping (state.waves[*].mcp_grants + render hooks)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7288,7 +7373,7 @@
         "render hooks emit per-wave scope",
         "goldens cover Claude + Codex + OpenCode"
       ],
-      "title": "feat: B035 per-wave/per-profile MCP scoping (state.waves[*].mcp_grants + render hooks)",
+      "title": "feat: B035 per-wave/per-profile MCP scoping (state.waves[*].mcp_grants",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7304,6 +7389,7 @@
       "deps": [
         "P21-I01-W12"
       ],
+      "description": "feat: B049 sandbox policy module + command_exit_zero audit-DSL enforcement",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7322,7 +7408,7 @@
         "command_exit_zero respects policy",
         "goldens cover deny + allow paths"
       ],
-      "title": "feat: B049 sandbox policy module + command_exit_zero audit-DSL enforcement",
+      "title": "feat: B049 sandbox policy module + command_exit_zero audit-DSL",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7374,6 +7460,7 @@
       "deps": [
         "P21-I01-W14"
       ],
+      "description": "audit: P21 ship-gate + state/backlog reconciliation (absorbs former P22 W01)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7393,7 +7480,7 @@
         "D34-D45 decisions recorded",
         "backlog rows current"
       ],
-      "title": "audit: P21 ship-gate + state/backlog reconciliation (absorbs former P22 W01)",
+      "title": "audit: P21 ship-gate + state/backlog reconciliation (absorbs former",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7407,6 +7494,7 @@
       "deps": [
         "P21-I01-W12"
       ],
+      "description": "feat: B062 MCP emit-and-verify hardening cross-runtime + idempotence goldens + plugin doctor MCP drift check",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7427,7 +7515,7 @@
         "plugin doctor surfaces drift",
         "idempotence goldens stable"
       ],
-      "title": "feat: B062 MCP emit-and-verify hardening cross-runtime + idempotence goldens + plugin doctor MCP drift check",
+      "title": "feat: B062 MCP emit-and-verify hardening cross-runtime + idempotence",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7611,6 +7699,7 @@
         "P22-I01-W04",
         "P22-I01-W05"
       ],
+      "description": "feat: patch promote for long-term subdir + promote 22 briefs to artifacts/research/long-term/",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7630,7 +7719,7 @@
         "sentinel stripped + chassis valid + scrub clean for each",
         "state.artifacts records 22 RESEARCH_BRIEF entries"
       ],
-      "title": "feat: patch promote for long-term subdir + promote 22 briefs to artifacts/research/long-term/",
+      "title": "feat: patch promote for long-term subdir + promote 22 briefs to",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7678,6 +7767,7 @@
       "closed_at": "2026-05-18T21:01:02.531487Z",
       "commit": null,
       "deps": [],
+      "description": "feat: URN_KINDS expansion to 26 + golden fixture + backward-compat aliases",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7700,7 +7790,7 @@
         "uv run mypy src/eawf/state/urn.py green",
         "brief .ea/local/research/2026-05-18-p23-c01-kernel-waves.md cited"
       ],
-      "title": "feat: URN_KINDS expansion to 26 + golden fixture + backward-compat aliases",
+      "title": "feat: URN_KINDS expansion to 26 + golden fixture + backward-compat",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7714,6 +7804,7 @@
       "deps": [
         "P23-I01-W01"
       ],
+      "description": "feat: minimum Principal model + Cost.attributed_to + EventPayload.actor_principal_id placeholders",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7735,7 +7826,7 @@
         "uv run mypy src/eawf/state/models.py green",
         "brief .ea/local/research/2026-05-18-p23-c01-kernel-waves.md cited"
       ],
-      "title": "feat: minimum Principal model + Cost.attributed_to + EventPayload.actor_principal_id placeholders",
+      "title": "feat: minimum Principal model + Cost.attributed_to +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7783,6 +7874,7 @@
       "closed_at": "2026-05-18T21:38:27.201933Z",
       "commit": null,
       "deps": [],
+      "description": "feat: criterion drift detector — wave success_criteria path-glob resolver + close-time warning",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7806,7 +7898,7 @@
         "uv run mypy src/eawf/lifecycle/criterion_drift.py src/eawf/lifecycle/transitions.py green",
         "Audit A29-P23-ship-gate followups F1..F4 are the worked example: lint MUST flag tests/unit/test_state_urn*.py + tests/unit/test_lifecycle*.py as unresolved if those success_criteria were re-validated"
       ],
-      "title": "feat: criterion drift detector — wave success_criteria path-glob resolver + close-time warning",
+      "title": "feat: criterion drift detector — wave success_criteria path-glob",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7825,6 +7917,7 @@
       "closed_at": "2026-05-19T14:00:57.771352Z",
       "commit": null,
       "deps": [],
+      "description": "feat: daemon process scaffolding + asyncio JSON-RPC framing + daemon.ping/status/shutdown methods",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7839,7 +7932,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: daemon process scaffolding + asyncio JSON-RPC framing + daemon.ping/status/shutdown methods",
+      "title": "feat: daemon process scaffolding + asyncio JSON-RPC framing +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7856,6 +7949,7 @@
       "deps": [
         "P24-I01-W01"
       ],
+      "description": "feat: Windows pywin32 named-pipe listener + asyncio queue bridge (XB11/Q8)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7870,7 +7964,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: Windows pywin32 named-pipe listener + asyncio queue bridge (XB11/Q8)",
+      "title": "feat: Windows pywin32 named-pipe listener + asyncio queue bridge",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7920,6 +8014,7 @@
         "P24-I01-W01",
         "P24-I01-W02"
       ],
+      "description": "feat: per-OS service registration (systemd-user + launchd + pywin32 Service with SCM-asyncio bridge XB14)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7936,7 +8031,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: per-OS service registration (systemd-user + launchd + pywin32 Service with SCM-asyncio bridge XB14)",
+      "title": "feat: per-OS service registration (systemd-user + launchd + pywin32",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7951,6 +8046,7 @@
         "P24-I01-W01",
         "P24-I01-W02"
       ],
+      "description": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS os.getpeereid + FreeBSD ctypes + Windows SID per XB13)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7965,7 +8061,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS os.getpeereid + FreeBSD ctypes + Windows SID per XB13)",
+      "title": "feat: per-OS peer-credential check (Linux SO_PEERCRED + macOS",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -7982,6 +8078,7 @@
         "P24-I01-W01",
         "P24-I01-W03"
       ],
+      "description": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) + reconnect catch-up via event.jsonl",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7997,7 +8094,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) + reconnect catch-up via event.jsonl",
+      "title": "feat: subscription bus + drop-oldest backpressure (D7/C02.F50) +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -8014,6 +8111,7 @@
         "P24-I01-W03",
         "P24-I01-W06"
       ],
+      "description": "feat: session-handle tracking (V8) with opaque session_log_handle (XB05) + TTL sweep + agent.dispatch fresh-path skeleton",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8029,7 +8127,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: session-handle tracking (V8) with opaque session_log_handle (XB05) + TTL sweep + agent.dispatch fresh-path skeleton",
+      "title": "feat: session-handle tracking (V8) with opaque session_log_handle",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -8046,6 +8144,7 @@
         "P24-I01-W01",
         "P24-I01-W04"
       ],
+      "description": "feat: idle-timeout watchdog + on-demand auto-spawn + cold-spawn p95 benchmark under V1 400ms budget",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8061,7 +8160,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: idle-timeout watchdog + on-demand auto-spawn + cold-spawn p95 benchmark under V1 400ms budget",
+      "title": "feat: idle-timeout watchdog + on-demand auto-spawn + cold-spawn p95",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -8079,6 +8178,7 @@
         "P24-I01-W07",
         "P24-I01-W08"
       ],
+      "description": "feat: state-CLI direct writer migrated to daemon state.mutate RPC proxy + event/audit/per-kind JSONL emitters daemon-internal (authority map rows 1-4)",
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -8094,7 +8194,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: state-CLI direct writer migrated to daemon state.mutate RPC proxy + event/audit/per-kind JSONL emitters daemon-internal (authority map rows 1-4)",
+      "title": "feat: state-CLI direct writer migrated to daemon state.mutate RPC",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -8108,6 +8208,7 @@
       "deps": [
         "P24-I01-W09"
       ],
+      "description": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8124,7 +8225,7 @@
       "sessions": {},
       "status": "closed",
       "success_criteria": [],
-      "title": "feat: layered-config + registry writers migrated to daemon RPCs (config.set_layer_value + registry.update); daemon.proxy_enabled default flips to true",
+      "title": "feat: layered-config + registry writers migrated to daemon RPCs",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -8167,6 +8268,7 @@
       "closed_at": "2026-05-19T20:38:36.980436Z",
       "commit": null,
       "deps": [],
+      "description": "feat: C03 PhaseSpec + IterSpec + WaveSpec Pydantic schemas + common types",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8190,7 +8292,7 @@
         "schema_version Literal['1.0'] enforced per BOT-03/Q5 lock",
         "missing failure_modes/ship_criteria/file_scopes raises ValidationError"
       ],
-      "title": "feat: C03 PhaseSpec + IterSpec + WaveSpec Pydantic schemas + common types",
+      "title": "feat: C03 PhaseSpec + IterSpec + WaveSpec Pydantic schemas + common",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W01-1779221186"
@@ -8240,6 +8342,7 @@
       "deps": [
         "P25-I01-W01"
       ],
+      "description": "feat: C03 daemon spec writer + spec cache + DRAFT/READY/IMPLEMENTED/ARCHIVED",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8266,7 +8369,7 @@
         "eawf spec show <urn> --from-git recovers archived specs",
         "state-CLI surface proxies through daemon with portalocker fallback"
       ],
-      "title": "feat: C03 daemon spec writer + spec cache + DRAFT/READY/IMPLEMENTED/ARCHIVED",
+      "title": "feat: C03 daemon spec writer + spec cache +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W03-1779223317"
@@ -8280,6 +8383,7 @@
       "deps": [
         "P25-I01-W01"
       ],
+      "description": "feat: C03 closed-wave success_criteria to WaveSpec backfill writer + bulk-run",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8302,7 +8406,7 @@
         "OQ-1 verdict: bulk-run executed against existing 50+ closed waves in this repo and resulting WaveSpec files committed under .ea/specs/",
         "closed waves remain readable through both surfaces (state row + WaveSpec file)"
       ],
-      "title": "feat: C03 closed-wave success_criteria to WaveSpec backfill writer + bulk-run",
+      "title": "feat: C03 closed-wave success_criteria to WaveSpec backfill writer +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W04-1779223318"
@@ -8316,6 +8420,7 @@
       "deps": [
         "P25-I01-W01"
       ],
+      "description": "feat: C03 KPI + non-empty + mockup heuristic + tests-real-paths validators",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8337,7 +8442,7 @@
         "UI-scope file_scope heuristic fires when path under src/eawf/tui_v2/ or src/eawf/render/ and demands mockup reference",
         "non-empty success_criteria + KPI presence enforced at schema load"
       ],
-      "title": "feat: C03 KPI + non-empty + mockup heuristic + tests-real-paths validators",
+      "title": "feat: C03 KPI + non-empty + mockup heuristic + tests-real-paths",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W05-1779223318"
@@ -8351,6 +8456,7 @@
       "closed_at": "2026-05-19T20:38:43.514078Z",
       "commit": null,
       "deps": [],
+      "description": "feat: C07b canonical Event model + event store + 10 per-kind JSONL layout",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8375,7 +8481,7 @@
         "schema_version Literal['1.0'] enforced + extra=forbid",
         "C06/C09/C11 import the same model (XB07 four-model risk killed) verified via import test"
       ],
-      "title": "feat: C07b canonical Event model + event store + 10 per-kind JSONL layout",
+      "title": "feat: C07b canonical Event model + event store + 10 per-kind JSONL",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W06-1779221187"
@@ -8387,6 +8493,7 @@
       "closed_at": "2026-05-19T20:38:50.123265Z",
       "commit": null,
       "deps": [],
+      "description": "feat: C07b commit-prefix lint hardening + worktree at .ea/worktrees/ + KISS-007",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8409,7 +8516,7 @@
         "commit-prefix lint regex enforces ^\\[P\\d{2}(-I\\d{2})?(-W\\d{2}|-CORE)\\]\\s+(feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state):\\s+\\S.*$",
         "KISS-007 cycle break: src/eawf/worktree/ submodules import eawf.worktree.git directly + cycle detector reports 0 internal cycles"
       ],
-      "title": "feat: C07b commit-prefix lint hardening + worktree at .ea/worktrees/ + KISS-007",
+      "title": "feat: C07b commit-prefix lint hardening + worktree at .ea/worktrees/ +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W07-1779221187"
@@ -8421,6 +8528,7 @@
       "closed_at": "2026-05-19T20:38:56.527213Z",
       "commit": null,
       "deps": [],
+      "description": "feat: C07b multi-repo registry + scope dispatch ladder (cwd to workspace/repo/user)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8444,7 +8552,7 @@
         "staleness = 14-day OR-chain per [5] §5.3 is_stale",
         "scan/walk/import-from-scan rejected with explicit error"
       ],
-      "title": "feat: C07b multi-repo registry + scope dispatch ladder (cwd to workspace/repo/user)",
+      "title": "feat: C07b multi-repo registry + scope dispatch ladder (cwd to",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W08-1779221188"
@@ -8535,6 +8643,7 @@
       "deps": [
         "P25-I01-W10"
       ],
+      "description": "feat: C07a PluginManifest(BaseModel) + eawf plugin sync + KISS-004 helpers",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8558,7 +8667,7 @@
         "KISS-004 helper module < 300 LOC per [1] §4.1",
         "three rendered outputs land at .claude/ + .codex/ + .opencode/ via daemon-mediated writer (authority-map row 14)"
       ],
-      "title": "feat: C07a PluginManifest(BaseModel) + eawf plugin sync + KISS-004 helpers",
+      "title": "feat: C07a PluginManifest(BaseModel) + eawf plugin sync + KISS-004",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W11-1779224956"
@@ -8572,6 +8681,7 @@
       "deps": [
         "P25-I01-W11"
       ],
+      "description": "feat: C07a plugin doctor + 4 drift kinds + KISS-001 coauthor env-detection fix",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8593,7 +8703,7 @@
         "KISS-001 coauthor env-detection opt-in via explicit EAWF_COAUTHOR_RUNTIME env var OR explicit JSON detected-runtime (no implicit detection)",
         "tests/integration/test_coauthor_verification.py passes"
       ],
-      "title": "feat: C07a plugin doctor + 4 drift kinds + KISS-001 coauthor env-detection fix",
+      "title": "feat: C07a plugin doctor + 4 drift kinds + KISS-001 coauthor",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W12-1779226133"
@@ -8681,6 +8791,7 @@
       "deps": [
         "P25-I01-W14"
       ],
+      "description": "feat: C08 ProfileBody v2 + conflicts_with + overrides + composition loader",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8704,7 +8815,7 @@
         "composition loader performs deterministic deep-merge by id + strictest-wins on instrument_requirements.kind + fail-fast on undeclared conflict per V3",
         "extra=forbid rejects unknown profile keys at load"
       ],
-      "title": "feat: C08 ProfileBody v2 + conflicts_with + overrides + composition loader",
+      "title": "feat: C08 ProfileBody v2 + conflicts_with + overrides + composition",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W15-1779223320"
@@ -8718,6 +8829,7 @@
       "deps": [
         "P25-I01-W14"
       ],
+      "description": "feat: C08 3 bootstrap templates (research+engineering+reverse-eng) + migration",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8744,7 +8856,7 @@
         "per-profile dispatch_session_policy defaults per [4] D10 (research:continue + engineering:fresh + reverse-engineering:continue)",
         "spike + hybrid templates explicitly NOT shipped (deferred v0.4+)"
       ],
-      "title": "feat: C08 3 bootstrap templates (research+engineering+reverse-eng) + migration",
+      "title": "feat: C08 3 bootstrap templates (research+engineering+reverse-eng) +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W16-1779223321"
@@ -8756,6 +8868,7 @@
       "closed_at": "2026-05-19T20:03:59.138813Z",
       "commit": null,
       "deps": [],
+      "description": "chore: AGENTS.md + skill workflow rules — /prep plan mode (Case A + B) + close-timing + /flow re-order",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -8785,7 +8898,7 @@
         "/prep skill body documents apply planner commands first then render via roadmap show inside plan mode",
         "audit + polish skills note iter close gate"
       ],
-      "title": "chore: AGENTS.md + skill workflow rules — /prep plan mode (Case A + B) + close-timing + /flow re-order",
+      "title": "chore: AGENTS.md + skill workflow rules — /prep plan mode (Case A + B)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W17-1779220281"
@@ -8797,6 +8910,7 @@
       "closed_at": "2026-05-19T20:39:21.992815Z",
       "commit": null,
       "deps": [],
+      "description": "test: C07a SDK pre-release probe snapshot (pre-2026-06-15 baseline for v0.4 diff)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -8817,7 +8931,7 @@
         "artifact under .ea/artifacts/research/long-term/2026-05-19-sdk-prerelease-probe.md records baseline so a future v0.4 wave can re-probe + diff",
         "independent of W10-W13 (no runtime adapter dep; snapshot operates on raw subprocess + advertised flags)"
       ],
-      "title": "test: C07a SDK pre-release probe snapshot (pre-2026-06-15 baseline for v0.4 diff)",
+      "title": "test: C07a SDK pre-release probe snapshot (pre-2026-06-15 baseline for",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P25-I01-W18-1779221191"
@@ -8829,6 +8943,7 @@
       "closed_at": "2026-05-19T22:00:08.337822Z",
       "commit": "c43766e297ee7b68bcbd1f9b481c3f1fcff10c02",
       "deps": [],
+      "description": "fix: P25-I01 polish — flip stale .claude/worktrees test + scrub W04-backfill stub citations",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -8849,7 +8964,7 @@
         "backfill writer emits warnings + skips stale path citations to prevent future stale-stub debt",
         "full test suite green (4200+ tests)"
       ],
-      "title": "fix: P25-I01 polish — flip stale .claude/worktrees test + scrub W04-backfill stub citations",
+      "title": "fix: P25-I01 polish — flip stale .claude/worktrees test + scrub",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -8895,6 +9010,7 @@
       "closed_at": "2026-05-20T00:19:54.558852Z",
       "commit": null,
       "deps": [],
+      "description": "fix: C08 config migration — drop legacy lifecycle/plugins + rewrite runtime.kind",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8914,7 +9030,7 @@
       "success_criteria": [
         "no deprecated_runtime_kind warning fires on validate of migrated config"
       ],
-      "title": "fix: C08 config migration — drop legacy lifecycle/plugins + rewrite runtime.kind",
+      "title": "fix: C08 config migration — drop legacy lifecycle/plugins + rewrite",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W02-1779235535"
@@ -8966,6 +9082,7 @@
         "P26-I01-W02",
         "P26-I01-W03"
       ],
+      "description": "feat: C05 verb-noun matrix + ErrorEnvelope + exit-code 0..5 compression (BREAKING)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8985,7 +9102,7 @@
       "success_criteria": [
         "CHANGELOG.md carries BREAKING entry for exit-code 0..9 -> 0..5 cutover; daemon JSON-RPC -3200X codes map to the five subclasses per C05 §5.3 table"
       ],
-      "title": "feat: C05 verb-noun matrix + ErrorEnvelope + exit-code 0..5 compression (BREAKING)",
+      "title": "feat: C05 verb-noun matrix + ErrorEnvelope + exit-code 0..5",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W04-1779237386"
@@ -9002,6 +9119,7 @@
       "deps": [
         "P26-I01-W04"
       ],
+      "description": "feat: C05 daemon-vs-daemonless escalation rules + raw RPC behind dev-mode gate",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9022,7 +9140,7 @@
         "(b) read verb in daemonless mode",
         "(c) mutating verb rejects --daemonless"
       ],
-      "title": "feat: C05 daemon-vs-daemonless escalation rules + raw RPC behind dev-mode gate",
+      "title": "feat: C05 daemon-vs-daemonless escalation rules + raw RPC behind",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W05-1779281344"
@@ -9073,6 +9191,7 @@
       "deps": [
         "P26-I01-W05"
       ],
+      "description": "refactor: C05 split god files per Q25 LOC cap — lifecycle.py + evidence.py + memory.py <=700 LOC per module",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9090,7 +9209,7 @@
       "success_criteria": [
         "existing pytest suite + uv run pre-commit run --all-files pass without changes to test imports (re-exports preserved at package __init__.py)"
       ],
-      "title": "refactor: C05 split god files per Q25 LOC cap — lifecycle.py + evidence.py + memory.py <=700 LOC per module",
+      "title": "refactor: C05 split god files per Q25 LOC cap — lifecycle.py +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W07-1779282290"
@@ -9106,6 +9225,7 @@
       "deps": [
         "P26-I01-W04"
       ],
+      "description": "feat: C04a workflow commands — research/roadmap/prep/flow/audit/ship body completion + spike wiring",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9123,7 +9243,7 @@
       "success_criteria": [
         "/roadmap propose creates phase+iter with empty wave DAG; /roadmap apply rejects empty-wave DAG"
       ],
-      "title": "feat: C04a workflow commands — research/roadmap/prep/flow/audit/ship body completion + spike wiring",
+      "title": "feat: C04a workflow commands — research/roadmap/prep/flow/audit/ship",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W08-1779281345"
@@ -9139,6 +9259,7 @@
       "deps": [
         "P26-I01-W08"
       ],
+      "description": "feat: C04a /ship pipeline — audit-verdict gate + coauthor trailer + rebase merge",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9157,7 +9278,7 @@
         "(b) project override",
         "(c) disabled mode"
       ],
-      "title": "feat: C04a /ship pipeline — audit-verdict gate + coauthor trailer + rebase merge",
+      "title": "feat: C04a /ship pipeline — audit-verdict gate + coauthor trailer +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W09-1779282721"
@@ -9175,6 +9296,7 @@
       "deps": [
         "P26-I01-W04"
       ],
+      "description": "feat: C04b SkillManifest schema + envelope status enum freeze + KISS-001 coauthor env-detection fix",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9195,7 +9317,7 @@
         "(b) non-Literal runtime rejection",
         "(c) target_dir -> output_dir rename per BOT-06"
       ],
-      "title": "feat: C04b SkillManifest schema + envelope status enum freeze + KISS-001 coauthor env-detection fix",
+      "title": "feat: C04b SkillManifest schema + envelope status enum freeze +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W10-1779281346"
@@ -9212,6 +9334,7 @@
       "deps": [
         "P26-I01-W10"
       ],
+      "description": "feat: C04b six missing skills — /coauthor /memory /agent-dispatch /compress /wave-spec /security-review",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9233,7 +9356,7 @@
       "success_criteria": [
         "C00 17-skill catalog drift closed; all 17 skills (11 original + 6 new) appear in skill registry per D-b4"
       ],
-      "title": "feat: C04b six missing skills — /coauthor /memory /agent-dispatch /compress /wave-spec /security-review",
+      "title": "feat: C04b six missing skills — /coauthor /memory /agent-dispatch",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W11-1779282066"
@@ -9249,6 +9372,7 @@
       "deps": [
         "P26-I01-W10"
       ],
+      "description": "feat: C04c AgentReportBody typed union + session_handle opaque-handle migration (XB05)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9267,7 +9391,7 @@
         "(c) verdict outside 4-value set raises ValidationError",
         "(d) session_handle scrub validator rejects raw path"
       ],
-      "title": "feat: C04c AgentReportBody typed union + session_handle opaque-handle migration (XB05)",
+      "title": "feat: C04c AgentReportBody typed union + session_handle opaque-handle",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W12-1779282067"
@@ -9285,6 +9409,7 @@
         "P26-I01-W10",
         "P26-I01-W12"
       ],
+      "description": "feat: C04d runtime integration — skill->adapter handshake + dispatch.session_policy + V5 reactive switchover",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9305,7 +9430,7 @@
         "(b) F-d01 mismatch rejection",
         "(c) F-d02 adapter resolution failure falls back to fresh per V8"
       ],
-      "title": "feat: C04d runtime integration — skill->adapter handshake + dispatch.session_policy + V5 reactive switchover",
+      "title": "feat: C04d runtime integration — skill->adapter handshake +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W13-1779282668"
@@ -9365,6 +9490,7 @@
         "P26-I01-W13",
         "P26-I01-W14"
       ],
+      "description": "test: P26-I01 surfaces audit + verify-implements pass on C04+C05 deliverables",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9381,7 +9507,7 @@
       "success_criteria": [
         "iter P26-I01 close envelope emitted only after /audit + /polish + ship CI + PR review pass per iter-phase-close-timing"
       ],
-      "title": "test: P26-I01 surfaces audit + verify-implements pass on C04+C05 deliverables",
+      "title": "test: P26-I01 surfaces audit + verify-implements pass on C04+C05",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W15-1779284107"
@@ -9436,6 +9562,7 @@
       "deps": [
         "P26-I01-W16"
       ],
+      "description": "feat: C06 core widgets — RoadmapTree + EUBar + StatusPane + GitPane + BacklogTable",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9455,7 +9582,7 @@
       "success_criteria": [
         "BacklogTable(DataTable) sortable by priority/id/target; filterable via /filter backlog; Enter row -> DetailModal"
       ],
-      "title": "feat: C06 core widgets — RoadmapTree + EUBar + StatusPane + GitPane + BacklogTable",
+      "title": "feat: C06 core widgets — RoadmapTree + EUBar + StatusPane + GitPane +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W17-1779286932"
@@ -9471,6 +9598,7 @@
       "deps": [
         "P26-I01-W17"
       ],
+      "description": "feat: C06 RepoScreen + WorkspaceScreen + UserScreen composing shared chassis (D3)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9501,7 +9629,7 @@
       "success_criteria": [
         "all three screens reuse Header + Footer + Heartbeat without per-scope duplicates (D3 shared chassis; salvageable LOC trim from ~5300 to ~2500)"
       ],
-      "title": "feat: C06 RepoScreen + WorkspaceScreen + UserScreen composing shared chassis (D3)",
+      "title": "feat: C06 RepoScreen + WorkspaceScreen + UserScreen composing shared",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W18-1779288016"
@@ -9564,6 +9692,7 @@
       "deps": [
         "P26-I01-W19"
       ],
+      "description": "feat: C06 PlanPreviewModal + NeedsUserModal + AuditRunningModal + AuditFailedModal (D17 mutating)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9589,7 +9718,7 @@
       "success_criteria": [
         "AuditFailedModal renders mutating menu (retry/split/land-partial/abandon/scope-change) per D17; each action dispatches via eawf agent dispatch; modal status line streams 'dispatching <action> -> <runtime> · attempt <n>' per D27"
       ],
-      "title": "feat: C06 PlanPreviewModal + NeedsUserModal + AuditRunningModal + AuditFailedModal (D17 mutating)",
+      "title": "feat: C06 PlanPreviewModal + NeedsUserModal + AuditRunningModal +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W20-1779290356"
@@ -9644,6 +9773,7 @@
         "P26-I01-W20",
         "P26-I01-W21"
       ],
+      "description": "test: C06 Pilot snapshot harness (ASCII text) + asciinema cast + perf budget CI gate + legacy tui/ migration verdict",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9668,7 +9798,7 @@
       "success_criteria": [
         "legacy src/eawf/tui/ migration verdict recorded per Codex C06-I010: parallel tree stays through P26 close; bare-eawf flips to tui_v2 default; EAWF_TUI_LEGACY=1 escape hatch documented; deletion deferred to follow-up phase (not P26)"
       ],
-      "title": "test: C06 Pilot snapshot harness (ASCII text) + asciinema cast + perf budget CI gate + legacy tui/ migration verdict",
+      "title": "test: C06 Pilot snapshot harness (ASCII text) + asciinema cast + perf",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W22-1779292969"
@@ -9680,6 +9810,7 @@
       "closed_at": "2026-05-20T00:24:52.616374Z",
       "commit": null,
       "deps": [],
+      "description": "chore: drop -CORE mandate from commit-prefix lint + rebind whitelist to type=state",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -9703,7 +9834,7 @@
         "src/eawf/profiles/data/core.yaml + src/eawf/render/skills.py reflect new lint contract",
         "tests/unit/test_commit_prefix_lint.py exercises both legacy -CORE and new state-type paths; 3 regenerated goldens; pre-commit clean"
       ],
-      "title": "chore: drop -CORE mandate from commit-prefix lint + rebind whitelist to type=state",
+      "title": "chore: drop -CORE mandate from commit-prefix lint + rebind whitelist",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W23-1779235537"
@@ -9715,6 +9846,7 @@
       "closed_at": "2026-05-20T12:57:19.412387Z",
       "commit": null,
       "deps": [],
+      "description": "fix: thread now= through tui/layout weekly-burn builders (test_tui_weekly_eu date bug)",
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -9731,7 +9863,7 @@
       "success_criteria": [
         "build_weekly_burn_line + build_footer_panel accept now= and thread it to compute_weekly_burn; test_tui_weekly_eu fixtures inject a fixed anchor so the trailing-7-day window is deterministic; both previously-failing tests pass; pre-commit + mypy + pytest green"
       ],
-      "title": "fix: thread now= through tui/layout weekly-burn builders (test_tui_weekly_eu date bug)",
+      "title": "fix: thread now= through tui/layout weekly-burn builders",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W24-1779281347"
@@ -9746,6 +9878,7 @@
         "P26-I01-W05",
         "P26-I01-W15"
       ],
+      "description": "fix: wire daemonless rejection across all mutating verbs (C05 §5.5 dead-code gap)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9766,7 +9899,7 @@
         "read verbs still bypass (no regression); test_daemon_escalation extended",
         "test_surfaces_smoke gains the daemonless-breadth assertion (now passing)"
       ],
-      "title": "fix: wire daemonless rejection across all mutating verbs (C05 §5.5 dead-code gap)",
+      "title": "fix: wire daemonless rejection across all mutating verbs (C05 §5.5",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W25-1779286047"
@@ -9781,6 +9914,7 @@
         "P26-I01-W11",
         "P26-I01-W15"
       ],
+      "description": "fix: integrate 6 C04b skills into user-facing eawf skill list catalog (registry=17 catalog=11 drift)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9803,7 +9937,7 @@
         "golden SKILL.md / skill-list goldens regenerated",
         "test_surfaces_smoke catalog-parity assertion (len CANONICAL_SKILL_NAMES == registry count) now passing"
       ],
-      "title": "fix: integrate 6 C04b skills into user-facing eawf skill list catalog (registry=17 catalog=11 drift)",
+      "title": "fix: integrate 6 C04b skills into user-facing eawf skill list catalog",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W26-1779287166"
@@ -9815,6 +9949,7 @@
       "closed_at": "2026-05-20T17:29:07.378405Z",
       "commit": null,
       "deps": [],
+      "description": "chore: P26 polish — strip rule-25 design-ID tokens from source comments/docstrings + ship.py log-format fix",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -9840,7 +9975,7 @@
         "ship.py:214 log line rewritten to canonical '<funcname> key=value' form (drop leading colon + add !r)",
         "no behavior change — full pytest suite + mypy + pre-commit green; grep for design-ID-in-source patterns returns zero new hits vs the documented set"
       ],
-      "title": "chore: P26 polish — strip rule-25 design-ID tokens from source comments/docstrings + ship.py log-format fix",
+      "title": "chore: P26 polish — strip rule-25 design-ID tokens from source",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W27-1779295160"
@@ -9852,6 +9987,7 @@
       "closed_at": "2026-05-20T18:42:29.071244Z",
       "commit": null,
       "deps": [],
+      "description": "fix: bump typer to restore shell-completion runtime (typer 0.25.1/click 8.3.3 COMP_WORDS crash)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9873,7 +10009,7 @@
         "new tests/cli/test_completion_runtime.py exercises the actual completion handshake (the _EAWF_COMPLETE runtime path not just the library) and asserts no crash + non-empty candidates",
         "full suite + mypy + pre-commit green on the bumped deps (CLI goldens/help-panel snapshots regenerated if typer changed help rendering)"
       ],
-      "title": "fix: bump typer to restore shell-completion runtime (typer 0.25.1/click 8.3.3 COMP_WORDS crash)",
+      "title": "fix: bump typer to restore shell-completion runtime (typer",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W28-1779300701"
@@ -9885,6 +10021,7 @@
       "closed_at": "2026-05-20T19:18:08.967365Z",
       "commit": null,
       "deps": [],
+      "description": "fix: zsh completion uses click-native function (typer eval-wrapper incompatible with click >=8.2 output)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -9905,7 +10042,7 @@
         "test_completion_runtime strengthened: asserts zsh script uses _describe + no raw-output eval + sources cleanly in live zsh with compinit; runtime handshake still emits candidates",
         "full suite + mypy + pre-commit green"
       ],
-      "title": "fix: zsh completion uses click-native function (typer eval-wrapper incompatible with click >=8.2 output)",
+      "title": "fix: zsh completion uses click-native function (typer eval-wrapper",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W29-1779304162"
@@ -9917,6 +10054,7 @@
       "closed_at": "2026-05-20T22:37:51.788581Z",
       "commit": null,
       "deps": [],
+      "description": "perf: lazy-import heavy deps in CLI command handlers (completion startup ~2-3x)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9944,7 +10082,7 @@
         "new tests/perf/cli/test_import_budget.py asserts the offenders are NOT imported on the completion path + a startup self-time ceiling (mirrors W22 perf gate)",
         "no behavior change — lazy imports only; full suite + mypy + pre-commit green; help/goldens unchanged"
       ],
-      "title": "perf: lazy-import heavy deps in CLI command handlers (completion startup ~2-3x)",
+      "title": "perf: lazy-import heavy deps in CLI command handlers (completion",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W30-1779305577"
@@ -9958,6 +10096,7 @@
       "closed_at": "2026-05-21T01:09:30.075224Z",
       "commit": null,
       "deps": [],
+      "description": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap pre-scroll, events ts, glyph color)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9983,7 +10122,7 @@
         "Status glyphs are tinted by lifecycle status via the theme.tcss palette so the V12 glyph stays the primary signal across phase iter and wave rows",
         "Snapshot tests updated and perf gate green with no behavior change beyond display"
       ],
-      "title": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap pre-scroll, events ts, glyph color)",
+      "title": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W31-1779324903"
@@ -10065,6 +10204,7 @@
       "closed_at": "2026-05-21T01:51:35.421765Z",
       "commit": null,
       "deps": [],
+      "description": "feat: tui_v2 ConfigModal + EditFieldModal (registry-driven config window on c / /config)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -10089,7 +10229,7 @@
         "Esc on a dirty modal prompts before discard per V15 and saves route through the daemon layered-config writer never touching state.json per rule 4",
         "Snapshot and unit tests cover every tab and field type and mypy and pre-commit green"
       ],
-      "title": "feat: tui_v2 ConfigModal + EditFieldModal (registry-driven config window on c / /config)",
+      "title": "feat: tui_v2 ConfigModal + EditFieldModal (registry-driven config",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W34-1779326291"
@@ -10106,6 +10246,7 @@
         "P26-I01-W33",
         "P26-I01-W34"
       ],
+      "description": "refactor: remove legacy tui/ tree (build tui_v2 non-TTY + offline_render replacements)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -10130,7 +10271,7 @@
         "legacy src/eawf/tui 9 modules and legacy tui tests deleted and skills/ship.py docstring ref fixed",
         "full pytest and mypy and pre-commit green and eawf tui works on TTY and piped"
       ],
-      "title": "refactor: remove legacy tui/ tree (build tui_v2 non-TTY + offline_render replacements)",
+      "title": "refactor: remove legacy tui/ tree (build tui_v2 non-TTY +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W35-1779328685"
@@ -10142,6 +10283,7 @@
       "closed_at": "2026-05-21T01:32:29.357233Z",
       "commit": null,
       "deps": [],
+      "description": "fix: scope status-pane wave counters to active phase + abandon-cascade archived-phase waves",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10164,7 +10306,7 @@
         "A one-time idempotent migration through the canonical state path backfills the 16 P21-I01 pending waves to ABANDONED kept for history marked archived",
         "Tests cover the scoped counter and the archive cascade and the backfill migration and snapshots regenerate and mypy and pre-commit green"
       ],
-      "title": "fix: scope status-pane wave counters to active phase + abandon-cascade archived-phase waves",
+      "title": "fix: scope status-pane wave counters to active phase + abandon-cascade",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W36-1779326292"
@@ -10176,6 +10318,7 @@
       "closed_at": "2026-05-21T01:44:36.964647Z",
       "commit": null,
       "deps": [],
+      "description": "fix: roadmap tree plain left/right collapse-expand (W31 left arrows inert)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10195,7 +10338,7 @@
         "Restores a function for left/right after W31 disabled horizontal scroll which left them inert",
         "Unit test covers the new left/right bindings and actions and full suite plus mypy plus pre-commit green"
       ],
-      "title": "fix: roadmap tree plain left/right collapse-expand (W31 left arrows inert)",
+      "title": "fix: roadmap tree plain left/right collapse-expand (W31 left arrows",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W37-1779327308"
@@ -10207,6 +10350,7 @@
       "closed_at": "2026-05-21T02:19:57.990072Z",
       "commit": null,
       "deps": [],
+      "description": "fix: ConfigModal UX — visible key helper, Space cycles choices, single-row tab selectable, tab-switch keys",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10228,7 +10372,7 @@
         "A tab with a single field such as runtime highlights and selects its lone row so Space and Enter act on it",
         "Unit tests and snapshots cover the helper text and space choice-cycle and single-row selection and tab switching and mypy and pre-commit green"
       ],
-      "title": "fix: ConfigModal UX — visible key helper, Space cycles choices, single-row tab selectable, tab-switch keys",
+      "title": "fix: ConfigModal UX — visible key helper, Space cycles choices,",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W38-1779328815"
@@ -10240,6 +10384,7 @@
       "closed_at": "2026-05-21T02:51:17.628447Z",
       "commit": null,
       "deps": [],
+      "description": "chore: polish — delete orphaned tests/golden/tui fixtures + P26 tui_v2 consistency sweep",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10259,7 +10404,7 @@
         "P26 tui_v2 surfaces swept for naming and docstring and log-field consistency with no behavior change",
         "Full suite and mypy and pre-commit green"
       ],
-      "title": "chore: polish — delete orphaned tests/golden/tui fixtures + P26 tui_v2 consistency sweep",
+      "title": "chore: polish — delete orphaned tests/golden/tui fixtures + P26 tui_v2",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W39-1779331209"
@@ -10271,6 +10416,7 @@
       "closed_at": "2026-05-21T10:17:33.874028Z",
       "commit": null,
       "deps": [],
+      "description": "fix: auto-activate iter on first wave claim (no waves under a PLANNED iter)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10290,7 +10436,7 @@
         "Claiming under an already-ACTIVE iter is unchanged and the W-number ordering and dep gates still apply",
         "Tests cover claim-activates-planned-iter and claim-under-active-unchanged and full suite plus mypy plus pre-commit green"
       ],
-      "title": "fix: auto-activate iter on first wave claim (no waves under a PLANNED iter)",
+      "title": "fix: auto-activate iter on first wave claim (no waves under a PLANNED",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W40-1779357874"
@@ -10330,6 +10476,7 @@
       "closed_at": "2026-05-21T11:26:48.862399Z",
       "commit": null,
       "deps": [],
+      "description": "fix: hermetic git-pane in snapshots (CI xdist drift) + active-phase pointer should-fixes",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10352,7 +10499,7 @@
         "status_pane _active_phase_id gates the pointer branch on ACTIVE status",
         "full suite green incl under parallel xdist and mypy and pre-commit green"
       ],
-      "title": "fix: hermetic git-pane in snapshots (CI xdist drift) + active-phase pointer should-fixes",
+      "title": "fix: hermetic git-pane in snapshots (CI xdist drift) + active-phase",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W42-1779362058"
@@ -10364,6 +10511,7 @@
       "closed_at": "2026-05-21T11:43:19.859391Z",
       "commit": null,
       "deps": [],
+      "description": "ci: run TUI snapshot+perf tests serially (kill -n auto contention flake) + harness diff-dump",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10383,7 +10531,7 @@
         "pilot_harness assert_screen_snapshot raises with a unified diff of captured-vs-golden so any residual drift is visible in the CI log",
         "both the parallel and serial pytest invocations pass locally and mypy and pre-commit green"
       ],
-      "title": "ci: run TUI snapshot+perf tests serially (kill -n auto contention flake) + harness diff-dump",
+      "title": "ci: run TUI snapshot+perf tests serially (kill -n auto contention",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W43-1779363515"
@@ -10395,6 +10543,7 @@
       "closed_at": "2026-05-21T11:53:43.668788Z",
       "commit": null,
       "deps": [],
+      "description": "feat: wire gh pr list shell-out for the TUI /pr overlay (lazy fetch + cache + open-web)",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10416,7 +10565,7 @@
         "subprocess is read-only mirroring GitPane (rule 4 reads bypass the daemon) and all gh calls are mocked in tests so the suite makes no real network/gh calls",
         "full suite green incl serial TUI + mypy + pre-commit"
       ],
-      "title": "feat: wire gh pr list shell-out for the TUI /pr overlay (lazy fetch + cache + open-web)",
+      "title": "feat: wire gh pr list shell-out for the TUI /pr overlay (lazy fetch +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W44-1779363737"
@@ -10789,6 +10938,7 @@
       "closed_at": "2026-05-22T03:30:40.848689Z",
       "commit": null,
       "deps": [],
+      "description": "fix: RoadmapTree row overflow (reserve completion-bar width in title budget)",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10808,7 +10958,7 @@
         "truncation stays reactive on resize",
         "snapshots + tests"
       ],
-      "title": "fix: RoadmapTree row overflow (reserve completion-bar width in title budget)",
+      "title": "fix: RoadmapTree row overflow (reserve completion-bar width in title",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I02-W12-1779420124"
@@ -10820,6 +10970,7 @@
       "closed_at": "2026-05-22T03:30:47.655047Z",
       "commit": null,
       "deps": [],
+      "description": "fix: DetailModal polish — tab hotkeys + markdown dp + label style + bucket text + hint gap",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10844,7 +10995,7 @@
         "no-data sentinel DRYed to eu_bar.EMPTY_STATE",
         "snapshots + tests"
       ],
-      "title": "fix: DetailModal polish — tab hotkeys + markdown dp + label style + bucket text + hint gap",
+      "title": "fix: DetailModal polish — tab hotkeys + markdown dp + label style +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I02-W13-1779420125"
@@ -10858,6 +11009,7 @@
       "deps": [
         "P26-I02-W15"
       ],
+      "description": "fix: config pane callable from all scopes + inline-edit value visibility/alignment",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10883,7 +11035,7 @@
         "help + footer hint reflect config-from-any-scope",
         "snapshots + tests"
       ],
-      "title": "fix: config pane callable from all scopes + inline-edit value visibility/alignment",
+      "title": "fix: config pane callable from all scopes + inline-edit value",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I02-W14-1779421813"
@@ -10899,6 +11051,7 @@
       "deps": [
         "P26-I02-W12"
       ],
+      "description": "fix: /audit overlay newest-for-scope + hint-bar vertical spacing + footer hint clip",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10925,7 +11078,7 @@
         "footer hint no longer clips at 120 cols",
         "snapshots + tests"
       ],
-      "title": "fix: /audit overlay newest-for-scope + hint-bar vertical spacing + footer hint clip",
+      "title": "fix: /audit overlay newest-for-scope + hint-bar vertical spacing +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I02-W15-1779420972"
@@ -10969,6 +11122,7 @@
       "closed_at": "2026-05-22T11:23:13.030005Z",
       "commit": null,
       "deps": [],
+      "description": "fix: DetailModal review — p-dispatch label + file-tree files + footer hotkey dedup",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10988,7 +11142,7 @@
       "success_criteria": [
         "dp tab labels its real p hotkey; wave files render as a collapsed file tree; footer drops the h/d/m/e/p list since tab labels carry hotkeys"
       ],
-      "title": "fix: DetailModal review — p-dispatch label + file-tree files + footer hotkey dedup",
+      "title": "fix: DetailModal review — p-dispatch label + file-tree files + footer",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -11000,6 +11154,7 @@
       "closed_at": "2026-05-22T11:23:13.489260Z",
       "commit": null,
       "deps": [],
+      "description": "fix: config inline-edit column alignment + drop dirty mark on unchanged value",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -11017,7 +11172,7 @@
       "success_criteria": [
         "inline-edit type cell + input share the static row columns (no squish); committing a value equal to persisted stages no dirty edit"
       ],
-      "title": "fix: config inline-edit column alignment + drop dirty mark on unchanged value",
+      "title": "fix: config inline-edit column alignment + drop dirty mark on",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -11573,6 +11728,7 @@
       "deps": [
         "P27-I01-W11"
       ],
+      "description": "feat: AbstractMetricsStore + SQLite default + DuckDB opt-in + auto-fallback",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11591,7 +11747,7 @@
       "success_criteria": [
         "AbstractMetricsStore protocol has SQLite + DuckDB impls with init_schema idempotent (second call no-ops) verified by a round-trip test; DDL is generated from the Pydantic row models; an ImportError on duckdb auto-falls-back to SQLite verified by a monkeypatched-import test"
       ],
-      "title": "feat: AbstractMetricsStore + SQLite default + DuckDB opt-in + auto-fallback",
+      "title": "feat: AbstractMetricsStore + SQLite default + DuckDB opt-in +",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I01-W12-1779468648"
@@ -11773,6 +11929,7 @@
       "closed_at": "2026-05-22T16:02:45.045107Z",
       "commit": null,
       "deps": [],
+      "description": "feat: bench fixture seed + eawf bench list/run/compare + per-OS baselines",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11792,7 +11949,7 @@
       "success_criteria": [
         "eawf bench fixture seed --size small|medium|large writes deterministic corpora (same seed -> byte-identical output) verified by a re-seed test; eawf bench run + compare flag a regression when after >= before times one-plus-threshold; per-OS baseline files + thresholds.yaml (Linux .10 / macOS .20 / Windows .15) land"
       ],
-      "title": "feat: bench fixture seed + eawf bench list/run/compare + per-OS baselines",
+      "title": "feat: bench fixture seed + eawf bench list/run/compare + per-OS",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I01-W18-1779465016"
@@ -12035,6 +12192,7 @@
         "P27-I01-W16",
         "P27-I01-W21"
       ],
+      "description": "docs: schema dump + autogen reference + mkdocs site + doc verify --strict",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12054,7 +12212,7 @@
       "success_criteria": [
         "eawf schema dump writes JSON Schema for the state and envelope models; autogen reference pages (cli/skills/schema/enum/error-code/exit-code) build from the dumped schema; eawf doc verify --strict passes the mkdocs build plus drift diff; docs ship under the eawf[docs] extra"
       ],
-      "title": "docs: schema dump + autogen reference + mkdocs site + doc verify --strict",
+      "title": "docs: schema dump + autogen reference + mkdocs site + doc verify",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I01-W26-1779472826"
@@ -12069,6 +12227,7 @@
         "P27-I01-W22",
         "P27-I01-W26"
       ],
+      "description": "build: _version single-source + bundle_data wheel hook + wheel-size gate + dormant release pipeline",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12088,7 +12247,7 @@
       "success_criteria": [
         "_version.py is the single version source consumed by pyproject; tools/version_bump.py bumps the semver plus PEP-440 version; bundle_data Hatchling hook populates _data and the wheel-size gate asserts service templates present with core wheel <=1 MB; release.yaml exists with the PyPI publish step gated off (dormant dry-run build only)"
       ],
-      "title": "build: _version single-source + bundle_data wheel hook + wheel-size gate + dormant release pipeline",
+      "title": "build: _version single-source + bundle_data wheel hook + wheel-size",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I01-W27-1779473612"
@@ -13508,6 +13667,7 @@
       "deps": [
         "P27-I03-W07"
       ],
+      "description": "Module-naming hygiene: drop versioned/legacy suffixes (eawf.tui_v2 -> eawf.tui)",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -13527,7 +13687,7 @@
       "success_criteria": [
         "package src/eawf/tui_v2 renamed to src/eawf/tui and tests/tui_v2 to tests/tui; all tui_v2 references updated (imports; snapshot/pilot harness paths; pyproject coverage gate key and path; coverage-gates.md; build plugin refs); other versioned/legacy identifiers audited with only tui_v2 a package (eawf_v0 and _to_v1 left as version/migration strings); tests green"
       ],
-      "title": "Module-naming hygiene: drop versioned/legacy suffixes (eawf.tui_v2 -> eawf.tui)",
+      "title": "Module-naming hygiene: drop versioned/legacy suffixes (eawf.tui_v2 ->",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
