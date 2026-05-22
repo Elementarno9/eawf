@@ -13,6 +13,10 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from eawf.estimation.buckets import (
+    actual_summary_from_timestamps,
+    default_estimate_summary,
+)
 from eawf.lifecycle._errors import LifecycleError
 from eawf.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
 from eawf.state.models import State, Wave
@@ -337,6 +341,16 @@ def claim_wave(
         it.status = IterStatus.ACTIVE
         state.current.iter_id = it.id
         logger.info(f"claim_wave auto-activated iter={it.id} on first claim wave={wave_id}")
+    # Seed a default estimate from the wave's effort bucket so the
+    # estimate-vs-actual variance metric has a baseline to compare the
+    # close-time actual against. Skipped (no estimate) when the wave
+    # carries no bucket — there is no centroid to derive from.
+    estimate = default_estimate_summary(wave, now=datetime.now(UTC))
+    if estimate is not None:
+        if state.estimates is None:
+            state.estimates = {}
+        state.estimates[wave_id] = estimate
+        logger.info(f"claim_wave seeded default estimate wave={wave_id} eu={estimate.expected_eu}")
     logger.info(f"claim_wave id={wave_id} session={session_id} out_of_order={out_of_order}")
     return wave
 
@@ -401,6 +415,16 @@ def close_wave(
     wave.closed_at = datetime.now(UTC)
     if wave_id in state.current.active_wave_ids:
         state.current.active_wave_ids.remove(wave_id)
+    # Auto-record an actual from the open->close wall-clock span so the
+    # learning loop (variance / calibration / weekly burn) has a sample.
+    # Derivation is crash-safe: a wave with missing/None timestamps yields
+    # no actual rather than raising, so a close never faults on bad data.
+    actual = actual_summary_from_timestamps(wave, now=wave.closed_at)
+    if actual is not None:
+        if state.actuals is None:
+            state.actuals = {}
+        state.actuals[wave_id] = actual
+        logger.info(f"close_wave recorded actual wave={wave_id} eu={actual.elapsed_eu}")
     logger.info(f"close_wave id={wave_id} outcome={outcome!r}")
     return wave
 
