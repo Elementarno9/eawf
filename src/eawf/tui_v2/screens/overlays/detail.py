@@ -1,4 +1,4 @@
-"""``DetailModal`` — scrollable detail card for a selected entity.
+"""``DetailModal`` — tabbed detail card for a selected entity.
 
 The drill-in overlay opened when the operator presses ``Enter`` on a row:
 the widgets emit a selection message
@@ -7,17 +7,23 @@ carrying a backlog-item id,
 :class:`~eawf.tui_v2.widgets.roadmap_tree.RoadmapTree.WaveSelected`
 carrying a wave id), the shared
 :class:`~eawf.tui_v2.scopes.ScopeScreen` routes the message here, and this
-modal renders the resolved entity's detail in a scrollable card.
+modal renders the resolved entity's detail in a tabbed, scrollable card.
 
-A scrollable detail card, ``Esc`` to close, stack depth ≤ 3 enforced by
-the App. The ``g <id>`` cross-jump and the per-overlay h/d/m/e/dp tabs
-ride later waves of this band; this wave lands the card itself + the
-message-routing seam the widgets were waiting for.
+The card body is split across up to five tabs — ``h`` history, ``d``
+detail, ``m`` metrics, ``e`` events, ``dp`` dispatch-prompt — mirroring
+the per-overlay tab set the C06 brief reserved. ``Tab`` / ``Shift+Tab``
+cycle the tabs; the arrow keys keep their native scroll behaviour inside
+the focused pane (they are *not* rebound to tab-switching). Only tabs that
+have data for the resolved entity are built, so an entity with no
+dispatch history shows no ``e`` tab rather than an empty one.
 
 Entity resolution is a pure function (:func:`resolve_detail`) that takes
 the reactive :class:`~eawf.state.models.State` and the selection id and
-returns a typed :class:`DetailCard` (title + ordered field rows). Keeping
-the formatting pure means the rendered detail is unit-testable without
+returns a typed :class:`DetailCard` (title + per-tab section rows). It
+resolves waves, iters, phases, and backlog items; an unknown id yields a
+total fallback card so the drill-in seam never crashes when the state and
+a widget row briefly disagree (e.g. mid daemon-push). Keeping the
+formatting pure means the rendered detail is unit-testable without
 mounting Textual, and the modal stays a thin view over it. Construct the
 modal with a pre-built :class:`DetailCard` (the host screen builds it from
 ``app.state``) so the overlay never reaches back into App state itself.
@@ -33,26 +39,116 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Static
+from textual.widgets import Static, TabbedContent, TabPane
+
+from eawf.dispatch.renderer import render_wave_prompt
+from eawf.tui_v2.widgets.eu_bar import (
+    render_completion_bar,
+    render_eu_bar_plain,
+    render_size_bar,
+)
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
+
+#: Tab id → human label, in cycle order. The modal builds a
+#: :class:`~textual.widgets.TabPane` per non-empty section keyed by these
+#: ids; the labels carry the single-letter mnemonic from the C06 brief.
+_TAB_LABELS: dict[str, str] = {
+    "h": "h history",
+    "d": "d detail",
+    "m": "m metrics",
+    "e": "e events",
+    "dp": "dp dispatch",
+}
 
 
 @dataclass(frozen=True)
 class DetailCard:
-    """A resolved detail card: a title plus ordered label/value rows.
+    """A resolved detail card: a title plus per-tab section rows.
+
+    The card carries one row group per overlay tab. ``rows`` is the
+    canonical ``d`` (detail) field group — always populated; the remaining
+    groups are populated only when the entity has data for them, and the
+    modal builds a tab only for a non-empty group. ``dispatch_prompt`` is
+    the verbatim text of the ``dp`` tab (a rendered wave prompt, or a
+    fallback note for non-wave entities).
 
     Attributes:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
-            ``backlog B042``).
-        rows: Ordered ``(label, value)`` pairs rendered one per line.
+            ``iter P26-I01`` / ``phase P26`` / ``backlog B042``).
+        rows: The ``d`` detail group — ordered ``(label, value)`` pairs.
+        metrics: The ``m`` group — bar rows (completion / size / EU /
+            token), ``(label, value)`` pairs.
+        history: The ``h`` group — lifecycle rows (status, timestamps).
+        events: The ``e`` group — recent activity rows (e.g. a wave's
+            dispatch history), ``(label, value)`` pairs.
+        dispatch_prompt: The ``dp`` group — the rendered dispatch prompt
+            for a wave, or a fallback note. ``None`` suppresses the tab.
     """
 
     title: str
     rows: tuple[tuple[str, str], ...]
+    metrics: tuple[tuple[str, str], ...] = ()
+    history: tuple[tuple[str, str], ...] = ()
+    events: tuple[tuple[str, str], ...] = ()
+    dispatch_prompt: str | None = None
+
+
+def _fmt_dt(value: object) -> str:
+    """Format a datetime-ish *value* as an ISO string, or ``"—"`` when unset.
+
+    Args:
+        value: A ``datetime`` (or ``None``) read off a state model.
+
+    Returns:
+        The ISO-8601 string, or an em dash when *value* is ``None``.
+    """
+    if value is None:
+        return "—"
+    return str(value)
+
+
+def _wave_metrics(wave: Wave) -> tuple[tuple[str, str], ...]:
+    """Build the ``m`` (metrics) rows for a wave.
+
+    A wave's only populated progress signal is its effort bucket (rendered
+    as a size bar); EU and token rows surface the shared empty-state
+    sentinel because estimates / actuals / token telemetry are
+    unpopulated scaffolding.
+
+    Args:
+        wave: The resolved wave.
+
+    Returns:
+        Ordered metric ``(label, value)`` rows.
+    """
+    rows: list[tuple[str, str]] = []
+    if wave.effort_bucket is not None:
+        rows.append(("size", render_size_bar(wave.effort_bucket.value)))
+    rows.append(("eu", render_eu_bar_plain(0.0, 0.0)))
+    rows.append(("tokens", render_eu_bar_plain(float(wave.tokens_consumed), 0.0)))
+    return tuple(rows)
+
+
+def _completion_metrics(closed: int, total: int) -> tuple[tuple[str, str], ...]:
+    """Build the ``m`` rows for an iter / phase from child-wave counts.
+
+    Args:
+        closed: Count of closed child waves.
+        total: Total child-wave count.
+
+    Returns:
+        Ordered metric ``(label, value)`` rows: a real completion bar plus
+        empty-state EU / token rows (no estimation data is populated).
+    """
+    return (
+        ("completion", render_completion_bar(closed, total)),
+        ("eu", render_eu_bar_plain(0.0, 0.0)),
+        ("tokens", render_eu_bar_plain(0.0, 0.0)),
+    )
 
 
 def _wave_card(state: State, wave_id: str) -> DetailCard | None:
@@ -84,7 +180,154 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
         rows.append(("files", ", ".join(wave.file_scopes)))
     for criterion in wave.success_criteria:
         rows.append(("criterion", criterion))
-    return DetailCard(title=f"wave {wave.id}", rows=tuple(rows))
+
+    history: list[tuple[str, str]] = [
+        ("status", wave.status.value),
+        ("opened", _fmt_dt(wave.opened_at)),
+        ("closed", _fmt_dt(wave.closed_at)),
+    ]
+    if wave.commit is not None:
+        history.append(("commit", wave.commit))
+
+    events: list[tuple[str, str]] = []
+    for ann in wave.dispatch_history:
+        runtime = ann.runtime_to or ann.runtime_from or "—"
+        events.append((f"attempt {ann.attempt}", f"{ann.note.value} ({runtime})"))
+
+    return DetailCard(
+        title=f"wave {wave.id}",
+        rows=tuple(rows),
+        metrics=_wave_metrics(wave),
+        history=tuple(history),
+        events=tuple(events),
+        dispatch_prompt=_wave_dispatch_prompt(state, wave_id),
+    )
+
+
+def _wave_dispatch_prompt(state: State, wave_id: str) -> str:
+    """Render the wave's dispatch prompt for the ``dp`` tab.
+
+    The renderer raises :class:`KeyError` when the wave → iter → phase →
+    scope chain has a broken link; the drill-in seam must stay total, so a
+    broken chain degrades to a short note rather than propagating.
+
+    Args:
+        state: The bound state.
+        wave_id: The wave whose prompt to render.
+
+    Returns:
+        The rendered Markdown prompt, or a fallback note when the scope
+        chain cannot be resolved.
+    """
+    try:
+        return render_wave_prompt(state, wave_id)
+    except KeyError as exc:
+        logger.info(f"_wave_dispatch_prompt unresolved wave={wave_id!r} reason={exc}")
+        return "dispatch prompt unavailable (scope chain unresolved)"
+
+
+def _iter_card(state: State, iter_id: str) -> DetailCard | None:
+    """Build a :class:`DetailCard` for the iter *iter_id*, or ``None``.
+
+    Args:
+        state: The bound state to resolve the iter from.
+        iter_id: The selected iter id.
+
+    Returns:
+        The card, or ``None`` when the id is not a known iter.
+    """
+    it = state.iters.get(iter_id)
+    if it is None:
+        return None
+    closed, total = _wave_completion(state, it.wave_ids)
+    rows: list[tuple[str, str]] = [
+        ("id", it.id),
+        ("phase", it.phase_id),
+        ("title", it.title),
+        ("status", it.status.value),
+        ("waves", f"{closed}/{total} closed"),
+    ]
+    history: list[tuple[str, str]] = [
+        ("status", it.status.value),
+        ("opened", _fmt_dt(it.opened_at)),
+        ("closed", _fmt_dt(it.closed_at)),
+    ]
+    return DetailCard(
+        title=f"iter {it.id}",
+        rows=tuple(rows),
+        metrics=_completion_metrics(closed, total),
+        history=tuple(history),
+        dispatch_prompt=_NON_WAVE_DISPATCH_NOTE,
+    )
+
+
+def _phase_card(state: State, phase_id: str) -> DetailCard | None:
+    """Build a :class:`DetailCard` for the phase *phase_id*, or ``None``.
+
+    Phase completion aggregates the closed-wave ratio across every wave of
+    every child iter, matching the iter / phase completion convention.
+
+    Args:
+        state: The bound state to resolve the phase from.
+        phase_id: The selected phase id.
+
+    Returns:
+        The card, or ``None`` when the id is not a known phase.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        return None
+    wave_ids: list[str] = []
+    for iter_id in phase.iter_ids:
+        it = state.iters.get(iter_id)
+        if it is not None:
+            wave_ids.extend(it.wave_ids)
+    closed, total = _wave_completion(state, wave_ids)
+    rows: list[tuple[str, str]] = [
+        ("id", phase.id),
+        ("scope", phase.scope_id),
+        ("title", phase.title),
+        ("status", phase.status.value),
+        ("iters", str(len(phase.iter_ids))),
+        ("waves", f"{closed}/{total} closed"),
+    ]
+    history: list[tuple[str, str]] = [
+        ("status", phase.status.value),
+        ("opened", _fmt_dt(phase.opened_at)),
+        ("closed", _fmt_dt(phase.closed_at)),
+    ]
+    return DetailCard(
+        title=f"phase {phase.id}",
+        rows=tuple(rows),
+        metrics=_completion_metrics(closed, total),
+        history=tuple(history),
+        dispatch_prompt=_NON_WAVE_DISPATCH_NOTE,
+    )
+
+
+def _wave_completion(state: State, wave_ids: list[str]) -> tuple[int, int]:
+    """Return ``(closed, total)`` over *wave_ids* against the state table.
+
+    Args:
+        state: The bound state holding the wave table.
+        wave_ids: The child-wave ids to tally.
+
+    Returns:
+        A ``(closed, total)`` pair; *total* is the count of *wave_ids* that
+        resolve to a known wave, *closed* the subset with a CLOSED status.
+    """
+    from eawf.state.enums import WaveStatus
+
+    total = 0
+    closed = 0
+    for wave_id in wave_ids:
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            continue
+        total += 1
+        if wave.status is WaveStatus.CLOSED:
+            closed += 1
+    return closed, total
 
 
 def _backlog_card(state: State, item_id: str) -> DetailCard | None:
@@ -113,14 +356,19 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     return DetailCard(title=f"backlog {item.id}", rows=tuple(rows))
 
 
+#: ``dp`` tab body for non-wave entities, which have no rendered dispatch
+#: prompt. Kept as a single constant so the fallback wording stays uniform.
+_NON_WAVE_DISPATCH_NOTE: str = "no dispatch prompt for this entity"
+
+
 def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
     """Resolve *selection_id* to a :class:`DetailCard` from *state*.
 
-    Tries the wave table first, then the backlog table. An unresolvable id
-    (or a ``None`` state) yields a fallback card naming the id so the
-    operator sees *something* rather than a crash — the drill-in seam must
-    stay total even when the state and the widget row briefly disagree
-    (e.g. mid daemon-push).
+    Tries the wave table, then iters, then phases, then the backlog. An
+    unresolvable id (or a ``None`` state) yields a fallback card naming the
+    id so the operator sees *something* rather than a crash — the drill-in
+    seam must stay total even when the state and the widget row briefly
+    disagree (e.g. mid daemon-push).
 
     Args:
         state: The bound state, or ``None`` when no state is loaded.
@@ -130,7 +378,12 @@ def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
         The resolved detail card, or a fallback card for an unknown id.
     """
     if state is not None:
-        card = _wave_card(state, selection_id) or _backlog_card(state, selection_id)
+        card = (
+            _wave_card(state, selection_id)
+            or _iter_card(state, selection_id)
+            or _phase_card(state, selection_id)
+            or _backlog_card(state, selection_id)
+        )
         if card is not None:
             return card
     return DetailCard(
@@ -140,12 +393,14 @@ def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
 
 
 class DetailModal(ModalScreen[None]):
-    """Scrollable detail card for a row-selected entity (Esc to close).
+    """Tabbed, scrollable detail card for a row-selected entity (Esc to close).
 
     Built with a pre-resolved :class:`DetailCard`; the host screen
     resolves the card from ``app.state`` via :func:`resolve_detail` when
-    it routes the W17 selection message. The modal owns only the
-    presentation + the ``Esc`` close binding.
+    it routes the selection message. The modal owns only the presentation,
+    the ``Tab`` / ``Shift+Tab`` tab cycle, and the ``Esc`` close binding.
+    The arrow keys keep their native per-pane scroll behaviour — they are
+    deliberately not bound here.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -153,10 +408,10 @@ class DetailModal(ModalScreen[None]):
         align: center middle;
     }
     DetailModal > #detail-card {
-        width: 70%;
-        max-width: 100;
+        width: 80%;
+        max-width: 120;
         height: auto;
-        max-height: 80%;
+        max-height: 85%;
         border: solid $accent;
         background: $surface;
         padding: 1 2;
@@ -176,11 +431,18 @@ class DetailModal(ModalScreen[None]):
         color: $text-muted;
         height: 1;
     }
+    DetailModal TabPane {
+        padding: 0;
+    }
     """
 
-    #: ``Esc`` closes; this is the only binding the detail card owns.
+    #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs. The
+    #: arrow keys are intentionally absent so they keep scrolling the
+    #: focused pane rather than switching tabs.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "close", show=False),
+        Binding("tab", "next_tab", "next tab", show=False),
+        Binding("shift+tab", "prev_tab", "prev tab", show=False),
     ]
 
     def __init__(self, card: DetailCard) -> None:
@@ -192,22 +454,113 @@ class DetailModal(ModalScreen[None]):
         """
         super().__init__()
         self._card = card
+        self._tab_ids = self._present_tabs(card)
+
+    @staticmethod
+    def _present_tabs(card: DetailCard) -> tuple[str, ...]:
+        """Return the ordered tab ids that have data for *card*.
+
+        The ``d`` detail tab is always present (every card carries field
+        rows); the rest appear only when their section is non-empty. Order
+        follows the ``h / d / m / e / dp`` brief sequence.
+
+        Args:
+            card: The resolved card.
+
+        Returns:
+            The ordered, deduplicated tab ids to build panes for.
+        """
+        present: list[str] = []
+        if card.history:
+            present.append("h")
+        present.append("d")
+        if card.metrics:
+            present.append("m")
+        if card.events:
+            present.append("e")
+        if card.dispatch_prompt is not None:
+            present.append("dp")
+        return tuple(present)
+
+    def _section_rows(self, tab_id: str) -> tuple[tuple[str, str], ...]:
+        """Return the ``(label, value)`` rows for the *tab_id* section.
+
+        Args:
+            tab_id: One of the row-group tab ids (``h`` / ``d`` / ``m`` /
+                ``e``).
+
+        Returns:
+            The matching section's rows.
+        """
+        if tab_id == "h":
+            return self._card.history
+        if tab_id == "m":
+            return self._card.metrics
+        if tab_id == "e":
+            return self._card.events
+        return self._card.rows
 
     def compose(self) -> ComposeResult:
-        """Yield the scrollable card: title, field rows, close hint.
+        """Yield the scrollable, tabbed card: title, tab panes, close hint.
 
-        Labels are space-padded to the widest label in the card so the
-        ``label: value`` colons line up in a single column (the same
-        mechanism :class:`~eawf.tui_v2.widgets.status_pane.StatusPane`
-        uses for its counter block).
+        Within each row-group pane the labels are space-padded to that
+        group's widest label so the ``label: value`` colons line up in one
+        column (the same mechanism
+        :class:`~eawf.tui_v2.widgets.status_pane.StatusPane` uses for its
+        counter block). The ``dp`` pane renders the dispatch-prompt text
+        verbatim.
         """
         with VerticalScroll(id="detail-card"):
             yield Static(self._card.title, classes="detail-title")
-            label_width = max((len(label) for label, _ in self._card.rows), default=0)
-            for label, value in self._card.rows:
-                padded = f"{label}:".ljust(label_width + 1)
-                yield Static(f"{padded} {value}", classes="detail-row")
-            yield Static("[ Esc to close ]", classes="detail-hint")
+            with TabbedContent(initial="detail-tab-d"):
+                for tab_id in self._tab_ids:
+                    with TabPane(_TAB_LABELS[tab_id], id=f"detail-tab-{tab_id}"):
+                        yield from self._compose_pane(tab_id)
+            yield Static("[ Tab/Shift+Tab tabs · Esc close ]", classes="detail-hint")
+
+    def _compose_pane(self, tab_id: str) -> ComposeResult:
+        """Yield the body widgets for one tab pane.
+
+        Args:
+            tab_id: The tab whose body to render.
+
+        Yields:
+            The pane's child widgets — aligned ``label: value`` rows for a
+            row-group tab, or a single verbatim block for the ``dp`` tab.
+        """
+        if tab_id == "dp":
+            yield Static(self._card.dispatch_prompt or "", classes="detail-row")
+            return
+        rows = self._section_rows(tab_id)
+        label_width = max((len(label) for label, _ in rows), default=0)
+        for label, value in rows:
+            padded = f"{label}:".ljust(label_width + 1)
+            yield Static(f"{padded} {value}", classes="detail-row")
+
+    def _cycle_tab(self, step: int) -> None:
+        """Move the active tab by *step* positions, wrapping around.
+
+        Args:
+            step: ``+1`` for the next tab, ``-1`` for the previous.
+        """
+        if len(self._tab_ids) <= 1:
+            return
+        tabs = self.query_one(TabbedContent)
+        active = tabs.active
+        try:
+            idx = self._tab_ids.index(active.removeprefix("detail-tab-"))
+        except ValueError:
+            idx = 0
+        nxt = self._tab_ids[(idx + step) % len(self._tab_ids)]
+        tabs.active = f"detail-tab-{nxt}"
+
+    def action_next_tab(self) -> None:
+        """Cycle to the next body tab (``Tab``)."""
+        self._cycle_tab(1)
+
+    def action_prev_tab(self) -> None:
+        """Cycle to the previous body tab (``Shift+Tab``)."""
+        self._cycle_tab(-1)
 
     def action_close(self) -> None:
         """Dismiss the detail modal (``Esc``)."""

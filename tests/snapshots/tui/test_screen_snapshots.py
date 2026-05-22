@@ -38,9 +38,13 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import orjson
 import pytest
+from textual.widgets import TabbedContent
 
 from eawf.config.registry import registry_lookup
+from eawf.state.enums import EffortBucket
+from eawf.state.models import State
 from eawf.tui_v2.app import EaApp
 from eawf.tui_v2.screens.overlays.config_modal import ConfigModal
 from eawf.tui_v2.screens.overlays.confirm import ConfirmModal
@@ -203,7 +207,11 @@ def test_confirm_overlay_snapshot() -> None:
 
 
 def test_detail_overlay_snapshot() -> None:
-    """The detail card aligns its ``label: value`` colons in one column."""
+    """The detail card aligns its ``label: value`` colons in one column.
+
+    Lands on the default ``d`` (detail) tab — the enlarged box + the tab
+    strip frame the field rows.
+    """
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
@@ -215,6 +223,59 @@ def test_detail_overlay_snapshot() -> None:
             app.push_modal(DetailModal(resolve_detail(state, wave_id)))
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "detail_overlay.txt")
+
+    asyncio.run(body())
+
+
+def _bucketed_wave_state() -> tuple[State, str]:
+    """Return the repo-fixture state with its wave's effort bucket set to ``L``.
+
+    The committed fixtures leave ``effort_bucket`` unset, so the size-bar
+    golden needs a bucket injected (the frozen model is rebuilt via
+    ``model_copy``).
+    """
+    state = State.model_validate(orjson.loads(_REPO_STATE.read_bytes()))
+    wave_id = next(iter(state.waves))
+    bucketed = state.waves[wave_id].model_copy(update={"effort_bucket": EffortBucket.L})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = bucketed
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def test_detail_overlay_iter_metrics_snapshot() -> None:
+    """The enlarged iter modal on its ``m`` tab shows the completion bar."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            state = app.state
+            assert state is not None
+            iter_id = next(iter(state.iters))
+            modal = DetailModal(resolve_detail(state, iter_id))
+            app.push_modal(modal)
+            await settle_screen(pilot)
+            modal.query_one(TabbedContent).active = "detail-tab-m"
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "detail_overlay_iter_metrics.txt")
+
+    asyncio.run(body())
+
+
+def test_detail_overlay_wave_size_snapshot() -> None:
+    """The enlarged wave modal on its ``m`` tab shows the effort-size bar."""
+
+    async def body() -> None:
+        state, wave_id = _bucketed_wave_state()
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = DetailModal(resolve_detail(state, wave_id))
+            app.push_modal(modal)
+            await settle_screen(pilot)
+            modal.query_one(TabbedContent).active = "detail-tab-m"
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "detail_overlay_wave_size.txt")
 
     asyncio.run(body())
 

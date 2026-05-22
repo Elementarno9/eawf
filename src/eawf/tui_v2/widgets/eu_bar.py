@@ -49,6 +49,25 @@ OK_THRESHOLD: float = 0.80
 #: anything above is ``err`` (over budget).
 WARN_THRESHOLD: float = 1.00
 
+#: Rendered when a bar has no data to show (e.g. an unpopulated EU / token
+#: row, a zero-total ratio, or an unknown effort bucket). Surfacing the
+#: row with this sentinel — rather than a fabricated 0 % bar — keeps the
+#: "surface now, data later" contract honest for not-yet-projected
+#: telemetry. Exported so every plain-text bar caller emits the same
+#: sentinel.
+EMPTY_STATE: str = "— no data"
+
+#: Effort-bucket → filled-cell count for :func:`render_size_bar`. Ordered
+#: smallest-to-largest so the bar grows with the bucket (XS lights one
+#: cell, XL lights all five).
+_BUCKET_CELLS: dict[str, int] = {
+    "XS": 1,
+    "S": 2,
+    "M": 3,
+    "L": 4,
+    "XL": 5,
+}
+
 
 def _fill_cells(fraction: float) -> int:
     """Return the number of filled cells for *fraction* of the bar.
@@ -128,6 +147,81 @@ def render_bar_plain(consumed_eu: float, total_eu: float) -> str:
     return f"{glyphs}  {pct}%"
 
 
+def render_eu_bar_plain(consumed_eu: float, total_eu: float) -> str:
+    """Render the EU bar, or :data:`EMPTY_STATE` when *total_eu* is unset.
+
+    Wraps :func:`render_bar_plain` with the empty-state guard the data
+    reality demands: estimates / actuals are unpopulated scaffolding, so a
+    non-positive *total_eu* must surface :data:`EMPTY_STATE` rather than a
+    fabricated 0 % bar. Use this — not the bare :func:`render_bar_plain` —
+    for any EU or token row whose total may be zero.
+
+    Args:
+        consumed_eu: Effort units consumed so far (≥ 0).
+        total_eu: Total estimated effort units (≥ 0). ``<= 0`` yields the
+            empty-state sentinel.
+
+    Returns:
+        The plain bar string, or :data:`EMPTY_STATE` when *total_eu* is
+        non-positive.
+    """
+    if total_eu <= 0:
+        return EMPTY_STATE
+    return render_bar_plain(consumed_eu, total_eu)
+
+
+def render_completion_bar(done: int, total: int, *, width: int = 10) -> str:
+    """Render a ``done / total`` completion ratio bar with a count suffix.
+
+    The populated progress signal for an iter or a phase: the share of its
+    child waves that are closed. Plain text only (no Rich markup) so the
+    same string drops into a Rich-parsed tree label and into the modal.
+
+    Args:
+        done: Completed child count (e.g. closed waves). Negative inputs
+            clamp to ``0``.
+        total: Total child count. ``<= 0`` yields :data:`EMPTY_STATE` (an
+            entity with no children has no completion to show).
+        width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
+
+    Returns:
+        A plain string of the form ``#####-----  3/6`` (50 %, 3 of 6
+        done), or :data:`EMPTY_STATE` when *total* is non-positive.
+    """
+    if total <= 0:
+        return EMPTY_STATE
+    done_clamped = min(max(done, 0), total)
+    fraction = done_clamped / total
+    filled = int(fraction * width + 0.5)
+    glyphs = GLYPH_FULL * filled + GLYPH_EMPTY * (width - filled)
+    return f"{glyphs}  {done_clamped}/{total}"
+
+
+def render_size_bar(bucket: str, *, width: int = 5) -> str:
+    """Render an effort-bucket size bar (``XS``..``XL`` → 1..5 filled cells).
+
+    The populated signal for a wave: its t-shirt effort bucket. The bucket
+    maps to a filled-cell count via :data:`_BUCKET_CELLS`; an unrecognised
+    bucket yields :data:`EMPTY_STATE` (the wave has no size to show).
+
+    Args:
+        bucket: The effort-bucket label (``"XS"`` / ``"S"`` / ``"M"`` /
+            ``"L"`` / ``"XL"``). Any other value yields the empty state.
+        width: Bar cell count. Defaults to ``5`` (one cell per bucket
+            step). Buckets fill at most ``width`` cells.
+
+    Returns:
+        A plain string of the form ``###--  M`` (bucket ``M``), or
+        :data:`EMPTY_STATE` for an unknown bucket.
+    """
+    cells = _BUCKET_CELLS.get(bucket)
+    if cells is None:
+        return EMPTY_STATE
+    filled = min(cells, width)
+    glyphs = GLYPH_FULL * filled + GLYPH_EMPTY * (width - filled)
+    return f"{glyphs}  {bucket}"
+
+
 def render_bar_markup(consumed_eu: float, total_eu: float) -> str:
     """Render the bar + trailing percent as a Textual content-markup string.
 
@@ -198,6 +292,7 @@ class EUBar(Static):
 
 __all__ = [
     "BAR_CELLS",
+    "EMPTY_STATE",
     "GLYPH_EMPTY",
     "GLYPH_FULL",
     "OK_THRESHOLD",
@@ -206,4 +301,7 @@ __all__ = [
     "band_var",
     "render_bar_markup",
     "render_bar_plain",
+    "render_completion_bar",
+    "render_eu_bar_plain",
+    "render_size_bar",
 ]

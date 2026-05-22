@@ -10,15 +10,20 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
 from textual.app import ComposeResult
 
 from eawf.tui_v2.widgets.eu_bar import (
     BAR_CELLS,
+    EMPTY_STATE,
     GLYPH_EMPTY,
     GLYPH_FULL,
     EUBar,
     band_var,
     render_bar_markup,
+    render_completion_bar,
+    render_eu_bar_plain,
+    render_size_bar,
 )
 
 from ._palette_harness import PaletteHarnessApp
@@ -130,3 +135,113 @@ def test_eu_bar_set_eu_updates_reactives() -> None:
             assert bar.total_eu == 6.0
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# render_completion_bar — iter / phase closed-ratio bar (W05)
+# --------------------------------------------------------------------------
+
+
+def test_render_completion_bar_zero_done_all_empty() -> None:
+    bar = render_completion_bar(0, 6)
+    assert bar == f"{GLYPH_EMPTY * 10}  0/6"
+
+
+def test_render_completion_bar_full_when_done_equals_total() -> None:
+    bar = render_completion_bar(6, 6)
+    assert bar == f"{GLYPH_FULL * 10}  6/6"
+
+
+def test_render_completion_bar_clamps_done_over_total() -> None:
+    # done > total clamps both the fill and the count suffix to total.
+    bar = render_completion_bar(9, 6)
+    assert bar == f"{GLYPH_FULL * 10}  6/6"
+
+
+def test_render_completion_bar_clamps_negative_done_to_zero() -> None:
+    bar = render_completion_bar(-3, 6)
+    assert bar == f"{GLYPH_EMPTY * 10}  0/6"
+
+
+def test_render_completion_bar_zero_total_empty_state() -> None:
+    assert render_completion_bar(0, 0) == EMPTY_STATE
+
+
+def test_render_completion_bar_negative_total_empty_state() -> None:
+    assert render_completion_bar(2, -1) == EMPTY_STATE
+
+
+def test_render_completion_bar_half_ratio_fills_half() -> None:
+    bar = render_completion_bar(3, 6)
+    assert bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}  3/6"
+    # 3/6 == 0.5 over a 10-cell bar -> exactly 5 filled cells.
+    fraction = 3 / 6
+    assert fraction == pytest.approx(0.5)
+
+
+def test_render_completion_bar_custom_width() -> None:
+    bar = render_completion_bar(1, 4, width=4)
+    assert bar == f"{GLYPH_FULL * 1}{GLYPH_EMPTY * 3}  1/4"
+
+
+# --------------------------------------------------------------------------
+# render_size_bar — wave effort-bucket bar (W05)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("bucket", "filled"),
+    [("XS", 1), ("S", 2), ("M", 3), ("L", 4), ("XL", 5)],
+)
+def test_render_size_bar_each_bucket(bucket: str, filled: int) -> None:
+    bar = render_size_bar(bucket)
+    assert bar == f"{GLYPH_FULL * filled}{GLYPH_EMPTY * (5 - filled)}  {bucket}"
+
+
+def test_render_size_bar_xs_lights_one_cell() -> None:
+    assert render_size_bar("XS").startswith(GLYPH_FULL + GLYPH_EMPTY)
+
+
+def test_render_size_bar_xl_fills_all_cells() -> None:
+    assert render_size_bar("XL").startswith(GLYPH_FULL * 5)
+
+
+def test_render_size_bar_unknown_bucket_empty_state() -> None:
+    assert render_size_bar("ZZ") == EMPTY_STATE
+
+
+def test_render_size_bar_empty_bucket_empty_state() -> None:
+    assert render_size_bar("") == EMPTY_STATE
+
+
+def test_render_size_bar_custom_width_caps_fill() -> None:
+    # XL maps to 5 cells but a width=3 bar caps the fill at the bar width.
+    bar = render_size_bar("XL", width=3)
+    assert bar == f"{GLYPH_FULL * 3}  XL"
+
+
+# --------------------------------------------------------------------------
+# render_eu_bar_plain — guarded EU / token row (W05)
+# --------------------------------------------------------------------------
+
+
+def test_render_eu_bar_plain_zero_total_empty_state() -> None:
+    assert render_eu_bar_plain(0.0, 0.0) == EMPTY_STATE
+
+
+def test_render_eu_bar_plain_negative_total_empty_state() -> None:
+    assert render_eu_bar_plain(5.0, -1.0) == EMPTY_STATE
+
+
+def test_render_eu_bar_plain_nonzero_total_renders_bar() -> None:
+    bar = render_eu_bar_plain(2.0, 4.0)
+    assert "50%" in bar
+    assert EMPTY_STATE not in bar
+    # 2/4 == 0.5 of the 5-cell EU bar -> 3 filled (round-half-up).
+    assert bar.count(GLYPH_FULL) == 3
+    assert pytest.approx(0.5) == (2.0 / 4.0)
+
+
+def test_empty_state_constant_is_stable() -> None:
+    # W06 imports this sentinel; the exact glyph is part of the contract.
+    assert EMPTY_STATE == "— no data"
