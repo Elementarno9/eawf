@@ -3108,7 +3108,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T17:03:03.299851Z",
+  "updated_at": "2026-05-22T17:26:36.118998Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11184,8 +11184,8 @@
     "P27-I01-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w06",
+      "closed_at": "2026-05-22T17:26:31.524538Z",
       "commit": null,
       "deps": [
         "P27-I01-W05"
@@ -11202,17 +11202,17 @@
       "id": "P27-I01-W06",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:11.849188Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "lifecycle.py and every new sibling module is <=700 LOC with EAWF010 clean and zero waivers; the lifecycle Typer app still registers every prior subcommand verified by a verb-inventory test; the lifecycle command test suite passes unchanged"
       ],
       "title": "refactor: split cli/commands/lifecycle.py under 700-LOC cap",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W06-1779469462"
     },
     "P27-I01-W07": {
       "agent_role": "executor",
@@ -11461,8 +11461,8 @@
       "blocks": [
         "P27-I01-W15"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w14",
+      "closed_at": "2026-05-22T17:26:35.120503Z",
       "commit": null,
       "deps": [
         "P27-I01-W11"
@@ -11477,17 +11477,17 @@
       "id": "P27-I01-W14",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:15.171824Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the codex_session adapter maps a fixture Codex JSONL to TelemetrySession rows; the opencode_session adapter reads the SQLite fixture and on an unknown drizzle fingerprint emits an Incident with cause EXTERNAL_API_FAILURE and skips projection; both implement the SessionSource protocol"
       ],
       "title": "feat: telemetry source adapters — codex_session + opencode_session",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W14-1779469463"
     },
     "P27-I01-W15": {
       "agent_role": "executor",
@@ -12923,6 +12923,17 @@
       "status": "merged",
       "wave_id": "P27-I01-W05"
     },
+    "WT-P27-I01-W06-1779469462": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w06",
+      "created_at": "2026-05-22T17:04:22.440352Z",
+      "id": "WT-P27-I01-W06-1779469462",
+      "merged_commit": "bd65d79",
+      "owner_session_id": "p27-w06",
+      "path": ".ea/worktrees/p27-w06",
+      "status": "merged",
+      "wave_id": "P27-I01-W06"
+    },
     "WT-P27-I01-W08-1779465010": {
       "base_branch": "feature/eawf-v0.3-p27",
       "branch": "feature/eawf-v0.3-p27-w08",
@@ -12988,6 +12999,17 @@
       "path": ".ea/worktrees/p27-w13",
       "status": "merged",
       "wave_id": "P27-I01-W13"
+    },
+    "WT-P27-I01-W14-1779469463": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w14",
+      "created_at": "2026-05-22T17:04:23.608329Z",
+      "id": "WT-P27-I01-W14-1779469463",
+      "merged_commit": "f4f83a5",
+      "owner_session_id": "p27-w14",
+      "path": ".ea/worktrees/p27-w14",
+      "status": "merged",
+      "wave_id": "P27-I01-W14"
     },
     "WT-P27-I01-W17-1779465014": {
       "base_branch": "feature/eawf-v0.3-p27",
