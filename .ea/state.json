@@ -1604,9 +1604,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3069,7 +3067,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T02:30:59.930102Z",
+  "updated_at": "2026-05-22T02:31:32.025938Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10512,7 +10510,7 @@
       "agent_role": "auditor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T02:31:32.025636Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10523,10 +10521,10 @@
       "id": "P26-I02-W10",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T02:30:59.555542Z",
-      "outcome": null,
+      "outcome": "A34-P26-tui-qol recorded (verdict minor); all 9 I02 waves verified against criteria; followups W06 defer + W07 backlog B068",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "fresh-context auditor verifies all 9 I02 waves against declared success criteria",
         "verdict minor recorded as A34-P26-tui-qol (report-bearing complete)",
