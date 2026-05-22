@@ -427,7 +427,8 @@ def test_config_enter_toggles_bool() -> None:
 
 
 def test_config_enter_cycles_choice_a_b_c_a() -> None:
-    """``Enter`` on a choice forward-cycles a -> b -> c -> a (no reverse key)."""
+    """``Enter`` forward-cycles a -> b -> c -> a; the wrap back to the persisted
+    value clears the dirty mark (no spurious unsaved edit)."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -443,12 +444,20 @@ def test_config_enter_cycles_choice_a_b_c_a() -> None:
             assert len(choices) >= 3
             start = current_value(entry, modal._merged, modal._view.dirty)
             start_index = choices.index(str(start))
-            # Press Enter len(choices) times: should land back on the start.
+            # Press Enter len(choices) times: each step advances the displayed
+            # value, and the final wrap back to the persisted start clears dirty.
             seen: list[str] = []
-            for _ in range(len(choices)):
+            for i in range(len(choices)):
                 await pilot.press("enter")
                 await pilot.pause()
-                seen.append(modal._view.dirty[entry.key])
+                value = current_value(entry, modal._merged, modal._view.dirty)
+                seen.append(value)
+                expected_value = choices[(start_index + i + 1) % len(choices)]
+                assert value == expected_value
+                if expected_value == str(start):
+                    assert entry.key not in modal._view.dirty  # wrapped → no dirty mark
+                else:
+                    assert modal._view.dirty[entry.key] == expected_value
             expected = [choices[(start_index + i + 1) % len(choices)] for i in range(len(choices))]
             assert seen == expected
             assert seen[-1] == str(start)  # wrapped back to start
@@ -499,6 +508,58 @@ def test_config_inline_edit_commit_stages_value() -> None:
             await pilot.pause()
             assert modal._editing_key is None  # editor torn down
             assert modal._view.dirty.get(entry.key) == 4  # coerced int, not "4"
+
+    asyncio.run(body())
+
+
+def test_config_inline_edit_same_value_leaves_no_dirty() -> None:
+    """Committing the field's current value stages no edit (no ``*`` / no tint).
+
+    Review fix: re-entering the existing value (e.g. typing ``4`` into
+    ``planning.max_parallel_waves`` whose default is ``4``) must not mark the
+    field dirty — nothing actually changed.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_tab(modal, "planning")
+            modal.field_index = 2  # planning.max_parallel_waves (int, default 4)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.key == "planning.max_parallel_waves"
+            persisted = modal._persisted_value(entry)
+            await pilot.press("enter")  # open inline editor
+            await pilot.pause()
+            modal.query_one("#config-inline-input", Input).value = str(persisted)
+            await pilot.press("enter")  # commit the unchanged value
+            await pilot.pause()
+            assert modal._editing_key is None
+            assert entry.key not in modal._view.dirty  # no spurious dirty mark
+
+    asyncio.run(body())
+
+
+def test_config_toggle_twice_clears_dirty() -> None:
+    """Toggling a bool back to its persisted value clears the dirty mark."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            entry = modal._active_field()  # audit.fix_safe (bool)
+            assert entry is not None and entry.type == "bool"
+            await pilot.press("enter")  # toggle once → dirty
+            await pilot.pause()
+            assert entry.key in modal._view.dirty
+            await pilot.press("enter")  # toggle back → matches persisted, no dirty
+            await pilot.pause()
+            assert entry.key not in modal._view.dirty
 
     asyncio.run(body())
 
@@ -563,6 +624,36 @@ def test_meta_line_prefixes_three_spaces_for_alignment() -> None:
     assert line.startswith("   audit.flaky_retry_count")
     # The key column matches the static row (caret + dirty + space = 3).
     assert line.index("audit.flaky_retry_count") == 3
+
+
+def test_config_inline_edit_type_cell_aligns_with_static_row() -> None:
+    """The inline meta line's ``[type]`` cell shares the static row's column.
+
+    Review fix for the "row squished after Enter": the old meta line packed
+    key + type + range with single separators, so the type cell (and the
+    trailing input) bunched left of the static value column. Reusing the
+    static column widths realigns them, landing the input in the value column.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            modal.field_index = 1  # audit.flaky_retry_count (int)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None
+            static_line = modal._field_line(entry, selected=True)
+            meta_line = modal._meta_line(entry)
+            type_cell = f"[{entry.type}]"
+            # Both the key and the type cell share a column with the static row,
+            # so the trailing input lands in the static value column.
+            assert static_line.index(entry.key) == meta_line.index(entry.key)
+            assert static_line.index(type_cell) == meta_line.index(type_cell)
+
+    asyncio.run(body())
 
 
 def test_config_inline_edit_esc_cancels_without_mutation() -> None:

@@ -619,7 +619,9 @@ class ConfigModal(ModalScreen[None]):
         commit / cancel keys the mounted :class:`Input` owns.
         """
         if self._editing_key is not None:
-            return "[ Enter commit · Esc cancel ]"
+            entry = registry_lookup(self._editing_key)
+            range_hint = self._range_hint(entry) if entry is not None else ""
+            return f"[ {range_hint}Enter commit · Esc cancel ]"
         return "[ ↑/↓ field · ←/→ tab · Enter edit · s save · r reset · L layer · Esc close ]"
 
     # -- active-context resolution -----------------------------------------
@@ -648,6 +650,45 @@ class ConfigModal(ModalScreen[None]):
             return None
         index = max(0, min(self.field_index, len(fields) - 1))
         return fields[index]
+
+    def _persisted_value(self, entry: ConfigKey) -> Any:
+        """Resolve *entry*'s persisted value — merged config, then default.
+
+        The baseline a staged edit is compared against (ignoring the dirty
+        map, unlike :func:`current_value`) to decide whether an edit is a
+        real change.
+
+        Args:
+            entry: The field to resolve the persisted value for.
+
+        Returns:
+            The merged-config value, or the registry default when the key is
+            absent from every layer.
+        """
+        try:
+            return get_dotted(self._merged, entry.key)
+        except KeyError:
+            return entry.default
+
+    def _drop_if_unchanged(self, entry: ConfigKey, dirty: dict[str, Any]) -> dict[str, Any]:
+        """Return *dirty* without *entry*'s key when its value matches persisted.
+
+        An edit that nets no change (the operator typed the current value, or
+        cycled / toggled all the way back to it) leaves no dirty mark — no
+        ``*`` and no ``-dirty`` tint — so the unsaved indicator only flags
+        genuine pending changes.
+
+        Args:
+            entry: The field whose staged value to reconcile.
+            dirty: The candidate dirty map (already carrying the new value).
+
+        Returns:
+            *dirty* unchanged, or a copy with *entry*'s key removed when its
+            staged value equals the persisted value.
+        """
+        if entry.key in dirty and dirty[entry.key] == self._persisted_value(entry):
+            return {key: value for key, value in dirty.items() if key != entry.key}
+        return dirty
 
     def _repaint_fields(self) -> None:
         """Repaint the active tab's field rows, layer line, and footer hint.
@@ -761,10 +802,12 @@ class ConfigModal(ModalScreen[None]):
         value = current_value(entry, self._merged, self._view.dirty)
         action = enter_action(entry, value, row_width=self._row_width())
         if action == "toggle":
-            self._view.dirty = toggle_bool(entry, self._merged, self._view.dirty)
+            staged = toggle_bool(entry, self._merged, self._view.dirty)
+            self._view.dirty = self._drop_if_unchanged(entry, staged)
             self._repaint_fields()
         elif action == "cycle":
-            self._view.dirty = cycle_choice(entry, self._merged, self._view.dirty, step=1)
+            staged = cycle_choice(entry, self._merged, self._view.dirty, step=1)
+            self._view.dirty = self._drop_if_unchanged(entry, staged)
             self._repaint_fields()
         elif action == "inline":
             self._begin_inline_edit(entry, value)
@@ -843,24 +886,39 @@ class ConfigModal(ModalScreen[None]):
 
     @staticmethod
     def _meta_line(entry: ConfigKey) -> str:
-        """Render the dotted key + type + range hint shown beside the inline input.
+        """Render the key + type label shown beside the inline input.
 
-        Mirrors the popup editor's meta line so the inline editor surfaces
-        the same type / range affordance. The return is prefixed with three
-        spaces so the key column lines up with the static field row, whose
-        :meth:`_field_line` reserves a caret + dirty marker + separating
-        space (three cells) ahead of the key — without the prefix the key
-        visibly jumps three columns left when the inline editor opens.
+        Reuses the static :meth:`_field_line` column widths exactly — a
+        three-cell prefix (caret + dirty marker + separator), then the key
+        padded to 42 and the type cell padded to 14 — so the trailing inline
+        :class:`Input` lands in the **same column as the static value cell**.
+        Without the shared widths the meta line was shorter than the static
+        row and the whole inline editor bunched against the key (the "row
+        squished after Enter" report). The range hint moves to the footer
+        (:meth:`_range_hint`) so it does not push the input out of column.
 
         Args:
             entry: The field being edited.
         """
-        parts = [entry.key, f"[{entry.type}]"]
-        if entry.min_value is not None or entry.max_value is not None:
-            low = "" if entry.min_value is None else f"{entry.min_value:g}"
-            high = "" if entry.max_value is None else f"{entry.max_value:g}"
-            parts.append(f"range {low}..{high}")
-        return "   " + "  ".join(parts) + "  "
+        type_cell = f"[{entry.type}]"
+        return f"   {entry.key:<42} {type_cell:<14} "
+
+    @staticmethod
+    def _range_hint(entry: ConfigKey) -> str:
+        """Return a ``range LOW..HIGH · `` footer prefix for a bounded numeric field.
+
+        Args:
+            entry: The field being edited.
+
+        Returns:
+            The range affordance with a trailing separator, or ``""`` when
+            the field declares neither bound.
+        """
+        if entry.min_value is None and entry.max_value is None:
+            return ""
+        low = "" if entry.min_value is None else f"{entry.min_value:g}"
+        high = "" if entry.max_value is None else f"{entry.max_value:g}"
+        return f"range {low}..{high} · "
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """Commit the inline edit on ``Enter`` (the Input's ``Submitted``).
@@ -883,7 +941,7 @@ class ConfigModal(ModalScreen[None]):
         except InvalidInput as exc:
             self._report_inline_error(str(exc))
             return
-        self._view.dirty = {**self._view.dirty, entry.key: coerced}
+        self._view.dirty = self._drop_if_unchanged(entry, {**self._view.dirty, entry.key: coerced})
         logger.info(f"config_modal inline_commit key={entry.key!r} type={entry.type}")
         self._teardown_inline_edit()
 
@@ -936,7 +994,9 @@ class ConfigModal(ModalScreen[None]):
         def _on_dismiss(result: Any) -> None:
             if result is None:
                 return
-            self._view.dirty = {**self._view.dirty, entry.key: result}
+            self._view.dirty = self._drop_if_unchanged(
+                entry, {**self._view.dirty, entry.key: result}
+            )
             self._repaint_fields()
 
         return _on_dismiss

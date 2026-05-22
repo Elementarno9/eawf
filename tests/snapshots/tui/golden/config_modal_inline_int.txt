@@ -9,7 +9,7 @@
       │   audit  estimation  planning  research  runtime  ship  ui  vcs  worktrees                               │
       │  ╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │     audit.fix_safe                             [bool]         false                                      │
-      │     audit.flaky_retry_count  [int]  range 0..5  1                                                        │
+      │     audit.flaky_retry_count                    [int]          1                                          │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
@@ -32,6 +32,6 @@
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
-      │  [ Enter commit · Esc cancel ]                                                                           │
+      │  [ range 0..5 · Enter commit · Esc cancel ]                                                              │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
