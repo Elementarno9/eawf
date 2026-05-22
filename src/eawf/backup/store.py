@@ -30,10 +30,13 @@ import hashlib
 import logging
 import os
 import re
+import secrets
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+from eawf.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +149,40 @@ def format_timestamp(when: datetime) -> str:
     return aware.astimezone(UTC).strftime(_TS_FORMAT)
 
 
+def _atomic_write_bytes(target: Path, payload: bytes) -> None:
+    """Write *payload* to *target* via tempfile + ``fsync`` + ``os.replace``.
+
+    Lock-agnostic — the caller acquires the sibling portalock when one is
+    needed. Mirrors :func:`eawf.state.writer._write_payload` (and the WAL's
+    private byte-writer) rather than importing it, matching the codebase
+    convention of keeping the byte-swap idiom co-located with its callers.
+
+    The temp file lands in *target*'s own directory so the final
+    :func:`os.replace` is a same-filesystem atomic rename. On any failure the
+    half-written temp is removed and *target* is left untouched.
+
+    Args:
+        target: Destination path. Parent directories are created on demand.
+        payload: Raw bytes to write verbatim (no re-serialisation).
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    suffix = secrets.token_hex(4)
+    tmp = target.with_name(f"{target.name}.tmp.{suffix}")
+    try:
+        with tmp.open("wb") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+        parent_fd = os.open(target.parent, os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 class BackupStore:
     """Reads, writes, lists, and prunes snapshots for a single repo.
 
@@ -251,12 +288,46 @@ class BackupStore:
         logger.info(f"write_pre_restore repo_sha={self.root.name} target={target.name!r}")
         return target
 
+    def _restore_state(self, src: Path, dest: Path) -> None:
+        """Write the snapshot ``state.json`` over the live file atomically.
+
+        ``state.json`` is the daemon's sole canonical mutable surface, so a
+        torn or partial write on interrupt — or a clobbering race with a
+        concurrent daemon write — would corrupt project state. The restore
+        therefore holds the same sibling :func:`eawf.lock.portalock.acquire`
+        the daemon uses and swaps the file via :func:`_atomic_write_bytes`
+        (tempfile + ``fsync`` + :func:`os.replace`): the live file is only
+        ever the fully-old document or the fully-new one, never an
+        intermediate.
+
+        The snapshot bytes are written verbatim (no re-serialisation) so the
+        restore stays byte-faithful per C10 §5.15.3 — a snapshot of an
+        operator-edited or older-schema ``state.json`` round-trips exactly.
+
+        Args:
+            src: The snapshot's ``state.json`` source path.
+            dest: The live ``.ea/state.json`` destination path.
+
+        Raises:
+            portalock.LockTimeout: When the sibling lock cannot be acquired
+                within the timeout (a concurrent daemon write is in flight).
+        """
+        payload = src.read_bytes()
+        with portalock.acquire(dest, timeout=5.0):
+            _atomic_write_bytes(dest, payload)
+
     def restore_snapshot(self, snapshot: Snapshot) -> list[str]:
         """Copy *snapshot*'s artifacts back into the repo's ``.ea/`` dir.
 
         Only ``state.json`` / ``config.yaml`` / ``profile.yaml`` are
         restored (per C10 §5.15.3) — never ``.ea/store/*.jsonl`` or
-        ``.ea/local/``. The copy is byte-faithful.
+        ``.ea/local/``. The restore is byte-faithful.
+
+        ``state.json`` is restored atomically under a sibling portalock (see
+        :meth:`_restore_state`) so an interrupt cannot leave a torn file and a
+        concurrent daemon write cannot corrupt the result. The ``config.yaml``
+        / ``profile.yaml`` sidecars are plain content (not the daemon's
+        canonical mutable file) and are restored with a byte-faithful copy.
 
         Args:
             snapshot: The snapshot to restore from.
@@ -264,14 +335,23 @@ class BackupStore:
         Returns:
             The list of artifact filenames written back, in canonical
             order.
+
+        Raises:
+            portalock.LockTimeout: When the sibling lock on ``state.json``
+                cannot be acquired within the timeout.
         """
         self.ea_dir.mkdir(parents=True, exist_ok=True)
         restored: list[str] = []
         for name in SNAPSHOT_ARTIFACTS:
             src = snapshot.path / name
-            if src.is_file():
-                shutil.copyfile(src, self.ea_dir / name)
-                restored.append(name)
+            if not src.is_file():
+                continue
+            dest = self.ea_dir / name
+            if name == "state.json":
+                self._restore_state(src, dest)
+            else:
+                shutil.copyfile(src, dest)
+            restored.append(name)
         logger.info(f"restore_snapshot ts={snapshot.ts!r} artifacts={restored}")
         return restored
 
