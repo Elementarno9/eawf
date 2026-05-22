@@ -500,6 +500,12 @@ from eawf.cli.commands.migrate import migrate_app  # noqa: E402
 app.add_typer(migrate_app, name="migrate", rich_help_panel=panel_for("migrate"))
 # --- end P27 W22 ---
 
+# --- P27 W23 backup registration ---
+from eawf.cli.commands.backup import backup_app  # noqa: E402
+
+app.add_typer(backup_app, name="backup", rich_help_panel=panel_for("backup"))
+# --- end P27 W23 ---
+
 # --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402
