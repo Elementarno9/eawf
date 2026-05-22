@@ -28,7 +28,7 @@ from eawf.state.enums import (
     WaveStatus,
 )
 from eawf.state.ids import parents_of
-from eawf.state.models import State
+from eawf.state.models import Iter, State, Wave
 from eawf.state.urn import parse as parse_urn
 from eawf.store.envelope import Envelope
 from eawf.store.kinds.agent_report import (
@@ -87,6 +87,56 @@ class Violation:
 
 
 Invariant = Callable[[State], Iterable[Violation]]
+
+
+@dataclass(frozen=True)
+class ValidationIndex:
+    """Pre-built parent->children groupings shared across a single validation.
+
+    Several invariants need to enumerate the children of a parent entity
+    (e.g. the iters under a phase, the waves under an iter). Computing those
+    groupings inline forces a nested ``O(parents * children)`` scan of
+    :class:`~eawf.state.models.State` per invariant. Building the groupings
+    once per :func:`~eawf.validate.strict.validate_state` call collapses each
+    such scan to a single ``O(children)`` pass plus an ``O(1)`` lookup.
+
+    The grouping values preserve ``State`` dict iteration order so violation
+    emission order is unchanged from the pre-index implementation.
+
+    Attributes:
+        iters_by_phase: Maps a phase id to the ``(iter_id, Iter)`` pairs whose
+            ``phase_id`` names that phase. Phases with no iters are absent.
+        waves_by_iter: Maps an iter id to the ``(wave_id, Wave)`` pairs whose
+            ``iter_id`` names that iter. Iters with no waves are absent.
+    """
+
+    iters_by_phase: dict[str, list[tuple[str, Iter]]]
+    waves_by_iter: dict[str, list[tuple[str, Wave]]]
+
+
+def build_validation_index(state: State) -> ValidationIndex:
+    """Build the per-validation parent->children index for *state*.
+
+    Each entity dict is walked exactly once; children are appended to their
+    parent's bucket in ``State`` iteration order so downstream invariants emit
+    violations in the same order as the pre-index nested scans.
+
+    Args:
+        state: The typed state document being validated.
+
+    Returns:
+        A :class:`ValidationIndex` grouping iters by ``phase_id`` and waves by
+        ``iter_id``.
+    """
+    iters_by_phase: dict[str, list[tuple[str, Iter]]] = {}
+    for iter_id, it in state.iters.items():
+        iters_by_phase.setdefault(it.phase_id, []).append((iter_id, it))
+
+    waves_by_iter: dict[str, list[tuple[str, Wave]]] = {}
+    for wave_id, w in state.waves.items():
+        waves_by_iter.setdefault(w.iter_id, []).append((wave_id, w))
+
+    return ValidationIndex(iters_by_phase=iters_by_phase, waves_by_iter=waves_by_iter)
 
 
 def check_parent_ids(state: State) -> Iterable[Violation]:
@@ -215,20 +265,27 @@ def check_current_pointers(state: State) -> Iterable[Violation]:
             )
 
 
-def check_closure_rules(state: State) -> Iterable[Violation]:
+def check_closure_rules(state: State, index: ValidationIndex | None = None) -> Iterable[Violation]:
     """Closed parents must not have open children (``INV.CLOSURE.*``).
 
     - A ``closed`` phase must not have iter children whose status is in
       ``{planned, active}``.
     - A ``closed`` iter must not have wave children whose status is in
       ``{pending, claimed, in_progress}``.
+
+    Args:
+        state: The typed state document being validated.
+        index: Pre-built parent->children groupings. When ``None`` (e.g. a
+            direct caller outside :func:`~eawf.validate.strict.validate_state`)
+            the index is built locally so the function stays usable on its own.
     """
+    if index is None:
+        index = build_validation_index(state)
+
     for phase_id, phase in state.phases.items():
         if phase.status != PhaseStatus.CLOSED.value:
             continue
-        for iter_id, it in state.iters.items():
-            if it.phase_id != phase_id:
-                continue
+        for iter_id, it in index.iters_by_phase.get(phase_id, ()):
             if it.status in _OPEN_ITER_STATUSES:
                 yield Violation(
                     code="INV.CLOSURE.PHASE_HAS_OPEN_ITER",
@@ -242,9 +299,7 @@ def check_closure_rules(state: State) -> Iterable[Violation]:
     for iter_id, it in state.iters.items():
         if it.status != IterStatus.CLOSED.value:
             continue
-        for wave_id, w in state.waves.items():
-            if w.iter_id != iter_id:
-                continue
+        for wave_id, w in index.waves_by_iter.get(iter_id, ()):
             if w.status in _OPEN_WAVE_STATUSES:
                 yield Violation(
                     code="INV.CLOSURE.ITER_HAS_OPEN_WAVE",

@@ -29,7 +29,12 @@ from pydantic_core import ErrorDetails
 
 from eawf.render.envelope import OutputEnvelope
 from eawf.state.models import State
-from eawf.validate.invariants import ALL_INVARIANTS, Violation
+from eawf.validate.invariants import (
+    ALL_INVARIANTS,
+    Violation,
+    build_validation_index,
+    check_closure_rules,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +120,16 @@ def validate_state(payload: dict[str, Any], *, strict_optional: bool = False) ->
             schema_errors=schema_errors,
             violations=[],
         )
+    # Build the parent->children groupings once and share them with the
+    # invariants that would otherwise re-scan State per call. Invariants that
+    # do not need the index are called with state alone.
+    index = build_validation_index(state)
     violations: list[Violation] = []
     for invariant in ALL_INVARIANTS:
-        violations.extend(invariant(state))
+        if invariant is check_closure_rules:
+            violations.extend(check_closure_rules(state, index))
+        else:
+            violations.extend(invariant(state))
     if strict_optional:
         violations.extend(_strict_optional_violations(state))
     logger.debug(f"validate_state violations={len(violations)}")
