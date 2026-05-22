@@ -1,6 +1,7 @@
 {
   "body_keys": [
     "audit_artifact_urn",
+    "auditor_dispatch",
     "checks_run",
     "findings",
     "hypothesis_verdicts",

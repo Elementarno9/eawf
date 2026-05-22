@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from eawf.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.audit_dsl.models import CheckResult, CheckSpec
 
@@ -170,6 +171,7 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "state_field_equals": _check_state_field_equals,
     "command_exit_zero": _check_command_exit_zero,
     "verify_implements": check_verify_implements,
+    "criterion_in_diff": check_criterion_in_diff,
 }
 
 

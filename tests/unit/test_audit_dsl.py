@@ -10,6 +10,8 @@ loader paths):
 * state_field_equals: equal, mismatch, missing-segment, non-json
   state file, missing-arg, custom state_path.
 * command_exit_zero: zero, non-zero, missing-binary, missing-arg.
+* criterion_in_diff: match (file scope), match (dir scope), no-match,
+  missing-criterion, missing-pattern, missing-scopes, bad-regex.
 * run_checks: cwd resolution, golden sample.
 """
 
@@ -360,6 +362,99 @@ def test_command_exit_zero_missing_argv_arg_raises(tmp_path: Path) -> None:
 def test_command_exit_zero_empty_argv_raises(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="argv"):
         _run_one("command_exit_zero", "x", {"argv": []}, tmp_path)
+
+
+# ---- criterion_in_diff -----------------------------------------------------
+
+
+def test_criterion_in_diff_match_file_scope(tmp_path: Path) -> None:
+    (tmp_path / "mod.py").write_text("# guard kept\nx = 1\n", encoding="utf-8")
+    result = _run_one(
+        "criterion_in_diff",
+        "c1",
+        {"criterion": "guard kept", "pattern": "guard kept", "file_scopes": ["mod.py"]},
+        tmp_path,
+    )
+    assert result.passed is True
+    assert "guard kept" in (result.details or "")
+
+
+def test_criterion_in_diff_match_dir_scope(tmp_path: Path) -> None:
+    pkg = tmp_path / "src" / "eawf"
+    pkg.mkdir(parents=True)
+    (pkg / "deep.py").write_text("MARKER_TOKEN = True\n", encoding="utf-8")
+    result = _run_one(
+        "criterion_in_diff",
+        "c1",
+        {"criterion": "marker present", "pattern": "MARKER_TOKEN", "file_scopes": ["src/eawf"]},
+        tmp_path,
+    )
+    assert result.passed is True
+
+
+def test_criterion_in_diff_no_match_fails(tmp_path: Path) -> None:
+    (tmp_path / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    result = _run_one(
+        "criterion_in_diff",
+        "c1",
+        {"criterion": "missing thing", "pattern": "absent_token", "file_scopes": ["mod.py"]},
+        tmp_path,
+    )
+    assert result.passed is False
+    assert "unmet criterion" in (result.details or "")
+    assert "missing thing" in (result.details or "")
+
+
+def test_criterion_in_diff_missing_criterion_arg_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="missing or empty str arg 'criterion'"):
+        _run_one(
+            "criterion_in_diff",
+            "c1",
+            {"pattern": "x", "file_scopes": ["mod.py"]},
+            tmp_path,
+        )
+
+
+def test_criterion_in_diff_missing_pattern_arg_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="missing or empty str arg 'pattern'"):
+        _run_one(
+            "criterion_in_diff",
+            "c1",
+            {"criterion": "x", "file_scopes": ["mod.py"]},
+            tmp_path,
+        )
+
+
+def test_criterion_in_diff_missing_scopes_arg_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="non-empty list"):
+        _run_one(
+            "criterion_in_diff",
+            "c1",
+            {"criterion": "x", "pattern": "y", "file_scopes": []},
+            tmp_path,
+        )
+
+
+def test_criterion_in_diff_bad_regex_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="not a valid regex"):
+        _run_one(
+            "criterion_in_diff",
+            "c1",
+            {"criterion": "x", "pattern": "[unterminated", "file_scopes": ["mod.py"]},
+            tmp_path,
+        )
+
+
+def test_criterion_in_diff_absent_scope_fails_cleanly(tmp_path: Path) -> None:
+    """A file_scope that does not exist → not found, not a crash."""
+    result = _run_one(
+        "criterion_in_diff",
+        "c1",
+        {"criterion": "x", "pattern": "x", "file_scopes": ["does_not_exist.py"]},
+        tmp_path,
+    )
+    assert result.passed is False
+    assert "0 file(s) searched" in (result.details or "")
 
 
 # ---- run_checks ------------------------------------------------------------

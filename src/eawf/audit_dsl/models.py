@@ -20,6 +20,12 @@ The check kinds frozen for v0.3:
   ``diff_base`` for verdict-id markers under each wave's
   ``file_scopes``; short-circuits when ``cadence`` does not match
   ``current_trigger``.
+* ``criterion_in_diff`` — ``args = {criterion: str, pattern: str,
+  file_scopes: list[str]}``. Greps a single wave success-criterion's
+  verification ``pattern`` across the current content of its
+  ``file_scopes``; fails with the offending criterion text in
+  ``details`` when the pattern is absent. Drives the criterion-vs-diff
+  half of the ``/audit`` gate.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -42,6 +48,7 @@ CheckKind = Literal[
     "state_field_equals",
     "command_exit_zero",
     "verify_implements",
+    "criterion_in_diff",
 ]
 
 
