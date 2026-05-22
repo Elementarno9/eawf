@@ -3080,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T12:14:56.145682Z",
+  "updated_at": "2026-05-22T12:57:55.031044Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10888,9 +10888,9 @@
     "P26-I02-W21": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-p26i02-w21",
+      "closed_at": "2026-05-22T12:57:55.030646Z",
+      "commit": "c36ed533a7ac9cda274031a01742455ef147055f",
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "S",
@@ -10903,10 +10903,10 @@
       "id": "P26-I02-W21",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T12:12:08.876816Z",
-      "outcome": null,
+      "outcome": "streaming _write flushes per frame + human-line newline collapse; state_mutate drops probe + maps OSError transport failure to DaemonUnreachable exit 4; tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "cli/streaming _write flushes per frame so a block-buffered pipe streams progressively",
         "render_human_line collapses embedded newlines so one frame is one human line",
