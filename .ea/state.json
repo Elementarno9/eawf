@@ -1605,8 +1605,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P27-I01",
+    "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2556,7 +2556,7 @@
       "id": "P27-I01",
       "opened_at": "2026-05-18T19:45:11.534616Z",
       "phase_id": "P27",
-      "status": "planned",
+      "status": "active",
       "title": "P27-I01: observ + ops waves",
       "wave_ids": [
         "P27-I01-W01",
@@ -3070,7 +3070,7 @@
         "ART-research-long-term-2026-05-17-c10-operations",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "C09+C10 observability + operations: quality DSL + telemetry + release/migration ops"
     }
@@ -3108,7 +3108,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T15:18:20.482275Z",
+  "updated_at": "2026-05-22T15:47:00.958660Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11024,8 +11024,8 @@
       "blocks": [
         "P27-I01-W02"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w01",
+      "closed_at": "2026-05-22T15:46:59.848927Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11039,17 +11039,17 @@
       "id": "P27-I01-W01",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:09.925266Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "pytest --cov reports skills/_common; vcs/coauthor; worktree/git each >=85%; new dirty-repo fixture exercises worktree/git error-class paths; all new tests follow test_<func>_<scenario> naming"
       ],
       "title": "test: lift coverage on skills/_common, vcs/coauthor, worktree/git",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W01-1779463855"
     },
     "P27-I01-W02": {
       "agent_role": "executor",
@@ -12878,6 +12878,17 @@
       "path": ".ea/worktrees/p26-i02-w16",
       "status": "merged",
       "wave_id": "P26-I02-W16"
+    },
+    "WT-P27-I01-W01-1779463855": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w01",
+      "created_at": "2026-05-22T15:30:55.153528Z",
+      "id": "WT-P27-I01-W01-1779463855",
+      "merged_commit": "3efe68d",
+      "owner_session_id": "p27-w01",
+      "path": ".ea/worktrees/p27-w01",
+      "status": "merged",
+      "wave_id": "P27-I01-W01"
     }
   }
 }
