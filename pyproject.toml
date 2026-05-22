@@ -113,7 +113,6 @@ max-loc = 700
 # those rows as the splits land. New modules get no exclusion — they
 # must respect the cap or carry an inline waiver.
 exclude = [
-    "src/eawf/cli/commands/lifecycle.py",
     "src/eawf/config/registry.py",
     "src/eawf/cli/commands/evidence.py",
     "src/eawf/cli/commands/plugin.py",
