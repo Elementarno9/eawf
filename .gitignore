@@ -46,6 +46,12 @@ CLAUDE.md
 .ea/indexes/
 .ea/instrument-probe.json
 
+# Telemetry / SQLite databases — telemetry.db embeds absolute cwd +
+# session_log_path, so it must never be committed. The bare glob covers
+# any *.db written anywhere in the tree (telemetry, scratch probes).
+*.db
+.ea/telemetry.db
+
 # Per Q13 (operator decision 2026-05-18): worktrees live under .ea/worktrees/
 .ea/worktrees/
 

@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import socket
 import uuid
 from typing import Any, cast
@@ -51,6 +52,13 @@ from eawf.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
 from eawf.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
+
+# Owner-only perms for the bound Unix socket. ``asyncio.start_unix_server``
+# creates the socket node under the prevailing umask, which may leave it
+# group/world-writable; the peer-credential check gates *who* may issue
+# RPCs, but the filesystem node itself should also be unreachable by other
+# local users. POSIX-only — Windows uses the named-pipe transport.
+SOCKET_FILE_MODE: int = 0o600
 
 
 # JSON-RPC 2.0 error codes (reserved range -32768..-32000) plus the
@@ -442,5 +450,16 @@ async def serve_unix(
         await handle_connection(reader, writer, ctx, expected_uid=expected_uid)
 
     server = await asyncio.start_unix_server(_on_connect, path=socket_path)
+    # ``start_unix_server`` creates the socket node under the prevailing
+    # umask, which may leave it group/world-accessible. Tighten it to
+    # owner-only before any peer connects so the filesystem node is
+    # unreachable by other local users (the peer-cred check gates *who*
+    # may issue RPCs; this gates *who can reach the node at all*). The
+    # holding directory is hardened at its creation point in
+    # :func:`eawf.daemon.runtime_dir.ensure_runtime_dir`, not here —
+    # ``serve_unix`` does not own the socket's parent (tests + operators
+    # may bind under a shared dir such as ``$TMPDIR``).
+    if os.name != "nt":
+        os.chmod(socket_path, SOCKET_FILE_MODE)
     logger.info(f"serve_unix bound socket={socket_path!r}")
     return server

@@ -15,6 +15,8 @@ import asyncio
 import contextlib
 import os
 import socket
+import stat
+import subprocess
 import sys
 import tempfile
 import uuid
@@ -29,12 +31,20 @@ from eawf import __version__
 from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.auth import UnauthorizedError, check_peer_uid
 from eawf.daemon.methods import MethodContext, registered_methods
-from eawf.daemon.runtime_dir import pid_path, runtime_dir, socket_path
+from eawf.daemon.runtime_dir import (
+    RUNTIME_DIR_MODE,
+    ensure_runtime_dir,
+    harden_runtime_dir,
+    pid_path,
+    runtime_dir,
+    socket_path,
+)
 from eawf.daemon.server import (
     INVALID_PARAMS,
     INVALID_REQUEST,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
+    SOCKET_FILE_MODE,
     serve_unix,
 )
 
@@ -305,3 +315,90 @@ def test_check_peer_uid_raises_on_mismatch() -> None:
     finally:
         s1.close()
         s2.close()
+
+
+def _mode(path: Path) -> int:
+    """Return the permission bits (``S_IMODE``) of *path*."""
+    return stat.S_IMODE(os.stat(path).st_mode)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod perms semantics differ on windows")
+def test_ensure_runtime_dir_creates_owner_only_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """:func:`ensure_runtime_dir` materialises the dir at ``0o700``."""
+    target = tmp_path / "rt"
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(target))
+    created = ensure_runtime_dir()
+    assert created == target
+    assert created.is_dir()
+    assert _mode(created) == RUNTIME_DIR_MODE
+    assert RUNTIME_DIR_MODE == 0o700
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod perms semantics differ on windows")
+def test_ensure_runtime_dir_retightens_permissive_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pre-existing world-traversable dir is tightened back to ``0o700``."""
+    target = tmp_path / "rt"
+    target.mkdir()
+    os.chmod(target, 0o755)
+    assert _mode(target) == 0o755
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(target))
+    ensure_runtime_dir()
+    assert _mode(target) == 0o700
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod perms semantics differ on windows")
+def test_harden_runtime_dir_sets_owner_only(tmp_path: Path) -> None:
+    """:func:`harden_runtime_dir` chmods an existing dir to ``0o700``."""
+    target = tmp_path / "rt"
+    target.mkdir(mode=0o777)
+    harden_runtime_dir(target)
+    assert _mode(target) == 0o700
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod perms semantics differ on windows")
+def test_harden_runtime_dir_missing_path_raises(tmp_path: Path) -> None:
+    """Hardening a non-existent path surfaces the OS error (fail-fast)."""
+    with pytest.raises(FileNotFoundError):
+        harden_runtime_dir(tmp_path / "does-not-exist")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="UDS perms semantics differ on windows")
+def test_serve_unix_socket_is_owner_only() -> None:
+    """:func:`serve_unix` chmods the bound socket node to ``0o600``."""
+    sock = _short_sock_path()
+
+    async def body(_ctx: MethodContext) -> None:
+        assert _mode(sock) == SOCKET_FILE_MODE
+        assert SOCKET_FILE_MODE == 0o600
+
+    _with_server(sock, body)
+
+
+def _repo_root() -> Path:
+    """Return the worktree root (two levels above ``tests/daemon/``)."""
+    return Path(__file__).resolve().parents[2]
+
+
+def _check_ignored(path: str) -> bool:
+    """Return True when *path* is matched by the repo's gitignore rules."""
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", path],
+        cwd=_repo_root(),
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def test_gitignore_matches_telemetry_db() -> None:
+    """``telemetry.db`` under ``.ea/`` is gitignored (PII / cwd leak guard)."""
+    assert _check_ignored(".ea/telemetry.db")
+
+
+def test_gitignore_matches_any_db_glob() -> None:
+    """The bare ``*.db`` glob covers db artifacts written anywhere."""
+    assert _check_ignored("telemetry.db")
+    assert _check_ignored("scratch/probe.db")
