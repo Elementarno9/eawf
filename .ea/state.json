@@ -3121,7 +3121,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T17:58:47.259095Z",
+  "updated_at": "2026-05-22T18:12:08.829043Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11833,8 +11833,8 @@
     "P27-I01-W25": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w25",
+      "closed_at": "2026-05-22T18:11:29.985100Z",
       "commit": null,
       "deps": [
         "P27-I01-W15"
@@ -11850,26 +11850,26 @@
       "id": "P27-I01-W25",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:19.647874Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf metrics variance emits the M26 estimate-actual-variance-pct for a fixture and feeds the Variance ship-gate section; eawf calibrate buckets re-fits XS/S/M/L/XL from 90d actuals and nudges when drift exceeds 25 percent verified by a synthetic-actuals test; VarianceTile renders the variance value"
       ],
       "title": "feat: eawf metrics variance + VarianceTile + calibrate buckets",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W25-1779472824"
     },
     "P27-I01-W26": {
       "agent_role": "executor",
       "blocks": [
         "P27-I01-W27"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p27-w26",
+      "closed_at": "2026-05-22T18:12:05.379718Z",
+      "commit": "686c844846bbac7177e2a0b6a9176b9a40f879b3",
       "deps": [
         "P27-I01-W16",
         "P27-I01-W21"
@@ -11886,17 +11886,17 @@
       "id": "P27-I01-W26",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:20.065401Z",
-      "outcome": null,
+      "outcome": "landed schema dump + autogen reference + mkdocs site + doc verify --strict (manual cherry-pick after golden conflict)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf schema dump writes JSON Schema for the state and envelope models; autogen reference pages (cli/skills/schema/enum/error-code/exit-code) build from the dumped schema; eawf doc verify --strict passes the mkdocs build plus drift diff; docs ship under the eawf[docs] extra"
       ],
       "title": "docs: schema dump + autogen reference + mkdocs site + doc verify --strict",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W26-1779472826"
     },
     "P27-I01-W27": {
       "agent_role": "executor",
@@ -13155,6 +13155,28 @@
       "path": ".ea/worktrees/p27-w24",
       "status": "merged",
       "wave_id": "P27-I01-W24"
+    },
+    "WT-P27-I01-W25-1779472824": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w25",
+      "created_at": "2026-05-22T18:00:24.961790Z",
+      "id": "WT-P27-I01-W25-1779472824",
+      "merged_commit": "d2bd9a6",
+      "owner_session_id": "p27-w25",
+      "path": ".ea/worktrees/p27-w25",
+      "status": "merged",
+      "wave_id": "P27-I01-W25"
+    },
+    "WT-P27-I01-W26-1779472826": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w26",
+      "created_at": "2026-05-22T18:00:26.373672Z",
+      "id": "WT-P27-I01-W26-1779472826",
+      "merged_commit": null,
+      "owner_session_id": "p27-w26",
+      "path": ".ea/worktrees/p27-w26",
+      "status": "abandoned",
+      "wave_id": "P27-I01-W26"
     }
   }
 }
