@@ -245,16 +245,35 @@ def incident_from_envelope(envelope: Envelope) -> TelemetryIncident | None:
     return None
 
 
-def _incident_from_incident_envelope(envelope: Envelope) -> TelemetryIncident:
+def _incident_from_incident_envelope(envelope: Envelope) -> TelemetryIncident | None:
     """Adopt the typed cause / severity of an ``incident``-kind envelope.
 
     The :class:`~eawf.store.kinds.incident.IncidentPayload` already carries
     a closed :class:`IncidentCause` + :class:`IncidentSeverity`, so the row
     is built directly off those typed members.
+
+    A rebuild folds whole event logs, including rows the source adapters
+    could not normalise; an ``incident``-kind row whose ``cause`` /
+    ``severity`` key is absent or carries a value outside the closed enum
+    is logged and skipped (returns ``None``) rather than aborting the whole
+    projection. Mirrors the skip-gracefully contract :func:`price_session`
+    and :func:`classify_event_cause` already honour for unprojectable rows.
+
+    Returns:
+        The synthesised :class:`TelemetryIncident`, or ``None`` when the
+        payload's ``cause`` / ``severity`` is missing or not a closed enum
+        member.
     """
     payload = envelope.payload
-    cause = IncidentCause(payload["cause"])
-    severity = IncidentSeverity(payload["severity"])
+    cause = _incident_cause_or_none(payload.get("cause"))
+    severity = _incident_severity_or_none(payload.get("severity"))
+    if cause is None or severity is None:
+        logger.warning(
+            f"_incident_from_incident_envelope incident={envelope.id!r} "
+            f"cause={payload.get('cause')!r} severity={payload.get('severity')!r} "
+            f"malformed; row skipped"
+        )
+        return None
     return TelemetryIncident(
         incident_id=envelope.id,
         severity=severity,
@@ -288,6 +307,36 @@ def _incident_from_event_envelope(envelope: Envelope) -> TelemetryIncident | Non
         wave_id=_str_or_none(payload.get("wave_id") or payload.get("trace_wave_id")),
         attempt_id=_str_or_none(payload.get("attempt_id") or payload.get("trace_attempt_id")),
     )
+
+
+def _incident_cause_or_none(raw: object) -> IncidentCause | None:
+    """Return *raw* coerced to a closed :class:`IncidentCause`, else ``None``.
+
+    Coerces only a string value through the enum constructor; a missing key
+    (``None``), a non-string, or a string outside the closed member set
+    yields ``None`` so the caller can skip the malformed row.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        return IncidentCause(raw)
+    except ValueError:
+        return None
+
+
+def _incident_severity_or_none(raw: object) -> IncidentSeverity | None:
+    """Return *raw* coerced to a closed :class:`IncidentSeverity`, else ``None``.
+
+    Mirrors :func:`_incident_cause_or_none`: only a string that names a
+    closed :class:`IncidentSeverity` member coerces; anything else (missing
+    key, non-string, unknown value) yields ``None``.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        return IncidentSeverity(raw)
+    except ValueError:
+        return None
 
 
 def _str_or_none(raw: object) -> str | None:

@@ -16,8 +16,10 @@ Covers the two load-bearing guarantees of the aggregator:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -31,8 +33,10 @@ from eawf.telemetry.aggregator import (
     price_session,
     roll_session,
 )
-from eawf.telemetry.models import TelemetrySession
+from eawf.telemetry.models import TelemetryIncident, TelemetrySession
 from eawf.telemetry.pricing import PRICING
+from eawf.telemetry.projector import RebuildMode, SourceSpec, rebuild
+from eawf.telemetry.store import SqliteMetricsStore
 
 _TS = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
 
@@ -412,3 +416,208 @@ def test_incident_from_incident_envelope_preserves_legacy_sentinel() -> None:
     incident = incident_from_envelope(env)
     assert incident is not None
     assert incident.cause == IncidentCause.LEGACY_FREE_TEXT
+
+
+# --------------------------------------------------------------------------- #
+# Malformed incident-kind envelope — logged + skipped, never raised.
+# --------------------------------------------------------------------------- #
+
+
+def _malformed_incident_envelope(
+    *,
+    env_id: str = "INC-bad",
+    payload: dict[str, Any],
+    summary: str = "a malformed incident",
+) -> Envelope:
+    """Build an ``incident``-kind envelope with a caller-controlled payload."""
+    return Envelope(
+        id=env_id,
+        kind=StoreKind.INCIDENT,
+        scope_id="ABC",
+        created_at=_TS,
+        summary=summary,
+        payload=payload,
+    )
+
+
+def test_incident_from_envelope_missing_cause_key_skips_not_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A KeyError on the absent ``cause`` field used to crash the whole
+    # rebuild; the row is now logged and skipped (returns None).
+    env = _malformed_incident_envelope(
+        payload={"severity": IncidentSeverity.HIGH.value, "wave_id": "W04"},
+    )
+    with caplog.at_level("WARNING"):
+        incident = incident_from_envelope(env)
+    assert incident is None
+    assert any("malformed" in rec.message for rec in caplog.records)
+
+
+def test_incident_from_envelope_missing_severity_key_skips_not_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    env = _malformed_incident_envelope(
+        payload={"cause": IncidentCause.RUNTIME_TIMEOUT.value},
+    )
+    with caplog.at_level("WARNING"):
+        incident = incident_from_envelope(env)
+    assert incident is None
+    assert any("malformed" in rec.message for rec in caplog.records)
+
+
+def test_incident_from_envelope_bad_cause_value_skips_not_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A ValueError on a ``cause`` outside the closed enum is skipped, not raised.
+    env = _malformed_incident_envelope(
+        payload={"cause": "not-a-real-cause", "severity": IncidentSeverity.LOW.value},
+    )
+    with caplog.at_level("WARNING"):
+        incident = incident_from_envelope(env)
+    assert incident is None
+    assert any("malformed" in rec.message for rec in caplog.records)
+
+
+def test_incident_from_envelope_bad_severity_value_skips_not_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    env = _malformed_incident_envelope(
+        payload={"cause": IncidentCause.RUNTIME_TIMEOUT.value, "severity": "bogus"},
+    )
+    with caplog.at_level("WARNING"):
+        incident = incident_from_envelope(env)
+    assert incident is None
+    assert any("malformed" in rec.message for rec in caplog.records)
+
+
+# --------------------------------------------------------------------------- #
+# Rebuild-path contract — one malformed incident skipped, good rows flow.
+# --------------------------------------------------------------------------- #
+
+
+def _incident_line(
+    env_id: str,
+    *,
+    cause: str | None = IncidentCause.RUNTIME_TIMEOUT.value,
+    severity: str | None = IncidentSeverity.MEDIUM.value,
+) -> str:
+    """Serialise one ``incident``-kind envelope JSONL line.
+
+    A ``None`` *cause* / *severity* omits that key, producing the
+    missing-key malformed shape a rebuild must skip rather than abort on.
+    """
+    payload: dict[str, Any] = {}
+    if cause is not None:
+        payload["cause"] = cause
+    if severity is not None:
+        payload["severity"] = severity
+    env = Envelope(
+        id=env_id,
+        kind=StoreKind.INCIDENT,
+        scope_id="ABC",
+        created_at=_TS,
+        summary=f"incident {env_id}",
+        payload=payload,
+    )
+    return env.model_dump_json() + "\n"
+
+
+class _IncidentFileSource:
+    """In-test incident source: discovers ``incidents.jsonl``, yields envelopes."""
+
+    source_name = "test_incidents"
+
+    def discover(self, root: Path) -> Iterator[Path]:
+        path = root / "incidents.jsonl"
+        if path.is_file():
+            yield path
+
+    def iter_rows(self, path: Path) -> Iterator[Envelope]:
+        if not path.is_file():
+            return
+        with path.open(encoding="utf-8") as handle:
+            for raw in handle:
+                line = raw.strip()
+                if line:
+                    yield Envelope.model_validate_json(line)
+
+
+def _open_store(tmp_path: Path) -> SqliteMetricsStore:
+    store = SqliteMetricsStore(tmp_path / "m.db")
+    store.init_schema()
+    return store
+
+
+def _incident_rows(store: SqliteMetricsStore) -> list[TelemetryIncident]:
+    rows = store.fetch_all("telemetry_incidents", TelemetryIncident)
+    return [r for r in rows if isinstance(r, TelemetryIncident)]
+
+
+def test_rebuild_skips_one_malformed_incident_and_projects_good_rows(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Canonical success criterion: a rebuild over a log with ONE malformed
+    # incident (missing ``cause`` key) completes, projects every good row,
+    # and logs+skips the bad one — no exception propagates.
+    path = tmp_path / "incidents.jsonl"
+    path.write_text(
+        _incident_line("INC-1")
+        + _incident_line("INC-bad", cause=None)
+        + _incident_line("INC-2")
+        + _incident_line("INC-3"),
+        encoding="utf-8",
+    )
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_IncidentFileSource(), root=tmp_path, project_id="p1")
+
+    with caplog.at_level("WARNING"):
+        report = rebuild(store, [spec], mode=RebuildMode.FULL)
+
+    assert report.incidents == 3
+    ids = {i.incident_id for i in _incident_rows(store)}
+    assert ids == {"INC-1", "INC-2", "INC-3"}
+    assert any("malformed" in rec.message for rec in caplog.records)
+    store.close()
+
+
+def test_rebuild_skips_bad_severity_value_and_projects_good_rows(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A bad VALUE (severity outside the closed enum) is skipped, not crashed.
+    path = tmp_path / "incidents.jsonl"
+    path.write_text(
+        _incident_line("INC-1")
+        + _incident_line("INC-bad", severity="bogus")
+        + _incident_line("INC-2"),
+        encoding="utf-8",
+    )
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_IncidentFileSource(), root=tmp_path, project_id="p1")
+
+    with caplog.at_level("WARNING"):
+        report = rebuild(store, [spec], mode=RebuildMode.FULL)
+
+    assert report.incidents == 2
+    ids = {i.incident_id for i in _incident_rows(store)}
+    assert ids == {"INC-1", "INC-2"}
+    assert any("malformed" in rec.message for rec in caplog.records)
+    store.close()
+
+
+def test_rebuild_all_good_incidents_unaffected(tmp_path: Path) -> None:
+    # Boundary: a log with no malformed rows projects every incident
+    # (no regression from the guard).
+    path = tmp_path / "incidents.jsonl"
+    path.write_text(
+        _incident_line("INC-1") + _incident_line("INC-2") + _incident_line("INC-3"),
+        encoding="utf-8",
+    )
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_IncidentFileSource(), root=tmp_path, project_id="p1")
+
+    report = rebuild(store, [spec], mode=RebuildMode.FULL)
+
+    assert report.incidents == 3
+    assert {i.incident_id for i in _incident_rows(store)} == {"INC-1", "INC-2", "INC-3"}
+    store.close()
