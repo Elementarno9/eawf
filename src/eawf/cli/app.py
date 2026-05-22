@@ -298,6 +298,12 @@ from eawf.cli.commands.doc import doc_app  # noqa: E402
 app.add_typer(doc_app, name="doc", rich_help_panel=panel_for("doc"))
 # --- end P12 W03 ---
 
+# --- P27 W26 schema dump + autogen reference registration ---
+from eawf.cli.commands.schema import schema_app  # noqa: E402
+
+app.add_typer(schema_app, name="schema", rich_help_panel=panel_for("schema"))
+# --- end P27 W26 ---
+
 # --- P12 W04 PR body + wiki render registration ---
 from eawf.cli.commands.pr import pr_app  # noqa: E402
 from eawf.cli.commands.release import release_app  # noqa: E402

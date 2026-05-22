@@ -1,0 +1,2699 @@
+{
+  "$defs": {
+    "ActualStatus": {
+      "enum": [
+        "planned",
+        "active",
+        "done",
+        "interrupted",
+        "blocked",
+        "abandoned",
+        "failed",
+        "superseded"
+      ],
+      "title": "ActualStatus",
+      "type": "string"
+    },
+    "ActualSummary": {
+      "additionalProperties": false,
+      "description": "Latest actual (segments in store).",
+      "properties": {
+        "agent_runtime_eu": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Runtime Eu"
+        },
+        "attention_eu": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attention Eu"
+        },
+        "current_store_record_id": {
+          "title": "Current Store Record Id",
+          "type": "string"
+        },
+        "elapsed_eu": {
+          "title": "Elapsed Eu",
+          "type": "number"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ActualStatus"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "status",
+        "elapsed_eu",
+        "current_store_record_id",
+        "updated_at"
+      ],
+      "title": "ActualSummary",
+      "type": "object"
+    },
+    "AgentSession": {
+      "additionalProperties": false,
+      "description": "Agent work session for provenance.",
+      "properties": {
+        "artifact_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Ids",
+          "type": "array"
+        },
+        "claimed_wave_ids": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "type": "string"
+          },
+          "title": "Claimed Wave Ids",
+          "type": "array"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/AgentSessionRole"
+        },
+        "runtime": {
+          "title": "Runtime",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AgentSessionStatus"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "worktree_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Worktree Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "runtime",
+        "scope_id",
+        "status",
+        "started_at"
+      ],
+      "title": "AgentSession",
+      "type": "object"
+    },
+    "AgentSessionRole": {
+      "enum": [
+        "researcher",
+        "planner",
+        "executor",
+        "auditor",
+        "reviewer",
+        "polisher",
+        "operator",
+        "domain-specialist"
+      ],
+      "title": "AgentSessionRole",
+      "type": "string"
+    },
+    "AgentSessionStatus": {
+      "enum": [
+        "active",
+        "checkpointed",
+        "closed",
+        "stale",
+        "failed"
+      ],
+      "title": "AgentSessionStatus",
+      "type": "string"
+    },
+    "Artifact": {
+      "additionalProperties": false,
+      "description": "Tracked artifact (file/blob/external).\n\n``kind`` is a free-form string in v0.3 but the canonical vocabulary is\npinned by :class:`~eawf.state.enums.ArtifactKind` (P14-W11 / B059).\nCallers that already speak the canonical vocabulary can pass an\n:class:`ArtifactKind` member directly; Pydantic coerces it to the\nunderlying string value on serialisation. The strict-enum tightening\nlands in v0.4 once every internal caller is migrated.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        },
+        "urn": {
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "title": "Urn",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "uri",
+        "urn",
+        "created_at"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "Audit": {
+      "additionalProperties": false,
+      "description": "Audit record (evaluation, ship-gate, incident, review).",
+      "properties": {
+        "check_results": {
+          "items": {},
+          "title": "Check Results",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "integrity_results": {
+          "items": {},
+          "title": "Integrity Results",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/AuditKind"
+        },
+        "report_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Artifact Id"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AuditStatus"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuditVerdict"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "kind",
+        "status",
+        "created_at"
+      ],
+      "title": "Audit",
+      "type": "object"
+    },
+    "AuditKind": {
+      "enum": [
+        "evaluation",
+        "ship-gate",
+        "incident",
+        "review"
+      ],
+      "title": "AuditKind",
+      "type": "string"
+    },
+    "AuditStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "complete",
+        "failed"
+      ],
+      "title": "AuditStatus",
+      "type": "string"
+    },
+    "AuditVerdict": {
+      "enum": [
+        "pass",
+        "minor",
+        "major"
+      ],
+      "title": "AuditVerdict",
+      "type": "string"
+    },
+    "BacklogItem": {
+      "additionalProperties": false,
+      "description": "Triaged backlog entry.",
+      "properties": {
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/$defs/BacklogPriority"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/BacklogStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "title",
+        "priority",
+        "status",
+        "created_at"
+      ],
+      "title": "BacklogItem",
+      "type": "object"
+    },
+    "BacklogPriority": {
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "title": "BacklogPriority",
+      "type": "string"
+    },
+    "BacklogStatus": {
+      "enum": [
+        "open",
+        "in_progress",
+        "closed",
+        "deferred"
+      ],
+      "title": "BacklogStatus",
+      "type": "string"
+    },
+    "Confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "Confidence",
+      "type": "string"
+    },
+    "CurrentPointers": {
+      "additionalProperties": false,
+      "description": "Active lifecycle pointers for the current state.",
+      "properties": {
+        "active_session_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Active Session Ids",
+          "type": "array"
+        },
+        "active_wave_ids": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "type": "string"
+          },
+          "title": "Active Wave Ids",
+          "type": "array"
+        },
+        "iter_id": {
+          "anyOf": [
+            {
+              "pattern": "^P\\d{2}-I\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Iter Id"
+        },
+        "phase_id": {
+          "anyOf": [
+            {
+              "pattern": "^P\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phase Id"
+        },
+        "project_code": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Code"
+        },
+        "subproject_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subproject Id"
+        }
+      },
+      "title": "CurrentPointers",
+      "type": "object"
+    },
+    "Decision": {
+      "additionalProperties": false,
+      "description": "Architectural / process decision.",
+      "properties": {
+        "alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/DecisionStatus"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "superseded_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Superseded By"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "summary",
+        "rationale",
+        "status",
+        "created_at"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "DecisionStatus": {
+      "enum": [
+        "active",
+        "superseded",
+        "reversed"
+      ],
+      "title": "DecisionStatus",
+      "type": "string"
+    },
+    "DispatchAnnotation": {
+      "additionalProperties": false,
+      "description": "One dispatch-history row attached to a wave.\n\nThe annotation captures the *transition* — fresh dispatch, continue\nfrom session, continue-failed fallback, V5 runtime switch, or\noperator-driven manual switch — that produced the matching\n:class:`SessionAttempt` row in ``Wave.sessions``.\n\nAttributes:\n    attempt: Attempt number this annotation belongs to.\n    note: Why the dispatch happened (per :class:`DispatchNote`).\n    runtime_from: Runtime id of the previous attempt, when this\n        transition swapped runtimes. ``None`` on first dispatch.\n    runtime_to: Runtime id of the new attempt.\n    occurred_at: Wall-clock timestamp of the transition.\n    reason: Free-form scrubbed context the operator or runtime\n        attached at dispatch time.",
+      "properties": {
+        "attempt": {
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "note": {
+          "$ref": "#/$defs/DispatchNote"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "runtime_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime From"
+        },
+        "runtime_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime To"
+        }
+      },
+      "required": [
+        "attempt",
+        "note",
+        "occurred_at"
+      ],
+      "title": "DispatchAnnotation",
+      "type": "object"
+    },
+    "DispatchNote": {
+      "description": "Reason annotating a dispatch transition on a wave's session table.\n\nAttached to :class:`~eawf.state.models.DispatchAnnotation` rows in\n``Wave.dispatch_history``. The values are stable wire identifiers; the\nfresh-dispatch path emits :attr:`FRESH_DISPATCH`, the V8 ``--continue``\nhappy path emits :attr:`CONTINUE_FROM_SESSION`, V8 fallback emits\n:attr:`CONTINUE_FAILED_FELL_BACK_TO_FRESH`, V5 runtime fallback emits\n:attr:`SWITCH_ON_ERROR`, and operator-driven manual swaps emit\n:attr:`SWITCH_MANUAL`.",
+      "enum": [
+        "fresh_dispatch",
+        "continue_from_session",
+        "continue_failed_fell_back_to_fresh",
+        "switch_on_error",
+        "switch_manual"
+      ],
+      "title": "DispatchNote",
+      "type": "string"
+    },
+    "EffortBucket": {
+      "enum": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "title": "EffortBucket",
+      "type": "string"
+    },
+    "EstimateSummary": {
+      "additionalProperties": false,
+      "description": "Latest estimate (full history in store).",
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "current_store_record_id": {
+          "title": "Current Store Record Id",
+          "type": "string"
+        },
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "expected_eu": {
+          "title": "Expected Eu",
+          "type": "number"
+        },
+        "expected_minutes": {
+          "title": "Expected Minutes",
+          "type": "number"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "pessimistic_eu": {
+          "title": "Pessimistic Eu",
+          "type": "number"
+        },
+        "pessimistic_minutes": {
+          "title": "Pessimistic Minutes",
+          "type": "number"
+        },
+        "reference_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Class"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "expected_eu",
+        "pessimistic_eu",
+        "expected_minutes",
+        "pessimistic_minutes",
+        "display",
+        "confidence",
+        "current_store_record_id",
+        "updated_at"
+      ],
+      "title": "EstimateSummary",
+      "type": "object"
+    },
+    "Goal": {
+      "additionalProperties": false,
+      "description": "Goal under a project or subproject.",
+      "properties": {
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "outcome_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Outcome Ids",
+          "type": "array"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GoalStatus"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "title",
+        "summary",
+        "status",
+        "created_at"
+      ],
+      "title": "Goal",
+      "type": "object"
+    },
+    "GoalStatus": {
+      "enum": [
+        "open",
+        "achieved",
+        "abandoned"
+      ],
+      "title": "GoalStatus",
+      "type": "string"
+    },
+    "Health": {
+      "enum": [
+        "ok",
+        "needs_setup",
+        "degraded"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "Hypothesis": {
+      "additionalProperties": false,
+      "description": "Research hypothesis with confirm/reject thresholds.",
+      "properties": {
+        "audit_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Id"
+        },
+        "confirm": {
+          "title": "Confirm",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:H\\d{2}-\\d{2}|[A-Z][A-Z0-9_-]{1,15}-H\\d{2}-\\d{2})$",
+          "title": "Id",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "reject": {
+          "title": "Reject",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "source_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Artifact Id"
+        },
+        "status": {
+          "$ref": "#/$defs/HypothesisStatus"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HypothesisVerdict"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "text",
+        "metric",
+        "confirm",
+        "reject",
+        "status"
+      ],
+      "title": "Hypothesis",
+      "type": "object"
+    },
+    "HypothesisStatus": {
+      "enum": [
+        "pending",
+        "confirmed",
+        "rejected",
+        "inconclusive",
+        "deferred"
+      ],
+      "title": "HypothesisStatus",
+      "type": "string"
+    },
+    "HypothesisVerdict": {
+      "enum": [
+        "confirmed",
+        "rejected",
+        "inconclusive"
+      ],
+      "title": "HypothesisVerdict",
+      "type": "string"
+    },
+    "Incident": {
+      "additionalProperties": false,
+      "description": "Incident record (full timeline in incidents.jsonl).",
+      "properties": {
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "corrective_action_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Corrective Action Ids",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "opened_at": {
+          "format": "date-time",
+          "title": "Opened At",
+          "type": "string"
+        },
+        "report_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report Artifact Id"
+        },
+        "root_cause": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Cause"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/IncidentSeverity"
+        },
+        "status": {
+          "$ref": "#/$defs/IncidentStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "severity",
+        "title",
+        "status",
+        "opened_at"
+      ],
+      "title": "Incident",
+      "type": "object"
+    },
+    "IncidentSeverity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "IncidentSeverity",
+      "type": "string"
+    },
+    "IncidentStatus": {
+      "enum": [
+        "open",
+        "mitigated",
+        "resolved",
+        "wont-fix"
+      ],
+      "title": "IncidentStatus",
+      "type": "string"
+    },
+    "Iter": {
+      "additionalProperties": false,
+      "description": "Lifecycle iteration.",
+      "properties": {
+        "audit_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Id"
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "estimate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimate Id"
+        },
+        "id": {
+          "pattern": "^P\\d{2}-I\\d{2}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "opened_at": {
+          "format": "date-time",
+          "title": "Opened At",
+          "type": "string"
+        },
+        "phase_id": {
+          "pattern": "^P\\d{2}$",
+          "title": "Phase Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/IterStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "wave_ids": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "type": "string"
+          },
+          "title": "Wave Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "phase_id",
+        "title",
+        "status",
+        "opened_at"
+      ],
+      "title": "Iter",
+      "type": "object"
+    },
+    "IterStatus": {
+      "enum": [
+        "planned",
+        "active",
+        "closed",
+        "abandoned"
+      ],
+      "title": "IterStatus",
+      "type": "string"
+    },
+    "McpGrant": {
+      "additionalProperties": false,
+      "description": "Scope-binding between an MCP server and a wave/profile/global scope.\n\nA grant is the projection key the dispatcher uses to compute\n``allowed_tools`` for a runtime: when the dispatched wave matches\n``scope_kind=\"wave\"`` / ``scope_id=<wave_id>`` (or a broader scope),\nthe grant's ``server_id`` contributes ``mcp__<server_id>__*`` to the\nSDK envelope's allowed-tools list. ``server_id`` MUST reference an\nentry in :attr:`State.mcp_servers`; the referential check lives in\n:func:`eawf.validate.invariants.check_mcp_grant_server_ref` and emits\n``INV.REF.MCP_GRANT_SERVER_MISSING`` when the reference dangles.\n\nThe ``id`` field follows the ``GRANT-<n>`` convention (verified by\n:mod:`tests.unit.test_state_mcp_grant_model`); it is otherwise an\n:data:`IdStr` so the schema-level pattern stays additive and the\nconvention can evolve without a schema break.",
+      "properties": {
+        "granted_at": {
+          "format": "date-time",
+          "title": "Granted At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_kind": {
+          "enum": [
+            "wave",
+            "profile",
+            "global"
+          ],
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "server_id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Server Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_kind",
+        "scope_id",
+        "server_id",
+        "granted_at"
+      ],
+      "title": "McpGrant",
+      "type": "object"
+    },
+    "McpRisk": {
+      "enum": [
+        "read",
+        "read-write",
+        "admin"
+      ],
+      "title": "McpRisk",
+      "type": "string"
+    },
+    "McpServer": {
+      "additionalProperties": false,
+      "description": "MCP server config (Eä-managed when owner == 'eawf').",
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "env_refs": {
+          "items": {
+            "pattern": "^\\$\\{ENV:[A-Z_][A-Z0-9_]*\\}$",
+            "type": "string"
+          },
+          "title": "Env Refs",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "installed_targets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Installed Targets",
+          "type": "array"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "risk": {
+          "$ref": "#/$defs/McpRisk"
+        },
+        "status": {
+          "$ref": "#/$defs/McpStatus"
+        },
+        "write_capable": {
+          "title": "Write Capable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "command",
+        "risk",
+        "write_capable",
+        "status"
+      ],
+      "title": "McpServer",
+      "type": "object"
+    },
+    "McpStatus": {
+      "enum": [
+        "not_configured",
+        "configured",
+        "installed",
+        "degraded",
+        "disabled"
+      ],
+      "title": "McpStatus",
+      "type": "string"
+    },
+    "MemoryStatus": {
+      "enum": [
+        "active",
+        "stale",
+        "superseded",
+        "pruned"
+      ],
+      "title": "MemoryStatus",
+      "type": "string"
+    },
+    "MemorySummary": {
+      "additionalProperties": false,
+      "description": "Memory entry summary (full text in memory.jsonl).\n\n``promoted_to_artifact_id`` mirrors the corresponding field on\n:class:`~eawf.store.kinds.memory.MemoryPayload`: when an entry is\ncanonised into a durable artifact (a :class:`Decision` in v0.1) the cache\nsurface carries the artifact ID so ``memory list`` / ``memory view`` can\nsurface it without replaying the JSONL.",
+      "properties": {
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "promoted_to_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promoted To Artifact Id"
+        },
+        "review_due": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Due"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/MemoryStatus"
+        },
+        "store_record_id": {
+          "title": "Store Record Id",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/MemoryTier",
+          "default": "working"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "summary",
+        "confidence",
+        "status",
+        "store_record_id"
+      ],
+      "title": "MemorySummary",
+      "type": "object"
+    },
+    "MemoryTier": {
+      "description": "Tiered-memory placement for ``MemorySummary.tier``.\n\nMirrors the Letta/Mem0 working/archival/retrieval split:\n\n- :attr:`WORKING` — hot tier; included in every render-context envelope.\n- :attr:`ARCHIVAL` — cold tier; excluded from the default context window\n  but kept queryable for explicit recall (``memory list --tier``).\n- :attr:`RETRIEVAL` — promoted artifacts surfaced on demand (e.g. via\n  ``memory render-context --tier``).",
+      "enum": [
+        "working",
+        "archival",
+        "retrieval"
+      ],
+      "title": "MemoryTier",
+      "type": "string"
+    },
+    "Outcome": {
+      "additionalProperties": false,
+      "description": "Quantitative outcome attached to a goal.",
+      "properties": {
+        "audit_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Id"
+        },
+        "direction": {
+          "$ref": "#/$defs/OutcomeDirection"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/OutcomeStatus"
+        },
+        "threshold": {
+          "title": "Threshold",
+          "type": "number"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "metric",
+        "threshold",
+        "direction",
+        "status",
+        "updated_at"
+      ],
+      "title": "Outcome",
+      "type": "object"
+    },
+    "OutcomeDirection": {
+      "enum": [
+        "min",
+        "max",
+        "equal",
+        "range"
+      ],
+      "title": "OutcomeDirection",
+      "type": "string"
+    },
+    "OutcomeStatus": {
+      "enum": [
+        "pending",
+        "met",
+        "missed",
+        "waived"
+      ],
+      "title": "OutcomeStatus",
+      "type": "string"
+    },
+    "Phase": {
+      "additionalProperties": false,
+      "description": "Lifecycle phase.",
+      "properties": {
+        "audit_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Id"
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "depends_on": {
+          "items": {
+            "pattern": "^P\\d{2}$",
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^P\\d{2}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "iter_ids": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}$",
+            "type": "string"
+          },
+          "title": "Iter Ids",
+          "type": "array"
+        },
+        "opened_at": {
+          "format": "date-time",
+          "title": "Opened At",
+          "type": "string"
+        },
+        "outcome_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Outcome Ids",
+          "type": "array"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "source_brief_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Brief Ids",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/PhaseStatus"
+        },
+        "subproject_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subproject Id"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "title",
+        "status",
+        "opened_at"
+      ],
+      "title": "Phase",
+      "type": "object"
+    },
+    "PhaseStatus": {
+      "enum": [
+        "planned",
+        "active",
+        "closed",
+        "archived"
+      ],
+      "title": "PhaseStatus",
+      "type": "string"
+    },
+    "PluginInstall": {
+      "additionalProperties": false,
+      "description": "Runtime plugin install record (Claude only in v0.1).",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "installed_at": {
+          "format": "date-time",
+          "title": "Installed At",
+          "type": "string"
+        },
+        "managed_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Managed Files",
+          "type": "array"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "runtime": {
+          "title": "Runtime",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/PluginInstallStatus"
+        },
+        "target_path": {
+          "title": "Target Path",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "runtime",
+        "scope_id",
+        "target_path",
+        "status",
+        "installed_at",
+        "updated_at"
+      ],
+      "title": "PluginInstall",
+      "type": "object"
+    },
+    "PluginInstallStatus": {
+      "enum": [
+        "installed",
+        "drifted",
+        "conflicted",
+        "disabled"
+      ],
+      "title": "PluginInstallStatus",
+      "type": "string"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "description": "Repo-level project record.\n\nThe ``weekly_eu_target`` field is the operator-set weekly EU budget; when\nset, the TUI footer renders a ``weekly burn: <consumed_eu> / <target_eu>``\nrollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.\nThe field is strictly optional (default ``None``) so adding it does not\nbump ``schema_version`` — projects without a target render no burn line.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "default_branch": {
+          "title": "Default Branch",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "repo_urn": {
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "title": "Repo Urn",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "weekly_eu_target": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weekly Eu Target"
+        }
+      },
+      "required": [
+        "code",
+        "slug",
+        "title",
+        "domains",
+        "default_branch",
+        "status",
+        "repo_urn"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
+    "ProjectStatus": {
+      "enum": [
+        "active",
+        "archived",
+        "retired"
+      ],
+      "title": "ProjectStatus",
+      "type": "string"
+    },
+    "SandboxPolicy": {
+      "additionalProperties": false,
+      "description": "Scope-binding between a wave/profile/global scope and a tool list.\n\nStrict shape — unknown keys are rejected so state-level corruption is\ncaught at load time.",
+      "properties": {
+        "allowed_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Tools",
+          "type": "array"
+        },
+        "denied_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Denied Tools",
+          "type": "array"
+        },
+        "granted_at": {
+          "format": "date-time",
+          "title": "Granted At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "scope_id": {
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "scope_kind": {
+          "enum": [
+            "wave",
+            "profile",
+            "global"
+          ],
+          "title": "Scope Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_kind",
+        "scope_id",
+        "granted_at"
+      ],
+      "title": "SandboxPolicy",
+      "type": "object"
+    },
+    "ScopeKind": {
+      "enum": [
+        "repo",
+        "workspace"
+      ],
+      "title": "ScopeKind",
+      "type": "string"
+    },
+    "SessionAttempt": {
+      "additionalProperties": false,
+      "description": "One runtime subprocess attempt against a wave.\n\nCaptures the daemon-issued bookkeeping for a single\n``agent.dispatch`` invocation. ``session_log_handle`` is an\n**opaque** handle (blob-URN or daemon-side index key) — never a\nfilesystem path. The daemon's in-process map (see\n:func:`eawf.daemon.session.register_session_log` /\n:func:`eawf.daemon.session.resolve_session_log`) is the only place\nreal paths live, satisfying AGENTS rule 16 (secrets / PII hygiene).\n\nAttributes:\n    attempt: 1-based attempt counter under the parent wave.\n    runtime: Runtime adapter id (e.g. ``\"claude-code\"`` /\n        ``\"codex\"`` / ``\"opencode\"``).\n    session_id: Runtime-specific session identifier (typically a\n        UUID emitted by the runtime).\n    session_log_handle: Opaque handle resolvable by the daemon to\n        a real session-log path. Format is daemon-internal; the\n        fresh-path skeleton uses\n        ``urn:eawf:v1:session-log:<runtime>:<uuid>``.\n    started_at: When the subprocess started.\n    ended_at: When the subprocess exited; ``None`` while running.\n    exit_status: Subprocess exit code; ``None`` while running.\n    subprocess_pid: PID at spawn time; ``None`` before W09 wires\n        the actual spawn.\n    cache_creation_input_tokens: Anthropic prompt-cache write\n        tokens charged on this attempt (optional).\n    cache_read_input_tokens: Anthropic prompt-cache read tokens\n        charged on this attempt (optional).\n    input_tokens: Non-cached input tokens (optional).\n    output_tokens: Output tokens (optional).",
+      "properties": {
+        "attempt": {
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "cache_creation_input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Creation Input Tokens"
+        },
+        "cache_read_input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Read Input Tokens"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "exit_status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exit Status"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "runtime": {
+          "minLength": 1,
+          "title": "Runtime",
+          "type": "string"
+        },
+        "session_id": {
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "session_log_handle": {
+          "minLength": 1,
+          "title": "Session Log Handle",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "subprocess_pid": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subprocess Pid"
+        }
+      },
+      "required": [
+        "attempt",
+        "runtime",
+        "session_id",
+        "session_log_handle",
+        "started_at"
+      ],
+      "title": "SessionAttempt",
+      "type": "object"
+    },
+    "Subproject": {
+      "additionalProperties": false,
+      "description": "Sub-workstream under a Project.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "goal_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Goal Ids",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/SubprojectStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "slug",
+        "title",
+        "kind",
+        "domains",
+        "status"
+      ],
+      "title": "Subproject",
+      "type": "object"
+    },
+    "SubprojectStatus": {
+      "enum": [
+        "active",
+        "planned",
+        "deferred",
+        "retired"
+      ],
+      "title": "SubprojectStatus",
+      "type": "string"
+    },
+    "Wave": {
+      "additionalProperties": false,
+      "description": "Atomic execution unit under an iter.",
+      "properties": {
+        "agent_role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentSessionRole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "blocks": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "type": "string"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "claim_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Session Id"
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "commit": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit"
+        },
+        "deps": {
+          "items": {
+            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "type": "string"
+          },
+          "title": "Deps",
+          "type": "array"
+        },
+        "dispatch_history": {
+          "items": {
+            "$ref": "#/$defs/DispatchAnnotation"
+          },
+          "title": "Dispatch History",
+          "type": "array"
+        },
+        "effort_bucket": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffortBucket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "file_scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "File Scopes",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "iter_id": {
+          "pattern": "^P\\d{2}-I\\d{2}$",
+          "title": "Iter Id",
+          "type": "string"
+        },
+        "opened_at": {
+          "format": "date-time",
+          "title": "Opened At",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "runtime_preference": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime Preference"
+        },
+        "sessions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SessionAttempt"
+          },
+          "title": "Sessions",
+          "type": "object"
+        },
+        "status": {
+          "$ref": "#/$defs/WaveStatus"
+        },
+        "success_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Success Criteria",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "token_budget": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Budget"
+        },
+        "tokens_consumed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Tokens Consumed",
+          "type": "integer"
+        },
+        "worktree_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worktree Id"
+        }
+      },
+      "required": [
+        "id",
+        "iter_id",
+        "title",
+        "status",
+        "opened_at"
+      ],
+      "title": "Wave",
+      "type": "object"
+    },
+    "WaveStatus": {
+      "enum": [
+        "pending",
+        "claimed",
+        "in_progress",
+        "closed",
+        "failed",
+        "abandoned"
+      ],
+      "title": "WaveStatus",
+      "type": "string"
+    },
+    "WorkspaceIndex": {
+      "additionalProperties": false,
+      "description": "Workspace-level catalogue of repos.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "current_repo_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Repo Code"
+        },
+        "repos": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkspaceRepoRef"
+          },
+          "title": "Repos",
+          "type": "object"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "title",
+        "repos"
+      ],
+      "title": "WorkspaceIndex",
+      "type": "object"
+    },
+    "WorkspaceRepoRef": {
+      "additionalProperties": false,
+      "description": "Reference to a repo from a workspace index.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "project_code": {
+          "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
+          "title": "Project Code",
+          "type": "string"
+        },
+        "state_urn": {
+          "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+          "title": "State Urn",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "path",
+        "state_urn",
+        "project_code",
+        "title",
+        "status"
+      ],
+      "title": "WorkspaceRepoRef",
+      "type": "object"
+    },
+    "WorktreeRecord": {
+      "additionalProperties": false,
+      "description": "git-worktree provenance record.",
+      "properties": {
+        "base_branch": {
+          "title": "Base Branch",
+          "type": "string"
+        },
+        "branch": {
+          "title": "Branch",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "merged_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Merged Commit"
+        },
+        "owner_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Session Id"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WorktreeStatus"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+          "title": "Wave Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "wave_id",
+        "branch",
+        "path",
+        "base_branch",
+        "status",
+        "created_at"
+      ],
+      "title": "WorktreeRecord",
+      "type": "object"
+    },
+    "WorktreeStatus": {
+      "enum": [
+        "active",
+        "conflicted",
+        "merged",
+        "abandoned"
+      ],
+      "title": "WorktreeStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level eawf state document.",
+  "properties": {
+    "actuals": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/ActualSummary"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actuals"
+    },
+    "agent_sessions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AgentSession"
+      },
+      "title": "Agent Sessions",
+      "type": "object"
+    },
+    "artifacts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Artifact"
+      },
+      "title": "Artifacts",
+      "type": "object"
+    },
+    "audits": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Audit"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audits"
+    },
+    "backlog": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/BacklogItem"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Backlog"
+    },
+    "current": {
+      "$ref": "#/$defs/CurrentPointers"
+    },
+    "decisions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Decision"
+      },
+      "title": "Decisions",
+      "type": "object"
+    },
+    "estimates": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/EstimateSummary"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estimates"
+    },
+    "goals": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Goal"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Goals"
+    },
+    "health": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Health"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "hypotheses": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Hypothesis"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hypotheses"
+    },
+    "incidents": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Incident"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Incidents"
+    },
+    "indexes": {
+      "additionalProperties": true,
+      "title": "Indexes",
+      "type": "object"
+    },
+    "iters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Iter"
+      },
+      "title": "Iters",
+      "type": "object"
+    },
+    "mcp_grants": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/McpGrant"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mcp Grants"
+    },
+    "mcp_servers": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/McpServer"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mcp Servers"
+    },
+    "memory_index": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/MemorySummary"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Memory Index"
+    },
+    "outcomes": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Outcome"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcomes"
+    },
+    "phases": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Phase"
+      },
+      "title": "Phases",
+      "type": "object"
+    },
+    "plugins": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PluginInstall"
+      },
+      "title": "Plugins",
+      "type": "object"
+    },
+    "project": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Project"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sandbox_policies": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/SandboxPolicy"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sandbox Policies"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scope_kind": {
+      "$ref": "#/$defs/ScopeKind"
+    },
+    "subprojects": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Subproject"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subprojects"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "urn": {
+      "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
+      "title": "Urn",
+      "type": "string"
+    },
+    "waves": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Wave"
+      },
+      "title": "Waves",
+      "type": "object"
+    },
+    "workspace": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkspaceIndex"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "worktrees": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorktreeRecord"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Worktrees"
+    }
+  },
+  "required": [
+    "schema_version",
+    "scope_kind",
+    "urn",
+    "updated_at",
+    "project",
+    "current",
+    "workspace",
+    "phases",
+    "iters",
+    "waves",
+    "artifacts",
+    "agent_sessions",
+    "plugins",
+    "indexes"
+  ],
+  "title": "State",
+  "type": "object"
+}

@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "EventPayload": {
+      "additionalProperties": false,
+      "description": "Payload for an event store record.\n\nLands inside :class:`eawf.store.envelope.Envelope.payload` when the\nenvelope kind is :attr:`StoreKind.EVENT`. The ``event_kind`` field\nis optional during the v0.3-v0.5 migration window so existing rows\n+ the 100+ call sites that pass ``event_type`` keep validating\nwithout backfill; v0.5+ governance flips ``event_kind`` to\nnon-optional once every caller has been migrated.",
+      "properties": {
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "actor_principal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Principal Id"
+        },
+        "after_state_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After State Version"
+        },
+        "args_hash": {
+          "title": "Args Hash",
+          "type": "string"
+        },
+        "before_state_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before State Version"
+        },
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "error_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Class"
+        },
+        "event_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "state_mutated",
+                "wave_claimed",
+                "wave_closed",
+                "phase_activated",
+                "phase_closed",
+                "iter_activated",
+                "iter_closed",
+                "runtime_switched",
+                "runtime_paused",
+                "runtime_auth_failed",
+                "runtime_unavailable",
+                "session_continued",
+                "session_failover",
+                "session_handle_pruned",
+                "cache_mislayer_alarm",
+                "dispatch_cost",
+                "audit_emitted",
+                "memory_appended",
+                "spec_validated",
+                "config_reloaded",
+                "subscription_lag",
+                "subscription_dropped",
+                "subprocess_oom_killed",
+                "daemon_service_enabled",
+                "daemon_service_disabled",
+                "wal_recovery"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Kind"
+        },
+        "event_type": {
+          "title": "Event Type",
+          "type": "string"
+        },
+        "extras": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "title": "Extras",
+          "type": "object"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "timestamp",
+        "event_type",
+        "actor",
+        "command",
+        "args_hash",
+        "status",
+        "message"
+      ],
+      "title": "EventPayload",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Canonical event envelope.\n\nThe outer wrapper consumed by C02 streaming, C06 reactivity, C09\ntelemetry projection, and C11 webhook ingress. Distinct from the\ngeneric :class:`eawf.store.envelope.Envelope`: ``Event`` is the\nin-memory + wire shape used by event-bus subscribers; ``Envelope``\nwith ``kind=EVENT`` is the on-disk JSONL row. The two interconvert\nlosslessly (``Envelope.payload`` is :class:`EventPayload`,\n``Envelope.id`` mirrors :attr:`Event.id`, etc.).",
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Idempotency Key"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/EventPayload"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scope_id": {
+      "title": "Scope Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "scope_id",
+    "occurred_at",
+    "payload"
+  ],
+  "title": "Event",
+  "type": "object"
+}

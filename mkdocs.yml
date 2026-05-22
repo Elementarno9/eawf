@@ -1,0 +1,61 @@
+site_name: Eä Workflow
+site_description: Agent-driven development framework — Eä manifest at runtime.
+repo_url: https://github.com/Elementarno9/eawf
+edit_uri: edit/main/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    primary: deep orange
+    accent: orange
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+    - search.suggest
+    - toc.integrate
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: README.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - State model: architecture/state-model.md
+      - CLI surface: architecture/cli-surface.md
+      - Workflow: architecture/workflow.md
+      - Profiles: architecture/profiles.md
+      - Plugins: architecture/plugins.md
+      - Memory: architecture/memory.md
+      - Envelope: architecture/envelope.md
+      - Statusline: architecture/statusline.md
+      - Installation: architecture/installation.md
+  - Reference:
+      - Overview: reference/index.md
+      - Enums: reference/enums.md
+      - Exit codes: reference/exit-codes.md
+      - Error codes: reference/error-codes.md
+      - Hook events: reference/hook-events.md
+      - Lockfile semantics: reference/lockfile-semantics.md
+      - URN namespace: reference/urn-namespace.md
+      - Coverage gates: reference/coverage-gates.md
+      - Auto-generated:
+          - Index: reference/autogen/index.md
+          - CLI: reference/autogen/cli.md
+          - Skills: reference/autogen/skills.md
+          - JSON Schema: reference/autogen/schema.md
+          - Enums: reference/autogen/enums.md
+          - Error codes: reference/autogen/error-codes.md
+          - Exit codes: reference/autogen/exit-codes.md
+  - Policy:
+      - AGENTS.md / CLAUDE.md: policy/agents-claude-md.md
+      - No PLAN.md: policy/no-plan-md.md
+      - Fixed decisions: policy/fixed-decisions.md

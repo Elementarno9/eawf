@@ -30,6 +30,14 @@ dependencies = [
 # is not installable from PyPI on POSIX; bundle it in this extras
 # group so ``pip install eawf[windows]`` is the operator path.
 windows = ["pywin32>=306"]
+# Docs site build chain for ``eawf doc verify --strict`` and the published
+# reference site. Not a hard dependency — the autogen reference pages and
+# the drift diff run on stdlib + already-present deps; only the mkdocs
+# strict-build step needs this extra. Install via ``pip install eawf[docs]``.
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+]
 
 [project.scripts]
 eawf = "eawf.cli.app:main"
