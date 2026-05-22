@@ -176,7 +176,15 @@ def test_main_no_args_is_usage_error(bump: Any, tmp_path: Path) -> None:
 
 
 def _build_wheel(out_dir: Path) -> Path | None:
-    """Run ``uv build --wheel`` into *out_dir*; return the ``.whl`` or None."""
+    """Run ``uv build --wheel`` into *out_dir*; return the ``.whl`` or None.
+
+    Returns ``None`` only when the build environment is genuinely
+    unavailable — the ``EAWF_SKIP_WHEEL_BUILD`` opt-out is set or ``uv``
+    is not on ``PATH`` (``FileNotFoundError``). A build that actually
+    runs but fails (non-zero exit) or produces no wheel raises
+    :class:`AssertionError` so the test REDS rather than green-skipping
+    a real packaging regression.
+    """
     if os.environ.get("EAWF_SKIP_WHEEL_BUILD"):
         return None
     try:
@@ -187,12 +195,15 @@ def _build_wheel(out_dir: Path) -> Path | None:
             text=True,
             timeout=300,
         )
-    except FileNotFoundError, subprocess.TimeoutExpired:
+    except FileNotFoundError:
         return None
-    if proc.returncode != 0:
-        return None
+    assert proc.returncode == 0, (
+        f"uv build --wheel failed (exit {proc.returncode})\n"
+        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
     wheels = sorted(out_dir.glob("*.whl"))
-    return wheels[0] if wheels else None
+    assert wheels, "uv build --wheel produced no .whl artifact"
+    return wheels[0]
 
 
 def test_wheel_bundles_service_templates_under_size_ceiling(tmp_path: Path) -> None:
@@ -224,3 +235,53 @@ def test_wheel_metadata_version_matches_single_source(tmp_path: Path) -> None:
         metadata = archive.read(metadata_name).decode()
     version_line = next(line for line in metadata.splitlines() if line.startswith("Version:"))
     assert version_line == f"Version: {eawf.__version__}"
+
+
+# --- Wheel-gate skip/fail discrimination ------------------------------------
+
+
+def _fake_proc(returncode: int) -> subprocess.CompletedProcess[str]:
+    """Return a stand-in ``CompletedProcess`` for a monkeypatched build run."""
+    return subprocess.CompletedProcess(
+        args=["uv", "build", "--wheel"],
+        returncode=returncode,
+        stdout="build log",
+        stderr="error detail" if returncode else "",
+    )
+
+
+def test_build_wheel_skips_when_uv_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``uv`` not on PATH (``FileNotFoundError``) is a legit skip (returns None)."""
+    monkeypatch.delenv("EAWF_SKIP_WHEEL_BUILD", raising=False)
+
+    def _raise_missing(*_args: Any, **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError("uv")
+
+    monkeypatch.setattr(subprocess, "run", _raise_missing)
+    assert _build_wheel(tmp_path / "dist") is None
+
+
+def test_build_wheel_reds_on_failed_build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real build failure (non-zero exit) must FAIL, not green-skip."""
+    monkeypatch.delenv("EAWF_SKIP_WHEEL_BUILD", raising=False)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _fake_proc(1))
+    with pytest.raises(AssertionError, match="uv build --wheel failed"):
+        _build_wheel(tmp_path / "dist")
+
+
+def test_build_wheel_reds_when_no_artifact_produced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A clean exit that yields no ``.whl`` is also a failure, not a skip."""
+    monkeypatch.delenv("EAWF_SKIP_WHEEL_BUILD", raising=False)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _fake_proc(0))
+    with pytest.raises(AssertionError, match="produced no"):
+        _build_wheel(tmp_path / "dist")
+
+
+def test_build_wheel_skips_when_opt_out_env_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ``EAWF_SKIP_WHEEL_BUILD`` opt-out short-circuits to a skip (None)."""
+    monkeypatch.setenv("EAWF_SKIP_WHEEL_BUILD", "1")
+    assert _build_wheel(tmp_path / "dist") is None

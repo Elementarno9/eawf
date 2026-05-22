@@ -352,6 +352,90 @@ def test_opencode_session_empty_drizzle_table_is_drift(tmp_path: Path) -> None:
     assert source.drift_incidents[0].cause is IncidentCause.EXTERNAL_API_FAILURE
 
 
+def test_opencode_session_query_failure_is_skipped_not_raised(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A known fingerprint but a moved column makes the relational query fail.
+
+    The adapter must catch the resulting ``sqlite3.OperationalError``, record a
+    query-failure incident, and yield nothing — never let the error escape.
+    """
+    db = tmp_path / "opencode.db"
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "CREATE TABLE __drizzle_migrations "
+            "(id INTEGER PRIMARY KEY, hash text NOT NULL, created_at numeric, "
+            "name text, applied_at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO __drizzle_migrations (id, hash, created_at, name, applied_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (1, "", 1777336920000, _KNOWN_MIGRATION, "2026-05-01T00:00:00Z"),
+        )
+        # A ``session`` table missing the ``time_created`` column the query selects.
+        conn.execute("CREATE TABLE session (id TEXT PRIMARY KEY)")
+        conn.commit()
+    finally:
+        conn.close()
+
+    source = OpenCodeSessionSource()
+    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.opencode_session"):
+        rows = list(source.iter_rows(db))
+    assert rows == []
+    assert len(source.drift_incidents) == 1
+    incident = source.drift_incidents[0]
+    assert isinstance(incident, TelemetryIncident)
+    assert incident.cause is IncidentCause.EXTERNAL_API_FAILURE
+    assert incident.severity is IncidentSeverity.MEDIUM
+    assert "query failed" in incident.summary
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "relational query failure" in warnings[0].message
+
+
+def test_opencode_session_part_query_failure_is_skipped(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A broken ``part`` table (per-session query) is also caught gracefully."""
+    db = tmp_path / "opencode.db"
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "CREATE TABLE __drizzle_migrations "
+            "(id INTEGER PRIMARY KEY, hash text NOT NULL, created_at numeric, "
+            "name text, applied_at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO __drizzle_migrations (id, hash, created_at, name, applied_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (1, "", 1777336920000, _KNOWN_MIGRATION, "2026-05-01T00:00:00Z"),
+        )
+        conn.execute(
+            "CREATE TABLE session "
+            "(id TEXT PRIMARY KEY, project_id TEXT, time_created INTEGER, "
+            "time_updated INTEGER, title TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO session (id, project_id, time_created, time_updated, title) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("sess-placeholder-eeee", "proj-1", 1777000000000, 1777000060000, "abc work"),
+        )
+        # ``part`` exists but lacks the ``data`` column the per-session query selects.
+        conn.execute("CREATE TABLE part (id TEXT PRIMARY KEY, session_id TEXT)")
+        conn.commit()
+    finally:
+        conn.close()
+
+    source = OpenCodeSessionSource()
+    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.opencode_session"):
+        rows = list(source.iter_rows(db))
+    assert rows == []
+    assert len(source.drift_incidents) == 1
+    assert source.drift_incidents[0].cause is IncidentCause.EXTERNAL_API_FAILURE
+    assert "query failed" in source.drift_incidents[0].summary
+
+
 def test_opencode_session_missing_path_yields_nothing() -> None:
     source = OpenCodeSessionSource()
     rows = list(source.iter_rows(Path("/nonexistent/opencode.db")))

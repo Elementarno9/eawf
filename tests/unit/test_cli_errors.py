@@ -279,3 +279,70 @@ def test_cli_error_for_rpc_unknown_falls_back_to_internal() -> None:
     err = errors.cli_error_for_rpc(-99999, "weird rpc code")
     assert isinstance(err, errors.InternalError)
     assert err.exit_code == exit_codes.INTERNAL_ERROR
+    assert err.kind is None
+
+
+@pytest.mark.parametrize(
+    ("rpc_code", "expected_kind"),
+    [
+        (-32001, "LockConflict"),
+        (-32005, "RuntimeUnavailable"),
+        (-32006, "RuntimeUnavailable"),
+        (-32003, "NotFound"),
+        (-32004, "ProtocolMismatch"),
+        (-32600, "InvalidInput"),
+    ],
+)
+def test_cli_error_for_rpc_threads_kind(rpc_code: int, expected_kind: str) -> None:
+    """The RPC table's fine-grained kind tag rides on the returned error."""
+    err = errors.cli_error_for_rpc(rpc_code, "rpc body")
+    assert err.kind == expected_kind
+
+
+@pytest.mark.parametrize(
+    "rpc_code",
+    [-32700, -32603, -32000, -32002, -32007, -32008, -32009],
+)
+def test_cli_error_for_rpc_no_kind_codes_have_none(rpc_code: int) -> None:
+    """RPC codes mapped to a bare bucket carry no kind tag."""
+    err = errors.cli_error_for_rpc(rpc_code, "rpc body")
+    assert err.kind is None
+
+
+def test_rpc_threaded_kind_survives_into_envelope() -> None:
+    """A StateConflict built from -32005 surfaces ``RuntimeUnavailable`` in the envelope.
+
+    Because the five buckets coincide with the exit-code surface, the only
+    way per-cause specificity survives is the threaded ``kind`` tag — it
+    must land in ``data.kind`` and drive the kind-specific hint.
+    """
+    err = errors.cli_error_for_rpc(-32005, "runtime ladder exhausted")
+    env = errors.build_envelope(err)
+    assert env.error == "StateConflict"
+    assert env.data["kind"] == "RuntimeUnavailable"
+    assert env.suggested_next_step == errors._KIND_HINTS["RuntimeUnavailable"]
+
+
+def test_rpc_threaded_kind_in_json_emit() -> None:
+    """End-to-end: the threaded kind reaches the emitted JSON envelope."""
+    flags = GlobalFlags(json_output=True)
+    err = errors.cli_error_for_rpc(-32001, "sibling lock held")
+    app = _make_emitting_app(err, flags)
+    result = runner.invoke(app, [])
+    assert result.exit_code == exit_codes.STATE_CONFLICT
+    body = json.loads(result.stdout)
+    assert body["error"] == "StateConflict"
+    assert body["data"]["kind"] == "LockConflict"
+
+
+def test_explicit_data_kind_overrides_threaded_kind() -> None:
+    """An explicit ``data.kind`` from the caller still wins (explicit over implicit)."""
+    err = errors.cli_error_for_rpc(-32005, "runtime ladder exhausted")
+    env = errors.build_envelope(err, data={"kind": "OperatorOverride"})
+    assert env.data["kind"] == "OperatorOverride"
+
+
+def test_clierror_kind_defaults_to_none() -> None:
+    """A plainly-raised CliError carries no kind tag unless one is threaded."""
+    assert errors.CliError("boom").kind is None
+    assert errors.StateConflict("boom", kind="LockConflict").kind == "LockConflict"

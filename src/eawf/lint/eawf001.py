@@ -43,10 +43,18 @@ _LOG_METHODS: frozenset[str] = frozenset(
     {"debug", "info", "warning", "error", "critical", "exception"}
 )
 
-# Receiver names treated as a logger. ``logger`` is the project-wide
-# canonical (``logger = logging.getLogger(__name__)``); ``log`` and
-# ``self.logger`` are tolerated aliases.
+# Bare-name receivers treated as a logger. ``logger`` is the project-wide
+# canonical (``logger = logging.getLogger(__name__)``); ``log`` is a
+# tolerated module-level alias.
 _LOGGER_NAMES: frozenset[str] = frozenset({"logger", "log"})
+
+# Attribute-receiver names treated as a logger (``<obj>.<name>.<level>()``).
+# Only ``logger`` qualifies — ``self.logger`` is the canonical instance
+# alias. A bare ``.log`` attribute is far more often a non-logger member
+# (an audit log object, a build-log handle, a Textual ``.log``) that merely
+# happens to expose a method named like a log level, so it is NOT treated
+# as a logger here to avoid false positives.
+_LOGGER_ATTR_NAMES: frozenset[str] = frozenset({"logger"})
 
 # Canonical message skeleton, faithful to the existing corpus:
 #   <funcname> ( <slug> | <key>=<value> )*  ( ; <prose> )?
@@ -97,9 +105,11 @@ class LogFormatViolation:
 def _is_logger_call(node: ast.Call) -> str | None:
     """Return the log level name if ``node`` is a logger call, else ``None``.
 
-    Recognises ``logger.<level>(...)`` and ``self.logger.<level>(...)``
-    (and the ``log`` alias) where ``<level>`` is in
-    :data:`_LOG_METHODS`.
+    Recognises a bare ``logger.<level>(...)`` (or the ``log`` alias) and an
+    instance ``self.logger.<level>(...)`` where ``<level>`` is in
+    :data:`_LOG_METHODS`. The attribute-receiver form is restricted to
+    ``logger`` (see :data:`_LOGGER_ATTR_NAMES`): a bare ``<obj>.log``
+    attribute is most often a non-logger member, so it is not flagged.
     """
     func = node.func
     if not isinstance(func, ast.Attribute):
@@ -111,7 +121,7 @@ def _is_logger_call(node: ast.Call) -> str | None:
         return func.attr
     if (
         isinstance(receiver, ast.Attribute)
-        and receiver.attr in _LOGGER_NAMES
+        and receiver.attr in _LOGGER_ATTR_NAMES
         and isinstance(receiver.value, ast.Name)
     ):
         return func.attr

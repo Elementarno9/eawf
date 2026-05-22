@@ -10,11 +10,13 @@ that needs the driver imports it lazily inside the function body, so:
   driver is absent (the ``ImportError`` surfaces from ``_connect``, but the
   factory pre-checks importability before constructing).
 
-The schema DDL and row read/write plumbing are inherited unchanged from
+The schema DDL and most row read/write plumbing are inherited from
 :class:`~eawf.telemetry.store.base.AbstractMetricsStore`; this module
-supplies only the DuckDB connection and execution primitives. DuckDB
-accepts the ``?`` parameter placeholder and the ``INSERT OR REPLACE``
-upsert form the base emits, so no SQL-dialect overrides are needed.
+supplies the DuckDB connection + execution primitives and one
+SQL-dialect override. DuckDB accepts the ``?`` parameter placeholder but
+not the SQLite-only ``INSERT OR REPLACE`` upsert the base emits, so
+:meth:`DuckDbMetricsStore.upsert` re-emits the row write as a portable
+``INSERT ... ON CONFLICT DO UPDATE`` statement.
 """
 
 from __future__ import annotations
@@ -23,9 +25,22 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from eawf.telemetry.store.base import AbstractMetricsStore
+from pydantic import BaseModel
+
+from eawf.telemetry.store.base import (
+    TABLES,
+    AbstractMetricsStore,
+    column_names,
+    encode_value,
+)
 
 logger = logging.getLogger(__name__)
+
+# Per-table primary-key columns, sourced from the shared table registry so
+# the DuckDB upsert's conflict target stays in lockstep with the DDL. The
+# key columns are excluded from the ``DO UPDATE SET`` clause — they are the
+# matched-on conflict target, not a value to overwrite.
+_PRIMARY_KEYS: dict[str, tuple[str, ...]] = {spec.name: spec.primary_key for spec in TABLES}
 
 
 class DuckDbMetricsStore(AbstractMetricsStore):
@@ -55,6 +70,33 @@ class DuckDbMetricsStore(AbstractMetricsStore):
 
     def _query(self, sql: str) -> list[tuple[Any, ...]]:
         return list(self._conn.execute(sql).fetchall())
+
+    def upsert(self, table: str, row: BaseModel) -> None:
+        """Insert-or-replace ``row`` into ``table`` via DuckDB upsert.
+
+        Overrides :meth:`AbstractMetricsStore.upsert` because DuckDB does
+        not accept the SQLite-only ``INSERT OR REPLACE`` form the base
+        emits. The portable equivalent is ``INSERT ... ON CONFLICT DO
+        UPDATE SET col = excluded.col`` over every non-primary-key column,
+        with the table's primary key as the inferred conflict target.
+
+        Args:
+            table: Target table name (must appear in :data:`TABLES`).
+            row: A populated row model whose type matches the table.
+        """
+        cols = column_names(type(row))
+        placeholder = self._placeholder()
+        col_list = ", ".join(cols)
+        value_list = ", ".join(placeholder for _ in cols)
+        values = [encode_value(getattr(row, col)) for col in cols]
+        pk = _PRIMARY_KEYS[table]
+        update_cols = [col for col in cols if col not in pk]
+        set_clause = ", ".join(f"{col} = excluded.{col}" for col in update_cols)
+        sql = (
+            f"INSERT INTO {table} ({col_list}) VALUES ({value_list}) "
+            f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {set_clause}"
+        )
+        self._execute(sql, values)
 
     def commit(self) -> None:
         self._conn.commit()

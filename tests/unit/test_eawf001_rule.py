@@ -116,6 +116,24 @@ def test_non_logger_call_is_ignored() -> None:
     assert check_source(source) == []
 
 
+def test_non_logger_dot_log_attribute_is_not_flagged() -> None:
+    """A bare ``<obj>.log.<level>`` member is not a logger and must not be flagged."""
+    source = 'self.log.info("oops: freeform prose with a colon")\n'
+    assert check_source(source) == []
+
+
+def test_non_logger_named_dot_log_attribute_is_not_flagged() -> None:
+    """An arbitrarily-named ``.log`` attribute receiver is likewise skipped."""
+    source = 'audit.log.warning("oops: freeform prose with a colon")\n'
+    assert check_source(source) == []
+
+
+def test_self_logger_attribute_still_flagged_after_narrowing() -> None:
+    """Narrowing the ``.log`` attribute must not stop flagging ``self.logger``."""
+    source = 'self.logger.info("oops: freeform prose with a colon")\n'
+    assert len(check_source(source)) == 1
+
+
 def test_non_logging_method_on_logger_is_ignored() -> None:
     source = 'logger.setLevel("DEBUG: anything goes")\n'
     assert check_source(source) == []

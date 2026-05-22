@@ -54,9 +54,21 @@ class CliError(Exception):
     The default :attr:`exit_code` is :data:`exit_codes.INTERNAL_ERROR` —
     an uncaught raised path is an internal error. Each subclass
     overrides it with the canonical 0..5 code for its bucket.
+
+    :attr:`kind` carries an optional fine-grained cause tag that is
+    folded into ``ErrorEnvelope.data.kind`` when the caller does not
+    supply one explicitly. The five canonical buckets coincide with the
+    exit-code surface, so a tag like ``"LockConflict"`` or
+    ``"RuntimeUnavailable"`` is the only way per-cause specificity
+    survives a :class:`StateConflict` raise that is not a legacy
+    subclass (e.g. an error built from a daemon JSON-RPC code).
     """
 
     exit_code: int = exit_codes.INTERNAL_ERROR
+
+    def __init__(self, *args: object, kind: str | None = None) -> None:
+        super().__init__(*args)
+        self.kind = kind
 
 
 class UserError(CliError):
@@ -367,9 +379,10 @@ def build_envelope(
             daemon-mediated.
         protocol_version: Daemon protocol version (only set on
             ``ProtocolMismatch``).
-        data: Verb-specific structured context. When *err* is a legacy
-            subclass and ``data`` lacks ``kind``, the legacy class name
-            is injected as ``data.kind``.
+        data: Verb-specific structured context. When ``data`` lacks
+            ``kind``, the legacy subclass name (if *err* is a legacy
+            class) or the error's threaded ``kind`` tag (if set, e.g.
+            from :func:`cli_error_for_rpc`) is injected as ``data.kind``.
 
     Returns:
         A populated :class:`ErrorEnvelope`.
@@ -377,8 +390,9 @@ def build_envelope(
     canonical = _canonical_error_name(err)
     legacy = _legacy_kind(err)
     merged_data: dict[str, Any] = dict(data) if data else {}
-    if legacy is not None and "kind" not in merged_data:
-        merged_data["kind"] = legacy
+    threaded = legacy if legacy is not None else err.kind
+    if threaded is not None and "kind" not in merged_data:
+        merged_data["kind"] = threaded
     kind = merged_data.get("kind")
     return ErrorEnvelope(
         error=canonical,
@@ -497,7 +511,10 @@ def cli_error_for_rpc(rpc_code: int, message: str) -> CliError:
 
     Returns:
         A :class:`CliError` instance whose class matches the § 5.3 table
-        bucket. Unknown codes fall back to :class:`InternalError`.
+        bucket, carrying the table's fine-grained ``kind`` tag so per-
+        cause specificity (``LockConflict`` / ``RuntimeUnavailable`` /
+        ...) survives into the error envelope. Unknown codes fall back to
+        :class:`InternalError`.
     """
-    cls, _kind = _DAEMON_RPC_MAP.get(rpc_code, (InternalError, None))
-    return cls(message)
+    cls, kind = _DAEMON_RPC_MAP.get(rpc_code, (InternalError, None))
+    return cls(message, kind=kind)

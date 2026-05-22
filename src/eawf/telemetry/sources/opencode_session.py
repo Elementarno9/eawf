@@ -125,7 +125,11 @@ class OpenCodeSessionSource:
         :class:`TelemetryIncident` (cause
         :attr:`~eawf.state.enums.IncidentCause.EXTERNAL_API_FAILURE`) on
         :attr:`drift_incidents` and yields nothing (C09 §6 F21). A missing path
-        also yields nothing.
+        also yields nothing. A :class:`sqlite3.OperationalError` from the
+        relational ``session`` / ``part`` queries (a column or table that moved
+        under a fingerprint the adapter still considers known) is likewise
+        caught: a query-failure incident is recorded and projection stops
+        rather than crashing the projector.
         """
         if not path.is_file():
             return
@@ -135,7 +139,10 @@ class OpenCodeSessionSource:
             if fingerprint not in _KNOWN_DRIZZLE_FINGERPRINTS:
                 self._record_drift(path, fingerprint)
                 return
-            yield from self._iter_sessions(conn, jsonl_path=path)
+            try:
+                yield from self._iter_sessions(conn, jsonl_path=path)
+            except sqlite3.OperationalError as exc:
+                self._record_query_failure(path, exc)
         finally:
             conn.close()
 
@@ -153,6 +160,27 @@ class OpenCodeSessionSource:
         logger.warning(
             f"iter_rows source={self.source_name} path={str(path)!r} "
             f"fingerprint={observed!r} skipped projection on unknown drizzle fingerprint"
+        )
+
+    def _record_query_failure(self, path: Path, exc: sqlite3.OperationalError) -> None:
+        """Append a query-failure incident and log the skip.
+
+        Reached when the drizzle fingerprint is known but a relational query
+        against ``session`` / ``part`` still fails — a column or table the
+        parser expects has moved within a fingerprint the adapter has not yet
+        retired. Treated as schema drift so the projector skips gracefully.
+        """
+        incident = TelemetryIncident(
+            incident_id="opencode-query-failure",
+            severity=IncidentSeverity.MEDIUM,
+            cause=IncidentCause.EXTERNAL_API_FAILURE,
+            ts=datetime.now(tz=UTC),
+            summary=f"opencode relational query failed; projection skipped; error={exc}",
+        )
+        self.drift_incidents.append(incident)
+        logger.warning(
+            f"iter_rows source={self.source_name} path={str(path)!r} "
+            f"error={exc!r} skipped projection on relational query failure"
         )
 
     def _iter_sessions(

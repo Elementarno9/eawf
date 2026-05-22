@@ -29,6 +29,7 @@ import pytest
 
 from eawf.state.enums import IncidentCause, IncidentSeverity
 from eawf.telemetry.models import (
+    TelemetryCompaction,
     TelemetryIncident,
     TelemetryProject,
     TelemetrySchemaMeta,
@@ -312,3 +313,86 @@ def test_open_store_duckdb_falls_back_to_sqlite_on_import_error(
 def test_abstract_store_cannot_be_instantiated(tmp_path: Path) -> None:
     with pytest.raises(TypeError):
         AbstractMetricsStore(tmp_path / "m.db")  # type: ignore[abstract]
+
+
+# ---------------------------------------------------------------------------
+# DuckDB upsert dialect — ON CONFLICT DO UPDATE, never INSERT OR REPLACE
+# ---------------------------------------------------------------------------
+
+
+class _RecordingConn:
+    """Minimal stand-in for a DuckDB connection that records executed SQL."""
+
+    def __init__(self) -> None:
+        self.statements: list[tuple[str, list[Any]]] = []
+
+    def execute(self, sql: str, params: list[Any] | None = None) -> _RecordingConn:
+        self.statements.append((sql, list(params) if params is not None else []))
+        return self
+
+
+def _duckdb_store_with_recording_conn() -> Any:
+    """Build a ``DuckDbMetricsStore`` whose connection records SQL.
+
+    Bypasses the real ``duckdb`` driver (an optional dependency that may be
+    absent) by stubbing ``_connect`` so the upsert SQL can be inspected
+    without a live database.
+    """
+    from eawf.telemetry.store.duckdb_store import DuckDbMetricsStore
+
+    store = DuckDbMetricsStore.__new__(DuckDbMetricsStore)
+    store.path = Path("unused.db")
+    store._conn = _RecordingConn()
+    return store
+
+
+def test_duckdb_upsert_uses_on_conflict_do_update() -> None:
+    """DuckDB's upsert emits ``ON CONFLICT DO UPDATE``, not ``INSERT OR REPLACE``."""
+    store = _duckdb_store_with_recording_conn()
+    store.upsert("telemetry_projects", _project_row())
+    sql, params = store._conn.statements[-1]
+    assert "INSERT OR REPLACE" not in sql
+    assert "ON CONFLICT (project_id) DO UPDATE SET" in sql
+    # The primary key is the matched-on conflict target, never re-assigned.
+    assert "project_id = excluded.project_id" not in sql
+    # A non-key column is updated from the proposed row.
+    assert "repo_name = excluded.repo_name" in sql
+    assert len(params) == len(TelemetryProject.model_fields)
+
+
+def test_duckdb_upsert_composite_pk_lists_all_key_columns() -> None:
+    """A composite primary key lands as the full ``ON CONFLICT (...)`` target."""
+    store = _duckdb_store_with_recording_conn()
+    row = TelemetryCompaction(
+        session_id="s1",
+        ts=datetime(2026, 5, 22, 9, 0, tzinfo=UTC),
+        pre_tokens=1000,
+        trigger="auto",
+    )
+    store.upsert("telemetry_compactions", row)
+    sql, _ = store._conn.statements[-1]
+    assert "ON CONFLICT (session_id, ts) DO UPDATE SET" in sql
+    # Both key columns are the conflict target, neither is re-assigned.
+    assert "session_id = excluded.session_id" not in sql
+    assert "ts = excluded.ts" not in sql
+    # A non-key column is updated.
+    assert "pre_tokens = excluded.pre_tokens" in sql
+
+
+def test_duckdb_round_trip_when_driver_present(tmp_path: Path) -> None:
+    """When ``duckdb`` is installed, the ON CONFLICT upsert actually executes."""
+    pytest.importorskip("duckdb")
+    from eawf.telemetry.store.duckdb_store import DuckDbMetricsStore
+
+    store = DuckDbMetricsStore(tmp_path / "m.duckdb")
+    store.init_schema()
+    store.upsert("telemetry_projects", _project_row())
+    store.commit()
+    # A second upsert on the same PK must update in place, not error or dup.
+    updated = _project_row().model_copy(update={"repo_name": "renamed"})
+    store.upsert("telemetry_projects", updated)
+    store.commit()
+    back = store.fetch_all("telemetry_projects", TelemetryProject)
+    store.close()
+    assert len(back) == 1
+    assert back[0].repo_name == "renamed"
