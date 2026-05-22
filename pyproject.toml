@@ -73,6 +73,7 @@ markers = [
     "acceptance: phase-gate end-to-end acceptance scenarios",
     "eval: skill-dispatch golden-envelope regression suite (opt-in)",
     "golden_scenarios: end-to-end lifecycle golden-tree scenarios",
+    "e2e: real-process tier spawning the eawf binary + a real eawfd daemon",
 ]
 
 [tool.mypy]
