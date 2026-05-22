@@ -264,6 +264,28 @@ def test_env_strips_prefix_only_no_value_segment() -> None:
     assert sources["planning.approval"] == "built-in"
 
 
+def test_env_blitz_recursion_knobs_are_reserved() -> None:
+    """Blitz recursion-guard env knobs must not leak into the config layer.
+
+    The blitz skill writes ``EAWF_BLITZ_DEPTH_COUNTER`` into ``os.environ`` as
+    its recursion counter (and ``EAWF_BLITZ_DEPTH`` is the user-facing cap).
+    Both are runtime control knobs, not config overrides — without reserving
+    them the env layer injects a phantom ``blitz_depth_counter`` top-level key
+    that the strict config schema then rejects with ``extra_forbidden``.
+    """
+    merged, sources = merge_config(
+        workspace=None,
+        repo=None,
+        env={"EAWF_BLITZ_DEPTH": "8", "EAWF_BLITZ_DEPTH_COUNTER": "1"},
+        cli_overrides={},
+    )
+    assert "blitz_depth" not in merged
+    assert "blitz_depth_counter" not in merged
+    assert "blitz_depth_counter" not in sources
+    # Built-ins remain reachable — the reserved knobs did not poison the merge.
+    assert sources["planning.approval"] == "built-in"
+
+
 # --- Idempotence ------------------------------------------------------------
 
 
