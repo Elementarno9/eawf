@@ -1616,7 +1616,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P27-I01",
+    "iter_id": "P27-I03",
     "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
@@ -2574,13 +2574,13 @@
       ]
     },
     "P27-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A35-P27-observ-ops",
+      "closed_at": "2026-05-22T19:55:54.714647Z",
       "estimate_id": null,
       "id": "P27-I01",
       "opened_at": "2026-05-18T19:45:11.534616Z",
       "phase_id": "P27",
-      "status": "active",
+      "status": "closed",
       "title": "P27-I01: observ + ops waves",
       "wave_ids": [
         "P27-I01-W01",
@@ -2611,6 +2611,82 @@
         "P27-I01-W26",
         "P27-I01-W27",
         "P27-I01-W28"
+      ]
+    },
+    "P27-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P27-I02",
+      "opened_at": "2026-05-22T19:55:55.103307Z",
+      "phase_id": "P27",
+      "status": "active",
+      "title": "P27-I02: correctness, safety, architecture foundation",
+      "wave_ids": [
+        "P27-I02-W01",
+        "P27-I02-W02",
+        "P27-I02-W03",
+        "P27-I02-W04",
+        "P27-I02-W05",
+        "P27-I02-W06",
+        "P27-I02-W07",
+        "P27-I02-W08",
+        "P27-I02-W09",
+        "P27-I02-W10",
+        "P27-I02-W11",
+        "P27-I02-W12",
+        "P27-I02-W13",
+        "P27-I02-W14",
+        "P27-I02-W15",
+        "P27-I02-W16",
+        "P27-I02-W17",
+        "P27-I02-W18",
+        "P27-I02-W19",
+        "P27-I02-W20",
+        "P27-I02-W21",
+        "P27-I02-W22",
+        "P27-I02-W23",
+        "P27-I02-W24",
+        "P27-I02-W25",
+        "P27-I02-W26"
+      ]
+    },
+    "P27-I03": {
+      "audit_id": null,
+      "closed_at": null,
+      "estimate_id": null,
+      "id": "P27-I03",
+      "opened_at": "2026-05-22T19:55:55.481661Z",
+      "phase_id": "P27",
+      "status": "active",
+      "title": "P27-I03: build-out, rules/skills, hardening, release",
+      "wave_ids": [
+        "P27-I03-W01",
+        "P27-I03-W02",
+        "P27-I03-W03",
+        "P27-I03-W04",
+        "P27-I03-W05",
+        "P27-I03-W06",
+        "P27-I03-W07",
+        "P27-I03-W08",
+        "P27-I03-W09",
+        "P27-I03-W10",
+        "P27-I03-W11",
+        "P27-I03-W12",
+        "P27-I03-W13",
+        "P27-I03-W14",
+        "P27-I03-W15",
+        "P27-I03-W16",
+        "P27-I03-W17",
+        "P27-I03-W18",
+        "P27-I03-W19",
+        "P27-I03-W20",
+        "P27-I03-W21",
+        "P27-I03-W22",
+        "P27-I03-W23",
+        "P27-I03-W24",
+        "P27-I03-W25",
+        "P27-I03-W26"
       ]
     }
   },
@@ -3085,7 +3161,9 @@
       ],
       "id": "P27",
       "iter_ids": [
-        "P27-I01"
+        "P27-I01",
+        "P27-I02",
+        "P27-I03"
       ],
       "opened_at": "2026-05-18T19:45:11.534597Z",
       "outcome_ids": [],
@@ -3133,7 +3211,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T19:03:57.127412Z",
+  "updated_at": "2026-05-22T19:57:16.303041Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11974,6 +12052,1581 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I01-W28-1779475679"
+    },
+    "P27-I02-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".gitignore",
+        "src/eawf/daemon/runtime_dir.py",
+        "src/eawf/daemon/server.py"
+      ],
+      "id": "P27-I02-W01",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:56.527091Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "git status never shows telemetry.db; *.db is gitignored; runtime dir chmod 0700 and socket 0600 verified on POSIX"
+      ],
+      "title": "Gitignore telemetry.db + harden runtime-dir/socket perms",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/logging/scrub.py",
+        "src/eawf/daemon/main.py"
+      ],
+      "id": "P27-I02-W02",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:56.938589Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "addFilter(SensitiveScrubber()) present on every handler (asserted in test); restoration uses indexed placeholders so an allowlisted email survives while a path is scrubbed; eawfd.log shows no /Users/ after a seeded leak; IPv4/IPv6 and bare ~/ patterns added"
+      ],
+      "title": "Install + repair the SensitiveScrubber",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/metrics.py"
+      ],
+      "id": "P27-I02-W03",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:57.337089Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "with telemetry.enabled=False the metrics rebuild/export/info verbs create no telemetry.db and write nothing (test asserts no file)"
+      ],
+      "title": "Fix telemetry opt-in bypass",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/telemetry/projector.py",
+        "src/eawf/telemetry/aggregator.py",
+        "src/eawf/telemetry/pricing.py"
+      ],
+      "id": "P27-I02-W04",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:57.734580Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a fixture session with known tokens and model yields non-zero total_cost_usd matching the pricing snapshot; zero-token rows guarded against div-by-zero"
+      ],
+      "title": "Wire pricing into the projector",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/telemetry/aggregator.py"
+      ],
+      "id": "P27-I02-W05",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:58.118255Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "rebuild over an event log containing one malformed incident completes and projects all good rows; the bad row is logged and skipped"
+      ],
+      "title": "Guard malformed incidents in the aggregator",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W18",
+        "P27-I03-W09",
+        "P27-I03-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/store/compact.py",
+        "src/eawf/store/kinds/events/**",
+        "src/eawf/store/kinds/event.py"
+      ],
+      "id": "P27-I02-W06",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:58.524967Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "store compact over an event.jsonl containing C09 dispatch rows round-trips cleanly; RuntimeSwitched/DispatchCost payloads validate via a discriminated union (or skip-revalidate) without ValidationError"
+      ],
+      "title": "Fix C09 payload / compaction incompatibility",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/backup/store.py"
+      ],
+      "id": "P27-I02-W07",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:58.910484Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "an interrupted restore leaves state.json fully old or fully new (injected-failure test); restore writes via atomic_write_json_locked under portalock; a concurrent daemon write does not corrupt"
+      ],
+      "title": "Atomic + locked backup restore",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W22",
+        "P27-I02-W23"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/migrations/_base.py",
+        "src/eawf/cli/commands/migrate.py",
+        "src/eawf/state/models.py"
+      ],
+      "id": "P27-I02-W08",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:59.302183Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "migrate to an unsupported target errors cleanly with no write; migrate to a supported target writes a re-loadable state"
+      ],
+      "title": "Migrate target guard",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/backup/store.py"
+      ],
+      "id": "P27-I02-W09",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:56:59.686494Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "--ts ../x and absolute paths are rejected against the timestamp pattern before path-join; valid timestamps work"
+      ],
+      "title": "Backup --ts path-traversal guard",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/snapshot.py",
+        "src/eawf/tools/snapshot_pairing_gate.py"
+      ],
+      "id": "P27-I02-W10",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:00.073381Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the tui golden_dir points at tests/snapshots/tui/golden and tui_config_modal is in the inventory; a TUI snapshot change without a paired test update is flagged by the gate (test)"
+      ],
+      "title": "Fix snapshot-pairing gate tui golden_dir",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/telemetry/projector.py"
+      ],
+      "id": "P27-I02-W11",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:00.453136Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a rotated or truncated source re-projects from offset 0; fold-whole-file adapters force a FULL re-read so a session row is not truncated; one bad upsert is logged and skipped without losing the rebuild"
+      ],
+      "title": "Projector robustness (rotation, tail-slice, per-row skip)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/errors.py",
+        "tests/unit/test_packaging.py",
+        "src/eawf/telemetry/store/duckdb_store.py",
+        "src/eawf/telemetry/sources/opencode_session.py",
+        "src/eawf/lint/eawf001.py"
+      ],
+      "id": "P27-I02-W12",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:00.835496Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "cli_error_for_rpc threads _kind so LockConflict/RuntimeUnavailable specificity survives; the wheel gate reds on a broken build and only skips when uv is absent; DuckDB upsert uses ON CONFLICT DO UPDATE; opencode queries are wrapped; eawf001 is narrowed for non-logger .log; each sub-fix has a regression test"
+      ],
+      "title": "I01 review minor bundle (L5/M6/T7/T9/L6)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W14",
+        "P27-I02-W15",
+        "P27-I03-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "tests/e2e/**"
+      ],
+      "id": "P27-I02-W13",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:01.214874Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "10-20 subprocess tests run the real eawf binary and spawn a real eawfd; they assert real stdout/stderr; exit codes; eawfd.log scrubbing; PID lifecycle and the daemon socket; the tier is marked e2e and green in CI"
+      ],
+      "title": "Real-process E2E test tier",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W13"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/skills/audit.py"
+      ],
+      "id": "P27-I02-W14",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:01.597594Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/audit on a wave with a seeded behavioral regression returns fail with the offending criterion; it dispatches a fresh-context auditor; no check returns skipped by default"
+      ],
+      "title": "Make /audit run real checks",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W13"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/skills/ship.py"
+      ],
+      "id": "P27-I02-W15",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:01.968940Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/ship runs the real gauntlet via subprocess (pre-commit/mypy/pytest/ruff) and aborts on any red (injected-failure test); the per-gate _gate_failure shape is kept"
+      ],
+      "title": "Make /ship run the real gauntlet",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W17"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/state/mutations.py",
+        "src/eawf/lifecycle/**"
+      ],
+      "id": "P27-I02-W16",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:02.350108Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "all 13 MutationKinds resolve to a real apply fn; daemon state.mutate handles EVENT_APPEND and ROADMAP_REVISE/APPLY/DROP and WAVE_RELEASE (test per kind)"
+      ],
+      "title": "Wire the stub MutationKinds",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W18"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W16"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/_dispatch.py",
+        "src/eawf/cli/_mutation.py",
+        "src/eawf/cli/commands/lifecycle.py"
+      ],
+      "id": "P27-I02-W17",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:02.731995Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "_mutate_via_daemon drives a proxied mutation end-to-end and falls back when the daemon is down (both tested); the dead state_mutate is removed; tests green"
+      ],
+      "title": "Generic daemon-proxy shim",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W19"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W17",
+        "P27-I02-W06"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py",
+        "src/eawf/cli/commands/lifecycle_wave.py",
+        "src/eawf/cli/_mutation.py",
+        "src/eawf/daemon/wal.py"
+      ],
+      "id": "P27-I02-W18",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:03.111944Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "all mutating verbs proxy when the daemon is up; the in-process fallback is state-first and WAL-backed; an injected-crash test leaves no phantom event; Rule 4 is realized"
+      ],
+      "title": "Route all 15 verbs through daemon + WAL-safe fallback",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W20"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/render/agents_md.py"
+      ],
+      "id": "P27-I02-W19",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:03.498613Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Decision accepts a consequences list (additive default-empty; no schema bump); the Decisions render shows them"
+      ],
+      "title": "Add Decision.consequences",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W19"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/evidence.py",
+        "src/eawf/validate/invariants.py"
+      ],
+      "id": "P27-I02-W20",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:03.884911Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf decision supersede <old> --by <new> flips status and sets superseded_by via the daemon; an invariant rejects an unlinked superseded row and requires status=superseded with the link set"
+      ],
+      "title": "Decision supersede verb + validator",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W20"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/state.json"
+      ],
+      "id": "P27-I02-W21",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:04.268209Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "D15 has status=superseded and superseded_by=D-SUP-TUI-01 set via the F2 verb; no contradictory active pair remains"
+      ],
+      "title": "Reconcile D15 vs D-SUP-TUI-01",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W22": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W23",
+        "P27-I02-W24"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W08"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/models.py",
+        "src/eawf/migrations/v1_0_to_v1_1.py"
+      ],
+      "id": "P27-I02-W22",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:04.646930Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "State.schema_version literal advances to 1.0/1.1 in lockstep with the migrate guard; migrate advances a 1.0 state to a re-loadable 1.1 state; the chain is idempotent"
+      ],
+      "title": "Advance schema_version 1.0->1.1 + migration step",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W23": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W07",
+        "P27-I03-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W22",
+        "P27-I02-W08"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/state/models.py"
+      ],
+      "id": "P27-I02-W23",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:05.027540Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "title (max 72) and description (max 500) added to Phase/Iter/Wave/BacklogItem/Incident; Decision.summary renamed to title and Hypothesis.text to title; an over-cap title is rejected; renamed fields round-trip; readers updated"
+      ],
+      "title": "Add title+description to entities + rename",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W22"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/migrations/v1_0_to_v1_1.py"
+      ],
+      "id": "P27-I02-W24",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:05.406149Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "each over-cap row copies its full string to description and truncates title to max 72 at a clause boundary; post-migration no title exceeds 72; no content is lost; tested on the real state fixture"
+      ],
+      "title": "Auto-truncate migrator for over-cap titles",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W25": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W26"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/lifecycle/wave.py",
+        "src/eawf/estimation/buckets.py",
+        "src/eawf/state/models.py"
+      ],
+      "id": "P27-I02-W25",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:05.790318Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "closing a wave writes an ActualSummary from opened_at/closed_at; claim writes a default EstimateSummary from effort_bucket; metrics variance returns a non-empty sample"
+      ],
+      "title": "Auto-record actuals on close + default estimates",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W25"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/migrations",
+        "src/eawf/estimation/buckets.py"
+      ],
+      "id": "P27-I02-W26",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-22T19:57:06.189233Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "closed waves get retroactive idempotent ActualSummary rows; metrics variance and calibrate buckets report fitted values from real samples; double-write is guarded"
+      ],
+      "title": "Backfill actuals from history",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W02",
+        "P27-I03-W03",
+        "P27-I03-W05",
+        "P27-I03-W06",
+        "P27-I03-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/models.py",
+        "src/eawf/render/agents_md.py",
+        "src/eawf/templates/AGENTS.md.j2"
+      ],
+      "id": "P27-I03-W01",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:06.580485Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "RenderBlock gains optional rationale/mechanism/verification with a model-validator (exactly one of body_template or the triad); a structured rule renders Rationale/Mechanism/Verification; a half-filled block fails validation; legacy prose blocks still validate"
+      ],
+      "title": "Structured RenderBlock schema",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W03"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/profiles/data/quality.yaml"
+      ],
+      "id": "P27-I03-W02",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:06.974519Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "quality.yaml is authored with the code-craft rules; each carries a verification line via the G1 schema; composing quality renders the rules with verification; the profile validates"
+      ],
+      "title": "Code-craft rules in opt-in quality.yaml",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W01",
+        "P27-I03-W02"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/data/agent_driven.yaml"
+      ],
+      "id": "P27-I03-W03",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:07.376715Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the agent-driven profile renders the phase=release and large-PR divergence rules plus an ADR pointer; the default profile still renders small-CL/trunk"
+      ],
+      "title": "agent-driven profile (phase=release/large-PR)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W17"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "pyproject.toml",
+        "src/eawf/lint/eawf011.py",
+        "src/eawf/lint/eawf010.py"
+      ],
+      "id": "P27-I03-W04",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:07.758975Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ruff C901 (warn at 10) and EAWF011 cognitive-complexity (warn at 15) fire on a grade-D function; EAWF010 is demoted to advisory; an edited module leaves the grandfather exclude list"
+      ],
+      "title": "Cognitive-complexity gate (EAWF011 + ruff C901)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/data/core.yaml",
+        "src/eawf/profiles/data/python.yaml"
+      ],
+      "id": "P27-I03-W05",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:08.141365Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "f-strings and uv-run duplicates are demoted to python.yaml; daemon-authority is consolidated into one rule; rules 23 and 24 are rewritten with the G1 triad and carry verification; the rendered AGENTS.md golden is updated"
+      ],
+      "title": "Dedup + rewrite prose-only rules",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/profiles/data/ml.yaml",
+        "src/eawf/profiles/data/research.yaml",
+        "src/eawf/profiles/data/quant.yaml",
+        "src/eawf/profiles/data/apps.yaml",
+        "src/eawf/profiles/data/infra.yaml"
+      ],
+      "id": "P27-I03-W06",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:08.528413Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ml/research/quant/apps/infra each render at least their defining rule block; composition tests pass"
+      ],
+      "title": "Stub-profile minimal rule sets",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W20"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W23"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/roadmap_tree.py",
+        "src/eawf/dispatch/renderer.py",
+        "src/eawf/render/plan_view.py",
+        "src/eawf/render/release_notes.py"
+      ],
+      "id": "P27-I03-W07",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:08.922712Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tree/tables/breadcrumb render the bounded title; wave-detail and dispatch body surface description; golden and snapshot updates show titles fit"
+      ],
+      "title": "Update title consumers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W23",
+        "P27-I03-W01"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/profiles/data/core.yaml",
+        "src/eawf/render/agents_md.py"
+      ],
+      "id": "P27-I03-W08",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:09.321871Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a generated rule renders title as an imperative noun-phrase of max 72 with no trailing period and description as purpose; lint flags an over-cap or trailing-period title"
+      ],
+      "title": "Entity-title naming rule",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W10",
+        "P27-I03-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W06",
+        "P27-I02-W13"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/methods/agent.py",
+        "src/eawf/daemon/dispatch_runner.py"
+      ],
+      "id": "P27-I03-W09",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:09.711780Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "agent.dispatch (or the dispatch CLI path) invokes run_dispatch for real; a real dispatch emits runtime_switched and dispatch_cost to the live event log (E2E test)"
+      ],
+      "title": "Give run_dispatch a production caller",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W09",
+        "P27-I02-W06"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/dispatch_runner.py"
+      ],
+      "id": "P27-I03-W10",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:10.093853Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "on dispatch completion an agent_end row is emitted with a valid verdict; check_agent_report_invariants validates it"
+      ],
+      "title": "Emit typed agent_end reports",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W09"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/dispatch_runner.py",
+        "src/eawf/lifecycle/wave.py"
+      ],
+      "id": "P27-I03-W11",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:10.486805Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "run_dispatch sets CLAIMED to IN_PROGRESS at its head; an inline wave start transition covers non-dispatched waves; dispatched and inline waves both reach IN_PROGRESS"
+      ],
+      "title": "Set wave -> IN_PROGRESS at implementation-start",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/render/skills.py",
+        "build/eawf-plugin/skills/**"
+      ],
+      "id": "P27-I03-W12",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:10.867643Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "refactor-god-class/write-adr/add-property-test/extract-function/extract-module/graduate-research-code render with user-invocable false; they are absent from the slash menu; the model can invoke them; goldens updated"
+      ],
+      "title": "Model-only code-quality skills",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W15"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/skills/flow.py",
+        "src/eawf/skills/ship.py",
+        "src/eawf/skills/research.py",
+        "src/eawf/skills/prep.py"
+      ],
+      "id": "P27-I03-W13",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:11.251300Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "each action() is under about 60 lines and below grade-C; shared _gather/_validate/_execute/_render plus _trace and _gate_failure are extracted into a SkillAction base; golden envelopes stay stable"
+      ],
+      "title": "Decompose the 4 god-method action()s",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W12"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/agents/specs/**",
+        "src/eawf/dispatch/renderer.py"
+      ],
+      "id": "P27-I03-W14",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:11.633763Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a SubagentSpec model and a role registry exist; a wave dispatch renders from a typed spec rather than an ad-hoc prompt; roles render to all kept runtimes; golden coverage added"
+      ],
+      "title": "Typed subagent-spec library + roles",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/skills/roadmap.py",
+        "src/eawf/cli/commands/roadmap.py"
+      ],
+      "id": "P27-I03-W15",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:12.023517Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "applying a plan with waves lands them PENDING with deps; plan-mode renders the full wave DAG before approval; AUQ approval gates it"
+      ],
+      "title": "/roadmap accept prefills waves",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "build/eawf-plugin/skills/**",
+        "src/eawf/render/skills.py"
+      ],
+      "id": "P27-I03-W16",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:12.412037Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a Decision-surfaces section is added where decisions exist; ship/SKILL.md prefix is updated to [P] state:; the 17 registry specs vs 11 build dirs are reconciled and documented; goldens updated"
+      ],
+      "title": "Skill consistency cleanup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W17": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W04"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/**"
+      ],
+      "id": "P27-I03-W17",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:12.790416Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "zero grade-D functions remain in the targeted set (repo_link_cmd; check_mcp_drift; _fold_record; check_agent_report_invariants; create_worktree; coerce_and_validate; check_closure_timestamps and the rest); behavior unchanged with tests green"
+      ],
+      "title": "Reduce grade-D functions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W18": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/errors.py"
+      ],
+      "id": "P27-I03-W18",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:13.191810Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the 15 remaining deprecated-alias raises are migrated to the canonical taxonomy; the 8 aliases are removed; tests green"
+      ],
+      "title": "Finish error-alias migration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W19": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W18"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle.py",
+        "src/eawf/state/io.py"
+      ],
+      "id": "P27-I03-W19",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:13.603596Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "_write_state_unlocked and _commit_mutation and _append_event move to a library module; no state-write helper remains under cli/; the CLI is thin dispatch; tests green"
+      ],
+      "title": "Lift state-write helpers out of the CLI layer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W20": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W07"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/**",
+        "tests/tui_v2/**",
+        "tests/snapshots/tui/**",
+        "pyproject.toml",
+        "docs/reference/coverage-gates.md"
+      ],
+      "id": "P27-I03-W20",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:13.996997Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "package src/eawf/tui_v2 renamed to src/eawf/tui and tests/tui_v2 to tests/tui; all tui_v2 references updated (imports; snapshot/pilot harness paths; pyproject coverage gate key and path; coverage-gates.md; build plugin refs); other versioned/legacy identifiers audited with only tui_v2 a package (eawf_v0 and _to_v1 left as version/migration strings); tests green"
+      ],
+      "title": "Module-naming hygiene: drop versioned/legacy suffixes (eawf.tui_v2 -> eawf.tui)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W14"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/dispatch/renderer.py",
+        "src/eawf/sandbox/policy.py"
+      ],
+      "id": "P27-I03-W21",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:14.388729Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a wave with a denied tool cannot dispatch it (test); the allowed set reflects the policy by intersecting denied_tools out of the dispatch envelope projection"
+      ],
+      "title": "Enforce SandboxPolicy at dispatch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "pyproject.toml"
+      ],
+      "id": "P27-I03-W22",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:14.771078Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "mutmut runs in CI on state/lifecycle/daemon/validate and reports a score (publish-not-block); a target of at least 70% is documented"
+      ],
+      "title": "Mutation testing on core",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W23": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/contract/**"
+      ],
+      "id": "P27-I03-W23",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:15.153523Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "contract assertions verify every skill/agent/hook resolves on each declared-supported runtime and the matrix matches the installer output; the test fails on the current OpenCode-hooks gap (then xfail/documented); the daemon RPC request/response schemas are pinned"
+      ],
+      "title": "Contract tests for runtimes + JSON-RPC",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W24": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W25"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/evidence_incident.py",
+        "pyproject.toml"
+      ],
+      "id": "P27-I03-W24",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:15.543434Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; W27 wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
+      ],
+      "title": "Deviation cleanup + wheel recalibration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W25": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I03-W26"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W24"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/_version.py"
+      ],
+      "id": "P27-I03-W25",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:15.918794Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf --version and the wheel METADATA report 0.3.0; the bump rides P27 phase close after every I02 and I03 functional wave is CLOSED (enforced by phase-close timing not explicit deps)"
+      ],
+      "title": "Version bump 0.2.0 -> 0.3.0",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I03-W25"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/release.py",
+        ".github/workflows/release.yaml"
+      ],
+      "id": "P27-I03-W26",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-22T19:57:16.303018Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf release tags and triggers the pipeline; publish is un-gated behind an explicit condition; twine check dist/* runs before publish; the pipeline builds and validates"
+      ],
+      "title": "eawf release verb + un-gate pipeline",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
