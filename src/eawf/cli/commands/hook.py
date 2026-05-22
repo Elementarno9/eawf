@@ -458,7 +458,25 @@ def _resolve_scan_paths(
 
     if files:
         return files
-    return relevant_for_hook(hook_name, base, cwd=cwd, staged=True)
+    candidates = relevant_for_hook(hook_name, base, cwd=cwd, staged=True)
+    return [p for p in candidates if not _is_state_bookkeeping_path(p)]
+
+
+def _is_state_bookkeeping_path(rel: str) -> bool:
+    """Return ``True`` for daemon-managed bookkeeping files excluded from leak scans.
+
+    ``.ea/state.json`` + ``.ea/store/*.jsonl`` are the daemon's canonical
+    bookkeeping surface (AGENTS rule 4): their content is machine-written,
+    their line offsets churn on every mutation, and free-text fields
+    (backlog titles, outcomes) may legitimately carry home-directory
+    path-shaped placeholders. ``detect-secrets`` excludes the
+    same set for the same reasons, so the leak gates mirror it rather than
+    block every state-bookkeeping commit.
+    """
+    norm = rel.replace("\\", "/")
+    if norm == ".ea/state.json":
+        return True
+    return norm.startswith(".ea/store/") and norm.endswith(".jsonl")
 
 
 def _emit_leak_result(

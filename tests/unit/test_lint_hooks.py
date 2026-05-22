@@ -226,6 +226,16 @@ def test_email_leak_lint_skips_action_version_ref(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
+def test_is_state_bookkeeping_path_excludes_daemon_files() -> None:
+    from eawf.cli.commands.hook import _is_state_bookkeeping_path
+
+    assert _is_state_bookkeeping_path(".ea/state.json")
+    assert _is_state_bookkeeping_path(".ea/store/event.jsonl")
+    assert _is_state_bookkeeping_path(".ea/store/audit.jsonl")
+    assert not _is_state_bookkeeping_path("src/eawf/cli/app.py")
+    assert not _is_state_bookkeeping_path(".ea/profile.yaml")
+
+
 def test_email_leak_lint_allowlists_noreply(tmp_path: Path) -> None:
     ok = tmp_path / "trailer.txt"
     ok.write_text("Co-Authored-By: Claude <noreply@anthropic.com>\n", encoding="utf-8")

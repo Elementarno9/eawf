@@ -3108,7 +3108,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T16:02:50.390054Z",
+  "updated_at": "2026-05-22T16:37:09.495273Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11118,8 +11118,8 @@
     "P27-I01-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w04",
+      "closed_at": "2026-05-22T16:30:00.407639Z",
       "commit": null,
       "deps": [
         "P27-I01-W03"
@@ -11135,17 +11135,17 @@
       "id": "P27-I01-W04",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:11.073133Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf hook path-leak-lint and email-leak-lint exit 1 on a seeded leak and 0 on a clean diff; _conditional early-exits when the diff name-only shows no relevant change; plugin-doctor-drift + log-format-lint wired as local pre-commit/pre-push entries"
       ],
       "title": "feat: lint hooks 16-19 via eawf hook dispatch + conditional-skip helper",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W04-1779466350"
     },
     "P27-I01-W05": {
       "agent_role": "executor",
@@ -11153,8 +11153,8 @@
         "P27-I01-W06",
         "P27-I01-W07"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w05",
+      "closed_at": "2026-05-22T16:30:03.404946Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -11169,17 +11169,17 @@
       "id": "P27-I01-W05",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:11.465273Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "EAWF010 flags a >700-LOC module and accepts a noqa EAWF010 waiver only when a rationale comment follows; EAWF002 + EAWF003 each have a flag-and-pass test; ruff select wired in pyproject so the rules run under pre-commit"
       ],
       "title": "feat: EAWF002 + EAWF003 + EAWF010 per-module 700-LOC cap rules",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W05-1779466352"
     },
     "P27-I01-W06": {
       "agent_role": "executor",
@@ -11321,8 +11321,8 @@
       "blocks": [
         "P27-I01-W15"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w10",
+      "closed_at": "2026-05-22T16:30:06.546117Z",
       "commit": null,
       "deps": [
         "P27-I01-W09"
@@ -11338,17 +11338,17 @@
       "id": "P27-I01-W10",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:13.443400Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the dispatch runner emits RuntimeSwitchedPayload on a simulated V5 fallback and DispatchCostPayload post-dispatch verified by an integration test reading event.jsonl; emitted envelopes pass discriminated-union validation at append; events route through the daemon canonical writer not a direct file write"
       ],
       "title": "feat: daemon emit points for the new event sub-types",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W10-1779466353"
     },
     "P27-I01-W11": {
       "agent_role": "executor",
@@ -11357,8 +11357,8 @@
         "P27-I01-W13",
         "P27-I01-W14"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w11",
+      "closed_at": "2026-05-22T16:30:08.877254Z",
       "commit": null,
       "deps": [
         "P27-I01-W08",
@@ -11376,17 +11376,17 @@
       "id": "P27-I01-W11",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:13.863868Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "PRICING embeds pricing_version 2026.05.17 with Decimal per-token rates and explicit cache multipliers verified by lookup_pricing exact + longest-prefix tests; row models carry extra=forbid; eawf telemetry pricing-currency-check emits a typed PricingDriftReport"
       ],
       "title": "feat: vendor agent-lens row models + PRICING snapshot + currency-check",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W11-1779466355"
     },
     "P27-I01-W12": {
       "agent_role": "executor",
@@ -11626,9 +11626,9 @@
     "P27-I01-W19": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p27-w19",
+      "closed_at": "2026-05-22T16:37:04.392479Z",
+      "commit": "5095827175f801d9aa6d501a83c367d2f2a03d51",
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "M",
@@ -11640,17 +11640,17 @@
       "id": "P27-I01-W19",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:17.135110Z",
-      "outcome": null,
+      "outcome": "landed snapshot update + CI pairing gate (manual cherry-pick after app.py/golden conflict resolve)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf snapshot update --kind <surface> regenerates the golden subset for that surface verified against a tmp fixture; the CI gate fails when a golden changes without a paired [P27-W##] test snapshot update commit; an unknown --kind exits USER_ERROR"
       ],
       "title": "feat: eawf snapshot update --kind + CI snapshot-pairing gate",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W19-1779466356"
     },
     "P27-I01-W20": {
       "agent_role": "executor",
@@ -11688,8 +11688,8 @@
         "P27-I01-W22",
         "P27-I01-W26"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w21",
+      "closed_at": "2026-05-22T16:37:07.673751Z",
       "commit": null,
       "deps": [
         "P27-I01-W08"
@@ -11705,17 +11705,17 @@
       "id": "P27-I01-W21",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:17.973884Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ErrorCode StrEnum carries the ~35 cause-level values layered over the existing five-bucket exit codes; ErrorEnvelope gains error_code and renders cause then next_step then See code verified by a render test; every ErrorCode has a doc anchor in error-codes.md verified by an anchor-coverage test"
       ],
       "title": "feat: ErrorCode closed enum + error_code on ErrorEnvelope + render",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W21-1779466358"
     },
     "P27-I01-W22": {
       "agent_role": "executor",
@@ -12901,6 +12901,28 @@
       "status": "merged",
       "wave_id": "P27-I01-W03"
     },
+    "WT-P27-I01-W04-1779466350": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w04",
+      "created_at": "2026-05-22T16:12:30.856808Z",
+      "id": "WT-P27-I01-W04-1779466350",
+      "merged_commit": "460fa45",
+      "owner_session_id": "p27-w04",
+      "path": ".ea/worktrees/p27-w04",
+      "status": "merged",
+      "wave_id": "P27-I01-W04"
+    },
+    "WT-P27-I01-W05-1779466352": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w05",
+      "created_at": "2026-05-22T16:12:32.066313Z",
+      "id": "WT-P27-I01-W05-1779466352",
+      "merged_commit": "b89885c",
+      "owner_session_id": "p27-w05",
+      "path": ".ea/worktrees/p27-w05",
+      "status": "merged",
+      "wave_id": "P27-I01-W05"
+    },
     "WT-P27-I01-W08-1779465010": {
       "base_branch": "feature/eawf-v0.3-p27",
       "branch": "feature/eawf-v0.3-p27-w08",
@@ -12922,6 +12944,28 @@
       "path": ".ea/worktrees/p27-w09",
       "status": "merged",
       "wave_id": "P27-I01-W09"
+    },
+    "WT-P27-I01-W10-1779466353": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w10",
+      "created_at": "2026-05-22T16:12:33.865300Z",
+      "id": "WT-P27-I01-W10-1779466353",
+      "merged_commit": "ce6ed86",
+      "owner_session_id": "p27-w10",
+      "path": ".ea/worktrees/p27-w10",
+      "status": "merged",
+      "wave_id": "P27-I01-W10"
+    },
+    "WT-P27-I01-W11-1779466355": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w11",
+      "created_at": "2026-05-22T16:12:35.237634Z",
+      "id": "WT-P27-I01-W11-1779466355",
+      "merged_commit": "8de75ca",
+      "owner_session_id": "p27-w11",
+      "path": ".ea/worktrees/p27-w11",
+      "status": "merged",
+      "wave_id": "P27-I01-W11"
     },
     "WT-P27-I01-W17-1779465014": {
       "base_branch": "feature/eawf-v0.3-p27",
@@ -12945,6 +12989,17 @@
       "status": "merged",
       "wave_id": "P27-I01-W18"
     },
+    "WT-P27-I01-W19-1779466356": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w19",
+      "created_at": "2026-05-22T16:12:36.447355Z",
+      "id": "WT-P27-I01-W19-1779466356",
+      "merged_commit": null,
+      "owner_session_id": "p27-w19",
+      "path": ".ea/worktrees/p27-w19",
+      "status": "abandoned",
+      "wave_id": "P27-I01-W19"
+    },
     "WT-P27-I01-W20-1779465018": {
       "base_branch": "feature/eawf-v0.3-p27",
       "branch": "feature/eawf-v0.3-p27-w20",
@@ -12955,6 +13010,17 @@
       "path": ".ea/worktrees/p27-w20",
       "status": "merged",
       "wave_id": "P27-I01-W20"
+    },
+    "WT-P27-I01-W21-1779466358": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w21",
+      "created_at": "2026-05-22T16:12:38.195229Z",
+      "id": "WT-P27-I01-W21-1779466358",
+      "merged_commit": "f596070",
+      "owner_session_id": "p27-w21",
+      "path": ".ea/worktrees/p27-w21",
+      "status": "merged",
+      "wave_id": "P27-I01-W21"
     },
     "WT-P27-I01-W24-1779465020": {
       "base_branch": "feature/eawf-v0.3-p27",
