@@ -1,0 +1,3 @@
+{"type":"user","sessionId":"sess-placeholder-bbbb","cwd":"/workspace/def","gitBranch":"main","timestamp":"2026-05-13T09:00:00Z","uuid":"uuid-1001","parentUuid":null,"message":{"role":"user","content":"hello"}}
+{"type":"assistant" THIS LINE IS CORRUPT NOT JSON
+{"type":"assistant","sessionId":"sess-placeholder-bbbb","cwd":"/workspace/def","gitBranch":"main","timestamp":"2026-05-13T09:00:45Z","uuid":"uuid-1002","parentUuid":"uuid-1001","message":{"role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":500,"output_tokens":120,"cache_read_input_tokens":2000,"cache_creation_input_tokens":100}}}
