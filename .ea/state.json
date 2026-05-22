@@ -1969,6 +1969,19 @@
       "status": "active",
       "summary": "Bare eawf on TTY auto-launches TUI by cwd resolve (workspace > repo > user > status)",
       "superseded_by": null
+    },
+    "D24": {
+      "alternatives": [
+        "Per-file coverage thresholds (rejected: churn on every refactor)",
+        "Single overall fail_under only (rejected: hides per-package regressions)"
+      ],
+      "created_at": "2026-05-22T17:44:17.196430Z",
+      "id": "D24",
+      "rationale": "F-008/G-19 picks the nine load-bearing architectural layers (daemon, telemetry, skills, cli, render, store, state, lock, runtimes plugin_install) as the coverage-gate grain over per-file (churns on refactor) or per-subpackage (too coarse). Each per-package threshold is set ~1 point below coverage measured 2026-05-22 so the CI gate catches regressions immediately without redding the current tree; tui_v2 line coverage is waived (Textual async render misreports it). Overall floor is 60 via coverage fail_under; current total sits ~86%.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "summary": "Adopt C09 §5.2 nine-layer per-package coverage gates as a measured ratchet with overall floor 60 (F-008)",
+      "superseded_by": null
     }
   },
   "estimates": null,
@@ -3108,7 +3121,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T17:26:36.118998Z",
+  "updated_at": "2026-05-22T17:44:17.196430Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11054,8 +11067,8 @@
     "P27-I01-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w02",
+      "closed_at": "2026-05-22T17:43:33.203747Z",
       "commit": null,
       "deps": [
         "P27-I01-W01"
@@ -11071,17 +11084,17 @@
       "id": "P27-I01-W02",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:10.310665Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "pyproject defines per-package coverage gates for the load-bearing set with overall floor 60; F-008 gate-set + per-package waivers recorded as a Decision URN in state.json; CI coverage stage fails when any gated package drops below threshold"
       ],
       "title": "ci: per-package coverage gate set + waivers + thresholds",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W02-1779471318"
     },
     "P27-I01-W03": {
       "agent_role": "executor",
@@ -11217,8 +11230,8 @@
     "P27-I01-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w07",
+      "closed_at": "2026-05-22T17:43:36.480944Z",
       "commit": null,
       "deps": [
         "P27-I01-W05"
@@ -11235,17 +11248,17 @@
       "id": "P27-I01-W07",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:12.236726Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "evidence.py and every new sibling module is <=700 LOC with EAWF010 clean and zero waivers; every prior evidence subcommand still registers verified by a verb-inventory test; the evidence command tests pass unchanged"
       ],
       "title": "refactor: split cli/commands/evidence.py under 700-LOC cap",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W07-1779471320"
     },
     "P27-I01-W08": {
       "agent_role": "executor",
@@ -11495,8 +11508,8 @@
         "P27-I01-W16",
         "P27-I01-W25"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w15",
+      "closed_at": "2026-05-22T17:43:39.402229Z",
       "commit": null,
       "deps": [
         "P27-I01-W10",
@@ -11515,17 +11528,17 @@
       "id": "P27-I01-W15",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:15.578716Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the aggregator classifies incidents via typed IncidentCause lookups not substring matching; the projector upsert is idempotent verified by running --full twice yielding identical row counts; --incremental projects only rows past file_meta.last_offset verified against a fixture"
       ],
       "title": "feat: telemetry aggregator + idempotent projector",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W15-1779471322"
     },
     "P27-I01-W16": {
       "agent_role": "executor",
@@ -11758,8 +11771,8 @@
     "P27-I01-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w23",
+      "closed_at": "2026-05-22T17:43:41.741909Z",
       "commit": null,
       "deps": [
         "P27-I01-W22"
@@ -11775,17 +11788,17 @@
       "id": "P27-I01-W23",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:18.809258Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "backup create snapshots state+config+profile to a user-scope path and list shows it; restore --ts round-trips to byte-identical state verified by a create-mutate-restore test; prune keeps the N most-recent and an unknown --ts exits USER_ERROR"
       ],
       "title": "feat: eawf backup create/list/restore/prune",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W23-1779471323"
     },
     "P27-I01-W24": {
       "agent_role": "executor",
@@ -12890,6 +12903,17 @@
       "status": "merged",
       "wave_id": "P27-I01-W01"
     },
+    "WT-P27-I01-W02-1779471318": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w02",
+      "created_at": "2026-05-22T17:35:18.515124Z",
+      "id": "WT-P27-I01-W02-1779471318",
+      "merged_commit": "b198d15",
+      "owner_session_id": "p27-w02",
+      "path": ".ea/worktrees/p27-w02",
+      "status": "merged",
+      "wave_id": "P27-I01-W02"
+    },
     "WT-P27-I01-W03-1779465008": {
       "base_branch": "feature/eawf-v0.3-p27",
       "branch": "feature/eawf-v0.3-p27-w03",
@@ -12933,6 +12957,17 @@
       "path": ".ea/worktrees/p27-w06",
       "status": "merged",
       "wave_id": "P27-I01-W06"
+    },
+    "WT-P27-I01-W07-1779471320": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w07",
+      "created_at": "2026-05-22T17:35:20.416749Z",
+      "id": "WT-P27-I01-W07-1779471320",
+      "merged_commit": "04f5461",
+      "owner_session_id": "p27-w07",
+      "path": ".ea/worktrees/p27-w07",
+      "status": "merged",
+      "wave_id": "P27-I01-W07"
     },
     "WT-P27-I01-W08-1779465010": {
       "base_branch": "feature/eawf-v0.3-p27",
@@ -13011,6 +13046,17 @@
       "status": "merged",
       "wave_id": "P27-I01-W14"
     },
+    "WT-P27-I01-W15-1779471322": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w15",
+      "created_at": "2026-05-22T17:35:22.246461Z",
+      "id": "WT-P27-I01-W15-1779471322",
+      "merged_commit": "95a8e62",
+      "owner_session_id": "p27-w15",
+      "path": ".ea/worktrees/p27-w15",
+      "status": "merged",
+      "wave_id": "P27-I01-W15"
+    },
     "WT-P27-I01-W17-1779465014": {
       "base_branch": "feature/eawf-v0.3-p27",
       "branch": "feature/eawf-v0.3-p27-w17",
@@ -13076,6 +13122,17 @@
       "path": ".ea/worktrees/p27-w22",
       "status": "merged",
       "wave_id": "P27-I01-W22"
+    },
+    "WT-P27-I01-W23-1779471323": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w23",
+      "created_at": "2026-05-22T17:35:23.962384Z",
+      "id": "WT-P27-I01-W23-1779471323",
+      "merged_commit": "3c59e7a",
+      "owner_session_id": "p27-w23",
+      "path": ".ea/worktrees/p27-w23",
+      "status": "merged",
+      "wave_id": "P27-I01-W23"
     },
     "WT-P27-I01-W24-1779465020": {
       "base_branch": "feature/eawf-v0.3-p27",
