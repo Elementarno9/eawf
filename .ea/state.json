@@ -2533,7 +2533,8 @@
         "P26-I02-W07",
         "P26-I02-W08",
         "P26-I02-W09",
-        "P26-I02-W10"
+        "P26-I02-W10",
+        "P26-I02-W11"
       ]
     },
     "P27-I01": {
@@ -3067,7 +3068,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T02:31:32.025938Z",
+  "updated_at": "2026-05-22T02:36:50.126497Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10531,6 +10532,36 @@
         "two non-blocking followups triaged (W06 defer + W07 backlog B068)"
       ],
       "title": "audit: A34-P26-tui-qol review report + minor verdict",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W11": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-22T02:36:50.126351Z",
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/cli/commands/skill.py"
+      ],
+      "id": "P26-I02-W11",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T02:36:39.955034Z",
+      "outcome": "I02 polish sweep; one safe docstring consolidation in resume_cmd; delta otherwise convention-clean; tests+pre-commit green",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "I02 src delta consistency sweep against canonical conventions",
+        "one safe docstring fix (duplicate NotFound Raises entry consolidated)",
+        "no public-API renames or deletions deferred",
+        "tests + pre-commit green"
+      ],
+      "title": "polish sweep: consolidate resume_cmd Raises docstring",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
