@@ -223,14 +223,27 @@ def _read_telemetry_config(state_path: Path) -> tuple[bool, str]:
     return enabled, db_kind
 
 
-def _telemetry_show(flags: GlobalFlags) -> None:
-    """Render the rolling telemetry metrics, or the opt-in nudge when disabled."""
-    from eawf.telemetry.exporter import build_snapshot, render_prom
-    from eawf.telemetry.store import metrics_db_path, open_store
+def _gate_on_opt_in(flags: GlobalFlags) -> tuple[Path, str] | None:
+    """Resolve the state path and gate the caller on ``telemetry.enabled``.
 
+    Mirrors the opt-in guard that every store-touching sub-verb shares: the
+    opt-in invariant says nothing should collect when telemetry is off, so a
+    disabled flag must short-circuit *before* the store is opened (opening it
+    via ``init_schema`` would create ``telemetry.db`` as a side effect — a
+    silent collection the operator never consented to).
+
+    Args:
+        flags: The resolved global CLI flags.
+
+    Returns:
+        ``(state_path, db_kind)`` when telemetry is enabled, or ``None`` when
+        the state path could not be resolved or telemetry is disabled. In the
+        disabled case the opt-in nudge is emitted before returning so the
+        caller can simply ``return`` on ``None``.
+    """
     state_path = _resolve_state_or_emit(flags)
     if state_path is None:
-        return
+        return None
 
     enabled, db_kind = _read_telemetry_config(state_path)
     if not enabled:
@@ -239,7 +252,19 @@ def _telemetry_show(flags: GlobalFlags) -> None:
             _OPT_IN_NUDGE,
             flags=flags,
         )
+        return None
+    return state_path, db_kind
+
+
+def _telemetry_show(flags: GlobalFlags) -> None:
+    """Render the rolling telemetry metrics, or the opt-in nudge when disabled."""
+    from eawf.telemetry.exporter import build_snapshot, render_prom
+    from eawf.telemetry.store import metrics_db_path, open_store
+
+    gated = _gate_on_opt_in(flags)
+    if gated is None:
         return
+    state_path, db_kind = gated
 
     db_path = metrics_db_path(state_path)
     store = open_store(db_kind, db_path)  # type: ignore[arg-type]
@@ -259,11 +284,11 @@ def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None
     if fmt not in ("prom", "json", "csv"):
         raise typer.BadParameter(f"unknown export format: {fmt!r} (expected prom|json|csv)")
 
-    state_path = _resolve_state_or_emit(flags)
-    if state_path is None:
+    gated = _gate_on_opt_in(flags)
+    if gated is None:
         return
+    state_path, db_kind = gated
 
-    _enabled, db_kind = _read_telemetry_config(state_path)
     db_path = metrics_db_path(state_path)
     store = open_store(db_kind, db_path)  # type: ignore[arg-type]
     try:
@@ -292,11 +317,11 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
         raise typer.BadParameter("pass only one of --full / --incremental")
     mode = RebuildMode.INCREMENTAL if incremental else RebuildMode.FULL
 
-    state_path = _resolve_state_or_emit(flags)
-    if state_path is None:
+    gated = _gate_on_opt_in(flags)
+    if gated is None:
         return
+    state_path, db_kind = gated
 
-    _enabled, db_kind = _read_telemetry_config(state_path)
     db_path = metrics_db_path(state_path)
     store = open_store(db_kind, db_path)  # type: ignore[arg-type]
     try:
@@ -331,11 +356,11 @@ def _telemetry_info(flags: GlobalFlags) -> None:
     from eawf.telemetry.store import metrics_db_path, open_store
     from eawf.telemetry.store.base import SCHEMA_VERSION
 
-    state_path = _resolve_state_or_emit(flags)
-    if state_path is None:
+    gated = _gate_on_opt_in(flags)
+    if gated is None:
         return
+    state_path, db_kind = gated
 
-    enabled, db_kind = _read_telemetry_config(state_path)
     db_path = metrics_db_path(state_path)
     exists = db_path.exists()
     store = open_store(db_kind, db_path)  # type: ignore[arg-type]
@@ -354,14 +379,14 @@ def _telemetry_info(flags: GlobalFlags) -> None:
         "db_size_bytes": size_bytes,
         "schema_version": SCHEMA_VERSION,
         "pricing_version": PRICING_VERSION,
-        "telemetry_enabled": enabled,
+        "telemetry_enabled": True,
         "session_rows": session_count,
         "incident_rows": incident_count,
     }
     text = (
         f"telemetry cache: backend={store.backend} path={db_path}\n"
         f"  schema_version={SCHEMA_VERSION} pricing_version={PRICING_VERSION} "
-        f"enabled={enabled}\n"
+        f"enabled=True\n"
         f"  rows: sessions={session_count} incidents={incident_count} "
         f"size={size_bytes}B"
     )

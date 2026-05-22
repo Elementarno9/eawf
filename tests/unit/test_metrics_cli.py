@@ -128,6 +128,81 @@ def test_metrics_rebuild_full_on_empty_sources(tmp_path: Path) -> None:
     assert payload["sessions"] == 0
 
 
+def _db_path(workspace: Path) -> Path:
+    """Return the telemetry cache path that a collecting sub-verb would create."""
+    return workspace / ".ea" / "telemetry.db"
+
+
+def test_metrics_export_disabled_creates_no_db(tmp_path: Path) -> None:
+    """``metrics export`` with telemetry off must not project or create the DB."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=False)
+    result = runner.invoke(app, ["-w", str(workspace), "metrics", "export", "--format", "prom"])
+    assert result.exit_code == 0, result.output
+    assert "telemetry is disabled" in result.stdout
+    assert "# HELP eawf_tokens_total" not in result.stdout
+    assert not _db_path(workspace).exists()
+
+
+def test_metrics_export_disabled_out_file_not_written(tmp_path: Path) -> None:
+    """``metrics export --out`` with telemetry off writes neither DB nor target."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=False)
+    out = tmp_path / "out" / "metrics.prom"
+    result = runner.invoke(
+        app,
+        ["-w", str(workspace), "metrics", "export", "--format", "prom", "--out", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "telemetry is disabled" in result.stdout
+    assert not out.exists()
+    assert not _db_path(workspace).exists()
+
+
+def test_metrics_rebuild_disabled_creates_no_db(tmp_path: Path) -> None:
+    """``metrics rebuild`` with telemetry off must not project or create the DB."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=False)
+    result = runner.invoke(app, ["-w", str(workspace), "metrics", "rebuild", "--full"])
+    assert result.exit_code == 0, result.output
+    assert "telemetry is disabled" in result.stdout
+    assert not _db_path(workspace).exists()
+
+
+def test_metrics_info_disabled_creates_no_db(tmp_path: Path) -> None:
+    """``metrics info`` (a read) with telemetry off must not create the DB."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=False)
+    result = runner.invoke(app, ["-w", str(workspace), "metrics", "info"])
+    assert result.exit_code == 0, result.output
+    assert "telemetry is disabled" in result.stdout
+    assert not _db_path(workspace).exists()
+
+
+def test_metrics_info_disabled_json_envelope(tmp_path: Path) -> None:
+    """``--json metrics info`` (disabled) emits the typed nudge envelope, no DB."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=False)
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics", "info"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["telemetry_enabled"] is False
+    assert "nudge" in payload
+    assert not _db_path(workspace).exists()
+
+
+def test_metrics_export_enabled_creates_db(tmp_path: Path) -> None:
+    """Boundary: with telemetry enabled the export path still projects (no regress)."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=True)
+    result = runner.invoke(app, ["-w", str(workspace), "metrics", "export", "--format", "prom"])
+    assert result.exit_code == 0, result.output
+    assert "# HELP eawf_tokens_total" in result.stdout
+    assert _db_path(workspace).exists()
+
+
+def test_metrics_info_enabled_creates_db(tmp_path: Path) -> None:
+    """Boundary: with telemetry enabled, ``info`` opens the cache (no regress)."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=True)
+    result = runner.invoke(app, ["-w", str(workspace), "metrics", "info"])
+    assert result.exit_code == 0, result.output
+    assert _db_path(workspace).exists()
+
+
 def test_metrics_unknown_subverb_fails(tmp_path: Path) -> None:
     """An unknown sub-verb is rejected with a non-zero exit."""
     workspace = _make_workspace(tmp_path, telemetry_enabled=False)
