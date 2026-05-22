@@ -1403,14 +1403,14 @@
       "title": "Sandbox-policy enforcement in audit-check DSL command_exit_zero (v0.3)"
     },
     "B050": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-22T01:40:04.884756Z",
+      "commit": "ad9de25",
       "created_at": "2026-05-11T20:21:10.738617Z",
       "id": "B050",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "weekly_eu_target field present on state.project and consumed end-to-end by the TUI footer weekly-burn line (P26-I02-W04) with a graceful no-data empty-state",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Add weekly_eu_target field to state.project for TUI cross-repo totals divisor"
     },
     "B054": {
@@ -3033,7 +3033,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T01:35:51.673604Z",
+  "updated_at": "2026-05-22T01:40:04.884756Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
