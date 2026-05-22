@@ -20,6 +20,7 @@
             │  completion: ----------  0/1                                                                 │
             │  eu:         — no data                                                                       │
             │  tokens:     — no data                                                                       │
-            │  [ Tab/Shift+Tab tabs · Esc close ]                                                          │
+            │                                                                                              │
+            │  [ h/d/m/e/p tabs · Tab/Shift+Tab cycle · Esc close ]                                        │
             │                                                                                              │
             └──────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 
 import orjson
-from textual.widgets import TabbedContent
+from textual.widgets import Markdown, TabbedContent
 
 from eawf.state.enums import EffortBucket
 from eawf.state.models import State
@@ -421,5 +421,131 @@ def test_detail_modal_iter_opens_with_tabs() -> None:
             await pilot.pause()
             assert isinstance(app.screen, DetailModal)
             assert iter_id in app.export_screenshot()
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# DetailModal tab hotkeys + markdown dp + label escape + bucket text (W13)
+# --------------------------------------------------------------------------
+
+
+def _full_card() -> DetailCard:
+    """A card carrying every section so all five tabs (h/d/m/e/dp) are built."""
+    return DetailCard(
+        title="wave P00-I01-W01",
+        rows=(("id", "P00-I01-W01"), ("title", "demo")),
+        metrics=(("size", "M"),),
+        history=(("status", "open"),),
+        events=(("attempt 1", "fresh (claude)"),),
+        dispatch_prompt="# heading\n\n**bold** body",
+    )
+
+
+def test_detail_modal_hotkey_activates_matching_tab() -> None:
+    """``h``/``m``/``e``/``p`` jump straight to their pane when present."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(DetailModal(_full_card()))
+            await pilot.pause()
+            tabs = app.screen.query_one(TabbedContent)
+            for key, expected in (
+                ("m", "detail-tab-m"),
+                ("h", "detail-tab-h"),
+                ("e", "detail-tab-e"),
+                ("p", "detail-tab-dp"),
+                ("d", "detail-tab-d"),
+            ):
+                await pilot.press(key)
+                await pilot.pause()
+                assert tabs.active == expected
+
+    asyncio.run(body())
+
+
+def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
+    """A hotkey for a tab the card lacks leaves the active tab unchanged.
+
+    Boundary: a card carrying only the ``d`` tab (field rows, no metrics /
+    history / events / dispatch). Pressing ``m`` (and ``h``/``e``/``p``)
+    must be a no-op rather than raising or switching to a missing pane.
+    """
+
+    async def body() -> None:
+        card = DetailCard(title="t", rows=(("id", "x"),))
+        assert DetailModal._present_tabs(card) == ("d",)
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(DetailModal(card))
+            await pilot.pause()
+            tabs = app.screen.query_one(TabbedContent)
+            assert tabs.active == "detail-tab-d"
+            for key in ("m", "h", "e", "p"):
+                await pilot.press(key)
+                await pilot.pause()
+                assert tabs.active == "detail-tab-d"
+
+    asyncio.run(body())
+
+
+def test_detail_modal_dp_pane_mounts_markdown() -> None:
+    """The ``dp`` tab body is a ``Markdown`` widget, not a plain ``Static``."""
+
+    async def body() -> None:
+        state, wave_id = _state_with_bucketed_wave(EffortBucket.L)
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            card = resolve_detail(state, wave_id)
+            assert card.dispatch_prompt is not None
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            pane = modal.query_one("#detail-tab-dp")
+            assert pane.query(Markdown)
+            # The raw prompt text is not emitted as a detail-row Static.
+            assert not pane.query("Static.detail-row")
+
+    asyncio.run(body())
+
+
+def test_detail_modal_wave_size_row_is_bucket_text() -> None:
+    """The wave ``size`` metric row is the plain bucket string (no bar glyphs)."""
+    state, wave_id = _state_with_bucketed_wave(EffortBucket.M)
+    card = resolve_detail(state, wave_id)
+    size_values = [value for label, value in card.metrics if label == "size"]
+    assert size_values == ["M"]
+    assert "#" not in size_values[0]
+    assert "-" not in size_values[0]
+    assert EMPTY_STATE not in size_values[0]
+
+
+def test_detail_modal_row_value_with_bracket_renders() -> None:
+    """A field value containing ``[`` is escaped, so markup cannot break.
+
+    Without escaping, a ``[`` in a value (e.g. a file-glob criterion) opens
+    an unterminated content-markup tag and Textual raises on render.
+    """
+
+    async def body() -> None:
+        card = DetailCard(
+            title="t",
+            rows=(("files", "src/**/[ab]*.py"), ("note", "[unterminated")),
+        )
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(DetailModal(card))
+            await pilot.pause()
+            modal = app.screen
+            assert isinstance(modal, DetailModal)
+            # Render succeeded (no markup-parse exception) and the literal
+            # bracket survives in the painted screen text.
+            rendered = capture_screen_text(app)
+            assert "[ab]" in rendered
 
     asyncio.run(body())

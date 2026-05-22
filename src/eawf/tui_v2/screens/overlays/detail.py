@@ -12,10 +12,12 @@ modal renders the resolved entity's detail in a tabbed, scrollable card.
 The card body is split across up to five tabs — ``h`` history, ``d``
 detail, ``m`` metrics, ``e`` events, ``dp`` dispatch-prompt — mirroring
 the per-overlay tab set the C06 brief reserved. ``Tab`` / ``Shift+Tab``
-cycle the tabs; the arrow keys keep their native scroll behaviour inside
-the focused pane (they are *not* rebound to tab-switching). Only tabs that
-have data for the resolved entity are built, so an entity with no
-dispatch history shows no ``e`` tab rather than an empty one.
+cycle the tabs, the single-letter keys ``h`` / ``d`` / ``m`` / ``e`` /
+``p`` jump straight to a tab (``p`` reaches the two-char ``dp`` tab), and
+the arrow keys keep their native scroll behaviour inside the focused pane
+(they are *not* rebound to tab-switching). Only tabs that have data for
+the resolved entity are built, so an entity with no dispatch history shows
+no ``e`` tab rather than an empty one; a hotkey for an absent tab no-ops.
 
 Entity resolution is a pure function (:func:`resolve_detail`) that takes
 the reactive :class:`~eawf.state.models.State` and the selection id and
@@ -38,14 +40,14 @@ from typing import TYPE_CHECKING, ClassVar
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
+from textual.markup import escape
 from textual.screen import ModalScreen
-from textual.widgets import Static, TabbedContent, TabPane
+from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
 from eawf.dispatch.renderer import render_wave_prompt
 from eawf.tui_v2.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
-    render_size_bar,
 )
 
 if TYPE_CHECKING:
@@ -114,10 +116,10 @@ def _fmt_dt(value: object) -> str:
 def _wave_metrics(wave: Wave) -> tuple[tuple[str, str], ...]:
     """Build the ``m`` (metrics) rows for a wave.
 
-    A wave's only populated progress signal is its effort bucket (rendered
-    as a size bar); EU and token rows surface the shared empty-state
-    sentinel because estimates / actuals / token telemetry are
-    unpopulated scaffolding.
+    A wave's only populated progress signal is its effort bucket (shown as
+    the plain bucket label, e.g. ``M``); EU and token rows surface the
+    shared empty-state sentinel because estimates / actuals / token
+    telemetry are unpopulated scaffolding.
 
     Args:
         wave: The resolved wave.
@@ -127,7 +129,7 @@ def _wave_metrics(wave: Wave) -> tuple[tuple[str, str], ...]:
     """
     rows: list[tuple[str, str]] = []
     if wave.effort_bucket is not None:
-        rows.append(("size", render_size_bar(wave.effort_bucket.value)))
+        rows.append(("size", wave.effort_bucket.value))
     rows.append(("eu", render_eu_bar_plain(0.0, 0.0)))
     rows.append(("tokens", render_eu_bar_plain(float(wave.tokens_consumed), 0.0)))
     return tuple(rows)
@@ -398,9 +400,10 @@ class DetailModal(ModalScreen[None]):
     Built with a pre-resolved :class:`DetailCard`; the host screen
     resolves the card from ``app.state`` via :func:`resolve_detail` when
     it routes the selection message. The modal owns only the presentation,
-    the ``Tab`` / ``Shift+Tab`` tab cycle, and the ``Esc`` close binding.
-    The arrow keys keep their native per-pane scroll behaviour — they are
-    deliberately not bound here.
+    the ``Tab`` / ``Shift+Tab`` tab cycle, the single-letter tab hotkeys
+    (``h`` / ``d`` / ``m`` / ``e`` / ``p``), and the ``Esc`` close
+    binding. The arrow keys keep their native per-pane scroll behaviour —
+    they are deliberately not bound here.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -424,25 +427,30 @@ class DetailModal(ModalScreen[None]):
     DetailModal .detail-row {
         height: auto;
     }
-    DetailModal .detail-label {
-        color: $text-muted;
-    }
     DetailModal .detail-hint {
         color: $text-muted;
         height: 1;
+        margin-top: 1;
     }
     DetailModal TabPane {
         padding: 0;
     }
     """
 
-    #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs. The
-    #: arrow keys are intentionally absent so they keep scrolling the
+    #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs; the
+    #: single-letter keys jump straight to a tab (``p`` reaches the
+    #: two-char ``dp`` dispatch tab, since one keypress cannot be ``dp``).
+    #: The arrow keys are intentionally absent so they keep scrolling the
     #: focused pane rather than switching tabs.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "close", show=False),
         Binding("tab", "next_tab", "next tab", show=False),
         Binding("shift+tab", "prev_tab", "prev tab", show=False),
+        Binding("h", "show_tab('h')", "history", show=False),
+        Binding("d", "show_tab('d')", "detail", show=False),
+        Binding("m", "show_tab('m')", "metrics", show=False),
+        Binding("e", "show_tab('e')", "events", show=False),
+        Binding("p", "show_tab('dp')", "dispatch", show=False),
     ]
 
     def __init__(self, card: DetailCard) -> None:
@@ -507,8 +515,8 @@ class DetailModal(ModalScreen[None]):
         group's widest label so the ``label: value`` colons line up in one
         column (the same mechanism
         :class:`~eawf.tui_v2.widgets.status_pane.StatusPane` uses for its
-        counter block). The ``dp`` pane renders the dispatch-prompt text
-        verbatim.
+        counter block). The ``dp`` pane renders the dispatch-prompt text as
+        Markdown.
         """
         with VerticalScroll(id="detail-card"):
             yield Static(self._card.title, classes="detail-title")
@@ -516,7 +524,10 @@ class DetailModal(ModalScreen[None]):
                 for tab_id in self._tab_ids:
                     with TabPane(_TAB_LABELS[tab_id], id=f"detail-tab-{tab_id}"):
                         yield from self._compose_pane(tab_id)
-            yield Static("[ Tab/Shift+Tab tabs · Esc close ]", classes="detail-hint")
+            yield Static(
+                "[ h/d/m/e/p tabs · Tab/Shift+Tab cycle · Esc close ]",
+                classes="detail-hint",
+            )
 
     def _compose_pane(self, tab_id: str) -> ComposeResult:
         """Yield the body widgets for one tab pane.
@@ -526,16 +537,16 @@ class DetailModal(ModalScreen[None]):
 
         Yields:
             The pane's child widgets — aligned ``label: value`` rows for a
-            row-group tab, or a single verbatim block for the ``dp`` tab.
+            row-group tab, or a rendered Markdown block for the ``dp`` tab.
         """
         if tab_id == "dp":
-            yield Static(self._card.dispatch_prompt or "", classes="detail-row")
+            yield Markdown(self._card.dispatch_prompt or "")
             return
         rows = self._section_rows(tab_id)
         label_width = max((len(label) for label, _ in rows), default=0)
         for label, value in rows:
             padded = f"{label}:".ljust(label_width + 1)
-            yield Static(f"{padded} {value}", classes="detail-row")
+            yield Static(f"[$accent]{padded}[/] {escape(value)}", classes="detail-row")
 
     def _cycle_tab(self, step: int) -> None:
         """Move the active tab by *step* positions, wrapping around.
@@ -553,6 +564,21 @@ class DetailModal(ModalScreen[None]):
             idx = 0
         nxt = self._tab_ids[(idx + step) % len(self._tab_ids)]
         tabs.active = f"detail-tab-{nxt}"
+
+    def action_show_tab(self, tab_id: str) -> None:
+        """Jump straight to the *tab_id* pane, or no-op when it is absent.
+
+        Bound to the single-letter tab hotkeys (``h`` / ``d`` / ``m`` /
+        ``e`` / ``p``→``dp``). A key for a tab the card does not carry
+        (e.g. ``e`` on an event-less card) is silently ignored so the
+        binding stays harmless on every card shape.
+
+        Args:
+            tab_id: The target tab id (one of :attr:`_tab_ids`).
+        """
+        if tab_id not in self._tab_ids:
+            return
+        self.query_one(TabbedContent).active = f"detail-tab-{tab_id}"
 
     def action_next_tab(self) -> None:
         """Cycle to the next body tab (``Tab``)."""

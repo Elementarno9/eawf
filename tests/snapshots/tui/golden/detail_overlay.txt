@@ -21,6 +21,7 @@
             │  title:  Implement validate                                                                  │
             │  status: in_progress                                                                         │
             │  files:  src/eawf/validate/                                                                  │
-            │  [ Tab/Shift+Tab tabs · Esc close ]                                                          │
+            │                                                                                              │
+            │  [ h/d/m/e/p tabs · Tab/Shift+Tab cycle · Esc close ]                                        │
             │                                                                                              │
             └──────────────────────────────────────────────────────────────────────────────────────────────┘
