@@ -185,6 +185,45 @@ def test_state_binding_connect_pushes_initial_state_and_degraded() -> None:
     assert seen_degraded == [True]
 
 
+def test_state_binding_poll_loop_survives_stat_oserror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A TOCTOU ``stat()`` failure mid-poll is swallowed; the poll loop survives.
+
+    Simulates the state file vanishing between the ``is_file()`` check and the
+    ``stat()`` call inside ``_poll_loop`` (``is_file()`` lies ``True``,
+    ``stat()`` raises). Without the guard the loop coroutine would raise and the
+    poll task would die; with it the tick is skipped and the task stays alive.
+    """
+
+    async def _noop_state(_s: State) -> None:
+        return None
+
+    async def _noop_degraded(_d: bool) -> None:
+        return None
+
+    async def body() -> None:
+        binder = StateBinding(
+            state_path=_EMPTY_REPO,
+            callbacks=StateBindingCallbacks(on_state=_noop_state, on_degraded=_noop_degraded),
+            poll_interval_s=0.01,
+        )
+        await binder.connect()
+        # TOCTOU: is_file() sees the file but the subsequent stat() loses it.
+        monkeypatch.setattr(Path, "is_file", lambda _self: True)
+
+        def _boom_stat(_self: Path, *_a: object, **_k: object) -> object:
+            raise FileNotFoundError("state.json vanished after is_file()")
+
+        monkeypatch.setattr(Path, "stat", _boom_stat)
+        await asyncio.sleep(0.05)  # several poll ticks under the failing stat()
+        assert binder._poll_task is not None
+        assert not binder._poll_task.done()  # the loop swallowed the OSError
+        await binder.disconnect()
+
+    asyncio.run(body())
+
+
 # --------------------------------------------------------------------------
 # Pilot first-paint smoke — confirms the shell renders the brand
 # --------------------------------------------------------------------------

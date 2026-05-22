@@ -23,12 +23,14 @@ scrollable view over them and the :class:`PrFetch` status it renders.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import subprocess
 import time
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -259,6 +261,29 @@ def fetch_open_prs(cwd: Path | None = None, *, force: bool = False) -> PrFetch:
     return fetch
 
 
+def _gh_view_web(number: int) -> None:
+    """Open PR *number* in the browser via ``gh pr view --web`` (fire-and-forget).
+
+    Mirrors the read-only ``gh`` shell-out pattern: a missing binary, a
+    timeout, or an error is swallowed (logged at debug) so a bad ``gh`` never
+    crashes the overlay. Runs in a worker thread off the event loop.
+
+    Args:
+        number: The PR number to open.
+    """
+    try:
+        subprocess.run(
+            ["gh", "pr", "view", "--web", str(number)],
+            cwd=str(Path.cwd()),
+            capture_output=True,
+            text=True,
+            timeout=GH_TIMEOUT_S,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug(f"_gh_view_web number={number} failed cause={exc!r}")
+
+
 def _render_row(row: PrRow) -> str:
     """Render one :class:`PrRow` as a single content-markup line.
 
@@ -414,26 +439,22 @@ class PrListModal(ModalScreen[None]):
     def action_open_web(self) -> None:
         """Open the highlighted PR in the browser via ``gh pr view --web``.
 
-        Fire-and-forget: spawns ``gh pr view --web <number>`` with a short
-        timeout and swallows a missing binary / timeout / error (logged at
-        debug) so the overlay never crashes on a bad ``gh``. A no-op when
-        the list is empty.
+        Offloads the ``gh pr view --web`` shell-out to a worker thread so the
+        Enter keypress returns immediately and the overlay never blocks on a
+        slow ``gh``; :func:`_gh_view_web` swallows a missing binary / timeout /
+        error so a bad ``gh`` never crashes the overlay. A no-op when the list
+        is empty.
         """
         if not self._rows or not (0 <= self.selected < len(self._rows)):
             return
         target = self._rows[self.selected]
         logger.info(f"pr_open_web number={target.number} url={target.url!r}")
-        try:
-            subprocess.run(
-                ["gh", "pr", "view", "--web", str(target.number)],
-                cwd=str(Path.cwd()),
-                capture_output=True,
-                text=True,
-                timeout=GH_TIMEOUT_S,
-                check=False,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
-            logger.debug(f"action_open_web number={target.number} failed cause={exc!r}")
+        self.run_worker(
+            partial(_gh_view_web, target.number),
+            group="pr-web",
+            exclusive=True,
+            thread=True,
+        )
 
     def action_close(self) -> None:
         """Dismiss the PR-list overlay (``Esc``)."""
@@ -470,6 +491,25 @@ def open_pr_list(
     return True
 
 
+def request_pr_list(app: App[None]) -> None:
+    """Fetch the repo's open PRs off the event loop, then open the overlay.
+
+    Runs :func:`fetch_open_prs` (a ``gh pr list`` shell-out, up to
+    :data:`GH_TIMEOUT_S`) in a worker so the ``/pr`` keypress returns
+    immediately; :func:`open_pr_list` pushes the overlay from the worker once
+    the fetch lands (rows + degraded status threaded through).
+
+    Args:
+        app: The running App the overlay is pushed onto.
+    """
+
+    async def _fetch_and_open() -> None:
+        fetch = await asyncio.to_thread(fetch_open_prs)
+        open_pr_list(app, fetch.rows, status=fetch.status)
+
+    app.run_worker(_fetch_and_open(), group="pr-fetch", exclusive=True)
+
+
 __all__ = [
     "GH_PR_FIELDS",
     "GH_PR_LIMIT",
@@ -482,5 +522,6 @@ __all__ = [
     "fetch_open_prs",
     "open_pr_list",
     "parse_pr_rows",
+    "request_pr_list",
     "reset_pr_cache",
 ]

@@ -152,7 +152,13 @@ class StateBinding:
             await asyncio.sleep(self._poll_interval)
             if self._state_path is None or not self._state_path.is_file():
                 continue
-            mtime = self._state_path.stat().st_mtime
+            try:
+                mtime = self._state_path.stat().st_mtime
+            except OSError:
+                # TOCTOU: the file vanished (or became unreadable) between the
+                # is_file() check and the stat(); skip this tick rather than
+                # letting the exception kill the poll loop.
+                continue
             if mtime <= self._last_mtime:
                 continue
             self._last_mtime = mtime

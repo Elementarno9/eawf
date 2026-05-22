@@ -131,6 +131,8 @@ def test_git_pane_paints_branch(tmp_path: Path) -> None:
         app = _Harness()
         app.cwd = repo
         async with app.run_test(size=(60, 12)) as pilot:
+            # The probe now runs in a worker; wait for it before sampling.
+            await app.workers.wait_for_complete()
             await pilot.pause()
             rendered = app.export_screenshot()
             assert "main" in rendered
@@ -146,10 +148,12 @@ def test_git_pane_refresh_force_reprobes(tmp_path: Path) -> None:
         app = _Harness()
         app.cwd = repo
         async with app.run_test(size=(60, 12)) as pilot:
+            await app.workers.wait_for_complete()  # initial mount probe
             await pilot.pause()
             pane = app.query_one("#gp", GitPane)
             (repo / "dirty.txt").write_text("y\n", encoding="utf-8")
             pane.refresh_git(force=True)
+            await app.workers.wait_for_complete()  # the forced re-probe worker
             await pilot.pause()
             assert "changed" in app.export_screenshot()
 

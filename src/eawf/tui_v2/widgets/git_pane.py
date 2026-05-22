@@ -23,6 +23,7 @@ palette vars — never hardcoded hex.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import subprocess
 import time
@@ -196,11 +197,16 @@ class GitPane(Static):
         self._fields: GitFields | None = None
 
     def on_mount(self) -> None:
-        """Probe git and paint on first mount."""
+        """Kick off the first git probe off the event loop."""
         self.refresh_git(force=True)
 
     def refresh_git(self, *, force: bool = False) -> None:
-        """Re-probe git (subject to the TTL cache) and repaint.
+        """Re-probe git off the event loop (subject to the TTL cache) and repaint.
+
+        The probe is four ``git`` subprocesses; running it in a worker keeps a
+        slow or hung ``git`` from blocking the first paint or the render loop.
+        The cached fields repaint when the worker returns. ``exclusive`` drops
+        any in-flight probe so back-to-back force-refreshes coalesce.
 
         Args:
             force: When ``True``, bypass the :data:`GIT_CACHE_TTL_S`
@@ -209,8 +215,13 @@ class GitPane(Static):
         now = time.monotonic()
         if not force and self._fields is not None and now - self._last_probe < GIT_CACHE_TTL_S:
             return
-        self._fields = gather_git_fields(self._cwd)
         self._last_probe = now
+        self.run_worker(self._probe_git(), group="git-probe", exclusive=True)
+
+    async def _probe_git(self) -> None:
+        """Worker body: probe git off-thread, then apply + repaint on the loop."""
+        fields = await asyncio.to_thread(gather_git_fields, self._cwd)
+        self._fields = fields
         self._repaint()
 
     def _repaint(self) -> None:

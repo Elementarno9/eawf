@@ -366,6 +366,7 @@ def test_pr_verb_opens_modal_through_cap(monkeypatch: pytest.MonkeyPatch) -> Non
             await pilot.pause()
             handler = next(v.handler for v in VERBS if v.name == "/pr")
             handler(app, "")
+            await app.workers.wait_for_complete()  # /pr fetch runs in a worker
             await pilot.pause()
             assert isinstance(app.screen, PrListModal)
             assert app.modal_depth() == 1
@@ -387,6 +388,7 @@ def test_pr_verb_gh_unavailable_opens_with_hint(monkeypatch: pytest.MonkeyPatch)
             await pilot.pause()
             handler = next(v.handler for v in VERBS if v.name == "/pr")
             handler(app, "")
+            await app.workers.wait_for_complete()  # /pr fetch runs in a worker
             await pilot.pause()
             assert isinstance(app.screen, PrListModal)
             empty = app.screen.query_one("#pr-list").query(".pr-empty")
@@ -454,6 +456,7 @@ def test_pr_modal_open_web_spawns_gh_view(monkeypatch: pytest.MonkeyPatch) -> No
             await pilot.press("down")  # highlight the second row (#13)
             await pilot.pause()
             await pilot.press("enter")
+            await app.workers.wait_for_complete()  # gh pr view --web runs in a worker
             await pilot.pause()
             assert gh_argvs == [["gh", "pr", "view", "--web", "13"]]
 
@@ -473,6 +476,7 @@ def test_pr_modal_open_web_graceful_when_gh_missing(monkeypatch: pytest.MonkeyPa
             await pilot.pause()
             # A missing gh must not crash the overlay on Enter.
             await pilot.press("enter")
+            await app.workers.wait_for_complete()  # gh pr view --web runs in a worker
             await pilot.pause()
             assert isinstance(app.screen, PrListModal)
 

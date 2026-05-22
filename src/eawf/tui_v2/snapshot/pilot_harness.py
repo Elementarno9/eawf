@@ -87,6 +87,10 @@ async def settle_screen(pilot: Pilot[object]) -> str:
     Returns:
         The settled, normalised screen text.
     """
+    # Drain background workers (e.g. the GitPane git probe, which now runs off
+    # the event loop) before sampling so the capture reflects the post-worker
+    # frame rather than a pre-probe placeholder.
+    await pilot.app.workers.wait_for_complete()
     previous = normalize_snapshot(capture_screen_text(pilot.app))
     for _ in range(_SETTLE_MAX_CYCLES):
         await pilot.pause()
