@@ -3080,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T12:57:55.031044Z",
+  "updated_at": "2026-05-22T13:05:18.907007Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10921,9 +10921,9 @@
     "P26-I02-W22": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-p26i02-w22",
+      "closed_at": "2026-05-22T13:05:18.906397Z",
+      "commit": "cfa1d8462339572df46c82f27341dc1a3db61e2d",
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "M",
@@ -10939,10 +10939,10 @@
       "id": "P26-I02-W22",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T12:12:09.305964Z",
-      "outcome": null,
+      "outcome": "git probe + /pr fetch + gh pr view --web offloaded to workers (asyncio.to_thread/thread); poll loop OSError-guards stat; settle_screen drains workers; tui_v2+snapshot suites green (643)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "git_pane on_mount probe runs off the event loop via a worker (no sync subprocess on mount)",
         "/pr fetch + action_open_web offloaded to workers (UI stays responsive while gh runs)",
