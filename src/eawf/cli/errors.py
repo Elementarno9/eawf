@@ -41,6 +41,7 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.cli import exit_codes
+from eawf.cli.error_codes import ErrorCode
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 
@@ -233,6 +234,16 @@ class ErrorEnvelope(BaseModel):
     """Operator-facing actionable hint — e.g.
     ``"run \\`eawf daemon start\\` then retry"``."""
 
+    error_code: str | None = None
+    """Cause-level :class:`~eawf.cli.error_codes.ErrorCode` value layered
+    over the five exit buckets — e.g. ``"WAVE_DEPS_NOT_SATISFIED"``.
+
+    Optional (default ``None``) so existing error sites that do not yet
+    pass one keep rendering unchanged. When set, the text branch appends a
+    ``See <code>`` line pointing at the matching anchor in
+    ``docs/reference/error-codes.md`` and CI consumers pivot on the precise
+    cause without the exit-code surface having to grow."""
+
     data: dict[str, Any] = Field(default_factory=dict)
     """Verb-specific structured context. Always JSON-safe. The ``kind``
     key preserves the legacy nine-class subclass distinction
@@ -332,6 +343,7 @@ def _resolve_hint(canonical: str, kind: str | None) -> str:
 def build_envelope(
     err: CliError,
     *,
+    error_code: ErrorCode | None = None,
     correlation_id: str | None = None,
     protocol_version: str | None = None,
     data: dict[str, Any] | None = None,
@@ -342,10 +354,15 @@ def build_envelope(
     (``UserError`` / ``ValidationError`` / ``StateConflict`` /
     ``DaemonUnreachable`` / ``InternalError``). When *err* is a legacy
     subclass, the legacy name is preserved in ``data.kind`` per the
-    disambiguation rule.
+    disambiguation rule. An optional cause-level *error_code* layers the
+    precise :class:`~eawf.cli.error_codes.ErrorCode` over the bucket
+    without changing the exit code.
 
     Args:
         err: The :class:`CliError` (or legacy subclass) instance.
+        error_code: Optional cause-level
+            :class:`~eawf.cli.error_codes.ErrorCode`. Stored as its string
+            value so the text branch renders a ``See <code>`` line.
         correlation_id: JSON-RPC request id when the error is
             daemon-mediated.
         protocol_version: Daemon protocol version (only set on
@@ -369,6 +386,7 @@ def build_envelope(
         exit_code=err.exit_code,
         exit_name=exit_codes.name_for(err.exit_code),
         suggested_next_step=_resolve_hint(canonical, kind),
+        error_code=error_code.value if error_code is not None else None,
         data=merged_data,
         correlation_id=correlation_id,
         protocol_version=protocol_version,
@@ -378,12 +396,21 @@ def build_envelope(
 def _render_text(env: ErrorEnvelope) -> str:
     """Render *env* as the plain-text branch body.
 
-    Skipped fields when empty: ``kind`` (when absent), ``data`` (when
-    only ``kind`` was present), ``correlation_id`` (when ``None``).
+    The operator-facing lead follows the C10 error-UX order: cause
+    (``error: <message>``) -> next_step (``hint: <suggested_next_step>``)
+    -> ``See <error_code>`` when an :class:`~eawf.cli.error_codes.ErrorCode`
+    is set. The ``See`` line is omitted when ``error_code`` is ``None`` so
+    legacy error sites render unchanged.
+
+    Skipped fields when empty: ``error_code`` (when ``None``), ``kind``
+    (when absent), ``data`` (when only ``kind`` was present),
+    ``correlation_id`` (when ``None``).
     """
     lines = [f"error: {env.message}"]
     if env.suggested_next_step is not None:
         lines.append(f"hint: {env.suggested_next_step}")
+    if env.error_code is not None:
+        lines.append(f"See {env.error_code}")
     lines.append(f"exit_code: {env.exit_code} ({env.exit_name})")
     kind = env.data.get("kind")
     if kind is not None:
@@ -400,6 +427,7 @@ def emit_error(
     err: CliError,
     *,
     flags: GlobalFlags,
+    error_code: ErrorCode | None = None,
     correlation_id: str | None = None,
     protocol_version: str | None = None,
     data: dict[str, Any] | None = None,
@@ -411,6 +439,9 @@ def emit_error(
             and string body populate the envelope.
         flags: Resolved global flags. ``flags.json_output`` controls the
             text/JSON branch in :func:`eawf.cli.output.emit_json_or_text`.
+        error_code: Optional cause-level
+            :class:`~eawf.cli.error_codes.ErrorCode` layered over the
+            bucket; renders a ``See <code>`` line in the text branch.
         correlation_id: Optional JSON-RPC request id for daemon-mediated
             errors.
         protocol_version: Optional daemon protocol version for
@@ -423,6 +454,7 @@ def emit_error(
     """
     env = build_envelope(
         err,
+        error_code=error_code,
         correlation_id=correlation_id,
         protocol_version=protocol_version,
         data=data,
