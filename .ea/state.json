@@ -1626,7 +1626,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I02-W23",
+      "P27-I02-W24"
+    ],
     "iter_id": "P27-I03",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -2036,7 +2039,34 @@
       "superseded_by": null
     }
   },
-  "estimates": null,
+  "estimates": {
+    "P27-I02-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W23-bucket-20260522T231713Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W23",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W23",
+      "updated_at": "2026-05-22T23:17:13.080954Z"
+    },
+    "P27-I02-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W24-bucket-20260522T231713Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W24",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W24",
+      "updated_at": "2026-05-22T23:17:13.561489Z"
+    }
+  },
   "goals": {
     "G01": {
       "closed_at": null,
@@ -3252,7 +3282,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T23:15:38.518626Z",
+  "updated_at": "2026-05-22T23:18:28.500487Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -12759,7 +12789,7 @@
         "P27-I03-W07",
         "P27-I03-W08"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "flow-p27i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -12769,7 +12799,15 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/state/models.py"
+        "src/eawf/state/models.py",
+        "src/eawf/render/**",
+        "src/eawf/tui_v2/**",
+        "src/eawf/dispatch/**",
+        "src/eawf/cli/**",
+        "src/eawf/migrations/v1_0_to_v1_1.py",
+        "src/eawf/schemas/**",
+        "docs/reference/autogen/**",
+        "tests/**"
       ],
       "id": "P27-I02-W23",
       "iter_id": "P27-I02",
@@ -12777,19 +12815,19 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "title (max 72) and description (max 500) added to Phase/Iter/Wave/BacklogItem/Incident; Decision.summary renamed to title and Hypothesis.text to title; an over-cap title is rejected; renamed fields round-trip; readers updated"
       ],
       "title": "Add title+description to entities + rename",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W23-1779491834"
     },
     "P27-I02-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "flow-p27i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -12806,7 +12844,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "each over-cap row copies its full string to description and truncates title to max 72 at a clause boundary; post-migration no title exceeds 72; no content is lost; tested on the real state fixture"
       ],
@@ -15167,6 +15205,17 @@
       "path": ".ea/worktrees/p27-w22",
       "status": "merged",
       "wave_id": "P27-I02-W22"
+    },
+    "WT-P27-I02-W23-1779491834": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w23",
+      "created_at": "2026-05-22T23:17:14.390034Z",
+      "id": "WT-P27-I02-W23-1779491834",
+      "merged_commit": null,
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w23",
+      "status": "active",
+      "wave_id": "P27-I02-W23"
     },
     "WT-P27-I02-W25-1779489718": {
       "base_branch": "feature/eawf-v0.3-p27",
