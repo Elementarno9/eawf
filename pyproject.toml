@@ -144,7 +144,82 @@ source = ["src/eawf"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 0
+# Overall floor. Measured total sits well above this (line ~87%, branch
+# ~78% on 2026-05-22); the floor stays low because the TUI line-cov gate
+# is waived (asynchronous Textual render misreports line hits, dropping
+# the achievable overall by ~15 points). The real regression-catching is
+# the per-package ratchet in ``[tool.eawf.coverage]``; this floor only
+# catches large-scale dead-code accumulation.
+fail_under = 60
+
+[tool.eawf.coverage]
+# Per-package coverage gates (C09 §5.2 nine-layer grouping). pytest-cov
+# has no native per-package threshold, so the CI ``coverage gate`` step
+# parses ``coverage.xml`` and asserts each gated package's measured
+# line/branch rate clears its threshold here. Thresholds are a ratchet:
+# each is set just below the coverage measured on 2026-05-22 (a ~1-point
+# safety margin absorbs cross-OS / test-selection variance) so the gate
+# catches regressions without redding CI on the current tree. See
+# ``docs/reference/coverage-gates.md`` for measured headroom + rationale.
+#
+# Each row maps a gate key to ``[line_threshold, branch_threshold]``.
+# ``path`` is the filename prefix (relative to ``src/eawf``) the checker
+# aggregates; ``glob`` rows match by suffix instead. ``waive_line`` /
+# ``waive_branch`` opt a layer out of that dimension.
+
+[tool.eawf.coverage.gates.daemon]
+path = "daemon/"
+line = 77
+branch = 64
+
+[tool.eawf.coverage.gates.telemetry]
+path = "telemetry/"
+line = 93
+branch = 86
+
+[tool.eawf.coverage.gates.skills]
+path = "skills/"
+line = 93
+branch = 81
+
+[tool.eawf.coverage.gates.cli]
+path = "cli/"
+line = 75
+branch = 65
+
+[tool.eawf.coverage.gates.tui_v2]
+# Line + branch waived: Textual widgets render asynchronously and
+# line-cov misreports. Screen coverage is enforced by the snapshot
+# pairing gate (C09 §5.2), not by this line/branch ratchet.
+path = "tui_v2/"
+waive_line = true
+waive_branch = true
+
+[tool.eawf.coverage.gates.render]
+path = "render/"
+line = 89
+branch = 74
+
+[tool.eawf.coverage.gates.store]
+path = "store/"
+line = 97
+branch = 84
+
+[tool.eawf.coverage.gates.state]
+path = "state/"
+line = 98
+branch = 95
+
+[tool.eawf.coverage.gates.lock]
+path = "lock/"
+line = 86
+branch = 80
+
+[tool.eawf.coverage.gates.plugin_install]
+# Crash-relevant install surface across all three runtimes.
+glob = "runtimes/*/plugin_install.py"
+line = 95
+branch = 88
 
 [build-system]
 requires = ["hatchling"]
