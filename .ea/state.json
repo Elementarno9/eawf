@@ -1572,9 +1572,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W05"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3035,7 +3033,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T01:15:42.823918Z",
+  "updated_at": "2026-05-22T01:16:00.629876Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10318,7 +10316,7 @@
         "P26-I02-W06"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-22T01:16:00.036401Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10332,10 +10330,10 @@
       "id": "P26-I02-W05",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T00:02:32.835158Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "resolve_detail gains iter + phase resolvers (currently wave+backlog only)",
         "sectioned cards per entity and h/d/m/e/dp tabs via TabbedContent with Tab/Shift+Tab cycle and arrows scroll",
@@ -11298,10 +11296,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w05",
       "created_at": "2026-05-22T00:11:02.678524Z",
       "id": "WT-P26-I02-W05-1779408662",
-      "merged_commit": null,
+      "merged_commit": "f643c5e",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p26-i02-w05",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W05"
     }
   }
