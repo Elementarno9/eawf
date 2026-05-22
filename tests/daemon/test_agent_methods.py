@@ -187,6 +187,51 @@ def test_dispatch_increments_attempt_when_wave_has_prior_sessions(
             {"wave_id": "P24-I01-W07", "session_policy": "fresh"},
         )
         assert result["attempt"] == 2
+        # Same runtime as the prior attempt → no swap, fresh-dispatch note.
+        assert result["annotation"]["note"] == DispatchNote.FRESH_DISPATCH.value
+        assert result["annotation"]["runtime_from"] is None
+
+    _run(body)
+
+
+def test_dispatch_manual_runtime_override_emits_switch_manual(tmp_path: Path) -> None:
+    """A runtime override that differs from the prior attempt is a manual swap.
+
+    The fresh-dispatch path resolves the new runtime from an operator override
+    (or preference) with no error involved, so the annotation note is
+    ``SWITCH_MANUAL`` — ``SWITCH_ON_ERROR`` is reserved for the error-driven
+    V5 reactive switch in :mod:`eawf.runtimes.fallback`.
+    """
+    state_path = tmp_path / "state.json"
+    prior = SessionAttempt(
+        attempt=1,
+        runtime="claude-code",
+        session_id="prior-uuid",
+        session_log_handle="urn:eawf:v1:session-log:claude-code:abc",
+        started_at=_now(),
+    )
+    _write_state(
+        state_path,
+        _build_state_payload(
+            wave_id="P24-I01-W07",
+            sessions={1: prior},
+            runtime_preference=["claude-code"],
+        ),
+    )
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        result: dict[str, Any] = await dispatch(
+            ctx,
+            {"wave_id": "P24-I01-W07", "runtime": "codex", "session_policy": "fresh"},
+        )
+        assert result["attempt"] == 2
+        assert result["runtime"] == "codex"
+        annotation = result["annotation"]
+        assert annotation["note"] == DispatchNote.SWITCH_MANUAL.value
+        assert annotation["note"] != DispatchNote.SWITCH_ON_ERROR.value
+        assert annotation["runtime_from"] == "claude-code"
+        assert annotation["runtime_to"] == "codex"
 
     _run(body)
 

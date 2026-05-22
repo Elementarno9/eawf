@@ -47,7 +47,7 @@ MANIFEST = SkillManifest(
     name="/wave-spec",
     description="Scaffold or validate a WaveSpec deliverable for a claimed wave.",
     runtime=["claude-code", "codex", "opencode"],
-    dispatch={"session_policy": "reuse"},
+    dispatch={"session_policy": "continue"},
     output_envelope_kind="wave_spec_operation",
 )
 

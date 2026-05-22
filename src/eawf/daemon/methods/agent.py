@@ -200,7 +200,11 @@ def _build_plan(
             last = wave.sessions[max(wave.sessions)]
             runtime_from = last.runtime if last.runtime != runtime else None
 
-    note = DispatchNote.FRESH_DISPATCH if runtime_from is None else DispatchNote.SWITCH_ON_ERROR
+    # ``runtime_from`` is set only when the resolved runtime differs from the
+    # last attempt's — an operator/preference override with no error involved,
+    # so the swap is manual. The error-driven V5 reactive switch lives in
+    # ``runtimes.fallback`` and owns ``SWITCH_ON_ERROR``.
+    note = DispatchNote.FRESH_DISPATCH if runtime_from is None else DispatchNote.SWITCH_MANUAL
     annotation = DispatchAnnotation(
         attempt=attempt,
         note=note,

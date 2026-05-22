@@ -46,7 +46,7 @@ MANIFEST = SkillManifest(
     name="/memory",
     description="Save, list, or forget curated durable memory entries.",
     runtime=["claude-code", "codex", "opencode"],
-    dispatch={"session_policy": "reuse"},
+    dispatch={"session_policy": "continue"},
     output_envelope_kind="memory_operation",
 )
 

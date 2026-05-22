@@ -168,3 +168,33 @@ def test_envelope_status_reexport_is_single_sourced() -> None:
 def test_runtime_id_literal_has_three_members() -> None:
     """``RuntimeId`` is closed to the three canonical runtime ids."""
     assert set(get_args(RuntimeId)) == {"claude-code", "codex", "opencode"}
+
+
+# ---------------------------------------------------------------------------
+# Shipped-skill manifest session_policy is on the canonical vocabulary
+# ---------------------------------------------------------------------------
+
+
+def test_shipped_skill_manifests_use_canonical_session_policy() -> None:
+    """Every shipped skill manifest's ``session_policy`` is on the canonical set.
+
+    The dispatcher accepts only
+    :data:`~eawf.daemon.methods.agent.SessionPolicy`
+    (``fresh`` / ``continue`` / ``hybrid``); an off-vocabulary value (e.g. the
+    legacy ``reuse``) would never match the dispatch policy.
+    """
+    from eawf.daemon.methods.agent import SessionPolicy
+    from eawf.skills.coauthor import MANIFEST as COAUTHOR_MANIFEST
+    from eawf.skills.compress import MANIFEST as COMPRESS_MANIFEST
+    from eawf.skills.memory import MANIFEST as MEMORY_MANIFEST
+    from eawf.skills.wave_spec import MANIFEST as WAVE_SPEC_MANIFEST
+
+    canonical = set(get_args(SessionPolicy))
+    for manifest in (
+        COMPRESS_MANIFEST,
+        MEMORY_MANIFEST,
+        COAUTHOR_MANIFEST,
+        WAVE_SPEC_MANIFEST,
+    ):
+        policy = manifest.dispatch.get("session_policy")
+        assert policy in canonical, f"{manifest.name} session_policy={policy!r} off-vocabulary"

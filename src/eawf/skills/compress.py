@@ -55,7 +55,7 @@ MANIFEST = SkillManifest(
     name="/compress",
     description="Compress the session conversation when context approaches the limit.",
     runtime=["claude-code", "codex", "opencode"],
-    dispatch={"session_policy": "reuse"},
+    dispatch={"session_policy": "continue"},
     output_envelope_kind="compression_result",
 )
 

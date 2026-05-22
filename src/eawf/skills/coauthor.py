@@ -58,7 +58,7 @@ MANIFEST = SkillManifest(
     name="/coauthor",
     description="Resolve the Co-Authored-By trailer policy for the active repo.",
     runtime=["claude-code", "codex", "opencode"],
-    dispatch={"session_policy": "reuse"},
+    dispatch={"session_policy": "continue"},
     output_envelope_kind="coauthor_resolution",
 )
 
