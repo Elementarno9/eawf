@@ -1,5 +1,25 @@
 {
   "actuals": {
+    "P27-I02-W23": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W23-close-20260522T234831Z",
+      "elapsed_eu": 7.71,
+      "id": "ACT-P27-I02-W23",
+      "scope_id": "P27-I02-W23",
+      "status": "done",
+      "updated_at": "2026-05-22T23:48:31.417219Z"
+    },
+    "P27-I02-W24": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W24-close-20260522T235411Z",
+      "elapsed_eu": 7.9,
+      "id": "ACT-P27-I02-W24",
+      "scope_id": "P27-I02-W24",
+      "status": "done",
+      "updated_at": "2026-05-22T23:54:11.295441Z"
+    },
     "P27-I02-W26": {
       "agent_runtime_eu": null,
       "attention_eu": null,
@@ -910,6 +930,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:34.695399Z",
+      "description": null,
       "id": "B001",
       "priority": "P3",
       "resolution": null,
@@ -921,6 +942,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:35.036761Z",
+      "description": null,
       "id": "B002",
       "priority": "P3",
       "resolution": null,
@@ -932,6 +954,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:35.385269Z",
+      "description": null,
       "id": "B003",
       "priority": "P1",
       "resolution": null,
@@ -943,6 +966,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:35.733145Z",
+      "description": null,
       "id": "B004",
       "priority": "P3",
       "resolution": null,
@@ -954,6 +978,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:36.132398Z",
+      "description": null,
       "id": "B005",
       "priority": "P3",
       "resolution": null,
@@ -965,6 +990,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:36.481668Z",
+      "description": null,
       "id": "B006",
       "priority": "P1",
       "resolution": null,
@@ -976,6 +1002,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:36.826924Z",
+      "description": null,
       "id": "B007",
       "priority": "P1",
       "resolution": null,
@@ -987,6 +1014,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:37.178741Z",
+      "description": null,
       "id": "B008",
       "priority": "P1",
       "resolution": null,
@@ -998,6 +1026,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:37.530831Z",
+      "description": null,
       "id": "B009",
       "priority": "P1",
       "resolution": null,
@@ -1009,6 +1038,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T12:50:37.904560Z",
+      "description": null,
       "id": "B010",
       "priority": "P3",
       "resolution": null,
@@ -1068,6 +1098,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T14:47:38.354765Z",
+      "description": null,
       "id": "B015",
       "priority": "P1",
       "resolution": null,
@@ -1079,6 +1110,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T14:47:38.781639Z",
+      "description": null,
       "id": "B016",
       "priority": "P3",
       "resolution": null,
@@ -1414,6 +1446,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-10T21:27:57.937474Z",
+      "description": null,
       "id": "B044",
       "priority": "P2",
       "resolution": null,
@@ -1461,6 +1494,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T14:52:28.239930Z",
+      "description": null,
       "id": "B048",
       "priority": "P3",
       "resolution": null,
@@ -1472,6 +1506,7 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-05-11T14:52:28.981761Z",
+      "description": null,
       "id": "B049",
       "priority": "P2",
       "resolution": null,
@@ -1676,10 +1711,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I02-W23",
-      "P27-I02-W24"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I03",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -1690,6 +1722,7 @@
       "alternatives": [],
       "consequences": [],
       "created_at": "2026-05-18T19:09:29.934741Z",
+      "description": null,
       "id": "D-SUP-01",
       "rationale": "Per audit XB09 + operator Q2 2026-05-18. Roadmap-synthesis brief deferred daemon; V1 ratified 2026-05-16 reverses to daemon Day-1 with smart-spawn + daemonless reader exemption. Migration cost grows monotonically with codebase size; cheapest to pay now.",
       "scope_id": "urn:eawf:v1:repo:eawf",
@@ -1701,6 +1734,7 @@
       "alternatives": [],
       "consequences": [],
       "created_at": "2026-05-18T19:09:30.478228Z",
+      "description": null,
       "id": "D-SUP-02",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Manifesto Rule 6 allowed multiple dispatchers; V1 narrows to single daemon dispatcher.",
       "scope_id": "urn:eawf:v1:repo:eawf",
@@ -1712,6 +1746,7 @@
       "alternatives": [],
       "consequences": [],
       "created_at": "2026-05-18T19:09:30.994652Z",
+      "description": null,
       "id": "D-SUP-03",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Manifesto Rule 5 plan-before-execute; V8 narrows to session-reuse on retry (fresh on new dispatch + continue on retry).",
       "scope_id": "urn:eawf:v1:repo:eawf",
@@ -1723,6 +1758,7 @@
       "alternatives": [],
       "consequences": [],
       "created_at": "2026-05-18T19:09:31.499178Z",
+      "description": null,
       "id": "D-SUP-04",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Roadmap-synthesis rejected BYOK; C07a D2 keeps BYOK supported with subscription as default.",
       "scope_id": "urn:eawf:v1:repo:eawf",
@@ -1734,6 +1770,7 @@
       "alternatives": [],
       "consequences": [],
       "created_at": "2026-05-18T19:09:31.992909Z",
+      "description": null,
       "id": "D-SUP-05",
       "rationale": "Per audit BOT-01 + operator Q2 2026-05-18. Halt-only pattern superseded by reactive runtime fallback (V5) + session-reuse on retry (V8).",
       "scope_id": "urn:eawf:v1:repo:eawf",
@@ -1745,6 +1782,7 @@
       "alternatives": [],
       "consequences": [],
       "created_at": "2026-05-18T19:09:32.534673Z",
+      "description": null,
       "id": "D-SUP-TUI-01",
       "rationale": "Per audit BOT-01 + operator Q6 2026-05-18. P14-era P20-direction-brief picked rich; C06 v0.3+ rebuilds TUI on Textual. Memory project_p14_direction superseded by project_tui_textual_v03.",
       "scope_id": "urn:eawf:v1:repo:eawf",
@@ -1775,6 +1813,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T19:48:55.001291Z",
+      "description": null,
       "id": "D02",
       "rationale": "Bottleneck is non-coders authoring audits, not expressing arbitrary logic. YAML + registry of built-in kinds (file_exists, regex_match, json_path_value, pytest_pass, coverage_min, numeric_threshold, command_exit_zero) lets check-authors stay in YAML; new kinds are a code change. Hybrid escape hatch can come later if real example pushes against the registry.",
       "scope_id": "EAWF",
@@ -1789,6 +1828,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T19:49:01.231132Z",
+      "description": null,
       "id": "D03",
       "rationale": "Audit link gates the commitment, not the exploration. Forcing audit at hypothesis open time forces premature audit design; making it fully optional fails the verify-before-claim rule. Permissive open + required audit on set-verdict matches the dogfood workflow.",
       "scope_id": "EAWF",
@@ -1804,6 +1844,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T19:49:06.729261Z",
+      "description": null,
       "id": "D04",
       "rationale": "Local file integrity is cheap to enforce; URL integrity is a different problem (provenance + fetch policy). Mandatory-everywhere couples the registry to network state at registration. eawf artifact verify recomputes on demand for both cases.",
       "scope_id": "EAWF",
@@ -1849,6 +1890,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T20:35:25.648863Z",
+      "description": null,
       "id": "D07",
       "rationale": "Squash collapses per-wave/per-commit history into a single fat commit on main, losing the symbol-prefixed audit trail (e.g. [P06-W05] [P06-CORE]) that AGENTS.md commit-prefix rule and the wave/audit chain depend on for reconstructibility from git log. Rebase-merge preserves linear, individual commits with their original messages — matches the cherry-pick discipline that already feeds the long-running phase branch. Merge-commits forbidden by repo settings (mergeCommitAllowed=false). Default for all phase PRs unless explicitly overridden.",
       "scope_id": "EAWF",
@@ -1863,6 +1905,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-10T21:26:53.450950Z",
+      "description": null,
       "id": "D08",
       "rationale": "User proposed shifting from per-phase PR to review-driven + version-bump PR mid-v0.2. Mid-stream workflow change = state-of-record drift risk; defer re-evaluation to v0.2.0 cut, when iter/phase aggregation pattern is fully exercised.",
       "scope_id": "EAWF",
@@ -1876,6 +1919,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T14:12:02.809171Z",
+      "description": null,
       "id": "D09",
       "rationale": "v0.2 scope locked at P13; PyPI publish needs maintainer-track decision + CI release gating + tag-driven workflow not yet in place. Park behind tag v0.2.0 ship and reopen as v0.3 epic.",
       "scope_id": "EAWF",
@@ -1889,6 +1933,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T14:12:08.585562Z",
+      "description": null,
       "id": "D10",
       "rationale": "D08 deferred the cadence policy revisit to v0.2.0 ship. Reviewed at P13 open: one-PR-per-phase produced clean rebase-merge history across P07..P12 and aligns with AGENTS.md phase lifecycle. Keep cadence; reopen for v0.3 only if multi-phase PRs become necessary.",
       "scope_id": "EAWF",
@@ -1902,6 +1947,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T14:12:12.008221Z",
+      "description": null,
       "id": "D11",
       "rationale": "P13 is the v0.2.0 ship-gate phase. Scope = backlog hygiene (W01) + 4 net-new features (W02 B009, W04 B019, W05 B015, W07 B017) + B042 (W03) + version bump (W06) + CORE final. Additional waves block tag and re-trigger CI; add via decision ADR only.",
       "scope_id": "EAWF",
@@ -1916,6 +1962,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:38.441970Z",
+      "description": null,
       "id": "D12",
       "rationale": "Goose/Aider/Cursor/Cline deferred to v0.4 to lock P14 at 11 waves; OpenCode and Codex are highest-demand harnesses per operator priority.",
       "scope_id": "EAWF",
@@ -1930,6 +1977,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:40.501195Z",
+      "description": null,
       "id": "D13",
       "rationale": "Avoid tsx/build-step rabbit hole + @opencode-ai/plugin type-stub churn risk; revisit when OpenCode publishes stable types.",
       "scope_id": "EAWF",
@@ -1958,6 +2006,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:47:43.808082Z",
+      "description": null,
       "id": "D15",
       "rationale": "rich already pinned; no new runtime dep; accepts weaker keyboard focus vs Textual; matches P05 anti-Textual precedent.",
       "scope_id": "EAWF",
@@ -2048,6 +2097,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:48:00.453179Z",
+      "description": null,
       "id": "D21",
       "rationale": "Operator priority is harness coverage, not new server runtime; hardens existing emit path (Claude .mcp.json + Codex TOML + OpenCode opencode.json mcp block); plugin doctor verifies drift; own MCP server deferred to v0.4.",
       "scope_id": "EAWF",
@@ -2062,6 +2112,7 @@
       ],
       "consequences": [],
       "created_at": "2026-05-11T20:48:02.319590Z",
+      "description": null,
       "id": "D22",
       "rationale": "Tight clarification-loop integration; recursion guard via EAWF_BLITZ_DEPTH env var; max-rounds safety cap default 8.",
       "scope_id": "EAWF",
@@ -2148,6 +2199,7 @@
     "P08-I01": {
       "audit_id": "A09-P08",
       "closed_at": "2026-05-10T23:05:32.718237Z",
+      "description": null,
       "estimate_id": null,
       "id": "P08-I01",
       "opened_at": "2026-05-10T21:46:31.667630Z",
@@ -2166,6 +2218,7 @@
     "P09-I01": {
       "audit_id": "A10-P09",
       "closed_at": "2026-05-11T08:36:31.584978Z",
+      "description": null,
       "estimate_id": null,
       "id": "P09-I01",
       "opened_at": "2026-05-11T08:15:55.743189Z",
@@ -2182,6 +2235,7 @@
     "P10-I01": {
       "audit_id": "A11-P10",
       "closed_at": "2026-05-11T10:50:23.234293Z",
+      "description": null,
       "estimate_id": null,
       "id": "P10-I01",
       "opened_at": "2026-05-11T10:19:44.869960Z",
@@ -2198,6 +2252,7 @@
     "P11-I01": {
       "audit_id": "A12-P11",
       "closed_at": "2026-05-11T11:50:52.416700Z",
+      "description": null,
       "estimate_id": null,
       "id": "P11-I01",
       "opened_at": "2026-05-11T11:37:58.709953Z",
@@ -2213,6 +2268,7 @@
     "P12-I01": {
       "audit_id": "A13-P12",
       "closed_at": "2026-05-11T13:28:30.252719Z",
+      "description": null,
       "estimate_id": null,
       "id": "P12-I01",
       "opened_at": "2026-05-11T12:57:19.867763Z",
@@ -2232,6 +2288,7 @@
     "P13-I01": {
       "audit_id": "A14-P13",
       "closed_at": "2026-05-11T15:09:13.455671Z",
+      "description": null,
       "estimate_id": null,
       "id": "P13-I01",
       "opened_at": "2026-05-11T14:12:37.620116Z",
@@ -2251,6 +2308,7 @@
     "P14-I01": {
       "audit_id": "A15-P14",
       "closed_at": "2026-05-11T23:03:25.522292Z",
+      "description": null,
       "estimate_id": null,
       "id": "P14-I01",
       "opened_at": "2026-05-11T21:00:03.369199Z",
@@ -2274,6 +2332,7 @@
     "P14-I02": {
       "audit_id": "A17-P14",
       "closed_at": "2026-05-12T18:29:03.334894Z",
+      "description": null,
       "estimate_id": null,
       "id": "P14-I02",
       "opened_at": "2026-05-12T16:55:45.811499Z",
@@ -2287,6 +2346,7 @@
     "P14-I03": {
       "audit_id": "A18-P14",
       "closed_at": "2026-05-12T18:58:56.918261Z",
+      "description": null,
       "estimate_id": null,
       "id": "P14-I03",
       "opened_at": "2026-05-12T18:43:24.617660Z",
@@ -2300,6 +2360,7 @@
     "P14-I04": {
       "audit_id": "A19-P14",
       "closed_at": "2026-05-12T20:10:32.920710Z",
+      "description": null,
       "estimate_id": null,
       "id": "P14-I04",
       "opened_at": "2026-05-12T19:50:47.505895Z",
@@ -2316,6 +2377,7 @@
     "P15-I01": {
       "audit_id": "A20-P15",
       "closed_at": "2026-05-13T13:34:56.380307Z",
+      "description": null,
       "estimate_id": null,
       "id": "P15-I01",
       "opened_at": "2026-05-13T12:39:30.071505Z",
@@ -2332,6 +2394,7 @@
     "P17-I01": {
       "audit_id": "A22-P17",
       "closed_at": "2026-05-14T15:43:54.342127Z",
+      "description": null,
       "estimate_id": null,
       "id": "P17-I01",
       "opened_at": "2026-05-14T15:07:37.287576Z",
@@ -2353,6 +2416,7 @@
     "P18-I01": {
       "audit_id": "A23-P18",
       "closed_at": "2026-05-14T18:36:30.198916Z",
+      "description": null,
       "estimate_id": null,
       "id": "P18-I01",
       "opened_at": "2026-05-14T17:24:06.464348Z",
@@ -2378,6 +2442,7 @@
     "P19-I01": {
       "audit_id": "A24-P19",
       "closed_at": "2026-05-14T22:22:47.378263Z",
+      "description": null,
       "estimate_id": null,
       "id": "P19-I01",
       "opened_at": "2026-05-14T19:20:41.264547Z",
@@ -2400,6 +2465,7 @@
     "P19-I02": {
       "audit_id": "A26-P19-I02",
       "closed_at": "2026-05-15T15:38:36.719285Z",
+      "description": null,
       "estimate_id": null,
       "id": "P19-I02",
       "opened_at": "2026-05-15T14:42:39.662926Z",
@@ -2423,6 +2489,7 @@
     "P20-I01": {
       "audit_id": "A27-P20",
       "closed_at": "2026-05-15T19:46:11.396060Z",
+      "description": null,
       "estimate_id": null,
       "id": "P20-I01",
       "opened_at": "2026-05-15T14:43:38.289058Z",
@@ -2450,6 +2517,7 @@
     "P20-I02": {
       "audit_id": "A27-P20",
       "closed_at": "2026-05-15T20:10:05.115290Z",
+      "description": null,
       "estimate_id": null,
       "id": "P20-I02",
       "opened_at": "2026-05-15T20:03:15.757941Z",
@@ -2463,6 +2531,7 @@
     "P20-I03": {
       "audit_id": "A27-P20",
       "closed_at": "2026-05-15T21:05:54.106140Z",
+      "description": null,
       "estimate_id": null,
       "id": "P20-I03",
       "opened_at": "2026-05-15T20:30:59.787544Z",
@@ -2476,6 +2545,7 @@
     "P21-I01": {
       "audit_id": null,
       "closed_at": "2026-05-21T02:23:42.947114Z",
+      "description": null,
       "estimate_id": null,
       "id": "P21-I01",
       "opened_at": "2026-05-15T14:44:37.910326Z",
@@ -2504,6 +2574,7 @@
     "P22-I01": {
       "audit_id": "A28-P22-ship-gate",
       "closed_at": "2026-05-18T19:35:31.845484Z",
+      "description": null,
       "estimate_id": null,
       "id": "P22-I01",
       "opened_at": "2026-05-18T18:50:26.968206Z",
@@ -2523,6 +2594,7 @@
     "P23-I01": {
       "audit_id": "A29-P23-ship-gate",
       "closed_at": "2026-05-18T21:27:21.137353Z",
+      "description": null,
       "estimate_id": null,
       "id": "P23-I01",
       "opened_at": "2026-05-18T19:44:49.107239Z",
@@ -2538,6 +2610,7 @@
     "P23-I02": {
       "audit_id": "A29-P23-ship-gate",
       "closed_at": "2026-05-18T21:39:00.693202Z",
+      "description": null,
       "estimate_id": null,
       "id": "P23-I02",
       "opened_at": "2026-05-18T21:30:39.222928Z",
@@ -2551,6 +2624,7 @@
     "P24-I01": {
       "audit_id": "A30-P24-ship-gate",
       "closed_at": "2026-05-19T17:18:49.682691Z",
+      "description": null,
       "estimate_id": null,
       "id": "P24-I01",
       "opened_at": "2026-05-18T19:45:10.042950Z",
@@ -2573,6 +2647,7 @@
     "P24-I02": {
       "audit_id": "A30-P24-ship-gate",
       "closed_at": "2026-05-19T17:18:49.136479Z",
+      "description": null,
       "estimate_id": null,
       "id": "P24-I02",
       "opened_at": "2026-05-19T17:03:00.543589Z",
@@ -2586,6 +2661,7 @@
     "P25-I01": {
       "audit_id": "A31-P25-ship-gate",
       "closed_at": "2026-05-19T23:19:24.503228Z",
+      "description": null,
       "estimate_id": null,
       "id": "P25-I01",
       "opened_at": "2026-05-18T19:45:10.543231Z",
@@ -2617,6 +2693,7 @@
     "P26-I01": {
       "audit_id": "A33-P26-tui-fixes",
       "closed_at": "2026-05-22T00:00:34.608417Z",
+      "description": null,
       "estimate_id": null,
       "id": "P26-I01",
       "opened_at": "2026-05-18T19:45:11.036158Z",
@@ -2673,6 +2750,7 @@
     "P26-I02": {
       "audit_id": "A34-P26-tui-qol",
       "closed_at": "2026-05-22T13:53:29.379057Z",
+      "description": null,
       "estimate_id": null,
       "id": "P26-I02",
       "opened_at": "2026-05-22T00:01:31.012318Z",
@@ -2708,6 +2786,7 @@
     "P27-I01": {
       "audit_id": "A35-P27-observ-ops",
       "closed_at": "2026-05-22T19:55:54.714647Z",
+      "description": null,
       "estimate_id": null,
       "id": "P27-I01",
       "opened_at": "2026-05-18T19:45:11.534616Z",
@@ -2748,6 +2827,7 @@
     "P27-I02": {
       "audit_id": null,
       "closed_at": null,
+      "description": null,
       "estimate_id": null,
       "id": "P27-I02",
       "opened_at": "2026-05-22T19:55:55.103307Z",
@@ -2786,6 +2866,7 @@
     "P27-I03": {
       "audit_id": null,
       "closed_at": null,
+      "description": null,
       "estimate_id": null,
       "id": "P27-I03",
       "opened_at": "2026-05-22T19:55:55.481661Z",
@@ -2831,6 +2912,7 @@
       "audit_id": "A01-P00",
       "closed_at": "2026-05-10T12:49:35.795254Z",
       "depends_on": [],
+      "description": null,
       "id": "P00",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:49:35.093737Z",
@@ -2845,6 +2927,7 @@
       "audit_id": "A02-P01",
       "closed_at": "2026-05-10T12:49:36.845938Z",
       "depends_on": [],
+      "description": null,
       "id": "P01",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:49:36.148016Z",
@@ -2859,6 +2942,7 @@
       "audit_id": "A03-P02",
       "closed_at": "2026-05-10T12:49:37.987593Z",
       "depends_on": [],
+      "description": null,
       "id": "P02",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:49:37.224878Z",
@@ -2873,6 +2957,7 @@
       "audit_id": "A04-P03",
       "closed_at": "2026-05-10T12:50:18.490662Z",
       "depends_on": [],
+      "description": null,
       "id": "P03",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:50:17.793212Z",
@@ -2887,6 +2972,7 @@
       "audit_id": "A05-P04",
       "closed_at": "2026-05-10T12:50:19.556964Z",
       "depends_on": [],
+      "description": null,
       "id": "P04",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:50:18.839120Z",
@@ -2916,6 +3002,7 @@
       "audit_id": "A07-P06",
       "closed_at": "2026-05-10T19:51:26.967883Z",
       "depends_on": [],
+      "description": null,
       "id": "P06",
       "iter_ids": [],
       "opened_at": "2026-05-10T12:50:20.945586Z",
@@ -2979,6 +3066,7 @@
       "audit_id": "A11-P10",
       "closed_at": "2026-05-11T10:50:23.605387Z",
       "depends_on": [],
+      "description": null,
       "id": "P10",
       "iter_ids": [
         "P10-I01"
@@ -3012,6 +3100,7 @@
       "audit_id": "A13-P12",
       "closed_at": "2026-05-11T13:28:30.650314Z",
       "depends_on": [],
+      "description": null,
       "id": "P12",
       "iter_ids": [
         "P12-I01"
@@ -3028,6 +3117,7 @@
       "audit_id": "A14-P13",
       "closed_at": "2026-05-11T15:09:14.172116Z",
       "depends_on": [],
+      "description": null,
       "id": "P13",
       "iter_ids": [
         "P13-I01"
@@ -3044,6 +3134,7 @@
       "audit_id": "A19-P14",
       "closed_at": "2026-05-12T20:10:41.442071Z",
       "depends_on": [],
+      "description": null,
       "id": "P14",
       "iter_ids": [
         "P14-I01",
@@ -3063,6 +3154,7 @@
       "audit_id": "A20-P15",
       "closed_at": "2026-05-13T13:53:40.304243Z",
       "depends_on": [],
+      "description": null,
       "id": "P15",
       "iter_ids": [
         "P15-I01"
@@ -3079,6 +3171,7 @@
       "audit_id": "A21-P16",
       "closed_at": "2026-05-13T23:35:47.345432Z",
       "depends_on": [],
+      "description": null,
       "id": "P16",
       "iter_ids": [],
       "opened_at": "2026-05-13T23:35:45.522704Z",
@@ -3093,6 +3186,7 @@
       "audit_id": "A22-P17",
       "closed_at": "2026-05-14T15:44:44.900622Z",
       "depends_on": [],
+      "description": null,
       "id": "P17",
       "iter_ids": [
         "P17-I01"
@@ -3109,6 +3203,7 @@
       "audit_id": "A23-P18",
       "closed_at": "2026-05-14T18:37:19.013151Z",
       "depends_on": [],
+      "description": null,
       "id": "P18",
       "iter_ids": [
         "P18-I01"
@@ -3125,6 +3220,7 @@
       "audit_id": "A26-P19-I02",
       "closed_at": "2026-05-15T15:38:49.299920Z",
       "depends_on": [],
+      "description": null,
       "id": "P19",
       "iter_ids": [
         "P19-I01",
@@ -3142,6 +3238,7 @@
       "audit_id": "A27-P20",
       "closed_at": "2026-05-18T18:10:54.070468Z",
       "depends_on": [],
+      "description": null,
       "id": "P20",
       "iter_ids": [
         "P20-I01",
@@ -3162,6 +3259,7 @@
       "depends_on": [
         "P20"
       ],
+      "description": null,
       "id": "P21",
       "iter_ids": [
         "P21-I01"
@@ -3180,6 +3278,7 @@
       "depends_on": [
         "P20"
       ],
+      "description": null,
       "id": "P22",
       "iter_ids": [
         "P22-I01"
@@ -3198,6 +3297,7 @@
       "depends_on": [
         "P22"
       ],
+      "description": null,
       "id": "P23",
       "iter_ids": [
         "P23-I01",
@@ -3352,7 +3452,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T23:18:28.500487Z",
+  "updated_at": "2026-05-22T23:54:11.812010Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -3364,6 +3464,7 @@
       "deps": [
         "P08-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3394,6 +3495,7 @@
       "closed_at": "2026-05-10T22:13:08.058437Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3427,6 +3529,7 @@
       "deps": [
         "P08-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3454,6 +3557,7 @@
       "closed_at": "2026-05-10T22:13:08.501855Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3483,6 +3587,7 @@
       "deps": [
         "P08-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3512,6 +3617,7 @@
       "deps": [
         "P08-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3541,6 +3647,7 @@
       "closed_at": "2026-05-11T08:18:14.020785Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3568,6 +3675,7 @@
       "closed_at": "2026-05-11T08:20:17.430900Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3594,6 +3702,7 @@
       "closed_at": "2026-05-11T08:21:40.313753Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3622,6 +3731,7 @@
       "deps": [
         "P09-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3650,6 +3760,7 @@
       "closed_at": "2026-05-11T10:43:00.505929Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3680,6 +3791,7 @@
       "closed_at": "2026-05-11T10:43:01.565652Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3713,6 +3825,7 @@
       "closed_at": "2026-05-11T10:43:02.296715Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3746,6 +3859,7 @@
         "P10-I01-W02",
         "P10-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3774,6 +3888,7 @@
       "closed_at": "2026-05-11T11:49:56.625542Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3802,6 +3917,7 @@
       "closed_at": "2026-05-11T11:49:57.680282Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3830,6 +3946,7 @@
         "P11-I01-W01",
         "P11-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3856,6 +3973,7 @@
       "closed_at": "2026-05-11T13:05:27.792212Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3883,6 +4001,7 @@
       "closed_at": "2026-05-11T13:09:07.015750Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3913,6 +4032,7 @@
       "closed_at": "2026-05-11T13:13:40.278328Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3940,6 +4060,7 @@
       "closed_at": "2026-05-11T13:16:03.556288Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3970,6 +4091,7 @@
       "closed_at": "2026-05-11T13:19:04.760498Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -3996,6 +4118,7 @@
       "closed_at": "2026-05-11T13:22:43.169235Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4027,6 +4150,7 @@
       "closed_at": "2026-05-11T13:24:44.025187Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4059,6 +4183,7 @@
       "closed_at": "2026-05-11T14:14:04.500555Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4090,6 +4215,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4120,6 +4246,7 @@
       "deps": [
         "P13-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4152,6 +4279,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4186,6 +4314,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4222,6 +4351,7 @@
         "P13-I01-W05",
         "P13-I01-W07"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4257,6 +4387,7 @@
       "deps": [
         "P13-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4318,6 +4449,7 @@
       "deps": [
         "P14-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4350,6 +4482,7 @@
       "closed_at": "2026-05-11T21:39:06.329869Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4384,6 +4517,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4413,6 +4547,7 @@
       "deps": [
         "P14-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4446,6 +4581,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4481,6 +4617,7 @@
       "deps": [
         "P14-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4514,6 +4651,7 @@
         "P14-I01-W06",
         "P14-I01-W07"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4541,6 +4679,7 @@
       "closed_at": "2026-05-11T22:31:24.973405Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4569,6 +4708,7 @@
       "closed_at": "2026-05-11T22:46:46.811276Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4597,6 +4737,7 @@
       "closed_at": "2026-05-11T23:01:22.700165Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4628,6 +4769,7 @@
       "closed_at": "2026-05-12T18:28:41.232196Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4694,6 +4836,7 @@
       "closed_at": "2026-05-12T20:09:22.023040Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4720,6 +4863,7 @@
       "closed_at": "2026-05-12T20:09:23.291579Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4747,6 +4891,7 @@
       "closed_at": "2026-05-12T20:09:24.561088Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4773,6 +4918,7 @@
       "closed_at": "2026-05-12T20:09:25.802062Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4801,6 +4947,7 @@
       "closed_at": "2026-05-13T12:42:40.715867Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4833,6 +4980,7 @@
       "deps": [
         "P15-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4866,6 +5014,7 @@
       "closed_at": "2026-05-13T12:44:45.255714Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4898,6 +5047,7 @@
         "P15-I01-W02",
         "P15-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": null,
       "file_scopes": [
@@ -4931,6 +5081,7 @@
       "closed_at": "2026-05-14T15:43:46.780266Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -4965,6 +5116,7 @@
       "deps": [
         "P17-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -4998,6 +5150,7 @@
       "closed_at": "2026-05-14T15:43:48.397007Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5032,6 +5185,7 @@
       "deps": [
         "P17-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -5065,6 +5219,7 @@
       "deps": [
         "P17-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5100,6 +5255,7 @@
       "deps": [
         "P17-I01-W05"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5134,6 +5290,7 @@
       "deps": [
         "P17-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5167,6 +5324,7 @@
         "P17-I01-W02",
         "P17-I01-W05"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5200,6 +5358,7 @@
         "P17-I01-W06",
         "P17-I01-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5231,6 +5390,7 @@
       "closed_at": "2026-05-14T17:27:53.626739Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5266,6 +5426,7 @@
       "deps": [
         "P18-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -5300,6 +5461,7 @@
       "deps": [
         "P18-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5340,6 +5502,7 @@
       "deps": [
         "P18-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -5375,6 +5538,7 @@
       "deps": [
         "P18-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5416,6 +5580,7 @@
       "deps": [
         "P18-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5453,6 +5618,7 @@
       "deps": [
         "P18-I01-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -5489,6 +5655,7 @@
       "deps": [
         "P18-I01-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5528,6 +5695,7 @@
         "P18-I01-W07",
         "P18-I01-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5563,6 +5731,7 @@
       "deps": [
         "P18-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5599,6 +5768,7 @@
         "P18-I01-W08",
         "P18-I01-W10"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5634,6 +5804,7 @@
       "deps": [
         "P18-I01-W11"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5670,6 +5841,7 @@
         "P18-I01-W09",
         "P18-I01-W12"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5708,6 +5880,7 @@
       "closed_at": "2026-05-14T20:44:43.535335Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5742,6 +5915,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5775,6 +5949,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -5808,6 +5983,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5842,6 +6018,7 @@
       "closed_at": "2026-05-14T20:45:34.465923Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -5875,6 +6052,7 @@
       "deps": [
         "P19-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -5910,6 +6088,7 @@
         "P19-I01-W01",
         "P19-I01-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -5948,6 +6127,7 @@
         "P19-I01-W06",
         "P19-I01-W07"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -5985,6 +6165,7 @@
         "P19-I01-W04",
         "P19-I01-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -6014,6 +6195,7 @@
       "deps": [
         "P19-I01-W09"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -6077,6 +6259,7 @@
       "closed_at": "2026-05-15T15:17:41.945993Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6111,6 +6294,7 @@
       "deps": [
         "P19-I02-W11"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6245,6 +6429,7 @@
       "closed_at": "2026-05-15T15:33:06.335759Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6276,6 +6461,7 @@
       "closed_at": "2026-05-15T15:17:42.418104Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6307,6 +6493,7 @@
       "closed_at": "2026-05-15T15:18:01.828920Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6339,6 +6526,7 @@
       "closed_at": "2026-05-15T15:20:27.151013Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6380,6 +6568,7 @@
         "P19-I02-W19",
         "P19-I02-W20"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6449,6 +6638,7 @@
       "deps": [
         "P20-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -6484,6 +6674,7 @@
       "deps": [
         "P20-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -6515,6 +6706,7 @@
       "deps": [
         "P20-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6548,6 +6740,7 @@
       "deps": [
         "P20-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6580,6 +6773,7 @@
       "deps": [
         "P20-I01-W05"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6613,6 +6807,7 @@
       "deps": [
         "P20-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6677,6 +6872,7 @@
       "deps": [
         "P20-I01-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6710,6 +6906,7 @@
       "closed_at": "2026-05-15T16:59:41.139622Z",
       "commit": "541da25cd0744a82b4c19cbfec41f9b15cd7ce34",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -6745,6 +6942,7 @@
         "P20-I01-W02",
         "P20-I01-W10"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6778,6 +6976,7 @@
       "deps": [
         "P20-I01-W10"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6813,6 +7012,7 @@
         "P20-I01-W11",
         "P20-I01-W12"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6878,6 +7078,7 @@
       "deps": [
         "P20-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -6908,6 +7109,7 @@
       "closed_at": "2026-05-15T20:10:04.578780Z",
       "commit": "f4eda19eedaae697f41df7e9eb88676898a2e94c",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6939,6 +7141,7 @@
       "closed_at": "2026-05-15T21:05:53.553442Z",
       "commit": "193a2debc4622bed0883f0417b5f6b8aab843066",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -6975,6 +7178,7 @@
       "closed_at": "2026-05-21T02:23:42.947114Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7013,6 +7217,7 @@
       "deps": [
         "P21-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7045,6 +7250,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7147,6 +7353,7 @@
       "deps": [
         "P21-I01-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7216,6 +7423,7 @@
       "deps": [
         "P21-I01-W07"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -7249,6 +7457,7 @@
       "deps": [
         "P21-I01-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7429,6 +7638,7 @@
         "P21-I01-W10",
         "P21-I01-W13"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7529,6 +7739,7 @@
       "closed_at": "2026-05-18T19:01:58.119217Z",
       "commit": "cf16d84d6a75a93f430bc939f7d4b0366493a728",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7563,6 +7774,7 @@
       "closed_at": "2026-05-18T19:04:17.649123Z",
       "commit": "7133c0fccf553116746f022b909a84600911cd58",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -7594,6 +7806,7 @@
       "closed_at": "2026-05-18T19:08:41.219577Z",
       "commit": "99f1dfa043dcfbdfab895bce83a470dc18cc30b2",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7629,6 +7842,7 @@
       "deps": [
         "P22-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -7661,6 +7875,7 @@
       "closed_at": "2026-05-18T19:12:58.010493Z",
       "commit": "131b469339b4354624e9c0a635aa5b851df096d7",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -7733,6 +7948,7 @@
       "deps": [
         "P22-I01-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -7840,6 +8056,7 @@
       "deps": [
         "P23-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -7982,6 +8199,7 @@
       "deps": [
         "P24-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -8237,6 +8455,7 @@
       "closed_at": "2026-05-19T17:18:38.011077Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -8306,6 +8525,7 @@
       "deps": [
         "P25-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -8564,6 +8784,7 @@
       "closed_at": "2026-05-19T20:39:04.765920Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -8604,6 +8825,7 @@
       "deps": [
         "P25-I01-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8717,6 +8939,7 @@
       "deps": [
         "P25-I01-W10"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -8752,6 +8975,7 @@
       "closed_at": "2026-05-19T20:39:15.669200Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -8976,6 +9200,7 @@
       "closed_at": "2026-05-20T00:34:51.487530Z",
       "commit": "efcd3250b21fbc7378786fede6f99c9ae5a1384a",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -9044,6 +9269,7 @@
       "closed_at": "2026-05-20T00:33:56.431756Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9156,6 +9382,7 @@
       "deps": [
         "P26-I01-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9446,6 +9673,7 @@
       "deps": [
         "P26-I01-W13"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -9523,6 +9751,7 @@
       "deps": [
         "P26-I01-W15"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9646,6 +9875,7 @@
       "deps": [
         "P26-I01-W18"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -9734,6 +9964,7 @@
       "deps": [
         "P26-I01-W19"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10136,6 +10367,7 @@
       "closed_at": "2026-05-21T01:07:22.638835Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10170,6 +10402,7 @@
       "closed_at": "2026-05-21T01:06:02.887629Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10448,6 +10681,7 @@
       "closed_at": "2026-05-21T10:30:16.699290Z",
       "commit": "4096d47faf914e7f164f94c44caf0c89659e4122",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -10577,6 +10811,7 @@
       "closed_at": "2026-05-22T01:35:46.061437Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10614,6 +10849,7 @@
       "closed_at": "2026-05-22T01:08:12.904285Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -10652,6 +10888,7 @@
       "closed_at": "2026-05-22T01:35:47.806304Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10684,6 +10921,7 @@
       "closed_at": "2026-05-22T01:15:42.277679Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10717,6 +10955,7 @@
       "closed_at": "2026-05-22T01:16:00.036401Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -10754,6 +10993,7 @@
       "deps": [
         "P26-I02-W05"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -10786,6 +11026,7 @@
       "closed_at": "2026-05-22T01:35:51.110094Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -10819,6 +11060,7 @@
       "closed_at": "2026-05-22T01:40:23.782521Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -10846,6 +11088,7 @@
       "closed_at": "2026-05-22T02:13:19.228396Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -10877,6 +11120,7 @@
       "closed_at": "2026-05-22T02:31:32.025636Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -10906,6 +11150,7 @@
       "closed_at": "2026-05-22T02:36:50.126351Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -11090,6 +11335,7 @@
       "closed_at": "2026-05-22T03:30:49.226842Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -11184,6 +11430,7 @@
       "closed_at": "2026-05-22T11:23:13.958614Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -11213,6 +11460,7 @@
       "closed_at": "2026-05-22T12:14:56.144676Z",
       "commit": "fb2734e6a87b4dde53043d6d991dbda87405ca8c",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -11249,6 +11497,7 @@
       "closed_at": "2026-05-22T12:57:55.030646Z",
       "commit": "c36ed533a7ac9cda274031a01742455ef147055f",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -11282,6 +11531,7 @@
       "closed_at": "2026-05-22T13:05:18.906397Z",
       "commit": "cfa1d8462339572df46c82f27341dc1a3db61e2d",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -11318,6 +11568,7 @@
       "closed_at": "2026-05-22T13:10:23.158383Z",
       "commit": "470d4265284cc1157f4549ddeee57a3501190d2b",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -11357,6 +11608,7 @@
       "closed_at": "2026-05-22T15:46:59.848927Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -11389,6 +11641,7 @@
       "deps": [
         "P27-I01-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11421,6 +11674,7 @@
       "closed_at": "2026-05-22T16:02:34.466015Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11453,6 +11707,7 @@
       "deps": [
         "P27-I01-W03"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11486,6 +11741,7 @@
       "closed_at": "2026-05-22T16:30:03.404946Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11519,6 +11775,7 @@
       "deps": [
         "P27-I01-W05"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -11552,6 +11809,7 @@
       "deps": [
         "P27-I01-W05"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11587,6 +11845,7 @@
       "closed_at": "2026-05-22T16:02:36.452977Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11621,6 +11880,7 @@
       "closed_at": "2026-05-22T16:02:38.506997Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -11656,6 +11916,7 @@
       "deps": [
         "P27-I01-W09"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11693,6 +11954,7 @@
         "P27-I01-W08",
         "P27-I01-W09"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -11763,6 +12025,7 @@
       "deps": [
         "P27-I01-W11"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11797,6 +12060,7 @@
       "deps": [
         "P27-I01-W11"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11834,6 +12098,7 @@
         "P27-I01-W13",
         "P27-I01-W14"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11868,6 +12133,7 @@
       "deps": [
         "P27-I01-W15"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -11899,6 +12165,7 @@
       "closed_at": "2026-05-22T16:02:41.170527Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -11961,6 +12228,7 @@
       "closed_at": "2026-05-22T16:37:04.392479Z",
       "commit": "5095827175f801d9aa6d501a83c367d2f2a03d51",
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -11990,6 +12258,7 @@
       "closed_at": "2026-05-22T16:02:47.395258Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12025,6 +12294,7 @@
       "deps": [
         "P27-I01-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12062,6 +12332,7 @@
         "P27-I01-W09",
         "P27-I01-W21"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -12095,6 +12366,7 @@
       "deps": [
         "P27-I01-W22"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12125,6 +12397,7 @@
       "closed_at": "2026-05-22T16:02:49.641832Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12157,6 +12430,7 @@
       "deps": [
         "P27-I01-W15"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12259,6 +12533,7 @@
       "closed_at": "2026-05-22T19:03:56.301273Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12290,6 +12565,7 @@
       "closed_at": "2026-05-22T22:00:56.914003Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -12319,6 +12595,7 @@
       "closed_at": "2026-05-22T22:13:57.452013Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12347,6 +12624,7 @@
       "closed_at": "2026-05-22T22:13:59.308292Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12374,6 +12652,7 @@
       "closed_at": "2026-05-22T22:14:01.267045Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12403,6 +12682,7 @@
       "closed_at": "2026-05-22T22:27:09.138554Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12434,6 +12714,7 @@
       "closed_at": "2026-05-22T22:14:03.425059Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12463,6 +12744,7 @@
       "closed_at": "2026-05-22T22:14:05.546685Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12493,6 +12775,7 @@
       "closed_at": "2026-05-22T22:14:07.689514Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12522,6 +12805,7 @@
       "closed_at": "2026-05-22T22:27:10.927617Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -12549,6 +12833,7 @@
       "closed_at": "2026-05-22T22:01:04.957342Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12577,6 +12862,7 @@
       "closed_at": "2026-05-22T22:41:27.667596Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12604,6 +12890,7 @@
       "closed_at": "2026-05-22T22:14:09.599954Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12639,6 +12926,7 @@
       "closed_at": "2026-05-22T22:14:11.429154Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12668,6 +12956,7 @@
       "deps": [
         "P27-I02-W13"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12699,6 +12988,7 @@
       "deps": [
         "P27-I02-W13"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12728,6 +13018,7 @@
       "closed_at": "2026-05-22T22:27:17.094632Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12761,6 +13052,7 @@
       "deps": [
         "P27-I02-W16"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12795,6 +13087,7 @@
         "P27-I02-W17",
         "P27-I02-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -12827,6 +13120,7 @@
       "closed_at": "2026-05-22T22:27:19.007871Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -12859,6 +13153,7 @@
       "deps": [
         "P27-I02-W19"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12889,6 +13184,7 @@
       "deps": [
         "P27-I02-W20"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -12921,6 +13217,7 @@
       "deps": [
         "P27-I02-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12949,12 +13246,13 @@
         "P27-I03-W08"
       ],
       "claim_session_id": "flow-p27i02",
-      "closed_at": null,
+      "closed_at": "2026-05-22T23:48:31.417219Z",
       "commit": null,
       "deps": [
         "P27-I02-W22",
         "P27-I02-W08"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -12971,10 +13269,10 @@
       "id": "P27-I02-W23",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:05.027540Z",
-      "outcome": null,
+      "outcome": "bounded title+description; rename Decision.summary/Hypothesis.text->title; v1.0->1.1 migration (rename+truncate); repo state migrated to 1.1; readers updated",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "title (max 72) and description (max 500) added to Phase/Iter/Wave/BacklogItem/Incident; Decision.summary renamed to title and Hypothesis.text to title; an over-cap title is rejected; renamed fields round-trip; readers updated"
       ],
@@ -12987,11 +13285,12 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "flow-p27i02",
-      "closed_at": null,
+      "closed_at": "2026-05-22T23:54:11.295441Z",
       "commit": null,
       "deps": [
         "P27-I02-W22"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13000,17 +13299,17 @@
       "id": "P27-I02-W24",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-22T19:57:05.406149Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "each over-cap row copies its full string to description and truncates title to max 72 at a clause boundary; post-migration no title exceeds 72; no content is lost; tested on the real state fixture"
       ],
       "title": "Auto-truncate migrator for over-cap titles",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I02-W24-1779493740"
     },
     "P27-I02-W25": {
       "agent_role": "executor",
@@ -13021,6 +13320,7 @@
       "closed_at": "2026-05-22T23:09:54.353956Z",
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13052,6 +13352,7 @@
       "deps": [
         "P27-I02-W25"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -13086,6 +13387,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13119,6 +13421,7 @@
       "deps": [
         "P27-I03-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -13149,6 +13452,7 @@
         "P27-I03-W01",
         "P27-I03-W02"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13178,6 +13482,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13209,6 +13514,7 @@
       "deps": [
         "P27-I03-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13239,6 +13545,7 @@
       "deps": [
         "P27-I03-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13274,6 +13581,7 @@
       "deps": [
         "P27-I02-W23"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13307,6 +13615,7 @@
         "P27-I02-W23",
         "P27-I03-W01"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
@@ -13341,6 +13650,7 @@
         "P27-I02-W06",
         "P27-I02-W13"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13372,6 +13682,7 @@
         "P27-I03-W09",
         "P27-I02-W06"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13401,6 +13712,7 @@
       "deps": [
         "P27-I03-W09"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13431,6 +13743,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -13461,6 +13774,7 @@
       "deps": [
         "P27-I02-W15"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -13495,6 +13809,7 @@
       "deps": [
         "P27-I03-W12"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XL",
       "file_scopes": [
@@ -13523,6 +13838,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -13551,6 +13867,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13581,6 +13898,7 @@
       "deps": [
         "P27-I03-W04"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -13608,6 +13926,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13637,6 +13956,7 @@
       "deps": [
         "P27-I02-W18"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13701,6 +14021,7 @@
       "deps": [
         "P27-I03-W14"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13729,6 +14050,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13756,6 +14078,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13785,6 +14108,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -13817,6 +14141,7 @@
       "deps": [
         "P27-I03-W24"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -13846,6 +14171,7 @@
       "deps": [
         "P27-I03-W25"
       ],
+      "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -15374,8 +15700,19 @@
       "merged_commit": null,
       "owner_session_id": "flow-p27i02",
       "path": ".ea/worktrees/p27-w23",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P27-I02-W23"
+    },
+    "WT-P27-I02-W24-1779493740": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w24",
+      "created_at": "2026-05-22T23:49:00.981226Z",
+      "id": "WT-P27-I02-W24-1779493740",
+      "merged_commit": "2f533f0",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w24",
+      "status": "merged",
+      "wave_id": "P27-I02-W24"
     },
     "WT-P27-I02-W25-1779489718": {
       "base_branch": "feature/eawf-v0.3-p27",
