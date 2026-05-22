@@ -1604,11 +1604,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W17",
-      "P26-I02-W18",
-      "P26-I02-W19"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3080,7 +3076,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T11:22:08.967731Z",
+  "updated_at": "2026-05-22T11:23:13.958759Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10764,7 +10760,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "operator-i02-review",
-      "closed_at": null,
+      "closed_at": "2026-05-22T11:23:13.030005Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10779,10 +10775,10 @@
       "id": "P26-I02-W17",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T11:21:28.228408Z",
-      "outcome": null,
+      "outcome": "DetailModal review: p-dispatch tab label, collapsed file-tree files row, footer hotkey dedup; 3 goldens regen; detail tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "dp tab labels its real p hotkey; wave files render as a collapsed file tree; footer drops the h/d/m/e/p list since tab labels carry hotkeys"
       ],
@@ -10795,7 +10791,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "operator-i02-review",
-      "closed_at": null,
+      "closed_at": "2026-05-22T11:23:13.489260Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10808,10 +10804,10 @@
       "id": "P26-I02-W18",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T11:21:28.653045Z",
-      "outcome": null,
+      "outcome": "config inline-edit column alignment (no post-Enter squish) + drop dirty mark when committed value equals persisted; golden regen; config tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "inline-edit type cell + input share the static row columns (no squish); committing a value equal to persisted stages no dirty edit"
       ],
@@ -10824,7 +10820,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": "operator-i02-review",
-      "closed_at": null,
+      "closed_at": "2026-05-22T11:23:13.958614Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10837,10 +10833,10 @@
       "id": "P26-I02-W19",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T11:21:29.079965Z",
-      "outcome": null,
+      "outcome": "/theme auto follows live system light/dark via 2s off-thread OS-appearance poll; explicit themes untouched; safe no-op fallback; theme tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "auto re-applies within the poll interval when OS appearance flips; explicit themes untouched; safe no-op when appearance undetectable"
       ],
