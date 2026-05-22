@@ -98,6 +98,14 @@ Perf bench harness — seed corpora, time harnesses, flag regressions.
 | `list` | List every fixture size x harness in the catalog. |
 | `run` | Seed a corpus in-memory and time each harness against it. |
 
+### `eawf calibrate`
+
+Re-fit estimation parameters from recorded actuals.
+
+| Verb | Summary |
+|---|---|
+| `buckets` | Re-fit the XS..XL effort buckets from 90-day actuals and nudge on drift. |
+
 ### `eawf cc`
 
 Claude Code adapter (statusline, plugin, hooks).
