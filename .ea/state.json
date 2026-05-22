@@ -3121,7 +3121,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T17:44:17.196430Z",
+  "updated_at": "2026-05-22T17:58:47.259095Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11545,8 +11545,8 @@
       "blocks": [
         "P27-I01-W26"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "p27-w16",
+      "closed_at": "2026-05-22T17:58:45.948266Z",
       "commit": null,
       "deps": [
         "P27-I01-W15"
@@ -11563,17 +11563,17 @@
       "id": "P27-I01-W16",
       "iter_id": "P27-I01",
       "opened_at": "2026-05-22T15:18:15.975643Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "metrics export --format prom|json|csv each match a golden for a fixture DB; telemetry.db_kind default flips to sqlite and the telemetry.export.endpoint key is removed; metrics show on telemetry.enabled=false prints the one-time opt-in nudge; DispatchCostPayload is recorded to event.jsonl regardless of telemetry.enabled verified by a disabled-telemetry test"
       ],
       "title": "feat: eawf metrics show/export/rebuild/info + exporters + opt-in default",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I01-W16-1779471906"
     },
     "P27-I01-W17": {
       "agent_role": "executor",
@@ -13056,6 +13056,17 @@
       "path": ".ea/worktrees/p27-w15",
       "status": "merged",
       "wave_id": "P27-I01-W15"
+    },
+    "WT-P27-I01-W16-1779471906": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w16",
+      "created_at": "2026-05-22T17:45:06.960708Z",
+      "id": "WT-P27-I01-W16-1779471906",
+      "merged_commit": "7f3d0bf",
+      "owner_session_id": "p27-w16",
+      "path": ".ea/worktrees/p27-w16",
+      "status": "merged",
+      "wave_id": "P27-I01-W16"
     },
     "WT-P27-I01-W17-1779465014": {
       "base_branch": "feature/eawf-v0.3-p27",
