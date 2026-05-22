@@ -27,7 +27,6 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.docs.autogen import dump_schemas, generate_all
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +83,11 @@ def schema_dump(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+
+    # Imported lazily so building the CLI tree (eawf.cli.app import) does not
+    # pull the heavy autogen dependency graph (state.models / store.kinds /
+    # yaml) — see tests/perf/cli/test_import_budget.py.
+    from eawf.docs.autogen import dump_schemas, generate_all
 
     written = dump_schemas(repo_root) if schema_only else generate_all(repo_root)
 
