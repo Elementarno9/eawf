@@ -37,4 +37,4 @@
 │                                                          ││                                                          │
 │                                                          ││                                                          │
 └──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
- ↑↓ move  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  / palette  ·  ? help  ·  q quit              •
+ ↑↓ move  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  / palette  ·  ? help   weekly burn: — no data•

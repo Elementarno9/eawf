@@ -37,4 +37,4 @@
 │                                                                                                                      │
 │                                                                                                                      │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- ↑↓ move  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit                            •
+ ↑↓ move  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit      weekly burn: — no data•

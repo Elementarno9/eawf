@@ -37,4 +37,4 @@
 │                                      ││                                      ││                                      │
 │                                      ││                                      ││                                      │
 └──────────────────────────────────────┘└──────────────────────────────────────┘└──────────────────────────────────────┘
- ↑↓ row  ·  z zoom  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit                  •
+ ↑↓ row  ·  z zoom  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q weekly burn: — no data•
