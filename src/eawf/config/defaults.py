@@ -254,6 +254,14 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # Encourage subagent prompts and skill bodies to surface discrete
         # decisions through ``AskUserQuestion`` rather than free-text prompts.
         "ask_on_decisions": True,
+        # Per-wave token-budget enforcement. ``soft`` (default) warns and
+        # lets the wave continue past its cap; ``hard`` halts the wave at
+        # the cap via the SIGTERM->SIGKILL ladder. ``multiplier`` scales
+        # the base budget to derive the enforced cap (1.5 == 50% headroom).
+        "budget": {
+            "enforce": "soft",
+            "multiplier": 1.5,
+        },
     },
     "memory": {
         "stores": ["project", "subproject", "agent", "user"],

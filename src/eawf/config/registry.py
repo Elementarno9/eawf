@@ -1392,6 +1392,30 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default=True,
         writable_layers=_WRITABLE_GWR,
     ),
+    LeafKey(
+        key="flow.budget.enforce",
+        domain="flow",
+        type="literal",
+        default="soft",
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Token-budget enforcement mode. soft (default) warns and lets "
+            "the wave continue past its cap; hard halts the wave at the cap "
+            "via the SIGTERM->SIGKILL ladder."
+        ),
+        choices=("soft", "hard"),
+    ),
+    LeafKey(
+        key="flow.budget.multiplier",
+        domain="flow",
+        type="float",
+        default=1.5,
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Safety multiplier applied to a wave's base budget to derive the "
+            "enforced cap (1.5 == 50% headroom)."
+        ),
+    ),
     # --- memory ------------------------------------------------------------
     LeafKey(
         key="memory.stores",
