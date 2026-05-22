@@ -26,19 +26,41 @@ registered Textual theme names through :data:`LOGICAL_THEMES`:
   the same semantic var *names* tuned for a light surface, built on
   Textual's ``textual-light`` base colours.
 * ``auto`` → terminal-background detect, resolving to ``dark`` or
-  ``light``. The synchronous swap path has no terminal-background query
-  available, so ``auto`` resolves to the dark baseline; the async OSC
-  probe that would refine it is out of scope here.
+  ``light``. The live OSC 11 probe (:func:`detect_auto_theme`) queries the
+  terminal background and classifies it by luminance; it runs once at App
+  construction (before Textual captures stdin) and the result is cached.
+  The pure :func:`resolve_theme_name` validator keeps returning the dark
+  baseline for ``auto`` so a persisted-value validation never triggers a
+  terminal query.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Final
+import os
+import select
+import sys
+import time
+from typing import IO, Final
 
 from textual.theme import Theme
 
 logger = logging.getLogger(__name__)
+
+#: OSC 11 request: ask the terminal to report its background colour. The
+#: terminal replies with ``\x1b]11;rgb:RRRR/GGGG/BBBB`` terminated by BEL
+#: (``\x07``) or ST (``\x1b\\``).
+OSC11_QUERY: Final[str] = "\x1b]11;?\x07"
+
+#: Bounded total wait for the OSC 11 reply. A terminal that does not answer
+#: (no support, pipe, multiplexer that swallows the query) must never hang
+#: the launch, so the read deadline is small and absolute.
+_OSC11_TIMEOUT_S: Final[float] = 0.2
+
+#: Relative-luminance threshold (sRGB, 0..255 channels) above which the
+#: terminal background counts as light. ``127.5`` is the 50%-luminance
+#: midpoint of the 0..255 range.
+_LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 
 #: Wong 2011 deuteranopia-safe semantic vars — the exact hex values that
 #: shipped at global scope in ``theme.tcss`` before the per-theme
@@ -159,10 +181,13 @@ THEME_CHOICES: Final[tuple[str, ...]] = ("dark", "light", "cb", "auto")
 def resolve_theme_name(logical: str) -> str | None:
     """Resolve an operator-facing logical name to a registered theme name.
 
-    ``auto`` resolves to the dark baseline: the synchronous swap path has
-    no terminal-background query available, so the honest best-effort
-    result is the default dark theme. Any other unknown name returns
-    ``None`` so the caller can reject it without changing the theme.
+    Pure validator: no I/O. ``auto`` resolves to the dark baseline so a
+    persisted-config validation (``_persisted_theme`` calls this to decide
+    whether a saved ``ui.theme`` value is recognised) never triggers a
+    terminal query. The live terminal-background detection that refines
+    ``auto`` into ``dark`` / ``light`` happens in :func:`detect_auto_theme`
+    (cached at App construction). Any other unknown name returns ``None``
+    so the caller can reject it without changing the theme.
 
     Args:
         logical: One of ``"dark"`` / ``"light"`` / ``"cb"`` / ``"auto"``.
@@ -176,6 +201,191 @@ def resolve_theme_name(logical: str) -> str | None:
     return LOGICAL_THEMES.get(logical)
 
 
+def resolve_auto_theme(rgb: tuple[int, int, int] | None) -> str:
+    """Classify a terminal background colour as the ``dark`` / ``light`` logical.
+
+    Pure function — no I/O. Computes the sRGB relative luminance
+    ``0.2126*r + 0.7152*g + 0.0722*b`` over 0..255 channels and returns
+    ``"light"`` when it exceeds the 50%-luminance midpoint, else ``"dark"``.
+    A missing colour (no reply / non-TTY / parse failure) classifies as
+    ``"dark"`` — the safe baseline.
+
+    Args:
+        rgb: The 8-bit ``(r, g, b)`` background colour, or ``None`` when the
+            background could not be determined.
+
+    Returns:
+        ``"light"`` for a light background, ``"dark"`` otherwise.
+    """
+    if rgb is None:
+        return "dark"
+    r, g, b = rgb
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return "light" if luminance > _LIGHT_LUMINANCE_THRESHOLD else "dark"
+
+
+def _scale_channel(hex_value: str) -> int:
+    """Scale a 1-4 hex-digit OSC 11 channel to an 8-bit value.
+
+    xterm reports each channel as 4 hex digits (``ffff``); some terminals
+    use 2 (``ff``) or 1 (``f``). Normalise by interpreting the digits as a
+    fraction of the channel's max and mapping onto 0..255.
+
+    Args:
+        hex_value: A 1-4 character hex string for one colour channel.
+
+    Returns:
+        The channel value scaled to 0..255.
+    """
+    width = len(hex_value)
+    raw = int(hex_value, 16)
+    maximum = (1 << (4 * width)) - 1
+    return round(raw * 255 / maximum)
+
+
+def _parse_osc11(reply: bytes) -> tuple[int, int, int] | None:
+    """Parse an OSC 11 background-colour reply into 8-bit RGB.
+
+    Matches the ``rgb:RRRR/GGGG/BBBB`` payload xterm returns (also accepting
+    1-2 digit channels), tolerating either the BEL (``\\x07``) or ST
+    (``\\x1b\\``) terminator and any surrounding bytes.
+
+    Args:
+        reply: The raw bytes read from the terminal (possibly partial or
+            empty).
+
+    Returns:
+        The ``(r, g, b)`` 8-bit colour, or ``None`` when *reply* carries no
+        recognisable ``rgb:`` payload.
+    """
+    import re
+
+    text = reply.decode("ascii", errors="ignore")
+    match = re.search(
+        r"rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})",
+        text,
+    )
+    if match is None:
+        return None
+    return (
+        _scale_channel(match.group(1)),
+        _scale_channel(match.group(2)),
+        _scale_channel(match.group(3)),
+    )
+
+
+def _read_osc_reply(fd: int, timeout_s: float) -> bytes:
+    """Read an OSC reply from *fd* until its terminator or a bounded deadline.
+
+    Loops :func:`select.select` against an absolute monotonic deadline so the
+    TOTAL wait is bounded regardless of how the terminal dribbles the reply
+    out; stops early on the BEL (``\\x07``) or ST (``\\x1b\\``) terminator.
+    Returns whatever was read — possibly empty (no reply) or partial (the
+    deadline elapsed mid-reply); :func:`_parse_osc11` tolerates both.
+
+    Args:
+        fd: The terminal file descriptor (already in cbreak mode).
+        timeout_s: The total wait budget in seconds.
+
+    Returns:
+        The bytes read from the terminal.
+    """
+    deadline = time.monotonic() + timeout_s
+    buffer = bytearray()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        ready, _, _ = select.select([fd], [], [], remaining)
+        if not ready:
+            break
+        chunk = os.read(fd, 32)
+        if not chunk:
+            break
+        buffer.extend(chunk)
+        if chunk.endswith(b"\x07") or chunk.endswith(b"\x1b\\"):
+            break
+    return bytes(buffer)
+
+
+def query_terminal_background(
+    *,
+    stdin: IO[str] | None = None,
+    stdout: IO[str] | None = None,
+    timeout_s: float = _OSC11_TIMEOUT_S,
+) -> tuple[int, int, int] | None:
+    """Query the terminal background colour via OSC 11.
+
+    Writes the OSC 11 request to *stdout* and reads the reply from *stdin*
+    under a bounded :func:`select`-driven deadline, restoring the terminal
+    mode afterward. MUST be called only while the process owns the TTY —
+    before Textual captures stdin (e.g. App ``__init__``), never mid-run.
+
+    Returns ``None`` (the safe fallback) without writing or hanging when:
+    ``CI`` or ``EAWF_NO_OSC`` is set, either stream is not a TTY, the
+    platform lacks ``termios`` / ``tty`` (non-POSIX), or the reply does not
+    arrive / does not parse.
+
+    Args:
+        stdin: Input stream to read the reply from (defaults to
+            :data:`sys.stdin`).
+        stdout: Output stream to write the query to (defaults to
+            :data:`sys.stdout`).
+        timeout_s: Bounded total wait for the reply, in seconds.
+
+    Returns:
+        The 8-bit ``(r, g, b)`` terminal background colour, or ``None`` on
+        any non-TTY / CI / unsupported / no-reply / parse-failure path.
+    """
+    stdin = stdin if stdin is not None else sys.stdin
+    stdout = stdout if stdout is not None else sys.stdout
+    if os.environ.get("CI") or os.environ.get("EAWF_NO_OSC"):
+        return None
+    try:
+        if not (stdin.isatty() and stdout.isatty()):
+            return None
+    except ValueError, OSError:
+        return None
+    try:
+        import termios
+        import tty
+    except ImportError:
+        return None
+    try:
+        fd = stdin.fileno()
+        old = termios.tcgetattr(fd)
+    except ValueError, OSError, termios.error:
+        return None
+    try:
+        tty.setcbreak(fd)
+        stdout.write(OSC11_QUERY)
+        stdout.flush()
+        reply = _read_osc_reply(fd, timeout_s)
+    except ValueError, OSError, termios.error:
+        return None
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    rgb = _parse_osc11(reply)
+    logger.debug(f"query_terminal_background rgb={rgb!r}")
+    return rgb
+
+
+def detect_auto_theme() -> str:
+    """Detect the ``auto`` logical theme from the live terminal background.
+
+    Glue over :func:`query_terminal_background` (live OSC 11 probe) and
+    :func:`resolve_auto_theme` (pure luminance classifier). MUST be called
+    only at the safe point where the process still owns the TTY — App
+    ``__init__``, before ``.run()`` captures stdin — and the result cached;
+    runtime ``/theme auto`` reuses the cached value. Falls back to ``"dark"``
+    on every non-TTY / no-reply / unsupported path.
+
+    Returns:
+        ``"light"`` or ``"dark"`` — the logical name ``auto`` resolves to.
+    """
+    return resolve_auto_theme(query_terminal_background())
+
+
 __all__ = [
     "DEFAULT_THEME",
     "EA_CB",
@@ -183,6 +393,10 @@ __all__ = [
     "EA_LIGHT",
     "EA_THEMES",
     "LOGICAL_THEMES",
+    "OSC11_QUERY",
     "THEME_CHOICES",
+    "detect_auto_theme",
+    "query_terminal_background",
+    "resolve_auto_theme",
     "resolve_theme_name",
 ]

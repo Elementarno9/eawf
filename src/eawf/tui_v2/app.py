@@ -53,6 +53,7 @@ from eawf.tui_v2.state_binding import StateBinding, StateBindingCallbacks
 from eawf.tui_v2.theme import (
     DEFAULT_THEME,
     EA_THEMES,
+    detect_auto_theme,
     resolve_theme_name,
 )
 from eawf.tui_v2.widgets.header import (
@@ -184,6 +185,14 @@ class EaApp(App[None]):
         self._binding: StateBinding | None = None
         self._help_open = False
         self._needs_user_open = False
+        # Detect the auto theme's terminal background ONCE here, before
+        # .run() captures stdin: the OSC 11 query needs the live TTY, and
+        # Textual's input parser owns stdin for the whole run — a mid-run
+        # query would corrupt the screen. Cache the dark/light verdict so a
+        # later /theme auto (or the persisted "auto" applied below) reuses it
+        # with no further TTY access. Under run_test()/non-TTY this returns
+        # the dark baseline, keeping the TUI tests deterministic.
+        self._auto_logical: str = detect_auto_theme()
         # Register the custom themes and apply the persisted one here, in
         # __init__, NOT in on_mount: Textual builds the App stylesheet
         # (which resolves every $var the structural CSS references) from
@@ -329,12 +338,15 @@ class EaApp(App[None]):
         """Apply an operator-facing logical theme name to the live App.
 
         Maps *logical* (one of ``dark`` / ``light`` / ``cb`` / ``auto``)
-        onto the registered Textual theme name via
-        :func:`~eawf.tui_v2.theme.resolve_theme_name` and assigns it to the
+        onto the registered Textual theme name and assigns it to the
         reactive :attr:`theme`, which re-resolves every semantic ``$var``
-        the structural CSS references. An unrecognised name leaves the
-        theme unchanged and returns ``False`` so callers can surface a
-        rejection.
+        the structural CSS references. ``auto`` resolves through the
+        terminal-background verdict cached at construction
+        (:attr:`_auto_logical`), so the dark/light choice reflects the real
+        terminal without a mid-run TTY query; every other name resolves via
+        the pure :func:`~eawf.tui_v2.theme.resolve_theme_name`. An
+        unrecognised name leaves the theme unchanged and returns ``False`` so
+        callers can surface a rejection.
 
         Args:
             logical: The operator-facing logical theme name.
@@ -343,12 +355,13 @@ class EaApp(App[None]):
             ``True`` when a known logical name was applied, ``False`` when
             *logical* was unrecognised (no theme change).
         """
-        registered = resolve_theme_name(logical)
+        effective = self._auto_logical if logical == "auto" else logical
+        registered = resolve_theme_name(effective)
         if registered is None:
             logger.info(f"apply_theme rejected logical={logical!r}")
             return False
         self.theme = registered
-        logger.info(f"apply_theme logical={logical!r} theme={registered!r}")
+        logger.info(f"apply_theme logical={logical!r} effective={effective!r} theme={registered!r}")
         return True
 
     def modal_depth(self) -> int:
