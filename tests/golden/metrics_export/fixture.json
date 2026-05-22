@@ -1,0 +1,170 @@
+{
+  "families": [
+    {
+      "help": "Total tokens by direction.",
+      "name": "eawf_tokens_total",
+      "samples": [
+        {
+          "labels": {
+            "direction": "cache_create",
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "348221"
+        },
+        {
+          "labels": {
+            "direction": "cache_create",
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "0"
+        },
+        {
+          "labels": {
+            "direction": "cache_read",
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "6108002"
+        },
+        {
+          "labels": {
+            "direction": "cache_read",
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "0"
+        },
+        {
+          "labels": {
+            "direction": "input",
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "812440"
+        },
+        {
+          "labels": {
+            "direction": "input",
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "10000"
+        },
+        {
+          "labels": {
+            "direction": "output",
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "142810"
+        },
+        {
+          "labels": {
+            "direction": "output",
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "5000"
+        }
+      ],
+      "type": "counter"
+    },
+    {
+      "help": "Cumulative cost in USD.",
+      "name": "eawf_cost_usd_total",
+      "samples": [
+        {
+          "labels": {
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "7.31"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "0.42"
+        }
+      ],
+      "type": "counter"
+    },
+    {
+      "help": "Cache-read / (cache-read + cache-create).",
+      "name": "eawf_cache_hit_ratio",
+      "samples": [
+        {
+          "labels": {
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "0.946"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "0"
+        }
+      ],
+      "type": "gauge"
+    },
+    {
+      "help": "Cumulative subagent dispatches across all sessions.",
+      "name": "eawf_subagent_dispatch_total",
+      "samples": [
+        {
+          "labels": {},
+          "value": "7"
+        }
+      ],
+      "type": "counter"
+    },
+    {
+      "help": "Per-runtime context-window compaction count.",
+      "name": "eawf_compaction_total",
+      "samples": [
+        {
+          "labels": {
+            "runtime": "claude"
+          },
+          "value": "3"
+        },
+        {
+          "labels": {
+            "runtime": "codex"
+          },
+          "value": "1"
+        }
+      ],
+      "type": "counter"
+    },
+    {
+      "help": "Recorded incidents by severity and cause.",
+      "name": "eawf_incidents_total",
+      "samples": [
+        {
+          "labels": {
+            "cause": "runtime_auth_error",
+            "severity": "critical"
+          },
+          "value": "1"
+        },
+        {
+          "labels": {
+            "cause": "runtime_timeout",
+            "severity": "medium"
+          },
+          "value": "1"
+        }
+      ],
+      "type": "counter"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "repo/eawf"
+}

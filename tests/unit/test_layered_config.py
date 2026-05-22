@@ -317,7 +317,6 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
         "runtime.fallback.retry_policy",
         "runtime.fallback.max_backoff_seconds",
         "telemetry.enabled",
-        "telemetry.export.endpoint",
         "telemetry.export.format",
         "telemetry.window_default",
         "telemetry.aggregate_window",

@@ -962,13 +962,6 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
-        key="telemetry.export.endpoint",
-        domain="telemetry",
-        type="str",
-        default=None,
-        writable_layers=("global",),
-    ),
-    LeafKey(
         key="telemetry.export.format",
         domain="telemetry",
         type="literal",
@@ -994,7 +987,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         key="telemetry.db_kind",
         domain="telemetry",
         type="literal",
-        default="duckdb",
+        default="sqlite",
         writable_layers=("global",),
         choices=("duckdb", "sqlite"),
     ),

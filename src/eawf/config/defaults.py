@@ -148,18 +148,19 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "config",
         ],
     },
-    # C09 (telemetry) projector reads these keys; defaults keep everything
-    # off-by-default so no external endpoint is contacted unless the
-    # operator opts in.
+    # C09 (telemetry) projector reads these keys. Telemetry is opt-in
+    # (``enabled`` defaults False) and strict-local: there is no export
+    # endpoint key, so a projection / export never contacts an external
+    # service. ``db_kind`` defaults to the always-available stdlib sqlite
+    # backend; ``duckdb`` is the opt-in analytics upgrade.
     "telemetry": {
         "enabled": False,
         "export": {
-            "endpoint": None,
             "format": "prom",
         },
         "window_default": "7d",
         "aggregate_window": "24h",
-        "db_kind": "duckdb",
+        "db_kind": "sqlite",
     },
     # Dispatch defaults — the per-skill or per-profile manifest still
     # wins; these are the bottom-of-stack values.

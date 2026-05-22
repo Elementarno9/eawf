@@ -1,27 +1,37 @@
-"""``eawf metrics`` — rolling workflow metrics view.
+"""``eawf metrics`` — workflow + telemetry metrics surface.
 
-Surfaces four wave-level metrics from the current state (no mutation, no
-event emission, read-only):
+The bare ``eawf metrics`` invocation renders the rolling **workflow**
+metrics (estimation calibration) from ``state.json`` — EU variance, audit
+pass rate, wave elapsed, and the planned-vs-reactive split. This is the
+read-only estimation view shipped in P20-W08.
 
-- **EU variance** — calibration drift between estimate and actual EU.
-- **Audit pass rate** — share of decided audits with verdict PASS.
-- **Wave elapsed (min)** — wall-clock latency roll-up for CLOSED waves.
-- **Planned vs reactive** — split of waves by iter (I01 vs I02+).
+The C09 telemetry capstone (P27-I01-W16) adds four sub-verbs behind the
+same ``metrics`` command — selected by a leading positional sub-verb so the
+existing single-command registration in :mod:`eawf.cli.app` stays intact
+(no app-level ``add_typer`` re-wire needed):
 
-The handler is thin dispatch: load state, run pure
-:func:`~eawf.estimation.metrics.compute_metrics`, then route either a
-JSON envelope (``--json``, ``schema_version=1``) or a Rich table (default)
-through :func:`~eawf.cli.output.emit_json_or_text`.
+- ``eawf metrics show`` — render the rolling telemetry metrics projected
+  into the local cache. With ``telemetry.enabled=false`` it prints a
+  one-time opt-in nudge and returns cleanly (no projection, no metrics).
+- ``eawf metrics export --format prom|json|csv`` — serialise the projected
+  metrics through :mod:`eawf.telemetry.exporter` to stdout or ``--out``.
+- ``eawf metrics rebuild [--full|--incremental]`` — drive the projector
+  (:func:`eawf.telemetry.projector.rebuild`) over the discovered sources.
+- ``eawf metrics info`` — print cache stats: DB kind, path, schema +
+  pricing version, and row counts.
 
-The shared renderer lives in :mod:`eawf.render.metrics_view` so the same
-table feeds the CLI today, the TUI overlay (P20 W04), and the release-
-notes section (P20 W13) without bytes drifting between consumers.
+CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
+reads the typed config, and routes the heavy lifting into
+:mod:`eawf.telemetry`. The shared estimation renderer lives in
+:mod:`eawf.render.metrics_view`; the telemetry aggregation + serialisation
+live in :mod:`eawf.telemetry.exporter` and :mod:`eawf.telemetry.projector`.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from pathlib import Path
+from typing import Annotated, Any
 
 import typer
 
@@ -32,24 +42,89 @@ from eawf.cli.scope import resolve_state_path
 
 logger = logging.getLogger(__name__)
 
+_TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info"})
 
-def metrics_cmd(ctx: typer.Context) -> None:
-    """Print the eawf metrics roll-up for the active workspace.
+_OPT_IN_NUDGE = (
+    "telemetry is disabled — no metrics are collected.\n"
+    "enable it with: eawf config set telemetry.enabled true\n"
+    "(strict-local: metrics are projected from local logs only; "
+    "nothing is sent off-device)"
+)
+
+
+def metrics_cmd(
+    ctx: typer.Context,
+    subcommand: Annotated[
+        str | None,
+        typer.Argument(
+            metavar="[show|export|rebuild|info]",
+            help="Telemetry sub-verb. Omit for the rolling workflow-metrics view.",
+        ),
+    ] = None,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Export format for `metrics export` (prom|json|csv)."),
+    ] = "prom",
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Write `metrics export` output to a file instead of stdout."),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="`metrics rebuild`: re-project every byte of every source."),
+    ] = False,
+    incremental: Annotated[
+        bool,
+        typer.Option(
+            "--incremental",
+            help="`metrics rebuild`: project only the tail appended since the last scan.",
+        ),
+    ] = False,
+) -> None:
+    """Dispatch the bare workflow-metrics view or a telemetry sub-verb.
+
+    Read-only for ``show`` / ``info`` / the bare view; ``export`` may write
+    a file; ``rebuild`` mutates the local telemetry cache only (never
+    ``state.json``).
+
+    Raises:
+        typer.BadParameter: When *subcommand* is not a recognised sub-verb.
+    """
+    flags: GlobalFlags = ctx.obj
+    if subcommand is None:
+        _workflow_metrics(flags)
+        return
+    if subcommand not in _TELEMETRY_SUBCOMMANDS:
+        raise typer.BadParameter(
+            f"unknown metrics sub-verb: {subcommand!r} "
+            f"(expected one of {sorted(_TELEMETRY_SUBCOMMANDS)} or no argument)"
+        )
+    if subcommand == "show":
+        _telemetry_show(flags)
+    elif subcommand == "export":
+        _telemetry_export(flags, fmt=fmt, out=out)
+    elif subcommand == "rebuild":
+        _telemetry_rebuild(flags, full=full, incremental=incremental)
+    else:  # subcommand == "info"
+        _telemetry_info(flags)
+
+
+def _workflow_metrics(flags: GlobalFlags) -> None:
+    """Render the rolling estimation metrics from ``state.json`` (P20-W08).
 
     Read-only — does not acquire a lock, append events, or mutate
     ``state.json``. Failures map to the canonical CLI exit codes:
 
-    - :class:`~eawf.cli.errors.NotFound` (``exit=4``) when no
+    - :class:`~eawf.cli.errors.NotFound` (``exit=1``) when no
       ``.ea/state.json`` is locatable from the cwd / ``-w`` / ``EA_STATE``
       precedence chain.
-    - :class:`~eawf.cli.errors.ValidationFailed` (``exit=6``) when the
+    - :class:`~eawf.cli.errors.ValidationFailed` (``exit=2``) when the
       on-disk payload fails strict schema validation.
     """
     from eawf.estimation.metrics import compute_metrics
     from eawf.evidence._io import load_state
     from eawf.render.metrics_view import render_metrics_plain, render_metrics_table
 
-    flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
@@ -63,12 +138,192 @@ def metrics_cmd(ctx: typer.Context) -> None:
         return
 
     summary = compute_metrics(state)
-    # ``model_dump(mode="json")`` emits the schema_version literal as the
-    # integer ``1`` (Pydantic v2 normalises the ``Literal[1]`` to its
-    # underlying value), which matches the wire contract documented in
-    # :data:`eawf.estimation.metrics.METRICS_SCHEMA_VERSION`.
     payload: dict[str, Any] = summary.model_dump(mode="json")
     text = render_metrics_plain(summary) if flags.plain_output else render_metrics_table(summary)
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _resolve_state_or_emit(flags: GlobalFlags) -> Path | None:
+    """Resolve the state path or emit a NotFound error and return ``None``."""
+    try:
+        return resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        return None
+
+
+def _scope_label(state_path: Path) -> str:
+    """Derive the scope label for metric rows from the project directory.
+
+    Uses ``repo/<dir>`` where ``<dir>`` is the project root (the parent of
+    ``.ea``). This mirrors the C09 §5.9.5 ``scope="repo/eawf"`` label form
+    without leaking an absolute path.
+    """
+    repo_root = state_path.parent.parent
+    return f"repo/{repo_root.name}"
+
+
+def _read_telemetry_config(state_path: Path) -> tuple[bool, str]:
+    """Return ``(enabled, db_kind)`` from the merged layered config.
+
+    Args:
+        state_path: The resolved ``.ea/state.json`` path.
+
+    Returns:
+        ``(telemetry.enabled, telemetry.db_kind)`` resolved through the
+        layered config merge anchored at the project repo root.
+    """
+    from eawf.config.layered import get_dotted, merge_config
+
+    repo_root = state_path.parent.parent
+    merged, _sources = merge_config(repo=repo_root)
+    enabled = bool(get_dotted(merged, "telemetry.enabled"))
+    db_kind = str(get_dotted(merged, "telemetry.db_kind"))
+    return enabled, db_kind
+
+
+def _telemetry_show(flags: GlobalFlags) -> None:
+    """Render the rolling telemetry metrics, or the opt-in nudge when disabled."""
+    from eawf.telemetry.exporter import build_snapshot, render_prom
+    from eawf.telemetry.store import metrics_db_path, open_store
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    enabled, db_kind = _read_telemetry_config(state_path)
+    if not enabled:
+        emit_json_or_text(
+            {"telemetry_enabled": False, "nudge": _OPT_IN_NUDGE},
+            _OPT_IN_NUDGE,
+            flags=flags,
+        )
+        return
+
+    db_path = metrics_db_path(state_path)
+    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
+    try:
+        store.init_schema()
+        snapshot = build_snapshot(store, scope=_scope_label(state_path))
+    finally:
+        store.close()
+    emit_json_or_text(snapshot.model_dump(mode="json"), render_prom(snapshot), flags=flags)
+
+
+def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None:
+    """Serialise the projected metrics in *fmt* to stdout or *out*."""
+    from eawf.telemetry.exporter import build_snapshot, render
+    from eawf.telemetry.store import metrics_db_path, open_store
+
+    if fmt not in ("prom", "json", "csv"):
+        raise typer.BadParameter(f"unknown export format: {fmt!r} (expected prom|json|csv)")
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    _enabled, db_kind = _read_telemetry_config(state_path)
+    db_path = metrics_db_path(state_path)
+    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
+    try:
+        store.init_schema()
+        snapshot = build_snapshot(store, scope=_scope_label(state_path))
+    finally:
+        store.close()
+
+    body = render(snapshot, fmt=fmt)  # type: ignore[arg-type]
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(body, encoding="utf-8")
+        logger.info(f"_telemetry_export format={fmt!r} out={str(out)!r} bytes={len(body)}")
+        typer.echo(f"wrote {fmt} metrics to {out}")
+        return
+    typer.echo(body, nl=False)
+
+
+def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> None:
+    """Drive the projector over the discovered sources into the local cache."""
+    from eawf.telemetry.projector import RebuildMode, SourceSpec, rebuild
+    from eawf.telemetry.sources.event_jsonl import EventJsonlSource
+    from eawf.telemetry.store import metrics_db_path, open_store
+
+    if full and incremental:
+        raise typer.BadParameter("pass only one of --full / --incremental")
+    mode = RebuildMode.INCREMENTAL if incremental else RebuildMode.FULL
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    _enabled, db_kind = _read_telemetry_config(state_path)
+    db_path = metrics_db_path(state_path)
+    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
+    try:
+        store.init_schema()
+        spec = SourceSpec(
+            source=EventJsonlSource(),
+            root=state_path,
+            project_id=_scope_label(state_path),
+        )
+        report = rebuild(store, [spec], mode=mode)
+    finally:
+        store.close()
+
+    payload = {
+        "mode": mode.value,
+        "sessions": report.sessions,
+        "incidents": report.incidents,
+        "files_scanned": report.files_scanned,
+        "files_skipped": report.files_skipped,
+    }
+    text = (
+        f"rebuild {mode.value}: sessions={report.sessions} incidents={report.incidents} "
+        f"scanned={report.files_scanned} skipped={report.files_skipped}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _telemetry_info(flags: GlobalFlags) -> None:
+    """Print cache stats: DB kind, path, schema + pricing version, row counts."""
+    from eawf.telemetry.models import TelemetryIncident, TelemetrySession
+    from eawf.telemetry.pricing import PRICING_VERSION
+    from eawf.telemetry.store import metrics_db_path, open_store
+    from eawf.telemetry.store.base import SCHEMA_VERSION
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    enabled, db_kind = _read_telemetry_config(state_path)
+    db_path = metrics_db_path(state_path)
+    exists = db_path.exists()
+    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
+    try:
+        store.init_schema()
+        session_count = len(store.fetch_all("telemetry_sessions", TelemetrySession))
+        incident_count = len(store.fetch_all("telemetry_incidents", TelemetryIncident))
+        size_bytes = db_path.stat().st_size if db_path.exists() else 0
+    finally:
+        store.close()
+
+    payload = {
+        "db_kind": store.backend,
+        "db_path": str(db_path),
+        "db_existed": exists,
+        "db_size_bytes": size_bytes,
+        "schema_version": SCHEMA_VERSION,
+        "pricing_version": PRICING_VERSION,
+        "telemetry_enabled": enabled,
+        "session_rows": session_count,
+        "incident_rows": incident_count,
+    }
+    text = (
+        f"telemetry cache: backend={store.backend} path={db_path}\n"
+        f"  schema_version={SCHEMA_VERSION} pricing_version={PRICING_VERSION} "
+        f"enabled={enabled}\n"
+        f"  rows: sessions={session_count} incidents={incident_count} "
+        f"size={size_bytes}B"
+    )
     emit_json_or_text(payload, text, flags=flags)
 
 

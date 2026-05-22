@@ -110,10 +110,10 @@ def migrate_config_payload(
         "telemetry",
         {
             "enabled": False,
-            "export": {"endpoint": None, "format": "prom"},
+            "export": {"format": "prom"},
             "window_default": "7d",
             "aggregate_window": "24h",
-            "db_kind": "duckdb",
+            "db_kind": "sqlite",
         },
     )
     _ensure_section(
@@ -316,6 +316,16 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     if "plugins" in payload:
         del payload["plugins"]
         changed = True
+
+    # ``telemetry.export.endpoint`` was dropped when telemetry became
+    # strict-local (no external export target); strip the orphan leaf so
+    # the daemon's unknown-config-key gate does not reject the migrated body.
+    telemetry = payload.get("telemetry")
+    if isinstance(telemetry, dict):
+        export = telemetry.get("export")
+        if isinstance(export, dict) and "endpoint" in export:
+            del export["endpoint"]
+            changed = True
 
     runtime = payload.get("runtime")
     if isinstance(runtime, dict) and "kind" in runtime:

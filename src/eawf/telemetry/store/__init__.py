@@ -26,6 +26,7 @@ from eawf.telemetry.store.base import (
     AbstractMetricsStore,
     StoreBackend,
     TableSpec,
+    metrics_db_path,
     open_store,
 )
 from eawf.telemetry.store.sqlite_store import SqliteMetricsStore
@@ -36,5 +37,6 @@ __all__ = [
     "SqliteMetricsStore",
     "StoreBackend",
     "TableSpec",
+    "metrics_db_path",
     "open_store",
 ]

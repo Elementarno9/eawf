@@ -1,0 +1,34 @@
+# HELP eawf_tokens_total Total tokens by direction.
+# TYPE eawf_tokens_total counter
+eawf_tokens_total{direction="cache_create",runtime="claude",scope="repo/eawf"} 348221
+eawf_tokens_total{direction="cache_create",runtime="codex",scope="repo/eawf"} 0
+eawf_tokens_total{direction="cache_read",runtime="claude",scope="repo/eawf"} 6108002
+eawf_tokens_total{direction="cache_read",runtime="codex",scope="repo/eawf"} 0
+eawf_tokens_total{direction="input",runtime="claude",scope="repo/eawf"} 812440
+eawf_tokens_total{direction="input",runtime="codex",scope="repo/eawf"} 10000
+eawf_tokens_total{direction="output",runtime="claude",scope="repo/eawf"} 142810
+eawf_tokens_total{direction="output",runtime="codex",scope="repo/eawf"} 5000
+
+# HELP eawf_cost_usd_total Cumulative cost in USD.
+# TYPE eawf_cost_usd_total counter
+eawf_cost_usd_total{runtime="claude",scope="repo/eawf"} 7.31
+eawf_cost_usd_total{runtime="codex",scope="repo/eawf"} 0.42
+
+# HELP eawf_cache_hit_ratio Cache-read / (cache-read + cache-create).
+# TYPE eawf_cache_hit_ratio gauge
+eawf_cache_hit_ratio{runtime="claude",scope="repo/eawf"} 0.946
+eawf_cache_hit_ratio{runtime="codex",scope="repo/eawf"} 0
+
+# HELP eawf_subagent_dispatch_total Cumulative subagent dispatches across all sessions.
+# TYPE eawf_subagent_dispatch_total counter
+eawf_subagent_dispatch_total 7
+
+# HELP eawf_compaction_total Per-runtime context-window compaction count.
+# TYPE eawf_compaction_total counter
+eawf_compaction_total{runtime="claude"} 3
+eawf_compaction_total{runtime="codex"} 1
+
+# HELP eawf_incidents_total Recorded incidents by severity and cause.
+# TYPE eawf_incidents_total counter
+eawf_incidents_total{cause="runtime_auth_error",severity="critical"} 1
+eawf_incidents_total{cause="runtime_timeout",severity="medium"} 1

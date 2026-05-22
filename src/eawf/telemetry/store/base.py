@@ -348,6 +348,22 @@ class AbstractMetricsStore(ABC):
         return out
 
 
+def metrics_db_path(state_path: Path) -> Path:
+    """Return the telemetry metrics DB path for a project state path.
+
+    The metrics cache lives at ``<state_dir>/telemetry.db`` — a sibling of
+    ``state.json`` and the ``store/`` JSONL directory. The file may not
+    exist yet (a project that has never run a projection has no cache).
+
+    Args:
+        state_path: The project's ``.ea/state.json`` path.
+
+    Returns:
+        The metrics-store database path (not guaranteed to exist).
+    """
+    return Path(state_path).parent / "telemetry.db"
+
+
 def open_store(
     db_kind: StoreBackend,
     path: Path | str,
