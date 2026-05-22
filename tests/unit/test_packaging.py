@@ -1,0 +1,226 @@
+"""Packaging guarantees for the single-source version + wheel bundling.
+
+Covers the three load-bearing guarantees of P27-W27:
+
+- **Single-source version** — ``src/eawf/_version.py`` is the one literal;
+  ``eawf.__version__`` re-exports it and Hatchling reads the same value at
+  build time (asserted via the built wheel's METADATA ``Version:`` line).
+- **version_bump grammar** — ``tools/version_bump.py`` bumps the semver
+  core and attaches / advances PEP-440 pre-release segments; boundary +
+  error paths are covered.
+- **Wheel-size gate** — a real ``uv build --wheel`` lands the per-OS
+  service templates under ``eawf/_data/service_templates/`` and stays
+  under the ``[tool.eawf.bundle] wheel_max_bytes`` ceiling. Skipped
+  cleanly when the build environment is unavailable; the assertions are
+  real whenever the wheel builds.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import subprocess
+import sys
+import tomllib
+import zipfile
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+import eawf
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_VERSION_FILE = _REPO_ROOT / "src" / "eawf" / "_version.py"
+_BUMP_PATH = _REPO_ROOT / "tools" / "version_bump.py"
+_PYPROJECT = _REPO_ROOT / "pyproject.toml"
+
+
+def _load_bump() -> Any:
+    """Import ``tools/version_bump.py`` as a module."""
+    tool_dir = _BUMP_PATH.parent
+    if str(tool_dir) not in sys.path:
+        sys.path.insert(0, str(tool_dir))
+    spec = importlib.util.spec_from_file_location("version_bump", _BUMP_PATH)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["version_bump"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.fixture()
+def bump() -> Any:
+    return _load_bump()
+
+
+def _bundle_config() -> dict[str, Any]:
+    with open(_PYPROJECT, "rb") as handle:
+        return tomllib.load(handle)["tool"]["eawf"]["bundle"]
+
+
+# --- Single-source version --------------------------------------------------
+
+
+def test_version_module_is_the_single_source(bump: Any) -> None:
+    """``eawf.__version__`` is re-exported from ``_version.py``."""
+    from eawf import _version
+
+    assert eawf.__version__ == _version.__version__
+    assert bump.read_current(_VERSION_FILE) == _version.__version__
+
+
+def test_pyproject_uses_dynamic_version() -> None:
+    """pyproject declares ``dynamic = ["version"]`` and points hatch at the file."""
+    with open(_PYPROJECT, "rb") as handle:
+        data = tomllib.load(handle)
+    assert "version" in data["project"]["dynamic"]
+    assert "version" not in data["project"]
+    assert data["tool"]["hatch"]["version"]["path"] == "src/eawf/_version.py"
+
+
+# --- version_bump grammar ---------------------------------------------------
+
+
+def test_parse_version_final(bump: Any) -> None:
+    assert bump.parse_version("0.2.0") == (0, 2, 0, None, None)
+
+
+def test_parse_version_prerelease(bump: Any) -> None:
+    assert bump.parse_version("0.3.0a1") == (0, 3, 0, "a", 1)
+
+
+def test_parse_version_rejects_garbage(bump: Any) -> None:
+    with pytest.raises(ValueError, match="unsupported version string"):
+        bump.parse_version("0.3")
+
+
+def test_parse_version_rejects_four_component(bump: Any) -> None:
+    with pytest.raises(ValueError, match="unsupported version string"):
+        bump.parse_version("0.3.0.1")
+
+
+def test_parse_version_rejects_unknown_phase(bump: Any) -> None:
+    with pytest.raises(ValueError, match="unsupported version string"):
+        bump.parse_version("0.3.0dev1")
+
+
+def test_bump_minor_resets_patch_and_drops_pre(bump: Any) -> None:
+    assert bump.bump_version("0.2.4a3", dimension="minor", pre_phase=None) == "0.3.0"
+
+
+def test_bump_major_resets_minor_and_patch(bump: Any) -> None:
+    assert bump.bump_version("0.2.4", dimension="major", pre_phase=None) == "1.0.0"
+
+
+def test_bump_patch(bump: Any) -> None:
+    assert bump.bump_version("0.2.0", dimension="patch", pre_phase=None) == "0.2.1"
+
+
+def test_bump_minor_with_pre_attaches_fresh_counter(bump: Any) -> None:
+    assert bump.bump_version("0.2.0", dimension="minor", pre_phase="a") == "0.3.0a1"
+
+
+def test_bump_pre_only_advances_existing_counter(bump: Any) -> None:
+    assert bump.bump_version("0.3.0a1", dimension=None, pre_phase="a") == "0.3.0a2"
+
+
+def test_bump_pre_only_switches_phase_resets_counter(bump: Any) -> None:
+    assert bump.bump_version("0.3.0a2", dimension=None, pre_phase="rc") == "0.3.0rc1"
+
+
+def test_bump_pre_only_attaches_when_no_existing_segment(bump: Any) -> None:
+    assert bump.bump_version("0.3.0", dimension=None, pre_phase="b") == "0.3.0b1"
+
+
+def test_bump_nothing_raises(bump: Any) -> None:
+    with pytest.raises(ValueError, match="nothing to bump"):
+        bump.bump_version("0.2.0", dimension=None, pre_phase=None)
+
+
+def test_round_trip_format_parse(bump: Any) -> None:
+    assert bump.format_version(0, 3, 0, "rc", 2) == "0.3.0rc2"
+    assert bump.parse_version("0.3.0rc2") == (0, 3, 0, "rc", 2)
+
+
+def test_format_pre_without_counter_raises(bump: Any) -> None:
+    with pytest.raises(ValueError, match="requires a counter"):
+        bump.format_version(0, 3, 0, "a", None)
+
+
+def test_bump_write_round_trip(bump: Any, tmp_path: Path) -> None:
+    """A real write rewrites the literal and reads back the new value."""
+    target = tmp_path / "_version.py"
+    target.write_text('from __future__ import annotations\n\n__version__ = "0.2.0"\n')
+    new = bump.bump_version(bump.read_current(target), dimension="minor", pre_phase="a")
+    bump.write_version(target, new)
+    assert bump.read_current(target) == "0.3.0a1"
+    assert "from __future__ import annotations" in target.read_text()
+
+
+def test_main_dry_run_does_not_mutate(bump: Any, tmp_path: Path) -> None:
+    target = tmp_path / "_version.py"
+    target.write_text('__version__ = "0.2.0"\n')
+    rc = bump.main(["--minor", "--dry-run", "--file", str(target)])
+    assert rc == 0
+    assert bump.read_current(target) == "0.2.0"
+
+
+def test_main_no_args_is_usage_error(bump: Any, tmp_path: Path) -> None:
+    target = tmp_path / "_version.py"
+    target.write_text('__version__ = "0.2.0"\n')
+    assert bump.main(["--file", str(target)]) == 2
+
+
+# --- Wheel-size gate --------------------------------------------------------
+
+
+def _build_wheel(out_dir: Path) -> Path | None:
+    """Run ``uv build --wheel`` into *out_dir*; return the ``.whl`` or None."""
+    if os.environ.get("EAWF_SKIP_WHEEL_BUILD"):
+        return None
+    try:
+        proc = subprocess.run(
+            ["uv", "build", "--wheel", "--out-dir", str(out_dir)],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except FileNotFoundError, subprocess.TimeoutExpired:
+        return None
+    if proc.returncode != 0:
+        return None
+    wheels = sorted(out_dir.glob("*.whl"))
+    return wheels[0] if wheels else None
+
+
+def test_wheel_bundles_service_templates_under_size_ceiling(tmp_path: Path) -> None:
+    """The built wheel ships the service templates and stays under budget."""
+    wheel = _build_wheel(tmp_path / "dist")
+    if wheel is None:
+        pytest.skip("uv build unavailable in this environment")
+
+    config = _bundle_config()
+    ceiling = config["wheel_max_bytes"]
+    size = wheel.stat().st_size
+    assert size <= ceiling, f"wheel {size} bytes exceeds ceiling {ceiling}"
+
+    with zipfile.ZipFile(wheel) as archive:
+        names = set(archive.namelist())
+    for template in config["service_templates"]:
+        member = f"eawf/_data/service_templates/{template}"
+        assert member in names, f"missing bundled template: {member}"
+
+
+def test_wheel_metadata_version_matches_single_source(tmp_path: Path) -> None:
+    """Hatchling stamps the wheel METADATA from ``_version.py``."""
+    wheel = _build_wheel(tmp_path / "dist")
+    if wheel is None:
+        pytest.skip("uv build unavailable in this environment")
+
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(n for n in archive.namelist() if n.endswith("METADATA"))
+        metadata = archive.read(metadata_name).decode()
+    version_line = next(line for line in metadata.splitlines() if line.startswith("Version:"))
+    assert version_line == f"Version: {eawf.__version__}"

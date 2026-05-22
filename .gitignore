@@ -5,6 +5,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Generated at wheel-build time by tools/bundle_data.py (Hatchling hook);
+# the source of truth is the repo-root templates/ dir, not this copy.
+src/eawf/_data/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

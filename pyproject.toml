@@ -1,6 +1,6 @@
 [project]
 name = "eawf"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Eä Workflow — agent-driven development framework"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -232,5 +232,46 @@ branch = 88
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Single-source version: Hatchling reads ``__version__`` from
+# ``src/eawf/_version.py`` at build time, so the package version, the
+# ``eawf --version`` banner, and ``importlib.metadata.version("eawf")``
+# all derive from one literal. ``tools/version_bump.py`` is the rewrite
+# path; the release pipeline never edits this file's version.
+[tool.hatch.version]
+path = "src/eawf/_version.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/eawf"]
+# ``_data/`` is populated at wheel-build time by the custom build hook
+# below (it does not exist in the source tree). Force-include keeps it
+# in the wheel even though it is gitignored / generated.
+force-include = { "src/eawf/_data" = "eawf/_data" }
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+# Custom build hook that populates ``src/eawf/_data/`` from the
+# repo-root template + asset directories before the wheel is assembled.
+# Wheel-only: the daemon reads service templates from the repo-root
+# ``templates/`` dir in dev; the bundled ``_data/`` copy is the
+# installed-from-PyPI read path.
+path = "tools/bundle_data.py"
+
+[tool.eawf.bundle]
+# Source directories the ``bundle_data`` hook copies into the wheel's
+# ``eawf/_data/`` tree. Paths are repo-relative. ``service_templates``
+# is the only mandatory bundle in v0.3 (per-OS daemon unit files);
+# the plugin trees / init templates / docs subset from the C10 design
+# are bundled in a later release phase when the canonical trees land.
+service_templates_dir = "templates"
+service_templates = [
+    "eawfd.service.j2",
+    "dev.eawf.eawfd.plist.j2",
+]
+# Wheel-size ceiling enforced by the packaging gate (bytes). The C10
+# design targeted 1 MB against a ~350 KB source-only wheel; the source
+# tree grew through P22-P27 to ~1.3 MB before any ``_data`` bundling,
+# so the literal 1 MB target is stale. This ceiling sits above the
+# current measured size with headroom and still catches a large
+# regression (e.g. accidentally bundling all three plugin trees or the
+# rendered docs subset). Recalibrate down once the source tree is
+# trimmed or the plugin trees move behind install extras.
+wheel_max_bytes = 2097152

@@ -1,0 +1,81 @@
+name: Release
+
+# Dormant release pipeline. The build + wheel-size gate run on tag push
+# and manual dispatch (dry-run only); the PyPI publish job exists but is
+# gated OFF (``if: false``) — the first public release ships in a later
+# phase. Flipping the gate on is a one-line change plus configuring the
+# ``pypi-publish`` trusted-publisher environment in the repo settings.
+
+on:
+  push:
+    tags:
+      - "v0.*" # v0.3.0a1, v0.3.0b1, v0.3.0rc1, v0.3.0
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "alpha | beta | rc | stable"
+        required: true
+        default: alpha
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheel:
+    name: Build wheel + sdist (dry-run)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Build wheel + sdist
+        run: uv build --out-dir dist
+
+      - name: Wheel-size gate (templates bundled + size ceiling)
+        # Asserts (a) the per-OS service templates land inside the wheel
+        # under ``eawf/_data/service_templates/`` and (b) the wheel stays
+        # under the ``[tool.eawf.bundle] wheel_max_bytes`` ceiling. Same
+        # assertions as ``tests/unit/test_packaging.py`` but run against
+        # the release build so a packaging regression reds the pipeline.
+        run: uv run pytest -q tests/unit/test_packaging.py
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    name: Publish to PyPI (DORMANT)
+    needs: build-wheel
+    # DORMANT: the first public release is a later phase. This job is
+    # gated OFF so the pipeline never publishes; flip ``if`` to a real
+    # condition (and configure the ``pypi-publish`` trusted-publisher
+    # environment) when the release phase opens.
+    if: false
+    runs-on: ubuntu-24.04
+    environment: pypi-publish
+    permissions:
+      id-token: write # PyPI trusted-publisher OIDC; no API token in repo secrets
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

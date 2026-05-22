@@ -236,7 +236,6 @@ wheels = [
 
 [[package]]
 name = "eawf"
-version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "jinja2" },
@@ -294,7 +293,7 @@ requires-dist = [
     { name = "textual", specifier = ">=8.0" },
     { name = "typer", specifier = ">=0.25.1" },
 ]
-provides-extras = ["windows", "docs"]
+provides-extras = ["docs", "windows"]
 
 [package.metadata.requires-dev]
 dev = [
