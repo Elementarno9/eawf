@@ -1,0 +1,45 @@
+Upstream provenance — eawf telemetry subsystem
+================================================
+
+The Pydantic row models in `models.py` are retyped from the upstream
+`agent-lens` project's dataclasses (`src/agent_lens/models.py`), and the
+`PRICING` snapshot in `pricing.py` descends from `agent-lens`'s embedded
+`PRICING` dict.
+
+Upstream project : agent-lens
+Upstream version : v0.1.0 (shipped 2026-04-30)
+Upstream module  : src/agent_lens/models.py (dataclasses + PRICING dict)
+
+Vendoring deltas applied at eawf C09 vendor time
+------------------------------------------------
+- Dataclasses -> Pydantic v2 BaseModel with ConfigDict(extra="forbid").
+- Free-string error_kind  -> closed ToolCallErrorKind enum.
+- New eawf-specific rows: TelemetryRuntimeSwitch, TelemetryIncident.
+- New eawf-specific fields: runtime, wave_id, attempt_id, has_eawf_state,
+  and the EndMarker `runtime_switched` member (V5).
+- float cost -> Decimal (total_cost_usd, all per-token rates).
+
+PRICING snapshot re-sourcing
+----------------------------
+The agent-lens embedded PRICING dict was a stale "April 2026 snapshot"
+(Opus 4.x over-billed 3x, Haiku 4.5 under-billed ~25%). The eawf snapshot
+is RE-SOURCED, not vendored verbatim: canonical Anthropic published rates
+fetched 2026-05-17 12:00:00 UTC from
+https://platform.claude.com/docs/en/about-claude/pricing
+(pricing_version="2026.05.17"), extended with the 5m/1h cache-write split
+plus pricing_version + fetched_at metadata fields.
+
+References (repo-relative / external URL)
+-----------------------------------------
+- .ea/local/research/long-term/2026-05-17-c09-blitz-pricing-currency.md
+  (currency diff + verdict that drove the re-source)
+- .ea/artifacts/research/long-term/2026-05-17-c09-quality-observability.md
+  (C09 §5.9 telemetry subsystem spec — reference models + pricing block)
+- https://platform.claude.com/docs/en/about-claude/pricing
+  (canonical Anthropic pricing page, 2026-05-17 fetch)
+
+Note: no upstream commit SHA is recorded here because the eawf vendor work
+referenced the published agent-lens v0.1.0 release artifact and the
+re-sourced Anthropic pricing page rather than a pinned upstream git commit.
+Update this file with a pinned SHA if/when the upstream is re-vendored from
+a specific revision.

@@ -482,6 +482,12 @@ from eawf.cli.commands.bench import bench_app  # noqa: E402
 app.add_typer(bench_app, name="bench", rich_help_panel=panel_for("bench"))
 # --- end P27 W18 ---
 
+# --- P27 W11 telemetry registration ---
+from eawf.cli.commands.telemetry import telemetry_app  # noqa: E402
+
+app.add_typer(telemetry_app, name="telemetry", rich_help_panel=panel_for("telemetry"))
+# --- end P27 W11 ---
+
 # --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402

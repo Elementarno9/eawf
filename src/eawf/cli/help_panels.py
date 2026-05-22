@@ -72,6 +72,7 @@ COMMAND_PANELS: dict[str, str] = {
     "estimate": "estimation",
     "impact": "estimation",
     "metrics": "estimation",
+    "telemetry": "estimation",
     # planning: roadmap / wave / iter / phase nouns + research + memory.
     "agent-report": "planning",
     "artifact": "planning",
