@@ -1,9 +1,10 @@
 """Unit + Pilot tests for the C06 ``RoadmapTree`` widget (P26-W17).
 
 Covers the V12 glyph maps (pure), tree construction from a fixture state
-(phase → iter → wave with status glyphs), the inline EU bar on an
-estimate-wired iter, the empty/None-state clear path, and the
-Enter-on-wave → :class:`RoadmapTree.WaveSelected` message seam.
+(phase → iter → wave with status glyphs), the inline completion bar on
+iter / phase rows (W06), width-aware row-title ellipsis (W06), the
+empty/None-state clear path, and the Enter-on-wave →
+:class:`RoadmapTree.WaveSelected` message seam.
 """
 
 from __future__ import annotations
@@ -16,11 +17,15 @@ from textual.app import ComposeResult
 
 from eawf.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.state.models import State
+from eawf.tui_v2.widgets.eu_bar import EMPTY_STATE
 from eawf.tui_v2.widgets.roadmap_tree import (
+    ELLIPSIS,
     ITER_GLYPHS,
     PHASE_GLYPHS,
     WAVE_GLYPHS,
     RoadmapTree,
+    _truncate_body,
+    _wave_completion,
 )
 
 from ._palette_harness import PaletteHarnessApp
@@ -43,41 +48,57 @@ def _load(path: Path) -> State:
     return State.model_validate(orjson.loads(path.read_bytes()))
 
 
-def _state_with_eu() -> State:
-    """Return the phase/iter/wave fixture with an EU-wired iter.
+def _make_wave(
+    wave_id: str, iter_id: str, status: str, *, title: str = "wave"
+) -> dict[str, object]:
+    """Build a minimal wave payload dict for fixture composition."""
+    return {
+        "id": wave_id,
+        "iter_id": iter_id,
+        "title": title,
+        "status": status,
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": "2026-05-08T00:00:00Z",
+        "closed_at": None,
+    }
 
-    Attaches an estimate (4 EU) to the iter and an actual (2 EU consumed,
-    matched by ``scope_id``) so the inline EU bar renders at 50 %.
+
+def _state_half_closed_iter() -> State:
+    """Return the fixture with the iter holding 4 waves, 2 of them CLOSED.
+
+    Gives the iter / phase completion bar a deterministic 50 % (``2/4``):
+    two CLOSED waves plus one in_progress and one pending.
     """
     payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
-    payload["iters"]["P01-I01"]["estimate_id"] = "EST-1"
-    payload["estimates"] = {
-        "EST-1": {
-            "id": "EST-1",
-            "scope_id": "P01-I01",
-            "expected_eu": 4.0,
-            "pessimistic_eu": 8.0,
-            "expected_minutes": 120.0,
-            "pessimistic_minutes": 240.0,
-            "display": "4 EU",
-            "reference_class": None,
-            "confidence": "medium",
-            "current_store_record_id": "EST-REC-1",
-            "updated_at": "2026-05-08T00:00:00Z",
-        }
+    payload["iters"]["P01-I01"]["wave_ids"] = [
+        "P01-I01-W01",
+        "P01-I01-W02",
+        "P01-I01-W03",
+        "P01-I01-W04",
+    ]
+    payload["waves"] = {
+        "P01-I01-W01": _make_wave("P01-I01-W01", "P01-I01", "closed"),
+        "P01-I01-W02": _make_wave("P01-I01-W02", "P01-I01", "closed"),
+        "P01-I01-W03": _make_wave("P01-I01-W03", "P01-I01", "in_progress"),
+        "P01-I01-W04": _make_wave("P01-I01-W04", "P01-I01", "pending"),
     }
-    payload["actuals"] = {
-        "ACT-1": {
-            "id": "ACT-1",
-            "scope_id": "P01-I01",
-            "status": "active",
-            "elapsed_eu": 2.0,
-            "attention_eu": None,
-            "agent_runtime_eu": None,
-            "current_store_record_id": "ACT-REC-1",
-            "updated_at": "2026-05-08T00:00:00Z",
-        }
-    }
+    return State.model_validate(payload)
+
+
+def _state_long_titles() -> State:
+    """Return the fixture with very long phase / iter / wave titles.
+
+    Each title is far wider than the narrow roadmap pane so the row-title
+    ellipsis path fires on every depth.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    long = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do"
+    payload["phases"]["P01"]["title"] = long
+    payload["iters"]["P01-I01"]["title"] = long
+    payload["waves"]["P01-I01-W01"]["title"] = long
     return State.model_validate(payload)
 
 
@@ -184,35 +205,77 @@ def test_tree_none_state_clears_to_empty() -> None:
 
 
 # --------------------------------------------------------------------------
-# Inline EU bar on an estimate-wired iter
+# _wave_completion — pure closed/total tally
 # --------------------------------------------------------------------------
 
 
-def test_tree_iter_row_shows_inline_eu_bar() -> None:
+def test_wave_completion_counts_closed_over_total() -> None:
+    state = _state_half_closed_iter()
+    closed, total = _wave_completion(state, list(state.iters["P01-I01"].wave_ids))
+    assert (closed, total) == (2, 4)
+
+
+def test_wave_completion_empty_wave_ids_is_zero_zero() -> None:
+    state = _load(_PHASE_ITER_WAVE)
+    assert _wave_completion(state, []) == (0, 0)
+
+
+def test_wave_completion_skips_unknown_wave_id() -> None:
+    """A dangling wave id is skipped, never inflating *total*."""
+    state = _load(_PHASE_ITER_WAVE)
+    _closed, total = _wave_completion(state, ["P01-I01-W01", "P99-MISSING"])
+    assert total == 1  # only the resolvable wave counts
+
+
+# --------------------------------------------------------------------------
+# Inline completion bar on iter / phase rows (W06)
+# --------------------------------------------------------------------------
+
+
+def test_tree_iter_row_shows_completion_bar() -> None:
     async def body() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 20)) as pilot:
             await pilot.pause()
             tree = app.query_one("#rt", RoadmapTree)
-            tree.state = _state_with_eu()
+            tree.state = _state_half_closed_iter()
             await pilot.pause()
             iter_label = next(lbl for lbl in _labels(tree) if "P01-I01 " in lbl)
-            assert "50%" in iter_label  # 2 of 4 EU consumed
-            assert "#" in iter_label
+            assert "2/4" in iter_label  # 2 of 4 child waves closed
+            assert "#" in iter_label  # filled cells present
 
     asyncio.run(body())
 
 
-def test_tree_iter_row_without_estimate_has_no_bar() -> None:
+def test_tree_phase_row_shows_completion_bar() -> None:
     async def body() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 20)) as pilot:
             await pilot.pause()
             tree = app.query_one("#rt", RoadmapTree)
-            tree.state = _load(_PHASE_ITER_WAVE)  # iter has no estimate_id
+            tree.state = _state_half_closed_iter()
             await pilot.pause()
-            iter_label = next(lbl for lbl in _labels(tree) if "P01-I01 " in lbl)
-            assert "%" not in iter_label
+            phase_label = next(lbl for lbl in _labels(tree) if "P01 " in lbl and "P01-" not in lbl)
+            assert "2/4" in phase_label  # phase tallies across its iters
+
+    asyncio.run(body())
+
+
+def test_tree_wave_row_has_no_completion_bar() -> None:
+    """Wave rows carry no inline bar — only iter / phase rows do."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_half_closed_iter()
+            await pilot.pause()
+            wave_labels = [lbl for lbl in _labels(tree) if "P01-I01-W0" in lbl]
+            assert wave_labels  # waves are present
+            for lbl in wave_labels:
+                assert "/" not in lbl  # no `closed/total` count suffix
+                assert EMPTY_STATE not in lbl
 
     asyncio.run(body())
 
@@ -441,5 +504,104 @@ def test_shift_arrow_parent_navigation_still_works() -> None:
             await pilot.pause()
             assert tree.cursor_node is not None
             assert tree.cursor_node.data == "P01-I01"
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Width-aware row-title ellipsis (W06)
+# --------------------------------------------------------------------------
+
+
+def test_truncate_body_short_text_unchanged() -> None:
+    """A body within budget is returned verbatim — no ellipsis."""
+    body = "P01-I01  short"
+    assert _truncate_body(body, 40) == body
+
+
+def test_truncate_body_long_text_gets_ellipsis() -> None:
+    out = _truncate_body("P01-I01  a very long iteration title here", 20)
+    assert out.endswith(ELLIPSIS)
+    assert len(out) == 20
+
+
+def test_truncate_body_equal_to_budget_unchanged() -> None:
+    """Off-by-one boundary: body length exactly the budget is untouched."""
+    body = "exactly-ten"  # 11 chars
+    assert _truncate_body(body, len(body)) == body
+
+
+def test_truncate_body_keeps_min_body_chars_on_tiny_budget() -> None:
+    """An extreme budget still shows a sliver of the id, not a lone marker."""
+    out = _truncate_body("P01-I01-W01  title", 2)
+    assert out.startswith("P01")  # >= _MIN_BODY_CHARS kept
+    assert out.endswith(ELLIPSIS)
+
+
+def test_tree_long_iter_title_ellipsizes_to_row_width() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_long_titles()
+            await pilot.pause()
+            iter_label = str(_node_by_data(tree, "P01-I01").label)  # type: ignore[attr-defined]
+            assert ELLIPSIS in iter_label
+            # The visible label (glyph + body + bar) fits the tree width.
+            assert len(iter_label) <= tree.size.width
+
+    asyncio.run(body())
+
+
+def test_tree_long_wave_title_ellipsizes_to_row_width() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_long_titles()
+            await pilot.pause()
+            wave_label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            assert ELLIPSIS in wave_label
+            assert len(wave_label) <= tree.size.width
+
+    asyncio.run(body())
+
+
+def test_tree_short_titles_not_ellipsized() -> None:
+    """Short titles in a wide pane keep their full text — no ellipsis."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _load(_PHASE_ITER_WAVE)
+            await pilot.pause()
+            for lbl in _labels(tree):
+                assert ELLIPSIS not in lbl
+
+    asyncio.run(body())
+
+
+def test_tree_re_truncates_on_resize() -> None:
+    """Shrinking the pane re-cuts a title that fit before the resize."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_long_titles()
+            await pilot.pause()
+            wide_label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            wide_len = len(wide_label)
+            # Narrow the viewport; on_resize rebuilds + re-truncates.
+            await pilot.resize_terminal(40, 20)
+            await pilot.pause()
+            narrow_label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            assert len(narrow_label) < wide_len
+            assert narrow_label.endswith(ELLIPSIS)
 
     asyncio.run(body())

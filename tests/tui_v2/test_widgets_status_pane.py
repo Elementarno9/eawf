@@ -15,6 +15,7 @@ import orjson
 from textual.app import ComposeResult
 
 from eawf.state.models import State
+from eawf.tui_v2.widgets.eu_bar import EMPTY_STATE
 from eawf.tui_v2.widgets.status_pane import (
     DASH,
     DEFAULT_PROJECT_CODE,
@@ -49,6 +50,31 @@ def _state_with_failed_wave() -> State:
     """Return the active fixture with its wave flipped to ``failed``."""
     payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
     payload["waves"]["P01-I01-W01"]["status"] = "failed"
+    return State.model_validate(payload)
+
+
+def _state_half_closed() -> State:
+    """Return the fixture with the active iter holding 2 waves, 1 CLOSED.
+
+    Gives the active-phase completion bar a deterministic ``1/2``.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["iters"]["P01-I01"]["wave_ids"] = ["P01-I01-W01", "P01-I01-W02"]
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = opened
+    payload["waves"]["P01-I01-W02"] = {
+        "id": "P01-I01-W02",
+        "iter_id": "P01-I01",
+        "title": "second",
+        "status": "in_progress",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": opened,
+        "closed_at": None,
+    }
     return State.model_validate(payload)
 
 
@@ -118,11 +144,26 @@ def test_summary_counts_none_state_all_zero() -> None:
         "iters_active",
         "waves_pending",
         "waves_in_progress",
+        "waves_closed",
+        "waves_total",
         "waves_failed",
         "audits_running",
         "audits_total",
         "worktrees_active",
     } <= set(counts)
+
+
+def test_summary_counts_closed_and_total_scoped_to_active_phase() -> None:
+    counts = summary_counts(_state_half_closed())
+    assert counts["waves_closed"] == 1
+    assert counts["waves_total"] == 2
+
+
+def test_summary_counts_archived_pending_excluded_from_total() -> None:
+    """Zombie pending waves under an archived phase do not inflate the total."""
+    counts = summary_counts(_state_with_archived_phase_pending_waves())
+    assert counts["waves_total"] == 1  # only the active P01 wave
+    assert counts["waves_closed"] == 0
 
 
 def test_summary_counts_active_phase_iter_wave() -> None:
@@ -337,6 +378,28 @@ def test_build_status_lines_waves_line_scoped_to_active_phase() -> None:
     assert "1 active · 0 pending" in waves_line
 
 
+def test_build_status_lines_progress_line_shows_completion_bar() -> None:
+    """The progress line carries the active-phase completion bar (closed/total)."""
+    lines = build_status_lines(_state_half_closed())
+    progress_line = next(line for line in lines if line.startswith("progress:"))
+    assert "1/2" in progress_line
+    assert "#" in progress_line  # at least one filled cell
+
+
+def test_build_status_lines_progress_line_empty_state_when_no_waves() -> None:
+    """A scope with no child waves shows the bar's empty-state, not ``0/0``."""
+    lines = build_status_lines(_load(_EMPTY_REPO))
+    progress_line = next(line for line in lines if line.startswith("progress:"))
+    assert EMPTY_STATE in progress_line
+
+
+def test_build_status_lines_progress_line_none_state_empty_state() -> None:
+    """The None-state frame renders the progress bar's empty-state sentinel."""
+    lines = build_status_lines(None)
+    progress_line = next(line for line in lines if line.startswith("progress:"))
+    assert EMPTY_STATE in progress_line
+
+
 # --------------------------------------------------------------------------
 # Pilot paint — renders under the real palette
 # --------------------------------------------------------------------------
@@ -365,5 +428,19 @@ def test_status_pane_paints_blocked_line_under_palette() -> None:
             await pilot.pause()
             rendered = app.export_screenshot()
             assert "blocked:" in rendered
+
+    asyncio.run(body())
+
+
+def test_status_pane_paints_progress_bar_under_palette() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(60, 12)) as pilot:
+            await pilot.pause()
+            app.query_one("#sp", StatusPane).state = _state_half_closed()
+            await pilot.pause()
+            rendered = app.export_screenshot()
+            assert "progress:" in rendered
+            assert "1/2" in rendered
 
     asyncio.run(body())

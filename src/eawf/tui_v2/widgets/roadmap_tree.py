@@ -4,7 +4,10 @@ A :class:`~textual.widgets.Tree` that renders the full
 phase → iter → wave hierarchy from the reactive
 :class:`~eawf.state.models.State`, prefixing each row with the **V12
 glyph schema** (``- > ~ # x !``) keyed off the row's lifecycle status,
-and surfacing an inline 5-cell EU bar on iter rows that carry an estimate.
+and surfacing an inline completion bar (closed ÷ total child waves) on
+iter and phase rows. Wave rows carry no inline bar — their effort-size
+gauge lives in the detail modal. Row titles ellipsize to the pane width
+so a long title never wraps or pushes the bar off-screen.
 
 This replaces the P20 regression where the "roadmap pane" shipped as a
 flat 5-line numeric counter strip instead of V12's collapsible tree (see
@@ -31,7 +34,7 @@ Rich (not Textual content markup) and cannot resolve the ``$`` palette
 vars, so the glyph tint is applied as a concrete-colour Rich span sourced
 from :data:`STATUS_COLOURS` — the same hex set ``theme.tcss`` carries as
 ``$status-*`` vars (Rich-label colours mirror the CSS vars, as the inline
-EU bar's plain renderer already does).
+completion bar's plain renderer already does).
 """
 
 from __future__ import annotations
@@ -50,14 +53,51 @@ from eawf.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.tui_v2.widgets.eu_bar import render_bar_plain
+from eawf.tui_v2.widgets.eu_bar import render_completion_bar
 
 if TYPE_CHECKING:
+    from textual.events import Resize
     from textual.widgets.tree import TreeNode
 
     from eawf.state.models import Iter, Phase, State, Wave
 
 logger = logging.getLogger(__name__)
+
+#: Cell count for the inline completion bar on iter / phase rows. Kept at
+#: 5 (one cell per 20 %) so it matches the inline EU bar's width and the
+#: ``<glyph> <id>  <title>  <bar>`` row still fits the narrow roadmap pane.
+COMPLETION_BAR_CELLS: int = 5
+
+#: Single-character ellipsis appended to a title truncated to the row
+#: width. The U+2026 glyph is one cell wide, so the truncated body plus
+#: this marker never exceeds the computed budget.
+ELLIPSIS: str = "…"
+
+#: Per-depth guide indentation Textual prepends to a Tree row, mirroring
+#: ``Tree.guide_depth`` (the widget sets ``guide_depth = 2``). Used to
+#: size the title-truncation budget so the visible row — guide chrome plus
+#: ``<glyph> <body>`` — fits the tree's content width.
+_GUIDE_INDENT_PER_DEPTH: int = 2
+
+#: Width of the leading expand/collapse toggle (``▼ `` / ``▶ ``) or the
+#: leaf spacer Textual renders before a row label. Folded into the
+#: truncation budget alongside the depth-scaled guide indent.
+_ROW_TOGGLE_WIDTH: int = 2
+
+#: Width of the ``<glyph><space>`` prefix every row label carries (the
+#: status glyph plus its trailing space), counted against the budget.
+_GLYPH_PREFIX_WIDTH: int = 2
+
+#: Minimum number of body characters kept when a row is truncated, so an
+#: extremely narrow pane still shows a sliver of the id rather than
+#: collapsing the body to just the ellipsis.
+_MIN_BODY_CHARS: int = 4
+
+#: Budget used when the tree has no measured width yet (pre-layout, or a
+#: bare standalone harness that never lays the widget out). Wide enough
+#: that no realistic title truncates until a real width lands via
+#: :meth:`RoadmapTree.on_resize`.
+_UNSIZED_BUDGET: int = 1024
 
 #: V12 glyph schema (``- > ~ # x !``) mapped onto wave lifecycle status.
 #: ``-`` pending · ``>`` claimed · ``~`` in-progress · ``#`` closed ·
@@ -170,38 +210,77 @@ def _row_label(glyph: str, body: str, glyph_colour: str | None = None) -> Text:
     return label
 
 
-def _iter_eu_suffix(state: State, iter_obj: Iter) -> str | None:
-    """Return an inline EU bar (plain string) for *iter_obj*, or ``None``.
+def _wave_completion(state: State, wave_ids: list[str]) -> tuple[int, int]:
+    """Return ``(closed, total)`` over *wave_ids* against the state table.
 
-    Reads the iter's :class:`~eawf.state.models.EstimateSummary` (via
-    ``iter.estimate_id``) for the total and the matching
-    :class:`~eawf.state.models.ActualSummary` (by ``scope_id``) for the
-    consumed EU, then renders the shared 5-cell bar as a plain string
-    (Tree labels are Rich-parsed and cannot resolve the palette vars).
-    Returns ``None`` when no estimate is attached so plain iters render
-    without a bar.
+    The populated completion signal for an iter or a phase: how many of
+    its child waves are CLOSED. Ids that do not resolve to a known wave
+    are skipped so a dangling reference never inflates *total*.
 
     Args:
-        state: The bound state (estimates / actuals live at the root).
-        iter_obj: The iter whose EU bar to build.
+        state: The bound state holding the wave table.
+        wave_ids: The child-wave ids to tally.
 
     Returns:
-        The rendered bar string, or ``None``.
+        A ``(closed, total)`` pair; *total* is the count of *wave_ids* that
+        resolve to a known wave, *closed* the subset with a CLOSED status.
     """
-    if iter_obj.estimate_id is None or state.estimates is None:
-        return None
-    estimate = state.estimates.get(iter_obj.estimate_id)
-    if estimate is None:
-        return None
-    consumed = 0.0
-    if state.actuals is not None:
-        actual = next(
-            (a for a in state.actuals.values() if a.scope_id == estimate.scope_id),
-            None,
-        )
-        if actual is not None:
-            consumed = actual.elapsed_eu
-    return render_bar_plain(consumed, estimate.expected_eu)
+    total = 0
+    closed = 0
+    for wave_id in wave_ids:
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            continue
+        total += 1
+        if wave.status is WaveStatus.CLOSED:
+            closed += 1
+    return closed, total
+
+
+def _phase_wave_ids(state: State, phase: Phase) -> list[str]:
+    """Return the flat list of every wave id under *phase*'s iters.
+
+    Walks the phase's ``iter_ids`` in order and concatenates each iter's
+    ``wave_ids``, so a phase completion bar tallies across all its iters.
+    Iter ids that do not resolve are skipped.
+
+    Args:
+        state: The bound state (its ``iters`` table resolves the ids).
+        phase: The phase whose child waves to collect.
+
+    Returns:
+        The ordered list of child-wave ids across the phase's iters.
+    """
+    wave_ids: list[str] = []
+    for iter_id in phase.iter_ids:
+        iter_obj = state.iters.get(iter_id)
+        if iter_obj is not None:
+            wave_ids.extend(iter_obj.wave_ids)
+    return wave_ids
+
+
+def _truncate_body(body: str, budget: int) -> str:
+    """Truncate *body* to *budget* cells, appending an ellipsis when cut.
+
+    Width-aware row-title ellipsis: a *body* already within *budget* is
+    returned unchanged (short titles untouched); a longer one is cut so
+    the kept text plus the single-cell :data:`ELLIPSIS` marker fits the
+    budget exactly. The kept slice never falls below
+    :data:`_MIN_BODY_CHARS` characters so an extreme budget still shows a
+    sliver of the id rather than a lone ellipsis.
+
+    Args:
+        body: The row body text (``<id>  <title>``).
+        budget: The maximum cell width the body may occupy. Non-positive
+            budgets are treated as :data:`_MIN_BODY_CHARS` (clamped).
+
+    Returns:
+        Either *body* unchanged, or its truncated ``<head>…`` form.
+    """
+    if len(body) <= budget:
+        return body
+    keep = max(budget - len(ELLIPSIS), _MIN_BODY_CHARS)
+    return f"{body[:keep]}{ELLIPSIS}"
 
 
 class RoadmapTree(Tree[str]):
@@ -279,6 +358,45 @@ class RoadmapTree(Tree[str]):
         """Rebuild the tree whenever the bound state changes."""
         self._rebuild(new_state)
 
+    def on_resize(self, event: Resize) -> None:
+        """Re-truncate row titles to the new width when the pane resizes.
+
+        Row-title ellipsis is budgeted against the tree's content width,
+        which is unknown until layout runs. Rebuilding on resize re-cuts
+        every title to fit the new width (and restores a title in full
+        when the pane grows back). A no-op while the state is unbound.
+
+        Args:
+            event: The Textual resize event (unused; the new width is read
+                from :attr:`size` during the rebuild).
+        """
+        del event
+        if self.state is not None:
+            self._rebuild(self.state)
+
+    def _body_budget(self, depth: int) -> int:
+        """Return the cell budget a row body may occupy at *depth*.
+
+        Subtracts the guide chrome Textual prepends — the depth-scaled
+        guide indent, the expand/collapse toggle, and the ``<glyph> ``
+        prefix — from the tree's measured content width. Falls back to
+        :data:`_UNSIZED_BUDGET` when the width is not yet known (pre-layout
+        or a bare harness), so short titles never truncate before a real
+        width arrives via :meth:`on_resize`.
+
+        Args:
+            depth: The row's depth below the hidden root (phase ``0``,
+                iter ``1``, wave ``2``).
+
+        Returns:
+            The maximum cell width the row body (``<id>  <title>``) may use.
+        """
+        width = self.size.width
+        if width <= 0:
+            return _UNSIZED_BUDGET
+        chrome = _GUIDE_INDENT_PER_DEPTH * depth + _ROW_TOGGLE_WIDTH + _GLYPH_PREFIX_WIDTH
+        return max(width - chrome, _MIN_BODY_CHARS)
+
     def _rebuild(self, state: State | None) -> None:
         """Repopulate the tree from *state* (phase → iter → wave).
 
@@ -329,7 +447,13 @@ class RoadmapTree(Tree[str]):
             phase: The phase to add.
         """
         glyph = _glyph_for(phase.status, PHASE_GLYPHS)
-        label = _row_label(glyph, f"{phase.id}  {phase.title}", _status_colour(phase.status))
+        closed, total = _wave_completion(state, _phase_wave_ids(state, phase))
+        bar = render_completion_bar(closed, total, width=COMPLETION_BAR_CELLS)
+        body = _truncate_body(
+            f"{phase.id}  {phase.title}", self._body_budget(depth=0) - len(bar) - 2
+        )
+        label = _row_label(glyph, body, _status_colour(phase.status))
+        label.append(f"  {bar}")
         node = self.root.add(label, data=phase.id, expand=phase.status is PhaseStatus.ACTIVE)
         for iter_id in phase.iter_ids:
             iter_obj = state.iters.get(iter_id)
@@ -345,12 +469,13 @@ class RoadmapTree(Tree[str]):
             iter_obj: The iter to add.
         """
         glyph = _glyph_for(iter_obj.status, ITER_GLYPHS)
-        label = _row_label(
-            glyph, f"{iter_obj.id}  {iter_obj.title}", _status_colour(iter_obj.status)
+        closed, total = _wave_completion(state, list(iter_obj.wave_ids))
+        bar = render_completion_bar(closed, total, width=COMPLETION_BAR_CELLS)
+        body = _truncate_body(
+            f"{iter_obj.id}  {iter_obj.title}", self._body_budget(depth=1) - len(bar) - 2
         )
-        eu_suffix = _iter_eu_suffix(state, iter_obj)
-        if eu_suffix is not None:
-            label.append(f"  {eu_suffix}")
+        label = _row_label(glyph, body, _status_colour(iter_obj.status))
+        label.append(f"  {bar}")
         node = parent.add(
             label,
             data=iter_obj.id,
@@ -369,7 +494,8 @@ class RoadmapTree(Tree[str]):
             wave: The wave to add.
         """
         glyph = _glyph_for(wave.status, WAVE_GLYPHS)
-        label = _row_label(glyph, f"{wave.id}  {wave.title}", _status_colour(wave.status))
+        body = _truncate_body(f"{wave.id}  {wave.title}", self._body_budget(depth=2))
+        label = _row_label(glyph, body, _status_colour(wave.status))
         parent.add_leaf(label, data=wave.id)
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
@@ -424,6 +550,8 @@ class RoadmapTree(Tree[str]):
 
 
 __all__ = [
+    "COMPLETION_BAR_CELLS",
+    "ELLIPSIS",
     "ITER_GLYPHS",
     "PHASE_GLYPHS",
     "STATUS_COLOURS",

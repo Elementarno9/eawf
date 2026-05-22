@@ -5,9 +5,9 @@
 │ phase:     —                                                                                                         │
 │ iter:      —                                                                                                         │
 │ waves:     0 active · 0 pending                                                                                      │
+│ progress:  — no data                                                                                                 │
 │ audits:    0 running · 0 total                                                                                       │
 │ worktrees: 0 active                                                                                                  │
-│                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │

@@ -34,6 +34,7 @@ from eawf.state.enums import (
     WaveStatus,
     WorktreeStatus,
 )
+from eawf.tui_v2.widgets.eu_bar import render_completion_bar
 
 if TYPE_CHECKING:
     from eawf.state.models import State
@@ -88,8 +89,9 @@ def summary_counts(state: State | None) -> dict[str, int]:
 
     Returns:
         A dict with keys ``phases_active`` / ``iters_active`` /
-        ``waves_pending`` / ``waves_in_progress`` / ``waves_failed`` /
-        ``audits_running`` / ``audits_total`` / ``worktrees_active``.
+        ``waves_pending`` / ``waves_in_progress`` / ``waves_closed`` /
+        ``waves_total`` / ``waves_failed`` / ``audits_running`` /
+        ``audits_total`` / ``worktrees_active``.
     """
     if state is None:
         return {
@@ -97,6 +99,8 @@ def summary_counts(state: State | None) -> dict[str, int]:
             "iters_active": 0,
             "waves_pending": 0,
             "waves_in_progress": 0,
+            "waves_closed": 0,
+            "waves_total": 0,
             "waves_failed": 0,
             "audits_running": 0,
             "audits_total": 0,
@@ -112,6 +116,8 @@ def summary_counts(state: State | None) -> dict[str, int]:
         "iters_active": sum(1 for it in state.iters.values() if it.status is IterStatus.ACTIVE),
         "waves_pending": sum(1 for w in scoped_waves if w.status is WaveStatus.PENDING),
         "waves_in_progress": sum(1 for w in scoped_waves if w.status is WaveStatus.IN_PROGRESS),
+        "waves_closed": sum(1 for w in scoped_waves if w.status is WaveStatus.CLOSED),
+        "waves_total": len(scoped_waves),
         "waves_failed": sum(1 for w in scoped_waves if w.status is WaveStatus.FAILED),
         "audits_running": sum(1 for a in audits if a.status is AuditStatus.RUNNING),
         "audits_total": len(state.audits or {}),
@@ -124,8 +130,9 @@ def build_status_lines(state: State | None) -> list[str]:
 
     Pure render source — unit-testable without mounting the widget. The
     line set mirrors the ``eawf status`` summary: project / phase / iter
-    pointers, then the wave / audit / worktree counters, then a blocked
-    line when any wave has failed.
+    pointers, then the wave counters, an active-phase completion bar
+    (closed ÷ total child waves), the audit / worktree counters, then a
+    blocked line when any wave has failed.
 
     Args:
         state: The bound state, or ``None``.
@@ -142,11 +149,13 @@ def build_status_lines(state: State | None) -> list[str]:
             project = state.project.code
         phase = state.current.phase_id or DASH
         iter_id = state.current.iter_id or DASH
+    progress = render_completion_bar(counts["waves_closed"], counts["waves_total"])
     lines = [
         f"project:   {project}",
         f"phase:     {phase}",
         f"iter:      {iter_id}",
         f"waves:     {counts['waves_in_progress']} active · {counts['waves_pending']} pending",
+        f"progress:  {progress}",
         f"audits:    {counts['audits_running']} running · {counts['audits_total']} total",
         f"worktrees: {counts['worktrees_active']} active",
     ]
