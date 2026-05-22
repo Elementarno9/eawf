@@ -1605,8 +1605,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P26-I02",
-    "phase_id": "P26",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -2515,13 +2515,13 @@
       ]
     },
     "P26-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A34-P26-tui-qol",
+      "closed_at": "2026-05-22T13:53:29.379057Z",
       "estimate_id": null,
       "id": "P26-I02",
       "opened_at": "2026-05-22T00:01:31.012318Z",
       "phase_id": "P26",
-      "status": "active",
+      "status": "closed",
       "title": "P26-I02: TUI QoL + deferred pull-in",
       "wave_ids": [
         "P26-I02-W01",
@@ -2997,8 +2997,8 @@
       "title": "C03+C07a+C07b+C08 contracts: spec infra + runtime dispatch + VCS events + profiles"
     },
     "P26": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A34-P26-tui-qol",
+      "closed_at": "2026-05-22T13:53:32.143585Z",
       "depends_on": [
         "P25"
       ],
@@ -3020,7 +3020,7 @@
         "ART-research-long-term-2026-05-17-c06-operator-surface",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime + operator TUI"
     },
@@ -3080,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T13:10:23.159045Z",
+  "updated_at": "2026-05-22T13:53:32.143782Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
