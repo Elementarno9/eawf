@@ -79,9 +79,9 @@ capabilities:
       Runtime supports session resume — re-attach to a prior session
       handle and continue the turn history. Backs V8 hybrid session
       reuse (C07a §5.4 + §5.8). OpenCode v0.3 marks this ``unsupported``
-      per F12 — the runtime ships ``--continue``/``--session``/``--fork``
+      — the runtime ships ``--continue``/``--session``/``--fork``
       surfaces but the eawf adapter holds the gate at ``False`` until
-      §8 Q1 lands the documented session-log path catalog; the matrix
+      the documented session-log path catalog lands; the matrix
       flips to ``supported`` in v0.4.
     claude-code: supported    # claude --continue <session-id>
     codex: supported          # codex resume <id> / codex exec resume <id>
@@ -92,7 +92,7 @@ capabilities:
       Runtime accepts caller-side ``cache_control`` markers in the
       dispatch prefix (V8 cache interplay). Claude has native support;
       Codex / OpenCode rely on prefix-stability + session resume to
-      hit cache, with no caller-side marker knob (C07a §5.6, §4 D4).
+      hit cache, with no caller-side marker knob (C07a §5.6).
       OpenCode auto-injects internally via ``@ai-sdk/anthropic`` but
       has no caller-side surface (and the OAuth path strips markers
       per upstream #17910), so the eawf adapter cannot pass cache

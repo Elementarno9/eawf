@@ -151,6 +151,8 @@ class NeedsUserModal(ModalScreen[str]):
             delta: ``-1`` for the previous option, ``+1`` for the next.
         """
         count = len(self._labels)
+        if count == 0:
+            return
         self.selected = (self.selected + delta) % count
 
     def action_confirm(self) -> None:

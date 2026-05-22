@@ -6,7 +6,7 @@ Eä commands and skills exchange a structured envelope with three parts:
   ``session``, ``started_at``/``finished_at``, ``status``, and
   ``instrument_probe``. Frozen at Phase 4 W01.
 - ``body`` — free-form payload. The payload is either a markdown string
-  (legacy/raw passthrough) or a typed Pydantic body model (one of the ten
+  (legacy/raw passthrough) or a typed Pydantic body model (one of the 17
   per-skill bodies under :mod:`eawf.skills.bodies`). The wire-form keeps
   the JSON serialisation byte-stable across either shape.
 - ``footer`` — typed :class:`EnvelopeFooter` with ``persisted_artifacts``,

@@ -21,8 +21,8 @@ Palette UX:
   palette, and runs the matched verb's handler.
 * ``Esc`` dismisses without executing.
 
-Per **Q12 OVERRIDE** the legacy ``:`` alias is gone in v0.3 — only ``/``
-opens the palette; this module never binds ``:``.
+The legacy ``:`` alias is gone in v0.3 — only ``/`` opens the palette;
+this module never binds ``:``.
 
 The fuzzy filter + the verb resolution live in pure functions on the
 registry module so the palette widget stays a thin view: it owns the

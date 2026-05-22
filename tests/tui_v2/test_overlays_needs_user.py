@@ -46,6 +46,16 @@ def test_needs_user_defaults_to_first_option() -> None:
     asyncio.run(body())
 
 
+def test_needs_user_action_move_empty_labels_is_noop() -> None:
+    """A degenerate empty-options modal does not divide by zero on move."""
+    modal = NeedsUserModal(_QUESTION)
+    modal._labels = ()  # degenerate: no options to move between
+    # The modulo guard makes the move a no-op rather than a ZeroDivisionError.
+    modal.action_move(1)
+    modal.action_move(-1)
+    assert modal.selected == 0
+
+
 def test_needs_user_down_then_enter_returns_second_label() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)

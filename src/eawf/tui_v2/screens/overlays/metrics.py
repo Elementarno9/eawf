@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 #: The rolling-window tokens the ``/metrics --window`` flag accepts.
 METRIC_WINDOWS: tuple[str, ...] = ("7d", "30d", "90d")
 
-#: Default rolling window when ``--window`` is omitted (V7 [1:198-201]).
+#: Default rolling window when ``--window`` is omitted (7-day weekly cadence).
 DEFAULT_WINDOW: str = "7d"
 
 #: Telemetry-projection refresh cadence in seconds (5 s tick).

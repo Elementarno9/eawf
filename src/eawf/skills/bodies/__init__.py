@@ -1,9 +1,9 @@
 """Per-skill body Pydantic models.
 
 Per ``docs/architecture/envelope.md``.
-Field set is additive after this wave: any new field must be optional and
-must not change the meaning of an existing field. Breaking changes
-require an explicit ``[CORE]`` commit on ``feature/eawf-v0.1``.
+Field set is additive: any new field must be optional and must not change
+the meaning of an existing field. A breaking change requires a new body
+version rather than redefining an existing field.
 
 Six core bodies (W02 fills implementations):
 

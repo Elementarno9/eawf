@@ -1,19 +1,17 @@
-"""``Heartbeat`` — standalone pulsing ``•`` liveness dot.
+"""``Heartbeat`` — the pulsing ``•`` liveness dot.
 
 A leaf :class:`~textual.widgets.Static` that pulses a single ``•`` glyph on
 a fixed cadence so the operator has visual proof the render loop is live.
 ``accent``-coloured by default, ``err``-coloured when :attr:`degraded` is
-set, with a one-shot lit-frame :meth:`ack` for the ``r`` force-refresh
+set, with a one-shot lit-frame :meth:`ack` for the ``F5`` force-refresh
 acknowledgement.
 
-This is the **standalone** Heartbeat the metrics / events overlays embed
-in their card chrome; a dedicated ``widgets/heartbeat.py`` module. The
-footer (:mod:`eawf.tui_v2.widgets.footer`) embeds its own private
-:class:`~eawf.tui_v2.widgets.footer.Heartbeat` for the shared chassis
-footer dot. The two are intentionally separate for this wave — the footer
-keeps its embedded dot untouched — and the duplication is flagged for a
-later consolidation sweep that points the footer at this module once the
-header (which also wants the dot per §5.9) lands its runtime cell.
+This is the single Heartbeat for the surface: the metrics / events overlays
+embed it in their card chrome and the footer
+(:mod:`eawf.tui_v2.widgets.footer`) imports it for the shared chassis footer
+dot. Carrying the ``.-degraded`` colour rule in this class's ``DEFAULT_CSS``
+keeps the degraded (red) dot self-contained wherever the widget is mounted,
+independent of the app-level ``theme.tcss``.
 
 The pulse runs off a Textual ``set_interval`` timer started on mount; the
 visible/hidden toggle and the colour swap are pure-ish reactive state so a
@@ -42,7 +40,7 @@ class Heartbeat(Static):
     Default ``accent`` colour; ``err`` colour when :attr:`degraded` is
     set. The dot toggles visible/hidden on :data:`HEARTBEAT_INTERVAL_S`
     so the operator sees a steady blink proving the render loop is live;
-    :meth:`ack` forces a lit frame for the ``r`` force-refresh
+    :meth:`ack` forces a lit frame for the ``F5`` force-refresh
     acknowledgement. Construct it bare (``Heartbeat()``) and mount it in
     any modal chrome that wants a liveness indicator.
     """

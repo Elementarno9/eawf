@@ -9,11 +9,11 @@ per-scope duplication**. The footer carries:
   the operator keymap convention, and
 * a live :class:`Heartbeat` dot — a ``•`` pulse that proves the
   TUI is alive, ``accent``-coloured by default and ``err``-coloured when
-  any pane is degraded, with a 0.5 s double-pulse ack on the ``r``
+  any pane is degraded, with a 0.5 s double-pulse ack on the ``F5``
   force-refresh keypress.
 
 Bundling the heartbeat inside the footer is the chassis trim: the
-three scope screens reuse one :class:`Footer` (which owns the
+three scope screens reuse one :class:`Footer` (which mounts the shared
 :class:`Heartbeat`) rather than each re-declaring the chrome — the
 ``~5300 → ~2500`` salvageable-LOC target. Colours resolve
 against the ``theme.tcss`` palette vars (``$muted`` for the hints,
@@ -37,18 +37,13 @@ from textual.widgets import Static
 
 from eawf.estimation.metrics import compute_weekly_burn
 from eawf.tui_v2.widgets.eu_bar import EMPTY_STATE
+from eawf.tui_v2.widgets.heartbeat import HEARTBEAT_GLYPH, HEARTBEAT_INTERVAL_S, Heartbeat
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from eawf.state.models import State
 
-#: The heartbeat glyph — a single bullet that pulses on each tick.
-HEARTBEAT_GLYPH: str = "•"
-
-#: Heartbeat pulse cadence in seconds (the dot toggles visible/hidden on
-#: this interval so the operator sees a steady blink).
-HEARTBEAT_INTERVAL_S: float = 1.0
 
 #: Default footer key hints (full key names). Screens may pass a
 #: scope-specific override via :meth:`Footer.set_hints`; this is the base
@@ -120,61 +115,6 @@ def build_weekly_burn_line(state: State | None, *, now: datetime | None = None) 
     if metric.target_eu is None:
         return f"{WEEKLY_BURN_LABEL} {WEEKLY_BURN_EMPTY}"
     return f"{WEEKLY_BURN_LABEL} {metric.consumed_eu:g} / {metric.target_eu:g} EU"
-
-
-class Heartbeat(Static):
-    """A pulsing ``•`` liveness dot.
-
-    Default ``accent`` colour; ``err`` colour when :attr:`degraded` is
-    set. The dot toggles visible/hidden on :data:`HEARTBEAT_INTERVAL_S`
-    so the operator sees a steady blink proving the render loop is live;
-    :meth:`ack` fires a one-shot double-pulse for the ``r`` force-refresh
-    acknowledgement.
-    """
-
-    DEFAULT_CSS: ClassVar[str] = """
-    Heartbeat {
-        width: auto;
-        height: 1;
-        color: $accent;
-    }
-    """
-
-    #: ``True`` when any pane is degraded — flips the dot to ``err``.
-    degraded: reactive[bool] = reactive(False)
-
-    #: Internal pulse phase; toggled by the timer so the dot blinks.
-    _lit: reactive[bool] = reactive(True)
-
-    def on_mount(self) -> None:
-        """Start the pulse timer and paint the first lit frame."""
-        self.set_interval(HEARTBEAT_INTERVAL_S, self._pulse)
-        self._repaint()
-
-    def _pulse(self) -> None:
-        """Toggle the pulse phase on each timer tick."""
-        self._lit = not self._lit
-
-    def ack(self) -> None:
-        """Force a lit frame as the ``r`` force-refresh acknowledgement.
-
-        The full 0.5 s double-pulse animation lands with the force-
-        refresh wiring; this guarantees a visible lit frame so the
-        operator sees the manual-refresh ack immediately.
-        """
-        self._lit = True
-
-    def watch_degraded(self, degraded: bool) -> None:
-        """Swap the dot colour class when the degraded flag flips."""
-        self.set_class(degraded, "-degraded")
-
-    def watch__lit(self) -> None:
-        """Repaint when the pulse phase toggles."""
-        self._repaint()
-
-    def _repaint(self) -> None:
-        """Render the dot (or a blank cell when unlit)."""
-        self.update(HEARTBEAT_GLYPH if self._lit else " ")
 
 
 class Footer(Static):
