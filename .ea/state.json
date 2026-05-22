@@ -3080,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T13:05:18.907007Z",
+  "updated_at": "2026-05-22T13:10:23.159045Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10957,9 +10957,9 @@
     "P26-I02-W23": {
       "agent_role": "polisher",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-p26i02-w23",
+      "closed_at": "2026-05-22T13:10:23.158383Z",
+      "commit": "470d4265284cc1157f4549ddeee57a3501190d2b",
       "deps": [],
       "dispatch_history": [],
       "effort_bucket": "M",
@@ -10976,10 +10976,10 @@
       "id": "P26-I02-W23",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T12:12:09.713243Z",
-      "outcome": null,
+      "outcome": "consolidated Heartbeat (footer imports+re-exports; .-degraded in DEFAULT_CSS); rule-25 Q12/V7[1:..]/F12/Q1/D4 dropped; envelope 17 bodies; bodies drops CORE/v0.1; r->F5; needs_user empty-guard; mypy+grep clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "footer degraded heartbeat carries the .-degraded rule via one consolidated Heartbeat class (footer imports it)",
         "no Q<N>/D<N>/F<N>/[n:nn-nn] decision tokens remain in touched tui_v2 + capabilities.yaml source",
