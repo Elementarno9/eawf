@@ -23,7 +23,7 @@ discriminator dispatch ahead of that consolidation.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, get_args
 
 from pydantic import Field
 
@@ -50,7 +50,38 @@ tag; a payload whose body does not match its tag fails fast with a
 projection time.
 """
 
+
+def _c09_event_type_tags() -> frozenset[str]:
+    """Collect the closed ``event_type`` discriminator tag of every union arm.
+
+    Derived from the union members so the tag set stays in lock-step with
+    the union: a new C09 sub-class added to :data:`C09EventPayloadUnion`
+    contributes its tag here automatically, with no second list to keep
+    in sync.
+
+    Returns:
+        The frozenset of ``event_type`` literal values the C09 union
+        discriminates on.
+    """
+    members = get_args(get_args(C09EventPayloadUnion)[0])
+    tags: set[str] = set()
+    for member in members:
+        (tag,) = get_args(member.model_fields["event_type"].annotation)
+        tags.add(tag)
+    return frozenset(tags)
+
+
+C09_EVENT_TYPE_TAGS: frozenset[str] = _c09_event_type_tags()
+"""The set of ``event_type`` discriminator values owned by the C09 union.
+
+A row whose ``event_type`` is in this set is a typed C09 payload and
+must validate through :data:`C09EventPayloadUnion`; any other
+``event_type`` is a legacy flat :class:`~eawf.store.kinds.event.EventPayload`
+row.
+"""
+
 __all__ = [
+    "C09_EVENT_TYPE_TAGS",
     "C09EventPayloadUnion",
     "CacheMislayerAlarmPayload",
     "DispatchCostPayload",

@@ -13,8 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eawf.lock import portalock
+from eawf.state.enums import StoreKind
 from eawf.store.envelope import Envelope
 from eawf.store.kinds import PAYLOAD_MODELS
+from eawf.store.kinds.event import validate_event_payload
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,14 @@ def compact_store(path: Path) -> CompactReport:
             env = Envelope.model_validate_json(line)
             if env.kind not in PAYLOAD_MODELS:
                 raise ValueError(f"unknown store kind {env.kind!r}")
-            PAYLOAD_MODELS[env.kind].model_validate(env.payload)
+            # Event payloads span two families (legacy flat + typed C09)
+            # that share the event_type key but have disjoint fields, so
+            # they route through the typed-aware validator; every other
+            # kind has a single payload model.
+            if env.kind == StoreKind.EVENT:
+                validate_event_payload(env.payload)
+            else:
+                PAYLOAD_MODELS[env.kind].model_validate(env.payload)
             if env.id in latest and latest[env.id].kind != env.kind:
                 raise ValueError(
                     f"kind drift on id {env.id!r}: {latest[env.id].kind.value} → {env.kind.value}"
@@ -88,5 +97,5 @@ def compact_store(path: Path) -> CompactReport:
             records_out=records_out,
             dedup_count=records_in - records_out,
         )
-        logger.info(f"compact_store {path} in={records_in} out={records_out}")
+        logger.info(f"compact_store path={path} in={records_in} out={records_out}")
         return report

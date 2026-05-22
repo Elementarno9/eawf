@@ -292,3 +292,54 @@ def test_union_member_is_strict_base_model() -> None:
     for _builder, model in _BUILDERS.values():
         assert issubclass(model, BaseModel)
         assert model.model_config.get("extra") == "forbid"
+
+
+# ---------------------------------------------------------------------------
+# validate_event_payload — typed-aware EVENT payload dispatch (P27-I02-W06)
+# ---------------------------------------------------------------------------
+
+
+def test_c09_event_type_tags_match_union_members() -> None:
+    from eawf.store.kinds.events import C09_EVENT_TYPE_TAGS
+
+    assert frozenset(_BUILDERS) == C09_EVENT_TYPE_TAGS
+
+
+@pytest.mark.parametrize("kind", list(_BUILDERS))
+def test_validate_event_payload_routes_c09_to_union(kind: str) -> None:
+    from eawf.store.kinds.event import validate_event_payload
+
+    builder, model = _BUILDERS[kind]
+    parsed = validate_event_payload(builder())
+    assert isinstance(parsed, model)
+
+
+def test_validate_event_payload_routes_flat_to_event_payload() -> None:
+    from eawf.store.kinds.event import EventPayload, validate_event_payload
+
+    flat = {
+        "timestamp": _TS,
+        "event_type": "state_mutated",
+        "actor": "cli",
+        "command": "eawf wave claim",
+        "args_hash": "abc",
+        "status": "ok",
+        "message": "claimed",
+    }
+    parsed = validate_event_payload(flat)
+    assert isinstance(parsed, EventPayload)
+    assert parsed.event_type == "state_mutated"
+
+
+def test_validate_event_payload_rejects_garbage_c09_body() -> None:
+    from eawf.store.kinds.event import validate_event_payload
+
+    with pytest.raises(ValidationError):
+        validate_event_payload({"event_type": "dispatch_cost", "rogue": True})
+
+
+def test_validate_event_payload_rejects_unknown_event_type() -> None:
+    from eawf.store.kinds.event import validate_event_payload
+
+    with pytest.raises(ValidationError):
+        validate_event_payload({"event_type": "totally_unknown"})

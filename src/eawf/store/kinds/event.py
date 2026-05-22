@@ -32,11 +32,12 @@ database.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from eawf.state.types import UtcDatetime
+from eawf.store.kinds.events import C09_EVENT_TYPE_TAGS, C09EventPayloadUnion, TracedEventPayload
 
 EventKind = Literal[
     "state_mutated",
@@ -120,3 +121,42 @@ class Event(BaseModel):
     occurred_at: UtcDatetime
     idempotency_key: str | None = None
     payload: EventPayload
+
+
+_C09_UNION_ADAPTER: TypeAdapter[TracedEventPayload] = TypeAdapter(C09EventPayloadUnion)
+
+
+def validate_event_payload(payload: dict[str, Any]) -> BaseModel:
+    """Validate a ``StoreKind.EVENT`` envelope payload, typed-aware.
+
+    The event store carries two payload families that share the
+    ``event_type`` key but have disjoint field sets:
+
+    * legacy **flat** rows validate against :class:`EventPayload`, whose
+      ``event_type`` is an open ``str``; and
+    * typed **C09** rows (runtime/session/cost/cache-alarm) validate
+      through :data:`~eawf.store.kinds.events.C09EventPayloadUnion`,
+      whose ``event_type`` is a closed discriminator literal.
+
+    A single ``Field(discriminator=...)`` union cannot fold both families
+    (the flat arm's open ``str`` tag has no single literal to key on), so
+    validation dispatches on ``event_type``: a value in
+    :data:`~eawf.store.kinds.events.C09_EVENT_TYPE_TAGS` routes to the C09
+    union; anything else routes to the flat model. Both arms keep
+    ``extra="forbid"``, so a genuinely malformed body — including a C09
+    tag worn over the wrong shape — still fails fast.
+
+    Args:
+        payload: The decoded envelope payload mapping.
+
+    Returns:
+        The validated payload model — a C09 union member for typed rows,
+        otherwise an :class:`EventPayload`.
+
+    Raises:
+        pydantic.ValidationError: When *payload* matches neither the C09
+            union arm for its tag nor the flat :class:`EventPayload`.
+    """
+    if payload.get("event_type") in C09_EVENT_TYPE_TAGS:
+        return _C09_UNION_ADAPTER.validate_python(payload)
+    return EventPayload.model_validate(payload)
