@@ -1604,7 +1604,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I02-W14"
+    ],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3073,7 +3075,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T03:45:48.671813Z",
+  "updated_at": "2026-05-22T03:50:13.326198Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10643,7 +10645,7 @@
     "P26-I02-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "w14-exec",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -10666,7 +10668,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "c and /config open ConfigModal from repo + workspace + user scopes",
         "inline field edit shows the current/typed value in the mounted Input",
@@ -10677,7 +10679,7 @@
       "title": "fix: config pane callable from all scopes + inline-edit value visibility/alignment",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P26-I02-W14-1779421813"
     },
     "P26-I02-W15": {
       "agent_role": "executor",
@@ -11679,6 +11681,17 @@
       "path": ".ea/worktrees/p26-i02-w13",
       "status": "merged",
       "wave_id": "P26-I02-W13"
+    },
+    "WT-P26-I02-W14-1779421813": {
+      "base_branch": "feature/eawf-v0.3-p26",
+      "branch": "feature/eawf-v0.3-p26-i02-w14",
+      "created_at": "2026-05-22T03:50:13.326198Z",
+      "id": "WT-P26-I02-W14-1779421813",
+      "merged_commit": null,
+      "owner_session_id": "w14-exec",
+      "path": ".ea/worktrees/p26-i02-w14",
+      "status": "active",
+      "wave_id": "P26-I02-W14"
     },
     "WT-P26-I02-W15-1779420972": {
       "base_branch": "feature/eawf-v0.3-p26",
