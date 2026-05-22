@@ -2534,7 +2534,12 @@
         "P26-I02-W08",
         "P26-I02-W09",
         "P26-I02-W10",
-        "P26-I02-W11"
+        "P26-I02-W11",
+        "P26-I02-W12",
+        "P26-I02-W13",
+        "P26-I02-W15",
+        "P26-I02-W16",
+        "P26-I02-W14"
       ]
     },
     "P27-I01": {
@@ -3068,7 +3073,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T02:36:50.126497Z",
+  "updated_at": "2026-05-22T03:02:56.788134Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10562,6 +10567,188 @@
         "tests + pre-commit green"
       ],
       "title": "polish sweep: consolidate resume_cmd Raises docstring",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I02-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/roadmap_tree.py",
+        "tests/tui_v2/**",
+        "tests/snapshots/tui/**"
+      ],
+      "id": "P26-I02-W12",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T03:02:46.532476Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "completion-bar + glyph/guide chrome width subtracted from the title budget so iter/phase rows never overflow the roadmap pane width",
+        "truncation stays reactive on resize",
+        "snapshots + tests"
+      ],
+      "title": "fix: RoadmapTree row overflow (reserve completion-bar width in title budget)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/detail.py",
+        "src/eawf/tui_v2/widgets/eu_bar.py",
+        "tests/tui_v2/**",
+        "tests/snapshots/tui/**"
+      ],
+      "id": "P26-I02-W13",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T03:02:46.932108Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "h/d/m/e/dp keys jump to their tab (Tab/Shift+Tab retained and arrows still scroll)",
+        "dp tab renders markdown via the textual Markdown widget",
+        "detail field labels visually distinct from values (accent style)",
+        "detail-hint footer gains a vertical gap from content",
+        "wave metrics show plain effort_bucket text (size progressbar dropped)",
+        "no-data sentinel DRYed to eu_bar.EMPTY_STATE",
+        "snapshots + tests"
+      ],
+      "title": "fix: DetailModal polish — tab hotkeys + markdown dp + label style + bucket text + hint gap",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I02-W15"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/config_modal.py",
+        "src/eawf/tui_v2/scopes/repo.py",
+        "src/eawf/tui_v2/scopes/workspace.py",
+        "src/eawf/tui_v2/scopes/user.py",
+        "src/eawf/tui_v2/screens/help.py",
+        "tests/tui_v2/**",
+        "tests/snapshots/tui/**"
+      ],
+      "id": "P26-I02-W14",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T03:02:56.788106Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "c and /config open ConfigModal from repo + workspace + user scopes",
+        "inline field edit shows the current/typed value in the mounted Input",
+        "focusing a field does not shift the row or label alignment",
+        "help + footer hint reflect config-from-any-scope",
+        "snapshots + tests"
+      ],
+      "title": "fix: config pane callable from all scopes + inline-edit value visibility/alignment",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P26-I02-W14"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P26-I02-W12"
+      ],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/palette/verbs.py",
+        "src/eawf/tui_v2/screens/overlays/audit_running.py",
+        "src/eawf/tui_v2/screens/overlays/metrics.py",
+        "src/eawf/tui_v2/screens/overlays/events.py",
+        "src/eawf/tui_v2/screens/overlays/pr_list.py",
+        "src/eawf/tui_v2/widgets/footer.py",
+        "src/eawf/tui_v2/theme.tcss",
+        "tests/tui_v2/**",
+        "tests/snapshots/tui/**"
+      ],
+      "id": "P26-I02-W15",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T03:02:47.685370Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/audit resolves the newest audit for the current scope (fallback newest overall) not the first unordered-dict entry",
+        "flush hint bars (metrics/events/pr_list) gain a margin-top for consistency",
+        "footer hint no longer clips at 120 cols",
+        "snapshots + tests"
+      ],
+      "title": "fix: /audit overlay newest-for-scope + hint-bar vertical spacing + footer hint clip",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P26-I02-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/theme.py",
+        "src/eawf/tui_v2/app.py",
+        "tests/tui_v2/**"
+      ],
+      "id": "P26-I02-W16",
+      "iter_id": "P26-I02",
+      "opened_at": "2026-05-22T03:02:48.057241Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/theme auto queries the terminal background via OSC 11 and picks dark or light by luminance",
+        "graceful fallback to dark on no-reply or non-TTY or unsupported terminal or CI",
+        "bounded timeout so no hang",
+        "tests with mocked terminal responses (dark / light / no-reply)"
+      ],
+      "title": "fix: /theme auto OSC 11 terminal-background detection with safe fallback",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
