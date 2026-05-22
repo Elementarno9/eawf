@@ -8,7 +8,8 @@ Three criteria from the wave spec, plus the dev-mode raw-RPC gate:
   --daemonless`` reads ``state.json`` directly and never spawns the
   daemon.
 * **(c) Mutating verb rejects ``--daemonless``** — both the
-  :func:`eawf.cli._mutation.state_mutate` proxy entry point and the
+  :func:`eawf.cli._dispatch.escalate_mutation` escalation gate (the
+  single entry every daemon-proxy callsite routes through) and the
   ``eawf state rpc`` raw passthrough refuse the carve-out with a
   :class:`~eawf.cli.errors.UserError` (exit-code 1,
   ``data.kind="InvalidInput"``).
@@ -25,7 +26,6 @@ End-to-end against a live socket is covered by
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -39,7 +39,6 @@ from eawf.cli import _dispatch, _mutation, exit_codes
 from eawf.cli import errors as cli_errors
 from eawf.cli.app import app
 from eawf.cli.flags import GlobalFlags
-from eawf.state.mutations import Mutation, MutationKind
 
 pytestmark = pytest.mark.unit
 
@@ -113,15 +112,6 @@ def _build_state(path: Path) -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
-
-
-def _make_mutation() -> Mutation:
-    return Mutation(
-        kind=MutationKind.WAVE_CLOSE,
-        scope_id="P26-I01-W05",
-        mutation_id=uuid.uuid4().hex,
-        params={"wave_id": "P26-I01-W05", "outcome": "test"},
-    )
 
 
 # ---- predicate helpers (daemonless_requested / dev_mode_enabled) ----------
@@ -282,49 +272,6 @@ def test_escalate_mutation_rejects_daemonless_env(
     )
     with pytest.raises(cli_errors.UserError):
         _dispatch.escalate_mutation("iter close", flags=GlobalFlags())
-
-
-def test_state_mutate_daemonless_rejects_before_proxy(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """state_mutate(daemonless=True) refuses before any proxy / config merge."""
-    state_path = tmp_path / "state.json"
-    _build_state(state_path)
-
-    def _no_merge(*_args: Any, **_kwargs: Any) -> bool:
-        pytest.fail("daemonless mutation must reject before proxy resolution")
-
-    monkeypatch.setattr(_mutation, "_proxy_enabled", _no_merge)
-
-    def _apply(_state: Any) -> None:
-        pytest.fail("apply must not run on a rejected daemonless mutation")
-
-    with pytest.raises(cli_errors.UserError, match="wave close"):
-        _mutation.state_mutate(
-            state_path,
-            _make_mutation(),
-            apply=_apply,
-            daemonless=True,
-            verb="wave close",
-        )
-
-
-def test_state_mutate_daemonless_user_error_exit_code(
-    tmp_path: Path,
-) -> None:
-    """The rejected daemonless mutation carries the USER_ERROR exit-code."""
-    state_path = tmp_path / "state.json"
-    _build_state(state_path)
-    with pytest.raises(cli_errors.UserError) as excinfo:
-        _mutation.state_mutate(
-            state_path,
-            _make_mutation(),
-            apply=lambda _s: None,
-            daemonless=True,
-            verb="wave close",
-        )
-    assert excinfo.value.exit_code == exit_codes.USER_ERROR
 
 
 # ---- (c') chokepoint: state_transaction rejects mutating --daemonless ------
