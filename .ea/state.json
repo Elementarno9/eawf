@@ -1604,11 +1604,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W12",
-      "P26-I02-W13",
-      "P26-I02-W16"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3077,7 +3073,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T03:22:06.298522Z",
+  "updated_at": "2026-05-22T03:30:49.721936Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10581,7 +10577,7 @@
         "P26-I02-W15"
       ],
       "claim_session_id": "w12-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-22T03:30:40.848689Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10594,10 +10590,10 @@
       "id": "P26-I02-W12",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T03:02:46.532476Z",
-      "outcome": null,
+      "outcome": "reserve scrollbar gutter in RoadmapTree row budget; iter/phase completion-bar no longer clips when roadmap scrolls",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "completion-bar + glyph/guide chrome width subtracted from the title budget so iter/phase rows never overflow the roadmap pane width",
         "truncation stays reactive on resize",
@@ -10612,7 +10608,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "w13-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-22T03:30:47.655047Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10626,10 +10622,10 @@
       "id": "P26-I02-W13",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T03:02:46.932108Z",
-      "outcome": null,
+      "outcome": "DetailModal polish: tab hotkeys h/d/m/e/p, markdown dp tab, accent+escaped field labels, plain bucket text, detail-hint gap",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "h/d/m/e/dp keys jump to their tab (Tab/Shift+Tab retained and arrows still scroll)",
         "dp tab renders markdown via the textual Markdown widget",
@@ -10729,7 +10725,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "w16-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-22T03:30:49.226842Z",
       "commit": null,
       "deps": [],
       "dispatch_history": [],
@@ -10742,10 +10738,10 @@
       "id": "P26-I02-W16",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T03:02:48.057241Z",
-      "outcome": null,
+      "outcome": "/theme auto OSC 11 terminal-background detection at safe pre-run point, luminance classify, bounded timeout + dark fallback",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "/theme auto queries the terminal background via OSC 11 and picks dark or light by luminance",
         "graceful fallback to dark on no-reply or non-TTY or unsupported terminal or CI",
@@ -11667,10 +11663,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w12",
       "created_at": "2026-05-22T03:22:04.929537Z",
       "id": "WT-P26-I02-W12-1779420124",
-      "merged_commit": null,
+      "merged_commit": "e60a57f",
       "owner_session_id": "w12-exec",
       "path": ".ea/worktrees/p26-i02-w12",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W12"
     },
     "WT-P26-I02-W13-1779420125": {
@@ -11678,10 +11674,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w13",
       "created_at": "2026-05-22T03:22:05.624381Z",
       "id": "WT-P26-I02-W13-1779420125",
-      "merged_commit": null,
+      "merged_commit": "e3ffd90",
       "owner_session_id": "w13-exec",
       "path": ".ea/worktrees/p26-i02-w13",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W13"
     },
     "WT-P26-I02-W16-1779420126": {
@@ -11689,10 +11685,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w16",
       "created_at": "2026-05-22T03:22:06.298522Z",
       "id": "WT-P26-I02-W16-1779420126",
-      "merged_commit": null,
+      "merged_commit": "249f1d9",
       "owner_session_id": "w16-exec",
       "path": ".ea/worktrees/p26-i02-w16",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W16"
     }
   }
