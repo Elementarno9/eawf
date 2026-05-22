@@ -22,6 +22,7 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.commands.lifecycle import (
     _append_event,
+    _load_state_readonly,
     _read_state_payload,
     _run_mutation,
     _state_version,
@@ -37,6 +38,7 @@ from eawf.state.enums import (
     WaveStatus,
 )
 from eawf.state.ids import is_phase_id
+from eawf.state.mutations import MutationKind
 
 if TYPE_CHECKING:
     from eawf.state.models import State
@@ -129,6 +131,27 @@ def phase_close_cmd(
         )
         return
 
+    # The phase-close checklist enforces CLI-only blockers (closed iters
+    # missing an audit, single-wave-without-decision) that the daemon's
+    # ``close_phase`` apply does not replicate. Run it as a read-only
+    # pre-flight so the proxy path rejects before any wire traffic; the
+    # in-process fallback re-runs it under the lock (defense-in-depth).
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    preflight_state, _ = loaded
+    try:
+        checklist = _phase_prepare_close_checklist(preflight_state, phase_id=phase_id)
+    except LifecycleError as exc:
+        cli_errors.emit_error(cli_errors.ValidationFailed(str(exc)), flags=flags)
+        return
+    if checklist["blockers"]:
+        cli_errors.emit_error(
+            cli_errors.ValidationFailed(f"phase close blocked: {'; '.join(checklist['blockers'])}"),
+            flags=flags,
+        )
+        return
+
     def _mutator(state: State) -> None:
         checklist = _phase_prepare_close_checklist(state, phase_id=phase_id)
         blockers = checklist["blockers"]
@@ -154,6 +177,8 @@ def phase_close_cmd(
         },
         mutate=_mutator,
         closure_kind=True,
+        mutation_kind=MutationKind.PHASE_CLOSE,
+        params={"phase_id": phase_id, "audit_id": audit, "checkpoint": checkpoint},
     )
 
 
@@ -466,6 +491,8 @@ def phase_activate_cmd(
         text=f"phase activate {phase_id}",
         envelope=lambda: {"phase": phase_id, "status": "active"},
         mutate=lambda state: _wrap_no_return(activate_phase(state, phase_id=phase_id)),
+        mutation_kind=MutationKind.PHASE_ACTIVATE,
+        params={"phase_id": phase_id},
     )
 
 

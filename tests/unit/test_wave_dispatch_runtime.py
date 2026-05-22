@@ -37,6 +37,11 @@ runner = CliRunner()
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     state_path = tmp_path / ".ea" / "state.json"
     monkeypatch.setenv("EA_STATE", str(state_path))
+    # The bootstrap mutations (phase open / iter open / wave plan) route
+    # through the daemon by default (daemon.proxy_enabled=True). This
+    # CLI-driving test is the V1 daemonless carve-out — force the
+    # in-process WAL-backed path so it does not reach a real daemon.
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     yield tmp_path
 
 

@@ -87,6 +87,7 @@ from eawf.state.urn import build as build_urn
 
 if TYPE_CHECKING:
     from eawf.state.models import State
+    from eawf.state.mutations import MutationKind
 
 logger = logging.getLogger(__name__)
 
@@ -174,8 +175,7 @@ def _state_version(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
-def _append_event(
-    events_path: Path,
+def _build_event_envelope(
     *,
     command: str,
     args: dict[str, Any],
@@ -183,22 +183,24 @@ def _append_event(
     before_version: str,
     after_version: str,
     summary: str,
-) -> None:
-    """Append one ``EVENT``-kind envelope to *events_path*.
+) -> Any:
+    """Build (but do not append) the canonical ``EVENT``-kind envelope.
 
-    Builds the envelope from command/args/scope_id and routes the write
-    through :func:`eawf.store.append.append_envelope`. Caller already
-    holds the state-side sibling lock; the events store uses its own
-    sibling lock so concurrent appends from unrelated callers stay safe.
+    Split out of :func:`_append_event` so the WAL-backed commit path can
+    capture the post-apply envelope in the ``.pending`` record before the
+    state write, then append the *same* envelope after the state lands.
+    The envelope shape mirrors
+    :func:`eawf.daemon.methods.state._build_event_envelope` so the
+    in-process fallback and the daemon-proxy path converge on identical
+    on-disk rows.
     """
-    from eawf.store.append import append_envelope
     from eawf.store.envelope import Envelope
     from eawf.store.kinds.event import EventPayload
 
     args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
     args_hash = hashlib.sha256(args_blob).hexdigest()[:16]
     now = datetime.now(UTC)
-    envelope = Envelope(
+    return Envelope(
         schema_version="1.0",
         id=f"EV-{uuid.uuid4().hex[:12]}",
         kind=StoreKind.EVENT,
@@ -220,6 +222,36 @@ def _append_event(
         blob_refs=[],
         artifact_ids=[],
     )
+
+
+def _append_event(
+    events_path: Path,
+    *,
+    command: str,
+    args: dict[str, Any],
+    scope_id: str,
+    before_version: str,
+    after_version: str,
+    summary: str,
+) -> None:
+    """Append one ``EVENT``-kind envelope to *events_path*.
+
+    Builds the envelope via :func:`_build_event_envelope` and routes the
+    write through :func:`eawf.store.append.append_envelope`. Caller
+    already holds the state-side sibling lock; the events store uses its
+    own sibling lock so concurrent appends from unrelated callers stay
+    safe.
+    """
+    from eawf.store.append import append_envelope
+
+    envelope = _build_event_envelope(
+        command=command,
+        args=args,
+        scope_id=scope_id,
+        before_version=before_version,
+        after_version=after_version,
+        summary=summary,
+    )
     append_envelope(events_path, envelope)
 
 
@@ -236,6 +268,19 @@ def _validate_or_raise(payload: dict[str, Any]) -> State:
     return report.state
 
 
+def _fallback_wal_dir(state_path: Path) -> Path:
+    """Return the in-process fallback WAL directory for *state_path*.
+
+    The fallback writer is the V1 carve-out (CI / one-shot / recovery
+    shell) — it does not share the daemon's per-user ``<runtime>/wal``.
+    Instead it keeps a repo-local WAL under ``.ea/locks/wal/`` so a crash
+    mid-write is reconcilable on the next mutation against the same
+    repo's ``state.json`` + ``event.jsonl``. ``.ea/locks/`` is gitignored
+    machine-local scratch, the right home for a transient recovery aid.
+    """
+    return state_path.parent / "locks" / "wal"
+
+
 def _commit_mutation(
     state_path: Path,
     *,
@@ -246,17 +291,40 @@ def _commit_mutation(
     scope_id: str,
     summary: str,
 ) -> dict[str, Any]:
-    """Validate + emit event + persist under the held sibling lock.
+    """Validate + WAL-pending + persist state + append event, crash-safely.
 
-    Order: validate -> append event.jsonl -> write state.json. The
-    canonical jsonl-first ordering (see commit ``18ee287``) ensures the
-    audit record always lands before the state mutation. If the append
-    fails, ``state.json`` is unchanged; if the state write fails after a
-    successful append, the surplus event is forward-replayable.
+    This is the in-process fallback writer (the V1 carve-out: CI /
+    one-shot / recovery shell). The canonical writer is the daemon
+    (rule 4); this path runs only when the daemon is unavailable, and it
+    mirrors the daemon's outcome-WAL ordering so the *same*
+    :func:`eawf.daemon.recovery.replay_wal` reconciles a crash.
 
-    Returns the candidate payload (already JSON-mode-dumped) so the caller
-    can compute its own envelope without a second model_dump.
+    Order (state-first, WAL-backed):
+
+    1. ``replay_wal`` over the fallback WAL to finish/roll-forward any
+       record a prior crashed fallback left behind (idempotent no-op on
+       a clean WAL).
+    2. Build the post-apply event envelope in memory.
+    3. ``write_pending`` the envelope to the WAL — the durable capture
+       that lets replay re-issue the event row verbatim.
+    4. ``_write_state_unlocked`` persists ``state.json`` (fsynced).
+    5. ``append_envelope`` lands the event row in ``event.jsonl``.
+    6. ``mark_applied`` → ``mark_fsynced`` retire the WAL record.
+
+    The invariant this buys: the event row is appended **only after**
+    ``state.json`` is durably written, so a crash never leaves a phantom
+    event (an event whose state change did not commit). A crash between
+    the state write and the event append leaves a ``.pending`` WAL
+    record; the next mutation's ``replay_wal`` reconciles it without
+    duplicating a row that already landed.
+
+    Returns the candidate payload (already JSON-mode-dumped) so the
+    caller can compute its own envelope without a second model_dump.
     """
+    from eawf.daemon import wal
+    from eawf.daemon.recovery import replay_wal
+    from eawf.daemon.wal import WalRecord
+    from eawf.store.append import append_envelope
     from eawf.store.paths import store_path
 
     payload = candidate.model_dump(mode="json")
@@ -264,8 +332,14 @@ def _commit_mutation(
     _validate_or_raise(payload)
     after_version = _state_version(payload)
     events_path = store_path(state_path, StoreKind.EVENT)
-    _append_event(
-        events_path,
+    wal_dir = _fallback_wal_dir(state_path)
+
+    # Roll forward any record a prior crashed fallback left behind so the
+    # log never carries an event whose state change is missing, and so a
+    # half-applied prior write completes before this one starts.
+    replay_wal(wal_dir, state_path=state_path, event_path=events_path)
+
+    envelope = _build_event_envelope(
         command=command,
         args=args,
         scope_id=scope_id,
@@ -273,7 +347,24 @@ def _commit_mutation(
         after_version=after_version,
         summary=summary,
     )
+    record_id = uuid.uuid4().hex
+    record = WalRecord(
+        record_id=record_id,
+        envelope=envelope,
+        idempotency_key=None,
+        written_at=datetime.now(UTC),
+        before_state_version=before_version,
+        after_state_version=after_version,
+    )
+    wal.write_pending(wal_dir, record)
     _write_state_unlocked(state_path, payload)
+    append_envelope(events_path, envelope)
+    wal.mark_applied(wal_dir, record_id)
+    wal.mark_fsynced(wal_dir, record_id)
+    logger.info(
+        f"_commit_mutation command={command!r} scope={scope_id!r} "
+        f"before={before_version} after={after_version} record={record_id!r}"
+    )
     return payload
 
 
@@ -584,14 +675,37 @@ def _run_mutation(
     envelope: Any = None,
     envelope_factory: Any = None,
     closure_kind: bool = False,
+    mutation_kind: MutationKind | None = None,
+    params: dict[str, Any] | None = None,
 ) -> None:
     """Shared transactional path for every mutating handler in this module.
+
+    Per rule 4 + D-SUP-01 the daemon is the canonical writer. When
+    *mutation_kind* is supplied the call routes through the generic
+    :func:`eawf.cli._dispatch._mutate_via_daemon` shim — escalate to the
+    daemon, marshal one typed :class:`~eawf.state.mutations.Mutation`, and
+    fall back to the in-process WAL-backed write only when the daemon is
+    unavailable or predates the kind (the V1 CI/recovery carve-out). Verbs
+    whose transition has no :class:`~eawf.state.mutations.MutationKind`
+    yet (``wave update`` / ``subproject add``·``switch`` / ``iter
+    activate`` / ``phase reopen`` / ``wave budget set``·``consume``) omit
+    *mutation_kind* and run the in-process WAL-backed path directly.
 
     Either *text* + *envelope* (static) or *text_factory* + *envelope_factory*
     (deferred until after the mutation has resolved auto-allocated ids) must
     be provided. Likewise either *scope_id* (eager) or *scope_id_factory*
     (deferred — resolved after ``mutate`` runs so handlers can capture the
     allocator-returned id rather than a placeholder).
+
+    Args:
+        mutation_kind: When set, the discriminator routed across
+            ``state.mutate``; the daemon owns the transaction and the
+            in-process body becomes the fallback. Verbs that pass this
+            MUST use eager *scope_id* (the fallback resolves the id the
+            same way the daemon's params do).
+        params: Kind-specific param dict carried in :attr:`Mutation.params`
+            on the daemon path. Required when *mutation_kind* is set;
+            ignored otherwise.
     """
     from pydantic import ValidationError as PydValidationError
 
@@ -600,6 +714,10 @@ def _run_mutation(
 
     if (scope_id is None) == (scope_id_factory is None):
         raise ValueError("exactly one of scope_id or scope_id_factory must be provided")
+    if mutation_kind is not None and scope_id is None:
+        raise ValueError("mutation_kind requires an eager scope_id")
+    if mutation_kind is not None and params is None:
+        raise ValueError("mutation_kind requires params")
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -613,7 +731,8 @@ def _run_mutation(
         )
         return
 
-    try:
+    def _in_process() -> dict[str, Any]:
+        """In-process WAL-backed transaction — the daemon-down fallback."""
         with portalock.acquire(state_path, timeout=5.0):
             payload = _read_state_payload(state_path)
             before_version = _state_version(payload)
@@ -636,7 +755,7 @@ def _run_mutation(
             # ``ValidationFailed`` raised by ``_commit_mutation`` is handled by
             # the surrounding ``except cli_errors.CliError`` clause below — no
             # local catch-and-re-raise is required.
-            _commit_mutation(
+            return _commit_mutation(
                 state_path,
                 candidate=state,
                 before_version=before_version,
@@ -645,6 +764,33 @@ def _run_mutation(
                 scope_id=resolved_scope_id,
                 summary=command,
             )
+
+    # Route through the daemon only when proxying is enabled in the merged
+    # config (the post-P24-W10 default). The V1 carve-out
+    # (``daemon.proxy_enabled=false`` or ``EAWF_DAEMONLESS=1``) runs the
+    # in-process WAL-backed path directly — mirroring ``wave_close_cmd`` so
+    # the ``EAWF_DAEMONLESS`` env hatch routes to the fallback rather than
+    # hitting the mutating-verb hard-reject inside ``escalate_mutation``.
+    from eawf.cli._mutation import _proxy_enabled
+
+    proxy = mutation_kind is not None and _proxy_enabled(flags.workspace)
+    try:
+        if proxy:
+            assert mutation_kind is not None  # narrowed by ``proxy``
+            assert scope_id is not None  # guarded above
+            assert params is not None  # guarded above
+            from eawf.cli._dispatch import _mutate_via_daemon
+
+            _mutate_via_daemon(
+                mutation_kind,
+                params,
+                flags,
+                scope_id=scope_id,
+                verb=command,
+                fallback=_in_process,
+            )
+        else:
+            _in_process()
     except portalock.LockTimeout as exc:
         cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
         return

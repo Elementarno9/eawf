@@ -36,6 +36,7 @@ from eawf.state.ids import (
     is_iter_id,
     is_wave_id,
 )
+from eawf.state.mutations import MutationKind
 
 if TYPE_CHECKING:
     from eawf.state.models import State
@@ -141,6 +142,18 @@ def wave_plan_cmd(
                 effort_bucket=effort_bucket,
             )
         ),
+        mutation_kind=MutationKind.ROADMAP_REVISE,
+        params={
+            "op": "add_wave",
+            "wave_id": wave_id,
+            "iter_id": iter_id,
+            "title": title,
+            "file_scopes": file_list,
+            "deps": deps_list,
+            "success_criteria": criteria_list,
+            "agent_role": agent_role.value if agent_role else None,
+            "effort_bucket": effort_bucket.value if effort_bucket else None,
+        },
     )
 
 
@@ -224,6 +237,12 @@ def wave_claim_cmd(
             "out_of_order": out_of_order,
         },
         mutate=_claim_with_budget_gate,
+        mutation_kind=MutationKind.WAVE_CLAIM,
+        params={
+            "wave_id": wave_id,
+            "session_id": session,
+            "out_of_order": out_of_order,
+        },
     )
 
 
@@ -419,6 +438,8 @@ def wave_fail_cmd(
         text=f"wave fail {wave_id} reason={reason!r}",
         envelope=lambda: {"wave": wave_id, "reason": reason},
         mutate=lambda state: _wrap_no_return(fail_wave(state, wave_id=wave_id, reason=reason)),
+        mutation_kind=MutationKind.WAVE_FAIL,
+        params={"wave_id": wave_id, "reason": reason},
     )
 
 

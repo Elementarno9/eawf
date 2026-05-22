@@ -40,6 +40,7 @@ from eawf.state.enums import (
     WaveStatus,
 )
 from eawf.state.ids import is_iter_id, is_phase_id, is_project_code
+from eawf.state.mutations import MutationKind
 from eawf.state.urn import build as build_urn
 
 if TYPE_CHECKING:
@@ -426,4 +427,6 @@ def iter_close_cmd(
         envelope=lambda: {"iter": iter_id, "audit": audit},
         mutate=lambda state: _wrap_no_return(close_iter(state, iter_id=iter_id, audit_id=audit)),
         closure_kind=True,
+        mutation_kind=MutationKind.ITER_CLOSE,
+        params={"iter_id": iter_id, "audit_id": audit},
     )
