@@ -1604,9 +1604,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P26-I02-W14"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3075,7 +3073,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T03:50:13.326198Z",
+  "updated_at": "2026-05-22T03:57:36.887570Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10646,7 +10644,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "w14-exec",
-      "closed_at": null,
+      "closed_at": "2026-05-22T03:57:36.424584Z",
       "commit": null,
       "deps": [
         "P26-I02-W15"
@@ -10665,10 +10663,10 @@
       "id": "P26-I02-W14",
       "iter_id": "P26-I02",
       "opened_at": "2026-05-22T03:02:56.788106Z",
-      "outcome": null,
+      "outcome": "config pane reachable via c + footer advert from repo/workspace/user; inline-edit Input no longer starved (label width:auto) so seeded/typed value renders; key column aligned (_meta_line 3-space prefix); help c is global",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "c and /config open ConfigModal from repo + workspace + user scopes",
         "inline field edit shows the current/typed value in the mounted Input",
@@ -11687,10 +11685,10 @@
       "branch": "feature/eawf-v0.3-p26-i02-w14",
       "created_at": "2026-05-22T03:50:13.326198Z",
       "id": "WT-P26-I02-W14-1779421813",
-      "merged_commit": null,
+      "merged_commit": "9167e7d",
       "owner_session_id": "w14-exec",
       "path": ".ea/worktrees/p26-i02-w14",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P26-I02-W14"
     },
     "WT-P26-I02-W15-1779420972": {
