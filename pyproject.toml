@@ -114,7 +114,6 @@ max-loc = 700
 # must respect the cap or carry an inline waiver.
 exclude = [
     "src/eawf/config/registry.py",
-    "src/eawf/cli/commands/evidence.py",
     "src/eawf/cli/commands/plugin.py",
     "src/eawf/cli/commands/repo.py",
     "src/eawf/tui_v2/screens/overlays/config_modal.py",
