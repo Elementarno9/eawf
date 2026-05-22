@@ -64,6 +64,7 @@ COMMAND_PANELS: dict[str, str] = {
     "audit": "audit",
     "doc": "audit",
     "doctor": "audit",
+    "migrate": "audit",
     "snapshot": "audit",
     "validate": "audit",
     # estimation: EU estimates / actuals, impact graph, rolling metrics,

@@ -494,6 +494,12 @@ from eawf.cli.commands.snapshot import snapshot_app  # noqa: E402
 app.add_typer(snapshot_app, name="snapshot", rich_help_panel=panel_for("snapshot"))
 # --- end P27 W19 ---
 
+# --- P27 W22 migrate registration ---
+from eawf.cli.commands.migrate import migrate_app  # noqa: E402
+
+app.add_typer(migrate_app, name="migrate", rich_help_panel=panel_for("migrate"))
+# --- end P27 W22 ---
+
 # --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402
