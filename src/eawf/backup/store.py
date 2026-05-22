@@ -229,13 +229,36 @@ class BackupStore:
     def get_snapshot(self, ts: str) -> Snapshot | None:
         """Return the snapshot named *ts*, or ``None`` when absent.
 
+        *ts* is operator-supplied (the ``--ts`` restore flag), so it is
+        validated against the snapshot-id timestamp pattern *before* the
+        ``self.root / ts`` join. A ``..`` segment or an absolute path would
+        otherwise let the join escape the per-repo backup tree (a
+        path-traversal read); the pattern admits only the exact
+        filesystem-safe ISO-8601 dir-name :meth:`write_snapshot` writes.
+
+        A malformed *ts* is operator-fixable (a typo or a traversal attempt),
+        so it raises the typed :class:`~eawf.backup.service.BackupError` the
+        CLI already renders as a ``USER_ERROR`` envelope — not a bare
+        ``ValueError`` that would surface as an internal traceback. The
+        import is function-local because :mod:`eawf.backup.service` imports
+        this module at load time; a top-level import would cycle.
+
         Args:
             ts: The snapshot timestamp dir-name (the ``--ts`` value).
 
         Returns:
             The matching :class:`Snapshot`, or ``None`` when no directory
             with that exact name exists.
+
+        Raises:
+            BackupError: When *ts* does not match the snapshot timestamp
+                pattern (rejects ``..``, absolute paths, and any other
+                non-timestamp input before the path-join).
         """
+        if not _TS_PATTERN.match(ts):
+            from eawf.backup.service import BackupError
+
+            raise BackupError(f"invalid snapshot timestamp: {ts!r}")
         ts_dir = self.root / ts
         if not ts_dir.is_dir():
             return None
