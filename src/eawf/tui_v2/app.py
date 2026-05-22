@@ -183,6 +183,7 @@ class EaApp(App[None]):
         self._state_path = state_path
         self._binding: StateBinding | None = None
         self._help_open = False
+        self._needs_user_open = False
         # Register the custom themes and apply the persisted one here, in
         # __init__, NOT in on_mount: Textual builds the App stylesheet
         # (which resolves every $var the structural CSS references) from
@@ -216,8 +217,94 @@ class EaApp(App[None]):
         self.push_screen(self._scope)
 
     async def _on_state(self, new_state: State) -> None:
-        """Receive a fresh state revision from the binder."""
+        """Receive a fresh state revision from the binder.
+
+        Each refresh also drives the needs_user auto-open check: when the
+        event store surfaces an unresolved pause for the active scope and
+        no needs_user modal is already open, the modal is auto-opened so
+        the operator can answer the paused question. Detection rides the
+        :class:`~eawf.tui_v2.state_binding.StateBinding` refresh because
+        there is no daemon push bus yet.
+        """
         self.state = new_state
+        self._maybe_open_needs_user(new_state)
+
+    def _maybe_open_needs_user(self, state: State) -> None:
+        """Auto-open the needs_user modal for the active scope's oldest pause.
+
+        Reads the event store (read-only) for unresolved pauses whose
+        ``scope_id`` matches ``state.urn``. The single-instance guard
+        (:attr:`_needs_user_open`) prevents a second auto-open while one is
+        already on the stack; the guard clears when the modal dismisses.
+
+        Args:
+            state: The freshly loaded state — its ``urn`` is the canonical
+                scope id pause records carry.
+        """
+        if self._needs_user_open or self._state_path is None:
+            return
+        from eawf.skills.needs_user import list_open_pauses
+
+        try:
+            pauses = list_open_pauses(self._state_path, scope_id=state.urn)
+        except OSError as exc:
+            logger.debug(f"_maybe_open_needs_user list failed cause={exc!r}")
+            return
+        if not pauses:
+            return
+        pause = pauses[0]
+        # Set the single-instance guard at schedule time so a second
+        # refresh arriving before the deferred push runs does not queue a
+        # duplicate. Defer the push to the next refresh so the scope screen
+        # (pushed synchronously after the binder connects in on_mount) is
+        # already on the stack — otherwise the initial-load modal would be
+        # buried under the scope screen pushed right after it.
+        self._needs_user_open = True
+        self.call_after_refresh(self._open_needs_user_pause, pause.pause_urn, pause.question)
+
+    def _open_needs_user_pause(self, pause_urn: str, question: object) -> None:
+        """Push the needs_user modal for *pause_urn* with a pick handler.
+
+        Args:
+            pause_urn: The pause the modal answers.
+            question: The :class:`~eawf.skills.bodies.user_question.UserQuestion`
+                to render (typed loosely to avoid an import cycle).
+        """
+        from eawf.tui_v2.screens.overlays.needs_user import NeedsUserModal
+
+        modal = NeedsUserModal(question)  # type: ignore[arg-type]
+        pushed = self.push_modal(
+            modal,
+            callback=lambda label: self._on_needs_user_picked(pause_urn, label),
+        )
+        # The guard was set eagerly at schedule time; clear it when the cap
+        # rejected the push so a later refresh can retry.
+        if not pushed:
+            self._needs_user_open = False
+
+    def _on_needs_user_picked(self, pause_urn: str, label: str | None) -> None:
+        """Resolve *pause_urn* with the picked *label*, or clear on defer.
+
+        ``label is None`` means the operator pressed ``Esc`` (defer): the
+        pause stays open and the guard clears so a later refresh can
+        re-open it. A non-None label routes through the shared resume
+        library function; a resume failure surfaces an error toast and
+        leaves the pause open for a retry.
+
+        Args:
+            pause_urn: The pause being answered.
+            label: The chosen option label, or ``None`` on defer.
+        """
+        self._needs_user_open = False
+        if label is None or self._state_path is None:
+            return
+        from eawf.skills.needs_user import PauseError, resolve_pause
+
+        try:
+            resolve_pause(self._state_path, pause_urn=pause_urn, choice=label)
+        except (PauseError, OSError) as exc:
+            logger.info(f"_on_needs_user_picked resume_failed pause_urn={pause_urn!r} {exc!r}")
+            self.notify(f"resume failed: {exc}", severity="error")
 
     async def _on_degraded(self, degraded: bool) -> None:
         """Receive a degraded-mode flip from the binder."""
@@ -276,17 +363,24 @@ class EaApp(App[None]):
         """
         return sum(1 for screen in self.screen_stack if isinstance(screen, ModalScreen))
 
-    def push_modal(self, modal: ModalScreen[Any]) -> bool:
+    def push_modal(
+        self,
+        modal: ModalScreen[Any],
+        *,
+        callback: Callable[[Any], None] | None = None,
+    ) -> bool:
         """Push *modal* unless the stack is already at :attr:`MAX_MODAL_DEPTH`.
 
         The single modal-stack-cap gate: every overlay-opening path (the
         ``/`` palette, the ``?`` help, the row-drill DetailModal, the
-        destructive ConfirmModal, and the later-wave overlays) routes
-        through here so the depth limit is enforced in exactly one place.
-        A rejected push toasts and mutates nothing.
+        destructive ConfirmModal, the needs_user picker, and the later-wave
+        overlays) routes through here so the depth limit is enforced in
+        exactly one place. A rejected push toasts and mutates nothing.
 
         Args:
             modal: The overlay screen to push.
+            callback: Optional callback invoked with the modal's dismiss
+                value when it closes (e.g. the needs_user picked label).
 
         Returns:
             ``True`` when the modal was pushed, ``False`` when the cap
@@ -301,7 +395,10 @@ class EaApp(App[None]):
                 severity="warning",
             )
             return False
-        self.push_screen(modal)
+        if callback is not None:
+            self.push_screen(modal, callback=callback)
+        else:
+            self.push_screen(modal)
         return True
 
     def action_open_palette(self) -> None:
