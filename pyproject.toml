@@ -93,6 +93,50 @@ target-version = "py314"
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
 ignore = []
 
+[tool.eawf.lint]
+# Registration for the project's custom static-analysis rules under
+# ``src/eawf/lint/`` (EAWF001 log-format, EAWF002 log-key naming,
+# EAWF003 logger acquisition, EAWF010 module-length cap). Ruff carries
+# no ``EAWF`` plugin, so these checks read their config from this table
+# rather than ``[tool.ruff.lint]``. ``enabled`` is the rule allow-list a
+# pre-commit dispatcher iterates; per-rule knobs live in the sub-tables.
+enabled = ["EAWF001", "EAWF002", "EAWF003", "EAWF010"]
+
+[tool.eawf.lint.eawf010]
+# Module-length rollup cap (physical lines). Modules over ``max-loc``
+# must either be split or carry a ``# noqa: EAWF010 <rationale>`` waiver.
+max-loc = 700
+# Pre-existing oversized modules predate the cap. They are excluded here
+# (rather than waived inline) so the rule can be wired without redding
+# the current tree and without this wave editing source it does not own.
+# P27-W06/W07 split the two largest (lifecycle.py + evidence.py); drop
+# those rows as the splits land. New modules get no exclusion — they
+# must respect the cap or carry an inline waiver.
+exclude = [
+    "src/eawf/cli/commands/lifecycle.py",
+    "src/eawf/config/registry.py",
+    "src/eawf/cli/commands/evidence.py",
+    "src/eawf/cli/commands/plugin.py",
+    "src/eawf/cli/commands/repo.py",
+    "src/eawf/tui_v2/screens/overlays/config_modal.py",
+    "src/eawf/cli/commands/memory.py",
+    "src/eawf/skills/flow.py",
+    "src/eawf/cli/commands/config.py",
+    "src/eawf/render/skills.py",
+    "src/eawf/render/plan_view.py",
+    "src/eawf/tui_v2/palette/verbs.py",
+    "src/eawf/cli/commands/roadmap.py",
+    "src/eawf/validate/invariants.py",
+    "src/eawf/cli/commands/estimation.py",
+    "src/eawf/cli/commands/mcp.py",
+    "src/eawf/daemon/methods/state.py",
+    "src/eawf/cli/commands/skill.py",
+    "src/eawf/daemon/methods/config.py",
+    "src/eawf/install/wizard.py",
+    "src/eawf/daemon/methods/spec.py",
+    "src/eawf/cli/commands/worktree.py",
+]
+
 [tool.coverage.run]
 source = ["src/eawf"]
 branch = true
