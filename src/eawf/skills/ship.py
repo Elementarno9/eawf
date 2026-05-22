@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import orjson
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.artifacts.validation import validate_markdown_artifact, validate_text_surface
 from eawf.config.layered import merge_config
@@ -63,6 +65,93 @@ _VALID_PR_ACTIONS: tuple[str, ...] = ("open", "ready", "draft", "close", "none")
 #: ``AgentReportVerdict.PASS_WITH_FOLLOWUPS`` semantics surfaced by the
 #: TUI audit overlay). ``major`` and a missing verdict both block.
 _SHIP_ALLOWED_VERDICTS: frozenset[AuditVerdict] = frozenset({AuditVerdict.PASS, AuditVerdict.MINOR})
+
+#: Wall-clock ceiling for any single gauntlet gate. A red tree must fail
+#: fast; a wedged hook should surface as a timeout rather than hang ship.
+_GAUNTLET_TIMEOUT_SECONDS: float = 1200.0
+
+#: Stdout/stderr tail length captured into the failure envelope. The full
+#: output of a red gauntlet is large; the operator needs the tail, not the
+#: whole transcript, to triage. Bytes beyond this from the end are dropped.
+_GAUNTLET_OUTPUT_TAIL_CHARS: int = 4000
+
+#: Canonical gauntlet commands per gate name when the layered
+#: ``acceptance.commands.*`` leaf is unset (its default is ``None``). These
+#: mirror the project's documented gauntlet (AGENTS.md rule 13 + the
+#: dispatch renderer) and the engineering init template. ``pre-commit`` has
+#: no ``acceptance.commands`` leaf — it is always the fixed invocation.
+_DEFAULT_GATE_COMMANDS: dict[str, str] = {
+    "pre-commit": "uv run pre-commit run --all-files",
+    "lint": "uv run ruff check .",
+    "typecheck": "uv run mypy .",
+    "tests": "uv run pytest",
+}
+
+
+class _AcceptanceCommands(BaseModel):
+    """Validated ``acceptance.commands`` block — per-gate command overrides."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tests: str | None = None
+    lint: str | None = None
+    typecheck: str | None = None
+    build: str | None = None
+
+
+class AcceptanceConfig(BaseModel):
+    """Validated ``acceptance`` config surface.
+
+    ``required_before_ship`` names the gates the ship gauntlet must run and
+    pass before proceeding. The built-in default (``["state"]``) names no
+    gauntlet gate, so ship runs no external check unless the operator opts
+    in by listing ``pre-commit`` / ``lint`` / ``typecheck`` / ``tests``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    commands: _AcceptanceCommands = Field(default_factory=_AcceptanceCommands)
+    required_before_ship: list[str] = Field(default_factory=list)
+
+
+class _GateResult(BaseModel):
+    """Per-gate outcome of one gauntlet command — the canonical gate shape.
+
+    This is the shape ``_gate_failure`` surfaces for each gate; downstream
+    refactors and the failure envelope depend on it. ``passed`` is the only
+    field the gate logic branches on; the rest carry triage detail.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    command: str
+    passed: bool
+    returncode: int | None
+    output: str
+
+
+def _gate_failure(result: _GateResult) -> dict[str, Any]:
+    """Render one failed :class:`_GateResult` into its envelope-payload shape.
+
+    The single source of truth for how a red gate is reported, so the
+    event payload, the failure body, and any future caller agree on the
+    field names.
+
+    Args:
+        result: The gate outcome to render (expected ``passed=False``).
+
+    Returns:
+        A JSON-ready dict with the gate's name, command, return code, and
+        captured output tail.
+    """
+    return {
+        "gate": result.name,
+        "command": result.command,
+        "returncode": result.returncode,
+        "passed": result.passed,
+        "output": result.output,
+    }
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -118,7 +207,7 @@ def _load_state(state_path: Path) -> State | None:
     try:
         return State.model_validate(orjson.loads(state_path.read_bytes()))
     except (orjson.JSONDecodeError, ValidationError) as exc:
-        logger.warning(f"_load_state could not read state at {state_path}: {exc}")
+        logger.warning(f"_load_state path={state_path} reason={exc!r}")
         return None
 
 
@@ -198,8 +287,8 @@ def _resolve_coauthor_trailer_for_ship(vcs_config: VcsConfig) -> str | None:
     co-author policy is never reimplemented here. A
     :class:`~eawf.vcs.coauthor.CoauthorPolicyError` (e.g. a runtime with no
     configured identity) degrades to ``None`` so trailer resolution never
-    aborts a ship — the per-commit gauntlet still enforces the trailer at
-    commit time.
+    aborts a ship — the commit-time pre-commit hooks still enforce the
+    trailer at commit time.
 
     Args:
         vcs_config: The validated ``vcs`` config surface.
@@ -216,6 +305,136 @@ def _resolve_coauthor_trailer_for_ship(vcs_config: VcsConfig) -> str | None:
             f"resolution=failed reason={exc!r}"
         )
         return None
+
+
+def _load_acceptance_config(state_path: Path) -> AcceptanceConfig:
+    """Load the layered ``acceptance`` config block as :class:`AcceptanceConfig`.
+
+    Mirrors :func:`_load_vcs_config`: the merge anchors on the repo root
+    (``state.json`` lives at ``<repo>/.ea/state.json``) so repo / branch /
+    local layers overlay the built-in defaults. This helper only reads.
+
+    Args:
+        state_path: Resolved path of the active ``state.json``.
+
+    Returns:
+        The validated ``acceptance`` config surface (built-in defaults when
+        no overlay file is present).
+    """
+    anchor = state_path.parent.parent
+    merged, _sources = merge_config(repo=anchor, workspace=anchor)
+    return AcceptanceConfig.model_validate(merged.get("acceptance", {}))
+
+
+def _resolve_gate_command(gate: str, acceptance: AcceptanceConfig) -> str | None:
+    """Resolve the shell command for one gauntlet *gate*.
+
+    A configured ``acceptance.commands.<gate>`` override wins; otherwise the
+    canonical built-in from :data:`_DEFAULT_GATE_COMMANDS` is used. Gate
+    names with neither (``state`` and any other lifecycle gate the operator
+    lists) resolve to ``None`` so the runner skips them — only the four
+    external gauntlet gates have runnable commands.
+
+    Args:
+        gate: The gate name from ``acceptance.required_before_ship``.
+        acceptance: The validated acceptance config surface.
+
+    Returns:
+        The resolved command string, or ``None`` when the gate has no
+        runnable gauntlet command.
+    """
+    override = getattr(acceptance.commands, gate, None)
+    if isinstance(override, str) and override.strip():
+        return override
+    return _DEFAULT_GATE_COMMANDS.get(gate)
+
+
+def _run_gate_command(name: str, command: str, cwd: Path) -> _GateResult:
+    """Run one gauntlet *command* as a subprocess and capture its outcome.
+
+    The single subprocess seam for the gauntlet; tests monkeypatch this to
+    stay fast and deterministic. The command runs with ``check=False`` (the
+    return code is the gate verdict, not an exception), a bounded timeout,
+    and combined stdout/stderr captured to the failure envelope. A missing
+    binary or timeout collapses to a failed gate rather than raising, so one
+    misconfigured gate cannot crash the whole ship.
+
+    Args:
+        name: The gate name (for the result + logs).
+        command: The shell command line to execute.
+        cwd: Working directory for the subprocess (the repo root).
+
+    Returns:
+        The :class:`_GateResult` for this gate; ``passed`` is true only when
+        the process exits zero.
+    """
+    argv = shlex.split(command)
+    try:
+        proc = subprocess.run(
+            argv,
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_GAUNTLET_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as exc:
+        logger.warning(f"_run_gate_command gate={name!r} command={command!r} reason=not-found")
+        return _GateResult(
+            name=name,
+            command=command,
+            passed=False,
+            returncode=None,
+            output=f"command not found: {exc}",
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            f"_run_gate_command gate={name!r} command={command!r} "
+            f"reason=timeout seconds={_GAUNTLET_TIMEOUT_SECONDS}"
+        )
+        return _GateResult(
+            name=name,
+            command=command,
+            passed=False,
+            returncode=None,
+            output=f"gate timed out after {_GAUNTLET_TIMEOUT_SECONDS}s",
+        )
+    combined = f"{proc.stdout}{proc.stderr}"
+    return _GateResult(
+        name=name,
+        command=command,
+        passed=proc.returncode == 0,
+        returncode=proc.returncode,
+        output=combined[-_GAUNTLET_OUTPUT_TAIL_CHARS:],
+    )
+
+
+def _run_gauntlet(acceptance: AcceptanceConfig, cwd: Path) -> list[_GateResult]:
+    """Run every external gate named in ``acceptance.required_before_ship``.
+
+    Each named gate that maps to a runnable command (see
+    :func:`_resolve_gate_command`) is executed independently so each gate's
+    pass/fail is reported on its own. Gate order follows the canonical
+    gauntlet order (``pre-commit`` → ``lint`` → ``typecheck`` → ``tests``)
+    rather than the operator's list order, so the cheapest broad check runs
+    first. Non-runnable gates (e.g. ``state``) are skipped silently.
+
+    Args:
+        acceptance: The validated acceptance config surface.
+        cwd: Working directory for each gate subprocess (the repo root).
+
+    Returns:
+        One :class:`_GateResult` per executed gate, in canonical order.
+    """
+    requested = set(acceptance.required_before_ship)
+    ordered_gates = [g for g in _DEFAULT_GATE_COMMANDS if g in requested]
+    results: list[_GateResult] = []
+    for gate in ordered_gates:
+        command = _resolve_gate_command(gate, acceptance)
+        if command is None:
+            continue
+        results.append(_run_gate_command(gate, command, cwd))
+    return results
 
 
 @register
@@ -356,6 +575,49 @@ class ShipSkill(Skill):
                 ],
             )
 
+        # Step 2c — run the local gauntlet. Each gate named in
+        # ``acceptance.required_before_ship`` that maps to a runnable command
+        # is executed for real; ANY red gate aborts the ship so a broken tree
+        # can never pass. The repo root anchors each subprocess
+        # (``state.json`` lives at ``<repo>/.ea/state.json``).
+        acceptance_config = _load_acceptance_config(state_path)
+        repo_root = state_path.parent.parent
+        gate_results = _run_gauntlet(acceptance_config, repo_root)
+        failed_gates = [r for r in gate_results if not r.passed]
+        if failed_gates:
+            failed_names = ", ".join(r.name for r in failed_gates)
+            evt_id = emit_event(
+                state_path=state_path,
+                scope_id=scope_id,
+                event_type="ship.gauntlet_gate",
+                summary=f"ship: gauntlet gate blocked ({failed_names})",
+                payload={"passed": False, "gates": [_gate_failure(r) for r in failed_gates]},
+            )
+            persisted_records.append(evt_id)
+            return SkillResult(
+                status="failed",
+                body=ShipBody(
+                    commit_groups=[],
+                    push=None,
+                    pr=None,
+                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
+                    rollback_notes=f"gauntlet gate failed: {failed_names}",
+                ).model_dump(mode="json"),
+                persisted_store_records=persisted_records,
+                state_mutations=state_mutations,
+                next_valid_actions=next_actions,
+                repair_commands=[r.command for r in failed_gates],
+            )
+        if gate_results:
+            evt_id = emit_event(
+                state_path=state_path,
+                scope_id=scope_id,
+                event_type="ship.gauntlet_gate",
+                summary=f"ship: gauntlet gate passed ({len(gate_results)} gate(s))",
+                payload={"passed": True, "gates": [r.name for r in gate_results]},
+            )
+            persisted_records.append(evt_id)
+
         # Resolve the co-author trailer once for every commit group's
         # message. Reuses the W12 resolver; never reimplemented here.
         coauthor_trailer = _resolve_coauthor_trailer_for_ship(vcs_config)
@@ -381,8 +643,8 @@ class ShipSkill(Skill):
         persisted_records.append(evt_id)
 
         # Step 5 — build pending-ship artefact. The commit-group message
-        # carries the resolved co-author trailer so the per-commit gauntlet
-        # finds the required trailer already present.
+        # carries the resolved co-author trailer so the commit-time
+        # pre-commit hooks find the required trailer already present.
         commit_groups: list[ShipCommitGroup] = []
         if do_commit:
             message = f"[{scope_id}] feat: pending ship"
