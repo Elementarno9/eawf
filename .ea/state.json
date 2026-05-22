@@ -881,6 +881,17 @@
       "scope_id": "P26",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A35-P27-observ-ops": {
+      "check_results": [],
+      "created_at": "2026-05-22T18:47:47.722417Z",
+      "id": "A35-P27-observ-ops",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "EAWF",
+      "status": "pending",
+      "verdict": null
     }
   },
   "backlog": {
@@ -2598,7 +2609,8 @@
         "P27-I01-W24",
         "P27-I01-W25",
         "P27-I01-W26",
-        "P27-I01-W27"
+        "P27-I01-W27",
+        "P27-I01-W28"
       ]
     }
   },
@@ -3121,7 +3133,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T18:21:40.511337Z",
+  "updated_at": "2026-05-22T19:03:57.127412Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -11931,6 +11943,37 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I01-W27-1779473612"
+    },
+    "P27-I01-W28": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "p27-w28",
+      "closed_at": "2026-05-22T19:03:56.301273Z",
+      "commit": null,
+      "deps": [],
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/config/registry.py",
+        "src/eawf/telemetry/exporter.py",
+        "src/eawf/store/kinds/events/runtime_switched.py",
+        "src/eawf/telemetry/**",
+        "src/eawf/cli/commands/**"
+      ],
+      "id": "P27-I01-W28",
+      "iter_id": "P27-I01",
+      "opened_at": "2026-05-22T18:47:48.334530Z",
+      "outcome": "landed 1 commit(s) via wave land",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "otlp removed from telemetry.export.format choices so config matches the closed exporter Literal; RuntimeSwitchedPayload.cause typed as RuntimeErrorClass; P27 naming/log-format/docstring/error-phrasing drift across new modules resolved; pre-commit + mypy + full pytest green"
+      ],
+      "title": "polish: P27 consistency sweep + audit followups",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I01-W28-1779475679"
     }
   },
   "workspace": null,
@@ -13188,6 +13231,17 @@
       "path": ".ea/worktrees/p27-w27",
       "status": "merged",
       "wave_id": "P27-I01-W27"
+    },
+    "WT-P27-I01-W28-1779475679": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w28",
+      "created_at": "2026-05-22T18:47:59.263791Z",
+      "id": "WT-P27-I01-W28-1779475679",
+      "merged_commit": "3ce7b2f",
+      "owner_session_id": "p27-w28",
+      "path": ".ea/worktrees/p27-w28",
+      "status": "merged",
+      "wave_id": "P27-I01-W28"
     }
   }
 }
