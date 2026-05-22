@@ -17,6 +17,7 @@ Covers the two load-bearing guarantees of the aggregator:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -27,14 +28,25 @@ from eawf.telemetry.aggregator import (
     classify_event_cause,
     default_severity_for,
     incident_from_envelope,
+    price_session,
     roll_session,
 )
 from eawf.telemetry.models import TelemetrySession
+from eawf.telemetry.pricing import PRICING
 
 _TS = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
 
 
-def _session(session_id: str = "sess-1", project_id: str = "") -> TelemetrySession:
+def _session(
+    session_id: str = "sess-1",
+    project_id: str = "",
+    *,
+    model_primary: str | None = "claude-opus",
+    total_input_tokens: int = 0,
+    total_output_tokens: int = 0,
+    total_cache_read: int = 0,
+    total_cache_write: int = 0,
+) -> TelemetrySession:
     return TelemetrySession(
         session_id=session_id,
         project_id=project_id,
@@ -45,7 +57,11 @@ def _session(session_id: str = "sess-1", project_id: str = "") -> TelemetrySessi
         started_at=_TS,
         ended_at=_TS,
         duration_ms=0,
-        model_primary="claude-opus",
+        model_primary=model_primary,
+        total_input_tokens=total_input_tokens,
+        total_output_tokens=total_output_tokens,
+        total_cache_read=total_cache_read,
+        total_cache_write=total_cache_write,
         end_marker="other",
     )
 
@@ -114,6 +130,115 @@ def test_roll_session_preserves_all_other_fields() -> None:
 def test_roll_session_empty_project_id_raises() -> None:
     with pytest.raises(ValueError, match="project_id must be non-empty"):
         roll_session(_session(), project_id="")
+
+
+# --------------------------------------------------------------------------- #
+# price_session — token counts priced through the PRICING snapshot.
+# --------------------------------------------------------------------------- #
+
+
+def test_price_session_known_model_yields_nonzero_cost() -> None:
+    row = PRICING["claude-opus-4-7"]
+    session = _session(
+        model_primary="claude-opus-4-7",
+        total_input_tokens=1000,
+        total_output_tokens=500,
+        total_cache_read=2000,
+        total_cache_write=800,
+    )
+    expected = (
+        Decimal(1000) * row.input_per_token
+        + Decimal(500) * row.output_per_token
+        + Decimal(2000) * row.cache_read_per_token
+        + Decimal(800) * row.cache_write_5m_per_token
+    )
+    cost = price_session(session)
+    assert cost == expected
+    assert cost > Decimal("0")
+
+
+def test_price_session_dated_model_resolves_via_prefix() -> None:
+    # A dated variant is not a snapshot key; longest-prefix fallback prices it.
+    row = PRICING["claude-opus-4-7"]
+    session = _session(
+        model_primary="claude-opus-4-7-20260514",
+        total_input_tokens=1000,
+    )
+    assert price_session(session) == Decimal(1000) * row.input_per_token
+
+
+def test_price_session_zero_token_row_is_zero_no_div_by_zero() -> None:
+    # All token counts zero: cost is Decimal("0") with no division performed.
+    session = _session(model_primary="claude-opus-4-7")
+    cost = price_session(session)
+    assert cost == Decimal("0")
+    assert isinstance(cost, Decimal)
+
+
+def test_price_session_zero_tokens_unknown_model_does_not_crash() -> None:
+    # Zero tokens short-circuit before the snapshot lookup, so an unknown
+    # model never matters for a zero-token row.
+    session = _session(model_primary="totally-unknown-model")
+    assert price_session(session) == Decimal("0")
+
+
+def test_price_session_unknown_model_skips_and_flags(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A non-zero token row whose model is absent from the snapshot is skipped
+    # (priced Decimal("0"), flagged) rather than raising.
+    session = _session(
+        session_id="sess-unknown",
+        model_primary="gpt-4o",
+        total_input_tokens=1000,
+    )
+    with caplog.at_level("WARNING"):
+        cost = price_session(session)
+    assert cost == Decimal("0")
+    assert any("unpriced" in rec.message for rec in caplog.records)
+
+
+def test_price_session_missing_model_skips_and_flags(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A non-zero token row with no model_primary at all is skipped, not crashed.
+    session = _session(
+        session_id="sess-nomodel",
+        model_primary=None,
+        total_output_tokens=42,
+    )
+    with caplog.at_level("WARNING"):
+        cost = price_session(session)
+    assert cost == Decimal("0")
+    assert any("unpriced" in rec.message for rec in caplog.records)
+
+
+def test_roll_session_prices_total_cost_usd() -> None:
+    row = PRICING["claude-opus-4-7"]
+    session = _session(
+        model_primary="claude-opus-4-7",
+        total_input_tokens=1000,
+        total_output_tokens=500,
+        total_cache_read=2000,
+        total_cache_write=800,
+    )
+    rolled = roll_session(session, project_id="proj123")
+    expected = (
+        Decimal(1000) * row.input_per_token
+        + Decimal(500) * row.output_per_token
+        + Decimal(2000) * row.cache_read_per_token
+        + Decimal(800) * row.cache_write_5m_per_token
+    )
+    assert rolled.total_cost_usd == expected
+    assert rolled.total_cost_usd > Decimal("0")
+    # Source row is left untouched (pure copy): cost stays at its default.
+    assert session.total_cost_usd == Decimal("0")
+
+
+def test_roll_session_zero_token_row_prices_zero() -> None:
+    session = _session(model_primary="claude-opus-4-7")
+    rolled = roll_session(session, project_id="proj123")
+    assert rolled.total_cost_usd == Decimal("0")
 
 
 # --------------------------------------------------------------------------- #

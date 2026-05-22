@@ -30,10 +30,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from decimal import Decimal
 
 from eawf.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.store.envelope import Envelope
 from eawf.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.telemetry.pricing import lookup_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -95,27 +97,88 @@ _CAUSE_DEFAULT_SEVERITY: dict[IncidentCause, IncidentSeverity] = {
 }
 
 
+def price_session(session: TelemetrySession) -> Decimal:
+    """Price a session's token counts through the embedded PRICING snapshot.
+
+    Source adapters leave ``total_cost_usd`` at its ``Decimal("0")`` default
+    (they do not know per-token rates); the aggregator prices it here so the
+    M02 ``eawf_cost_usd_total`` counter and the M08-M10 burn-rate gauges read
+    a real cost. The cost is the per-direction token sum:
+
+    * input tokens at ``input_per_token``;
+    * output tokens at ``output_per_token``;
+    * cache-read tokens at ``cache_read_per_token``;
+    * cache-write tokens at ``cache_write_5m_per_token``.
+
+    The session model carries a single ``total_cache_write`` (cache-creation
+    tokens) with no TTL split, so cache writes price at the 5m rate — the
+    default ephemeral cache TTL the adapters read from
+    ``cache_creation_input_tokens``.
+
+    A session with no billable tokens prices to ``Decimal("0")`` without a
+    snapshot lookup, so a zero-token row never depends on pricing being
+    present. A non-zero token row whose ``model_primary`` is missing or
+    absent from the snapshot is skipped (logged, priced ``Decimal("0")``)
+    rather than raising, so an unknown model never crashes a projection.
+
+    Args:
+        session: A session row (project-stamped or not; pricing reads only
+            its token counts and ``model_primary``).
+
+    Returns:
+        The session's USD cost as a :class:`~decimal.Decimal`; ``Decimal("0")``
+        for a zero-token row or an unpriceable model.
+    """
+    billable = (
+        session.total_input_tokens
+        + session.total_output_tokens
+        + session.total_cache_read
+        + session.total_cache_write
+    )
+    if billable <= 0:
+        return Decimal("0")
+    model = session.model_primary
+    pricing = lookup_pricing(model) if model else None
+    if pricing is None:
+        logger.warning(
+            f"price_session session={session.session_id!r} model={model!r} "
+            f"unpriced billable_tokens={billable}"
+        )
+        return Decimal("0")
+    return (
+        Decimal(session.total_input_tokens) * pricing.input_per_token
+        + Decimal(session.total_output_tokens) * pricing.output_per_token
+        + Decimal(session.total_cache_read) * pricing.cache_read_per_token
+        + Decimal(session.total_cache_write) * pricing.cache_write_5m_per_token
+    )
+
+
 def roll_session(session: TelemetrySession, *, project_id: str) -> TelemetrySession:
-    """Stamp a source session row with the project it belongs to.
+    """Stamp a source session row with its project and price its cost.
 
     Per-runtime source adapters yield a
     :class:`~eawf.telemetry.models.TelemetrySession` with an empty
-    ``project_id`` (they do not know the project hash); the aggregator
-    stamps it so the projector can upsert a fully-keyed row.
+    ``project_id`` and a ``Decimal("0")`` ``total_cost_usd`` (they know
+    neither the project hash nor the per-token rates); the aggregator stamps
+    the project and prices the cost so the projector can upsert a
+    fully-keyed, fully-priced row.
 
     Args:
         session: A session row yielded by a per-runtime source adapter.
         project_id: The owning project's id (``sha256(repo_path)[:12]``).
 
     Returns:
-        A copy of *session* with ``project_id`` set.
+        A copy of *session* with ``project_id`` set and ``total_cost_usd``
+        priced through :func:`price_session`.
 
     Raises:
         ValueError: When *project_id* is empty.
     """
     if not project_id:
         raise ValueError(f"project_id must be non-empty: {project_id!r}")
-    return session.model_copy(update={"project_id": project_id})
+    return session.model_copy(
+        update={"project_id": project_id, "total_cost_usd": price_session(session)}
+    )
 
 
 def classify_event_cause(envelope: Envelope) -> IncidentCause | None:
@@ -248,5 +311,6 @@ __all__ = [
     "classify_event_cause",
     "default_severity_for",
     "incident_from_envelope",
+    "price_session",
     "roll_session",
 ]

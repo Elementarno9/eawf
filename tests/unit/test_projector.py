@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from eawf.state.enums import StoreKind
@@ -30,6 +31,7 @@ from eawf.telemetry.models import (
     TelemetryIncident,
     TelemetrySession,
 )
+from eawf.telemetry.pricing import PRICING
 from eawf.telemetry.projector import (
     RebuildMode,
     SourceSpec,
@@ -123,6 +125,37 @@ class _SessionSource:
         )
 
 
+class _PricedSessionSource:
+    """In-test source yielding one priced session with known tokens + model."""
+
+    source_name = "test_priced_sessions"
+
+    def discover(self, root: Path) -> Iterator[Path]:
+        if root.is_dir():
+            yield from sorted(root.glob("*.session"))
+
+    def iter_rows(self, path: Path) -> Iterator[TelemetrySession]:
+        if not path.is_file():
+            return
+        yield TelemetrySession(
+            session_id=path.stem,
+            project_id="",
+            runtime="claude",
+            wave_id=None,
+            attempt_id=None,
+            session_log_path=str(path),
+            started_at=_TS,
+            ended_at=_TS,
+            duration_ms=0,
+            model_primary="claude-opus-4-7",
+            total_input_tokens=1000,
+            total_output_tokens=500,
+            total_cache_read=2000,
+            total_cache_write=800,
+            end_marker="other",
+        )
+
+
 def _open_store(tmp_path: Path) -> SqliteMetricsStore:
     store = SqliteMetricsStore(tmp_path / "m.db")
     store.init_schema()
@@ -194,6 +227,28 @@ def test_full_rebuild_projects_sessions(tmp_path: Path) -> None:
 
     assert report.sessions == 2
     assert {s.project_id for s in _sessions(store)} == {"proj-9"}
+    store.close()
+
+
+def test_full_rebuild_prices_session_cost(tmp_path: Path) -> None:
+    # End-to-end: a projected session with known tokens + a snapshot model
+    # lands a non-zero total_cost_usd in the store (cost is no longer inert).
+    (tmp_path / "priced.session").write_text("x", encoding="utf-8")
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_PricedSessionSource(), root=tmp_path, project_id="proj-9")
+
+    rebuild(store, [spec], mode=RebuildMode.FULL)
+
+    (session,) = _sessions(store)
+    row = PRICING["claude-opus-4-7"]
+    expected = (
+        Decimal(1000) * row.input_per_token
+        + Decimal(500) * row.output_per_token
+        + Decimal(2000) * row.cache_read_per_token
+        + Decimal(800) * row.cache_write_5m_per_token
+    )
+    assert session.total_cost_usd == expected
+    assert session.total_cost_usd > Decimal("0")
     store.close()
 
 
