@@ -19,6 +19,9 @@ existing single-command registration in :mod:`eawf.cli.app` stays intact
   (:func:`eawf.telemetry.projector.rebuild`) over the discovered sources.
 - ``eawf metrics info`` — print cache stats: DB kind, path, schema +
   pricing version, and row counts.
+- ``eawf metrics variance`` — emit the C09 §5.9.6 M26
+  ``eawf_estimate_actual_variance_pct`` gauge from ``state.json`` and feed
+  the ship-gate Variance section + the C06 VarianceTile.
 
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
@@ -42,7 +45,7 @@ from eawf.cli.scope import resolve_state_path
 
 logger = logging.getLogger(__name__)
 
-_TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info"})
+_TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info", "variance"})
 
 _OPT_IN_NUDGE = (
     "telemetry is disabled — no metrics are collected.\n"
@@ -57,7 +60,7 @@ def metrics_cmd(
     subcommand: Annotated[
         str | None,
         typer.Argument(
-            metavar="[show|export|rebuild|info]",
+            metavar="[show|export|rebuild|info|variance]",
             help="Telemetry sub-verb. Omit for the rolling workflow-metrics view.",
         ),
     ] = None,
@@ -105,6 +108,8 @@ def metrics_cmd(
         _telemetry_export(flags, fmt=fmt, out=out)
     elif subcommand == "rebuild":
         _telemetry_rebuild(flags, full=full, incremental=incremental)
+    elif subcommand == "variance":
+        _estimate_actual_variance(flags)
     else:  # subcommand == "info"
         _telemetry_info(flags)
 
@@ -141,6 +146,42 @@ def _workflow_metrics(flags: GlobalFlags) -> None:
     payload: dict[str, Any] = summary.model_dump(mode="json")
     text = render_metrics_plain(summary) if flags.plain_output else render_metrics_table(summary)
     emit_json_or_text(payload, text, flags=flags)
+
+
+def _estimate_actual_variance(flags: GlobalFlags) -> None:
+    """Emit the M26 estimate-actual variance pct from ``state.json``.
+
+    Read-only — computes the C09 §5.9.6 M26 gauge over CLOSED waves with
+    both an estimate and an actual and feeds the ship-gate Variance section
+    + the C06 VarianceTile. Failures map to the canonical CLI exit codes:
+    NotFound (``exit=1``) when no ``state.json`` resolves, ValidationFailed
+    (``exit=2``) on a schema mismatch.
+    """
+    from eawf.estimation.metrics import compute_estimate_actual_variance
+    from eawf.evidence._io import load_state
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    try:
+        state = load_state(state_path)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+
+    metric = compute_estimate_actual_variance(state)
+    payload: dict[str, Any] = metric.model_dump(mode="json")
+    text = _render_variance(metric.variance_pct, metric.sample_count)
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _render_variance(variance_pct: float | None, sample_count: int) -> str:
+    """Render the M26 variance gauge as a one-line ship-gate summary."""
+    if variance_pct is None:
+        return f"estimate-actual variance: no data (samples={sample_count})"
+    sign = "+" if variance_pct >= 0 else ""
+    return f"estimate-actual variance: {sign}{variance_pct:.1f}% (samples={sample_count})"
 
 
 def _resolve_state_or_emit(flags: GlobalFlags) -> Path | None:

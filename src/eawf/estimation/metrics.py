@@ -132,6 +132,29 @@ class PlannedVsReactiveMetric(BaseModel):
 WEEKLY_BURN_WINDOW: timedelta = timedelta(days=7)
 
 
+class EstimateActualVarianceMetric(BaseModel):
+    """M26 ``eawf_estimate_actual_variance_pct`` roll-up.
+
+    The C09 §5.9.6 M26 gauge: ``(actual EU - planned EU) / planned EU *
+    100`` aggregated over CLOSED waves that carry both an estimate and an
+    actual. ``planned_eu`` sums :class:`EstimateSummary.expected_eu`,
+    ``actual_eu`` sums :class:`ActualSummary.elapsed_eu` over the same
+    contributing waves.
+
+    ``variance_pct`` is ``None`` when ``sample_count == 0`` or when the
+    planned-EU denominator is zero — the VarianceTile and the ship-gate
+    Variance section surface "no data" rather than a fabricated ``0%``
+    or a divide-by-zero.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    sample_count: int = Field(ge=0)
+    planned_eu: float = Field(ge=0.0)
+    actual_eu: float = Field(ge=0.0)
+    variance_pct: float | None
+
+
 class WeeklyBurnMetric(BaseModel):
     """Rolling-7-day EU consumption rollup against ``Project.weekly_eu_target``.
 
@@ -266,6 +289,57 @@ def compute_eu_variance(state: State) -> EuVarianceMetric:
         mean_delta_eu=mean,
         stdev_delta_eu=stdev,
         inside_pessimistic_share=inside_pessimistic / len(deltas),
+    )
+
+
+def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetric:
+    """Compute the M26 estimate-actual variance percentage.
+
+    The C09 §5.9.6 M26 gauge feeding the C06 VarianceTile and the ship-gate
+    Variance section. A wave contributes when:
+
+    1. ``wave.status == WaveStatus.CLOSED``.
+    2. ``state.estimates`` carries an entry for ``wave.id``.
+    3. ``state.actuals`` carries an entry for ``wave.id``.
+
+    The variance is the aggregate ``(sum actual_eu - sum planned_eu) / sum
+    planned_eu * 100`` over the contributing waves. The aggregate form (sum
+    of actuals vs sum of estimates) — rather than a mean of per-wave ratios
+    — keeps a single large over-run from being diluted by many small waves,
+    matching the ship-gate's "did the phase as a whole run over?" question.
+
+    A positive percentage means the work ran over the estimate; a negative
+    percentage means it finished under. ``variance_pct`` is ``None`` when no
+    wave contributes or when the planned-EU denominator is zero.
+
+    Args:
+        state: Loaded typed :class:`State` snapshot (read-only).
+
+    Returns:
+        The M26 roll-up — sample count, summed planned / actual EU, and the
+        variance percentage (``None`` when not computable).
+    """
+    estimates = state.estimates or {}
+    actuals = state.actuals or {}
+    planned_eu = 0.0
+    actual_eu = 0.0
+    sample_count = 0
+    for wave in state.waves.values():
+        if wave.status != WaveStatus.CLOSED:
+            continue
+        est = estimates.get(wave.id)
+        act = actuals.get(wave.id)
+        if est is None or act is None:
+            continue
+        planned_eu += est.expected_eu
+        actual_eu += act.elapsed_eu
+        sample_count += 1
+    variance_pct = (actual_eu - planned_eu) / planned_eu * 100.0 if planned_eu > 0 else None
+    return EstimateActualVarianceMetric(
+        sample_count=sample_count,
+        planned_eu=planned_eu,
+        actual_eu=actual_eu,
+        variance_pct=variance_pct,
     )
 
 
@@ -412,12 +486,14 @@ __all__ = [
     "METRICS_SCHEMA_VERSION",
     "WEEKLY_BURN_WINDOW",
     "AuditPassRateMetric",
+    "EstimateActualVarianceMetric",
     "EuVarianceMetric",
     "MetricsSummary",
     "PlannedVsReactiveMetric",
     "WaveElapsedMetric",
     "WeeklyBurnMetric",
     "compute_audit_pass_rate",
+    "compute_estimate_actual_variance",
     "compute_eu_variance",
     "compute_metrics",
     "compute_planned_vs_reactive",

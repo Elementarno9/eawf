@@ -8,6 +8,7 @@ compose:
     Heartbeat     — pulsing liveness dot (accent / err on degrade)
     RoadmapTree   — phase → iter → wave tree with V12 status glyphs
     EUBar         — 5-cell colour-banded effort-unit progress bar
+    VarianceTile  — colour-banded M26 estimate-actual variance gauge
     StatusPane    — current-scope lifecycle status summary
     GitPane       — live git branch / status / ahead-behind context
     BacklogTable  — sortable / filterable backlog grid
@@ -28,6 +29,7 @@ from eawf.tui_v2.widgets.git_pane import GitPane
 from eawf.tui_v2.widgets.header import Header
 from eawf.tui_v2.widgets.roadmap_tree import RoadmapTree
 from eawf.tui_v2.widgets.status_pane import StatusPane
+from eawf.tui_v2.widgets.variance_tile import VarianceTile
 
 __all__ = [
     "BacklogTable",
@@ -38,4 +40,5 @@ __all__ = [
     "Heartbeat",
     "RoadmapTree",
     "StatusPane",
+    "VarianceTile",
 ]

@@ -506,6 +506,12 @@ from eawf.cli.commands.backup import backup_app  # noqa: E402
 app.add_typer(backup_app, name="backup", rich_help_panel=panel_for("backup"))
 # --- end P27 W23 ---
 
+# --- P27 W25 calibrate registration ---
+from eawf.cli.commands.calibrate import calibrate_app  # noqa: E402
+
+app.add_typer(calibrate_app, name="calibrate", rich_help_panel=panel_for("calibrate"))
+# --- end P27 W25 ---
+
 # --- completion + help registrations ---
 from eawf.cli.commands.completion import completion_app  # noqa: E402
 from eawf.cli.commands.help import help_app  # noqa: E402

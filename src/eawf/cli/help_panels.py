@@ -69,9 +69,10 @@ COMMAND_PANELS: dict[str, str] = {
     "snapshot": "audit",
     "validate": "audit",
     # estimation: EU estimates / actuals, impact graph, rolling metrics,
-    # perf bench harness.
+    # perf bench harness, effort-bucket calibration.
     "actual": "estimation",
     "bench": "estimation",
+    "calibrate": "estimation",
     "estimate": "estimation",
     "impact": "estimation",
     "metrics": "estimation",
