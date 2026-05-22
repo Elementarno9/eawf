@@ -236,6 +236,48 @@ def decision_add(
     _emit(payload, text, flags)
 
 
+@decision_app.command("supersede")
+def decision_supersede(
+    ctx: typer.Context,
+    old_id: Annotated[str, typer.Argument(help="ID of the ACTIVE decision to retire")],
+    new_id: Annotated[
+        str,
+        typer.Option("--by", help="ID of the decision that supersedes <old_id>"),
+    ],
+) -> None:
+    """Supersede an existing decision by another existing decision."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import decision as decision_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        with state_transaction(state_path) as state:
+            record, event = decision_evi.supersede_decision(
+                state,
+                old_id=old_id,
+                new_id=new_id,
+            )
+            paths = store_paths(state_path)
+            append_jsonl(paths[StoreKind.DECISION], record)
+            append_jsonl(paths[StoreKind.EVENT], event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "decision_id": old_id,
+            "superseded_by": new_id,
+            "status": "superseded",
+        },
+        f"decision {old_id} superseded by {new_id}",
+        flags,
+    )
+
+
 @decision_app.command("list")
 def decision_list(
     ctx: typer.Context,

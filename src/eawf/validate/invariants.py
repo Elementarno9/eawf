@@ -20,6 +20,7 @@ from eawf.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
     BacklogStatus,
+    DecisionStatus,
     GoalStatus,
     IncidentStatus,
     IterStatus,
@@ -540,6 +541,42 @@ def check_artifact_urns(state: State) -> Iterable[Violation]:
             )
 
 
+def check_decision_supersede_link(state: State) -> Iterable[Violation]:
+    """Decision supersede status and link must agree (``INV.DECISION.*``).
+
+    The ``status`` flag and the ``superseded_by`` link are two halves of one
+    fact and must move together:
+
+    - A decision with ``superseded_by`` set MUST have ``status=superseded``
+      (a dangling link on an active row is flagged
+      ``INV.DECISION.LINK_WITHOUT_SUPERSEDED``).
+    - A decision with ``status=superseded`` MUST have ``superseded_by`` set
+      (an unlinked superseded row is flagged
+      ``INV.DECISION.SUPERSEDED_WITHOUT_LINK``).
+    """
+    for decision_id, decision in (state.decisions or {}).items():
+        is_superseded = decision.status == DecisionStatus.SUPERSEDED
+        has_link = decision.superseded_by is not None
+        if has_link and not is_superseded:
+            yield Violation(
+                code="INV.DECISION.LINK_WITHOUT_SUPERSEDED",
+                path=f"/decisions/{decision_id}/status",
+                message=(
+                    f"decision {decision_id!r} sets superseded_by "
+                    f"{decision.superseded_by!r} but status is "
+                    f"{decision.status.value!r}; expected superseded"
+                ),
+            )
+        if is_superseded and not has_link:
+            yield Violation(
+                code="INV.DECISION.SUPERSEDED_WITHOUT_LINK",
+                path=f"/decisions/{decision_id}/superseded_by",
+                message=(
+                    f"decision {decision_id!r} has status superseded but superseded_by is null"
+                ),
+            )
+
+
 def _report_path(report_id: str, field: str) -> str:
     return f"/agent_reports/{report_id}/{field}"
 
@@ -839,4 +876,5 @@ ALL_INVARIANTS: tuple[Invariant, ...] = (
     check_plugin_owners,
     check_wave_blocks_invariant,
     check_artifact_urns,
+    check_decision_supersede_link,
 )

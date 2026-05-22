@@ -117,7 +117,7 @@ incident_app = typer.Typer(
 
 decision_app = typer.Typer(
     name="decision",
-    help="Manage decisions (add / list).",
+    help="Manage decisions (add / supersede / list / graph).",
     no_args_is_help=True,
 )
 

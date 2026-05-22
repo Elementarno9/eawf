@@ -585,6 +585,68 @@ def test_decision_add_and_list(state_path: Path) -> None:
     assert payload["decisions"][0]["id"] == "D012"
 
 
+def _add_decision(decision_id: str, summary: str) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "decision",
+            "add",
+            decision_id,
+            "--scope-id",
+            "QR",
+            "--summary",
+            summary,
+            "--rationale",
+            "because",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+
+
+def test_decision_supersede_flips_status_and_link(state_path: Path) -> None:
+    _add_decision("D010", "old choice")
+    _add_decision("D011", "new choice")
+
+    result = runner.invoke(
+        app,
+        ["--json", "decision", "supersede", "D010", "--by", "D011"],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["decision_id"] == "D010"
+    assert payload["superseded_by"] == "D011"
+    assert payload["status"] == "superseded"
+
+    body = json.loads(state_path.read_text())
+    assert body["decisions"]["D010"]["status"] == "superseded"
+    assert body["decisions"]["D010"]["superseded_by"] == "D011"
+    # The superseding decision stays active.
+    assert body["decisions"]["D011"]["status"] == "active"
+    assert body["decisions"]["D011"]["superseded_by"] is None
+
+
+def test_decision_supersede_unknown_old_errors(state_path: Path) -> None:
+    _add_decision("D011", "new choice")
+    result = runner.invoke(
+        app,
+        ["decision", "supersede", "D999", "--by", "D011"],
+    )
+    assert result.exit_code != 0
+    assert "D999" in result.stdout
+    assert "not found" in result.stdout
+
+
+def test_decision_supersede_unknown_by_errors(state_path: Path) -> None:
+    _add_decision("D010", "old choice")
+    result = runner.invoke(
+        app,
+        ["decision", "supersede", "D010", "--by", "D999"],
+    )
+    assert result.exit_code != 0
+    assert "D999" in result.stdout
+    assert "not found" in result.stdout
+
+
 # ---- artifact --------------------------------------------------------------
 
 
