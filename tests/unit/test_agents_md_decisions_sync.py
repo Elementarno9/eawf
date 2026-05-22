@@ -62,7 +62,7 @@ def _decision(
     return Decision(
         id=id_,
         scope_id=scope_id,
-        summary=summary if summary is not None else f"{id_} summary text",
+        title=summary if summary is not None else f"{id_} summary text",
         rationale=rationale if rationale is not None else f"{id_} rationale paragraph.",
         alternatives=alternatives if alternatives is not None else [],
         consequences=consequences if consequences is not None else [],
@@ -495,7 +495,7 @@ def test_decision_consequences_defaults_empty_when_omitted() -> None:
     legacy = {
         "id": "D21",
         "scope_id": "QR",
-        "summary": "Pre-consequences decision",
+        "title": "Pre-consequences decision",
         "rationale": "Written before the field existed.",
         "status": DecisionStatus.ACTIVE.value,
         "created_at": datetime.now(UTC).isoformat(),

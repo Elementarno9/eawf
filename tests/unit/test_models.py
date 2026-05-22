@@ -37,7 +37,7 @@ def _hypothesis_payload(hid: str) -> dict[str, object]:
     return {
         "id": hid,
         "scope_id": "QR",
-        "text": "h",
+        "title": "h",
         "metric": "m",
         "confirm": "x",
         "reject": "y",
@@ -287,7 +287,7 @@ def test_hypothesis_thresholds_required_when_populated() -> None:
     hypothesis = models.Hypothesis(
         id="H03-12",
         scope_id="QR",
-        text="Latency below 100ms improves UX.",
+        title="Latency below 100ms improves UX.",
         metric="p99_latency_ms",
         confirm="< 100",
         reject=">= 200",
@@ -731,3 +731,137 @@ def test_offset_datetime_normalised_to_utc() -> None:
     assert state.updated_at.tzinfo is UTC
     expected = datetime(2025, 12, 31, 19, 0, 0, tzinfo=UTC)
     assert state.updated_at == expected
+
+
+# ---- Bounded title + description (P27-I02-W23) ------------------------------
+
+
+def _wave_kwargs(**overrides: object) -> dict[str, object]:
+    """Return Wave constructor kwargs with sane defaults for cap tests."""
+    base: dict[str, object] = {
+        "id": "P00-I01-W01",
+        "iter_id": "P00-I01",
+        "title": "Wave one",
+        "status": "pending",
+        "opened_at": datetime.now(UTC),
+    }
+    base.update(overrides)
+    return base
+
+
+def test_wave_title_at_cap_validates() -> None:
+    wave = models.Wave(**_wave_kwargs(title="t" * 72))
+    assert len(wave.title) == 72
+
+
+def test_wave_title_over_cap_rejected() -> None:
+    with pytest.raises(ValidationError):
+        models.Wave(**_wave_kwargs(title="t" * 73))
+
+
+def test_wave_title_empty_rejected() -> None:
+    with pytest.raises(ValidationError):
+        models.Wave(**_wave_kwargs(title=""))
+
+
+def test_wave_description_at_cap_validates() -> None:
+    wave = models.Wave(**_wave_kwargs(description="d" * 500))
+    assert wave.description is not None
+    assert len(wave.description) == 500
+
+
+def test_wave_description_over_cap_rejected() -> None:
+    with pytest.raises(ValidationError):
+        models.Wave(**_wave_kwargs(description="d" * 501))
+
+
+def test_wave_description_defaults_none() -> None:
+    wave = models.Wave(**_wave_kwargs())
+    assert wave.description is None
+
+
+def test_decision_title_over_cap_rejected() -> None:
+    with pytest.raises(ValidationError):
+        models.Decision(
+            id="D01",
+            scope_id="QR",
+            title="t" * 73,
+            rationale="r",
+            status="active",
+            created_at=datetime.now(UTC),
+        )
+
+
+def test_decision_title_and_description_round_trip() -> None:
+    decision = models.Decision(
+        id="D01",
+        scope_id="QR",
+        title="Pick rebase merges",
+        description="Squash collapses the per-wave commit history.",
+        rationale="Keeps the [P-W] audit trail.",
+        status="active",
+        created_at=datetime.now(UTC),
+    )
+    reloaded = models.Decision.model_validate(decision.model_dump(mode="json"))
+    assert reloaded.title == "Pick rebase merges"
+    assert reloaded.description == "Squash collapses the per-wave commit history."
+    assert reloaded == decision
+
+
+def test_decision_summary_key_rejected_after_rename() -> None:
+    """The pre-rename ``summary`` key is now an extra field (extra=forbid)."""
+    with pytest.raises(ValidationError):
+        models.Decision.model_validate(
+            {
+                "id": "D01",
+                "scope_id": "QR",
+                "summary": "old field name",
+                "rationale": "r",
+                "status": "active",
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+        )
+
+
+def test_hypothesis_title_over_cap_rejected() -> None:
+    with pytest.raises(ValidationError):
+        models.Hypothesis(
+            id="H03-12",
+            scope_id="QR",
+            title="t" * 73,
+            metric="m",
+            confirm="x",
+            reject="y",
+            status="pending",
+        )
+
+
+def test_hypothesis_title_round_trip() -> None:
+    hypothesis = models.Hypothesis(
+        id="H03-12",
+        scope_id="QR",
+        title="Render is idempotent",
+        metric="drift",
+        confirm="drift == 0",
+        reject="drift > 0",
+        status="pending",
+    )
+    reloaded = models.Hypothesis.model_validate(hypothesis.model_dump(mode="json"))
+    assert reloaded.title == "Render is idempotent"
+    assert reloaded == hypothesis
+
+
+def test_hypothesis_text_key_rejected_after_rename() -> None:
+    """The pre-rename ``text`` key is now an extra field (extra=forbid)."""
+    with pytest.raises(ValidationError):
+        models.Hypothesis.model_validate(
+            {
+                "id": "H03-12",
+                "scope_id": "QR",
+                "text": "old field name",
+                "metric": "m",
+                "confirm": "x",
+                "reject": "y",
+                "status": "pending",
+            }
+        )

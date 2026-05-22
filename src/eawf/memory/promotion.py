@@ -131,9 +131,7 @@ def promote_record(
         confidence=confidence,
         now=now,
     )
-    logger.info(
-        f"promote_record source={source_id} -> memory={record.summary.id} scope={final_scope}"
-    )
+    logger.info(f"promote_record source={source_id} memory={record.summary.id} scope={final_scope}")
     return PromotionResult(record=record, source_store_record_id=source_id)
 
 
@@ -217,7 +215,7 @@ def _build_decision_envelope(
     decision = Decision(
         id=artifact_id,
         scope_id=summary.scope_id,
-        summary=decision_summary,
+        title=decision_summary,
         rationale=rationale,
         alternatives=[],
         status=DecisionStatus.ACTIVE,
@@ -352,7 +350,7 @@ def promote_to_artifact(
     state.memory_index = index
 
     logger.info(
-        f"promote_to_artifact source={source_id} -> artifact={artifact_id} kind={artifact_kind}"
+        f"promote_to_artifact source={source_id} artifact={artifact_id} kind={artifact_kind}"
     )
     return ArtifactPromotionResult(
         memory_id=source_id,

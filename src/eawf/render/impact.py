@@ -96,7 +96,7 @@ def build_impact_graph(state: State, *, decision_id: str | None = None) -> Impac
             nodes.append(
                 ImpactNode(
                     decision_id=d.id,
-                    decision_summary=d.summary,
+                    decision_summary=d.title,
                     scope_id=d.scope_id,
                     wave_ids=[],
                     file_globs=[],
@@ -113,7 +113,7 @@ def build_impact_graph(state: State, *, decision_id: str | None = None) -> Impac
         nodes.append(
             ImpactNode(
                 decision_id=d.id,
-                decision_summary=d.summary,
+                decision_summary=d.title,
                 scope_id=d.scope_id,
                 wave_ids=wave_ids,
                 file_globs=file_globs,

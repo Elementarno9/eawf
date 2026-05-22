@@ -178,7 +178,7 @@ def test_prepare_close_allows_single_wave_with_scope_collapse_decision(
     state.decisions["D-SINGLE"] = Decision(
         id="D-SINGLE",
         scope_id="P03",
-        summary="P03 scope collapse: finish as single-wave phase",
+        title="P03 scope collapse: finish as single-wave phase",
         rationale="scope collapse accepted because follow-up work moved to next phase",
         alternatives=["open another wave", "leave phase open"],
         status=DecisionStatus.ACTIVE,

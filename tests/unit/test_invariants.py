@@ -320,7 +320,7 @@ def test_check_audit_evidence_flags_resolved_hypothesis_without_audit() -> None:
         "H03-12": {
             "id": "H03-12",
             "scope_id": "QR",
-            "text": "Latency below 100ms improves UX.",
+            "title": "Latency below 100ms improves UX.",
             "metric": "p99_latency_ms",
             "confirm": "< 100",
             "reject": ">= 200",

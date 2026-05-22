@@ -77,7 +77,7 @@ def build_decision_graph(state: State) -> DecisionGraph:
     nodes = [
         DecisionNode(
             id=d.id,
-            summary=d.summary,
+            summary=d.title,
             status=d.status.value if hasattr(d.status, "value") else str(d.status),
             scope_id=d.scope_id,
         )

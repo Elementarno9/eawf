@@ -213,7 +213,7 @@ def render_decisions_section(
         if decision.status.value != "active":
             badge = f" [{decision.status.value}]"
         parts.append("")
-        parts.append(f"### {decision.id}{badge}: {decision.summary}")
+        parts.append(f"### {decision.id}{badge}: {decision.title}")
         parts.append("")
         parts.append(decision.rationale.rstrip())
         if decision.alternatives:

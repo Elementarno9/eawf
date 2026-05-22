@@ -90,7 +90,7 @@ def _decision(decision_id: str, *, scope_id: str = "ZZ", summary: str = "") -> d
     return {
         "id": decision_id,
         "scope_id": scope_id,
-        "summary": summary or f"Decision {decision_id}",
+        "title": summary or f"Decision {decision_id}",
         "rationale": "because",
         "alternatives": [],
         "status": "active",

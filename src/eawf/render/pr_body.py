@@ -127,8 +127,8 @@ def _decisions_for_phase(state: State, phase_id: str) -> list[str]:
     decisions = state.decisions or {}
     out: list[str] = []
     for d in sorted(decisions.values(), key=lambda r: r.id):
-        if phase_id in d.summary:
-            out.append(d.summary)
+        if phase_id in d.title:
+            out.append(d.title)
     return out
 
 

@@ -66,7 +66,7 @@ def _decision(
     return {
         "id": decision_id,
         "scope_id": scope_id,
-        "summary": summary or f"Decision {decision_id}",
+        "title": summary or f"Decision {decision_id}",
         "rationale": "because",
         "alternatives": [],
         "status": status,

@@ -101,7 +101,7 @@ def build_wiki(state: State) -> str:
         lines.extend(["## Decisions", ""])
         for d in sorted(decisions.values(), key=lambda r: r.id):
             status = d.status.value if hasattr(d.status, "value") else str(d.status)
-            lines.append(f"- `{d.id}` [{status}] {d.summary}")
+            lines.append(f"- `{d.id}` [{status}] {d.title}")
         lines.append("")
 
     phases = state.phases or {}

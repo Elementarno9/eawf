@@ -194,7 +194,8 @@ class Phase(_StrictModel):
     id: PhaseIdStr
     scope_id: str
     subproject_id: str | None = None
-    title: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     status: PhaseStatus
     iter_ids: list[IterIdStr] = Field(default_factory=list)
     outcome_ids: list[str] = Field(default_factory=list)
@@ -210,7 +211,8 @@ class Iter(_StrictModel):
 
     id: IterIdStr
     phase_id: PhaseIdStr
-    title: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     status: IterStatus
     wave_ids: list[WaveIdStr] = Field(default_factory=list)
     estimate_id: str | None = None
@@ -299,7 +301,8 @@ class Wave(_StrictModel):
 
     id: WaveIdStr
     iter_id: IterIdStr
-    title: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     status: WaveStatus
     deps: list[WaveIdStr] = Field(default_factory=list)
     blocks: list[WaveIdStr] = Field(default_factory=list)
@@ -325,7 +328,8 @@ class Hypothesis(_StrictModel):
 
     id: HypothesisIdStr
     scope_id: str
-    text: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     metric: str
     confirm: str
     reject: str
@@ -375,7 +379,8 @@ class Decision(_StrictModel):
 
     id: IdStr
     scope_id: str
-    summary: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     rationale: str
     alternatives: list[str] = Field(default_factory=list)
     # Nygard-ADR "Consequences" — what becomes easier/harder after the
@@ -392,7 +397,8 @@ class BacklogItem(_StrictModel):
 
     id: IdStr
     scope_id: str
-    title: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     priority: BacklogPriority
     status: BacklogStatus
     created_at: UtcDatetime
@@ -542,7 +548,8 @@ class Incident(_StrictModel):
     id: IdStr
     scope_id: str
     severity: IncidentSeverity
-    title: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
     status: IncidentStatus
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None

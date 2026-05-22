@@ -88,7 +88,7 @@
       "scope_id": "P05-I01",
       "source_artifact_id": null,
       "status": "rejected",
-      "text": "approach X scales beyond 1k waves",
+      "title": "approach X scales beyond 1k waves",
       "verdict": "rejected"
     }
   },

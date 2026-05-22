@@ -315,7 +315,7 @@ def _parse_check_result(
         details = getattr(raw, "details", None)
     if not isinstance(name, str) or not isinstance(passed, bool):
         logger.warning(
-            f"plan_view: skipping malformed check_result audit_id={audit_id!r} "
+            f"_parse_check_result skipping malformed check_result audit_id={audit_id!r} "
             f"wave={wave_id!r} raw={raw!r}"
         )
         return None
@@ -432,7 +432,7 @@ def _hypothesis_to_risk(h: Hypothesis, scopes: set[str]) -> list[RiskView]:
             kind="hypothesis_rejected",
             id=h.id,
             severity="rejected",
-            title=h.text,
+            title=h.title,
             status=h.status.value,
         )
     ]
@@ -546,7 +546,7 @@ def build_view(state: State, iter_id: str) -> PlanView:
             # (the canonical surface for cycle / dangling-ref errors is
             # ``eawf validate``); the debug log lets an operator
             # cross-reference the absence without re-running validate.
-            logger.debug(f"plan_view: dangling wave_id {wid!r} skipped for iter {iter_obj.id!r}")
+            logger.debug(f"build_view dangling wave={wid!r} skipped iter={iter_obj.id!r}")
 
     iter_view = IterView(
         id=iter_obj.id,

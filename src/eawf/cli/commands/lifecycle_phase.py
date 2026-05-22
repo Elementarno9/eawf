@@ -595,9 +595,9 @@ def _phase_has_scope_collapse_decision(state: State, *, phase_id: str) -> bool:
     for decision in (state.decisions or {}).values():
         if decision.status != DecisionStatus.ACTIVE:
             continue
-        if decision.scope_id != phase_id and phase_id not in decision.summary:
+        if decision.scope_id != phase_id and phase_id not in decision.title:
             continue
-        haystack = f"{decision.summary}\n{decision.rationale}".lower()
+        haystack = f"{decision.title}\n{decision.rationale}".lower()
         if any(phrase in haystack for phrase in phrases):
             return True
     return False

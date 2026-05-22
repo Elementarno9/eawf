@@ -26,7 +26,7 @@
     "DEC-001": {
       "id": "DEC-001",
       "scope_id": "QR",
-      "summary": "Use Pydantic v2 strict models",
+      "title": "Use Pydantic v2 strict models",
       "rationale": "Strict validation prevents drift between schema and code",
       "alternatives": ["TypedDict", "attrs"],
       "status": "active",

@@ -328,7 +328,7 @@ def _render_decisions(state: State, *, scope_id: str) -> str:
     parts = ["## Decisions"]
     for decision in matching:
         parts.append("")
-        parts.append(f"### {decision.id}: {decision.summary}")
+        parts.append(f"### {decision.id}: {decision.title}")
         parts.append("")
         parts.append(decision.rationale.rstrip())
     return "\n".join(parts)

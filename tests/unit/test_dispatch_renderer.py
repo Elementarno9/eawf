@@ -149,7 +149,7 @@ def test_render_includes_attached_decisions() -> None:
         "D01": Decision(
             id="D01",
             scope_id="QR",
-            summary="Cherry-pick worktrees, never merge",
+            title="Cherry-pick worktrees, never merge",
             rationale="Merges break the [P-W] / [P-CORE] history audit trail.",
             alternatives=["squash"],
             status=DecisionStatus.ACTIVE,
@@ -159,7 +159,7 @@ def test_render_includes_attached_decisions() -> None:
         "D02": Decision(
             id="D02",
             scope_id="QR",
-            summary="State CLI is the only writer",
+            title="State CLI is the only writer",
             rationale="Direct edits bypass the audit-side event.jsonl.",
             alternatives=[],
             status=DecisionStatus.ACTIVE,
@@ -169,7 +169,7 @@ def test_render_includes_attached_decisions() -> None:
         "D99": Decision(
             id="D99",
             scope_id="OTHER",
-            summary="Out-of-scope",
+            title="Out-of-scope",
             rationale="Should not appear in QR wave prompts.",
             alternatives=[],
             status=DecisionStatus.ACTIVE,
@@ -195,7 +195,7 @@ def test_render_includes_hypotheses_with_open_verdict() -> None:
         "H01-01": Hypothesis(
             id="H01-01",
             scope_id="QR",
-            text="Workflow rendering is idempotent",
+            title="Workflow rendering is idempotent",
             metric="render_drift_count",
             confirm="drift == 0",
             reject="drift > 0",
@@ -207,7 +207,7 @@ def test_render_includes_hypotheses_with_open_verdict() -> None:
         "H01-02": Hypothesis(
             id="H01-02",
             scope_id="QR",
-            text="Closed deps unblock children",
+            title="Closed deps unblock children",
             metric="ready_after_close",
             confirm="next-ready surfaces child",
             reject="next-ready stays empty",

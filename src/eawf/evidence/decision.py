@@ -62,7 +62,7 @@ def add_decision(
     decision = Decision(
         id=decision_id,
         scope_id=scope_id,
-        summary=summary,
+        title=summary,
         rationale=rationale,
         alternatives=list(alternatives or []),
         status=DecisionStatus.ACTIVE,
@@ -158,7 +158,7 @@ def supersede_decision(
         scope_id=old.scope_id,
         summary=f"decision {old_id} superseded by {new_id}",
         payload={
-            "summary": old.summary,
+            "summary": old.title,
             "superseded_by": new_id,
         },
     )

@@ -393,6 +393,19 @@
           "title": "Created At",
           "type": "string"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "id": {
           "minLength": 1,
           "pattern": "^\\S+$",
@@ -422,6 +435,8 @@
           "$ref": "#/$defs/BacklogStatus"
         },
         "title": {
+          "maxLength": 72,
+          "minLength": 1,
           "title": "Title",
           "type": "string"
         }
@@ -563,6 +578,19 @@
           "title": "Created At",
           "type": "string"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "id": {
           "minLength": 1,
           "pattern": "^\\S+$",
@@ -580,10 +608,6 @@
         "status": {
           "$ref": "#/$defs/DecisionStatus"
         },
-        "summary": {
-          "title": "Summary",
-          "type": "string"
-        },
         "superseded_by": {
           "anyOf": [
             {
@@ -595,12 +619,18 @@
           ],
           "default": null,
           "title": "Superseded By"
+        },
+        "title": {
+          "maxLength": 72,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
         }
       },
       "required": [
         "id",
         "scope_id",
-        "summary",
+        "title",
         "rationale",
         "status",
         "created_at"
@@ -876,6 +906,19 @@
           "title": "Confirm",
           "type": "string"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "id": {
           "pattern": "^(?:H\\d{2}-\\d{2}|[A-Z][A-Z0-9_-]{1,15}-H\\d{2}-\\d{2})$",
           "title": "Id",
@@ -908,8 +951,10 @@
         "status": {
           "$ref": "#/$defs/HypothesisStatus"
         },
-        "text": {
-          "title": "Text",
+        "title": {
+          "maxLength": 72,
+          "minLength": 1,
+          "title": "Title",
           "type": "string"
         },
         "verdict": {
@@ -927,7 +972,7 @@
       "required": [
         "id",
         "scope_id",
-        "text",
+        "title",
         "metric",
         "confirm",
         "reject",
@@ -980,6 +1025,19 @@
           "title": "Corrective Action Ids",
           "type": "array"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "id": {
           "minLength": 1,
           "pattern": "^\\S+$",
@@ -1026,6 +1084,8 @@
           "$ref": "#/$defs/IncidentStatus"
         },
         "title": {
+          "maxLength": 72,
+          "minLength": 1,
           "title": "Title",
           "type": "string"
         }
@@ -1090,6 +1150,19 @@
           "default": null,
           "title": "Closed At"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "estimate_id": {
           "anyOf": [
             {
@@ -1121,6 +1194,8 @@
           "$ref": "#/$defs/IterStatus"
         },
         "title": {
+          "maxLength": 72,
+          "minLength": 1,
           "title": "Title",
           "type": "string"
         },
@@ -1496,6 +1571,19 @@
           "title": "Depends On",
           "type": "array"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "id": {
           "pattern": "^P\\d{2}$",
           "title": "Id",
@@ -1548,6 +1636,8 @@
           "title": "Subproject Id"
         },
         "title": {
+          "maxLength": 72,
+          "minLength": 1,
           "title": "Title",
           "type": "string"
         }
@@ -2057,6 +2147,19 @@
           "title": "Deps",
           "type": "array"
         },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
         "dispatch_history": {
           "items": {
             "$ref": "#/$defs/DispatchAnnotation"
@@ -2142,6 +2245,8 @@
           "type": "array"
         },
         "title": {
+          "maxLength": 72,
+          "minLength": 1,
           "title": "Title",
           "type": "string"
         },

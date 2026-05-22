@@ -297,13 +297,13 @@ def decision_list(
             {
                 "id": d.id,
                 "scope_id": d.scope_id,
-                "summary": d.summary,
+                "summary": d.title,
                 "status": d.status.value,
             }
             for d in items
         ]
     }
-    text = "\n".join(f"{d.id}\t{d.status.value}\t{d.summary}" for d in items) or "(none)"
+    text = "\n".join(f"{d.id}\t{d.status.value}\t{d.title}" for d in items) or "(none)"
     _emit(payload, text, flags)
 
 

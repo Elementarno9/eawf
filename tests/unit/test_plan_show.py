@@ -310,7 +310,7 @@ def test_collect_risks_rejected_hypothesis() -> None:
         "H05-01": {
             "id": "H05-01",
             "scope_id": "P05-I01",
-            "text": "tried approach X; failed",
+            "title": "tried approach X; failed",
             "metric": "throughput",
             "confirm": ">100",
             "reject": "<50",

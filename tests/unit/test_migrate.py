@@ -1,7 +1,9 @@
 """Unit tests for the ``eawf migrate`` chain runner + canonical writer.
 
-The first migration edge (v1.0 -> v1.1) is a pure ``schema_version``
-bump: the field deltas land in a later wave. The live
+The first migration edge (v1.0 -> v1.1) tightens every entity ``title``
+to ``max_length=72`` (copying the full over-cap title into the new
+``description`` first) and renames ``Decision.summary`` /
+``Hypothesis.text`` to ``title``. The live
 :class:`eawf.state.models.State` model accepts both ``"1.0"`` and
 ``"1.1"``, so a migrated state re-loads under the live model. The suite
 exercises:
@@ -9,7 +11,8 @@ exercises:
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
 * a full v1.0 state migrating to a re-loadable v1.1 state;
 * idempotency — re-running against an already-1.1 state is a no-op;
-* a long-title v1.0 state migrating cleanly (no cap on this edge yet);
+* an over-cap-title v1.0 state migrating to a capped, re-loadable v1.1
+  state with the full original title preserved in ``description``;
 * the canonical-writer route (``portalock`` + ``atomic_write_json_locked``)
   with an assertion that the ``atomic_write_json`` bypass is never called;
 * ``--dry-run`` writing nothing;
@@ -116,6 +119,90 @@ def _minimal_state_v1_0() -> dict[str, Any]:
     }
 
 
+def _state_v1_0_with_entities() -> dict[str, Any]:
+    """Return a full v1.0 state carrying a wave, a decision, and a hypothesis.
+
+    The decision row carries the pre-rename ``summary`` key and the
+    hypothesis row the pre-rename ``text`` key so the migration's rename +
+    title-cap transform has a body to exercise. The phase/iter/wave chain
+    is referentially complete so the migrated state re-loads under the
+    live model.
+    """
+    ts = "2026-05-08T00:00:00Z"
+    payload = _minimal_state_v1_0()
+    payload["phases"] = {
+        "P00": {
+            "id": "P00",
+            "scope_id": "QR",
+            "subproject_id": None,
+            "title": "Phase zero",
+            "status": "active",
+            "iter_ids": ["P00-I01"],
+            "outcome_ids": [],
+            "depends_on": [],
+            "source_brief_ids": [],
+            "opened_at": ts,
+            "closed_at": None,
+            "audit_id": None,
+        }
+    }
+    payload["iters"] = {
+        "P00-I01": {
+            "id": "P00-I01",
+            "phase_id": "P00",
+            "title": "Iter one",
+            "status": "active",
+            "wave_ids": ["P00-I01-W01"],
+            "estimate_id": None,
+            "audit_id": None,
+            "opened_at": ts,
+            "closed_at": None,
+        }
+    }
+    payload["waves"] = {
+        "P00-I01-W01": {
+            "id": "P00-I01-W01",
+            "iter_id": "P00-I01",
+            "title": "Wave one",
+            "status": "pending",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": [],
+            "success_criteria": [],
+            "opened_at": ts,
+            "closed_at": None,
+        }
+    }
+    payload["decisions"] = {
+        "D01": {
+            "id": "D01",
+            "scope_id": "QR",
+            "summary": "Pick rebase merges",
+            "rationale": "Squash destroys the wave-prefix history.",
+            "alternatives": [],
+            "consequences": [],
+            "status": "active",
+            "created_at": ts,
+            "superseded_by": None,
+        }
+    }
+    payload["hypotheses"] = {
+        "H01-01": {
+            "id": "H01-01",
+            "scope_id": "QR",
+            "text": "Render is idempotent",
+            "metric": "drift",
+            "confirm": "drift == 0",
+            "reject": "drift > 0",
+            "status": "pending",
+            "verdict": None,
+            "audit_id": None,
+            "source_artifact_id": None,
+        }
+    }
+    return payload
+
+
 def _write_fixture(path: Path) -> dict[str, Any]:
     """Write the minimal raw v1.0 fixture to *path* and return the dict."""
     payload = _fixture_state_v1_0()
@@ -176,6 +263,71 @@ def test_v1_0_to_v1_1_apply_deep_copies_nested_nodes() -> None:
     out = step.apply(src)
     out["events"][0]["kind"] = "tampered"
     assert src["events"][0]["kind"] == "demo"
+
+
+def test_v1_0_to_v1_1_apply_renames_decision_summary_to_title() -> None:
+    step = MigrationV10ToV11()
+    out = step.apply(_state_v1_0_with_entities())
+    row = out["decisions"]["D01"]
+    assert "summary" not in row
+    assert row["title"] == "Pick rebase merges"
+
+
+def test_v1_0_to_v1_1_apply_renames_hypothesis_text_to_title() -> None:
+    step = MigrationV10ToV11()
+    out = step.apply(_state_v1_0_with_entities())
+    row = out["hypotheses"]["H01-01"]
+    assert "text" not in row
+    assert row["title"] == "Render is idempotent"
+
+
+def test_v1_0_to_v1_1_apply_caps_over_72_title_into_description() -> None:
+    step = MigrationV10ToV11()
+    src = _state_v1_0_with_entities()
+    long_title = "Wave " + "x" * 174  # 179 chars
+    src["waves"]["P00-I01-W01"]["title"] = long_title
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert len(row["title"]) <= 72
+    # The full original title is preserved with no loss.
+    assert row["description"] == long_title
+
+
+def test_v1_0_to_v1_1_apply_truncates_at_word_boundary() -> None:
+    """The truncated title cuts on a whole-word boundary at or before 72."""
+    step = MigrationV10ToV11()
+    src = _state_v1_0_with_entities()
+    # 8-char words separated by spaces; the boundary at/<=72 lands cleanly.
+    words = " ".join(["abcdefgh"] * 12)  # 12*8 + 11 spaces = 107 chars
+    src["waves"]["P00-I01-W01"]["title"] = words
+    out = step.apply(src)
+    title = out["waves"]["P00-I01-W01"]["title"]
+    assert len(title) <= 72
+    # No partial trailing word — the cut lands on a space boundary.
+    assert not title.endswith("abcdefg")
+    assert title.split() == ["abcdefgh"] * len(title.split())
+
+
+def test_v1_0_to_v1_1_apply_leaves_at_cap_title_untouched() -> None:
+    """Boundary: a title of exactly 72 chars is neither capped nor copied."""
+    step = MigrationV10ToV11()
+    src = _state_v1_0_with_entities()
+    exact = "y" * 72
+    src["waves"]["P00-I01-W01"]["title"] = exact
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert row["title"] == exact
+    assert row.get("description") is None
+
+
+def test_v1_0_to_v1_1_apply_minimal_state_is_identity_apart_from_version() -> None:
+    """A state with no over-cap titles + no renamed fields is pure version bump."""
+    step = MigrationV10ToV11()
+    src = _minimal_state_v1_0()
+    out = step.apply(src)
+    expected = dict(src)
+    expected["schema_version"] = "1.1"
+    assert out == expected
 
 
 def test_v1_0_to_v1_1_check_pre_rejects_wrong_version() -> None:
@@ -248,16 +400,19 @@ def test_run_chain_migrate_is_idempotent_on_already_v1_1(tmp_path: Path) -> None
     assert reloaded.schema_version == "1.1"
 
 
-def test_run_chain_long_title_state_migrates_without_cap(tmp_path: Path) -> None:
-    """Boundary: a v1.0 state with a >72-char title migrates + re-loads (no cap yet).
+def test_run_chain_over_cap_title_state_caps_and_reloads(tmp_path: Path) -> None:
+    """Boundary: a v1.0 state with a 179-char wave title caps + re-loads.
 
-    This edge is a pure version bump; the title-cap tightening lands in a
-    later wave. A long-title state must NOT be bricked here.
+    The full original title is preserved in ``description`` and the
+    on-disk ``title`` is truncated to <= 72 so the migrated state passes
+    the tightened model. The decision ``summary`` and hypothesis ``text``
+    rename to ``title`` in the same step.
     """
     state_path = tmp_path / "state.json"
-    payload = _minimal_state_v1_0()
-    long_title = "Q" * 120
-    payload["project"]["title"] = long_title
+    payload = _state_v1_0_with_entities()
+    long_title = "Wave " + "x" * 174  # 179 chars
+    assert len(long_title) == 179
+    payload["waves"]["P00-I01-W01"]["title"] = long_title
     state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
@@ -266,9 +421,16 @@ def test_run_chain_long_title_state_migrates_without_cap(tmp_path: Path) -> None
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     reloaded = State.model_validate(on_disk)
     assert reloaded.schema_version == "1.1"
-    # The long title rides through untouched — no truncation on this edge.
-    assert reloaded.project is not None
-    assert reloaded.project.title == long_title
+
+    wave = reloaded.waves["P00-I01-W01"]
+    assert len(wave.title) <= 72
+    # The complete original title is preserved with no loss.
+    assert wave.description == long_title
+
+    # The decision/hypothesis field renames carried their value into title.
+    assert reloaded.decisions["D01"].title == "Pick rebase merges"
+    assert reloaded.hypotheses is not None
+    assert reloaded.hypotheses["H01-01"].title == "Render is idempotent"
 
 
 def test_run_chain_writes_backup_adjacent_to_state(tmp_path: Path) -> None:

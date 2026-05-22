@@ -39,7 +39,7 @@ def define_hypothesis(
     hyp = Hypothesis(
         id=hypothesis_id,
         scope_id=scope_id,
-        text=text,
+        title=text,
         metric=metric,
         confirm=confirm,
         reject=reject,

@@ -100,7 +100,7 @@ def _decision_payload(
     return {
         "id": decision_id,
         "scope_id": "QR",
-        "summary": f"decision {decision_id}",
+        "title": f"decision {decision_id}",
         "rationale": "because",
         "alternatives": [],
         "consequences": [],
