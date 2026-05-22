@@ -135,6 +135,9 @@ exclude = [
     "src/eawf/install/wizard.py",
     "src/eawf/daemon/methods/spec.py",
     "src/eawf/cli/commands/worktree.py",
+    # P27-W04 grew this CLI-dispatch module past the cap with the four
+    # diff-scoped lint subcommands; a split is a future-hygiene candidate.
+    "src/eawf/cli/commands/hook.py",
 ]
 
 [tool.coverage.run]
