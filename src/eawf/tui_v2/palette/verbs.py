@@ -333,6 +333,56 @@ def _handle_events(app: App[None], args: str) -> None:
     open_events(app, load_recent_events(event_path))
 
 
+def _handle_theme(app: App[None], args: str) -> None:
+    """Swap the active theme + persist the choice (the ``/theme`` verb).
+
+    Parses the logical theme name (``dark`` / ``light`` / ``cb`` /
+    ``auto``) from *args* and applies it through the App's
+    ``apply_theme``, which rebinds every semantic ``$var`` the structural
+    CSS references. An unknown name is rejected with a warning toast and
+    leaves the theme unchanged. The accepted choice is then persisted to
+    the global config layer's ``ui.theme`` through the same
+    daemon-mediated layered writer the config window uses, so the palette
+    survives the next launch. The persist is best-effort: a swap is a
+    cosmetic preference, so a writer failure (daemon unreachable in a
+    non-daemonless context, malformed layer) downgrades to an
+    applied-but-not-saved toast rather than aborting the swap.
+
+    Args:
+        app: The running App.
+        args: The raw ``/theme`` arg string — its first token is the
+            logical theme name. Empty / unknown names are rejected.
+    """
+    name = args.strip().split()[0] if args.strip() else ""
+    apply = getattr(app, "apply_theme", None)
+    if not callable(apply) or not apply(name):
+        logger.info(f"palette_verb_theme_rejected name={name!r}")
+        app.notify(f"unknown theme: {name!r} (choose dark/light/cb/auto)", severity="warning")
+        return
+    _persist_theme_choice(app, name)
+
+
+def _persist_theme_choice(app: App[None], name: str) -> None:
+    """Persist the applied logical theme name to the global ``ui.theme`` layer.
+
+    Best-effort: routes through the CLI ``_save_value_to_layer`` (the
+    daemon-mediated layered writer), and on any failure logs + toasts that
+    the theme applied but was not saved, leaving the live swap intact.
+
+    Args:
+        app: The running App (for the toast on a writer failure).
+        name: The accepted logical theme name to persist.
+    """
+    from eawf.cli.commands.config import _save_value_to_layer
+    from eawf.config.layered import global_config_path
+
+    try:
+        _save_value_to_layer(target_path=global_config_path(), key="ui.theme", value=name)
+    except Exception as exc:
+        logger.warning(f"_persist_theme_choice name={name!r} not saved exc={exc!r}")
+        app.notify(f"theme applied (not saved: {exc})", severity="warning")
+
+
 #: The static verb registry. Order is display order in the palette
 #: before fuzzy ranking. Handlers that land in a later wave use
 #: :func:`_placeholder` so the registry is complete now and the follow-up
@@ -366,7 +416,7 @@ VERBS: tuple[PaletteVerb, ...] = (
     PaletteVerb(
         "/theme",
         "theme dark/light/cb/auto",
-        _placeholder("/theme"),
+        _handle_theme,
         SCOPES_ALL,
         args_grammar="<name>",
     ),

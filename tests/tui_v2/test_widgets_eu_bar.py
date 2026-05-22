@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 
 from eawf.tui_v2.widgets.eu_bar import (
     BAR_CELLS,
@@ -21,10 +21,12 @@ from eawf.tui_v2.widgets.eu_bar import (
     render_bar_markup,
 )
 
+from ._palette_harness import PaletteHarnessApp
+
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui_v2" / "theme.tcss"
 
 
-class _Harness(App[None]):
+class _Harness(PaletteHarnessApp):
     """Production-style host app loading the real palette CSS."""
 
     CSS_PATH = str(_THEME)

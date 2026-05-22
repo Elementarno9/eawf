@@ -11,7 +11,7 @@ import asyncio
 import subprocess
 from pathlib import Path
 
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 
 from eawf.tui_v2.widgets.git_pane import (
     DASH,
@@ -20,6 +20,8 @@ from eawf.tui_v2.widgets.git_pane import (
     format_git_lines,
     gather_git_fields,
 )
+
+from ._palette_harness import PaletteHarnessApp
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui_v2" / "theme.tcss"
 
@@ -41,7 +43,7 @@ def _make_repo(root: Path) -> Path:
     return root
 
 
-class _Harness(App[None]):
+class _Harness(PaletteHarnessApp):
     """Production-style host loading the real palette CSS."""
 
     CSS_PATH = str(_THEME)

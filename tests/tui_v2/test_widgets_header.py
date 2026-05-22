@@ -13,7 +13,7 @@ import asyncio
 from pathlib import Path
 
 import orjson
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 
 from eawf.state.enums import ScopeKind
 from eawf.state.models import State
@@ -28,6 +28,8 @@ from eawf.tui_v2.widgets.header import (
     runtime_cell_text,
 )
 
+from ._palette_harness import PaletteHarnessApp
+
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -35,7 +37,7 @@ _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui_v2" / "theme.tcss"
 
 
-class _Harness(App[None]):
+class _Harness(PaletteHarnessApp):
     """Production-style host loading the real palette CSS."""
 
     CSS_PATH = str(_THEME)

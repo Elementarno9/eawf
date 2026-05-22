@@ -50,6 +50,11 @@ from eawf.state.enums import ScopeKind
 from eawf.state.models import State
 from eawf.tui_v2.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.tui_v2.state_binding import StateBinding, StateBindingCallbacks
+from eawf.tui_v2.theme import (
+    DEFAULT_THEME,
+    EA_THEMES,
+    resolve_theme_name,
+)
 from eawf.tui_v2.widgets.header import (
     BRAND,
     DEFAULT_PROJECT_CODE,
@@ -71,6 +76,34 @@ ScopeName = Literal["repo", "workspace", "user"]
 #: :class:`~eawf.tui_v2.widgets.header.Header` and this module share one
 #: source (DRY); this alias keeps the scaffold-test import path stable.
 _breadcrumb = build_breadcrumb
+
+
+def _persisted_theme() -> str:
+    """Read the persisted ``ui.theme`` logical name from layered config.
+
+    Reads through the same :func:`~eawf.config.layered.merge_config` path
+    the config window writes through, so a value the operator saved via
+    ``/config`` (or ``eawf config set ui.theme ...``) is honoured on the
+    next launch. A missing key, an unreadable layer, or a value that is
+    not a recognised logical name all degrade to :data:`DEFAULT_THEME` —
+    the swap is a cosmetic preference, never a launch-blocking read.
+
+    Returns:
+        The persisted logical theme name, or :data:`DEFAULT_THEME` when
+        none is persisted / the persisted value is unrecognised.
+    """
+    from eawf.config.layered import get_dotted, merge_config
+
+    try:
+        merged, _sources = merge_config()
+        value = get_dotted(merged, "ui.theme")
+    except (KeyError, OSError, ValueError) as exc:
+        logger.debug(f"_persisted_theme fallback exc={exc!r}")
+        return DEFAULT_THEME
+    if isinstance(value, str) and resolve_theme_name(value) is not None:
+        return value
+    logger.debug(f"_persisted_theme unrecognised value={value!r}")
+    return DEFAULT_THEME
 
 
 class EaApp(App[None]):
@@ -150,6 +183,16 @@ class EaApp(App[None]):
         self._state_path = state_path
         self._binding: StateBinding | None = None
         self._help_open = False
+        # Register the custom themes and apply the persisted one here, in
+        # __init__, NOT in on_mount: Textual builds the App stylesheet
+        # (which resolves every $var the structural CSS references) from
+        # get_css_variables() before on_mount runs, and a theme's
+        # variables only enter that namespace once the theme is the active
+        # one. Setting the theme any later leaves the initial parse with
+        # the migrated $accent/$ok/$status-* vars undefined.
+        for theme in EA_THEMES:
+            self.register_theme(theme)
+        self.apply_theme(_persisted_theme())
 
     async def on_mount(self) -> None:
         """Bind state read-only, then push the resolved scope screen.
@@ -158,6 +201,9 @@ class EaApp(App[None]):
         load is a single synchronous file read inside
         :meth:`StateBinding.connect`, and the poll loop's first probe is
         deferred behind ``asyncio.sleep`` so it never blocks the paint.
+        Themes are registered + the persisted one applied in ``__init__``
+        (the App stylesheet that resolves the semantic ``$var``\\ s is
+        built before ``on_mount`` runs).
         """
         self._binding = StateBinding(
             state_path=self._state_path,
@@ -191,6 +237,32 @@ class EaApp(App[None]):
             return
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
+
+    def apply_theme(self, logical: str) -> bool:
+        """Apply an operator-facing logical theme name to the live App.
+
+        Maps *logical* (one of ``dark`` / ``light`` / ``cb`` / ``auto``)
+        onto the registered Textual theme name via
+        :func:`~eawf.tui_v2.theme.resolve_theme_name` and assigns it to the
+        reactive :attr:`theme`, which re-resolves every semantic ``$var``
+        the structural CSS references. An unrecognised name leaves the
+        theme unchanged and returns ``False`` so callers can surface a
+        rejection.
+
+        Args:
+            logical: The operator-facing logical theme name.
+
+        Returns:
+            ``True`` when a known logical name was applied, ``False`` when
+            *logical* was unrecognised (no theme change).
+        """
+        registered = resolve_theme_name(logical)
+        if registered is None:
+            logger.info(f"apply_theme rejected logical={logical!r}")
+            return False
+        self.theme = registered
+        logger.info(f"apply_theme logical={logical!r} theme={registered!r}")
+        return True
 
     def modal_depth(self) -> int:
         """Return the number of :class:`ModalScreen` overlays on the stack.

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import orjson
 import pytest
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 
 from eawf.state.models import BacklogItem, State
 from eawf.tui_v2.widgets.backlog_table import (
@@ -23,6 +23,8 @@ from eawf.tui_v2.widgets.backlog_table import (
     next_sort_key,
     sort_items,
 )
+
+from ._palette_harness import PaletteHarnessApp
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _BACKLOG = _FIXTURES / "07-decisions-and-backlog.json"
@@ -59,7 +61,7 @@ def _state_with_backlog(items: list[BacklogItem]) -> State:
     return State.model_validate(payload)
 
 
-class _Harness(App[None]):
+class _Harness(PaletteHarnessApp):
     """Production-style host loading the real palette CSS."""
 
     CSS_PATH = str(_THEME)

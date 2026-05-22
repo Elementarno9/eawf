@@ -276,6 +276,18 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         max_value=10000,
     ),
     ConfigKey(
+        tab="ui",
+        key="ui.theme",
+        label="TUI colour theme",
+        type="choice",
+        default="dark",
+        description=(
+            "dark = Wong colour-blind-safe (default); cb = IBM "
+            "colour-blind-safe; light = light background; auto = detect."
+        ),
+        choices=("dark", "light", "cb", "auto"),
+    ),
+    ConfigKey(
         tab="vcs",
         key="vcs.auto_commit",
         label="Auto-commit policy",
@@ -907,6 +919,15 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default="auto",
         writable_layers=("global", "workspace", "repo", "env"),
         choices=("auto", "always", "never"),
+    ),
+    LeafKey(
+        key="ui.theme",
+        domain="ui",
+        type="literal",
+        default="dark",
+        writable_layers=("global", "workspace", "repo", "env"),
+        choices=("dark", "light", "cb", "auto"),
+        description="TUI colour theme: dark (Wong) / cb (IBM) / light / auto.",
     ),
     LeafKey(
         key="ui.glyphs",

@@ -1,34 +1,18 @@
 /* Textual theme for the Eä TUI rebuild (tui_v2).
  *
- * Defines the semantic colour vars consumed by every tui_v2 widget +
- * screen ($ok/$warn/$err/$muted/$accent/$primary) and the base layout
- * for the scope screens. Runtime theme swap (/theme dark|light|auto)
- * rebinds these vars at the App level in a later wave; this file is the
- * default dark palette. Colours follow the Wong 2011 deuteranopia-safe
- * set so the colour-blind palette swap stays a var rebind, not a layout
- * change.
+ * Structural / layout CSS for the scope screens and chrome. The semantic
+ * colour vars it references ($accent/$primary/$ok/$warn/$err/$muted and
+ * the $status-* lifecycle tints) are NOT defined here: they live in each
+ * Theme's `variables` map in theme.py and are re-resolved by the App when
+ * the active theme changes. Defining them at global scope here would pin
+ * them to one palette and make the runtime /theme swap recolour nothing,
+ * so this file carries layout only and leaves every $var to the theme.
+ *
+ * The $status-* tints are mirrored as hardcoded hex in
+ * roadmap_tree.STATUS_COLOURS because tree node labels are Rich-parsed
+ * and cannot resolve these vars; the per-theme `variables` map is the
+ * canonical palette home for every surface that CAN resolve them.
  */
-
-/* --- semantic colour vars (dark default) --- */
-$accent: #56b6c2;
-$primary: #56b6c2;
-$ok: #009e73;
-$warn: #e69f00;
-$err: #d55e00;
-$muted: #6c6c6c;
-
-/* --- lifecycle-status glyph tints (additive on top of the V12 glyph) ---
- * The roadmap tree tints each row's leading status glyph by lifecycle
- * status from the Wong deuteranopia-safe set. Tree node labels are
- * Rich-parsed and cannot resolve these vars, so the tree mirrors the same
- * hex values in roadmap_tree.STATUS_COLOURS; these vars are the canonical
- * palette home (any other surface that wants a status tint binds them).
- */
-$status-pending: #6c6c6c;
-$status-claimed: #56b6c2;
-$status-in-progress: #e69f00;
-$status-closed: #009e73;
-$status-failed: #d55e00;
 
 Screen {
     background: $surface;
