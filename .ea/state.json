@@ -1604,7 +1604,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P26-I02-W17",
+      "P26-I02-W18",
+      "P26-I02-W19"
+    ],
     "iter_id": "P26-I02",
     "phase_id": "P26",
     "project_code": "EAWF",
@@ -3076,7 +3080,7 @@
   "schema_version": "1.0",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T11:21:29.079988Z",
+  "updated_at": "2026-05-22T11:22:08.967731Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -10759,7 +10763,7 @@
     "P26-I02-W17": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "operator-i02-review",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -10778,7 +10782,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "dp tab labels its real p hotkey; wave files render as a collapsed file tree; footer drops the h/d/m/e/p list since tab labels carry hotkeys"
       ],
@@ -10790,7 +10794,7 @@
     "P26-I02-W18": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "operator-i02-review",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -10807,7 +10811,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "inline-edit type cell + input share the static row columns (no squish); committing a value equal to persisted stages no dirty edit"
       ],
@@ -10819,7 +10823,7 @@
     "P26-I02-W19": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "operator-i02-review",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -10836,7 +10840,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "auto re-applies within the poll interval when OS appearance flips; explicit themes untouched; safe no-op when appearance undetectable"
       ],
