@@ -139,3 +139,97 @@ jobs:
 
       - name: Snapshot pairing gate
         run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+
+  mutation-core:
+    name: Mutation testing (core, publish-not-block)
+    # Publish-not-block per success criterion: the campaign runs on PRs,
+    # prints a mutation score, and never reds the build below the >=70%
+    # target. ``continue-on-error`` makes the job non-blocking even if the
+    # campaign step exits non-zero (e.g. a surviving mutant). PR-only
+    # because a mutation run is far slower than the unit suite and the
+    # score is review signal, not a merge gate.
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Build the mutation venv (non-editable eawf + dev deps + mutmut)
+        # mutmut rewrites source into a ``mutants/`` sandbox and runs the
+        # suite from there. An *editable* install breaks in that sandbox
+        # because ``from eawf import __version__`` re-triggers the dynamic
+        # hatch-version build hook (whose ``tools/`` is not copied), so the
+        # campaign env installs eawf as a built wheel (non-editable) plus
+        # the dev test deps the suite needs (hypothesis, ...) plus mutmut.
+        # mutmut is added with ``uv pip install`` into a throwaway venv, so
+        # the committed ``uv.lock`` is never touched — it stays a campaign
+        # tool, not a wheel/lock dependency. The dev-dep set is exported
+        # from the frozen lock so versions match the gating ``test`` job.
+        run: |
+          uv export --frozen --only-dev --no-emit-project -o /tmp/dev-reqs.txt
+          uv venv /tmp/mutenv
+          VIRTUAL_ENV=/tmp/mutenv uv pip install . -r /tmp/dev-reqs.txt mutmut==3.5.0
+
+      - name: Run mutmut on core (state/lifecycle/daemon/validate)
+        # mutmut config (paths_to_mutate, also_copy, do_not_mutate,
+        # covered-lines scoping) lives in ``[tool.mutmut]`` of
+        # pyproject.toml. Run via the campaign venv's own interpreter (no
+        # ``uv run`` wrapper) so changing cwd into ``mutants/`` never
+        # re-resolves the project. ``|| true`` keeps the step green even on
+        # surviving mutants / partial collection; the score is published
+        # in the next step. NOTE: mutmut's source-rewriting sandbox can
+        # still trip pydantic-core's compiled validators on some modules;
+        # because this job is publish-not-block, a partial run only narrows
+        # the published denominator and never reds CI. See
+        # ``docs/reference/mutation-testing.md`` (sandbox caveats).
+        run: /tmp/mutenv/bin/python -m mutmut run || true
+
+      - name: Publish mutation score (target >=70%)
+        # Reads the killed/survived/total counts mutmut writes to
+        # ``mutants/mutmut-cicd-stats.json`` and prints the score to the
+        # job log + step summary. Documented target is 70% killed of
+        # killed+survived; this step reports against it without failing.
+        run: |
+          /tmp/mutenv/bin/python -m mutmut export-cicd-stats || true
+          /tmp/mutenv/bin/python <<'PY'
+          import json
+          import os
+          import pathlib
+
+          stats_path = pathlib.Path("mutants/mutmut-cicd-stats.json")
+          if not stats_path.exists():
+              print("no mutmut-cicd-stats.json produced; skipping score report")
+              raise SystemExit(0)
+
+          stats = json.loads(stats_path.read_text())
+          killed = stats.get("killed", 0)
+          survived = stats.get("survived", 0)
+          tested = killed + survived
+          score = (killed / tested * 100) if tested else 0.0
+          target = 70.0
+
+          lines = [
+              "## Mutation testing (core)",
+              "",
+              f"- killed: {killed}",
+              f"- survived: {survived}",
+              f"- score (killed / killed+survived): {score:.1f}%",
+              f"- target: >= {target:.0f}% (publish-not-block)",
+              f"- status: {'meets target' if score >= target else 'BELOW target (not blocking)'}",
+          ]
+          report = "\n".join(lines)
+          print(report)
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              pathlib.Path(summary).write_text(report + "\n")
+          PY

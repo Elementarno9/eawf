@@ -14,6 +14,9 @@ src/eawf/_data/
 .mypy_cache/
 .coverage
 htmlcov/
+# mutmut rewrites source + writes its CI/CD stats into this sandbox dir
+# at the repo root when a mutation campaign runs locally.
+mutants/
 
 # uv
 .venv/

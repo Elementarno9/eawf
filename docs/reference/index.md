@@ -11,6 +11,7 @@ Curated prose plus auto-generated catalogs for the `eawf` framework.
 - [Lockfile semantics](lockfile-semantics.md) — `portalocker` sibling-lock contract.
 - [URN namespace](urn-namespace.md) — `urn:eawf:v1:*` format rules and kind catalog.
 - [Coverage gates](coverage-gates.md) — per-package coverage thresholds.
+- [Mutation testing](mutation-testing.md) — publish-not-block mutmut campaign on core (target >= 70%).
 
 ## Auto-generated reference
 

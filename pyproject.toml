@@ -198,6 +198,52 @@ exclude = [
 # the SonarSource default "needs refactoring" threshold.
 max-complexity = 15
 
+[tool.mutmut]
+# Mutation-testing config for the four load-bearing "core" packages
+# (state / lifecycle / daemon / validate). mutmut runs as a
+# publish-not-block CI job (the ``mutation-core`` job in
+# ``.github/workflows/ci.yaml``) from a throwaway venv built with
+# ``uv pip install ... mutmut==<pin>`` — never via the project's runtime
+# deps or the committed ``uv.lock``, so it stays a campaign tool, not a
+# library dependency. The documented score target is **>= 70%**
+# killed/(killed+survived); the CI job publishes the score and does not
+# fail the build below target. See ``docs/reference/mutation-testing.md``
+# for how to run a campaign (incl. the non-editable-install requirement
+# and sandbox caveats) and how the score is read.
+paths_to_mutate = [
+    "src/eawf/state/",
+    "src/eawf/lifecycle/",
+    "src/eawf/daemon/",
+    "src/eawf/validate/",
+]
+# Copy the *whole* ``eawf`` package into mutmut's ``mutants/`` sandbox so
+# the four mutated sub-packages can still import their siblings
+# (``eawf.cli``, ``eawf.render``, the package-root ``__init__``, ...).
+# mutmut only copies ``paths_to_mutate`` by default, which leaves an
+# incomplete ``mutants/src/eawf`` tree and breaks ``import eawf.<sibling>``
+# during the per-mutant test run. ``also_copy`` runs before mutant
+# generation, so the four core sub-packages are still overwritten with
+# their mutated variants on top of this pristine copy.
+also_copy = ["src/eawf/"]
+tests_dir = ["tests/"]
+# Only mutate lines a test actually exercises. A mutation on an
+# unreachable line is "no_tests", not a real survivor; restricting to
+# covered lines keeps the campaign tractable and makes the published
+# killed/survived ratio meaningful.
+mutate_only_covered_lines = true
+# fnmatch globs (matched against the source path) for files mutmut must
+# skip. The Windows-only daemon transport modules are import-guarded
+# (``raise ImportError`` off-win32) so their mutants can never be killed
+# on the POSIX CI host; ``__init__.py`` re-export shims carry no logic to
+# mutate. Excluding them avoids inflating the survivor count with mutants
+# no Linux/macOS test could ever reach.
+do_not_mutate = [
+    "*/daemon/windows_pipe.py",
+    "*/daemon/windows_security.py",
+    "*/daemon/win_service.py",
+    "*/__init__.py",
+]
+
 [tool.coverage.run]
 source = ["src/eawf"]
 branch = true
