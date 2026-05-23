@@ -4,7 +4,10 @@ The v1.1 schema delta tightens every entity ``title`` to ``max_length=72``
 and adds an optional ``description`` (``max_length=500``), and renames two
 fields so the breadcrumb-safe ``title`` is the single dominant name:
 ``Decision.summary`` -> ``Decision.title`` and ``Hypothesis.text`` ->
-``Hypothesis.title``.
+``Hypothesis.title``. Because v1.1 also tightens ``title`` to
+``min_length=1``, an empty / whitespace-only v1.0 ``title`` is replaced
+with a placeholder (the row ``id`` when present, else ``"(untitled)"``)
+so the migrated row stays model-valid.
 
 The transform operates on the **raw** state dict and never re-validates the
 input against the full :class:`eawf.state.models.State` model — the v1.0
@@ -127,18 +130,41 @@ def _truncate_title(title: str) -> str:
     return head.rstrip()
 
 
+def _empty_title_placeholder(row: dict[str, Any]) -> str:
+    """Return a ``min_length=1`` stand-in for an empty/whitespace-only title.
+
+    Prefers the row's own ``id`` (a stable, human-meaningful handle that
+    already satisfies the v1.1 ``min_length=1`` floor); falls back to the
+    literal ``"(untitled)"`` when the row carries no usable ``id``.
+    """
+    row_id = row.get("id")
+    if isinstance(row_id, str) and row_id.strip():
+        return row_id
+    return "(untitled)"
+
+
 def _migrate_title_row(row: dict[str, Any]) -> None:
     """Cap ``row['title']`` to <= 72, preserving the full text in description.
 
-    No-op when the row carries no ``title`` or the title already fits. When
-    the title is over-cap, the FULL original title is copied into
-    ``description`` (only when ``description`` is not already populated) and
-    ``title`` is truncated in place. The copied ``description`` is itself
-    bounded to :data:`_DESCRIPTION_MAX` so a title longer than the
-    description cap (no live row reaches it) cannot brick model re-load.
+    No-op when the row carries no ``title`` key. An empty / whitespace-only
+    ``title`` is replaced with a ``min_length=1`` placeholder
+    (:func:`_empty_title_placeholder`) so the migrated row satisfies the
+    v1.1 model floor — the lean ``check_post`` invariant reads only
+    ``schema_version`` and would not otherwise catch it. An in-cap
+    non-empty title is left untouched. When the title is over-cap, the FULL
+    original title is copied into ``description`` (only when ``description``
+    is not already populated) and ``title`` is truncated in place. The
+    copied ``description`` is itself bounded to :data:`_DESCRIPTION_MAX` so
+    a title longer than the description cap (no live row reaches it) cannot
+    brick model re-load.
     """
     title = row.get("title")
-    if not isinstance(title, str) or len(title) <= _TITLE_MAX:
+    if not isinstance(title, str):
+        return
+    if not title.strip():
+        row["title"] = _empty_title_placeholder(row)
+        return
+    if len(title) <= _TITLE_MAX:
         return
     if not row.get("description"):
         row["description"] = title[:_DESCRIPTION_MAX]

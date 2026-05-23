@@ -17,6 +17,11 @@ exercises:
   with an assertion that the ``atomic_write_json`` bypass is never called;
 * ``--dry-run`` writing nothing;
 * a mid-chain failure restoring from the gitignored backup;
+* an empty / whitespace-only v1.0 title migrating to a placeholder so the
+  v1.1 ``min_length=1`` floor holds and the state re-loads;
+* a model-invalid *final* payload (lean ``check_post`` passes but the full
+  ``State`` model rejects it) restoring the backup + raising a ``post``
+  step error (MIG-F6);
 * the model-supported-max guard that now permits ``1.1`` (the model
   advanced) but still refuses a target the live model cannot re-validate.
 
@@ -210,8 +215,28 @@ def _state_v1_0_with_entities() -> dict[str, Any]:
 
 
 def _write_fixture(path: Path) -> dict[str, Any]:
-    """Write the minimal raw v1.0 fixture to *path* and return the dict."""
+    """Write the minimal raw v1.0 fixture to *path* and return the dict.
+
+    The lean fixture carries only ``schema_version`` + a couple of
+    pass-through keys; it does NOT load against the full ``State`` model,
+    so it is reserved for tests that exercise ``step.apply`` directly or a
+    ``dry_run`` (no write-path round-trip). Write-path tests use
+    :func:`_write_full_fixture` so the final-payload round-trip (MIG-F6)
+    passes.
+    """
     payload = _fixture_state_v1_0()
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return payload
+
+
+def _write_full_fixture(path: Path) -> dict[str, Any]:
+    """Write a full, model-valid raw v1.0 state to *path* and return the dict.
+
+    Used by write-path machinery tests so the final-payload round-trip
+    (:func:`eawf.migrations._base.run_chain` MIG-F6) loads the migrated
+    candidate against the live ``State`` model without faulting.
+    """
+    payload = _minimal_state_v1_0()
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return payload
 
@@ -353,7 +378,7 @@ def test_v1_0_to_v1_1_check_post_rejects_unbumped_version() -> None:
 
 def test_run_chain_migrates_fixture_state_v1_0_to_v1_1(tmp_path: Path) -> None:
     state_path = tmp_path / "state.json"
-    _write_fixture(state_path)
+    _write_full_fixture(state_path)
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     result = run_chain(
@@ -441,7 +466,7 @@ def test_run_chain_over_cap_title_state_caps_and_reloads(tmp_path: Path) -> None
 
 def test_run_chain_writes_backup_adjacent_to_state(tmp_path: Path) -> None:
     state_path = tmp_path / "state.json"
-    _write_fixture(state_path)
+    _write_full_fixture(state_path)
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
@@ -471,7 +496,7 @@ def test_run_chain_routes_write_through_canonical_writer(
     from eawf.state import writer
 
     state_path = tmp_path / "state.json"
-    _write_fixture(state_path)
+    _write_full_fixture(state_path)
 
     locked_calls: list[Path] = []
     acquire_calls: list[Path] = []
@@ -567,6 +592,101 @@ def test_run_chain_mid_chain_failure_restores_from_backup(
     backup = backup_path_for(state_path, from_version="1.0", to_version="1.2")
     assert backup.exists()
     assert json.loads(backup.read_text(encoding="utf-8"))["schema_version"] == "1.0"
+
+
+# --- Final-payload model round-trip (MIG-F6) -------------------------------
+
+
+class _ModelInvalidStep:
+    """A step that bumps the version but emits a model-invalid final payload.
+
+    The lean ``check_post`` reads only ``schema_version`` so it passes,
+    but the body carries an over-cap wave ``title`` the full ``State``
+    model rejects — exercising the runner's final-payload round-trip.
+    """
+
+    from_version = "1.0"
+    to_version = "1.1"
+
+    def apply(self, state_dict: dict[str, Any]) -> dict[str, Any]:
+        out = copy.deepcopy(state_dict)
+        out["schema_version"] = "1.1"
+        # A 100-char title violates the v1.1 ``max_length=72`` floor; the
+        # lean ``check_post`` (schema_version only) cannot catch it.
+        out["waves"]["P00-I01-W01"]["title"] = "x" * 100
+        return out
+
+    def check_pre(self, state_dict: dict[str, Any]) -> None:
+        return None
+
+    def check_post(self, state_dict: dict[str, Any]) -> None:
+        return None
+
+
+def test_run_chain_model_invalid_final_payload_restores_and_raises_post(
+    tmp_path: Path,
+) -> None:
+    """A model-invalid final payload restores the backup + raises a post error.
+
+    The per-step ``check_post`` passes (it reads only ``schema_version``),
+    so the bricking payload would land without the final round-trip. The
+    runner loads the candidate against the live ``State`` model, restores
+    the pre-migration v1.0 state from the backup, and re-raises as a
+    ``post``-phase :class:`MigrationStepError`.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_state_v1_0_with_entities(), indent=2), encoding="utf-8")
+
+    with pytest.raises(
+        MigrationStepError, match="does not load against the live State model"
+    ) as ei:
+        run_chain(
+            state_path,
+            chain=[_ModelInvalidStep()],
+            from_version="1.0",
+            to_version="1.1",
+        )
+    assert ei.value.phase == "post"
+    assert ei.value.from_version == "1.0"
+    assert ei.value.to_version == "1.1"
+
+    # The on-disk state was restored to the pre-migration v1.0 payload.
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    assert on_disk["schema_version"] == "1.0"
+    # The pre-migration wave title survived the restore (no bricking write).
+    assert on_disk["waves"]["P00-I01-W01"]["title"] == "Wave one"
+    # The backup file remains for forensic recovery.
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.1")
+    assert backup.exists()
+    assert json.loads(backup.read_text(encoding="utf-8"))["schema_version"] == "1.0"
+
+
+def test_run_chain_model_invalid_final_payload_dry_run_skips_round_trip(
+    tmp_path: Path,
+) -> None:
+    """``--dry-run`` returns the candidate without the model round-trip firing.
+
+    The round-trip guards the write path; a dry run takes no backup and
+    writes nothing, so it must not raise on a model-invalid candidate — it
+    just reports what *would* change.
+    """
+    state_path = tmp_path / "state.json"
+    original = json.dumps(_state_v1_0_with_entities(), indent=2)
+    state_path.write_text(original, encoding="utf-8")
+
+    result = run_chain(
+        state_path,
+        chain=[_ModelInvalidStep()],
+        from_version="1.0",
+        to_version="1.1",
+        dry_run=True,
+    )
+
+    assert result["schema_version"] == "1.1"
+    # On-disk state is untouched and no backup ran.
+    assert state_path.read_text(encoding="utf-8") == original
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.1")
+    assert not backup.exists()
 
 
 # --- Model-supported-max guard ---------------------------------------------
@@ -1064,12 +1184,63 @@ def test_apply_preexisting_description_is_not_overwritten() -> None:
     assert row["description"] == "hand-authored note"
 
 
-def test_apply_empty_string_title_is_left_untouched() -> None:
-    """Boundary: an empty title (len 0 <= cap) is a no-op, no description."""
+def test_apply_empty_string_title_gets_id_placeholder() -> None:
+    """Boundary: an empty title is replaced with the row ``id`` placeholder.
+
+    The v1.1 model floors ``title`` at ``min_length=1``, so an empty v1.0
+    title cannot pass through untouched. The migrator substitutes the row's
+    own ``id`` (already non-empty) and adds no ``description``.
+    """
     step = MigrationV10ToV11()
     src = _realistic_state_v1_0()
     src["waves"]["P00-I01-W01"]["title"] = ""
     out = step.apply(src)
     row = out["waves"]["P00-I01-W01"]
-    assert row["title"] == ""
+    assert row["title"] == "P00-I01-W01"
     assert row.get("description") is None
+
+
+def test_apply_whitespace_only_title_gets_id_placeholder() -> None:
+    """A whitespace-only title is treated as empty and gets the id placeholder."""
+    step = MigrationV10ToV11()
+    src = _realistic_state_v1_0()
+    src["waves"]["P00-I01-W01"]["title"] = "   \t  "
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert row["title"] == "P00-I01-W01"
+    assert row.get("description") is None
+
+
+def test_apply_empty_title_without_id_falls_back_to_untitled() -> None:
+    """A row with an empty title and no usable ``id`` gets ``"(untitled)"``."""
+    step = MigrationV10ToV11()
+    src = _realistic_state_v1_0()
+    # Drop the id so the placeholder must fall back to the literal.
+    del src["waves"]["P00-I01-W01"]["id"]
+    src["waves"]["P00-I01-W01"]["title"] = ""
+    out = step.apply(src)
+    row = out["waves"]["P00-I01-W01"]
+    assert row["title"] == "(untitled)"
+    assert row.get("description") is None
+
+
+def test_run_chain_empty_title_migrates_to_model_valid_v1_1(tmp_path: Path) -> None:
+    """End-to-end: an empty-title v1.0 row migrates to a State-valid v1.1 payload.
+
+    The empty wave title is replaced with the row ``id`` so the migrated
+    state satisfies the v1.1 ``min_length=1`` floor and re-loads under the
+    live ``State`` model — without the empty title bricking the next read.
+    """
+    state_path = tmp_path / "state.json"
+    payload = _state_v1_0_with_entities()
+    payload["waves"]["P00-I01-W01"]["title"] = ""
+    state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.1"
+    wave = reloaded.waves["P00-I01-W01"]
+    assert wave.title == "P00-I01-W01"

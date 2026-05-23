@@ -24,11 +24,26 @@ routes through :func:`write_canonical`, which acquires
 write primitive the daemon ``state.mutate`` handler and the
 ``state_transaction`` chokepoint use. Routing through the shared lock +
 ``atomic_write_json_locked`` primitive keeps the migration on the
-canonical writer path without forcing a full ``State.model_validate``
-inside ``state_transaction`` — a later migration edge will introduce a
-breaking field change whose intermediate output cannot load against the
-post-edge model, so the migration runner deliberately stays off the
-model-validating chokepoint.
+canonical writer path without routing every per-step *intermediate*
+output through ``state_transaction``'s full ``State.model_validate`` — a
+later migration edge will introduce a breaking field change whose
+intermediate output cannot load against the post-edge model, so the
+per-step chain deliberately validates only against the lean
+from/to invariant models (:meth:`Migration.check_pre` /
+:meth:`Migration.check_post`).
+
+**Final-payload model round-trip (MIG-F6).** The per-step ``check_post``
+invariants validate only the lean to-version marker, not the full state
+schema — a transform emitting a model-invalid *final* payload would
+otherwise be written silently and fault only on the next read, bricking
+the repo with no migration-time signal. After the chain completes (and
+before :func:`write_canonical`), :func:`run_chain` round-trips the final
+candidate through the live :class:`eawf.state.models.State` model. On a
+:class:`pydantic.ValidationError` it restores from the backup the runner
+already took and re-raises as a ``post``-phase
+:class:`MigrationStepError`. This validates only the *final* payload at
+the *final* target version (which the guard already proved the model
+supports), so it does not regress the intermediate-edge concern above.
 
 **Backup discipline.** Before any write, :func:`run_chain` snapshots the
 pre-migration payload to ``state.json.bak.v<from>.v<to>`` adjacent to the
@@ -334,12 +349,17 @@ def run_chain(
        through the chain.
     5. When ``dry_run``: skip the write entirely and return the result
        dict (the caller reports what *would* change).
-    6. Otherwise persist the result through :func:`write_canonical` (the
+    6. Round-trip the final candidate through the live ``State`` model
+       (:func:`_validate_final_payload`) so a transform that emits a
+       model-invalid final payload faults at migration time, not on the
+       next read (MIG-F6).
+    7. Otherwise persist the result through :func:`write_canonical` (the
        daemon canonical-writer path) and return it.
 
-    On a mid-chain :class:`MigrationStepError`, when a backup was taken,
-    restore the on-disk state from the backup before re-raising so a
-    half-applied chain never lands (MIG-F3).
+    On a mid-chain :class:`MigrationStepError` — or a final-payload model
+    round-trip failure — when a backup was taken, restore the on-disk
+    state from the backup before re-raising so a half-applied (or
+    model-invalid) chain never lands (MIG-F3 / MIG-F6).
 
     Args:
         state_path: Absolute path to ``state.json``.
@@ -356,8 +376,10 @@ def run_chain(
     Raises:
         MigrationError: When *to_version* exceeds the model-supported max;
             no read, backup, or write occurs.
-        MigrationStepError: When a step fails; the on-disk state is
-            restored from the backup first when one was taken.
+        MigrationStepError: When a step fails its pre/apply/post invariant,
+            or when the final candidate does not load against the live
+            ``State`` model (MIG-F6); the on-disk state is restored from
+            the backup first when one was taken.
         FileNotFoundError: When *state_path* does not exist.
     """
     guard_target_supported(to_version)
@@ -392,8 +414,72 @@ def run_chain(
         logger.info(f"run_chain dry-run from={from_version} to={to_version} no-write")
         return candidate
 
+    _validate_final_payload(
+        candidate,
+        backup_target=backup_target,
+        state_path=state_path,
+        from_version=from_version,
+        to_version=to_version,
+    )
+
     write_canonical(state_path, candidate)
     return candidate
+
+
+def _validate_final_payload(
+    candidate: dict[str, Any],
+    *,
+    backup_target: Path | None,
+    state_path: Path,
+    from_version: str,
+    to_version: str,
+) -> None:
+    """Round-trip *candidate* through the live ``State`` model before write.
+
+    The per-step ``check_post`` invariants validate only the lean
+    to-version marker, so a transform emitting a model-invalid *final*
+    payload would be written silently and fault only on the next read
+    (MIG-F6). This boundary loads *candidate* against the full
+    :class:`eawf.state.models.State` model; on a validation failure it
+    restores the on-disk state from the backup the runner already took
+    (when one exists) and re-raises as a ``post``-phase step error so a
+    bricking payload never lands.
+
+    Args:
+        candidate: The final migrated state dict, post-chain.
+        backup_target: The pre-migration backup path, or ``None`` when
+            no backup was taken.
+        state_path: Absolute path to ``state.json`` (for the restore).
+        from_version: The on-disk source version (for the error edge).
+        to_version: The requested target version (for the error edge).
+
+    Raises:
+        MigrationStepError: When *candidate* does not load against the
+            live ``State`` model; the on-disk state is restored from the
+            backup first when one was taken (MIG-F6).
+    """
+    # Imported lazily to keep ``eawf.state.models`` (and its heavy
+    # transitive imports) off the CLI tree-build / shell-completion cold
+    # path, matching :func:`model_supported_max_version`.
+    from pydantic import ValidationError
+
+    from eawf.state.models import State
+
+    try:
+        State.model_validate(candidate)
+    except ValidationError as exc:
+        if backup_target is not None:
+            restored: dict[str, Any] = json.loads(backup_target.read_text(encoding="utf-8"))
+            write_canonical(state_path, restored)
+            logger.warning(
+                f"run_chain restored={state_path!r} from={backup_target!r} reason=model-invalid"
+            )
+        raise MigrationStepError(
+            from_version=from_version,
+            to_version=to_version,
+            phase="post",
+            message=f"final payload does not load against the live State model: {exc}",
+        ) from exc
 
 
 #: Default migration registry — populated by importing the concrete step
