@@ -34,7 +34,7 @@ from eawf.cli.commands.lifecycle import (
 EXPECTED_PROJECT_VERBS = {"init"}
 EXPECTED_SUBPROJECT_VERBS = {"add", "switch"}
 EXPECTED_PHASE_VERBS = {"open", "close", "activate", "reopen", "prepare-close"}
-EXPECTED_ITER_VERBS = {"activate", "open", "close"}
+EXPECTED_ITER_VERBS = {"activate", "open", "close", "plan"}
 EXPECTED_WAVE_VERBS = {
     "plan",
     "claim",
