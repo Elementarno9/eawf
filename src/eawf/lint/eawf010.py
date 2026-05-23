@@ -1,12 +1,24 @@
-"""EAWF010 — module-length rollup cap.
+"""EAWF010 — module-length rollup alarm (advisory coarse backstop).
 
 A module-level rollup rule: flags any Python module whose physical line
-count exceeds :data:`DEFAULT_MAX_LOC` (700). Oversized modules are a
+count exceeds :data:`DEFAULT_MAX_LOC`. Oversized modules are a
 maintainability smell — they outgrow a single reviewer's working set,
 attract merge conflicts, and usually signal a missed split along a
 responsibility seam (AGENTS rule 24, single-responsibility). The cap is
 a rollup rather than a per-symbol rule: it does not care *what* makes the
 module long, only that the file as a whole has crossed the budget.
+
+**Advisory, not the master gate.** Lines-of-code is a coarse proxy:
+research (and this codebase's own review) puts *complexity*, not length,
+as the variable that predicts how hard code is to read, test, and change.
+The precise per-function gates are therefore ruff ``C901`` (cyclomatic,
+warns at 10) and :mod:`eawf.lint.eawf011` (cognitive, warns at 15);
+EAWF010 is demoted to an **advisory coarse alarm** that catches only
+modules so large they are a structural emergency irrespective of their
+internal complexity. Its budget is set well above the old precise cap so
+the per-module grandfather list collapses to the genuine outliers, and a
+module drops off that list as soon as a wave touches it (un-grandfather
+on touch).
 
 **Waiver.** A genuinely irreducible module (a generated table, a
 cohesive command surface mid-split) may opt out with a waiver comment:

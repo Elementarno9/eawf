@@ -99,60 +99,106 @@ line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
+# ``C901`` is McCabe cyclomatic complexity — the precise per-function
+# alarm that, alongside the cognitive-complexity rule EAWF011, replaces
+# lines-of-code (EAWF010, now an advisory coarse backstop) as the master
+# maintainability variable. It warns at ``mccabe.max-complexity`` (10).
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C901"]
 ignore = []
+
+[tool.ruff.lint.mccabe]
+# Cyclomatic-complexity budget for ``C901``. A function with more than
+# this many independent execution paths is flagged. 10 is the long-
+# standing McCabe "moderate risk" threshold.
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# ``C901`` grandfather list. These modules pre-date the complexity gate;
+# their over-budget functions are excluded so wiring ``C901`` does not red
+# ``pre-commit run --all-files`` on the current tree. This is the
+# cyclomatic analogue of EAWF010's module-length ``exclude`` list. Reducing
+# the flagged functions is dedicated downstream-hygiene work; a module
+# drops off this list as its functions are split below the budget. New
+# modules get no entry — they must respect the budget or carry an inline
+# ``# noqa: C901`` waiver.
+"src/eawf/audit_dsl/kinds/verify_implements.py" = ["C901"]
+"src/eawf/cli/commands/config.py" = ["C901"]
+"src/eawf/cli/commands/estimation.py" = ["C901"]
+"src/eawf/cli/commands/flow.py" = ["C901"]
+"src/eawf/cli/commands/init.py" = ["C901"]
+"src/eawf/cli/commands/lifecycle.py" = ["C901"]
+"src/eawf/cli/commands/lifecycle_iter.py" = ["C901"]
+"src/eawf/cli/commands/lifecycle_wave.py" = ["C901"]
+"src/eawf/cli/commands/mcp.py" = ["C901"]
+"src/eawf/cli/commands/plan.py" = ["C901"]
+"src/eawf/cli/commands/plugin.py" = ["C901"]
+"src/eawf/cli/commands/repo.py" = ["C901"]
+"src/eawf/cli/commands/roadmap.py" = ["C901"]
+"src/eawf/cli/commands/validate.py" = ["C901"]
+"src/eawf/config/layered.py" = ["C901"]
+"src/eawf/config/registry.py" = ["C901"]
+"src/eawf/daemon/methods/state.py" = ["C901"]
+"src/eawf/doctor/checks.py" = ["C901"]
+"src/eawf/lifecycle/wave.py" = ["C901"]
+"src/eawf/memory/promotion.py" = ["C901"]
+"src/eawf/memory/prune.py" = ["C901"]
+"src/eawf/memory/store.py" = ["C901"]
+"src/eawf/profiles/compose.py" = ["C901"]
+"src/eawf/render/agent_report.py" = ["C901"]
+"src/eawf/render/plan_view.py" = ["C901"]
+"src/eawf/render/pr_body.py" = ["C901"]
+"src/eawf/render/regions.py" = ["C901"]
+"src/eawf/runtimes/claude/plugin_package.py" = ["C901"]
+"src/eawf/runtimes/codex/plugin_install.py" = ["C901"]
+"src/eawf/runtimes/opencode/plugin_doctor.py" = ["C901"]
+"src/eawf/runtimes/opencode/plugin_install.py" = ["C901"]
+"src/eawf/runtimes/plugin_doctor.py" = ["C901"]
+"src/eawf/skills/_common.py" = ["C901"]
+"src/eawf/skills/flow.py" = ["C901"]
+"src/eawf/skills/ship.py" = ["C901"]
+"src/eawf/telemetry/sources/claude_session.py" = ["C901"]
+"src/eawf/validate/invariants.py" = ["C901"]
+"src/eawf/worktree/create.py" = ["C901"]
+# Test helper (a Tarjan strongly-connected-components routine) that is
+# inherently branch-dense; grandfathered like the library offenders so the
+# gate does not red the current tree. Test fixtures are not product code.
+"tests/unit/test_worktree_home.py" = ["C901"]
 
 [tool.eawf.lint]
 # Registration for the project's custom static-analysis rules under
 # ``src/eawf/lint/`` (EAWF001 log-format, EAWF002 log-key naming,
-# EAWF003 logger acquisition, EAWF010 module-length cap). Ruff carries
-# no ``EAWF`` plugin, so these checks read their config from this table
-# rather than ``[tool.ruff.lint]``. ``enabled`` is the rule allow-list a
-# pre-commit dispatcher iterates; per-rule knobs live in the sub-tables.
-enabled = ["EAWF001", "EAWF002", "EAWF003", "EAWF010"]
+# EAWF003 logger acquisition, EAWF010 module-length advisory alarm,
+# EAWF011 cognitive-complexity gate). Ruff carries no ``EAWF`` plugin, so
+# these checks read their config from this table rather than
+# ``[tool.ruff.lint]``. ``enabled`` is the rule allow-list a pre-commit
+# dispatcher iterates; per-rule knobs live in the sub-tables.
+enabled = ["EAWF001", "EAWF002", "EAWF003", "EAWF010", "EAWF011"]
 
 [tool.eawf.lint.eawf010]
-# Module-length rollup cap (physical lines). Modules over ``max-loc``
-# must either be split or carry a ``# noqa: EAWF010 <rationale>`` waiver.
-max-loc = 700
-# Pre-existing oversized modules predate the cap. They are excluded here
-# (rather than waived inline) so the rule can be wired without redding
-# the current tree and without this wave editing source it does not own.
-# P27-W06/W07 split the two largest (lifecycle.py + evidence.py); drop
-# those rows as the splits land. New modules get no exclusion — they
-# must respect the cap or carry an inline waiver.
+# Module-length rollup — now an *advisory coarse alarm*, not the master
+# gate. Complexity (ruff ``C901`` + EAWF011), not lines-of-code, is the
+# variable that predicts maintainability, so the precise per-function
+# gates carry the load and EAWF010 only catches modules so large they are
+# a structural emergency irrespective of internal complexity. The budget
+# is therefore raised to 1400 (2x the old precise 700 cap), which
+# collapses the per-module grandfather list from 21 rows to the single
+# genuine outlier. A module drops off ``exclude`` as soon as a wave
+# touches it (un-grandfather on touch).
+max-loc = 1400
+# At the coarse 1400 budget only ``config/registry.py`` (~1960 lines)
+# remains over the alarm threshold. Every other previously-grandfathered
+# module is now under the coarse cap and has left this list. The remaining
+# row is a split candidate for a dedicated registry-decomposition wave.
 exclude = [
     "src/eawf/config/registry.py",
-    "src/eawf/cli/commands/plugin.py",
-    "src/eawf/cli/commands/repo.py",
-    "src/eawf/tui_v2/screens/overlays/config_modal.py",
-    "src/eawf/cli/commands/memory.py",
-    "src/eawf/skills/flow.py",
-    "src/eawf/cli/commands/config.py",
-    "src/eawf/render/skills.py",
-    "src/eawf/render/plan_view.py",
-    "src/eawf/tui_v2/palette/verbs.py",
-    "src/eawf/cli/commands/roadmap.py",
-    "src/eawf/validate/invariants.py",
-    "src/eawf/cli/commands/estimation.py",
-    "src/eawf/cli/commands/mcp.py",
-    "src/eawf/daemon/methods/state.py",
-    "src/eawf/cli/commands/skill.py",
-    "src/eawf/daemon/methods/config.py",
-    "src/eawf/install/wizard.py",
-    "src/eawf/daemon/methods/spec.py",
-    "src/eawf/cli/commands/worktree.py",
-    # P27-W04 grew this CLI-dispatch module past the cap with the four
-    # diff-scoped lint subcommands; a split is a future-hygiene candidate.
-    "src/eawf/cli/commands/hook.py",
-    # Grandfathered, not waived inline — proper decomposition is deferred
-    # to P27-I03. ship.py grew past the cap absorbing the gauntlet runner;
-    # extract that runner into its own module. lifecycle.py grew absorbing
-    # the daemon-routing path; extract the daemon-routing helpers. Drop
-    # both rows once the I03 refactor lands.
-    "src/eawf/skills/ship.py",
-    "src/eawf/cli/commands/lifecycle.py",
 ]
+
+[tool.eawf.lint.eawf011]
+# Cognitive-complexity budget for the EAWF011 per-function gate. A
+# function scoring above this (SonarSource cognitive complexity, which
+# weights nested control flow more heavily than flat) is flagged. 15 is
+# the SonarSource default "needs refactoring" threshold.
+max-complexity = 15
 
 [tool.coverage.run]
 source = ["src/eawf"]
