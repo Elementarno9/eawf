@@ -545,6 +545,128 @@ def test_action_gauntlet_uses_configured_command_override(
     assert seen == ["uv run pytest tests/fast -q"]
 
 
+# ---- P27-I02-W35: configured build gate runs ---------------------------------
+
+
+def test_run_gauntlet_runs_configured_build_gate(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``build`` gate (configured via ``acceptance.commands.build``) runs.
+
+    ``build`` is not a key in ``_DEFAULT_GATE_COMMANDS`` but is a real config
+    leaf; once required + resolvable it must be executed, not silently dropped.
+    """
+    from eawf.skills import ship as ship_module
+
+    _write_acceptance_config(
+        state_dir,
+        acceptance_overrides={
+            "commands": {"build": "uv run python -m build"},
+            "required_before_ship": ["build"],
+        },
+    )
+    calls, runner = _stub_gate_runner()
+    monkeypatch.setattr(ship_module, "_run_gate_command", runner)
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "ok"
+    assert calls == ["build"]
+
+
+def test_run_gauntlet_build_gate_uses_configured_command(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The resolved ``build`` command is the one passed to the runner."""
+    from eawf.skills import ship as ship_module
+
+    _write_acceptance_config(
+        state_dir,
+        acceptance_overrides={
+            "commands": {"build": "uv run python -m build --sdist"},
+            "required_before_ship": ["build"],
+        },
+    )
+    seen: list[str] = []
+
+    def _runner(name: str, command: str, cwd: Path) -> object:
+        from eawf.skills.ship import _GateResult
+
+        seen.append(command)
+        return _GateResult(name=name, command=command, passed=True, returncode=0, output="")
+
+    monkeypatch.setattr(ship_module, "_run_gate_command", _runner)
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "ok"
+    assert seen == ["uv run python -m build --sdist"]
+
+
+def test_action_gauntlet_aborts_on_red_build_gate(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failing ``build`` gate aborts the ship and surfaces its command."""
+    from eawf.skills import ship as ship_module
+
+    _write_acceptance_config(
+        state_dir,
+        acceptance_overrides={
+            "commands": {"build": "uv run python -m build"},
+            "required_before_ship": ["build"],
+        },
+    )
+    _calls, runner = _stub_gate_runner(fail={"build"})
+    monkeypatch.setattr(ship_module, "_run_gate_command", runner)
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "failed"
+    body = ShipBody.model_validate(cast(dict, env.body))
+    assert body.rollback_notes == "gauntlet gate failed: build"
+    assert env.footer.repair_commands == ["uv run python -m build"]
+
+
+def test_run_gauntlet_unconfigured_build_gate_is_dropped(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A required ``build`` gate with no command leaf stays non-runnable.
+
+    ``build`` has no ``_DEFAULT_GATE_COMMANDS`` entry, so without an
+    ``acceptance.commands.build`` override it resolves to ``None`` and is
+    skipped (mirrors how ``state`` is skipped) rather than crashing the ship.
+    """
+    from eawf.skills import ship as ship_module
+
+    _write_acceptance_config(
+        state_dir,
+        acceptance_overrides={"required_before_ship": ["build"]},
+    )
+    calls, runner = _stub_gate_runner()
+    monkeypatch.setattr(ship_module, "_run_gate_command", runner)
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "ok"
+    assert calls == []
+
+
+def test_run_gauntlet_defaults_lead_then_build(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default gates run in canonical order, then the extra ``build`` gate.
+
+    Even when ``build`` is listed first, the canonical default gates lead and
+    the extra configured gate follows, so the run order is deterministic.
+    """
+    from eawf.skills import ship as ship_module
+
+    _write_acceptance_config(
+        state_dir,
+        acceptance_overrides={
+            "commands": {"build": "uv run python -m build"},
+            "required_before_ship": ["build", "tests", "lint"],
+        },
+    )
+    calls, runner = _stub_gate_runner()
+    monkeypatch.setattr(ship_module, "_run_gate_command", runner)
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "ok"
+    assert calls == ["lint", "tests", "build"]
+
+
 def test_run_gate_command_missing_binary_is_red(tmp_path: Path) -> None:
     """A non-existent binary collapses to a failed gate, not an exception."""
     from eawf.skills.ship import _run_gate_command

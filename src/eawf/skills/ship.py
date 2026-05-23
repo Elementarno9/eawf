@@ -409,27 +409,60 @@ def _run_gate_command(name: str, command: str, cwd: Path) -> _GateResult:
     )
 
 
+def _ordered_gauntlet_gates(acceptance: AcceptanceConfig) -> list[str]:
+    """Return the requested gate names that map to a runnable command, ordered.
+
+    Every gate named in ``acceptance.required_before_ship`` that
+    :func:`_resolve_gate_command` can resolve is included. The canonical
+    default gates (``pre-commit`` → ``lint`` → ``typecheck`` → ``tests``) lead
+    in their fixed order so the cheapest broad check runs first; any extra
+    configured gate (e.g. ``build``, whose command comes from
+    ``acceptance.commands.build``) follows in the operator's list order. Gates
+    with no runnable command (e.g. ``state``) are dropped. The result is
+    deduplicated while preserving first-seen order.
+
+    Args:
+        acceptance: The validated acceptance config surface.
+
+    Returns:
+        The deterministic, deduplicated list of runnable gate names.
+    """
+    requested = acceptance.required_before_ship
+    requested_set = set(requested)
+    leading = [g for g in _DEFAULT_GATE_COMMANDS if g in requested_set]
+    extras = [
+        g
+        for g in requested
+        if g not in _DEFAULT_GATE_COMMANDS and _resolve_gate_command(g, acceptance) is not None
+    ]
+    ordered: list[str] = []
+    for gate in (*leading, *extras):
+        if gate not in ordered:
+            ordered.append(gate)
+    return ordered
+
+
 def _run_gauntlet(acceptance: AcceptanceConfig, cwd: Path) -> list[_GateResult]:
     """Run every external gate named in ``acceptance.required_before_ship``.
 
     Each named gate that maps to a runnable command (see
     :func:`_resolve_gate_command`) is executed independently so each gate's
-    pass/fail is reported on its own. Gate order follows the canonical
-    gauntlet order (``pre-commit`` → ``lint`` → ``typecheck`` → ``tests``)
-    rather than the operator's list order, so the cheapest broad check runs
-    first. Non-runnable gates (e.g. ``state``) are skipped silently.
+    pass/fail is reported on its own. Gate order is the deterministic order
+    from :func:`_ordered_gauntlet_gates` — the canonical default gates
+    (``pre-commit`` → ``lint`` → ``typecheck`` → ``tests``) lead, then any
+    extra configured gate such as ``build``. Non-runnable gates (e.g.
+    ``state``) are skipped silently. The caller aborts the ship when ANY
+    returned gate is red (the W15 abort-on-red contract).
 
     Args:
         acceptance: The validated acceptance config surface.
         cwd: Working directory for each gate subprocess (the repo root).
 
     Returns:
-        One :class:`_GateResult` per executed gate, in canonical order.
+        One :class:`_GateResult` per executed gate, in deterministic order.
     """
-    requested = set(acceptance.required_before_ship)
-    ordered_gates = [g for g in _DEFAULT_GATE_COMMANDS if g in requested]
     results: list[_GateResult] = []
-    for gate in ordered_gates:
+    for gate in _ordered_gauntlet_gates(acceptance):
         command = _resolve_gate_command(gate, acceptance)
         if command is None:
             continue
