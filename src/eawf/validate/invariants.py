@@ -553,8 +553,13 @@ def check_decision_supersede_link(state: State) -> Iterable[Violation]:
     - A decision with ``status=superseded`` MUST have ``superseded_by`` set
       (an unlinked superseded row is flagged
       ``INV.DECISION.SUPERSEDED_WITHOUT_LINK``).
+    - The ``superseded_by`` chain MUST be acyclic; a chain that revisits a
+      decision is flagged ``INV.DECISION.SUPERSEDE_CYCLE`` (backstops the
+      mutator guard against any other path that closes a cycle, e.g. A->B
+      then B->A).
     """
-    for decision_id, decision in (state.decisions or {}).items():
+    decisions = state.decisions or {}
+    for decision_id, decision in decisions.items():
         is_superseded = decision.status == DecisionStatus.SUPERSEDED
         has_link = decision.superseded_by is not None
         if has_link and not is_superseded:
@@ -575,6 +580,36 @@ def check_decision_supersede_link(state: State) -> Iterable[Violation]:
                     f"decision {decision_id!r} has status superseded but superseded_by is null"
                 ),
             )
+
+    # Walk the superseded_by chains; each decision has at most one outgoing
+    # link, so a cycle is detected when a walk revisits a node already on its
+    # own path. ``walked`` shares the visited set across starts so each chain
+    # is traversed once and a given cycle is reported a single time.
+    walked: set[str] = set()
+    for start_id in decisions:
+        if start_id in walked:
+            continue
+        path: list[str] = []
+        on_path: set[str] = set()
+        current: str | None = start_id
+        while current is not None and current in decisions:
+            if current in on_path:
+                cycle = path[path.index(current) :]
+                yield Violation(
+                    code="INV.DECISION.SUPERSEDE_CYCLE",
+                    path=f"/decisions/{current}/superseded_by",
+                    message=(
+                        f"decision supersede chain forms a cycle: "
+                        f"{' -> '.join([*cycle, current])!r}"
+                    ),
+                )
+                break
+            if current in walked:
+                break
+            path.append(current)
+            on_path.add(current)
+            walked.add(current)
+            current = decisions[current].superseded_by
 
 
 def _report_path(report_id: str, field: str) -> str:

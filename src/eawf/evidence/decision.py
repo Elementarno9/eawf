@@ -126,8 +126,10 @@ def supersede_decision(
 
     Raises:
         NotFound: when *old_id* or *new_id* names a decision absent from state.
-        InvalidInput: when *old_id* equals *new_id* (self-supersede) or
-            *old_id* is not currently ACTIVE.
+        InvalidInput: when *old_id* equals *new_id* (self-supersede), *old_id*
+            is not currently ACTIVE, or *new_id* is not currently ACTIVE (a
+            non-ACTIVE superseder would form a supersede cycle, e.g. A->B then
+            B->A).
     """
     decisions: dict[str, Decision] = dict(state.decisions or {})
     if old_id == new_id:
@@ -140,6 +142,13 @@ def supersede_decision(
     if old.status != DecisionStatus.ACTIVE:
         raise InvalidInput(
             f"decision {old_id!r} is {old.status.value!r}; only ACTIVE decisions can be superseded"
+        )
+    new = decisions[new_id]
+    # A non-ACTIVE superseder is already retired; reusing it as a superseder
+    # would close a supersede cycle (A->B then B->A).
+    if new.status != DecisionStatus.ACTIVE:
+        raise InvalidInput(
+            f"decision {new_id!r} is {new.status.value!r}; only ACTIVE decisions can supersede"
         )
 
     now = datetime.now(UTC)

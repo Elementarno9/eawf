@@ -88,6 +88,18 @@ def test_supersede_decision_already_superseded_raises(tmp_path: Path) -> None:
         decision.supersede_decision(state, old_id="D010", new_id="D012")
 
 
+def test_supersede_decision_reverse_link_cycle_raises(tmp_path: Path) -> None:
+    # A->B then B->A would close a cycle; the second supersede must reject
+    # because the superseder (A) is already SUPERSEDED.
+    state = _seed_two_decisions(tmp_path)
+    decision.supersede_decision(state, old_id="D010", new_id="D011")
+    with pytest.raises(cli_errors.InvalidInput, match="only ACTIVE decisions can supersede"):
+        decision.supersede_decision(state, old_id="D011", new_id="D010")
+    # State is unchanged by the rejected call: D011 stays the live ACTIVE head.
+    assert state.decisions["D011"].status == DecisionStatus.ACTIVE
+    assert state.decisions["D011"].superseded_by is None
+
+
 # ---- check_decision_supersede_link invariant -------------------------------
 
 
@@ -182,6 +194,48 @@ def test_check_decision_supersede_link_ignores_plain_active_decision() -> None:
     payload = _base_state_payload()
     payload["decisions"] = {
         "D010": _decision_payload("D010", status="active", superseded_by=None),
+    }
+    state = State.model_validate(payload)
+    assert list(check_decision_supersede_link(state)) == []
+
+
+def test_check_decision_supersede_link_flags_two_node_cycle() -> None:
+    # A->B and B->A: each node passes the status/link agreement check on its
+    # own (both SUPERSEDED with a link), so only the cycle walk catches it.
+    payload = _base_state_payload()
+    payload["decisions"] = {
+        "D010": _decision_payload("D010", status="superseded", superseded_by="D011"),
+        "D011": _decision_payload("D011", status="superseded", superseded_by="D010"),
+    }
+    state = State.model_validate(payload)
+    violations = list(check_decision_supersede_link(state))
+    codes = _codes(violations)
+    assert "INV.DECISION.SUPERSEDE_CYCLE" in codes
+    assert "INV.DECISION.LINK_WITHOUT_SUPERSEDED" not in codes
+    assert "INV.DECISION.SUPERSEDED_WITHOUT_LINK" not in codes
+    # The cycle is reported exactly once, not once per entry point.
+    assert sum(1 for v in violations if v.code == "INV.DECISION.SUPERSEDE_CYCLE") == 1
+
+
+def test_check_decision_supersede_link_flags_three_node_cycle() -> None:
+    payload = _base_state_payload()
+    payload["decisions"] = {
+        "D010": _decision_payload("D010", status="superseded", superseded_by="D011"),
+        "D011": _decision_payload("D011", status="superseded", superseded_by="D012"),
+        "D012": _decision_payload("D012", status="superseded", superseded_by="D010"),
+    }
+    state = State.model_validate(payload)
+    violations = list(check_decision_supersede_link(state))
+    assert sum(1 for v in violations if v.code == "INV.DECISION.SUPERSEDE_CYCLE") == 1
+
+
+def test_check_decision_supersede_link_ignores_linear_chain() -> None:
+    # A->B->C linear chain (no cycle): only the live head C is ACTIVE.
+    payload = _base_state_payload()
+    payload["decisions"] = {
+        "D010": _decision_payload("D010", status="superseded", superseded_by="D011"),
+        "D011": _decision_payload("D011", status="superseded", superseded_by="D012"),
+        "D012": _decision_payload("D012", status="active", superseded_by=None),
     }
     state = State.model_validate(payload)
     assert list(check_decision_supersede_link(state)) == []
