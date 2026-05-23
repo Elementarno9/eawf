@@ -215,7 +215,7 @@ def _proxy_enabled(workspace: Path | None) -> bool:
     try:
         merged, _ = merge_config(workspace=workspace, repo=repo)
     except (OSError, ValueError, KeyError) as exc:
-        logger.debug(f"_proxy_enabled merge_config_failed={exc!s} default_proxy_enabled=False")
+        logger.debug(f"_proxy_enabled False reason={exc!s}")
         return False
     daemon_cfg = merged.get("daemon")
     if not isinstance(daemon_cfg, dict):
