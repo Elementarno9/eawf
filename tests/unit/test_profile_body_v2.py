@@ -131,6 +131,104 @@ def test_profile_body_v2_keeps_v1_field_defaults() -> None:
     assert body.dispatch_session_policy is None
 
 
+# --- RenderBlock body-shape XOR (P27-I03-W01) ------------------------------
+
+
+def test_render_block_prose_shape_validates() -> None:
+    """A legacy prose block (non-empty body_template, no triad) validates."""
+    block = RenderBlock(id="rules", target="AGENTS.md", body_template="## Rules\n\n- one")
+    assert block.body_template == "## Rules\n\n- one"
+    assert block.rationale is None
+    assert block.is_structured is False
+
+
+def test_render_block_structured_shape_validates() -> None:
+    """A fully-populated triad (no body_template) validates as structured."""
+    block = RenderBlock(
+        id="verify-rule",
+        target="AGENTS.md",
+        rationale="Claims must be backed by evidence.",
+        mechanism="Read source, grep call sites, inspect fixtures.",
+        verification="Quote the implementation, not the design doc.",
+    )
+    assert block.is_structured is True
+    assert block.body_template == ""
+    assert block.rationale == "Claims must be backed by evidence."
+
+
+def test_render_block_rejects_both_prose_and_triad() -> None:
+    """Filling both body_template and the full triad is invalid (not XOR)."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="both",
+            target="AGENTS.md",
+            body_template="## Prose",
+            rationale="r",
+            mechanism="m",
+            verification="v",
+        )
+    assert "provide exactly one" in str(excinfo.value)
+
+
+def test_render_block_rejects_neither_prose_nor_triad() -> None:
+    """A block with empty body_template and no triad is invalid (not XOR)."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(id="empty", target="AGENTS.md")
+    assert "provide exactly one" in str(excinfo.value)
+
+
+def test_render_block_rejects_half_filled_triad_one_field() -> None:
+    """Only ``rationale`` set (no mechanism/verification) fails validation."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(id="partial", target="AGENTS.md", rationale="just one")
+    assert "incomplete structured triad" in str(excinfo.value)
+
+
+def test_render_block_rejects_half_filled_triad_two_fields() -> None:
+    """Two of three triad fields set (no verification) fails validation."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="partial2",
+            target="AGENTS.md",
+            rationale="r",
+            mechanism="m",
+        )
+    assert "incomplete structured triad" in str(excinfo.value)
+
+
+def test_render_block_rejects_partial_triad_alongside_prose() -> None:
+    """Prose body plus a single triad field is an incomplete-triad error."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="mixed",
+            target="AGENTS.md",
+            body_template="## Prose",
+            rationale="dangling",
+        )
+    assert "incomplete structured triad" in str(excinfo.value)
+
+
+def test_render_block_structured_round_trips_through_dump() -> None:
+    """``model_dump`` + ``model_validate`` preserves a structured block."""
+    original = RenderBlock(
+        id="verify-rule",
+        target="AGENTS.md",
+        rationale="r",
+        mechanism="m",
+        verification="v",
+    )
+    restored = RenderBlock.model_validate(original.model_dump(mode="python"))
+    assert restored == original
+
+
+def test_render_block_rejects_unknown_key() -> None:
+    """``extra="forbid"`` rejects an unknown field on the block."""
+    with pytest.raises(ValidationError):
+        RenderBlock.model_validate(
+            {"id": "x", "target": "AGENTS.md", "body_template": "y", "bogus": 1},
+        )
+
+
 # --- ComposedProfile v2 envelope shape -------------------------------------
 
 

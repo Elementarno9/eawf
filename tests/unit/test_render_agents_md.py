@@ -241,6 +241,92 @@ def test_render_agents_md_preserves_other_target_manifest_entries(tmp_path: Path
     assert f"{target.as_posix()}::rules" in manifest.generated
 
 
+def test_render_agents_md_structured_block_emits_triad_layout(tmp_path: Path) -> None:
+    """A structured RenderBlock renders Rationale/Mechanism/Verification headings."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [
+            RenderBlock(
+                id="verify-rule",
+                target="AGENTS.md",
+                rationale="Claims must be backed by evidence.",
+                mechanism="Read source, grep call sites, inspect fixtures.",
+                verification="Quote the implementation, not the design doc.",
+            )
+        ]
+    )
+
+    result, _ = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    text = target.read_text(encoding="utf-8")
+    region = regions.extract_region(text, "verify-rule")
+    assert region is not None
+    body = region.body
+    assert "### Rationale" in body
+    assert "### Mechanism" in body
+    assert "### Verification" in body
+    # Sub-headings appear in triad order.
+    assert (
+        body.index("### Rationale") < body.index("### Mechanism") < body.index("### Verification")
+    )
+    # The triad values are emitted under their headings.
+    assert "Claims must be backed by evidence." in body
+    assert "Read source, grep call sites, inspect fixtures." in body
+    assert "Quote the implementation, not the design doc." in body
+    assert result.regions_added == ["verify-rule"]
+
+
+def test_render_agents_md_structured_block_is_byte_stable_on_rerender(tmp_path: Path) -> None:
+    """Re-rendering a structured block is a no-op delta (round-trips)."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [
+            RenderBlock(
+                id="verify-rule",
+                target="AGENTS.md",
+                rationale="r",
+                mechanism="m",
+                verification="v",
+            )
+        ]
+    )
+
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+    before = target.read_text(encoding="utf-8")
+    result, _ = render_agents_md(composed, target, manifest)
+    after = target.read_text(encoding="utf-8")
+
+    assert before == after
+    assert result.regions_unchanged == ["verify-rule"]
+    assert result.regions_updated == []
+    assert result.regions_added == []
+
+
+def test_render_agents_md_mixed_prose_and_structured_blocks(tmp_path: Path) -> None:
+    """Prose and structured blocks coexist in one render."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [
+            _block("rules", "## Rules\n\n- one"),
+            RenderBlock(
+                id="verify-rule",
+                target="AGENTS.md",
+                rationale="r",
+                mechanism="m",
+                verification="v",
+            ),
+        ]
+    )
+
+    result, _ = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    text = target.read_text(encoding="utf-8")
+    assert regions.extract_region(text, "rules").body == "## Rules\n\n- one"  # type: ignore[union-attr]
+    structured_body = regions.extract_region(text, "verify-rule").body  # type: ignore[union-attr]
+    assert "### Rationale" in structured_body
+    assert result.regions_added == ["rules", "verify-rule"]
+
+
 def test_render_agents_md_empty_compose_no_regions(tmp_path: Path) -> None:
     """A composed profile with zero AGENTS.md blocks: file is created empty / unchanged.
 

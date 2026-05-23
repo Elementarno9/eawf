@@ -6,8 +6,10 @@ Per ``docs/policy/agents-claude-md.md``:
   list declares the regions that should appear on disk.
 - Filter to ``target == "AGENTS.md"`` blocks (other targets — ``.claude/...``
   skill/agent files — are handled by sibling renderers in W05+).
-- For each block: render its ``body_template`` via Jinja2 against the
-  bundled ``AGENTS.md.j2`` template, then call
+- For each block: render its body via Jinja2 against the bundled
+  ``AGENTS.md.j2`` template (prose ``body_template`` verbatim, or a fixed
+  ``Rationale``/``Mechanism``/``Verification`` layout for structured triad
+  blocks), then call
   :func:`~eawf.render.regions.replace_region` so an existing block with the
   same id is replaced in-place and a brand-new block is appended.
   Anything *outside* a managed region (hand-written paragraphs above, below,
@@ -128,8 +130,11 @@ def _load_environment() -> Environment:
 def _render_block_body(env: Environment, block: RenderBlock, composed: ComposedProfile) -> str:
     """Render one ``RenderBlock`` to its body string via the AGENTS.md template.
 
-    The template currently emits ``block.body_template`` verbatim — see
-    ``src/eawf/templates/AGENTS.md.j2`` for the substitution policy.
+    Prose blocks (non-empty ``body_template``) emit their template verbatim;
+    structured blocks (the ``rationale``/``mechanism``/``verification`` triad)
+    emit a fixed ``Rationale``/``Mechanism``/``Verification`` sub-heading
+    layout. The template branches on :attr:`RenderBlock.is_structured` — see
+    ``src/eawf/templates/AGENTS.md.j2`` for the surface policy.
     """
     template = env.get_template(_TEMPLATE_NAME)
     return template.render(block=block, composed=composed)

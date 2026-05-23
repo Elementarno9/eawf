@@ -18,8 +18,12 @@ Field semantics mirror ``docs/architecture/profiles.md``:
 
 - ``state_extensions.fields_required`` — top-level state keys to materialise.
 - ``instrument_requirements`` — ``{name, kind, probe, version_args, version_regex}``.
-- ``render_blocks`` — ``{id, target, body_template, version}``. ``id`` is the
-  composition merge key; later overrides earlier per id.
+- ``render_blocks`` — ``{id, target, body_template | (rationale, mechanism,
+  verification), version}``. ``id`` is the composition merge key; later
+  overrides earlier per id. A block carries its body in exactly one of two
+  shapes: a prose ``body_template`` or the structured
+  ``rationale``/``mechanism``/``verification`` triad (XOR enforced by a
+  model-validator).
 - ``skills_referenced`` / ``hooks_referenced`` — string lists, union-merged.
 
 Schema v2 (P25-W15) adds three new fields on :class:`ProfileBody`:
@@ -39,7 +43,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class StateExtensions(BaseModel):
@@ -72,17 +76,76 @@ class RenderBlock(BaseModel):
     """A chunk of templated content the renderer emits into a managed file.
 
     ``id`` is the merge key during composition; ``target`` names the destination
-    file (e.g. ``"AGENTS.md"``); ``body_template`` is the Jinja2 source the
-    Phase 3 W04 renderer compiles. ``version`` is recorded in the rendered
+    file (e.g. ``"AGENTS.md"``); ``version`` is recorded in the rendered
     managed-region marker so re-renders can detect template upgrades.
+
+    A block carries its body in exactly one of two shapes:
+
+    - **Prose** — ``body_template`` is a non-empty Jinja2 source the renderer
+      compiles verbatim. This is the legacy shape every shipped profile uses.
+    - **Structured** — the ``rationale`` / ``mechanism`` / ``verification``
+      triad is fully populated and ``body_template`` is left empty. The
+      renderer emits a fixed ``Rationale`` / ``Mechanism`` / ``Verification``
+      sub-heading layout from the triad so authors who want the canonical
+      three-part rule shape do not hand-format markdown.
+
+    The :meth:`_exactly_one_body_shape` validator enforces the XOR: a block
+    that fills neither shape, both shapes, or only part of the triad is a
+    :class:`ValidationError`. An empty ``body_template`` (the ``""`` default)
+    means "not the prose shape"; non-empty means prose.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
     target: str
-    body_template: str
+    body_template: str = ""
+    rationale: str | None = None
+    mechanism: str | None = None
+    verification: str | None = None
     version: str = "1.0"
+
+    @property
+    def is_structured(self) -> bool:
+        """``True`` when this block carries the structured triad (not prose)."""
+        return self.rationale is not None
+
+    @model_validator(mode="after")
+    def _exactly_one_body_shape(self) -> RenderBlock:
+        """Enforce exactly one of prose ``body_template`` or the full triad.
+
+        A block is *prose* when ``body_template`` is non-empty; it is
+        *structured* when all three of ``rationale`` / ``mechanism`` /
+        ``verification`` are set. Exactly one shape must hold: a block that
+        fills both, fills neither, or fills only part of the triad is invalid.
+
+        Raises:
+            ValueError: when the block fills both the prose and structured
+                shapes at once, fills neither, or supplies an incomplete
+                triad (one or two of the three triad fields).
+        """
+        has_prose = bool(self.body_template)
+        triad = (self.rationale, self.mechanism, self.verification)
+        triad_set = [field is not None for field in triad]
+        has_full_triad = all(triad_set)
+        has_partial_triad = any(triad_set) and not has_full_triad
+
+        if has_partial_triad:
+            raise ValueError(
+                f"render_block id={self.id!r} has an incomplete structured triad: "
+                f"rationale/mechanism/verification must all be set together"
+            )
+        if has_prose and has_full_triad:
+            raise ValueError(
+                f"render_block id={self.id!r} sets both body_template and the "
+                f"rationale/mechanism/verification triad: provide exactly one"
+            )
+        if not has_prose and not has_full_triad:
+            raise ValueError(
+                f"render_block id={self.id!r} sets neither body_template nor the "
+                f"rationale/mechanism/verification triad: provide exactly one"
+            )
+        return self
 
 
 class ProfileBody(BaseModel):
