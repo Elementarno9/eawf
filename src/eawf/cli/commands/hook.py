@@ -384,6 +384,28 @@ def _is_placeholder_or_nonemail(addr: str) -> bool:
     return not (tld.isalpha() and len(tld) >= 2)
 
 
+def _is_placeholder_path(snippet: str) -> bool:
+    """Return ``True`` for documented home-dir placeholders, not real path leaks.
+
+    The path-leak gate's loose home-directory anchors (macOS, Windows,
+    Linux, tilde) match the pedagogical "do NOT commit these" examples
+    that the secrets-hygiene rule body and rendered ``AGENTS.md`` carry
+    verbatim — ``/Users/<name>``, ``C:\\Users\\...``, ``~/Workspace/...``.
+    Those are documentation, not leaks, so the gate skips them. This is
+    the symmetric counterpart to :func:`_is_placeholder_or_nonemail`,
+    which already shields the email gate from reserved-domain and
+    version-pin false positives.
+
+    A matched ``snippet`` is treated as a placeholder when it carries an
+    angle bracket (``<`` or ``>``) — the convention for a name to be
+    filled in (``/Users/<name>``) — or an ellipsis (``...``) — the
+    convention for an elided tail (``C:\\Users\\...``). A concrete
+    home-dir path with a real username after the anchor carries neither
+    token and is still flagged as a leak.
+    """
+    return any(token in snippet for token in ("<", ">", "..."))
+
+
 def _read_text_lines(path: Path) -> list[str] | None:
     """Return ``path``'s text lines, or ``None`` for unreadable/binary files.
 
@@ -411,6 +433,8 @@ def _scan_path_leaks(paths: list[str], *, cwd: Path) -> list[LeakFinding]:
                 continue
             for pattern in patterns:
                 for match in pattern.finditer(line):
+                    if _is_placeholder_path(match.group(0)):
+                        continue
                     findings.append(LeakFinding(path=rel, lineno=lineno, snippet=match.group(0)))
     return findings
 

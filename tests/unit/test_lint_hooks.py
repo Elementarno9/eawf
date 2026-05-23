@@ -198,6 +198,64 @@ def test_path_leak_lint_staged_fallback_flags_staged_leak(tmp_path: Path) -> Non
     assert "staged_leak.py" in result.stdout
 
 
+# The path-leak gate scans only the macOS / Windows / Linux home anchors
+# (``_path_leak_patterns`` filters ``SensitiveScrubber.PATTERNS`` to those
+# whose source mentions ``Users`` or ``home``); the bare ``~/`` tilde shape
+# is intentionally outside the gate's scan set, so the CLI-level cases below
+# exercise only the gate-covered anchors. The tilde placeholder/leak
+# discrimination is asserted directly against the helper instead.
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    [
+        "/Users/<name>",
+        "/Users/<name>/.config/eawf",
+        "C:\\Users\\...",
+        "/home/<user>",
+    ],
+)
+def test_path_leak_lint_skips_doc_placeholder(tmp_path: Path, placeholder: str) -> None:
+    # Pedagogical "do NOT commit these" placeholders carry an
+    # angle-bracket or ellipsis and are documentation, not leaks —
+    # symmetric with the email gate's reserved-domain skip.
+    doc = tmp_path / "secrets-hygiene.md"
+    doc.write_text(f"Never commit machine paths like {placeholder} to VCS.\n", encoding="utf-8")
+    result = runner.invoke(app, ["hook", "path-leak-lint", str(doc)])
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+@pytest.mark.parametrize(
+    "real_path",
+    [
+        "/Users/realuser",  # pragma: allowlist secret
+        "C:\\Users\\Bob",  # pragma: allowlist secret
+        "/home/realuser",  # pragma: allowlist secret
+    ],
+)
+def test_path_leak_lint_still_flags_real_path(tmp_path: Path, real_path: str) -> None:
+    # A concrete home-dir path (no placeholder token) is still a leak.
+    leak = tmp_path / "leak.py"
+    leak.write_text(f'HOME = "{real_path}"\n', encoding="utf-8")  # pragma: allowlist secret
+    result = runner.invoke(app, ["hook", "path-leak-lint", str(leak)])
+    assert result.exit_code == 1, result.stdout
+    assert "leak" in result.stdout.lower()
+
+
+def test_is_placeholder_path_discriminates_placeholder_from_leak() -> None:
+    from eawf.cli.commands.hook import _is_placeholder_path
+
+    assert _is_placeholder_path("/Users/<name>")
+    assert _is_placeholder_path("/Users/<name>/...")
+    assert _is_placeholder_path("C:\\Users\\...")
+    assert _is_placeholder_path("~/Workspace/...")
+    assert _is_placeholder_path("/home/<user>")
+    assert not _is_placeholder_path("/Users/realuser")  # pragma: allowlist secret
+    assert not _is_placeholder_path("C:\\Users\\Bob")  # pragma: allowlist secret
+    assert not _is_placeholder_path("~/Workspace/myproject")  # pragma: allowlist secret
+
+
 # --- email-leak-lint ------------------------------------------------------
 
 
