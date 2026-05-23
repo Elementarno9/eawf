@@ -396,6 +396,85 @@ def test_roadmap_apply_requires_wave(workspace: Path) -> None:
     assert res.exit_code == 0, res.output
 
 
+def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Path) -> None:
+    """Bare apply renders the full wave DAG and emits a needs_user AUQ gate."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--add-wave", "W01", "--title", "feat: a", "--files", "src/a"],
+    )
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W02",
+            "--title",
+            "feat: b",
+            "--files",
+            "src/b",
+            "--deps",
+            "W01",
+        ],
+    )
+    res = runner.invoke(app, ["--json", "roadmap", "apply", "P21"])
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["status"] == "needs_user"
+    assert body["decision_kind"] == "approve_plan"
+    assert body["wave_count"] == 2
+    rendered_ids = [w["id"] for w in body["waves"]]
+    assert rendered_ids == ["P21-I01-W01", "P21-I01-W02"]
+    # W02's dep on W01 is surfaced in the rendered DAG.
+    w02 = next(w for w in body["waves"] if w["id"] == "P21-I01-W02")
+    assert w02["deps"] == ["P21-I01-W01"]
+    assert [opt["label"] for opt in body["options"]] == ["approve", "revise", "cancel"]
+
+
+def test_roadmap_apply_dag_text_lists_pending_waves(workspace: Path) -> None:
+    """The text render of apply names every PENDING wave id."""
+    _propose_with_wave(workspace)
+    res = runner.invoke(app, ["roadmap", "apply", "P21"])
+    assert res.exit_code == 0, res.output
+    assert "Wave DAG" in res.output
+    assert "P21-I01-W01" in res.output
+
+
+def test_roadmap_apply_approve_finalises_to_ok(workspace: Path) -> None:
+    """`--approve` confirms the DAG and emits an ok envelope for /prep."""
+    _propose_with_wave(workspace)
+    res = runner.invoke(app, ["--json", "roadmap", "apply", "P21", "--approve"])
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["status"] == "ok"
+    assert body["wave_count"] == 1
+    assert body["next"] == "eawf prep P21"
+
+
+def test_roadmap_apply_approve_emits_event(workspace: Path) -> None:
+    """Only the --approve path appends a roadmap apply EVENT row."""
+    _propose_with_wave(workspace)
+    # Bare apply (needs_user) must not append the apply event.
+    runner.invoke(app, ["roadmap", "apply", "P21"])
+    before = [e for e in _read_events(workspace) if e["payload"]["command"] == "roadmap apply"]
+    assert not before
+    runner.invoke(app, ["roadmap", "apply", "P21", "--approve"])
+    after = [e for e in _read_events(workspace) if e["payload"]["command"] == "roadmap apply"]
+    assert len(after) == 1
+
+
+def test_roadmap_apply_non_planned_phase_rejected(workspace: Path) -> None:
+    """Apply on a non-PLANNED phase is rejected (only PLANNED can apply)."""
+    _propose_with_wave(workspace)
+    _set_phase_status(workspace, "P21", "active")
+    res = runner.invoke(app, ["roadmap", "apply", "P21"])
+    assert res.exit_code != 0
+    combined = f"{res.stdout}{res.stderr}"
+    assert "only PLANNED" in combined
+
+
 def test_roadmap_drop_archives_planned(workspace: Path) -> None:
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
     res = runner.invoke(app, ["roadmap", "drop", "P21"])

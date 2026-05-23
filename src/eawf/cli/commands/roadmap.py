@@ -144,6 +144,84 @@ def _phase_summary(state: State, phase_id: str) -> dict[str, Any]:
     }
 
 
+def _collect_pending_waves(state: State, phase_id: str) -> list[dict[str, Any]]:
+    """Project a phase's PENDING waves into ordered DAG rows.
+
+    Walks ``phase.iter_ids`` in order; for each iter walks ``iter.wave_ids``
+    and emits one row per wave whose status is :attr:`WaveStatus.PENDING`.
+    Each row mirrors the wave's id, parent iter, deps, and file scopes so a
+    caller can render the full wave DAG (the plan that ``apply`` confirms)
+    without re-reading the state map.
+
+    Args:
+        state: The validated state document holding the ``iters`` / ``waves``
+            maps.
+        phase_id: The target phase id (assumed present in ``state.phases``).
+
+    Returns:
+        DAG rows in iter-then-wave order; empty when the phase has no
+        PENDING waves.
+    """
+    rows: list[dict[str, Any]] = []
+    phase = state.phases[phase_id]
+    for iter_id in phase.iter_ids:
+        iter_record = state.iters.get(iter_id)
+        if iter_record is None:
+            continue
+        for wave_id in iter_record.wave_ids:
+            wave = state.waves.get(wave_id)
+            if wave is None or wave.status != WaveStatus.PENDING:
+                continue
+            rows.append(
+                {
+                    "id": wave.id,
+                    "iter_id": wave.iter_id,
+                    "title": wave.title,
+                    "deps": list(wave.deps),
+                    "file_scopes": list(wave.file_scopes),
+                }
+            )
+    return rows
+
+
+def _render_apply_dag_text(state: State, phase_id: str, waves: list[dict[str, Any]]) -> str:
+    """Render the full wave DAG of a phase as markdown plan text.
+
+    This is the plan-mode surface ``apply`` shows before approval: phase
+    header followed by every PENDING wave with its deps and file scopes so
+    the operator reviews the DAG, not a one-line summary.
+
+    Args:
+        state: The validated state document.
+        phase_id: The target phase id (assumed present in ``state.phases``).
+        waves: The ordered DAG rows from :func:`_collect_pending_waves`.
+
+    Returns:
+        A markdown string covering the phase title plus one bullet per
+        PENDING wave.
+    """
+    phase = state.phases[phase_id]
+    lines = [
+        f"# Apply plan: {phase.id}",
+        "",
+        f"**Title:** {phase.title}",
+        f"**Waves planned:** {len(waves)}",
+        "",
+        "## Wave DAG",
+        "",
+    ]
+    for row in waves:
+        deps = ", ".join(row["deps"]) or "-"
+        files = ", ".join(row["file_scopes"]) or "-"
+        lines.append(f"- `{row['id']}` — {row['title']}  (deps: {deps}; files: {files})")
+    lines.append("")
+    lines.append(
+        f"Approve with `eawf roadmap apply {phase.id} --approve` "
+        f"or reshape with `eawf roadmap revise {phase.id} ...`."
+    )
+    return "\n".join(lines)
+
+
 def _render_propose_plan_text(state: State, phase_id: str) -> str:
     summary = _phase_summary(state, phase_id)
     lines = [
@@ -487,11 +565,32 @@ def _coerce_full_wave_id(state: State, phase_id: str, candidate: str) -> str:
 @roadmap_app.command("apply")
 def roadmap_apply_cmd(
     ctx: typer.Context,
-    phase_id: Annotated[str, typer.Argument(help="Phase id to apply (informational).")],
+    phase_id: Annotated[str, typer.Argument(help="Phase id to apply.")],
+    approve: Annotated[
+        bool,
+        typer.Option(
+            "--approve",
+            help="Confirm the rendered wave DAG and finalise apply (emits ok).",
+        ),
+    ] = False,
 ) -> None:
-    """Finalise a PLANNED phase. Currently informational — propose
-    already persists the PLANNED scope; apply confirms readiness for
-    ``/prep``."""
+    """Confirm a PLANNED phase's wave DAG before handing off to ``/prep``.
+
+    Without ``--approve`` this renders the phase's full wave DAG (the
+    PENDING waves with their deps + file scopes) and emits a
+    ``needs_user`` envelope carrying an ``approve_plan`` decision so the
+    active runtime gates the apply through its native confirm UI (Claude
+    plan-mode, Codex text-prompt). With ``--approve`` it validates the
+    plan and emits an ``ok`` envelope. Either way the underlying PLANNED
+    scope is already persisted by ``propose`` / ``revise``; this verb is
+    the confirmation surface, never a state mutation of the wave set.
+
+    Raises:
+        InvalidInput: ``phase_id`` is malformed, the phase is not PLANNED,
+            or the phase has no waves to apply.
+        NotFound: ``phase_id`` is not present in state, or no ``state.json``
+            resolves for the workspace.
+    """
     from eawf.cli._mutation import state_transaction
 
     flags: GlobalFlags = ctx.obj
@@ -506,8 +605,12 @@ def roadmap_apply_cmd(
     except FileNotFoundError as exc:
         cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
         return
+    dag_text = ""
+    pending_waves: list[dict[str, Any]] = []
     try:
-        with state_transaction(state_path) as state:
+        # read_only when not approving: rendering the DAG must not trip the
+        # mutating-verb gate, and only the approve path appends an EVENT.
+        with state_transaction(state_path, read_only=not approve) as state:
             if phase_id not in state.phases:
                 raise cli_errors.NotFound(f"unknown phase {phase_id!r}")
             phase = state.phases[phase_id]
@@ -516,29 +619,50 @@ def roadmap_apply_cmd(
                     f"phase {phase_id!r} has status {phase.status.value!r}; "
                     "only PLANNED phases can be applied"
                 )
-            wave_count = sum(1 for w in state.waves.values() if w.iter_id in set(phase.iter_ids))
-            if wave_count == 0:
+            pending_waves = _collect_pending_waves(state, phase_id)
+            if not pending_waves:
                 raise cli_errors.InvalidInput(
-                    f"phase {phase_id!r} has no waves; revise --add-wave before apply"
+                    f"phase {phase_id!r} has no pending waves; revise --add-wave before apply"
                 )
-            state.updated_at = datetime.now(UTC)
-            _append_roadmap_event(
-                state_path,
-                command="roadmap apply",
-                args={"phase_id": phase_id, "wave_count": wave_count},
-                scope_id=phase_id,
-                summary=f"roadmap apply {phase_id} waves={wave_count}",
-            )
+            dag_text = _render_apply_dag_text(state, phase_id, pending_waves)
+            if approve:
+                state.updated_at = datetime.now(UTC)
+                _append_roadmap_event(
+                    state_path,
+                    command="roadmap apply",
+                    args={"phase_id": phase_id, "wave_count": len(pending_waves)},
+                    scope_id=phase_id,
+                    summary=f"roadmap apply {phase_id} waves={len(pending_waves)}",
+                )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+
+    if not approve:
+        envelope = {
+            "status": "needs_user",
+            "decision_kind": "approve_plan",
+            "phase_id": phase_id,
+            "wave_count": len(pending_waves),
+            "waves": pending_waves,
+            "plan_text": dag_text,
+            "options": [
+                {"label": "approve", "next": f"eawf roadmap apply {phase_id} --approve"},
+                {"label": "revise", "next": f"eawf roadmap revise {phase_id} --add-wave WNN ..."},
+                {"label": "cancel", "next": f"eawf roadmap drop {phase_id}"},
+            ],
+        }
+        emit_json_or_text(envelope, dag_text, flags=flags)
+        return
+
     emit_json_or_text(
         {
             "phase_id": phase_id,
             "status": "ok",
+            "wave_count": len(pending_waves),
             "next": f"eawf prep {phase_id}",
         },
-        f"phase {phase_id} ready for /prep ({wave_count} waves planned)",
+        f"phase {phase_id} ready for /prep ({len(pending_waves)} waves planned)",
         flags=flags,
     )
 

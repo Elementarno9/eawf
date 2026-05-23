@@ -419,7 +419,7 @@ Roadmap planner (propose / revise / apply / drop / show).
 
 | Verb | Summary |
 |---|---|
-| `apply` | Finalise a PLANNED phase. Currently informational — propose |
+| `apply` | Confirm a PLANNED phase's wave DAG before handing off to ``/prep``. |
 | `drop` | Archive a PLANNED phase (PLANNED → ARCHIVED). Irreversible via the |
 | `propose` | Propose a new PLANNED phase + I01 iter; emits needs_user envelope. |
 | `revise` | Edit a PLANNED or ACTIVE phase's wave plan via structured flags. |
