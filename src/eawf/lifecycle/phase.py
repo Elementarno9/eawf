@@ -13,10 +13,21 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.lifecycle._errors import LifecycleError
-from eawf.state.enums import IterStatus, PhaseStatus, WaveStatus
+from eawf.state.enums import DecisionStatus, IterStatus, PhaseStatus, WaveStatus
 from eawf.state.models import Phase, State
 
 logger = logging.getLogger(__name__)
+
+#: Phrases that, when present in an ACTIVE decision scoped to the phase,
+#: ratify closing a phase that landed only a single wave (the
+#: "single-commit-per-phase" exception of the P19-W03 gate).
+_SCOPE_COLLAPSE_PHRASES: tuple[str, ...] = (
+    "single-wave",
+    "single wave",
+    "scope collapse",
+    "scope collapsed",
+    "collapse scope",
+)
 
 #: Wave statuses that are already terminal — :func:`archive_phase` leaves
 #: these untouched when cascading to ABANDONED.
@@ -67,6 +78,26 @@ def open_phase(
     return phase
 
 
+def has_scope_collapse_decision(state: State, *, phase_id: str) -> bool:
+    """Return whether an ACTIVE decision ratifies a single-wave phase close.
+
+    A decision counts when it is :data:`DecisionStatus.ACTIVE`, is scoped to
+    *phase_id* (either ``scope_id == phase_id`` or *phase_id* appears in the
+    title), and its title/rationale mentions one of
+    :data:`_SCOPE_COLLAPSE_PHRASES`. This is the authoritative source for the
+    single-wave-without-decision gate; the CLI pre-flight reuses it.
+    """
+    for decision in (state.decisions or {}).values():
+        if decision.status != DecisionStatus.ACTIVE:
+            continue
+        if decision.scope_id != phase_id and phase_id not in decision.title:
+            continue
+        haystack = f"{decision.title}\n{decision.rationale}".lower()
+        if any(phrase in haystack for phrase in _SCOPE_COLLAPSE_PHRASES):
+            return True
+    return False
+
+
 def close_phase(
     state: State,
     *,
@@ -74,16 +105,29 @@ def close_phase(
     audit_id: str,
     checkpoint: str | None = None,
 ) -> Phase:
-    """Close an active phase. Rejects when child iters are still open
-    or when the phase has zero waves in :data:`WaveStatus.CLOSED`.
+    """Close an active phase.
+
+    Rejects when child iters are still open, when the phase has zero waves in
+    :data:`WaveStatus.CLOSED`, when any CLOSED child iter lacks its
+    ``audit_id``, or when the phase landed exactly one closed wave without an
+    ACTIVE decision ratifying the scope collapse.
 
     The ≥1-closed-wave gate (P19-W03) catches the
     "single-commit-per-phase" anti-pattern where a runtime ships the
-    entire phase as one commit without closing any waves first.
+    entire phase as one commit without closing any waves first. The
+    closed-iter-audit and single-wave-decision gates are enforced here (not
+    only in the CLI pre-flight) so they hold atomically under the write lock
+    on both the daemon-proxy and in-process paths.
 
     The ``checkpoint`` argument is recorded in the lifecycle event but does
     not currently mutate the phase record — that field will land in Phase 3
     when the audit-link table is introduced.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown, the phase is not in a
+            closable status, child iters are still open, no wave is closed,
+            a CLOSED child iter is missing its audit, or a single-wave phase
+            lacks its scope-collapse decision.
     """
     phase = state.phases.get(phase_id)
     if phase is None:
@@ -106,6 +150,20 @@ def close_phase(
     if closed_wave_count == 0:
         raise LifecycleError(
             f"phase {phase_id!r} has no closed waves; close_phase requires at least one closed wave"
+        )
+    iters_without_audit = sorted(
+        iid
+        for iid, it in state.iters.items()
+        if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+    )
+    if iters_without_audit:
+        raise LifecycleError(
+            f"phase {phase_id!r} has closed iters missing audit: {iters_without_audit}"
+        )
+    if closed_wave_count == 1 and not has_scope_collapse_decision(state, phase_id=phase_id):
+        raise LifecycleError(
+            f"phase {phase_id!r} has a single closed wave; close_phase requires an active "
+            "phase decision documenting scope collapse"
         )
     phase.status = PhaseStatus.CLOSED
     phase.closed_at = datetime.now(UTC)

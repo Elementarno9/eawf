@@ -32,7 +32,6 @@ from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 from eawf.state.enums import (
-    DecisionStatus,
     IterStatus,
     StoreKind,
     WaveStatus,
@@ -131,11 +130,13 @@ def phase_close_cmd(
         )
         return
 
-    # The phase-close checklist enforces CLI-only blockers (closed iters
-    # missing an audit, single-wave-without-decision) that the daemon's
-    # ``close_phase`` apply does not replicate. Run it as a read-only
-    # pre-flight so the proxy path rejects before any wire traffic; the
-    # in-process fallback re-runs it under the lock (defense-in-depth).
+    # The ``close_phase`` transition is authoritative for every close
+    # blocker (open iters, no closed wave, closed iters missing audit,
+    # single-wave-without-decision) and enforces them atomically under the
+    # write lock on both the daemon-proxy and in-process paths. The
+    # read-only pre-flight below is a friendly early-exit: it surfaces the
+    # aggregated checklist blockers before any wire traffic so the operator
+    # sees all problems at once instead of the transition's first failure.
     loaded = _load_state_readonly(ctx)
     if loaded is None:
         return
@@ -153,10 +154,6 @@ def phase_close_cmd(
         return
 
     def _mutator(state: State) -> None:
-        checklist = _phase_prepare_close_checklist(state, phase_id=phase_id)
-        blockers = checklist["blockers"]
-        if blockers:
-            raise LifecycleError(f"phase close blocked: {'; '.join(blockers)}")
         close_phase(
             state,
             phase_id=phase_id,
@@ -529,7 +526,10 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     The handler renders ``ok=True`` only when every blocking item resolves to
     empty.
     """
-    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.lifecycle.transitions import (
+        LifecycleError,
+        has_scope_collapse_decision,
+    )
     from eawf.lifecycle.wave_sha import derive_wave_sha
 
     phase = state.phases.get(phase_id)
@@ -558,7 +558,7 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
         wid for wid, sha in zip(closed_wave_ids, closed_wave_shas, strict=True) if not sha
     )
     unique_closed_wave_commits = sorted({sha for sha in closed_wave_shas if sha})
-    scope_collapse_decision = _phase_has_scope_collapse_decision(state, phase_id=phase_id)
+    scope_collapse_decision = has_scope_collapse_decision(state, phase_id=phase_id)
     single_wave_without_decision = bool(len(closed_wave_ids) == 1 and not scope_collapse_decision)
     iters_without_audit = sorted(
         iid
@@ -581,26 +581,6 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     checklist["blockers"] = blockers
     checklist["ok"] = not blockers
     return checklist
-
-
-def _phase_has_scope_collapse_decision(state: State, *, phase_id: str) -> bool:
-    """Return whether active decisions explicitly allow a single-wave close."""
-    phrases = (
-        "single-wave",
-        "single wave",
-        "scope collapse",
-        "scope collapsed",
-        "collapse scope",
-    )
-    for decision in (state.decisions or {}).values():
-        if decision.status != DecisionStatus.ACTIVE:
-            continue
-        if decision.scope_id != phase_id and phase_id not in decision.title:
-            continue
-        haystack = f"{decision.title}\n{decision.rationale}".lower()
-        if any(phrase in haystack for phrase in phrases):
-            return True
-    return False
 
 
 def _phase_close_blockers(checklist: dict[str, Any]) -> list[str]:
