@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.6 hash=cb8dc71df1a41581 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.7 hash=681f4b031e00bda5 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -25,8 +25,8 @@ non-trivial body has an expansion block immediately following.
 6. **Deletion rule.** See ``deletion-rule``.
 7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
 8. **Verify before claiming.** See ``verify-before-claim``.
-9. **f-strings only.** No ``%``-style or ``.format()``. Library modules use
-   ``logger = logging.getLogger(__name__)``.
+9. **f-strings only.** No ``%``-style or ``.format()``. See the python
+   profile for the library-module logging form.
 10. **`uv run` for all Python invocations.** See the python profile for
     details.
 11. **Worktree discipline.** See ``worktree-discipline``.
@@ -44,20 +44,9 @@ non-trivial body has an expansion block immediately following.
 20. **Planned-scope revisability.** See ``planned-scope-revisability``.
 21. **Roadmap procedure.** See ``roadmap-procedure``.
 22. **Spike workflow.** See ``spike-workflow``.
-23. **Engineering principles (DRY/KISS/YAGNI).** Apply DRY (don't
-    repeat yourself), KISS (keep it simple, stupid), and YAGNI (you
-    aren't gonna need it) when shaping new code. Reach for the simplest
-    design that solves the immediate need; avoid premature abstraction
-    or speculative flexibility. Three similar lines is better than a
-    half-fitted helper. Don't add error handling, fallbacks, or
-    validation for scenarios that can't happen.
-24. **Other engineering practice.** Default to: fail-fast (raise at the
-    boundary, not deep in a call stack), single-responsibility (each
-    function or class has one reason to change), principle of least
-    surprise (behaviour matches the name), separation of concerns
-    (parsing ≠ validation ≠ execution), pure functions where viable
-    (no hidden state), and explicit-over-implicit (named args over
-    positional when arity ≥ 3; explicit returns over None-as-success).
+23. **Engineering principles (DRY/KISS/YAGNI).** See
+    ``engineering-principles``.
+24. **Other engineering practice.** See ``engineering-practice``.
 25. **Source code stays clean of design-decision references.** No
     inline ``# per Q<N>``, ``# per audit XB##``, ``# per Codex``, or
     roundtable / operator-decision-id comments in committed source
@@ -95,7 +84,7 @@ IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN>``
 (zero-padded, e.g., ``P00``, ``P03``). Wave IDs: ``W<NN>`` likewise.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.2 hash=152512babd439ccf -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.3 hash=6d0e4bb5c2b0dfe2 -->
 ### Naming conventions
 
 To prevent drift across state models, envelopes, parameters, and
@@ -141,12 +130,9 @@ summary; reserve the ``Raises:`` block for that.
 
 **Mutator-path precision in wave success criteria** — when a
 wave's success criterion text references a "save through" or
-"persist via" path, name the **canonical writer** rather than
-the generic phrase ``state-CLI``. Per D-SUP-01 (2026-05-18),
-the canonical writer for every stateful surface is the
-**daemon** (``eawfd``); during v0.3-v0.5 the daemon proxies
-through legacy internal subsystems (state writer, config
-writer, registry writer, telemetry projector). Authority map
+"persist via" path, name the **canonical writer** (the daemon,
+per rule 4) rather than the generic phrase ``state-CLI``. The
+authority map
 ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``
 names the canonical writer per file. Conflating the
 operator-facing surface (``uv run eawf state ...``) with the
@@ -173,15 +159,14 @@ Agents MUST NOT delete: schema files, golden fixtures, MIT
 propose the list and wait for explicit confirmation.
 
 <!-- END EAWF:managed id=deletion-rule -->
-<!-- BEGIN EAWF:managed id=state-vs-specs version=1.1 hash=60be0bd4c876e901 -->
+<!-- BEGIN EAWF:managed id=state-vs-specs version=1.2 hash=7cc9c321140e8332 -->
 ### State vs specs
 
-Specs describe intent; state reflects reality. Per rule 4 + D-SUP-01
-(2026-05-18), the **daemon** (``eawfd``) is the sole canonical writer
-of ``state.json``; during v0.3-v0.5 the state CLI
-(``uv run eawf state ...``) is the operator-facing surface that
-proxies mutations to the daemon (with a ``portalocker`` direct-write
-fallback when the daemon is unavailable).
+Specs describe intent; state reflects reality. The canonical writer of
+``state.json`` is the daemon — see rule 4 for the full mutator-authority
+statement (operator-facing state CLI, JSON-RPC proxy, portalocker
+fallback). Do not hand-edit ``state.json`` to make it agree with a spec;
+drive the state mutation and let the spec follow.
 
 <!-- END EAWF:managed id=state-vs-specs -->
 <!-- BEGIN EAWF:managed id=verify-before-claim version=1.1 hash=da4d1a7a1791bb85 -->
@@ -242,7 +227,7 @@ the reason in the plan or handoff before dispatching worktrees or
 starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.2 hash=2d0f7197ea6b63d3 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.3 hash=f9f7015dfda2b8b2 -->
 ### Commit prefix
 
 ``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types:
@@ -265,15 +250,21 @@ Subject grammar (post-P26-W23):
   iter variant) remains valid for back-compat with pre-P26-W23
   commits. New bookkeeping commits MAY drop the ``-CORE``
   suffix; the lint accepts both forms identically.
+- **Phase/iter-scoped artifact docs** — ``[P<NN>] docs:`` (or
+  ``[P<NN>-I<NN>] docs:``) for documentation artifacts no single
+  wave owns (closure audits, promoted research / decision /
+  incident briefs). Restricted to ``.ea/artifacts/**``;
+  wave-produced docs use the ``[P<NN>-W<NN>] docs:`` form.
 
 The path whitelist for state-bookkeeping commits triggers on
 ``type == 'state'`` (the canonical semantic signal). The
 legacy ``-CORE`` suffix is also treated as a whitelist
 trigger so pre-P26-W23 commits continue to validate.
 
-Bare ``[P<NN>]`` is accepted only when ``type == 'state'``; for
-every other type the ``-W<NN>`` or ``-CORE`` suffix remains
-mandatory (P19-W05).
+Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any
+state-bookkeeping path) and ``type == 'docs'`` (restricted to
+``.ea/artifacts/**``); for every other type the ``-W<NN>`` or
+``-CORE`` suffix remains mandatory.
 
 Body: 3-6 bullets on what changed and why. Trailer: a recognized
 Claude or Codex ``Co-Authored-By`` trailer.
@@ -607,3 +598,100 @@ ends the phase; pre-merge close keeps ``state.json`` in sync
 with what reviewers approved.
 
 <!-- END EAWF:managed id=iter-phase-close-timing -->
+<!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=7e6a3b368a8b0993 -->
+### Rationale
+
+**Entity-title naming.** Every lifecycle and research entity
+(``Phase`` / ``Iter`` / ``Wave`` / ``Decision`` / ``Hypothesis`` /
+``BacklogItem`` / ``Incident``) carries a bounded ``title`` and an
+optional long-form ``description``. The bound exists so titles stay
+scannable in dense renders — the roadmap tree, plan-view table, and
+dispatch header all lay titles out in a single fixed-width row, and an
+unbounded sentence either truncates with an ellipsis (losing the tail)
+or wraps and breaks the column. A trailing period reads as the end of a
+sentence, but a title is a label, not prose; the period is visual noise
+that the description, which IS prose, should carry instead.
+
+
+### Mechanism
+
+Write ``title`` as an imperative noun-phrase of at most 72 characters
+with no trailing period — e.g. ``Add bounded title to entities`` or
+``Enforce sandbox deny-list at dispatch``, never
+``Adds a bounded title to every entity.`` (over-cap once the clause
+grows, and the period is sentence noise). Put the why / the long-form
+purpose in ``description`` (bounded at 500 characters); the renderers
+surface it as a detail block under the bounded title, so the two fields
+split the label from the explanation rather than competing for one line.
+
+
+### Verification
+
+The model enforces the hard bound: ``title`` is
+``Annotated[str, Field(min_length=1, max_length=72)]`` on every entity,
+so an over-72 title fails :class:`pydantic.ValidationError` at the
+ingestion boundary. The style backstop is
+:func:`eawf.render.agents_md.lint_entity_title`, which a reviewer (or a
+future authoring command) runs over a candidate title to flag an
+over-cap or a trailing-period title before it reaches the model — the
+same two failure modes the bound and this rule describe.
+
+<!-- END EAWF:managed id=entity-title-naming -->
+<!-- BEGIN EAWF:managed id=engineering-principles version=1.0 hash=befb20ec78f50d19 -->
+### Rationale
+
+**Engineering principles (DRY/KISS/YAGNI).** Speculative flexibility is
+the dominant source of accidental complexity: an abstraction added for a
+caller that never arrives costs reading effort on every later edit while
+paying back nothing. DRY (don't repeat yourself) keeps one canonical home
+per behaviour; KISS (keep it simple, stupid) keeps the design no larger
+than the immediate need; YAGNI (you aren't gonna need it) defers anything
+the current change does not require.
+
+
+### Mechanism
+
+Reach for the simplest design that solves the immediate need. Three
+similar lines are better than a half-fitted helper — do not extract until
+a third caller actually appears. Do not add error handling, fallbacks, or
+validation for scenarios that cannot happen on the real call paths.
+
+
+### Verification
+
+A reviewer checks that each new helper, parameter, or config knob has a
+present-day caller; a helper introduced for one or two call sites, or for
+a use site that does not yet exist, is rejected. Defensive branches for
+impossible states are removed before merge.
+
+<!-- END EAWF:managed id=engineering-principles -->
+<!-- BEGIN EAWF:managed id=engineering-practice version=1.0 hash=89789e32b7eb3b87 -->
+### Rationale
+
+**Other engineering practice.** Code that fails far from its cause, mixes
+concerns, or signals success with ``None`` is expensive to debug and easy
+to break: the stack trace points at a symptom, a change to one concern
+risks the others, and the happy path reads ambiguously. Failing fast,
+separating concerns, and being explicit keep behaviour where the name and
+the call site say it is.
+
+
+### Mechanism
+
+Default to: fail-fast (raise at the boundary, not deep in a call stack);
+single-responsibility (each function or class has one reason to change);
+principle of least surprise (behaviour matches the name); separation of
+concerns (parsing ≠ validation ≠ execution); pure functions where viable
+(no hidden state); and explicit-over-implicit (named arguments over
+positional when arity ≥ 3, explicit returns over ``None``-as-success).
+
+
+### Verification
+
+A reviewer reads each public function's first statements (validation
+precedes side effects) and each call site of arity ≥ 3 (arguments passed
+by keyword). A function whose name implies a value but returns ``None`` on
+the happy path is reworked; ``uv run mypy src/`` backs the explicit-return
+contract via full type hints.
+
+<!-- END EAWF:managed id=engineering-practice -->

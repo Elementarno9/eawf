@@ -66,23 +66,24 @@ def test_accepts_both_supported_coauthor_trailers(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
-def test_rejects_bare_phase_prefix_non_state_type(tmp_path: Path, mod) -> None:
-    """P19-W05 + P26-W23: bare ``[P##]`` is rejected for non-state types.
+def test_rejects_bare_phase_prefix_non_state_non_docs_type(tmp_path: Path, mod) -> None:
+    """P19-W05 + P26-W23 + W28: bare ``[P##]`` rejected for types other than
+    ``state`` / ``docs``.
 
-    Bare ``[P##]`` is accepted only when ``type == 'state'`` (the canonical
-    bookkeeping signal post-P26-W23). For ``docs`` / ``feat`` / etc. the
-    ``-W##`` or ``-CORE`` suffix remains mandatory.
+    Bare ``[P##]`` is accepted only for ``type == 'state'`` (bookkeeping) or
+    ``type == 'docs'`` (phase/iter-scoped artifacts). For ``feat`` / ``fix`` /
+    etc. the ``-W##`` or ``-CORE`` suffix remains mandatory.
     """
-    msg = _write_msg(tmp_path, "[P14] docs: update phase narrative\n")
-    code, diag = mod.lint(msg, ["docs/x.md"])
+    msg = _write_msg(tmp_path, "[P14] feat: drive-by feature\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 1
     assert "commit subject rejected" in diag
 
 
-def test_rejects_bare_phase_iter_prefix_non_state_type(tmp_path: Path, mod) -> None:
-    """P19-W05: ``[P##-I##]`` without trailing -W## or -CORE rejected for non-state types."""
-    msg = _write_msg(tmp_path, "[P14-I02] docs: iter-scope note\n")
-    code, _diag = mod.lint(msg, ["docs/x.md"])
+def test_rejects_bare_phase_iter_prefix_non_state_non_docs_type(tmp_path: Path, mod) -> None:
+    """``[P##-I##]`` without -W##/-CORE rejected for types other than state/docs."""
+    msg = _write_msg(tmp_path, "[P14-I02] feat: iter-scope feature\n")
+    code, _diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 1
 
 
@@ -132,6 +133,43 @@ def test_rejects_bare_state_type_touching_docs(tmp_path: Path, mod) -> None:
     code, diag = mod.lint(msg, [".ea/state.json", "docs/architecture.md"])
     assert code == 1
     assert "non-state paths" in diag
+
+
+def test_accepts_bare_phase_docs_artifact(tmp_path: Path, mod) -> None:
+    """W28: bare ``[P##] docs:`` accepted for phase-scoped artifacts under .ea/artifacts/**."""
+    msg = _write_msg(tmp_path, "[P27] docs: P27 closure audit report (A37, minor)\n")
+    code, diag = mod.lint(msg, [".ea/artifacts/audits/2026-05-23-p27-closure.md"])
+    assert code == 0, diag
+
+
+def test_accepts_bare_iter_docs_artifact(tmp_path: Path, mod) -> None:
+    """W28: ``[P##-I##] docs:`` accepted for artifacts under .ea/artifacts/**."""
+    msg = _write_msg(tmp_path, "[P27-I03] docs: P27-I03 closure audit (A37)\n")
+    code, diag = mod.lint(msg, [".ea/artifacts/audits/2026-05-23-p27-i03-closure.md"])
+    assert code == 0, diag
+
+
+def test_rejects_bare_docs_touching_non_artifact_paths(tmp_path: Path, mod) -> None:
+    """W28: bare ``[P##] docs:`` is path-gated to .ea/artifacts/**; docs/ is rejected."""
+    msg = _write_msg(tmp_path, "[P27] docs: mkdocs reference page\n")
+    code, diag = mod.lint(msg, ["docs/reference/x.md"])
+    assert code == 1
+    assert "non-artifact paths" in diag
+
+
+def test_rejects_bare_docs_touching_src(tmp_path: Path, mod) -> None:
+    """W28: bare ``[P##] docs:`` touching src/ is rejected (not an artifact path)."""
+    msg = _write_msg(tmp_path, "[P27] docs: sneaky src docstring change\n")
+    code, diag = mod.lint(msg, [".ea/artifacts/x.md", "src/eawf/foo.py"])
+    assert code == 1
+    assert "non-artifact paths" in diag
+
+
+def test_accepts_wave_docs_touching_artifact_and_src(tmp_path: Path, mod) -> None:
+    """W28: wave-form ``[P##-W##] docs:`` stays unrestricted (any path)."""
+    msg = _write_msg(tmp_path, "[P27-I03-W40] docs: closure audit + narrative\n")
+    code, diag = mod.lint(msg, [".ea/artifacts/audits/x.md", "docs/reference/y.md"])
+    assert code == 0, diag
 
 
 def test_rejects_missing_prefix(tmp_path: Path, mod) -> None:

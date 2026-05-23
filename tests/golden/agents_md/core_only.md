@@ -266,7 +266,7 @@ the reason in the plan or handoff before dispatching worktrees or
 starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.2 hash=2d0f7197ea6b63d3 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.3 hash=f9f7015dfda2b8b2 -->
 ### Commit prefix
 
 ``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types:
@@ -289,15 +289,21 @@ Subject grammar (post-P26-W23):
   iter variant) remains valid for back-compat with pre-P26-W23
   commits. New bookkeeping commits MAY drop the ``-CORE``
   suffix; the lint accepts both forms identically.
+- **Phase/iter-scoped artifact docs** — ``[P<NN>] docs:`` (or
+  ``[P<NN>-I<NN>] docs:``) for documentation artifacts no single
+  wave owns (closure audits, promoted research / decision /
+  incident briefs). Restricted to ``.ea/artifacts/**``;
+  wave-produced docs use the ``[P<NN>-W<NN>] docs:`` form.
 
 The path whitelist for state-bookkeeping commits triggers on
 ``type == 'state'`` (the canonical semantic signal). The
 legacy ``-CORE`` suffix is also treated as a whitelist
 trigger so pre-P26-W23 commits continue to validate.
 
-Bare ``[P<NN>]`` is accepted only when ``type == 'state'``; for
-every other type the ``-W<NN>`` or ``-CORE`` suffix remains
-mandatory (P19-W05).
+Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any
+state-bookkeeping path) and ``type == 'docs'`` (restricted to
+``.ea/artifacts/**``); for every other type the ``-W<NN>`` or
+``-CORE`` suffix remains mandatory.
 
 Body: 3-6 bullets on what changed and why. Trailer: a recognized
 Claude or Codex ``Co-Authored-By`` trailer.
