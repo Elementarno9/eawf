@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.dispatch import render_wave_prompt
+from eawf.agents.specs.models import SubagentSpec
+from eawf.dispatch import build_subagent_spec, render_wave_prompt
 from eawf.lifecycle.transitions import (
     open_iter,
     open_phase,
@@ -94,6 +95,41 @@ def _seed_chain(state: State) -> None:
         file_scopes=["src/bar/"],
         deps=["P01-I01-W01"],
     )
+
+
+# ---- Typed-spec projection (P27-I03-W14) -----------------------------------
+
+
+def test_build_subagent_spec_returns_typed_spec() -> None:
+    """``build_subagent_spec`` projects state into a typed ``SubagentSpec``."""
+    state = _empty_state()
+    _seed_chain(state)
+    spec = build_subagent_spec(state, "P01-I01-W02")
+    assert isinstance(spec, SubagentSpec)
+    assert spec.wave_id == "P01-I01-W02"
+    assert spec.iter_id == "P01-I01"
+    assert spec.title == "Second wave"
+    assert spec.scope_id == "QR"
+    # The single closed/pending dep is projected as a typed row.
+    assert len(spec.dependencies) == 1
+    assert spec.dependencies[0].wave_id == "P01-I01-W01"
+    assert spec.dependencies[0].status == "pending"
+
+
+def test_build_subagent_spec_renders_identically_to_render_wave_prompt() -> None:
+    """The spec's ``render`` output equals the public ``render_wave_prompt``."""
+    state = _empty_state()
+    _seed_chain(state)
+    spec = build_subagent_spec(state, "P01-I01-W01")
+    assert spec.render() == render_wave_prompt(state, "P01-I01-W01")
+
+
+def test_build_subagent_spec_unknown_wave_raises_key_error() -> None:
+    """A missing wave id surfaces as ``KeyError`` from the builder."""
+    state = _empty_state()
+    _seed_chain(state)
+    with pytest.raises(KeyError, match="unknown wave"):
+        build_subagent_spec(state, "P01-I01-W99")
 
 
 # ---- Section coverage -------------------------------------------------------

@@ -2,9 +2,13 @@
 
 Public API:
 
-- :func:`render_wave_prompt` — build a self-contained Markdown prompt
-  for one wave by walking the wave → iter → phase → scope chain and
-  collecting attached decisions, hypotheses, and recent audits.
+- :func:`build_subagent_spec` — project a validated
+  :class:`~eawf.state.models.State` snapshot + wave id into a typed
+  :class:`~eawf.agents.specs.models.SubagentSpec` by walking the
+  wave → iter → phase → scope chain and collecting attached decisions,
+  hypotheses, and recent audits.
+- :func:`render_wave_prompt` — build the :class:`SubagentSpec` and
+  render it to a self-contained Markdown prompt for one wave.
 - :func:`render_dispatch_envelope` — wrap the wave prompt in a typed
   :class:`DispatchEnvelope` for either the ``claude-code`` or
   ``claude-agent-sdk`` runtime. The SDK branch projects
@@ -23,6 +27,7 @@ from __future__ import annotations
 from eawf.dispatch.renderer import (
     DISPATCH_RUNTIMES,
     DispatchEnvelope,
+    build_subagent_spec,
     render_dispatch_envelope,
     render_wave_prompt,
 )
@@ -30,6 +35,7 @@ from eawf.dispatch.renderer import (
 __all__ = [
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "build_subagent_spec",
     "render_dispatch_envelope",
     "render_wave_prompt",
 ]

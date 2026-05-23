@@ -7,6 +7,15 @@ context: the wave's scope, its file_scopes, its blocking deps, any
 decisions / hypotheses recorded under the same scope, the most recent
 audits in scope, and the working-tree wire-up.
 
+P27-I03-W14 reshapes the render path around a typed spec: instead of
+concatenating section strings straight out of ``State``,
+:func:`build_subagent_spec` projects ``State`` into a typed
+:class:`~eawf.agents.specs.models.SubagentSpec`, and
+:func:`render_wave_prompt` renders that spec. The rendered bytes are
+unchanged — the spec's section renderers reproduce the legacy output —
+but the prompt is now produced from a typed, individually-testable
+structure rather than an ad-hoc string blob.
+
 The renderer is a pure function: it takes a snapshot of state plus an
 optional repo_root and returns a string. The CLI handlers own all
 stdout / file writes (see :mod:`eawf.cli.commands.lifecycle`).
@@ -42,6 +51,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from eawf.agents.specs.models import (
+    SpecAudit,
+    SpecDecision,
+    SpecDependency,
+    SpecHypothesis,
+    SpecWorktree,
+    SubagentSpec,
+)
 from eawf.state.models import (
     Audit,
     Decision,
@@ -201,6 +218,65 @@ def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
     return sorted(tools)
 
 
+def build_subagent_spec(
+    state: State,
+    wave_id: str,
+    *,
+    repo_root: Path | None = None,
+) -> SubagentSpec:
+    """Project *state* + *wave_id* into a typed :class:`SubagentSpec`.
+
+    This is the ``State`` → typed-spec half of the render path: it walks
+    the wave → iter → phase → scope chain, collects the in-scope
+    decisions / hypotheses / recent audits, resolves the worktree
+    wire-up, and surfaces matching spike briefs. The returned spec
+    renders itself via :meth:`SubagentSpec.render`; this function does no
+    string formatting.
+
+    Args:
+        state: Validated, read-only state snapshot.
+        wave_id: Target wave id (must exist in ``state.waves``).
+        repo_root: Optional repo root. When supplied, spike briefs whose
+            filename mentions the wave / iter / phase id are surfaced in
+            :attr:`SubagentSpec.references`; ``None`` skips the scan.
+
+    Returns:
+        A fully-populated :class:`SubagentSpec`.
+
+    Raises:
+        KeyError: When the wave id is missing or the
+            wave → iter → phase → scope chain has a broken link.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise KeyError(f"unknown wave: {wave_id!r}")
+
+    scope_id = _resolve_scope_for_wave(state, wave)
+
+    spec = SubagentSpec(
+        wave_id=wave.id,
+        iter_id=wave.iter_id,
+        title=wave.title,
+        scope_id=scope_id,
+        agent_role=wave.agent_role.value if wave.agent_role else None,
+        effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
+        success_criteria=list(wave.success_criteria),
+        file_scopes=list(wave.file_scopes),
+        dependencies=_build_dependencies(state, wave),
+        decisions=_build_decisions(state, scope_id=scope_id),
+        hypotheses=_build_hypotheses(state, scope_id=scope_id),
+        recent_audits=_build_recent_audits(state, scope_id=scope_id),
+        references=_find_spike_briefs(wave, repo_root=repo_root) if repo_root is not None else [],
+        worktree=_build_worktree(state, wave),
+    )
+    logger.debug(
+        f"build_subagent_spec wave={wave.id!r} scope={scope_id!r} "
+        f"deps={len(spec.dependencies)} decisions={len(spec.decisions)} "
+        f"refs={len(spec.references)}"
+    )
+    return spec
+
+
 def render_wave_prompt(
     state: State,
     wave_id: str,
@@ -208,6 +284,10 @@ def render_wave_prompt(
     repo_root: Path | None = None,
 ) -> str:
     """Return the Markdown prompt for *wave_id*.
+
+    Builds a typed :class:`SubagentSpec` via :func:`build_subagent_spec`
+    and renders it. The rendered bytes are identical to the pre-W14
+    ad-hoc renderer.
 
     Args:
         state: Validated, read-only state snapshot.
@@ -232,28 +312,8 @@ def render_wave_prompt(
         KeyError: When the wave id is missing or the
             wave → iter → phase → scope chain has a broken link.
     """
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        raise KeyError(f"unknown wave: {wave_id!r}")
-
-    scope_id = _resolve_scope_for_wave(state, wave)
-
-    sections: list[str] = []
-    sections.append(_render_header(wave))
-    sections.append(_render_wave_tags(wave))
-    sections.append(_render_scope(wave, scope_id=scope_id))
-    sections.append(_render_dependencies(state, wave))
-    sections.append(_render_decisions(state, scope_id=scope_id))
-    sections.append(_render_hypotheses(state, scope_id=scope_id))
-    sections.append(_render_recent_audits(state, scope_id=scope_id))
-    references_section = _render_spike_references(wave, repo_root=repo_root)
-    if references_section is not None:
-        sections.append(references_section)
-    sections.append(_render_working_tree(state, wave))
-    sections.append(_render_workflow(wave))
-    sections.append(_render_out_of_scope())
-
-    return "\n\n".join(sections).rstrip() + "\n"
+    spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
+    return spec.render()
 
 
 # ---- Scope resolution -------------------------------------------------------
@@ -274,131 +334,76 @@ def _resolve_scope_for_wave(state: State, wave: Wave) -> str:
     return phase.scope_id
 
 
-# ---- Section renderers ------------------------------------------------------
+# ---- Section builders -------------------------------------------------------
 
 
-def _render_header(wave: Wave) -> str:
-    return f"# Wave {wave.id}: {wave.title}"
+def _build_dependencies(state: State, wave: Wave) -> list[SpecDependency]:
+    """Project a wave's ``deps`` into typed :class:`SpecDependency` rows.
 
-
-def _render_wave_tags(wave: Wave) -> str:
-    role = wave.agent_role.value if wave.agent_role else "unspecified"
-    bucket = wave.effort_bucket.value if wave.effort_bucket else "unspecified"
-    lines = ["## Wave tags", "", f"- agent_role: {role}", f"- effort_bucket: {bucket}"]
-    if wave.success_criteria:
-        lines.append("- success_criteria:")
-        lines.extend(f"  - {criterion}" for criterion in wave.success_criteria)
-    else:
-        lines.append("- success_criteria: none")
-    return "\n".join(lines)
-
-
-def _render_scope(wave: Wave, *, scope_id: str) -> str:
-    files = ", ".join(wave.file_scopes) if wave.file_scopes else "(none)"
-    rationale = (
-        f"Scope is anchored on iter {wave.iter_id} under scope {scope_id}. "
-        f"Stay inside the listed file_scopes — any change outside this list "
-        f"is out of scope for this wave."
-    )
-    return f"## Scope\n\n{files}\n\n{rationale}"
-
-
-def _render_dependencies(state: State, wave: Wave) -> str:
-    lines = ["## Dependencies", ""]
-    if not wave.deps:
-        lines.append("None.")
-        return "\n".join(lines)
+    A dep id absent from ``state.waves`` becomes a row with ``title`` /
+    ``status`` left ``None`` so the rendered prompt surfaces the missing
+    edge (``status=unknown``) rather than raising — the strict
+    invariants in ``validate_state`` already catch dangling deps on the
+    mutation seam.
+    """
+    rows: list[SpecDependency] = []
     for dep_id in wave.deps:
         dep = state.waves.get(dep_id)
         if dep is None:
-            # Surface the missing edge in the prompt rather than raising; the
-            # renderer is best-effort for non-fatal gaps. The strict
-            # invariants in ``validate_state`` already catch dangling deps
-            # on the mutation seam.
-            lines.append(f"- {dep_id}: (missing from state) (status=unknown)")
+            rows.append(SpecDependency(wave_id=dep_id))
         else:
-            lines.append(f"- {dep_id}: {dep.title} (status={dep.status.value})")
-    return "\n".join(lines)
+            rows.append(SpecDependency(wave_id=dep_id, title=dep.title, status=dep.status.value))
+    return rows
 
 
-def _render_decisions(state: State, *, scope_id: str) -> str:
-    matching = _decisions_for_scope(state, scope_id=scope_id)
-    if not matching:
-        return "## Decisions\n\nNone."
-    parts = ["## Decisions"]
-    for decision in matching:
-        parts.append("")
-        parts.append(f"### {decision.id}: {decision.title}")
-        parts.append("")
-        parts.append(decision.rationale.rstrip())
-    return "\n".join(parts)
+def _build_decisions(state: State, *, scope_id: str) -> list[SpecDecision]:
+    """Project in-scope decisions into typed :class:`SpecDecision` rows."""
+    return [
+        SpecDecision(
+            decision_id=decision.id,
+            title=decision.title,
+            rationale=decision.rationale,
+        )
+        for decision in _decisions_for_scope(state, scope_id=scope_id)
+    ]
 
 
-def _render_hypotheses(state: State, *, scope_id: str) -> str:
-    matching = _hypotheses_for_scope(state, scope_id=scope_id)
-    if not matching:
-        return "## Hypotheses\n\nNone."
-    lines = ["## Hypotheses", ""]
-    for hyp in matching:
-        verdict = hyp.verdict.value if hyp.verdict is not None else "open"
-        lines.append(f"- {hyp.id}: metric={hyp.metric!r}")
-        lines.append(f"    confirm: {hyp.confirm}")
-        lines.append(f"    reject:  {hyp.reject}")
-        lines.append(f"    verdict: {verdict}")
-    return "\n".join(lines)
+def _build_hypotheses(state: State, *, scope_id: str) -> list[SpecHypothesis]:
+    """Project in-scope hypotheses into typed :class:`SpecHypothesis` rows."""
+    return [
+        SpecHypothesis(
+            hypothesis_id=hyp.id,
+            metric=hyp.metric,
+            confirm=hyp.confirm,
+            reject=hyp.reject,
+            verdict=hyp.verdict.value if hyp.verdict is not None else None,
+        )
+        for hyp in _hypotheses_for_scope(state, scope_id=scope_id)
+    ]
 
 
-def _render_recent_audits(state: State, *, scope_id: str) -> str:
-    matching = _recent_audits_for_scope(state, scope_id=scope_id, limit=5)
-    if not matching:
-        return "## Recent audits\n\nNone."
-    lines = ["## Recent audits", ""]
-    for audit in matching:
-        verdict = audit.verdict.value if audit.verdict is not None else "pending"
-        lines.append(f"- {audit.id}: {audit.kind.value} verdict={verdict}")
-    return "\n".join(lines)
+def _build_recent_audits(state: State, *, scope_id: str) -> list[SpecAudit]:
+    """Project recent in-scope audits into typed :class:`SpecAudit` rows."""
+    return [
+        SpecAudit(
+            audit_id=audit.id,
+            kind=audit.kind.value,
+            verdict=audit.verdict.value if audit.verdict is not None else None,
+        )
+        for audit in _recent_audits_for_scope(state, scope_id=scope_id, limit=5)
+    ]
 
 
-def _render_spike_references(wave: Wave, *, repo_root: Path | None) -> str | None:
-    """Return the ``## References`` section listing spike briefs, or ``None``.
-
-    A spike brief is any ``*.md`` file directly under
-    ``<repo_root>/.ea/local/`` or
-    ``<repo_root>/.ea/local/research/`` whose filename mentions the
-    wave's id, its iter id, or its phase id (case-insensitive
-    substring match). The match is filename-only so the scan stays
-    cheap and predictable; richer matching (content scan, slug
-    overlap with ``wave.file_scopes``) is a deferred follow-up.
-
-    Args:
-        wave: The dispatched wave — supplies the id tokens scanned for.
-        repo_root: When ``None`` the scan is skipped and the function
-            returns ``None`` so the renderer omits the section. When a
-            real path, ``<repo_root>/.ea/local/`` is opened (best-effort
-            — missing directory is treated as "no briefs").
-
-    Returns:
-        Rendered ``## References`` block (no trailing newline) when at
-        least one brief matches; ``None`` otherwise. The renderer
-        skips the section entirely on ``None`` rather than emitting an
-        empty ``None.`` placeholder — keeps the prompt terse when no
-        spike preceded the wave.
-    """
-    if repo_root is None:
+def _build_worktree(state: State, wave: Wave) -> SpecWorktree | None:
+    """Project a wave's worktree record into a typed :class:`SpecWorktree`."""
+    record = _worktree_record_for_wave(state, wave)
+    if record is None:
         return None
-    briefs = _find_spike_briefs(wave, repo_root=repo_root)
-    if not briefs:
-        return None
-    lines = ["## References", ""]
-    lines.append(
-        "Spike briefs whose filename references this wave / iter / phase. "
-        "Read these before starting work — they capture the read-only "
-        "investigation that motivated the wave's success criteria."
+    return SpecWorktree(
+        branch=record.branch,
+        path=record.path,
+        base_branch=record.base_branch,
     )
-    lines.append("")
-    for rel_path in briefs:
-        lines.append(f"- {rel_path}")
-    return "\n".join(lines)
 
 
 def _find_spike_briefs(wave: Wave, *, repo_root: Path) -> list[str]:
@@ -406,9 +411,9 @@ def _find_spike_briefs(wave: Wave, *, repo_root: Path) -> list[str]:
 
     Scans ``<repo_root>/.ea/local/`` (non-recursive) and
     ``<repo_root>/.ea/local/research/`` (non-recursive). Match is a
-    case-insensitive substring test of the filename stem against the
-    wave id, iter id, and phase id. The returned list is sorted
-    lexicographically for deterministic output across runs.
+    case-insensitive substring test of the filename against the wave id,
+    iter id, and phase id. The returned list is sorted lexicographically
+    for deterministic output across runs.
 
     Returns ``[]`` when ``.ea/local/`` does not exist or no file
     matches — callers treat that as "skip the section".
@@ -440,50 +445,6 @@ def _find_spike_briefs(wave: Wave, *, repo_root: Path) -> list[str]:
         f"_find_spike_briefs wave={wave.id!r} matched={len(matched)} candidates={len(candidates)}"
     )
     return matched
-
-
-def _render_working_tree(state: State, wave: Wave) -> str:
-    record = _worktree_record_for_wave(state, wave)
-    lines = ["## Working tree", ""]
-    if record is not None:
-        lines.append(f"Branch: {record.branch}")
-        lines.append(f"Worktree path: {record.path}")
-        lines.append(f"Base commit: {record.base_branch}")
-    else:
-        lines.append("Worktree path: inline")
-    return "\n".join(lines)
-
-
-def _render_workflow(wave: Wave) -> str:
-    phase_segment, wave_segment = _phase_wave_commit_prefix(wave.id)
-    commit_prefix = f"[{phase_segment}-{wave_segment}]"
-    body = (
-        "## Workflow\n"
-        "\n"
-        "1. cd into the wave's worktree (see `## Working tree` above).\n"
-        "2. Implement edits in dependency order: schemas → logic → CLI → tests.\n"
-        "3. Run the local gauntlet:\n"
-        "   - `uv run pre-commit run --all-files`\n"
-        "   - `uv run mypy src/`\n"
-        "   - `uv run pytest tests/ -q`\n"
-        "4. Commit with prefix `"
-        + commit_prefix
-        + " <type>: <summary>` (3-6 bullet body) and the\n"
-        "   recognized Claude or Codex `Co-Authored-By` trailer."
-    )
-    return body
-
-
-def _render_out_of_scope() -> str:
-    return (
-        "## Out of scope\n"
-        "\n"
-        "- Do **not** push the branch.\n"
-        "- Do **not** open a PR.\n"
-        "- Do **not** edit `.ea/state.json` or `.ea/store/event.jsonl` "
-        "directly — every mutation goes through `uv run eawf state ...`.\n"
-        "- Never `git commit --no-verify`; root-cause the hook instead."
-    )
 
 
 # ---- Lookup helpers ---------------------------------------------------------
@@ -539,6 +500,7 @@ def _phase_wave_commit_prefix(wave_id: str) -> tuple[str, str]:
 __all__ = [
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "build_subagent_spec",
     "render_dispatch_envelope",
     "render_wave_prompt",
 ]
