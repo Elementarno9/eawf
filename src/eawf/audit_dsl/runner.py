@@ -5,8 +5,8 @@ Public surface
 
 * :func:`load_spec` — read a yaml file, validate it against
   :class:`~eawf.audit_dsl.models.CheckFile`, return the typed
-  ``checks`` list. Raises :class:`~eawf.cli.errors.InvalidInput` on
-  missing file, bad yaml, or schema-mismatch.
+  ``checks`` list. Raises :class:`~eawf.cli.errors.UserError`
+  (``kind="InvalidInput"``) on missing file, bad yaml, or schema-mismatch.
 * :func:`run_checks` — iterate the spec list, dispatch each via
   :data:`~eawf.audit_dsl.registry.CHECK_REGISTRY`, return the list
   of :class:`~eawf.audit_dsl.models.CheckResult` values.
@@ -42,8 +42,8 @@ def load_spec(path: Path) -> list[CheckSpec]:
         The validated ``checks`` list.
 
     Raises:
-        InvalidInput: When the file is missing, yaml-malformed, or
-            fails Pydantic validation.
+        UserError: When the file is missing, yaml-malformed, or
+            fails Pydantic validation (``kind="InvalidInput"``).
     """
     if not path.is_file():
         raise UserError(f"audit-check spec {path} not found", kind="InvalidInput")

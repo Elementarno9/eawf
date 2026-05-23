@@ -13,8 +13,8 @@ concurrent appenders across processes serialise. The state.json
 transaction (if any) holds a different sibling lock - there is no
 deadlock risk because the two locks are on distinct files.
 
-``LockTimeout`` is mapped to :class:`eawf.cli.errors.LockConflict` so the
-CLI surfaces the canonical exit code.
+``LockTimeout`` is mapped to :class:`eawf.cli.errors.StateConflict`
+(``kind="LockConflict"``) so the CLI surfaces the canonical exit code.
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ def append_envelope(path: Path, envelope: Envelope, *, timeout: float = 5.0) -> 
     lockfile), appends one line, calls ``os.fsync`` on the file, releases.
 
     Raises:
-        LockConflict: When the sibling lock cannot be acquired within
-            *timeout* seconds.
+        StateConflict: When the sibling lock cannot be acquired within
+            *timeout* seconds (``kind="LockConflict"``).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     line = envelope.model_dump_json() + "\n"

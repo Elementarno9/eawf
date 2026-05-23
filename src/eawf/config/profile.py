@@ -109,8 +109,8 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
     ``eawf.cli._mutation.state_transaction``) cannot drop the freshly-added
     top-level keys via a stale-view dump. Routing through
     ``state_transaction`` itself is unsuitable here because that wrapper
-    raises ``NotFound`` on missing state, breaking the
-    profile-enable-before-init flow.
+    raises ``UserError`` (``kind="NotFound"``) on missing state, breaking
+    the profile-enable-before-init flow.
     """
     if not state_path.exists():
         logger.info(
@@ -170,7 +170,8 @@ def enable_profile(
         profile_id: Profile name (must appear in :data:`KNOWN_PROFILES`).
         layer: One of :data:`WRITABLE_LAYERS`. The literal layer label is
             stored verbatim in the response envelope; the read-only
-            ``"built-in"`` layer is rejected with :class:`InvalidInput`.
+            ``"built-in"`` layer is rejected with :class:`UserError`
+            (``kind="InvalidInput"``).
         layer_file_path: Resolved on-disk path to the layer's ``config.yaml``.
         state_path: Optional state-file path. When given, missing
             ``fields_required`` for the profile are materialised as ``{}``.
@@ -182,8 +183,9 @@ def enable_profile(
         ``layer_path``, ``already_enabled``, ``state_keys_materialised``.
 
     Raises:
-        InvalidInput: ``profile_id`` unknown or ``layer`` not writable.
-        NotFound: state file is malformed (read-time only).
+        UserError: ``profile_id`` unknown or ``layer`` not writable
+            (``kind="InvalidInput"``); or state file is malformed
+            (read-time only) (``kind="NotFound"``).
     """
     if profile_id not in KNOWN_PROFILES:
         raise UserError(

@@ -60,7 +60,8 @@ def _friendly_validation_message(exc: ValidationError) -> str:
     Pydantic v2 prepends ``"Value error, "`` to messages raised from
     :class:`ValueError` inside field validators. The wizard validators
     already produce operator-facing copy, so the prefix is noise; we
-    strip it before handing the text to :class:`InvalidInput`.
+    strip it before handing the text to :class:`UserError`
+    (``kind="InvalidInput"``).
     """
     errors = exc.errors()
     if not errors:
@@ -108,8 +109,8 @@ def _resolve_profiles_and_template(
     The three surfaces (`--profile`, `--profiles`, `--template`) are
     mutually exclusive: at most one may be passed.
     Passing none falls through to the wizard default (``["core"]``).
-    Passing more than one raises :class:`InvalidInput` so the operator
-    picks the form they want.
+    Passing more than one raises :class:`UserError` (``kind="InvalidInput"``)
+    so the operator picks the form they want.
 
     When ``--template`` is the chosen surface, the template's
     ``profiles.enabled`` becomes the profiles list and the remaining
@@ -128,7 +129,8 @@ def _resolve_profiles_and_template(
         was selected.
 
     Raises:
-        InvalidInput: More than one surface used, or unknown template.
+        UserError: More than one surface used, or unknown template
+            (``kind="InvalidInput"``).
     """
     from eawf.profiles.discovery import load_init_template
 

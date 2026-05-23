@@ -61,8 +61,8 @@ def load_state(state_path: Path) -> State:
     """Read *state_path* and return a typed :class:`State`.
 
     Raises:
-        NotFound: when ``state_path`` does not exist.
-        ValidationFailed: when the on-disk payload is not a valid State.
+        UserError: when ``state_path`` does not exist (``kind="NotFound"``).
+        ValidationError: when the on-disk payload is not a valid State.
     """
     if not state_path.exists():
         raise UserError(f"state file not found: {state_path}", kind="NotFound")
@@ -81,7 +81,7 @@ def validate_or_raise(state: State) -> None:
     The mutated state has already been built by the caller; this helper
     re-runs the strict validator (no ``strict_optional`` because that is
     user-facing) and surfaces both schema and invariant violations under
-    :class:`eawf.cli.errors.ValidationFailed`.
+    :class:`eawf.cli.errors.ValidationError`.
     """
     payload = json.loads(state.model_dump_json())
     report = validate_payload(payload, strict_optional=False)

@@ -134,11 +134,12 @@ def probe_skill_instruments(
         else:
             report = run_probe(pids, cache_path=cache, reprobe=False)
     except Exception as exc:
-        # ``probe`` raises ``InstrumentMissing`` on a hard fail and only
-        # surfaces other exceptions on truly broken environments. Either
+        # ``probe`` raises ``UserError`` (``kind="InstrumentMissing"``) on a
+        # hard fail and only surfaces other exceptions on truly broken
+        # environments. Either
         # way we want the engine to surface a blocked envelope rather
         # than crash.
-        logger.warning(f"probe_skill_instruments: probe raised: {exc}")
+        logger.warning(f"probe_skill_instruments probe_error={exc!r}")
         repair = ["eawf doctor --reprobe"]
         # Best-effort rebuild of the probe map: assume every spec is
         # missing so the envelope still carries an actionable map.
@@ -246,7 +247,7 @@ def emit_event(
         # Skills must not crash on append failure; the engine wraps action
         # bodies so an exception flips the envelope to ``failed`` with a
         # traceback. We log and re-raise so the engine can surface it.
-        logger.warning(f"emit_event: append failed for {events_path}: {exc}")
+        logger.warning(f"emit_event outcome=append_failed path={events_path} error={exc!r}")
         raise
     return event_id
 
@@ -284,7 +285,7 @@ def has_research_profile(state_path: Path) -> bool:
     try:
         merged, _sources = merge_config(repo=anchor, workspace=anchor)
     except Exception as exc:
-        logger.debug(f"has_research_profile: merge_config raised: {exc}")
+        logger.debug(f"has_research_profile merge_error={exc!r}")
         return False
     profiles = merged.get("profiles") if isinstance(merged, dict) else None
     if not isinstance(profiles, dict):

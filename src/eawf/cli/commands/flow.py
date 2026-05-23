@@ -78,7 +78,7 @@ def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
 
     Mirrors :func:`eawf.cli.commands.skill._parse_stdin_args`. Empty
     stdin → empty dict. Non-mapping payloads raise
-    :class:`InvalidInput`.
+    :class:`UserError` (``kind="InvalidInput"``).
     """
     if not stdin_text.strip():
         return {}
@@ -105,10 +105,11 @@ def _resolve_target_flow_id(
 
     1. Explicit ``--flow-id`` flag wins; the resolver verifies the
        ``FL-...`` prefix (so ``--flow-id=foo`` raises
-       :class:`InvalidInput`).
+       :class:`UserError` with ``kind="InvalidInput"``).
     2. Otherwise, the unique in-progress flow id is used. Zero
-       in-progress flows → :class:`NotFound`. More than one → ambiguous,
-       raises :class:`InvalidInput` asking for ``--flow-id``.
+       in-progress flows → :class:`UserError` (``kind="NotFound"``). More
+       than one → ambiguous, raises :class:`UserError`
+       (``kind="InvalidInput"``) asking for ``--flow-id``.
     """
     from eawf.skills.flow import in_progress_flow_ids
 

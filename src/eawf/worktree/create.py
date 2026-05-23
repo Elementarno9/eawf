@@ -98,9 +98,9 @@ def _validate_wave_for_worktree(state: State, *, wave_id: str) -> Wave:
     """Validate *wave_id* and return its (CLAIMED/IN_PROGRESS) wave record.
 
     Raises:
-        InvalidInput: when the wave id is malformed or the wave is not in a
-            worktree-eligible status.
-        NotFound: when the wave id is absent from ``state.waves``.
+        UserError: when the wave id is malformed or the wave is not in a
+            worktree-eligible status (``kind="InvalidInput"``); or when the
+            wave id is absent from ``state.waves`` (``kind="NotFound"``).
     """
     if not is_wave_id(wave_id):
         raise cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput")
@@ -120,8 +120,9 @@ def _resolve_branch_name(branch: str | None, *, wave_id: str) -> str:
     """Return the validated branch name (explicit or default for *wave_id*).
 
     Raises:
-        InvalidInput: when the branch name is empty, carries whitespace, or
-            contains characters outside :data:`_BRANCH_NAME_RE`.
+        UserError: when the branch name is empty, carries whitespace, or
+            contains characters outside :data:`_BRANCH_NAME_RE`
+            (``kind="InvalidInput"``).
     """
     chosen_branch = branch or _default_branch_name(wave_id)
     if not chosen_branch.strip() or " " in chosen_branch or "\t" in chosen_branch:
@@ -159,13 +160,14 @@ def _resolve_base_branch(
     an explicit *base* bypasses the guard only when *explicit_base* is set.
 
     Raises:
-        InvalidInput: when the resolved base is the guarded default branch
-            and the explicit-override opt-in was not given.
+        UserError: when the resolved base is the guarded default branch
+            and the explicit-override opt-in was not given
+            (``kind="InvalidInput"``).
     """
     guarded_default = _guarded_default_branch(state, default_branch)
     if base is None:
         # The current-branch resolver already refuses detached HEAD with
-        # InvalidInput.
+        # UserError (kind="InvalidInput").
         chosen_base = git.current_branch(repo_root)
         if guarded_default and chosen_base == guarded_default:
             raise cli_errors.UserError(
@@ -191,8 +193,9 @@ def _resolve_worktree_path(
     """Resolve + validate the on-disk worktree path, clearing an empty dir under *force*.
 
     Raises:
-        InvalidInput: when the path resolves outside *repo_root*, is a
-            non-empty directory, or already exists (empty) without *force*.
+        UserError: when the path resolves outside *repo_root*, is a
+            non-empty directory, or already exists (empty) without *force*
+            (``kind="InvalidInput"``).
     """
     chosen_path = path or _default_path(repo_root, wave_id)
     _validate_path_inside_repo(repo_root, chosen_path)
@@ -255,13 +258,14 @@ def create_worktree(
         The new :class:`WorktreeRecord`.
 
     Raises:
-        InvalidInput: Bad inputs (regex, detached HEAD, branch already
-            exists, path outside repo, target dir non-empty).
-        NotFound: Wave id absent from ``state.waves`` or git repo absent.
-        IntegrityViolation: ``git worktree add`` failed for an unmapped
-            reason.
-        LockConflict: git's own registry was contended (mapped from
-            "already a working tree").
+        UserError: Bad inputs (regex, detached HEAD, branch already
+            exists, path outside repo, target dir non-empty)
+            (``kind="InvalidInput"``); or wave id absent from
+            ``state.waves`` or git repo absent (``kind="NotFound"``).
+        StateConflict: ``git worktree add`` failed for an unmapped reason
+            (``kind="IntegrityViolation"``); or git's own registry was
+            contended (mapped from "already a working tree";
+            ``kind="LockConflict"``).
     """
     # ---- 1. Validate wave id + presence -----------------------------------
     wave = _validate_wave_for_worktree(state, wave_id=wave_id)

@@ -789,15 +789,16 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 apply_func(state, mutation)
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
-                # (ValidationFailed, exit 2); every other lifecycle-guard
+                # (ValidationError, exit 2); every other lifecycle-guard
                 # rejection surfaces as a plain ValueError -> -32602
-                # (InvalidInput, exit 1). This mirrors the in-process fallback
-                # taxonomy so the daemon path and the daemon-down fallback
-                # agree on the exit code for the same rejection: phase/iter
-                # close pass closure_kind=True to ``_state_transaction`` and
-                # wave close maps -32002 in its bespoke ``_wave_close_via_daemon``
-                # proxy (both -> ValidationFailed), while every other verb maps
-                # a lifecycle rejection to InvalidInput.
+                # (UserError kind="InvalidInput", exit 1). This mirrors the
+                # in-process fallback taxonomy so the daemon path and the
+                # daemon-down fallback agree on the exit code for the same
+                # rejection: phase/iter close pass closure_kind=True to
+                # ``_state_transaction`` and wave close maps -32002 in its
+                # bespoke ``_wave_close_via_daemon`` proxy (both ->
+                # ValidationError), while every other verb maps a lifecycle
+                # rejection to UserError (kind="InvalidInput").
                 if mutation.kind in (
                     MutationKind.PHASE_CLOSE,
                     MutationKind.ITER_CLOSE,

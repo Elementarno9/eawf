@@ -30,7 +30,7 @@ Subcommands:
   directory by typo. Honours ``--no-input`` + ``--yes``.
 - ``repo remove <code>`` (P20-I01-W06) — drop the entry whose
   ``code == <code>`` from the registry. Explicit-only: never auto-prunes;
-  exits 2 (NotFound) when the code is absent.
+  exits 2 (UserError, ``kind="NotFound"``) when the code is absent.
 - ``repo prune`` (P20-I01-W06) — drop registry entries whose on-disk
   paths no longer exist. Requires ``--yes`` (or ``--no-input``) so the
   pruner never deletes silently. Reports each dropped entry in the
@@ -232,8 +232,10 @@ def _load_workspace_payload(workspace_state_path: Path) -> dict[str, Any]:
     """Load + JSON-decode *workspace_state_path*.
 
     Raises:
-        NotFound: When the workspace state file is absent.
-        IntegrityViolation: When the file content is not valid JSON.
+        UserError: When the workspace state file is absent
+            (``kind="NotFound"``).
+        StateConflict: When the file content is not valid JSON
+            (``kind="IntegrityViolation"``).
     """
     if not workspace_state_path.exists():
         raise cli_errors.UserError(
@@ -251,8 +253,9 @@ def _load_repo_payload(repo_state_path: Path) -> dict[str, Any]:
     """Load + JSON-decode *repo_state_path*.
 
     Raises:
-        NotFound: When the repo state file is absent.
-        IntegrityViolation: When the file content is not valid JSON.
+        UserError: When the repo state file is absent (``kind="NotFound"``).
+        StateConflict: When the file content is not valid JSON
+            (``kind="IntegrityViolation"``).
     """
     if not repo_state_path.exists():
         raise cli_errors.UserError(f"repo state file not found: {repo_state_path}", kind="NotFound")
@@ -426,9 +429,9 @@ def repo_link_cmd(
        later ``workspace validate`` can confirm the back-reference.
     4. Write both state files atomically under their own sibling locks.
 
-    Exits 3 (``InvalidInput``) when codes fail the project-code regex, when
-    the workspace code on disk disagrees with the *workspace_code* arg, or
-    when *repo_code* is already linked.
+    Exits 3 (``UserError``, ``kind="InvalidInput"``) when codes fail the
+    project-code regex, when the workspace code on disk disagrees with the
+    *workspace_code* arg, or when *repo_code* is already linked.
     """
 
     flags: GlobalFlags = ctx.obj
@@ -550,12 +553,13 @@ def _read_registry_for_write(registry_path: Path) -> Registry:
 
     When the file is missing returns a fresh :class:`Registry` with
     version 1 and an empty repos mapping. Other read errors
-    (validation failure, corrupted JSON) raise :class:`InvalidInput`
-    so the operator can repair by hand before mutating.
+    (validation failure, corrupted JSON) raise :class:`UserError`
+    (``kind="InvalidInput"``) so the operator can repair by hand before
+    mutating.
 
     Raises:
-        InvalidInput: When the file exists but cannot be parsed /
-            validated.
+        UserError: When the file exists but cannot be parsed /
+            validated (``kind="InvalidInput"``).
     """
     from eawf.registry import Registry, RegistryReadError, read_registry
 
@@ -669,9 +673,10 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
             (or a test override).
 
     Raises:
-        IntegrityViolation: Daemon required but unreachable.
-        ValidationFailed: Candidate payload fails schema validation.
-        LockConflict: In-process arm could not acquire the lock.
+        StateConflict: Daemon required but unreachable
+            (``kind="IntegrityViolation"``); or in-process arm could not
+            acquire the lock (``kind="LockConflict"``).
+        ValidationError: Candidate payload fails schema validation.
     """
     from pydantic import ValidationError as PydValidationError
 
@@ -816,13 +821,15 @@ def _confirm_unrecognised_parent(
 
     - ``--yes`` → skip prompt and proceed. Operator explicit opt-in.
     - ``--no-input`` (and no ``--yes``) → fail closed with
-      :class:`UserDeclined`. CI / scripts must pass ``--yes``.
+      :class:`UserError` (``kind="UserDeclined"``). CI / scripts must
+      pass ``--yes``.
     - stdin is not a TTY → also fail closed.
-    - Otherwise prompt; a "no" answer raises :class:`UserDeclined`.
+    - Otherwise prompt; a "no" answer raises :class:`UserError`
+      (``kind="UserDeclined"``).
 
     Raises:
-        UserDeclined: When the operator declines or the policy
-            forbids silent confirmation.
+        UserError: When the operator declines or the policy
+            forbids silent confirmation (``kind="UserDeclined"``).
     """
     if yes:
         return
@@ -1048,9 +1055,10 @@ def repo_add_cmd(
     Exit codes:
 
     - 0 — success (idempotent re-add included).
-    - 2 (NotFound) — *path* does not exist.
-    - 3 (InvalidInput) — missing/invalid code, registry corrupted.
-    - 6 (UserDeclined) — TOFU gate declined.
+    - 2 (UserError, ``kind="NotFound"``) — *path* does not exist.
+    - 3 (UserError, ``kind="InvalidInput"``) — missing/invalid code,
+      registry corrupted.
+    - 6 (UserError, ``kind="UserDeclined"``) — TOFU gate declined.
     """
     flags: GlobalFlags = ctx.obj
     resolved_path = path.resolve()
@@ -1127,14 +1135,16 @@ def repo_remove_cmd(
 
     Strictly explicit: this command never resolves *code* from the
     current working directory and never bulk-removes. Exits 2
-    (NotFound) when the registry has no such entry so a typo cannot
-    silently drop the wrong row.
+    (UserError, ``kind="NotFound"``) when the registry has no such entry
+    so a typo cannot silently drop the wrong row.
 
     Exit codes:
 
     - 0 — success.
-    - 2 (NotFound) — registry missing OR no entry with *code*.
-    - 3 (InvalidInput) — invalid code shape, registry corrupted.
+    - 2 (UserError, ``kind="NotFound"``) — registry missing OR no entry
+      with *code*.
+    - 3 (UserError, ``kind="InvalidInput"``) — invalid code shape,
+      registry corrupted.
     """
     from eawf.registry import Registry, RegistryReadError, read_registry
 
@@ -1217,7 +1227,8 @@ def repo_prune_cmd(
     fails ``Path.exists()``. The prune is staged: nothing writes
     until either ``--yes`` or ``--no-input`` confirms the intent.
     The TTY-without-confirm branch fails closed with
-    :class:`UserDeclined` so the operator never deletes silently.
+    :class:`UserError` (``kind="UserDeclined"``) so the operator never
+    deletes silently.
 
     When ``--yes`` is passed alongside ``--no-input`` the command
     completes silently (suitable for CI cleanup hooks).
@@ -1225,9 +1236,10 @@ def repo_prune_cmd(
     Exit codes:
 
     - 0 — success (zero or more entries pruned).
-    - 2 (NotFound) — registry file is missing.
-    - 3 (InvalidInput) — registry corrupted / invalid schema.
-    - 6 (UserDeclined) — confirmation gate declined.
+    - 2 (UserError, ``kind="NotFound"``) — registry file is missing.
+    - 3 (UserError, ``kind="InvalidInput"``) — registry corrupted /
+      invalid schema.
+    - 6 (UserError, ``kind="UserDeclined"``) — confirmation gate declined.
     """
     from eawf.registry import Registry, RegistryReadError, read_registry
 

@@ -12,10 +12,10 @@ wave-lifecycle counterpart to ``eawf worktree merge-back``:
   the resulting commit SHA as evidence.
 - Optionally clean up the worktree directory + branch.
 
-On conflict the function refuses to close the wave and surfaces an
-:class:`~eawf.cli.errors.IntegrityViolation` with a repair hint. The
-on-disk repo state (``.git/CHERRY_PICK_HEAD``) is preserved so the
-operator can resolve and re-run.
+On conflict the function refuses to close the wave and surfaces a
+:class:`~eawf.cli.errors.StateConflict` (``kind="IntegrityViolation"``)
+with a repair hint. The on-disk repo state (``.git/CHERRY_PICK_HEAD``) is
+preserved so the operator can resolve and re-run.
 
 The function mutates the supplied :class:`State` in place. Caller holds
 ``portalock(state.json)`` (via :func:`state_transaction`) and the
@@ -84,8 +84,9 @@ def _format_default_outcome(commit_count: int) -> str:
 def _check_wave_exists_and_active(state: State, wave_id: str) -> None:
     """Surface canonical errors for the common pre-flight failures.
 
-    The :func:`merge_back` call below already raises :class:`NotFound`
-    when the wave is missing, but it does so via the worktree-record
+    The :func:`merge_back` call below already raises :class:`UserError`
+    (``kind="NotFound"``) when the wave is missing, but it does so via the
+    worktree-record
     lookup ("wave X has no worktree id stamped") which obscures the
     underlying cause. We raise the cleaner shape up-front so the CLI
     envelope reads ``unknown wave`` rather than ``no worktree``.
@@ -105,7 +106,9 @@ def _refuse_on_conflict(
     merge_result: MergeBackResult,
     record_path: str,
 ) -> None:
-    """Raise :class:`IntegrityViolation` when *merge_result* is conflicted.
+    """Raise :class:`StateConflict` (``kind="IntegrityViolation"``) on conflict.
+
+    Fires when *merge_result* is conflicted.
 
     The hint mirrors the repair procedure documented in :func:`merge_back`:
     resolve the conflict in the parent worktree, then either re-run
@@ -152,15 +155,17 @@ def wave_land(
         outcome stamped, and whether the worktree was torn down.
 
     Raises:
-        NotFound: When the wave is unknown or has no worktree.
-        ValidationFailed: When the wave is not in a closable status.
-        IntegrityViolation: When the cherry-pick conflicts.
+        UserError: When the wave is unknown or has no worktree
+            (``kind="NotFound"``).
+        ValidationError: When the wave is not in a closable status.
+        StateConflict: When the cherry-pick conflicts
+            (``kind="IntegrityViolation"``).
         LifecycleError surfaces propagate from :func:`close_wave`.
     """
     _check_wave_exists_and_active(state, wave_id)
 
-    # merge_back will raise NotFound when the worktree record is missing
-    # (e.g., wave was never claimed via `worktree create`).
+    # merge_back will raise UserError (kind="NotFound") when the worktree
+    # record is missing (e.g., wave was never claimed via `worktree create`).
     merge_result = merge_back(
         state,
         repo_root=repo_root,

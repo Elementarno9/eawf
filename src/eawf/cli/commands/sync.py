@@ -83,8 +83,8 @@ def _load_state_or_none(state_path: Path) -> State | None:
     Sync runs against bare directories at ``init`` time — the memory view
     pipeline must degrade gracefully when there is no state yet rather than
     explode. Validation errors propagate to the caller as
-    :class:`cli_errors.InvalidInput` so the existing error envelope still
-    fires.
+    :class:`cli_errors.UserError` (``kind="InvalidInput"``) so the existing
+    error envelope still fires.
     """
     from eawf.validate.strict import validate_state
 
@@ -189,7 +189,7 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
         which is a legitimate "no managed AGENTS.md regions" outcome).
 
     Raises:
-        InvalidInput: ``profiles.enabled`` exists but is not a list of
+        UserError: ``profiles.enabled`` exists but is not a list of
             strings, or the layered merge raises (malformed YAML in any
             layer).
     """

@@ -29,8 +29,10 @@ creates, mutates, or scans the registry; both fail gracefully when
 the file is absent.
 
 Exit-code mapping mirrors the rest of the CLI (see
-:mod:`eawf.cli.errors`): bad inputs map to ``InvalidInput`` (3), missing
-state to ``NotFound`` (2), and lock contention to ``LockConflict`` (5).
+:mod:`eawf.cli.errors`): bad inputs map to ``UserError``
+(``kind="InvalidInput"``, exit 3), missing state to ``UserError``
+(``kind="NotFound"``, exit 2), and lock contention to ``StateConflict``
+(``kind="LockConflict"``, exit 5).
 """
 
 from __future__ import annotations
@@ -548,10 +550,11 @@ def workspace_registry_list_cmd(
     """Enumerate repos in ``~/.eawf/registry.json``.
 
     STRICTLY READ-ONLY — never grows the registry. When the file is
-    missing the command exits 2 (``NotFound``) with a hint pointing
-    at ``eawf init`` as the explicit-growth path. When the file is
-    present but malformed it exits 3 (``InvalidInput``) with the
-    Pydantic validation error so the operator can repair by hand.
+    missing the command exits 2 (``UserError``, ``kind="NotFound"``) with
+    a hint pointing at ``eawf init`` as the explicit-growth path. When the
+    file is present but malformed it exits 3 (``UserError``,
+    ``kind="InvalidInput"``) with the Pydantic validation error so the
+    operator can repair by hand.
     """
     from eawf.registry import (
         Registry,

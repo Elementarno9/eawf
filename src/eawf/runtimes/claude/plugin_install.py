@@ -361,7 +361,7 @@ def _check_for_drift(target_dir: Path, manifest: Manifest, *, force: bool) -> No
             )
 
 
-class IntegrityViolation(Exception):  # noqa: N818 — mirrors eawf.cli.errors.IntegrityViolation
+class IntegrityViolation(Exception):  # noqa: N818 — mirrors the kind="IntegrityViolation" CLI error bucket
     """Raised when a managed plugin file has drifted from its recorded hash."""
 
 

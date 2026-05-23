@@ -4,10 +4,12 @@ Refusal contract per the §Phase-5 plan row ("clean teardown" + "Property
 test: file-scope claims disjoint"):
 
 - ``record.status == ACTIVE`` AND working tree is dirty AND not
-  ``--force`` -> :class:`IntegrityViolation` (exit 8).
+  ``--force`` -> :class:`StateConflict` (``kind="IntegrityViolation"``,
+  exit 8).
 - ``record.status == CONFLICTED`` AND not ``--force`` ->
-  :class:`IntegrityViolation` ("preserve evidence; pass --force to
-  discard"). The conflict-preservation criterion in AGENTS.md rule 11
+  :class:`StateConflict` (``kind="IntegrityViolation"``; "preserve
+  evidence; pass --force to discard"). The conflict-preservation
+  criterion in AGENTS.md rule 11
   is the contract here: a CONFLICTED state is operator-recoverable
   evidence, not garbage.
 
@@ -87,8 +89,10 @@ def cleanup_worktree(
     """Tear down the worktree directory + per-wave branch.
 
     Raises:
-        NotFound: The wave or its worktree record is absent.
-        IntegrityViolation: The dirty/CONFLICTED guard refused.
+        UserError: The wave or its worktree record is absent
+            (``kind="NotFound"``).
+        StateConflict: The dirty/CONFLICTED guard refused
+            (``kind="IntegrityViolation"``).
     """
     record = _find_record_for_wave(state, wave_id)
     worktree_path = repo_root / record.path
@@ -104,10 +108,11 @@ def cleanup_worktree(
 
     # Dirty-tree guard. Skip when status is already MERGED (the
     # post-merge worktree often retains cherry-pick artifacts that are
-    # innocuous) or when the path is already gone. Only suppress
-    # ``InstrumentMissing`` so a broken git invocation still surfaces:
-    # ``IntegrityViolation`` (rc!=0) and ``LockConflict`` (timeout) are
-    # operator-actionable signals that the cleanup must not swallow.
+    # innocuous) or when the path is already gone. Only suppress the
+    # ``kind="InstrumentMissing"`` case so a broken git invocation still
+    # surfaces: ``kind="IntegrityViolation"`` (rc!=0) and
+    # ``kind="LockConflict"`` (timeout) are operator-actionable signals
+    # that the cleanup must not swallow.
     if worktree_path.exists() and record.status == WorktreeStatus.ACTIVE and not force:
         try:
             dirty = git.status_porcelain(worktree_path)

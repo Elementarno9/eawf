@@ -614,7 +614,7 @@ def _parse_age_days(raw: str | int) -> int:
       approximations because v0.1 has no calendar engine.
 
     Raises:
-        InvalidInput: Empty, negative, or malformed input.
+        UserError: Empty, negative, or malformed input (``kind="InvalidInput"``).
     """
     if isinstance(raw, int):
         if raw < 0:

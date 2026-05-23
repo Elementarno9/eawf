@@ -48,11 +48,11 @@ def add_audit(
     closed via :func:`require_complete_audit`.
 
     Raises:
-        InvalidInput: When ``audit_id`` already exists, when ``verdict`` is
+        UserError: When ``audit_id`` already exists, when ``verdict`` is
             given without ``report_artifact_id``, or when ``report_artifact_id``
             is non-None but absent from :attr:`State.artifacts` (orphan-ref
             guard — the audit-evidence anchor must point at an existing
-            artifact, not a placeholder id).
+            artifact, not a placeholder id). Carries ``kind="InvalidInput"``.
     """
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id in audits:
@@ -229,9 +229,9 @@ def set_verdict(
 
     Behaviour matrix:
 
-    * ``audit_id`` absent → :class:`NotFound`.
+    * ``audit_id`` absent → :class:`UserError` (``kind="NotFound"``).
     * Audit ``PENDING`` and ``report_artifact_id`` is ``None`` →
-      :class:`InvalidInput` (a verdict requires evidence).
+      :class:`UserError` (``kind="InvalidInput"`` — a verdict requires evidence).
     * Audit ``PENDING`` and ``report_artifact_id`` provided → orphan-ref
       guard mirrors :func:`add_audit`; on success the audit lifts to
       ``COMPLETE`` with the supplied ``report_artifact_id`` and ``verdict``.

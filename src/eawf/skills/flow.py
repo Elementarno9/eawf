@@ -773,7 +773,8 @@ class FlowSkill(SkillAction):
         """Validate the ``resume_from`` arg into a checkpoint + envelope id.
 
         Raises:
-            InvalidInput: when the supplied checkpoint dict fails validation.
+            UserError: when the supplied checkpoint dict fails validation
+                (``kind="InvalidInput"``).
         """
         if not isinstance(resume_from_raw, dict):
             return None, None

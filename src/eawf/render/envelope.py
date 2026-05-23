@@ -317,7 +317,7 @@ def from_markdown(text: str) -> OutputEnvelope:
     Raises:
         ValueError: ``text`` does not start with the frontmatter fence,
             is missing the closing fence, or lacks the footer comment
-            block. The CLI handler maps these to :class:`ValidationFailed`.
+            block. The CLI handler maps these to :class:`ValidationError`.
     """
     open_fence = f"{_FRONTMATTER_FENCE}\n"
     if not text.startswith(open_fence):

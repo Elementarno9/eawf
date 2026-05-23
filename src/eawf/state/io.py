@@ -25,7 +25,7 @@ Validation rejections raise :class:`StateValidationError` (a stdlib
 :class:`ValueError` subclass) rather than a CLI-layer error type, keeping
 this module free of the ``eawf.cli`` import that would otherwise invert the
 layering. The CLI maps it onto its canonical
-:class:`eawf.cli.errors.ValidationFailed` exit code at the boundary.
+:class:`eawf.cli.errors.ValidationError` exit code at the boundary.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class StateValidationError(ValueError):
     pass :func:`eawf.validate.strict.validate_state`. Subclasses
     :class:`ValueError` so callers that have no CLI-error context can still
     catch it; the CLI boundary maps it onto
-    :class:`eawf.cli.errors.ValidationFailed` (exit code 2).
+    :class:`eawf.cli.errors.ValidationError` (exit code 2).
     """
 
 

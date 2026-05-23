@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 # Schema markers that the migrator recognises on input. Anything else
-# raises :class:`ValidationFailed` — we refuse to silently accept an
+# raises :class:`ValidationError` — we refuse to silently accept an
 # unknown future marker, since the body shape may differ in ways we
 # cannot guess at.
 CURRENT_MARKER: Final[str] = CONFIG_SCHEMA_VERSION  # "1.0"
@@ -74,7 +74,7 @@ def migrate_config_payload(
         input was already ``"1.0"`` and the migration was a no-op.
 
     Raises:
-        ValidationFailed: When ``schema_version`` is missing entirely,
+        ValidationError: When ``schema_version`` is missing entirely,
             or is a value outside :data:`ACCEPTED_MARKERS`. Missing
             markers are rejected because the legacy code path always
             wrote one; an absent marker indicates corruption.
@@ -166,7 +166,7 @@ def migrate_config_file(path: Path) -> tuple[dict[str, Any], bool, Path | None]:
         occurred; ``None`` otherwise.
 
     Raises:
-        ValidationFailed: When the YAML cannot be parsed, the body is
+        ValidationError: When the YAML cannot be parsed, the body is
             not a mapping, or the schema marker is unrecognised.
     """
     if not path.exists():

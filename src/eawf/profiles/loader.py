@@ -70,8 +70,9 @@ def load_profile(
         Pydantic-validated :class:`ProfileBody`.
 
     Raises:
-        InvalidInput: ``profile_id`` is not present in any layer.
-        ValidationFailed: The YAML body fails schema validation.
+        UserError: ``profile_id`` is not present in any layer
+            (``kind="InvalidInput"``).
+        ValidationError: The YAML body fails schema validation.
     """
     return load_profile_with_discovery(profile_id, workspace=workspace)
 
@@ -112,9 +113,9 @@ def load_composed_profile(
         override-audit, and conflict-warning records.
 
     Raises:
-        InvalidInput: One of the requested ids is not present in any
-            discovery layer.
-        ValidationFailed: A discovered YAML body fails schema validation.
+        UserError: One of the requested ids is not present in any
+            discovery layer (``kind="InvalidInput"``).
+        ValidationError: A discovered YAML body fails schema validation.
         ProfileConflict: ``conflict_resolution="fail"`` and the composition
             has at least one undeclared conflict edge.
     """

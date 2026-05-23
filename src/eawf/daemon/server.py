@@ -210,7 +210,7 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     except DaemonValidationError as exc:
         # A lifecycle-guard / post-invariant rejection — the param shape
         # was syntactically fine, the mutation was semantically refused.
-        # Emit -32002 so the CLI client maps it to ValidationFailed
+        # Emit -32002 so the CLI client maps it to ValidationError
         # (exit 2), matching the in-process fallback for the same case.
         return _error(req_id, VALIDATION_FAILED, str(exc))
     except ValueError as exc:

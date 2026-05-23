@@ -305,9 +305,9 @@ def _save_value_to_layer(
             ``daemon_anchor_fallback`` warning on the daemon side.
 
     Raises:
-        IntegrityViolation: Daemon required but unreachable
-            (``daemon_required`` envelope).
-        ValidationFailed: Underlying YAML is malformed.
+        StateConflict: Daemon required but unreachable
+            (``daemon_required`` envelope; ``kind="IntegrityViolation"``).
+        ValidationError: Underlying YAML is malformed.
         OSError: Filesystem failure during read or write.
         yaml.YAMLError: Dump failure when serialising the merged payload.
     """
@@ -525,8 +525,8 @@ def config_validate(
         from eawf.profiles.loader import list_profiles, load_profile
 
         # Resolve the enabled profile list from the merged config. Unknown
-        # ids surface as InvalidInput from load_profile so the user gets a
-        # helpful pointer to the registry.
+        # ids surface as UserError (kind="InvalidInput") from load_profile
+        # so the user gets a helpful pointer to the registry.
         profiles_section = merged.get("profiles") or {}
         enabled_raw = profiles_section.get("enabled") or []
         if not isinstance(enabled_raw, list):
@@ -663,7 +663,7 @@ def _build_menu_style() -> Any:
 
 
 def _ensure_menu_answer(value: Any, *, step: str) -> Any:
-    """Map a ``None`` questionary answer to :class:`UserDeclined`.
+    """Map a ``None`` questionary answer to :class:`UserError` (``kind="UserDeclined"``).
 
     questionary returns ``None`` from ``.ask()`` whenever the operator hits
     Ctrl-C / Esc / EOF. The menu treats that as a user-declined cancellation
@@ -690,7 +690,8 @@ def _prompt_for_value(entry: ConfigKey, current: Any) -> Any:
         coerces via :func:`coerce_and_validate`).
 
     Raises:
-        UserDeclined: Operator aborted with Ctrl-C / Esc / EOF.
+        UserError: Operator aborted with Ctrl-C / Esc / EOF
+            (``kind="UserDeclined"``).
     """
     import questionary
     from questionary import Choice

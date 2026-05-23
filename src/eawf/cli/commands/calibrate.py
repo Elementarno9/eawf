@@ -51,9 +51,10 @@ def calibrate_buckets_cmd(ctx: typer.Context) -> None:
     operator can re-cadence it. Failures map to the canonical CLI exit
     codes:
 
-    - :class:`~eawf.cli.errors.NotFound` (``exit=1``) when no
-      ``.ea/state.json`` resolves from the cwd / ``-w`` / ``EA_STATE`` chain.
-    - :class:`~eawf.cli.errors.ValidationFailed` (``exit=2``) when the
+    - :class:`~eawf.cli.errors.UserError` (``kind="NotFound"``, ``exit=1``)
+      when no ``.ea/state.json`` resolves from the cwd / ``-w`` /
+      ``EA_STATE`` chain.
+    - :class:`~eawf.cli.errors.ValidationError` (``exit=2``) when the
       on-disk payload fails strict schema validation.
     """
     from eawf.estimation.buckets import calibrate_buckets

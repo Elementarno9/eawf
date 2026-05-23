@@ -8,11 +8,12 @@ to the caller (or ``None`` when the call is a write).
 The structure mirrors :func:`eawf.cli.commands.clone_repo._git_clone`:
 
 - :func:`shutil.which` check up-front maps to
-  :class:`~eawf.cli.errors.InstrumentMissing` (exit 6).
+  :class:`~eawf.cli.errors.UserError` (``kind="InstrumentMissing"``, exit 6).
 - :class:`subprocess.TimeoutExpired` maps to
-  :class:`~eawf.cli.errors.IntegrityViolation` (exit 8). A timeout is a
-  transient hung-git symptom, not a sibling-lock-held condition; mapping
-  it to ``LockConflict`` would lie to operators about the failure mode.
+  :class:`~eawf.cli.errors.StateConflict` (``kind="IntegrityViolation"``,
+  exit 8). A timeout is a transient hung-git symptom, not a
+  sibling-lock-held condition; mapping it to ``kind="LockConflict"`` would
+  lie to operators about the failure mode.
 - Non-zero exit is dispatched per-helper, with stderr-marker matching
   for the well-known git error strings (``"fatal: not a git repository"``,
   ``"fatal: invalid reference"``, ``"fatal: already a working tree"``).
@@ -41,7 +42,7 @@ _SLOW_TIMEOUT: float = 60.0
 
 
 def _ensure_git() -> None:
-    """Raise :class:`InstrumentMissing` if ``git`` is not on PATH."""
+    """Raise :class:`UserError` (``kind="InstrumentMissing"``) if ``git`` is not on PATH."""
     if shutil.which("git") is None:
         raise cli_errors.UserError(
             "git executable not found on PATH; install git before using eawf worktree",
@@ -55,7 +56,10 @@ def _run(
     cwd: Path | None = None,
     timeout: float = _FAST_TIMEOUT,
 ) -> subprocess.CompletedProcess[str]:
-    """Invoke *args* via :func:`subprocess.run`, mapping timeout to IntegrityViolation."""
+    """Invoke *args* via :func:`subprocess.run`.
+
+    A timeout maps to :class:`StateConflict` (``kind="IntegrityViolation"``).
+    """
     _ensure_git()
     logger.info(f"_run invoking args={args} cwd={cwd} timeout={timeout}")
     try:
@@ -76,7 +80,8 @@ def _run(
 def repo_root(start: Path) -> Path:
     """Return the repository root that *start* lies inside.
 
-    Raises :class:`NotFound` if *start* is not in a git working tree.
+    Raises :class:`UserError` (``kind="NotFound"``) if *start* is not in a
+    git working tree.
     """
     res = _run(["git", "-C", str(start), "rev-parse", "--show-toplevel"])
     if res.returncode != 0:
@@ -90,7 +95,8 @@ def repo_root(start: Path) -> Path:
 def current_branch(repo: Path) -> str:
     """Return the current HEAD branch of *repo*.
 
-    Raises :class:`InvalidInput` when HEAD is detached (no symbolic ref).
+    Raises :class:`UserError` (``kind="InvalidInput"``) when HEAD is
+    detached (no symbolic ref).
     """
     res = _run(["git", "-C", str(repo), "symbolic-ref", "--short", "HEAD"])
     if res.returncode != 0:
@@ -124,10 +130,14 @@ def worktree_add(
 
     Maps git's well-known error strings to the canonical taxonomy:
 
-    - ``"already a working tree"`` -> :class:`LockConflict` (exit 5).
-    - ``"invalid reference"`` -> :class:`InvalidInput` (exit 3).
-    - ``"not a git repository"`` -> :class:`NotFound` (exit 2).
-    - default -> :class:`IntegrityViolation` (exit 8).
+    - ``"already a working tree"`` -> :class:`StateConflict`
+      (``kind="LockConflict"``, exit 5).
+    - ``"invalid reference"`` -> :class:`UserError`
+      (``kind="InvalidInput"``, exit 3).
+    - ``"not a git repository"`` -> :class:`UserError`
+      (``kind="NotFound"``, exit 2).
+    - default -> :class:`StateConflict`
+      (``kind="IntegrityViolation"``, exit 8).
     """
     args = [
         "git",
@@ -266,8 +276,9 @@ def cherry_pick(repo: Path, *, sha: str) -> tuple[bool, str]:
     has the equivalent content.
 
     Hard failures unrelated to a conflict (invalid sha, etc.) raise
-    :class:`InvalidInput` / :class:`IntegrityViolation` per the same
-    pattern as :func:`worktree_add`.
+    :class:`UserError` (``kind="InvalidInput"``) / :class:`StateConflict`
+    (``kind="IntegrityViolation"``) per the same pattern as
+    :func:`worktree_add`.
     """
     res = _run(["git", "-C", str(repo), "cherry-pick", sha], timeout=_SLOW_TIMEOUT)
     if res.returncode == 0:
@@ -283,8 +294,9 @@ def cherry_pick(repo: Path, *, sha: str) -> tuple[bool, str]:
         )
         if skip.returncode == 0:
             return True, ""
-        # If the skip itself failed, fall through to the IntegrityViolation
-        # path below — we cannot leave the repo mid-pick.
+        # If the skip itself failed, fall through to the StateConflict
+        # (kind="IntegrityViolation") path below — we cannot leave the repo
+        # mid-pick.
         detail = ((skip.stderr or "") + (skip.stdout or "")).strip() or detail
     if "after resolving the conflicts" in lower or "could not apply" in lower:
         return False, detail

@@ -9,9 +9,10 @@ Surface contract::
 The command shells out to ``git clone`` (auth via the operator's existing
 git credentials and ``GIT_*`` environment — there is **no interactive
 authentication** in v0.1) and then delegates to the ``eawf init --no-input``
-pipeline against the freshly-cloned tree. Bad URLs surface as
-``InvalidInput`` (exit 3); transient git failures (network, auth) surface
-as ``LockConflict`` (exit 5) so caller scripts can retry.
+pipeline against the freshly-cloned tree. Bad URLs surface as ``UserError``
+(``kind="InvalidInput"``, exit 3); transient git failures (network, auth)
+surface as ``StateConflict`` (``kind="LockConflict"``, exit 5) so caller
+scripts can retry.
 
 Why a separate command? ``git clone`` + ``eawf init`` is two transactions;
 combining them lets the v0.1 CLI offer a single "go from zero to a
@@ -85,7 +86,8 @@ def _derive_project_code(target_dir: Path, project_code: str | None) -> str:
       source of truth for the coercion rules — the wizard validator and
       the clone-repo derivation now agree byte-for-byte.
 
-    Raises :class:`InvalidInput` when neither path produces a valid code.
+    Raises :class:`UserError` (``kind="InvalidInput"``) when neither path
+    produces a valid code.
     """
     if project_code is not None:
         if not is_project_code(project_code):
@@ -111,9 +113,11 @@ def _git_clone(
 
     Exit-code mapping per the plan §W06:
 
-    - Bad URL / argv mistake -> :class:`InvalidInput` (exit 3).
+    - Bad URL / argv mistake -> :class:`UserError`
+      (``kind="InvalidInput"``, exit 3).
     - Network / auth / "not a git repository" / unreachable host
-      -> :class:`LockConflict` (exit 5) — these are transient by nature.
+      -> :class:`StateConflict` (``kind="LockConflict"``, exit 5) — these
+      are transient by nature.
     """
     if shutil.which("git") is None:
         raise cli_errors.UserError(

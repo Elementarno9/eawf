@@ -347,7 +347,7 @@ def _resolve_state_path(flags: GlobalFlags) -> Path | None:
 
 
 def _resolve_wave_or_raise(state: State, wave_id: str) -> Wave:
-    """Look up *wave_id*; raise :class:`NotFound` when missing."""
+    """Look up *wave_id*; raise :class:`UserError` (``kind="NotFound"``) when missing."""
     wave = state.waves.get(wave_id)
     if wave is None:
         raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")

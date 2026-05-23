@@ -591,10 +591,10 @@ def roadmap_apply_cmd(
     the confirmation surface, never a state mutation of the wave set.
 
     Raises:
-        InvalidInput: ``phase_id`` is malformed, the phase is not PLANNED,
-            or the phase has no waves to apply.
-        NotFound: ``phase_id`` is not present in state, or no ``state.json``
-            resolves for the workspace.
+        UserError: ``phase_id`` is malformed, the phase is not PLANNED,
+            or the phase has no waves to apply (``kind="InvalidInput"``);
+            or ``phase_id`` is not present in state, or no ``state.json``
+            resolves for the workspace (``kind="NotFound"``).
     """
     from eawf.cli._mutation import state_transaction
 

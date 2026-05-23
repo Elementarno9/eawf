@@ -23,8 +23,8 @@ Public API (menu surface — pre-P25):
 - :func:`keys_for_tab` — alphabetical :class:`ConfigKey` list for one tab.
 - :func:`registry_lookup` — locate an entry by dotted key.
 - :func:`coerce_and_validate` — turn a raw string answer into a typed value
-  matching the entry's declared type, raising :class:`InvalidInput` on
-  failure.
+  matching the entry's declared type, raising :class:`UserError`
+  (``kind="InvalidInput"``) on failure.
 
 Public API (leaf-key catalog — P25-W14 / C08):
 
@@ -387,7 +387,11 @@ def registry_lookup(key: str) -> ConfigKey | None:
 
 
 def _coerce_bool(raw: str | bool) -> bool:
-    """Coerce a string answer to bool. Empty / unknown raises :class:`InvalidInput`."""
+    """Coerce a string answer to bool.
+
+    Raises:
+        UserError: Empty / unknown value (``kind="InvalidInput"``).
+    """
     if isinstance(raw, bool):
         return raw
     lowered = raw.strip().lower()
@@ -402,7 +406,8 @@ def _coerce_number(raw: str | int | float, *, want_int: bool) -> int | float:
     """Coerce a string answer to int or float.
 
     Raises:
-        InvalidInput: When the string fails the requested numeric parse.
+        UserError: When the string fails the requested numeric parse
+            (``kind="InvalidInput"``).
     """
     if isinstance(raw, (int, float)) and not isinstance(raw, bool):
         return int(raw) if want_int else float(raw)
@@ -418,8 +423,8 @@ def _coerce_ranged_number(entry: ConfigKey, raw: Any, *, want_int: bool) -> int 
     """Coerce *raw* to int/float and range-check it against *entry*'s bounds.
 
     Raises:
-        InvalidInput: When *raw* does not parse as the declared numeric type
-            or falls outside ``[min_value, max_value]``.
+        UserError: When *raw* does not parse as the declared numeric type
+            or falls outside ``[min_value, max_value]`` (``kind="InvalidInput"``).
     """
     value = _coerce_number(raw, want_int=want_int)
     if entry.min_value is not None and value < entry.min_value:
@@ -439,7 +444,8 @@ def _coerce_choice(entry: ConfigKey, raw: Any) -> str:
     """Coerce *raw* to one of *entry*'s declared single-choice options.
 
     Raises:
-        InvalidInput: When the stringified value is not a declared choice.
+        UserError: When the stringified value is not a declared choice
+            (``kind="InvalidInput"``).
     """
     text = str(raw)
     if entry.choices is None or text not in entry.choices:
@@ -456,8 +462,8 @@ def _coerce_multichoice(entry: ConfigKey, raw: Any) -> list[str]:
     Accepts a sequence (tuple/list) or a comma-separated string.
 
     Raises:
-        InvalidInput: When the key declares no choices, or any parsed item is
-            not a declared choice.
+        UserError: When the key declares no choices, or any parsed item is
+            not a declared choice (``kind="InvalidInput"``).
     """
     if isinstance(raw, (list, tuple)):
         items = [str(item) for item in raw]
@@ -490,9 +496,9 @@ def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
         layer through the existing :func:`_atomic_write_yaml` helper.
 
     Raises:
-        InvalidInput: When the raw value cannot be parsed as the declared
+        UserError: When the raw value cannot be parsed as the declared
             type, is outside the declared range, or is not one of the
-            declared choices.
+            declared choices (``kind="InvalidInput"``).
     """
     if entry.type == "bool":
         return _coerce_bool(raw)

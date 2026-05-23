@@ -42,7 +42,7 @@ def define_goal(
         outcome_ids: Optional outcome ids to seed (typically empty).
 
     Raises:
-        InvalidInput: When ``goal_id`` is already present.
+        UserError: When ``goal_id`` is already present (``kind="InvalidInput"``).
     """
     goals: dict[str, Goal] = dict(state.goals or {})
     if goal_id in goals:

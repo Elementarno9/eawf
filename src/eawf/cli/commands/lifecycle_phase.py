@@ -211,9 +211,9 @@ def _phase_activate_find_repo_root(state_path: Path) -> Path | None:
 def _phase_activate_run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     """Run ``git`` with the phase-activate timeout and captured stdio.
 
-    Maps the timeout into :class:`cli_errors.IntegrityViolation` so the
-    operator gets exit 8 (transient infrastructure failure) instead of a
-    surface-level rejection.
+    Maps the timeout into :class:`cli_errors.StateConflict`
+    (``kind="IntegrityViolation"``) so the operator gets exit 8 (transient
+    infrastructure failure) instead of a surface-level rejection.
     """
     logger.info(f"_phase_activate_run_git args={args} cwd={cwd}")
     try:
@@ -235,9 +235,9 @@ def _phase_activate_run_git(args: list[str], *, cwd: Path) -> subprocess.Complet
 def _phase_activate_dirty_lines(repo: Path) -> list[str]:
     """Return ``git status --porcelain`` lines from *repo* (empty list when clean).
 
-    Surfaces an :class:`cli_errors.IntegrityViolation` when the porcelain
-    invocation itself fails (rc != 0); a clean tree returns ``[]`` and a
-    dirty tree returns one entry per dirty path.
+    Surfaces a :class:`cli_errors.StateConflict` (``kind="IntegrityViolation"``)
+    when the porcelain invocation itself fails (rc != 0); a clean tree
+    returns ``[]`` and a dirty tree returns one entry per dirty path.
     """
     res = _phase_activate_run_git(["git", "-C", str(repo), "status", "--porcelain"], cwd=repo)
     if res.returncode != 0:
@@ -353,10 +353,12 @@ def _phase_activate_git_gates(
     see the decision.
 
     Raises:
-        cli_errors.InvalidInput: when the worktree is dirty (gate 3) or
-            ``HEAD`` is behind ``origin/<default_branch>`` (gate 2).
-        cli_errors.IntegrityViolation: when an underlying ``git``
-            invocation fails or times out unexpectedly.
+        cli_errors.UserError: when the worktree is dirty (gate 3) or
+            ``HEAD`` is behind ``origin/<default_branch>`` (gate 2)
+            (``kind="InvalidInput"``).
+        cli_errors.StateConflict: when an underlying ``git``
+            invocation fails or times out unexpectedly
+            (``kind="IntegrityViolation"``).
     """
     if shutil.which("git") is None:
         logger.info("_phase_activate_git_gates skip=no_git_binary")

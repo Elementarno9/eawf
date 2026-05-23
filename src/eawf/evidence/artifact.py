@@ -105,7 +105,8 @@ def update_artifact(
     Only ``sha256``, ``size_bytes``, and ``uri`` are mutable; identity
     (``id``, ``kind``, ``urn``, ``scope_id``, ``created_at``) is fixed
     once registered. At least one of the three mutable fields MUST be
-    supplied; passing all-``None`` raises :class:`InvalidInput`.
+    supplied; passing all-``None`` raises :class:`UserError`
+    (``kind="InvalidInput"``).
 
     Designed for the recompute-on-touch case: when a registered file's
     on-disk content drifts (typically because pre-commit hooks rewrite
@@ -122,9 +123,10 @@ def update_artifact(
             non-``None`` against the file://-and-absolute-path block.
 
     Raises:
-        NotFound: when *artifact_id* is not registered.
-        InvalidInput: when no mutable field is supplied, or *uri* is
-            an absolute path / ``file://`` scheme.
+        UserError: when *artifact_id* is not registered
+            (``kind="NotFound"``), or when no mutable field is supplied or
+            *uri* is an absolute path / ``file://`` scheme
+            (``kind="InvalidInput"``).
 
     Returns:
         Event envelope describing the update; caller appends to event.jsonl.

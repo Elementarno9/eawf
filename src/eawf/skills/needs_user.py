@@ -70,8 +70,9 @@ class PauseError(ValueError):
     """Raised when a pause cannot be resolved.
 
     Carries a single human-readable message; callers map it onto their
-    surface-specific error (the CLI onto :class:`~eawf.cli.errors.NotFound`
-    / :class:`~eawf.cli.errors.InvalidInput`, the TUI onto an error toast).
+    surface-specific error (the CLI onto :class:`~eawf.cli.errors.UserError`
+    with ``kind="NotFound"`` / ``kind="InvalidInput"``, the TUI onto an
+    error toast).
     """
 
 
@@ -275,7 +276,9 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
         try:
             question = UserQuestion.model_validate_json(raw_question)
         except ValueError as exc:
-            logger.debug(f"list_open_pauses skip undecodable question pause_urn={urn!r} {exc!r}")
+            logger.debug(
+                f"list_open_pauses outcome=skip_undecodable pause_urn={urn!r} error={exc!r}"
+            )
             continue
         session = payload.extras.get(_SESSION_KEY)
         pending.append(

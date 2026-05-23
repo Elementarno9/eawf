@@ -114,18 +114,19 @@ def state_transaction(
     0. Daemonless gate: when this is a mutating transaction
        (``read_only=False``, the default) AND the operator passed the
        ``--daemonless`` flag (per :func:`daemonless_flag_requested`),
-       refuse with :class:`~eawf.cli.errors.InvalidInput` *before*
-       touching the file — mutating verbs are daemon-only. Read-only
+       refuse with :class:`~eawf.cli.errors.UserError`
+       (``kind="InvalidInput"``) *before* touching the file — mutating
+       verbs are daemon-only. Read-only
        callers (``worktree list``, ``roadmap show``) pass
        ``read_only=True`` to bypass this gate.
     1. Acquire :func:`eawf.lock.portalock.acquire` on *state_path* with
        *timeout* (default 5 s, matching the rest of the CLI).
     2. Read + decode + schema-validate the on-disk state. Schema errors
-       raise :class:`~eawf.cli.errors.ValidationFailed`.
+       raise :class:`~eawf.cli.errors.ValidationError`.
     3. ``yield`` the typed :class:`State` to the caller for in-place
        mutation.
     4. On caller success, re-validate the mutated state (schema +
-       invariants). Failures raise :class:`ValidationFailed` and the
+       invariants). Failures raise :class:`ValidationError` and the
        on-disk file is left unchanged.
     5. ``atomic_write_json_locked`` persists the new payload while
        the lock is still held.
@@ -139,15 +140,15 @@ def state_transaction(
             (mutating) so every write path inherits the gate.
 
     Raises:
-        InvalidInput: When ``read_only=False`` and the ``--daemonless``
-            flag was passed (``data.kind="InvalidInput"``) — mutating
-            verbs cannot run daemonless.
-        NotFound: When *state_path* does not exist.
-        ValidationFailed: When the loaded payload fails schema
+        UserError: When ``read_only=False`` and the ``--daemonless``
+            flag was passed (``kind="InvalidInput"`` — mutating verbs
+            cannot run daemonless); or when *state_path* does not exist
+            (``kind="NotFound"``).
+        ValidationError: When the loaded payload fails schema
             validation, or the post-mutation payload fails schema
             or invariant checks.
-        LockConflict: When the sibling lock cannot be acquired within
-            *timeout*.
+        StateConflict: When the sibling lock cannot be acquired within
+            *timeout* (``kind="LockConflict"``).
 
     .. warning::
 

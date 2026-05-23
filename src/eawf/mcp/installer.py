@@ -66,10 +66,10 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 class IntegrityViolation(Exception):  # noqa: N818 — canonical CLI error name (mirrors eawf.cli.errors)
     """Raised when a runtime config write would clobber a user entry.
 
-    The CLI layer maps this to :class:`eawf.cli.errors.IntegrityViolation`
-    (exit code 8). The library raises a plain Python error so it can
-    be reused outside the Typer surface (e.g. by ``eawf doctor`` in
-    v0.1.1).
+    The CLI layer maps this to :class:`eawf.cli.errors.StateConflict`
+    (``kind="IntegrityViolation"``, exit code 8). The library raises a
+    plain Python error so it can be reused outside the Typer surface
+    (e.g. by ``eawf doctor`` in v0.1.1).
     """
 
 

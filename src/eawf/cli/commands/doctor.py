@@ -5,7 +5,7 @@ Surface contract:
 - ``eawf doctor`` runs the W01 check set (tools, state presence, config
   merge), prints a Rich-formatted table, and exits ``0`` when every check
   is ``ok``/``warn`` and ``6`` when a hard probe fails (via
-  :class:`eawf.cli.errors.InstrumentMissing`).
+  :class:`eawf.cli.errors.UserError` with ``kind="InstrumentMissing"``).
 - ``eawf doctor --reprobe`` deletes the on-disk probe cache before re-running
   the probes (forces a fresh ``shutil.which`` round-trip per requirement).
 - ``eawf doctor --user-scope`` additionally probes ``uv tool list`` for a
@@ -30,7 +30,7 @@ Exit codes:
 
 - ``0`` — every check passed (warnings allowed).
 - ``6`` — at least one ``hard`` requirement is missing (probe raised
-  :class:`eawf.cli.errors.InstrumentMissing`).
+  :class:`eawf.cli.errors.UserError` with ``kind="InstrumentMissing"``).
 - ``1`` — any other ``fail`` status (forward-compat; the W01 surface only
   has the probe path that maps to ``6``).
 """
@@ -268,7 +268,7 @@ def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
         column-aligned rendered table the TTY branch prints.
 
     Raises:
-        ValidationFailed: ``runtime_id`` is not one of the three
+        ValidationError: ``runtime_id`` is not one of the three
             canonical v0.3-v0.5 runtimes.
     """
     from eawf.runtimes.capabilities import (
@@ -403,6 +403,7 @@ def doctor(
     emit_json_or_text(payload, text, flags=effective_flags)
     if overall_status(results) == "fail":
         # Defence in depth: ``run_all`` already converts hard probe failures
-        # into InstrumentMissing. A residual ``fail`` here means a future
-        # check produced one without raising — we still want a non-zero exit.
+        # into UserError (kind="InstrumentMissing"). A residual ``fail`` here
+        # means a future check produced one without raising — we still want a
+        # non-zero exit.
         raise typer.Exit(code=1)

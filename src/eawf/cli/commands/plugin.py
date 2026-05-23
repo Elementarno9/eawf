@@ -129,8 +129,9 @@ def _validate_scope(scope: str, *, runtime: str) -> None:
     """Reject invalid scope values, and ``user`` for claude.
 
     Raises:
-        InvalidInput: when *scope* is not ``project`` / ``user``, or
-            when *runtime* is ``claude`` and *scope* is ``user``.
+        UserError: when *scope* is not ``project`` / ``user``, or
+            when *runtime* is ``claude`` and *scope* is ``user``
+            (``kind="InvalidInput"``).
     """
     if scope not in _VALID_SCOPES:
         raise cli_errors.UserError(
@@ -150,8 +151,9 @@ def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
 
     - ``--force`` overrides the gate (caller is acknowledging the duplicate
       render).
-    - ``--no-input`` mode refuses the install with an :exc:`InvalidInput`
-      error so the operator can pick a path before retrying.
+    - ``--no-input`` mode refuses the install with a :exc:`UserError`
+      (``kind="InvalidInput"``) so the operator can pick a path before
+      retrying.
     - Otherwise prompts via :mod:`questionary` for confirmation; a ``No``
       answer aborts cleanly.
     """
@@ -1135,7 +1137,7 @@ def _normalise_sync_runtimes(values: list[str]) -> list[str]:
     """Map operator-facing aliases (``claude``) to canonical ids (``claude-code``).
 
     Raises:
-        InvalidInput: when a value is not a recognised alias.
+        UserError: when a value is not a recognised alias (``kind="InvalidInput"``).
     """
     canonical: list[str] = []
     for value in values:

@@ -76,11 +76,12 @@ def set_priority(
     """Update the priority of an open backlog item in place.
 
     Raises:
-        NotFound: when ``item_id`` is absent from :attr:`State.backlog`.
-        InvalidInput: when the item is :attr:`BacklogStatus.CLOSED` (closed
-            items are frozen) or when the requested ``priority`` already
-            equals the current value (no-op rejected so the event log does
-            not silently churn).
+        UserError: when ``item_id`` is absent from :attr:`State.backlog`
+            (``kind="NotFound"``); or when the item is
+            :attr:`BacklogStatus.CLOSED` (closed items are frozen) or the
+            requested ``priority`` already equals the current value (no-op
+            rejected so the event log does not silently churn)
+            (``kind="InvalidInput"``).
     """
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id not in backlog:

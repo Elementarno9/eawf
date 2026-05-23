@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_state_path(flags: GlobalFlags) -> Path:
-    """Resolve the active ``state.json`` path or raise :class:`NotFound`."""
+    """Resolve the active ``state.json`` path or raise :class:`UserError` (``kind="NotFound"``)."""
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
@@ -59,7 +59,12 @@ def _resolve_state_path(flags: GlobalFlags) -> Path:
 
 
 def _read_log(log_path: Path) -> str:
-    """Read the CI log file or raise :class:`NotFound` / :class:`InvalidInput`."""
+    """Read the CI log file.
+
+    Raises:
+        UserError: When the log file is absent (``kind="NotFound"``) or
+            cannot be read (``kind="InvalidInput"``).
+    """
     if not log_path.exists():
         raise cli_errors.UserError(f"ci log not found: {log_path}", kind="NotFound")
     try:

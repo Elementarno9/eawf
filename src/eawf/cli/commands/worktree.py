@@ -67,7 +67,7 @@ worktree_app = typer.Typer(
 
 
 def _resolve_state_path(flags: GlobalFlags) -> Path:
-    """Resolve the active ``state.json`` path or raise :class:`NotFound`."""
+    """Resolve the active ``state.json`` path or raise :class:`UserError` (``kind="NotFound"``)."""
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:

@@ -82,7 +82,8 @@ def _coerce_confidence(raw: str | None, *, default: Confidence = Confidence.MEDI
     """Convert ``--confidence h|m|l`` to a :class:`Confidence` value.
 
     Accepts the long form (``high``/``medium``/``low``) too. ``None`` returns
-    *default*. Anything else raises :class:`errors.InvalidInput`.
+    *default*. Anything else raises :class:`errors.UserError`
+    (``kind="InvalidInput"``).
     """
     if raw is None:
         return default
@@ -126,7 +127,7 @@ def _commit_state(
 ) -> None:
     """Validate and atomically persist *state*.
 
-    Raises :class:`errors.ValidationFailed` on schema/invariant errors so the
+    Raises :class:`errors.ValidationError` on schema/invariant errors so the
     mutation never lands on disk in an invalid form.
     """
     from eawf.validate.strict import validate_state

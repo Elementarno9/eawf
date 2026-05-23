@@ -139,7 +139,10 @@ wave_app.add_typer(wave_budget_app, name="budget")
 
 
 def _read_state_payload(path: Path) -> dict[str, Any]:
-    """Read and JSON-decode *path*. Raises ``cli_errors.NotFound`` on miss."""
+    """Read and JSON-decode *path*.
+
+    Raises ``cli_errors.UserError`` (``kind="NotFound"``) on miss.
+    """
     if not path.exists():
         raise cli_errors.UserError(f"state file not found: {path}", kind="NotFound")
     raw = path.read_bytes()
@@ -152,7 +155,7 @@ def _read_state_payload(path: Path) -> dict[str, Any]:
 
 
 def _validate_or_raise(payload: dict[str, Any]) -> State:
-    """Validate the candidate payload; raise ``ValidationFailed`` on error."""
+    """Validate the candidate payload; raise ``ValidationError`` on error."""
     from eawf.validate.strict import validate_state as validate_state_payload
 
     report = validate_state_payload(payload, strict_optional=False)
@@ -281,9 +284,9 @@ def _resolve_commit_sha(ref: str) -> str:
         The 40-char lowercase hex commit SHA.
 
     Raises:
-        cli_errors.InvalidInput: If git is not on ``PATH``, the
+        cli_errors.UserError: If git is not on ``PATH``, the
             subprocess times out, or the ref does not resolve to a
-            commit on any branch.
+            commit on any branch (``kind="InvalidInput"``).
     """
     cmd = ["git", "rev-parse", f"{ref}^{{commit}}"]
     try:
@@ -576,7 +579,7 @@ def _run_mutation(
             resolved_scope_id = scope_id if scope_id is not None else scope_id_factory()
             # The library writer raises ``StateValidationError`` for a
             # post-apply invariant rejection; map it onto the CLI
-            # ``ValidationFailed`` bucket (exit 2) so the surrounding
+            # ``ValidationError`` bucket (exit 2) so the surrounding
             # ``except cli_errors.CliError`` clause below surfaces it.
             try:
                 return commit_mutation(

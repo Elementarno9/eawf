@@ -72,8 +72,8 @@ def _parse_event_type(raw: str) -> HookEventType:
 
     Accepts the canonical lowercase value ("pre_commit", "post_commit",
     …) — matches the StrEnum value verbatim. Unknown values raise
-    :class:`~eawf.cli.errors.InvalidInput` so the handler can surface
-    exit code 3.
+    :class:`~eawf.cli.errors.UserError` (``kind="InvalidInput"``) so the
+    handler can surface exit code 3.
     """
     from eawf.hooks.event import HookEventType
 
@@ -94,8 +94,9 @@ def _parse_payload(stdin_text: str) -> dict[str, Any]:
     smoke checks.
 
     Raises:
-        InvalidInput: ``stdin_text`` is non-empty but not valid JSON,
-            or decodes to something other than a JSON object.
+        UserError: ``stdin_text`` is non-empty but not valid JSON,
+            or decodes to something other than a JSON object
+            (``kind="InvalidInput"``).
     """
     if not stdin_text.strip():
         return {}

@@ -13,7 +13,7 @@ verdict-bearing mutation (``outcome set``, ``hypothesis verdict``,
 ``incident close``, ``backlog close``) must provide ``--audit <id>`` of an
 audit that exists in ``state.audits`` and has ``status == complete``.
 
-Failures are surfaced as :class:`eawf.cli.errors.ValidationFailed` so the
+Failures are surfaced as :class:`eawf.cli.errors.ValidationError` so the
 caller exits with code ``4`` (``VALIDATION_FAILED``), matching the canonical
 exit-code table from :mod:`eawf.cli.exit_codes`.
 """
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def require_complete_audit(state: State, audit_id: str | None) -> None:
-    """Raise :class:`ValidationFailed` if *audit_id* is not a complete audit.
+    """Raise :class:`ValidationError` if *audit_id* is not a complete audit.
 
     Args:
         state: The candidate state already holding any new audit record(s).

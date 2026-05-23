@@ -27,8 +27,9 @@ Public API:
   forbidding extras and validating ``project_code`` plus ``profiles`` membership.
 - :class:`WizardResult` — Pydantic v2 model summarising the artefacts written.
 - :class:`WizardCancelled` — raised when the operator aborts a prompt
-  (Ctrl-C / EOF). Subclass of :class:`~eawf.cli.errors.UserDeclined` so the
-  CLI handler maps it to the canonical ``USER_DECLINED`` exit code.
+  (Ctrl-C / EOF). Subclass of :class:`~eawf.cli.errors.UserError` (its
+  concrete name folds into ``data.kind="WizardCancelled"``) so the CLI
+  handler maps it to the canonical ``USER_DECLINED`` exit code.
 - :func:`run_wizard_no_input` — pure pipeline.
 - :func:`run_wizard_interactive` — questionary TTY entry-point.
 
@@ -428,8 +429,8 @@ def run_wizard_no_input(
         state keys (so the CLI envelope can surface "added 3 keys to state").
 
     Raises:
-        InvalidInput: ``.ea/`` already contains canonical files and
-            ``force`` is False.
+        UserError: ``.ea/`` already contains canonical files and
+            ``force`` is False (``kind="InvalidInput"``).
     """
     target_dir = target_dir.resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -687,10 +688,10 @@ def run_wizard_interactive(target_dir: Path, *, force: bool = False) -> WizardRe
     Raises:
         WizardCancelled: When the operator aborts a prompt (Ctrl-C / EOF /
             Esc). Maps to ``USER_DECLINED`` exit code.
-        InvalidInput: When the collected answers fail Pydantic validation.
-            The interactive surface keeps the same exception taxonomy as
-            ``--no-input`` so the CLI handler maps to ``INVALID_INPUT``
-            uniformly.
+        UserError: When the collected answers fail Pydantic validation
+            (``kind="InvalidInput"``). The interactive surface keeps the
+            same exception taxonomy as ``--no-input`` so the CLI handler
+            maps to ``INVALID_INPUT`` uniformly.
     """
     from rich.console import Console
 

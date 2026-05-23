@@ -145,10 +145,10 @@ def _workflow_metrics(flags: GlobalFlags) -> None:
     Read-only — does not acquire a lock, append events, or mutate
     ``state.json``. Failures map to the canonical CLI exit codes:
 
-    - :class:`~eawf.cli.errors.NotFound` (``exit=1``) when no
-      ``.ea/state.json`` is locatable from the cwd / ``-w`` / ``EA_STATE``
-      precedence chain.
-    - :class:`~eawf.cli.errors.ValidationFailed` (``exit=2``) when the
+    - :class:`~eawf.cli.errors.UserError` (``kind="NotFound"``, ``exit=1``)
+      when no ``.ea/state.json`` is locatable from the cwd / ``-w`` /
+      ``EA_STATE`` precedence chain.
+    - :class:`~eawf.cli.errors.ValidationError` (``exit=2``) when the
       on-disk payload fails strict schema validation.
     """
     from eawf.estimation.metrics import compute_metrics
@@ -179,8 +179,8 @@ def _estimate_actual_variance(flags: GlobalFlags) -> None:
     Read-only — computes the C09 §5.9.6 M26 gauge over CLOSED waves with
     both an estimate and an actual and feeds the ship-gate Variance section
     + the C06 VarianceTile. Failures map to the canonical CLI exit codes:
-    NotFound (``exit=1``) when no ``state.json`` resolves, ValidationFailed
-    (``exit=2``) on a schema mismatch.
+    UserError (``kind="NotFound"``, ``exit=1``) when no ``state.json``
+    resolves, ValidationError (``exit=2``) on a schema mismatch.
     """
     from eawf.estimation.metrics import compute_estimate_actual_variance
     from eawf.evidence._io import load_state
@@ -216,9 +216,9 @@ def _backfill_actuals(flags: GlobalFlags, *, dry_run: bool) -> None:
     With ``dry_run`` the count is computed against an in-memory snapshot and
     nothing is persisted (no lock, no write).
 
-    Failures map to the canonical CLI exit codes: NotFound (``exit=1``) when
-    no ``state.json`` resolves, ValidationFailed (``exit=2``) on a schema
-    mismatch.
+    Failures map to the canonical CLI exit codes: UserError
+    (``kind="NotFound"``, ``exit=1``) when no ``state.json`` resolves,
+    ValidationError (``exit=2``) on a schema mismatch.
     """
     from eawf.cli._mutation import state_transaction
     from eawf.evidence._io import load_state
@@ -254,7 +254,7 @@ def _render_variance(variance_pct: float | None, sample_count: int) -> str:
 
 
 def _resolve_state_or_emit(flags: GlobalFlags) -> Path | None:
-    """Resolve the state path or emit a NotFound error and return ``None``."""
+    """Resolve the state path or emit a UserError (``kind="NotFound"``) and return ``None``."""
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:

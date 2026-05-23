@@ -37,9 +37,10 @@ def add_decision(
     :func:`eawf.cli._mutation.state_transaction` so they land atomically).
 
     Raises:
-        InvalidInput: when *decision_id* already exists, *rationale* is empty,
+        UserError: when *decision_id* already exists, *rationale* is empty,
             *supersedes* names an unknown decision, *supersedes* equals
             *decision_id* (self-supersede), or the named parent is not ACTIVE.
+            Carries ``kind="InvalidInput"``.
     """
     decisions: dict[str, Decision] = dict(state.decisions or {})
     if decision_id in decisions:
@@ -130,11 +131,11 @@ def supersede_decision(
     :func:`eawf.cli._mutation.state_transaction`) so the flip lands atomically.
 
     Raises:
-        NotFound: when *old_id* or *new_id* names a decision absent from state.
-        InvalidInput: when *old_id* equals *new_id* (self-supersede), *old_id*
-            is not currently ACTIVE, or *new_id* is not currently ACTIVE (a
-            non-ACTIVE superseder would form a supersede cycle, e.g. A->B then
-            B->A).
+        UserError: when *old_id* or *new_id* names a decision absent from
+            state (``kind="NotFound"``); or when *old_id* equals *new_id*
+            (self-supersede), *old_id* is not currently ACTIVE, or *new_id*
+            is not currently ACTIVE (a non-ACTIVE superseder would form a
+            supersede cycle, e.g. A->B then B->A) (``kind="InvalidInput"``).
     """
     decisions: dict[str, Decision] = dict(state.decisions or {})
     if old_id == new_id:

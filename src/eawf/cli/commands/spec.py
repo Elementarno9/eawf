@@ -414,7 +414,7 @@ def _parse_spec_urn(urn: str) -> tuple[str, str]:
         :func:`spec_writer.spec_file_path`.
 
     Raises:
-        InvalidInput: When *urn* does not parse as a spec URN.
+        UserError: When *urn* does not parse as a spec URN (``kind="InvalidInput"``).
     """
     from eawf.state.urn import parse as parse_urn
 
@@ -501,7 +501,7 @@ def spec_show_cmd(
     3. When the file is missing AND ``--from-git`` is set: walk
        ``git log -- <path>`` for the most recent blob and print
        that body.
-    4. Anything else: raise :class:`NotFound`.
+    4. Anything else: raise :class:`UserError` (``kind="NotFound"``).
     """
     from eawf.spec import cache as spec_cache
 

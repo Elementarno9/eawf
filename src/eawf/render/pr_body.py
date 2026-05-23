@@ -45,7 +45,7 @@ PrBodyInputKind = Literal["operator_rollup", "executor_report", "reviewer_report
 PrKind = Literal["phase", "iter", "docs-research", "incident-fix"]
 
 
-class PrBodyNotFound(LookupError):  # noqa: N818 — pairs with cli.errors.NotFound naming
+class PrBodyNotFound(LookupError):  # noqa: N818 — pairs with the cli.errors kind="NotFound" tag
     """Raised when the requested phase id is not present in ``state.phases``."""
 
 

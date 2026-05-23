@@ -16,7 +16,8 @@ Probe outcomes per spec are normalised to one of three statuses:
                 NOT abort.
 - ``fail``    — the spec is marked ``kind="hard"`` and the binary was not
                 found; :func:`probe` raises
-                :class:`eawf.cli.errors.InstrumentMissing` (CLI exit 6).
+                :class:`eawf.cli.errors.UserError`
+                (``kind="InstrumentMissing"``, CLI exit 6).
 
 Cache shape (``v=1``)::
 
@@ -78,7 +79,8 @@ class InstrumentSpec(BaseModel):
         name: Binary name passed to :func:`shutil.which`. Must match the
             executable filename (no path components).
         kind: ``"hard"`` requirements abort the probe via
-            :class:`InstrumentMissing`; ``"soft"`` requirements warn only.
+            :class:`UserError` (``kind="InstrumentMissing"``); ``"soft"``
+            requirements warn only.
         probe: ``"which"`` checks PATH only; ``"version"`` additionally runs
             ``[name, *version_args]`` and captures stdout.
         version_args: Argv tail for the version probe (default ``["--version"]``).
@@ -323,8 +325,9 @@ def probe(
         wins).
 
     Raises:
-        InstrumentMissing: when at least one ``kind="hard"`` requirement
-            failed. The exception message lists every missing hard tool.
+        UserError: when at least one ``kind="hard"`` requirement
+            failed (``kind="InstrumentMissing"``). The exception message
+            lists every missing hard tool.
     """
     target_path = resolve_cache_path(cache_path)
 

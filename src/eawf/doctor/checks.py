@@ -6,9 +6,10 @@ this install workable?".
 
 - :func:`check_tools_available` — runs the instrument probe and surfaces its
   outcome (``ok``/``warn``/``fail``). On hard-tool failure the underlying
-  :class:`eawf.cli.errors.InstrumentMissing` is allowed to propagate so the
-  CLI maps it to exit code ``6`` (``INSTRUMENT_MISSING``). All other outcomes
-  collapse to a non-fatal :class:`CheckResult`.
+  :class:`eawf.cli.errors.UserError` (``kind="InstrumentMissing"``) is
+  allowed to propagate so the CLI maps it to exit code ``6``
+  (``INSTRUMENT_MISSING``). All other outcomes collapse to a non-fatal
+  :class:`CheckResult`.
 - :func:`check_state_present` — reports whether ``state.json`` resolves at
   the workspace anchor.
 - :func:`check_config_resolves` — reports whether the layered config merge
@@ -91,8 +92,9 @@ def check_tools_available(
     - ``warn`` — at least one soft probe failed (no hard fails).
     - ``fail`` — at least one hard probe failed.
 
-    The function lets :class:`eawf.cli.errors.InstrumentMissing` escape so the
-    CLI surface can map it to exit code ``6``. Callers that only want the
+    The function lets :class:`eawf.cli.errors.UserError`
+    (``kind="InstrumentMissing"``) escape so the CLI surface can map it to
+    exit code ``6``. Callers that only want the
     snapshot view (no abort) should call :func:`eawf.install.instrument_probe.probe`
     directly with a guard.
     """
@@ -104,8 +106,9 @@ def check_tools_available(
     statuses = {r.status for r in report.results}
     if "fail" in statuses:
         # Should be unreachable: a hard fail would have raised
-        # InstrumentMissing inside ``probe``. Soft fails do not exist (they
-        # are reclassified to ``warn``). Keep the branch for forward-compat.
+        # UserError (kind="InstrumentMissing") inside ``probe``. Soft fails
+        # do not exist (they are reclassified to ``warn``). Keep the branch
+        # for forward-compat.
         return CheckResult(
             name="tools_available",
             status="fail",
@@ -471,8 +474,9 @@ def run_all(
     """Run every doctor check and return the result list.
 
     The instrument probe is the only check whose hard failure aborts the
-    function; it raises :class:`eawf.cli.errors.InstrumentMissing` so the CLI
-    can map it to exit code ``6``. Every other check returns a
+    function; it raises :class:`eawf.cli.errors.UserError`
+    (``kind="InstrumentMissing"``) so the CLI can map it to exit code
+    ``6``. Every other check returns a
     :class:`CheckResult`. W08 adds the manifest-in-sync and
     render-output-roundtrip checks at the end of the list so the canonical
     envelope shape mirrors the order operators see in the doctor table.

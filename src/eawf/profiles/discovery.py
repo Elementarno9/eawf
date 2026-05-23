@@ -109,7 +109,7 @@ def discover_profile(
             ``.ea/profiles/`` is consulted before the user overlay.
 
     Raises:
-        InvalidInput: The id is not present in any layer.
+        UserError: The id is not present in any layer (``kind="InvalidInput"``).
     """
     if workspace is not None:
         ws_map = _iter_yaml(workspace_profiles_dir(workspace))
@@ -269,8 +269,9 @@ def load_init_template(template_name: str) -> dict[str, Any]:
         Parsed YAML mapping (always a ``dict[str, Any]``).
 
     Raises:
-        InvalidInput: ``template_name`` is not in the bundled set.
-        ValidationFailed: Template YAML is malformed or non-mapping.
+        UserError: ``template_name`` is not in the bundled set
+            (``kind="InvalidInput"``).
+        ValidationError: Template YAML is malformed or non-mapping.
     """
     known = list_init_templates()
     if template_name not in known:

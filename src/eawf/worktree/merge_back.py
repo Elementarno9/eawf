@@ -12,8 +12,9 @@ Two strategies:
   is left mid-flight; ``--continue`` resumes it from the worktree.
   If the parent is not fast-forwardable post-rebase (a concurrent
   commit landed on *target* between the rebase and the merge step),
-  raises :class:`~eawf.cli.errors.IntegrityViolation` rather than
-  force-updating — operator must re-attempt under a fresh lock.
+  raises :class:`~eawf.cli.errors.StateConflict`
+  (``kind="IntegrityViolation"``) rather than force-updating — operator
+  must re-attempt under a fresh lock.
 
 Both strategies preserve evidence on conflict — the on-disk repo state
 (``.git/CHERRY_PICK_HEAD`` for cherry-pick, ``rebase-merge`` for rebase)
@@ -231,8 +232,9 @@ def _continue_resume(
     - ``CHERRY_PICK_HEAD`` present in *repo_root*'s ``.git`` -> cherry-pick.
     - rebase-merge / rebase-apply present in the worktree's ``.git`` -> rebase.
 
-    Raises :class:`IntegrityViolation` when the record is CONFLICTED
-    but neither evidence is present (operator likely aborted manually).
+    Raises :class:`StateConflict` (``kind="IntegrityViolation"``) when the
+    record is CONFLICTED but neither evidence is present (operator likely
+    aborted manually).
     """
     if git.cherry_pick_in_progress(repo_root):
         clean, _detail = git.cherry_pick_continue(repo_root)

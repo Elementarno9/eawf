@@ -31,7 +31,7 @@ Discipline checklist:
 - Grants reference :class:`McpServer` rows by id; a dangling
   ``server_id`` is caught by
   :func:`eawf.validate.invariants.check_mcp_grant_server_ref` and
-  rolled back as :class:`ValidationFailed` inside ``grant_cmd``.
+  rolled back as :class:`cli_errors.ValidationError` inside ``grant_cmd``.
 """
 
 from __future__ import annotations
@@ -141,9 +141,10 @@ def _confirm_install(
     - ``--no-input`` (``flags.no_input is True``) → skip prompt and
       proceed. The user opted in to non-interactive policy.
     - stdin is **not** a TTY → fail closed with
-      :class:`UserDeclined`. We refuse to silently proceed — the
-      caller must explicitly opt in via ``--no-input``.
-    - Otherwise prompt; a "no" answer raises :class:`UserDeclined`.
+      :class:`UserError` (``kind="UserDeclined"``). We refuse to silently
+      proceed — the caller must explicitly opt in via ``--no-input``.
+    - Otherwise prompt; a "no" answer raises :class:`UserError`
+      (``kind="UserDeclined"``).
 
     The text mirrors a security checklist: command, env-refs,
     runtime, target path. No env-ref *values* are emitted (and we
@@ -714,7 +715,7 @@ def grant_cmd(
     The transaction validates referential integrity after mutation: if
     *server_id* is not registered in ``state.mcp_servers``, the
     ``INV.REF.MCP_GRANT_SERVER_MISSING`` invariant fires and the write is
-    rolled back as :class:`ValidationFailed`.
+    rolled back as :class:`cli_errors.ValidationError`.
     """
     from pydantic import ValidationError
 

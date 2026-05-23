@@ -235,7 +235,7 @@ def _mutate_via_daemon[FallbackT](
        rather than blindly re-running *fallback* (which would
        double-apply a non-idempotent kind such as ``EVENT_APPEND``).
     5. A ``-32002 validation_failed`` rejection maps to
-       :class:`~eawf.cli.errors.ValidationFailed`; any other RPC error
+       :class:`~eawf.cli.errors.ValidationError`; any other RPC error
        (``-32001`` lock conflict, ``-32003`` not found, ``-32005``
        runtime unavailable, ...) maps onto its specific typed
        :class:`~eawf.cli.errors.CliError` via
@@ -277,7 +277,7 @@ def _mutate_via_daemon[FallbackT](
             read times out AFTER the request was sent (POST-SEND phase) —
             the write may or may not have applied, so the fallback is not
             re-run. Exit code 4 (subclass of ``DaemonUnreachable``).
-        ValidationFailed: When the daemon rejects the mutation with
+        ValidationError: When the daemon rejects the mutation with
             ``-32002 validation_failed``.
         CliError: When the daemon returns any other JSON-RPC error
             envelope — the code is mapped onto its specific typed

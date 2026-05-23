@@ -2,7 +2,7 @@
 
 Each layer in :mod:`eawf.config.layered` resolves to a single YAML file path.
 This module reads the file (if present) and returns the parsed mapping. Any
-parse error is surfaced as :class:`eawf.cli.errors.ValidationFailed` so the
+parse error is surfaced as :class:`eawf.cli.errors.ValidationError` so the
 CLI surface maps cleanly onto exit code ``4``.
 
 Public API:
@@ -36,10 +36,10 @@ def load_yaml_layer(path: Path) -> dict[str, Any]:
         - the file contains an explicit empty document.
 
     Raises:
-        ValidationFailed: When the file is unreadable due to a YAML parse
+        ValidationError: When the file is unreadable due to a YAML parse
             error, or when the parsed document is not a mapping (top-level
             list/scalar/null-after-content). Mapping every malformed-input
-            case to ``ValidationFailed`` lets ``eawf config validate`` emit
+            case to ``ValidationError`` lets ``eawf config validate`` emit
             exit-code ``4`` consistently.
     """
     if not path.exists():

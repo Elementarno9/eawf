@@ -59,7 +59,7 @@ def _flags(ctx: typer.Context) -> GlobalFlags:
 
 
 def _state_path(flags: GlobalFlags) -> Path:
-    """Resolve the state path or raise :class:`NotFound`."""
+    """Resolve the state path or raise :class:`UserError` (``kind="NotFound"``)."""
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:

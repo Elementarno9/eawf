@@ -116,7 +116,8 @@ def show_cmd(
     summary fields the operator needs.
 
     Raises:
-        NotFound: When the resolved ``state.json`` does not exist.
+        UserError: When the resolved ``state.json`` does not exist
+            (``kind="NotFound"``).
     """
     flags: GlobalFlags = ctx.obj
     effective_ws = workspace if workspace is not None else flags.workspace

@@ -12,7 +12,7 @@ parse a hand-authored response into the canonical JSON shape for the
 state CLI).
 
 ``--strict`` is the loud-failure switch: malformed input raises
-:class:`~eawf.cli.errors.ValidationFailed` (exit 4). Without ``--strict``
+:class:`~eawf.cli.errors.ValidationError` (exit 4). Without ``--strict``
 the same parse errors still raise (the spec only enumerates strict
 behaviour); we keep the surface symmetric so callers don't have to
 remember which side is permissive.

@@ -93,8 +93,8 @@ def _append_event_fsynced(event_path: Path, record: WalRecord) -> None:
     does not acquire the JSONL sibling lock — replay runs single-
     threaded at boot before any RPC traffic is accepted, so no
     concurrent appender can race us. Keeping the lock-free path
-    avoids importing the CLI's ``LockConflict`` surface into the
-    daemon recovery loop.
+    avoids importing the CLI's ``StateConflict`` (``kind="LockConflict"``)
+    surface into the daemon recovery loop.
     """
     event_path.parent.mkdir(parents=True, exist_ok=True)
     line = record.envelope.model_dump_json() + "\n"

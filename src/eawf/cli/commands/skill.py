@@ -171,7 +171,8 @@ def _resolve_skill_name(raw: str) -> SkillName:
     in shells that interpret it.
 
     Raises:
-        InvalidInput: ``raw`` is not one of the ten canonical names.
+        UserError: ``raw`` is not one of the ten canonical names
+            (``kind="InvalidInput"``).
     """
     candidate = _normalise_skill_input(raw)
     valid = _all_skill_names()
@@ -188,7 +189,8 @@ def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
     """Decode and shape-check the optional stdin JSON args mapping.
 
     Empty stdin is allowed and yields an empty dict; non-empty input
-    that is not a JSON object is rejected with :class:`InvalidInput`.
+    that is not a JSON object is rejected with :class:`UserError`
+    (``kind="InvalidInput"``).
     """
     if not stdin_text.strip():
         return {}
@@ -376,8 +378,9 @@ def _resolve_skill_spec(name: SkillName) -> SkillSpec:
     work in the slashed namespace.
 
     Raises:
-        cli_errors.InvalidInput: ``name`` has no matching :data:`SkillSpec`
-            entry. This should be unreachable in practice because
+        cli_errors.UserError: ``name`` has no matching :data:`SkillSpec`
+            entry (``kind="InvalidInput"``). This should be unreachable in
+            practice because
             :func:`_resolve_skill_name` validates the canonical literal
             BEFORE we land here — the registry and the literal are
             frozen at the same ten names — but we still raise the
@@ -482,7 +485,7 @@ def list_cmd(
 
 
 # Frozen set of valid ``--format`` values for the ``render`` command.
-# Centralised so the InvalidInput message lists the exact alternatives
+# Centralised so the UserError message lists the exact alternatives
 # the surface accepts; bare ``Literal`` would let Typer auto-coerce but
 # would not give us a stable rejection message for an arbitrary input.
 _RENDER_FORMATS: frozenset[str] = frozenset({"skill-md", "json"})
@@ -520,11 +523,12 @@ def render_cmd(
     row of ``skill list --json`` plus a ``body`` field holding the
     canonical SKILL.md string.
 
-    Unknown skill name → :class:`~eawf.cli.errors.InvalidInput`
-    (exit code 3, mirrors :func:`_resolve_skill_name`).
-    Unknown ``--format`` → :class:`~eawf.cli.errors.InvalidInput`
-    (same code), with the canonical alternatives listed in the
-    rejection message.
+    Unknown skill name → :class:`~eawf.cli.errors.UserError`
+    (``kind="InvalidInput"``, exit code 3, mirrors
+    :func:`_resolve_skill_name`).
+    Unknown ``--format`` → :class:`~eawf.cli.errors.UserError`
+    (``kind="InvalidInput"``, same code), with the canonical alternatives
+    listed in the rejection message.
     """
     from eawf.render.skills import render_skill_md_from_spec
     from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
@@ -592,11 +596,11 @@ def resume_cmd(
     from that record on its next run.
 
     Raises:
-        NotFound: When *pause_urn* names no open pause (it never existed
+        UserError: When *pause_urn* names no open pause (it never existed
             or was already resolved), or the resolved ``state.json`` does
-            not exist — exit non-zero.
-        InvalidInput: When *choice* is not one of the question's option
-            labels — exit non-zero.
+            not exist (``kind="NotFound"``); or when *choice* is not one of
+            the question's option labels (``kind="InvalidInput"``) — exit
+            non-zero.
     """
     from eawf.skills.needs_user import PauseError, find_open_pause, resolve_pause
 
