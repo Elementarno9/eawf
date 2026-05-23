@@ -22,6 +22,19 @@ The typed payload is validated through :data:`C09EventPayloadUnion`
 whose body does not match its ``event_type`` discriminator fails fast
 with :class:`pydantic.ValidationError` at emit time rather than at
 projection time (the §5.11 discriminator-emit invariant).
+
+On dispatch completion the runner also emits a typed ``agent_end``
+executor report through the canonical agent-report writer
+:func:`eawf.agent_report.store.append_agent_report` (the same writer the
+operator-facing ``eawf hook event`` AGENT_END path uses). The report
+uses the dispatched wave's executor :class:`~eawf.state.models.AgentSession`
+as authority — role, scope, attempt, and store kind are derived from the
+session — so the persisted row passes
+:func:`eawf.validate.invariants.check_agent_report_invariants`. Report
+emission is opt-in: it fires only when the caller supplies the
+``session_id`` of the executor session AND the daemon context is wired to
+an on-disk ``state.json`` (plan-only and stateless unit-test contexts
+skip it).
 """
 
 from __future__ import annotations
@@ -36,9 +49,12 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
 
-from eawf.state.enums import StoreKind
+from eawf.agent_report.store import append_agent_report
+from eawf.evidence._io import load_state
+from eawf.state.enums import AgentReportVerdict, Confidence, StoreKind
 from eawf.store.append import append_envelope
 from eawf.store.envelope import Envelope
+from eawf.store.kinds.agent_report import ExecutorReportBody
 from eawf.store.kinds.events import (
     C09EventPayloadUnion,
     DispatchCostPayload,
@@ -84,15 +100,23 @@ class DispatchResult:
         attempt_id: Dispatch-attempt id of the serving attempt.
         switched: ``True`` when a V5 fallback fired and the dispatch
             switched runtimes mid-flight.
-        event_ids: Ids of every envelope the runner emitted, in append
-            order (``runtime_switched`` first when a fallback fired, then
-            ``dispatch_cost``).
+        event_ids: Ids of the C09 *event*-store envelopes the runner
+            emitted, in append order (``runtime_switched`` first when a
+            fallback fired, then ``dispatch_cost``).
+        report_id: Envelope id of the typed ``agent_end`` executor report
+            persisted on dispatch completion, or ``None`` when the caller
+            supplied no executor ``session_id`` (or the daemon context
+            carries no ``state.json``) and report emission was skipped.
+            The report lands in the role-specific ``executor_report``
+            store, not the event store, so it is intentionally kept off
+            :attr:`event_ids`.
     """
 
     runtime: RuntimeTriple
     attempt_id: str
     switched: bool
     event_ids: tuple[str, ...]
+    report_id: str | None = None
 
 
 def _event_path(ctx: MethodContext) -> Path:
@@ -270,6 +294,116 @@ def emit_dispatch_cost(
     return _emit(ctx, payload, scope_id=wave_id, summary=summary)
 
 
+def _completion_verdict(*, switched: bool) -> AgentReportVerdict:
+    """Derive the executor report verdict from the dispatch outcome.
+
+    A clean dispatch (no runtime switch) completes as ``pass``. A V5
+    fallback means the primary runtime failed and a switch served the
+    dispatch instead; the work still landed, so the verdict is
+    ``pass-with-followups`` to flag the switchover for review rather than
+    a hard ``fail``.
+
+    Args:
+        switched: ``True`` when a V5 fallback fired during the dispatch.
+
+    Returns:
+        The derived :class:`~eawf.state.enums.AgentReportVerdict`.
+    """
+    if switched:
+        return AgentReportVerdict.PASS_WITH_FOLLOWUPS
+    return AgentReportVerdict.PASS
+
+
+def emit_agent_end_report(
+    ctx: MethodContext,
+    *,
+    session_id: str,
+    wave_id: str,
+    commit_sha: str,
+    outcome: str,
+    files_changed: list[str] | None = None,
+    tests_run: list[str] | None = None,
+    runtime: RuntimeTriple,
+    verdict: AgentReportVerdict | None = None,
+    confidence: Confidence = Confidence.HIGH,
+    switched: bool = False,
+) -> str:
+    """Emit a typed ``agent_end`` executor report on dispatch completion.
+
+    Builds an :class:`~eawf.store.kinds.agent_report.ExecutorReportBody`
+    and persists it through the canonical agent-report writer
+    :func:`eawf.agent_report.store.append_agent_report`, using the
+    executor :class:`~eawf.state.models.AgentSession` named by
+    *session_id* as authority. The writer derives the report's role,
+    scope, attempt number, and store kind from the session, so the
+    persisted envelope passes
+    :func:`eawf.validate.invariants.check_agent_report_invariants`.
+
+    The dispatched *wave_id* is used as the report ``base_id`` so retried
+    dispatches for the same wave append monotonic attempts under one
+    ``(role, base_id)`` series.
+
+    Args:
+        ctx: Daemon method context — supplies ``state_path``.
+        session_id: Id of the executor session that ran the dispatch;
+            must exist in ``state.json`` with ``role=executor``.
+        wave_id: ``W<NN>`` wave the dispatch served. Must exist in
+            ``state.waves`` so the executor-wave invariant holds.
+        commit_sha: Commit the executor landed; must be non-empty so the
+            executor-commit invariant holds (a report with no commit is
+            flagged ``INV.AGENT_REPORT.EXECUTOR_COMMIT_MISSING``).
+        outcome: One-line implementation outcome for the report body.
+        files_changed: Repo-relative paths the dispatch changed.
+        tests_run: Test commands the dispatch executed.
+        runtime: Runtime that served the dispatch, recorded on the
+            report header.
+        verdict: Report verdict; derived from *switched* when ``None``.
+        confidence: Report confidence (defaults to ``high``).
+        switched: ``True`` when a V5 fallback fired; feeds the derived
+            verdict when *verdict* is ``None``.
+
+    Returns:
+        The id of the appended ``executor_report`` envelope.
+
+    Raises:
+        RuntimeError: When ``ctx.state_path`` is not configured (the
+            writer needs state to resolve the session authority).
+        KeyError: When *session_id* is absent from ``state.json``.
+        eawf.agent_report.store.AgentReportRoleMismatchError: When the
+            session role is not ``executor``.
+        eawf.agent_report.store.AgentReportScrubError: When the report
+            body text contains local or sensitive tokens.
+    """
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    state_path = Path(ctx.state_path)
+    state = load_state(state_path)
+    resolved_verdict = verdict if verdict is not None else _completion_verdict(switched=switched)
+    body = ExecutorReportBody(
+        verdict=resolved_verdict,
+        confidence=confidence,
+        summary=outcome,
+        wave_id=wave_id,
+        files_changed=list(files_changed or []),
+        tests_run=list(tests_run or []),
+        commit_sha=commit_sha,
+        outcome=outcome,
+    )
+    result = append_agent_report(
+        state=state,
+        state_path=state_path,
+        session_id=session_id,
+        base_id=wave_id,
+        body=body,
+        runtime=runtime,
+    )
+    logger.info(
+        f"emit_agent_end_report wave={wave_id} session={session_id!r} "
+        f"verdict={resolved_verdict.value} report_id={result.envelope.id!r}"
+    )
+    return result.envelope.id
+
+
 def run_dispatch(
     ctx: MethodContext,
     *,
@@ -282,6 +416,13 @@ def run_dispatch(
     tokens: DispatchTokens,
     cost_usd: Decimal,
     trace_request_id: str | None = None,
+    session_id: str | None = None,
+    commit_sha: str | None = None,
+    outcome: str | None = None,
+    files_changed: list[str] | None = None,
+    tests_run: list[str] | None = None,
+    verdict: AgentReportVerdict | None = None,
+    confidence: Confidence = Confidence.HIGH,
 ) -> DispatchResult:
     """Drive one wave dispatch attempt, emitting the C09 dispatch events.
 
@@ -291,6 +432,13 @@ def run_dispatch(
     emitted through the canonical writer, and the fallback runtime serves
     the dispatch. Once the serving attempt completes, a ``dispatch_cost``
     event is emitted with the token tally + priced cost.
+
+    On completion the runner also emits a typed ``agent_end`` executor
+    report through :func:`emit_agent_end_report` when *session_id* is
+    supplied (and the daemon context carries a ``state.json``); the
+    report's envelope id rides back on :attr:`DispatchResult.report_id`.
+    Stateless contexts (no ``session_id`` or no ``state_path``) skip the
+    report and leave ``report_id`` ``None``.
 
     Args:
         ctx: Daemon method context.
@@ -306,10 +454,24 @@ def run_dispatch(
         tokens: Token tally the serving attempt accrued.
         cost_usd: Priced cost in USD for the serving attempt.
         trace_request_id: Optional daemon RPC request id.
+        session_id: Id of the executor session that ran the dispatch. When
+            supplied (and ``ctx.state_path`` is configured) the runner
+            emits the typed ``agent_end`` executor report on completion.
+        commit_sha: Commit the executor landed; required for the
+            ``agent_end`` report (defaults to the serving attempt id when
+            omitted so the executor-commit invariant still holds).
+        outcome: One-line implementation outcome for the report body;
+            defaults to a generated summary when omitted.
+        files_changed: Repo-relative paths the dispatch changed (report).
+        tests_run: Test commands the dispatch executed (report).
+        verdict: ``agent_end`` report verdict; derived from the fallback
+            outcome when ``None``.
+        confidence: ``agent_end`` report confidence (defaults to ``high``).
 
     Returns:
         A :class:`DispatchResult` naming the serving runtime, its attempt
-        id, whether a fallback fired, and the emitted envelope ids.
+        id, whether a fallback fired, the emitted C09 event ids, and the
+        ``agent_end`` report id (``None`` when no report was emitted).
     """
     primary_attempt = uuid.uuid4().hex
     event_ids: list[str] = []
@@ -351,13 +513,32 @@ def run_dispatch(
         )
     )
 
+    report_id: str | None = None
+    if session_id is not None and ctx.state_path is not None:
+        report_id = emit_agent_end_report(
+            ctx,
+            session_id=session_id,
+            wave_id=wave_id,
+            commit_sha=commit_sha if commit_sha is not None else serving_attempt,
+            outcome=outcome
+            if outcome is not None
+            else f"dispatch served by {serving_runtime} (switched={switched})",
+            files_changed=files_changed,
+            tests_run=tests_run,
+            runtime=serving_runtime,
+            verdict=verdict,
+            confidence=confidence,
+            switched=switched,
+        )
+
     logger.info(
         f"run_dispatch wave={wave_id} serving_runtime={serving_runtime} "
-        f"switched={switched} events={len(event_ids)}"
+        f"switched={switched} events={len(event_ids)} report_id={report_id!r}"
     )
     return DispatchResult(
         runtime=serving_runtime,
         attempt_id=serving_attempt,
         switched=switched,
         event_ids=tuple(event_ids),
+        report_id=report_id,
     )
