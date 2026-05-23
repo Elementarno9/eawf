@@ -2830,6 +2830,266 @@
       "status": "done",
       "updated_at": "2026-05-23T15:08:58.452996Z"
     },
+    "P27-I03-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W01-close-20260523T162626Z",
+      "elapsed_eu": 40.98,
+      "id": "ACT-P27-I03-W01",
+      "scope_id": "P27-I03-W01",
+      "status": "done",
+      "updated_at": "2026-05-23T16:26:26.445850Z"
+    },
+    "P27-I03-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W02-close-20260523T181414Z",
+      "elapsed_eu": 44.57,
+      "id": "ACT-P27-I03-W02",
+      "scope_id": "P27-I03-W02",
+      "status": "done",
+      "updated_at": "2026-05-23T18:14:14.073007Z"
+    },
+    "P27-I03-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W03-close-20260523T184123Z",
+      "elapsed_eu": 45.48,
+      "id": "ACT-P27-I03-W03",
+      "scope_id": "P27-I03-W03",
+      "status": "done",
+      "updated_at": "2026-05-23T18:41:23.608492Z"
+    },
+    "P27-I03-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W04-close-20260523T162628Z",
+      "elapsed_eu": 40.98,
+      "id": "ACT-P27-I03-W04",
+      "scope_id": "P27-I03-W04",
+      "status": "done",
+      "updated_at": "2026-05-23T16:26:28.490588Z"
+    },
+    "P27-I03-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W05-close-20260523T193012Z",
+      "elapsed_eu": 47.1,
+      "id": "ACT-P27-I03-W05",
+      "scope_id": "P27-I03-W05",
+      "status": "done",
+      "updated_at": "2026-05-23T19:30:12.859658Z"
+    },
+    "P27-I03-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W06-close-20260523T184127Z",
+      "elapsed_eu": 45.48,
+      "id": "ACT-P27-I03-W06",
+      "scope_id": "P27-I03-W06",
+      "status": "done",
+      "updated_at": "2026-05-23T18:41:27.742707Z"
+    },
+    "P27-I03-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W07-close-20260523T190805Z",
+      "elapsed_eu": 46.36,
+      "id": "ACT-P27-I03-W07",
+      "scope_id": "P27-I03-W07",
+      "status": "done",
+      "updated_at": "2026-05-23T19:08:05.156677Z"
+    },
+    "P27-I03-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W08-close-20260523T194246Z",
+      "elapsed_eu": 47.52,
+      "id": "ACT-P27-I03-W08",
+      "scope_id": "P27-I03-W08",
+      "status": "done",
+      "updated_at": "2026-05-23T19:42:46.092927Z"
+    },
+    "P27-I03-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W09-close-20260523T162631Z",
+      "elapsed_eu": 40.98,
+      "id": "ACT-P27-I03-W09",
+      "scope_id": "P27-I03-W09",
+      "status": "done",
+      "updated_at": "2026-05-23T16:26:31.641324Z"
+    },
+    "P27-I03-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W10-close-20260523T172242Z",
+      "elapsed_eu": 42.85,
+      "id": "ACT-P27-I03-W10",
+      "scope_id": "P27-I03-W10",
+      "status": "done",
+      "updated_at": "2026-05-23T17:22:42.555308Z"
+    },
+    "P27-I03-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W11-close-20260523T175629Z",
+      "elapsed_eu": 43.98,
+      "id": "ACT-P27-I03-W11",
+      "scope_id": "P27-I03-W11",
+      "status": "done",
+      "updated_at": "2026-05-23T17:56:29.124755Z"
+    },
+    "P27-I03-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W12-close-20260523T164822Z",
+      "elapsed_eu": 41.71,
+      "id": "ACT-P27-I03-W12",
+      "scope_id": "P27-I03-W12",
+      "status": "done",
+      "updated_at": "2026-05-23T16:48:22.553291Z"
+    },
+    "P27-I03-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W13-close-20260523T172244Z",
+      "elapsed_eu": 42.85,
+      "id": "ACT-P27-I03-W13",
+      "scope_id": "P27-I03-W13",
+      "status": "done",
+      "updated_at": "2026-05-23T17:22:44.750100Z"
+    },
+    "P27-I03-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W14-close-20260523T174126Z",
+      "elapsed_eu": 43.48,
+      "id": "ACT-P27-I03-W14",
+      "scope_id": "P27-I03-W14",
+      "status": "done",
+      "updated_at": "2026-05-23T17:41:26.840590Z"
+    },
+    "P27-I03-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W15-close-20260523T175631Z",
+      "elapsed_eu": 43.98,
+      "id": "ACT-P27-I03-W15",
+      "scope_id": "P27-I03-W15",
+      "status": "done",
+      "updated_at": "2026-05-23T17:56:31.273014Z"
+    },
+    "P27-I03-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W16-close-20260523T184125Z",
+      "elapsed_eu": 45.47,
+      "id": "ACT-P27-I03-W16",
+      "scope_id": "P27-I03-W16",
+      "status": "done",
+      "updated_at": "2026-05-23T18:41:25.702710Z"
+    },
+    "P27-I03-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W17-close-20260523T211538Z",
+      "elapsed_eu": 50.61,
+      "id": "ACT-P27-I03-W17",
+      "scope_id": "P27-I03-W17",
+      "status": "done",
+      "updated_at": "2026-05-23T21:15:38.024490Z"
+    },
+    "P27-I03-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W18-close-20260523T204806Z",
+      "elapsed_eu": 49.7,
+      "id": "ACT-P27-I03-W18",
+      "scope_id": "P27-I03-W18",
+      "status": "done",
+      "updated_at": "2026-05-23T20:48:06.846679Z"
+    },
+    "P27-I03-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W19-close-20260523T190807Z",
+      "elapsed_eu": 46.36,
+      "id": "ACT-P27-I03-W19",
+      "scope_id": "P27-I03-W19",
+      "status": "done",
+      "updated_at": "2026-05-23T19:08:07.116842Z"
+    },
+    "P27-I03-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W20-close-20260523T200458Z",
+      "elapsed_eu": 48.26,
+      "id": "ACT-P27-I03-W20",
+      "scope_id": "P27-I03-W20",
+      "status": "done",
+      "updated_at": "2026-05-23T20:04:58.408314Z"
+    },
+    "P27-I03-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W21-close-20260523T193014Z",
+      "elapsed_eu": 47.1,
+      "id": "ACT-P27-I03-W21",
+      "scope_id": "P27-I03-W21",
+      "status": "done",
+      "updated_at": "2026-05-23T19:30:14.871412Z"
+    },
+    "P27-I03-W22": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W22-close-20260523T193016Z",
+      "elapsed_eu": 47.1,
+      "id": "ACT-P27-I03-W22",
+      "scope_id": "P27-I03-W22",
+      "status": "done",
+      "updated_at": "2026-05-23T19:30:16.959731Z"
+    },
+    "P27-I03-W23": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W23-close-20260523T181416Z",
+      "elapsed_eu": 44.57,
+      "id": "ACT-P27-I03-W23",
+      "scope_id": "P27-I03-W23",
+      "status": "done",
+      "updated_at": "2026-05-23T18:14:16.127092Z"
+    },
+    "P27-I03-W24": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W24-close-20260523T174124Z",
+      "elapsed_eu": 1.77,
+      "id": "ACT-P27-I03-W24",
+      "scope_id": "P27-I03-W24",
+      "status": "done",
+      "updated_at": "2026-05-23T17:41:24.847263Z"
+    },
+    "P27-I03-W25": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W25-close-20260523T190803Z",
+      "elapsed_eu": 0.83,
+      "id": "ACT-P27-I03-W25",
+      "scope_id": "P27-I03-W25",
+      "status": "done",
+      "updated_at": "2026-05-23T19:08:03.046791Z"
+    },
+    "P27-I03-W26": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W26-close-20260523T231518Z",
+      "elapsed_eu": 3.03,
+      "id": "ACT-P27-I03-W26",
+      "scope_id": "P27-I03-W26",
+      "status": "done",
+      "updated_at": "2026-05-23T23:15:18.574086Z"
+    },
     "P27-I03-W27": {
       "agent_runtime_eu": null,
       "attention_eu": null,
@@ -2839,6 +3099,16 @@
       "scope_id": "P27-I03-W27",
       "status": "done",
       "updated_at": "2026-05-23T15:39:57.213565Z"
+    },
+    "P27-I03-W28": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W28-close-20260523T234046Z",
+      "elapsed_eu": 0.49,
+      "id": "ACT-P27-I03-W28",
+      "scope_id": "P27-I03-W28",
+      "status": "done",
+      "updated_at": "2026-05-23T23:40:46.373239Z"
     }
   },
   "agent_sessions": {
@@ -2886,6 +3156,16 @@
       "size_bytes": null,
       "uri": "repo:.ea/artifacts/audits/2026-05-23-p27-i02-review-fixes.md",
       "urn": "urn:eawf:v1:artifact:P27-I02/A36-P27-i02-fixes-report"
+    },
+    "A37-P27-i03-report": {
+      "created_at": "2026-05-23T21:43:49.454982Z",
+      "id": "A37-P27-i03-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "b2f7752a662b0a4b4cf12f344ff3cfe24d762f622b66bc4f22db16313fd46258",
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-23-p27-i03-closure.md",
+      "urn": "urn:eawf:v1:artifact:P27-I03/A37-P27-i03-report"
     },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
@@ -3752,6 +4032,17 @@
       "kind": "ship-gate",
       "report_artifact_id": "A36-P27-i02-fixes-report",
       "scope_id": "P27-I02",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A37-P27-i03": {
+      "check_results": [],
+      "created_at": "2026-05-23T21:43:49.865065Z",
+      "id": "A37-P27-i03",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A37-P27-i03-report",
+      "scope_id": "P27-I03",
       "status": "complete",
       "verdict": "minor"
     }
@@ -5191,6 +5482,344 @@
       "scope_id": "P27-I02-W40",
       "updated_at": "2026-05-23T15:08:28.939046Z"
     },
+    "P27-I03-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W01-bucket-20260523T155902Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W01",
+      "updated_at": "2026-05-23T15:59:02.366901Z"
+    },
+    "P27-I03-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W02-bucket-20260523T174128Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I03-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I03-W02",
+      "updated_at": "2026-05-23T17:41:28.071279Z"
+    },
+    "P27-I03-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W03-bucket-20260523T181417Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W03",
+      "updated_at": "2026-05-23T18:14:17.346090Z"
+    },
+    "P27-I03-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W04-bucket-20260523T160211Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W04",
+      "updated_at": "2026-05-23T16:02:11.678610Z"
+    },
+    "P27-I03-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W05-bucket-20260523T181419Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W05",
+      "updated_at": "2026-05-23T18:14:19.193937Z"
+    },
+    "P27-I03-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W06-bucket-20260523T181420Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W06",
+      "updated_at": "2026-05-23T18:14:20.861906Z"
+    },
+    "P27-I03-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W07-bucket-20260523T184308Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W07",
+      "updated_at": "2026-05-23T18:43:08.746972Z"
+    },
+    "P27-I03-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W08-bucket-20260523T193019Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I03-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I03-W08",
+      "updated_at": "2026-05-23T19:30:19.131689Z"
+    },
+    "P27-I03-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W09-bucket-20260523T160210Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W09",
+      "updated_at": "2026-05-23T16:02:10.511565Z"
+    },
+    "P27-I03-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W10-bucket-20260523T162943Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W10",
+      "updated_at": "2026-05-23T16:29:43.091340Z"
+    },
+    "P27-I03-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W11-bucket-20260523T172247Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W11",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W11",
+      "updated_at": "2026-05-23T17:22:47.005709Z"
+    },
+    "P27-I03-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W12-bucket-20260523T160212Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I03-W12",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I03-W12",
+      "updated_at": "2026-05-23T16:02:12.840616Z"
+    },
+    "P27-I03-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W13-bucket-20260523T162944Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I03-W13",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I03-W13",
+      "updated_at": "2026-05-23T16:29:44.711619Z"
+    },
+    "P27-I03-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W14-bucket-20260523T164826Z",
+      "display": "3.5 EU · exp ~105m · pess ~378m",
+      "expected_eu": 3.5,
+      "expected_minutes": 105.0,
+      "id": "EST-P27-I03-W14",
+      "pessimistic_eu": 12.6,
+      "pessimistic_minutes": 378.0,
+      "reference_class": "bucket:XL",
+      "scope_id": "P27-I03-W14",
+      "updated_at": "2026-05-23T16:48:26.125323Z"
+    },
+    "P27-I03-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W15-bucket-20260523T172248Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I03-W15",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I03-W15",
+      "updated_at": "2026-05-23T17:22:48.900381Z"
+    },
+    "P27-I03-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W16-bucket-20260523T181422Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W16",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W16",
+      "updated_at": "2026-05-23T18:14:22.496157Z"
+    },
+    "P27-I03-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W17-bucket-20260523T204808Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I03-W17",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I03-W17",
+      "updated_at": "2026-05-23T20:48:08.198841Z"
+    },
+    "P27-I03-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W18-bucket-20260523T184310Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W18",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W18",
+      "updated_at": "2026-05-23T18:43:10.313914Z"
+    },
+    "P27-I03-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W19-bucket-20260523T184311Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W19",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W19",
+      "updated_at": "2026-05-23T18:43:11.889964Z"
+    },
+    "P27-I03-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W20-bucket-20260523T193020Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I03-W20",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I03-W20",
+      "updated_at": "2026-05-23T19:30:20.934715Z"
+    },
+    "P27-I03-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W21-bucket-20260523T190808Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W21",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W21",
+      "updated_at": "2026-05-23T19:08:08.568223Z"
+    },
+    "P27-I03-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W22-bucket-20260523T190810Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W22",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W22",
+      "updated_at": "2026-05-23T19:08:10.422692Z"
+    },
+    "P27-I03-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W23-bucket-20260523T174129Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I03-W23",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I03-W23",
+      "updated_at": "2026-05-23T17:41:29.959066Z"
+    },
+    "P27-I03-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W24-bucket-20260523T164824Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I03-W24",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I03-W24",
+      "updated_at": "2026-05-23T16:48:24.287469Z"
+    },
+    "P27-I03-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W25-bucket-20260523T184307Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I03-W25",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I03-W25",
+      "updated_at": "2026-05-23T18:43:07.102880Z"
+    },
+    "P27-I03-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W26-bucket-20260523T214419Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I03-W26",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I03-W26",
+      "updated_at": "2026-05-23T21:44:19.579540Z"
+    },
     "P27-I03-W27": {
       "confidence": "low",
       "current_store_record_id": "EST-P27-I03-W27-bucket-20260523T153840Z",
@@ -5203,6 +5832,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I03-W27",
       "updated_at": "2026-05-23T15:38:40.737567Z"
+    },
+    "P27-I03-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W28-bucket-20260523T232617Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I03-W28",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I03-W28",
+      "updated_at": "2026-05-23T23:26:17.356902Z"
     }
   },
   "goals": {
@@ -5937,7 +6579,11 @@
         "P27-I03-W21",
         "P27-I03-W22",
         "P27-I03-W23",
-        "P27-I03-W27"
+        "P27-I03-W27",
+        "P27-I03-W24",
+        "P27-I03-W25",
+        "P27-I03-W26",
+        "P27-I03-W28"
       ]
     },
     "P27-I04": {
@@ -6516,7 +7162,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T15:42:21.910852Z",
+  "updated_at": "2026-05-23T23:40:46.373751Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -9922,7 +10568,7 @@
         "JSON envelope schema_version=1",
         "shared renderer feeds CLI + TUI overlay + release notes"
       ],
-      "title": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed,",
+      "title": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -10366,7 +11012,7 @@
         "golden render",
         "reproducibility gates documented"
       ],
-      "title": "feat: B006 quant.yaml body (instruments, backtest/strategy artefacts,",
+      "title": "feat: B006 quant.yaml body (instruments, backtest/strategy artefacts)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -10401,7 +11047,7 @@
         "golden render",
         "smoke-check audit-DSL hooks"
       ],
-      "title": "feat: B007 ml.yaml body (notebooks/datasets/models, sha256 policy,",
+      "title": "feat: B007 ml.yaml body (notebooks/datasets/models, sha256 policy)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -13669,7 +14315,7 @@
         "A tab with a single field such as runtime highlights and selects its lone row so Space and Enter act on it",
         "Unit tests and snapshots cover the helper text and space choice-cycle and single-row selection and tab switching and mypy and pre-commit green"
       ],
-      "title": "fix: ConfigModal UX — visible key helper, Space cycles choices,",
+      "title": "fix: ConfigModal UX — visible key helper, Space cycles choices",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P26-I01-W38-1779328815"
@@ -16875,8 +17521,8 @@
         "P27-I03-W06",
         "P27-I03-W08"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W01",
+      "closed_at": "2026-05-23T16:26:26.445850Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -16890,25 +17536,25 @@
       "id": "P27-I03-W01",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:06.580485Z",
-      "outcome": null,
+      "outcome": "scoped impl; gauntlet green for scope (2 pre-existing W27 base failures tracked separately)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "RenderBlock gains optional rationale/mechanism/verification with a model-validator (exactly one of body_template or the triad); a structured rule renders Rationale/Mechanism/Verification; a half-filled block fails validation; legacy prose blocks still validate"
       ],
       "title": "Structured RenderBlock schema",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W01-1779552120"
     },
     "P27-I03-W02": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W03"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W02",
+      "closed_at": "2026-05-23T18:14:14.073007Z",
       "commit": null,
       "deps": [
         "P27-I03-W01"
@@ -16922,23 +17568,23 @@
       "id": "P27-I03-W02",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:06.974519Z",
-      "outcome": null,
+      "outcome": "opt-in quality.yaml code-craft profile: 4 structured triad rules each with verification line; composes+renders into AGENTS.md",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "quality.yaml is authored with the code-craft rules; each carries a verification line via the G1 schema; composing quality renders the rules with verification; the profile validates"
       ],
       "title": "Code-craft rules in opt-in quality.yaml",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W02-1779558088"
     },
     "P27-I03-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W03",
+      "closed_at": "2026-05-23T18:41:23.608492Z",
       "commit": null,
       "deps": [
         "P27-I03-W01",
@@ -16953,25 +17599,25 @@
       "id": "P27-I03-W03",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:07.376715Z",
-      "outcome": null,
+      "outcome": "opt-in agent_driven profile (phase=release + large-PR rules via structured triad + ADR pointer); default stays core-only small-CL",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the agent-driven profile renders the phase=release and large-PR divergence rules plus an ADR pointer; the default profile still renders small-CL/trunk"
       ],
       "title": "agent-driven profile (phase=release/large-PR)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W03-1779560058"
     },
     "P27-I03-W04": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W17"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W04",
+      "closed_at": "2026-05-23T16:26:28.490588Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -16985,23 +17631,23 @@
       "id": "P27-I03-W04",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:07.758975Z",
-      "outcome": null,
+      "outcome": "scoped impl; gauntlet green for scope (2 pre-existing W27 base failures tracked separately)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ruff C901 (warn at 10) and EAWF011 cognitive-complexity (warn at 15) fire on a grade-D function; EAWF010 is demoted to advisory; an edited module leaves the grandfather exclude list"
       ],
       "title": "Cognitive-complexity gate (EAWF011 + ruff C901)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W04-1779552132"
     },
     "P27-I03-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W05",
+      "closed_at": "2026-05-23T19:30:12.859658Z",
       "commit": null,
       "deps": [
         "P27-I03-W01"
@@ -17016,23 +17662,23 @@
       "id": "P27-I03-W05",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:08.141365Z",
-      "outcome": null,
+      "outcome": "dedup f-strings/uv-run into python profile; consolidate daemon-authority into rule 4; rewrite rules 23/24 as structured triad; regen AGENTS.md goldens",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "f-strings and uv-run duplicates are demoted to python.yaml; daemon-authority is consolidated into one rule; rules 23 and 24 are rewritten with the G1 triad and carry verification; the rendered AGENTS.md golden is updated"
       ],
       "title": "Dedup + rewrite prose-only rules",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W05-1779560059"
     },
     "P27-I03-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W06",
+      "closed_at": "2026-05-23T18:41:27.742707Z",
       "commit": null,
       "deps": [
         "P27-I03-W01"
@@ -17050,25 +17696,25 @@
       "id": "P27-I03-W06",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:08.528413Z",
-      "outcome": null,
+      "outcome": "ml/quant/apps/infra stub profiles get minimal defining rule blocks; research already had one",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ml/research/quant/apps/infra each render at least their defining rule block; composition tests pass"
       ],
       "title": "Stub-profile minimal rule sets",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W06-1779560061"
     },
     "P27-I03-W07": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W20"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W07",
+      "closed_at": "2026-05-23T19:08:05.156677Z",
       "commit": null,
       "deps": [
         "P27-I02-W23"
@@ -17085,23 +17731,23 @@
       "id": "P27-I03-W07",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:08.922712Z",
-      "outcome": null,
+      "outcome": "title consumers surface bounded title + entity description in detail/dispatch renders; SubagentSpec.description companion field (post-W14 typed-spec rendering)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "tree/tables/breadcrumb render the bounded title; wave-detail and dispatch body surface description; golden and snapshot updates show titles fit"
       ],
       "title": "Update title consumers",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W07-1779561789"
     },
     "P27-I03-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W08",
+      "closed_at": "2026-05-23T19:42:46.092927Z",
       "commit": null,
       "deps": [
         "P27-I02-W23",
@@ -17117,17 +17763,17 @@
       "id": "P27-I03-W08",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:09.321871Z",
-      "outcome": null,
+      "outcome": "entity-title naming rule (structured render block) + lint_entity_title backstop flagging over-cap/trailing-period titles",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a generated rule renders title as an imperative noun-phrase of max 72 with no trailing period and description as purpose; lint flags an over-cap or trailing-period title"
       ],
       "title": "Entity-title naming rule",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W08-1779564619"
     },
     "P27-I03-W09": {
       "agent_role": "executor",
@@ -17135,8 +17781,8 @@
         "P27-I03-W10",
         "P27-I03-W11"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W09",
+      "closed_at": "2026-05-23T16:26:31.641324Z",
       "commit": null,
       "deps": [
         "P27-I02-W06",
@@ -17152,23 +17798,23 @@
       "id": "P27-I03-W09",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:09.711780Z",
-      "outcome": null,
+      "outcome": "scoped impl; gauntlet green for scope (2 pre-existing W27 base failures tracked separately)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "agent.dispatch (or the dispatch CLI path) invokes run_dispatch for real; a real dispatch emits runtime_switched and dispatch_cost to the live event log (E2E test)"
       ],
       "title": "Give run_dispatch a production caller",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W09-1779552131"
     },
     "P27-I03-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W10",
+      "closed_at": "2026-05-23T17:22:42.555308Z",
       "commit": null,
       "deps": [
         "P27-I03-W09",
@@ -17183,23 +17829,23 @@
       "id": "P27-I03-W10",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:10.093853Z",
-      "outcome": null,
+      "outcome": "run_dispatch emits typed agent_end executor report on completion; passes check_agent_report_invariants",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "on dispatch completion an agent_end row is emitted with a valid verdict; check_agent_report_invariants validates it"
       ],
       "title": "Emit typed agent_end reports",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W10-1779553783"
     },
     "P27-I03-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W11",
+      "closed_at": "2026-05-23T17:56:29.124755Z",
       "commit": null,
       "deps": [
         "P27-I03-W09"
@@ -17214,25 +17860,25 @@
       "id": "P27-I03-W11",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:10.486805Z",
-      "outcome": null,
+      "outcome": "run_dispatch flips CLAIMED->IN_PROGRESS at head; new start_wave transition for inline waves; re-exported via transitions.py",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "run_dispatch sets CLAIMED to IN_PROGRESS at its head; an inline wave start transition covers non-dispatched waves; dispatched and inline waves both reach IN_PROGRESS"
       ],
       "title": "Set wave -> IN_PROGRESS at implementation-start",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W11-1779556967"
     },
     "P27-I03-W12": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W14"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W12",
+      "closed_at": "2026-05-23T16:48:22.553291Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -17245,23 +17891,23 @@
       "id": "P27-I03-W12",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:10.867643Z",
-      "outcome": null,
+      "outcome": "6 model-only code-quality skills in render/skills.py + forced golden/autogen ride-along; incidental cli.md iter-plan regen; gauntlet green modulo pre-existing W27 inventory failure (W24)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "refactor-god-class/write-adr/add-property-test/extract-function/extract-module/graduate-research-code render with user-invocable false; they are absent from the slash menu; the model can invoke them; goldens updated"
       ],
       "title": "Model-only code-quality skills",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W12-1779552133"
     },
     "P27-I03-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W13",
+      "closed_at": "2026-05-23T17:22:44.750100Z",
       "commit": null,
       "deps": [
         "P27-I02-W15"
@@ -17278,25 +17924,25 @@
       "id": "P27-I03-W13",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:11.251300Z",
-      "outcome": null,
+      "outcome": "decompose 4 god-method action()s into shared SkillAction base in engine.py (justified ride-along); flow.py+ship.py drop off C901 grandfather list; behaviour-preserving",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "each action() is under about 60 lines and below grade-C; shared _gather/_validate/_execute/_render plus _trace and _gate_failure are extracted into a SkillAction base; golden envelopes stay stable"
       ],
       "title": "Decompose the 4 god-method action()s",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W13-1779553785"
     },
     "P27-I03-W14": {
       "agent_role": "executor",
       "blocks": [
         "P27-I03-W21"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W14",
+      "closed_at": "2026-05-23T17:41:26.840590Z",
       "commit": null,
       "deps": [
         "P27-I03-W12"
@@ -17311,23 +17957,23 @@
       "id": "P27-I03-W14",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:11.633763Z",
-      "outcome": null,
+      "outcome": "typed SubagentSpec model + role registry; render_wave_prompt renders from typed spec byte-identical; roles render to 3 kept runtimes; golden coverage",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a SubagentSpec model and a role registry exist; a wave dispatch renders from a typed spec rather than an ad-hoc prompt; roles render to all kept runtimes; golden coverage added"
       ],
       "title": "Typed subagent-spec library + roles",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W14-1779554907"
     },
     "P27-I03-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W15",
+      "closed_at": "2026-05-23T17:56:31.273014Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -17340,23 +17986,23 @@
       "id": "P27-I03-W15",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:12.023517Z",
-      "outcome": null,
+      "outcome": "/roadmap apply prefills wave DAG (PENDING waves + deps), renders full DAG before approval, AUQ-gated in skill + CLI",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "applying a plan with waves lands them PENDING with deps; plan-mode renders the full wave DAG before approval; AUQ approval gates it"
       ],
       "title": "/roadmap accept prefills waves",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W15-1779556969"
     },
     "P27-I03-W16": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W16",
+      "closed_at": "2026-05-23T18:41:25.702710Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -17369,23 +18015,23 @@
       "id": "P27-I03-W16",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:12.412037Z",
-      "outcome": null,
+      "outcome": "skill consistency: ## Decision surfaces added to 6 operator skills with needs_user path; 23-spec registry synced to goldens",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a Decision-surfaces section is added where decisions exist; ship/SKILL.md prefix is updated to [P] state:; the 17 registry specs vs 11 build dirs are reconciled and documented; goldens updated"
       ],
       "title": "Skill consistency cleanup",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W16-1779560063"
     },
     "P27-I03-W17": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W17",
+      "closed_at": "2026-05-23T21:15:38.024490Z",
       "commit": null,
       "deps": [
         "P27-I03-W04"
@@ -17399,51 +18045,52 @@
       "id": "P27-I03-W17",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:12.790416Z",
-      "outcome": null,
+      "outcome": "reduce all 15 grade-D functions to grade-C/better via single-responsibility helper extraction; behaviour preserved; radon -n D empty",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "zero grade-D functions remain in the targeted set (repo_link_cmd; check_mcp_drift; _fold_record; check_agent_report_invariants; create_worktree; coerce_and_validate; check_closure_timestamps and the rest); behavior unchanged with tests green"
       ],
       "title": "Reduce grade-D functions",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W17-1779569289"
     },
     "P27-I03-W18": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W18",
+      "closed_at": "2026-05-23T20:48:06.846679Z",
       "commit": null,
       "deps": [],
       "description": null,
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/cli/errors.py"
+        "src/eawf/**",
+        "tests/**"
       ],
       "id": "P27-I03-W18",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:13.191810Z",
-      "outcome": null,
+      "outcome": "remove 8 deprecated CliError subclass aliases; migrate all raise/except/isinstance/test consumers to canonical bucket+kind across 118 files; behaviour-preserving (same exit codes/data.kind/hints)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the 15 remaining deprecated-alias raises are migrated to the canonical taxonomy; the 8 aliases are removed; tests green"
       ],
       "title": "Finish error-alias migration",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W18-1779561791"
     },
     "P27-I03-W19": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W19",
+      "closed_at": "2026-05-23T19:08:07.116842Z",
       "commit": null,
       "deps": [
         "P27-I02-W18"
@@ -17458,23 +18105,23 @@
       "id": "P27-I03-W19",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:13.603596Z",
-      "outcome": null,
+      "outcome": "lifted state-write helpers from cli/commands/lifecycle.py into eawf.state.io behind StateValidationError boundary; CLI now thin dispatch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "_write_state_unlocked and _commit_mutation and _append_event move to a library module; no state-write helper remains under cli/; the CLI is thin dispatch; tests green"
       ],
       "title": "Lift state-write helpers out of the CLI layer",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W19-1779561792"
     },
     "P27-I03-W20": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W20",
+      "closed_at": "2026-05-23T20:04:58.408314Z",
       "commit": null,
       "deps": [
         "P27-I03-W07"
@@ -17487,28 +18134,36 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**",
         "pyproject.toml",
-        "docs/reference/coverage-gates.md"
+        "docs/reference/coverage-gates.md",
+        "src/eawf/cli/app.py",
+        "src/eawf/cli/commands/workspace.py",
+        "src/eawf/spec/heuristics.py",
+        "src/eawf/spec/wave.py",
+        "tests/integration/test_spec_three_layer_enforcement.py",
+        "tests/perf/tui/**",
+        "tests/unit/test_spec_validators.py",
+        "tests/unit/test_variance_calibrate.py"
       ],
       "id": "P27-I03-W20",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:13.996997Z",
-      "outcome": null,
+      "outcome": "rename eawf.tui_v2 package -> eawf.tui (78 git-mv renames + import-token sweep incl spec/heuristics UI_SCOPE_PREFIXES + coverage-gate key); behaviour-preserving; zero tui_v2 refs outside .ea history",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "package src/eawf/tui_v2 renamed to src/eawf/tui and tests/tui_v2 to tests/tui; all tui_v2 references updated (imports; snapshot/pilot harness paths; pyproject coverage gate key and path; coverage-gates.md; build plugin refs); other versioned/legacy identifiers audited with only tui_v2 a package (eawf_v0 and _to_v1 left as version/migration strings); tests green"
       ],
-      "title": "Module-naming hygiene: drop versioned/legacy suffixes (eawf.tui_v2 ->",
+      "title": "Module-naming hygiene: rename eawf.tui_v2 -> eawf.tui",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W20-1779564621"
     },
     "P27-I03-W21": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W21",
+      "closed_at": "2026-05-23T19:30:14.871412Z",
       "commit": null,
       "deps": [
         "P27-I03-W14"
@@ -17523,23 +18178,23 @@
       "id": "P27-I03-W21",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:14.388729Z",
-      "outcome": null,
+      "outcome": "SandboxPolicy deny-list enforced at dispatch: resolve_denied_tools unions wave+global; renderer subtracts from allowed_tools projection",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a wave with a denied tool cannot dispatch it (test); the allowed set reflects the policy by intersecting denied_tools out of the dispatch envelope projection"
       ],
       "title": "Enforce SandboxPolicy at dispatch",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W21-1779563289"
     },
     "P27-I03-W22": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W22",
+      "closed_at": "2026-05-23T19:30:16.959731Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -17551,23 +18206,23 @@
       "id": "P27-I03-W22",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:14.771078Z",
-      "outcome": null,
+      "outcome": "wire publish-not-block mutmut campaign on core: [tool.mutmut] config + PR-only CI job + docs (>=70% target); score pending mutmut/pydantic-core sandbox fix (followup)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "mutmut runs in CI on state/lifecycle/daemon/validate and reports a score (publish-not-block); a target of at least 70% is documented"
       ],
       "title": "Mutation testing on core",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W22-1779563291"
     },
     "P27-I03-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "exec-P27-I03-W23",
+      "closed_at": "2026-05-23T18:14:16.127092Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -17579,17 +18234,104 @@
       "id": "P27-I03-W23",
       "iter_id": "P27-I03",
       "opened_at": "2026-05-22T19:57:15.153523Z",
-      "outcome": null,
+      "outcome": "contract tests for runtime resolution + daemon JSON-RPC schemas; pins OpenCode-hooks gap via xfail",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "contract assertions verify every skill/agent/hook resolves on each declared-supported runtime and the matrix matches the installer output; the test fails on the current OpenCode-hooks gap (then xfail/documented); the daemon RPC request/response schemas are pinned"
       ],
       "title": "Contract tests for runtimes + JSON-RPC",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P27-I03-W23-1779558090"
+    },
+    "P27-I03-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "exec-P27-I03-W24",
+      "closed_at": "2026-05-23T17:41:24.847263Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/unit/test_lifecycle_cmd_inventory.py"
+      ],
+      "id": "P27-I03-W24",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-23T16:48:23.788914Z",
+      "outcome": "EXPECTED_ITER_VERBS += 'plan'; test_iter_app_verb_inventory passes; W27 fallout resolved",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "EXPECTED_ITER_VERBS includes the 'plan' verb so test_iter_app_verb_inventory passes against the iter app's actual verb set"
+      ],
+      "title": "Fix W27 fallout: EXPECTED_ITER_VERBS missing 'plan'",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I03-W24-1779554905"
+    },
+    "P27-I03-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "exec-P27-I03-W25",
+      "closed_at": "2026-05-23T19:08:03.046791Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/hook.py"
+      ],
+      "id": "P27-I03-W25",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-23T18:43:06.647297Z",
+      "outcome": "path-leak scan skips doc placeholder paths (<...>/ellipsis) symmetric with email scan; real paths still flagged",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "_scan_path_leaks skips angle-bracket/ellipsis doc placeholders (e.g. /Users/<name>",
+        "C:\\Users\\...",
+        "~/Workspace/...) the same way _scan_email_leaks already skips placeholders",
+        "while still flagging real home-dir paths; boundary + error tests cover both"
+      ],
+      "title": "Path-leak scan skips doc placeholders (symmetry with email scan)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I03-W25-1779561787"
+    },
+    "P27-I03-W26": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "polish-P27-I03-W26",
+      "closed_at": "2026-05-23T23:15:18.574086Z",
+      "commit": "e934dd336ca0c780109a29a0c7ffcf2554529416",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/**"
+      ],
+      "id": "P27-I03-W26",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-23T21:44:19.116827Z",
+      "outcome": "Aligned ~65 files' docstring/comment error refs to the canonical CliError bucket + kind= form (clears the W18-deferred docs followup from A37); pure docs sweep, full gauntlet green",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "no docstring :class:/Raises: prose names a removed CliError alias (rephrased to canonical bucket + kind); repo-wide naming/log/error-phrasing drift from the I03 waves aligned; gauntlet green"
+      ],
+      "title": "polish: P27-I03 consistency sweep (docstring alias refs + drift)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I03-W26-1779572660"
     },
     "P27-I03-W27": {
       "agent_role": "executor",
@@ -17616,6 +18358,38 @@
         "eawf iter plan <iter-id> --title stages a PLANNED iter without moving current.iter_id; mirrors iter activate; iter activate later flips it ACTIVE"
       ],
       "title": "Add 'eawf iter plan' CLI verb (stage PLANNED iter)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I03-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-23T23:40:46.373239Z",
+      "commit": "8f06fd92421b683fa8a3ce5e14be16c8ec33e031",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "src/eawf/profiles/data/core.yaml",
+        "AGENTS.md",
+        "tests/golden/agents_md/**"
+      ],
+      "id": "P27-I03-W28",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-23T23:26:09.671535Z",
+      "outcome": "bare [P##(-I##)] docs: accepted + path-gated to .ea/artifacts/**; wave/state forms unchanged; AGENTS.md+goldens regenerated; lint tests cover accept+reject; gauntlet green",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "bare [P##(-I##)] docs: accepted under .ea/artifacts/** and rejected for non-artifact paths; wave/state forms unchanged; AGENTS.md regenerated via eawf sync; lint tests cover accept+reject; gauntlet green"
+      ],
+      "title": "loosen commit-prefix lint: bare [P##] docs: for artifacts",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -19596,6 +20370,292 @@
       "path": ".ea/worktrees/p27-w29",
       "status": "merged",
       "wave_id": "P27-I02-W29"
+    },
+    "WT-P27-I03-W01-1779552120": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w01",
+      "created_at": "2026-05-23T16:02:00.670561Z",
+      "id": "WT-P27-I03-W01-1779552120",
+      "merged_commit": "cffe9e8",
+      "owner_session_id": "exec-P27-I03-W01",
+      "path": ".ea/worktrees/p27-w01",
+      "status": "merged",
+      "wave_id": "P27-I03-W01"
+    },
+    "WT-P27-I03-W02-1779558088": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w02",
+      "created_at": "2026-05-23T17:41:28.947626Z",
+      "id": "WT-P27-I03-W02-1779558088",
+      "merged_commit": "ebad948",
+      "owner_session_id": "exec-P27-I03-W02",
+      "path": ".ea/worktrees/p27-w02",
+      "status": "merged",
+      "wave_id": "P27-I03-W02"
+    },
+    "WT-P27-I03-W03-1779560058": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w03",
+      "created_at": "2026-05-23T18:14:18.231779Z",
+      "id": "WT-P27-I03-W03-1779560058",
+      "merged_commit": "b82efd9",
+      "owner_session_id": "exec-P27-I03-W03",
+      "path": ".ea/worktrees/p27-w03",
+      "status": "merged",
+      "wave_id": "P27-I03-W03"
+    },
+    "WT-P27-I03-W04-1779552132": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w04",
+      "created_at": "2026-05-23T16:02:12.385879Z",
+      "id": "WT-P27-I03-W04-1779552132",
+      "merged_commit": "3a3472c",
+      "owner_session_id": "exec-P27-I03-W04",
+      "path": ".ea/worktrees/p27-w04",
+      "status": "merged",
+      "wave_id": "P27-I03-W04"
+    },
+    "WT-P27-I03-W05-1779560059": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w05",
+      "created_at": "2026-05-23T18:14:19.956570Z",
+      "id": "WT-P27-I03-W05-1779560059",
+      "merged_commit": "9d0a420",
+      "owner_session_id": "exec-P27-I03-W05",
+      "path": ".ea/worktrees/p27-w05",
+      "status": "merged",
+      "wave_id": "P27-I03-W05"
+    },
+    "WT-P27-I03-W06-1779560061": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w06",
+      "created_at": "2026-05-23T18:14:21.578948Z",
+      "id": "WT-P27-I03-W06-1779560061",
+      "merged_commit": "bf3a9bc",
+      "owner_session_id": "exec-P27-I03-W06",
+      "path": ".ea/worktrees/p27-w06",
+      "status": "merged",
+      "wave_id": "P27-I03-W06"
+    },
+    "WT-P27-I03-W07-1779561789": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w07",
+      "created_at": "2026-05-23T18:43:09.442883Z",
+      "id": "WT-P27-I03-W07-1779561789",
+      "merged_commit": "5532500",
+      "owner_session_id": "exec-P27-I03-W07",
+      "path": ".ea/worktrees/p27-w07",
+      "status": "merged",
+      "wave_id": "P27-I03-W07"
+    },
+    "WT-P27-I03-W08-1779564619": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w08",
+      "created_at": "2026-05-23T19:30:19.971636Z",
+      "id": "WT-P27-I03-W08-1779564619",
+      "merged_commit": "ca753c1",
+      "owner_session_id": "exec-P27-I03-W08",
+      "path": ".ea/worktrees/p27-w08",
+      "status": "merged",
+      "wave_id": "P27-I03-W08"
+    },
+    "WT-P27-I03-W09-1779552131": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w09",
+      "created_at": "2026-05-23T16:02:11.197782Z",
+      "id": "WT-P27-I03-W09-1779552131",
+      "merged_commit": "010fa6c",
+      "owner_session_id": "exec-P27-I03-W09",
+      "path": ".ea/worktrees/p27-w09",
+      "status": "merged",
+      "wave_id": "P27-I03-W09"
+    },
+    "WT-P27-I03-W10-1779553783": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w10",
+      "created_at": "2026-05-23T16:29:43.825141Z",
+      "id": "WT-P27-I03-W10-1779553783",
+      "merged_commit": "cfa59a5",
+      "owner_session_id": "exec-P27-I03-W10",
+      "path": ".ea/worktrees/p27-w10",
+      "status": "merged",
+      "wave_id": "P27-I03-W10"
+    },
+    "WT-P27-I03-W11-1779556967": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w11",
+      "created_at": "2026-05-23T17:22:47.925945Z",
+      "id": "WT-P27-I03-W11-1779556967",
+      "merged_commit": "992c059",
+      "owner_session_id": "exec-P27-I03-W11",
+      "path": ".ea/worktrees/p27-w11",
+      "status": "merged",
+      "wave_id": "P27-I03-W11"
+    },
+    "WT-P27-I03-W12-1779552133": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w12",
+      "created_at": "2026-05-23T16:02:13.563036Z",
+      "id": "WT-P27-I03-W12-1779552133",
+      "merged_commit": "097c174",
+      "owner_session_id": "exec-P27-I03-W12",
+      "path": ".ea/worktrees/p27-w12",
+      "status": "merged",
+      "wave_id": "P27-I03-W12"
+    },
+    "WT-P27-I03-W13-1779553785": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w13",
+      "created_at": "2026-05-23T16:29:45.405438Z",
+      "id": "WT-P27-I03-W13-1779553785",
+      "merged_commit": "a84c8ac",
+      "owner_session_id": "exec-P27-I03-W13",
+      "path": ".ea/worktrees/p27-w13",
+      "status": "merged",
+      "wave_id": "P27-I03-W13"
+    },
+    "WT-P27-I03-W14-1779554907": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w14",
+      "created_at": "2026-05-23T16:48:27.122152Z",
+      "id": "WT-P27-I03-W14-1779554907",
+      "merged_commit": "72bbb78",
+      "owner_session_id": "exec-P27-I03-W14",
+      "path": ".ea/worktrees/p27-w14",
+      "status": "merged",
+      "wave_id": "P27-I03-W14"
+    },
+    "WT-P27-I03-W15-1779556969": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w15",
+      "created_at": "2026-05-23T17:22:49.650497Z",
+      "id": "WT-P27-I03-W15-1779556969",
+      "merged_commit": "4572ec2",
+      "owner_session_id": "exec-P27-I03-W15",
+      "path": ".ea/worktrees/p27-w15",
+      "status": "merged",
+      "wave_id": "P27-I03-W15"
+    },
+    "WT-P27-I03-W16-1779560063": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w16",
+      "created_at": "2026-05-23T18:14:23.205478Z",
+      "id": "WT-P27-I03-W16-1779560063",
+      "merged_commit": "31ae879",
+      "owner_session_id": "exec-P27-I03-W16",
+      "path": ".ea/worktrees/p27-w16",
+      "status": "merged",
+      "wave_id": "P27-I03-W16"
+    },
+    "WT-P27-I03-W17-1779569289": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w17",
+      "created_at": "2026-05-23T20:48:09.093216Z",
+      "id": "WT-P27-I03-W17-1779569289",
+      "merged_commit": "5a25fda",
+      "owner_session_id": "exec-P27-I03-W17",
+      "path": ".ea/worktrees/p27-w17",
+      "status": "merged",
+      "wave_id": "P27-I03-W17"
+    },
+    "WT-P27-I03-W18-1779561791": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w18",
+      "created_at": "2026-05-23T18:43:11.005600Z",
+      "id": "WT-P27-I03-W18-1779561791",
+      "merged_commit": "34d6b44",
+      "owner_session_id": "exec-P27-I03-W18",
+      "path": ".ea/worktrees/p27-w18",
+      "status": "merged",
+      "wave_id": "P27-I03-W18"
+    },
+    "WT-P27-I03-W19-1779561792": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w19",
+      "created_at": "2026-05-23T18:43:12.611159Z",
+      "id": "WT-P27-I03-W19-1779561792",
+      "merged_commit": "0e269bb",
+      "owner_session_id": "exec-P27-I03-W19",
+      "path": ".ea/worktrees/p27-w19",
+      "status": "merged",
+      "wave_id": "P27-I03-W19"
+    },
+    "WT-P27-I03-W20-1779564621": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w20",
+      "created_at": "2026-05-23T19:30:21.631375Z",
+      "id": "WT-P27-I03-W20-1779564621",
+      "merged_commit": "5303e53",
+      "owner_session_id": "exec-P27-I03-W20",
+      "path": ".ea/worktrees/p27-w20",
+      "status": "merged",
+      "wave_id": "P27-I03-W20"
+    },
+    "WT-P27-I03-W21-1779563289": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w21",
+      "created_at": "2026-05-23T19:08:09.425077Z",
+      "id": "WT-P27-I03-W21-1779563289",
+      "merged_commit": "a435ee1",
+      "owner_session_id": "exec-P27-I03-W21",
+      "path": ".ea/worktrees/p27-w21",
+      "status": "merged",
+      "wave_id": "P27-I03-W21"
+    },
+    "WT-P27-I03-W22-1779563291": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w22",
+      "created_at": "2026-05-23T19:08:11.176133Z",
+      "id": "WT-P27-I03-W22-1779563291",
+      "merged_commit": "48f054d",
+      "owner_session_id": "exec-P27-I03-W22",
+      "path": ".ea/worktrees/p27-w22",
+      "status": "merged",
+      "wave_id": "P27-I03-W22"
+    },
+    "WT-P27-I03-W23-1779558090": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w23",
+      "created_at": "2026-05-23T17:41:30.694602Z",
+      "id": "WT-P27-I03-W23-1779558090",
+      "merged_commit": "da80910",
+      "owner_session_id": "exec-P27-I03-W23",
+      "path": ".ea/worktrees/p27-w23",
+      "status": "merged",
+      "wave_id": "P27-I03-W23"
+    },
+    "WT-P27-I03-W24-1779554905": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w24",
+      "created_at": "2026-05-23T16:48:25.130525Z",
+      "id": "WT-P27-I03-W24-1779554905",
+      "merged_commit": "94dcd86",
+      "owner_session_id": "exec-P27-I03-W24",
+      "path": ".ea/worktrees/p27-w24",
+      "status": "merged",
+      "wave_id": "P27-I03-W24"
+    },
+    "WT-P27-I03-W25-1779561787": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w25",
+      "created_at": "2026-05-23T18:43:07.863712Z",
+      "id": "WT-P27-I03-W25-1779561787",
+      "merged_commit": "9009216",
+      "owner_session_id": "exec-P27-I03-W25",
+      "path": ".ea/worktrees/p27-w25",
+      "status": "merged",
+      "wave_id": "P27-I03-W25"
+    },
+    "WT-P27-I03-W26-1779572660": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.3-p27-w26",
+      "created_at": "2026-05-23T21:44:20.383903Z",
+      "id": "WT-P27-I03-W26-1779572660",
+      "merged_commit": null,
+      "owner_session_id": "polish-P27-I03-W26",
+      "path": ".ea/worktrees/p27-w26",
+      "status": "active",
+      "wave_id": "P27-I03-W26"
     }
   }
 }
