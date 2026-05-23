@@ -1,3 +1,34 @@
 name: ml
 version: "1.0"
-description: "Machine-learning profile (stub for v0.1.1)."
+description: "Machine-learning profile: leakage-safe training and tracked runs."
+
+state_extensions:
+  fields_required: []
+
+instrument_requirements: []
+
+render_blocks:
+  - id: ml-leakage-discipline
+    target: AGENTS.md
+    version: "1.0"
+    rationale: |
+      A model that has seen the future scores well in backtest and fails in
+      production. Full-sample normalisation, forward-looking rolling windows,
+      using the target as a feature, and fitting a meta-learner on accumulated
+      out-of-sample data all leak information across the train/evaluation
+      boundary, inflating metrics without improving the model.
+    mechanism: |
+      Fit every transform (scaler, encoder, imputer) on the training fold only
+      and apply it forward. Walk-forward the stacker — never fit the
+      meta-learner on accumulated OOS rows and then evaluate on the same rows.
+      Log each train's config snapshot plus a data manifest (file paths,
+      sha256 hashes, row counts, date ranges) to a tracking server so the run
+      is reconstructible.
+    verification: |
+      Audit any OOS result that beats a literature benchmark by more than 20%
+      for leakage before trusting it. A reviewer confirms the tracking-server
+      run carries the config + data manifest and that no transform was fit
+      across the train/evaluation split.
+
+skills_referenced: []
+hooks_referenced: []

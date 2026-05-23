@@ -1,3 +1,33 @@
 name: quant
 version: "1.0"
-description: "Quantitative finance profile (stub for v0.1.1)."
+description: "Quantitative-finance profile: reproducible backtests, no data loss."
+
+state_extensions:
+  fields_required: []
+
+instrument_requirements: []
+
+render_blocks:
+  - id: quant-run-reproducibility
+    target: AGENTS.md
+    version: "1.0"
+    rationale: |
+      A backtest result is only trustworthy if the run that produced it can be
+      reproduced. Behaviour-defining configs that live outside version control,
+      and runs that record no data provenance, make a strategy's numbers
+      impossible to audit or replicate later.
+    mechanism: |
+      Keep behaviour-defining configs under ``configs/`` and committed. Every
+      backtest or model run logs a config snapshot plus a data manifest (file
+      paths, sha256 hashes, row counts, date ranges) and emits a report.
+      Walk-forward evaluation windows must not overlap. Datasets, run
+      artifacts, evaluation reports, briefs, and milestones are never deleted
+      by an agent.
+    verification: |
+      A reviewer confirms the run links a config snapshot and a data manifest
+      with hashes, that the report artifact exists, and that no
+      walk-forward window overlaps another. Deletions of data or run artifacts
+      are rejected.
+
+skills_referenced: []
+hooks_referenced: []

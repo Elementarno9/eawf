@@ -1,3 +1,27 @@
 name: infra
 version: "1.0"
-description: "Infrastructure / platform profile (stub for v0.1.1)."
+description: "Infrastructure / platform profile: declarative, reviewable changes."
+
+state_extensions:
+  fields_required: []
+
+instrument_requirements: []
+
+render_blocks:
+  - id: infra-change-discipline
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ## Infrastructure engineering (infra profile)
+
+      - Infrastructure is declarative and committed: changes land as
+        version-controlled config, never as an out-of-band console edit, so the
+        live state is reconstructible from the repo.
+      - Every change is previewed (plan / diff) and reviewed before apply; the
+        plan output is attached to the change so a reviewer sees what will
+        mutate.
+      - Secrets stay out of version control — config references a secret store
+        or environment, never an inline credential.
+
+skills_referenced: []
+hooks_referenced: []

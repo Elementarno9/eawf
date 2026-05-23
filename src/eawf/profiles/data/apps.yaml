@@ -1,3 +1,27 @@
 name: apps
 version: "1.0"
-description: "Application / product engineering profile (stub for v0.1.1)."
+description: "Application / product engineering profile: user-facing change discipline."
+
+state_extensions:
+  fields_required: []
+
+instrument_requirements: []
+
+render_blocks:
+  - id: apps-product-discipline
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ## Application engineering (apps profile)
+
+      - User-facing behaviour change ships with a test that exercises the new
+        behaviour through the same entry point a user hits, not just an internal
+        helper.
+      - Keep the seam between UI / transport, application logic, and persistence
+        explicit — rendering and request parsing never reach past the
+        application layer into storage directly.
+      - Feature work is gated behind config or a flag until its tests pass, so
+        an incomplete change never becomes the default path.
+
+skills_referenced: []
+hooks_referenced: []

@@ -70,13 +70,25 @@ def test_loader_unknown_id_raises_invalid_input() -> None:
 
 
 def test_loader_stub_profiles_validate() -> None:
-    """Every catalog stub parses cleanly with default fields."""
-    for stub in ("quant", "ml", "docs", "apps", "infra", "re", "game", "robotics"):
+    """Every no-body catalog stub parses cleanly with default fields."""
+    for stub in ("docs", "re", "game", "robotics"):
         body = load_profile(stub)
         assert body.name == stub
         assert body.state_extensions.fields_required == []
         assert body.render_blocks == []
         assert body.instrument_requirements == []
+
+
+def test_loader_minimal_rule_profiles_render_defining_block() -> None:
+    """ml/quant/apps/infra each ship at least their defining AGENTS.md block."""
+    for stub in ("ml", "quant", "apps", "infra"):
+        body = load_profile(stub)
+        assert body.name == stub
+        assert body.render_blocks, f"{stub} ships no defining render block"
+        assert all(block.target == "AGENTS.md" for block in body.render_blocks)
+        # No instruments or state extensions: these stay minimal rule sets.
+        assert body.instrument_requirements == []
+        assert body.state_extensions.fields_required == []
 
 
 def test_loader_caches_repeat_calls() -> None:
