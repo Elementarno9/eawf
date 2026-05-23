@@ -228,7 +228,12 @@ def _mutate_via_daemon[FallbackT](
        carry the mutation against a pre-wire daemon.
     5. A ``-32002 validation_failed`` rejection maps to
        :class:`~eawf.cli.errors.ValidationFailed`; any other RPC error
-       re-raises.
+       (``-32001`` lock conflict, ``-32003`` not found, ``-32005``
+       runtime unavailable, ...) maps onto its specific typed
+       :class:`~eawf.cli.errors.CliError` via
+       :func:`~eawf.cli.errors.cli_error_for_rpc` so the verb handler's
+       ``except CliError`` surfaces a proper error envelope rather than
+       leaking an uncaught ``DaemonRpcError``.
 
     Args:
         kind: :class:`MutationKind` discriminator the daemon dispatches
@@ -260,8 +265,11 @@ def _mutate_via_daemon[FallbackT](
             socket (mapped from the spawn timeout).
         ValidationFailed: When the daemon rejects the mutation with
             ``-32002 validation_failed``.
-        DaemonRpcError: When the daemon returns any other JSON-RPC
-            error envelope.
+        CliError: When the daemon returns any other JSON-RPC error
+            envelope — the code is mapped onto its specific typed
+            subclass (``StateConflict`` / ``UserError`` / ...) via
+            :func:`~eawf.cli.errors.cli_error_for_rpc` so the caller's
+            ``except CliError`` handler renders it.
     """
     from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
     from eawf.state.mutations import Mutation
@@ -292,7 +300,7 @@ def _mutate_via_daemon[FallbackT](
             return fallback()
         if exc.code == -32002:
             raise cli_errors.ValidationFailed(exc.message) from exc
-        raise
+        raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     except (RuntimeError, OSError, TimeoutError) as exc:
         logger.debug(f"_mutate_via_daemon transport-fallback kind={kind.value} reason={exc!s}")
         return fallback()

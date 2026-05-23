@@ -27,7 +27,13 @@ from eawf.daemon.bus import EventBus
 from eawf.daemon.idle import IdleTimeoutWatchdog
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.recovery import replay_wal
-from eawf.daemon.runtime_dir import log_path, pid_path, runtime_dir, socket_path
+from eawf.daemon.runtime_dir import (
+    harden_runtime_dir,
+    log_path,
+    pid_path,
+    runtime_dir,
+    socket_path,
+)
 from eawf.daemon.server import process_frame_bytes, serve_unix
 from eawf.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
 from eawf.logging.scrub import SensitiveScrubber
@@ -186,7 +192,13 @@ def _configure_logging(foreground: bool) -> None:
         logging.basicConfig(level=logging.INFO, handlers=[handler])
         return
     log_file = log_path()
+    # The log lives directly under the runtime dir, and this branch is the
+    # earliest runtime-dir materialiser on a non-foreground boot. Create
+    # the parent then retighten it to owner-only (0700) so the first log
+    # write never lands in a group/other-traversable directory (the dir
+    # holds the PID file, socket, log, and WAL — all embed operator paths).
     log_file.parent.mkdir(parents=True, exist_ok=True)
+    harden_runtime_dir(log_file.parent)
     handler = logging.FileHandler(log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter(fmt))
     handler.addFilter(SensitiveScrubber())
@@ -296,7 +308,11 @@ def run(*, foreground: bool = True) -> int:
     """
     _configure_logging(foreground)
     rt_dir = runtime_dir()
+    # Create + retighten the runtime dir to owner-only (0700) on every boot:
+    # it holds the PID file, socket, log, and WAL, all of which embed the
+    # operator's cwd / state paths, so other local users must not traverse it.
     rt_dir.mkdir(parents=True, exist_ok=True)
+    harden_runtime_dir(rt_dir)
     pid_file = pid_path()
 
     started_at = datetime.now(UTC).isoformat()

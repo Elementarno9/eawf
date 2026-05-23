@@ -193,6 +193,20 @@ def test_bound_socket_is_owner_only(running_daemon: E2EEnv) -> None:
     assert _imode(running_daemon.sock_file) == 0o600
 
 
+def test_runtime_dir_is_owner_only_after_boot(running_daemon: E2EEnv) -> None:
+    """The live daemon retightens its runtime dir to ``0o700`` on boot.
+
+    The harness pre-creates the runtime dir under the prevailing umask, so
+    a passing assertion proves the daemon's boot path routes through
+    ``ensure_runtime_dir`` (which re-applies owner-only perms) rather than
+    a bare ``mkdir`` that would leave group/other traversal bits set. The
+    dir holds the PID file, socket, log, and WAL — all of which embed the
+    operator's cwd / state paths — so it must not be listable by other
+    local users.
+    """
+    assert _imode(running_daemon.runtime_dir) == 0o700
+
+
 def test_stop_kills_daemon_and_removes_pidfile_and_socket(running_daemon: E2EEnv) -> None:
     """``daemon stop`` terminates the live daemon and clears its artifacts."""
     pid = _read_pidfile_pid(running_daemon.pid_file)
@@ -256,16 +270,6 @@ _HOME_PREFIX = "Users"
 _PLANTED_USER = "victim"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "SensitiveScrubber exists + is unit-tested but is never wired onto the "
-        "daemon's FileHandler in eawf.daemon.main._configure_logging, so the "
-        "eawfd.log leaks raw home-shaped paths. This E2E assertion captures the "
-        "gap; wiring the filter flips it to xpass -> the strict marker forces "
-        "this xfail to be removed in the same change that lands the fix."
-    ),
-)
 def test_log_scrubs_home_shaped_paths() -> None:
     """A macOS-home-shaped path segment must be redacted in the daemon log.
 

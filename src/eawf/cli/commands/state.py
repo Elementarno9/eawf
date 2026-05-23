@@ -215,10 +215,13 @@ def rpc_cmd(
         with DaemonClient() as client:
             result = client.call(method, rpc_params)
     except DaemonRpcError as exc:
+        # No ``kind`` override here: the specific kind threaded by
+        # ``cli_error_for_rpc`` (LockConflict / NotFound / ...) must reach
+        # the envelope; supplying ``kind`` would mask it (explicit wins).
         cli_errors.emit_error(
             cli_errors.cli_error_for_rpc(exc.code, exc.message),
             flags=flags,
-            data={"kind": "RawRpc", "method": method, "rpc_code": exc.code},
+            data={"method": method, "rpc_code": exc.code},
         )
     text = f"rpc ok method={method} result={result}"
     emit_json_or_text({"method": method, "result": result}, text, flags=flags)

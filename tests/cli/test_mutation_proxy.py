@@ -18,7 +18,13 @@ This suite exercises the branching contract:
 5. **Validation rejection** — a ``-32002 validation_failed`` maps to
    :class:`~eawf.cli.errors.ValidationFailed`; the fallback MUST NOT
    run.
-6. **Daemonless boundary** — ``--daemonless`` (flag or env) on the
+6. **Typed RPC-error mapping** — every other non-fallback RPC code
+   (``-32001`` / ``-32003`` / ``-32005`` / unknown) maps onto its
+   specific :class:`~eawf.cli.errors.CliError` via
+   :func:`~eawf.cli.errors.cli_error_for_rpc` (NOT a bare
+   ``DaemonRpcError`` that would escape the verb handler's
+   ``except CliError``); the threaded kind survives into the envelope.
+7. **Daemonless boundary** — ``--daemonless`` (flag or env) on the
    mutating verb is refused by the embedded escalation gate before any
    wire traffic; neither the client nor the fallback runs.
 
@@ -346,19 +352,39 @@ def test_mutate_via_daemon_validation_failed_maps_to_validation_error(
         )
 
 
-def test_mutate_via_daemon_other_rpc_error_reraises(
+@pytest.mark.parametrize(
+    ("rpc_code", "rpc_message", "expected_cls", "expected_kind"),
+    [
+        (-32001, "sibling lock held", cli_errors.StateConflict, "LockConflict"),
+        (-32005, "runtime ladder exhausted", cli_errors.StateConflict, "RuntimeUnavailable"),
+        (-32003, "no such wave", cli_errors.UserError, "NotFound"),
+    ],
+)
+def test_mutate_via_daemon_maps_rpc_error_to_typed_cli_error(
     monkeypatch: pytest.MonkeyPatch,
     _no_spawn: None,
+    rpc_code: int,
+    rpc_message: str,
+    expected_cls: type[cli_errors.CliError],
+    expected_kind: str,
 ) -> None:
-    """An unrecognised RPC error code re-raises rather than falling back."""
+    """A non-fallback RPC error maps onto its specific typed ``CliError``.
+
+    Regression guard: a bare ``raise`` of the ``DaemonRpcError`` (a
+    ``RuntimeError``, not a ``CliError``) escaped the verb handler's
+    ``except CliError`` and surfaced as an uncaught traceback. The shim
+    must now route every non-``-32601``/``-32002`` code through
+    :func:`cli_errors.cli_error_for_rpc` so the operator sees a proper
+    error envelope.
+    """
     from eawf.cli._daemon_client import DaemonRpcError
 
-    _set_client(monkeypatch, _refusing_client(-32000, "server error: boom"))
+    _set_client(monkeypatch, _refusing_client(rpc_code, rpc_message))
 
     def _fallback() -> None:
-        pytest.fail("fallback must not run on an unrecognised RPC error")
+        pytest.fail("fallback must not run on a mapped RPC error")
 
-    with pytest.raises(DaemonRpcError):
+    with pytest.raises(expected_cls) as excinfo:
         _dispatch._mutate_via_daemon(
             MutationKind.WAVE_CLOSE,
             _PARAMS,
@@ -367,6 +393,67 @@ def test_mutate_via_daemon_other_rpc_error_reraises(
             verb="wave close",
             fallback=_fallback,
         )
+    # Specific bucket, not the bare DaemonRpcError/RuntimeError that leaked.
+    assert not isinstance(excinfo.value, DaemonRpcError)
+    assert str(excinfo.value) == rpc_message
+    # The fine-grained kind tag rides on the typed error so the envelope
+    # preserves per-cause specificity inside the five exit buckets.
+    assert excinfo.value.kind == expected_kind
+
+
+def test_mutate_via_daemon_mapped_rpc_error_envelope_carries_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    _no_spawn: None,
+) -> None:
+    """The typed error built from an RPC code surfaces its kind in the envelope.
+
+    End-to-end of the specificity contract: a ``-32001`` lock conflict
+    maps to :class:`~eawf.cli.errors.StateConflict`, and its threaded
+    ``LockConflict`` kind lands in ``ErrorEnvelope.data.kind`` so CI
+    scripts pivot on the precise cause without the exit-code surface
+    having to grow.
+    """
+    _set_client(monkeypatch, _refusing_client(-32001, "sibling lock held"))
+
+    with pytest.raises(cli_errors.StateConflict) as excinfo:
+        _dispatch._mutate_via_daemon(
+            MutationKind.WAVE_CLOSE,
+            _PARAMS,
+            None,
+            scope_id="P24-I01-W09",
+            verb="wave close",
+            fallback=lambda: pytest.fail("fallback must not run"),
+        )
+
+    env = cli_errors.build_envelope(excinfo.value)
+    assert env.error == "StateConflict"
+    assert env.exit_code == exit_codes.STATE_CONFLICT
+    assert env.data["kind"] == "LockConflict"
+
+
+def test_mutate_via_daemon_unknown_rpc_code_maps_to_internal_error(
+    monkeypatch: pytest.MonkeyPatch,
+    _no_spawn: None,
+) -> None:
+    """An unrecognised RPC code maps to ``InternalError`` (no fallback, no leak)."""
+    from eawf.cli._daemon_client import DaemonRpcError
+
+    _set_client(monkeypatch, _refusing_client(-32000, "server error: boom"))
+
+    def _fallback() -> None:
+        pytest.fail("fallback must not run on an unrecognised RPC error")
+
+    with pytest.raises(cli_errors.InternalError) as excinfo:
+        _dispatch._mutate_via_daemon(
+            MutationKind.WAVE_CLOSE,
+            _PARAMS,
+            None,
+            scope_id="P24-I01-W09",
+            verb="wave close",
+            fallback=_fallback,
+        )
+    assert not isinstance(excinfo.value, DaemonRpcError)
+    assert excinfo.value.exit_code == exit_codes.INTERNAL_ERROR
 
 
 # ---- Scenario 6: daemonless boundary ---------------------------------------
