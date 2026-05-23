@@ -460,6 +460,110 @@ def test_mutate_missing_required_param_rejected(tmp_path: Path) -> None:
     _run(body)
 
 
+# ---- state.mutate (JSON-RPC wire contract) ---------------------------------
+# The handler-level tests above catch the raw ``DaemonValidationError``;
+# these drive :func:`eawf.daemon.server._process_frame` so the on-the-wire
+# error CODE is exercised. A lifecycle/post-invariant rejection MUST emit
+# ``-32002`` (so the CLI client maps it to ValidationFailed / exit 2), not
+# the generic ``-32602 invalid_params`` a bare ValueError would yield.
+
+
+def _mutate_frame(mutation: Mutation) -> bytes:
+    """Serialise a ``state.mutate`` JSON-RPC request frame for *mutation*."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": "wire-1",
+        "method": "state.mutate",
+        "params": {"mutation": mutation.model_dump(mode="json")},
+    }
+    return orjson.dumps(request)
+
+
+def test_process_frame_validation_rejection_emits_minus_32002(tmp_path: Path) -> None:
+    """A rejected mutation surfaces as JSON-RPC ``-32002`` on the wire.
+
+    Wire-contract regression: before W31 the lifecycle-guard rejection
+    left the handler as a bare ``ValueError`` that ``_process_frame``
+    mapped to ``-32602 invalid_params``, so the CLI client's
+    ``-32002`` ValidationFailed branch was dead and the daemon path
+    returned a different exit code than the in-process fallback for the
+    SAME rejection.
+    """
+    from eawf.daemon.methods import VALIDATION_FAILED as WIRE_VALIDATION_FAILED
+    from eawf.daemon.server import _process_frame
+
+    ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W99",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W99", "outcome": "nope"},  # unknown wave
+    )
+
+    async def body() -> None:
+        response = await _process_frame(_mutate_frame(mutation), ctx)
+        assert response["id"] == "wire-1"
+        assert "result" not in response
+        assert response["error"]["code"] == WIRE_VALIDATION_FAILED
+        assert response["error"]["code"] == -32002
+        assert "validation_failed" in response["error"]["message"]
+
+    _run(body)
+
+
+def test_process_frame_post_invariant_rejection_emits_minus_32002(tmp_path: Path) -> None:
+    """A post-mutation invariant rejection also surfaces as ``-32002``.
+
+    ROADMAP_APPLY on a PLANNED phase with zero waves is a lifecycle-guard
+    rejection routed through :class:`DaemonValidationError`; the wire code
+    must be ``-32002`` so the client maps it to ValidationFailed.
+    """
+    from eawf.daemon.server import _process_frame
+
+    ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_APPLY,
+        scope_id="P24",
+        mutation_id=uuid.uuid4().hex,
+        params={"phase_id": "P24"},  # P24 is ACTIVE, not PLANNED → rejected
+    )
+
+    async def body() -> None:
+        response = await _process_frame(_mutate_frame(mutation), ctx)
+        assert response["error"]["code"] == -32002
+        assert "validation_failed" in response["error"]["message"]
+
+    _run(body)
+
+
+def test_process_frame_corrupt_state_stays_minus_32602(tmp_path: Path) -> None:
+    """On-disk corruption stays ``-32602`` — NOT the mutation-rejection code.
+
+    Reading a schema-invalid ``state.json`` raises a *bare* ``ValueError``
+    (on-disk corruption, not a rejected mutation), so the wire code must
+    remain ``-32602 invalid_params`` — distinct from the ``-32002`` a
+    typed :class:`DaemonValidationError` yields. Guards against the
+    refactor over-broadening the typed exception.
+    """
+    from eawf.daemon.server import INVALID_PARAMS, _process_frame
+
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path)
+    state_path.write_text('{"schema_version": "1.0", "not": "valid"}')
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        response = await _process_frame(_mutate_frame(mutation), ctx)
+        assert response["error"]["code"] == INVALID_PARAMS
+        assert response["error"]["code"] == -32602
+
+    _run(body)
+
+
 def test_apply_registry_has_no_stub_kinds() -> None:
     """Every MutationKind resolves to a real apply fn (no not-yet-wired stub)."""
     from eawf.daemon.methods import state as state_methods

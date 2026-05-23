@@ -57,7 +57,12 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.daemon import wal
-from eawf.daemon.methods import MethodContext, register
+from eawf.daemon.methods import (
+    VALIDATION_FAILED,
+    DaemonValidationError,
+    MethodContext,
+    register,
+)
 from eawf.daemon.wal import WalRecord
 from eawf.lifecycle.transitions import (
     LifecycleError,
@@ -95,11 +100,6 @@ logger = logging.getLogger(__name__)
 #: helper :func:`_resolve_anchor` reads + writes this directly.
 _ANCHOR_FALLBACK_WARN_EMITTED: bool = False
 
-
-#: JSON-RPC error code raised when the post-mutation state fails
-#: validation (or when the mutation body itself is rejected by the
-#: lifecycle guard). This code is reserved for ``validation_failed``.
-VALIDATION_FAILED: Final[int] = -32002
 
 #: TTL for cached idempotency results (seconds). A repeat
 #: ``state.mutate`` with the same ``idempotency_key`` inside this
@@ -347,7 +347,11 @@ def _read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
     Raises:
         FileNotFoundError: when *state_path* does not exist.
         ValueError: when the on-disk payload fails schema validation.
-            The handler maps this to ``-32002 validation_failed``.
+            This is on-disk corruption (not a mutation rejection), so it
+            stays a bare ``ValueError`` that the server maps to
+            ``-32602 invalid_params`` — distinct from the typed
+            :class:`~eawf.daemon.methods.DaemonValidationError` the
+            mutator raises for a *rejected* mutation (``-32002``).
     """
     if not state_path.exists():
         raise FileNotFoundError(f"state file not found: {state_path!r}")
@@ -723,17 +727,19 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Raises:
         RuntimeError: when ``ctx.state_path``, ``ctx.event_path``, or
             ``ctx.wal_dir`` is missing.
-        ValueError: when the mutation body or post-mutation state fails
-            validation; mapped to ``-32002 validation_failed`` by the
-            server.
+        DaemonValidationError: when the mutation body fails the typed
+            contract, a lifecycle guard rejects the mutation, or the
+            post-mutation state fails schema / invariant validation;
+            mapped to ``-32002 validation_failed`` by the server.
     """
     try:
         args = MutateParams.model_validate(params)
     except ValidationError as exc:
-        # The server maps ValueError → -32602; we surface validation
-        # rejections as -32002 instead because the param shape itself
-        # was syntactically fine — the body failed the typed contract.
-        raise ValueError(f"validation_failed: {exc}") from exc
+        # The server maps a bare ValueError → -32602; we raise the typed
+        # DaemonValidationError so the server emits -32002 instead,
+        # because the param envelope was syntactically fine — the body
+        # failed the typed Mutation contract.
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
     state_path, event_path, wal_path = _resolve_mutator_paths(
         repo_root=args.repo_root,
@@ -772,21 +778,21 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             try:
                 apply_func(state, mutation)
             except LifecycleError as exc:
-                raise ValueError(f"validation_failed: {exc}") from exc
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except KeyError as exc:
-                raise ValueError(f"validation_failed: missing param {exc!s}") from exc
+                raise DaemonValidationError(f"validation_failed: missing param {exc!s}") from exc
 
             state.updated_at = datetime.now(UTC)
             new_payload = state.model_dump(mode="json")
             post = validate_state(new_payload, strict_optional=False)
             if post.state is None:
-                raise ValueError(
+                raise DaemonValidationError(
                     "validation_failed: post-mutation schema invalid: "
                     + "; ".join(post.schema_errors[:3])
                 )
             if post.violations:
                 violation_codes = ",".join(v.code for v in post.violations)
-                raise ValueError(
+                raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
             after_version = _state_version(new_payload)

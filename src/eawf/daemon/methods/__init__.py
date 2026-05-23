@@ -15,15 +15,41 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
+
+
+#: JSON-RPC error code the server emits when a mutation is rejected by a
+#: lifecycle guard or by post-mutation invariant validation. Single
+#: source of truth shared by :class:`DaemonValidationError` raisers in
+#: :mod:`eawf.daemon.methods.state` and the wire-mapping in
+#: :func:`eawf.daemon.server._process_frame`; the CLI client maps it to
+#: :class:`eawf.cli.errors.ValidationFailed` (exit code 2).
+VALIDATION_FAILED: Final[int] = -32002
 
 
 class MethodNotFoundError(KeyError):
     """Raised by :func:`dispatch` when a method name is unknown.
 
     The listener translates this into JSON-RPC error code ``-32601``.
+    """
+
+
+class DaemonValidationError(ValueError):
+    """Raised by a handler when a mutation fails validation.
+
+    Distinguished from a bare :class:`ValueError` (which the server maps
+    to ``-32602 invalid_params`` for malformed param shapes) so the
+    server can emit :data:`VALIDATION_FAILED` (``-32002``) on the wire
+    instead. The CLI client maps that code to
+    :class:`eawf.cli.errors.ValidationFailed`, matching the in-process
+    fallback's exit code for the same rejection.
+
+    Subclasses :class:`ValueError` so any callsite that already catches
+    ``ValueError`` keeps working; the server's ordered ``except`` clauses
+    catch this subclass first to pick the more specific wire code. The
+    ``validation_failed: `` message prefix is preserved by every raiser.
     """
 
 

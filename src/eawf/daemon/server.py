@@ -43,6 +43,8 @@ import eawf.daemon.methods.state_subscribe  # noqa: F401  — registers (state|e
 from eawf.daemon.auth import UnauthorizedError, verify_peer_credential
 from eawf.daemon.bus import CatchUpTooLargeError, EventBus, Subscriber
 from eawf.daemon.methods import (
+    VALIDATION_FAILED,
+    DaemonValidationError,
     MethodContext,
     MethodNotFoundError,
     dispatch,
@@ -205,6 +207,12 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
         result = await dispatch(method, ctx, params)
     except MethodNotFoundError:
         return _error(req_id, METHOD_NOT_FOUND, f"method not found: {method!r}")
+    except DaemonValidationError as exc:
+        # A lifecycle-guard / post-invariant rejection — the param shape
+        # was syntactically fine, the mutation was semantically refused.
+        # Emit -32002 so the CLI client maps it to ValidationFailed
+        # (exit 2), matching the in-process fallback for the same case.
+        return _error(req_id, VALIDATION_FAILED, str(exc))
     except ValueError as exc:
         return _error(req_id, INVALID_PARAMS, str(exc))
     except Exception as exc:
