@@ -2719,6 +2719,16 @@
       "scope_id": "P27-I02-W29",
       "status": "done",
       "updated_at": "2026-05-23T00:39:49.379426Z"
+    },
+    "P27-I02-W30": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W30-close-20260523T134528Z",
+      "elapsed_eu": 0.05,
+      "id": "ACT-P27-I02-W30",
+      "scope_id": "P27-I02-W30",
+      "status": "done",
+      "updated_at": "2026-05-23T13:45:28.859474Z"
     }
   },
   "agent_sessions": {
@@ -4906,6 +4916,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I02-W29",
       "updated_at": "2026-05-23T00:33:50.065302Z"
+    },
+    "P27-I02-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W30-bucket-20260523T134406Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I02-W30",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I02-W30",
+      "updated_at": "2026-05-23T13:44:06.916220Z"
     }
   },
   "goals": {
@@ -5592,7 +5615,8 @@
         "P27-I02-W26",
         "P27-I02-W27",
         "P27-I02-W28",
-        "P27-I02-W29"
+        "P27-I02-W29",
+        "P27-I02-W30"
       ]
     },
     "P27-I03": {
@@ -6184,7 +6208,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T00:39:49.905944Z",
+  "updated_at": "2026-05-23T13:45:28.860099Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -16201,6 +16225,34 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I02-W29-1779496430"
+    },
+    "P27-I02-W30": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "inline-polish-w30",
+      "closed_at": "2026-05-23T13:45:28.859474Z",
+      "commit": "c9b32d4855da23b461495a2d5ac1d58ab13ca717",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/cli/_mutation.py"
+      ],
+      "id": "P27-I02-W30",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T13:43:50.631853Z",
+      "outcome": "Realigned _proxy_enabled merge-fail debug log to '<funcname> False reason={exc!s}' bare-key form matching _daemon_reachable sibling; canonical patterns otherwise clean across the 26-wave I02 delivery",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "_proxy_enabled merge-fail debug log matches _daemon_reachable bare-key form (<funcname> False reason={exc!s})"
+      ],
+      "title": "polish: align _proxy_enabled fallback log to sibling bare-key form",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     },
     "P27-I03-W01": {
       "agent_role": "executor",
