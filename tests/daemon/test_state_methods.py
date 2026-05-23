@@ -511,14 +511,19 @@ def test_process_frame_validation_rejection_emits_minus_32002(tmp_path: Path) ->
     _run(body)
 
 
-def test_process_frame_post_invariant_rejection_emits_minus_32002(tmp_path: Path) -> None:
-    """A post-mutation invariant rejection also surfaces as ``-32002``.
+def test_process_frame_nonclosure_lifecycle_rejection_emits_minus_32602(tmp_path: Path) -> None:
+    """A NON-closure lifecycle-guard rejection surfaces as ``-32602``.
 
-    ROADMAP_APPLY on a PLANNED phase with zero waves is a lifecycle-guard
-    rejection routed through :class:`DaemonValidationError`; the wire code
-    must be ``-32002`` so the client maps it to ValidationFailed.
+    ROADMAP_APPLY on an ACTIVE (not PLANNED) phase is a lifecycle-guard
+    rejection, but ROADMAP_APPLY is not a closure (``*_CLOSE``) kind, so the
+    daemon emits ``-32602 invalid_params`` (the client maps it to
+    InvalidInput / exit 1) rather than ``-32002``. This keeps the daemon-up
+    path and the in-process fallback (which maps a non-closure
+    ``LifecycleError`` to InvalidInput) agreeing on the exit code for the
+    same rejection. Only the ``*_CLOSE`` kinds surface ``-32002``
+    (see ``test_process_frame_validation_rejection_emits_minus_32002``).
     """
-    from eawf.daemon.server import _process_frame
+    from eawf.daemon.server import INVALID_PARAMS, _process_frame
 
     ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)
     mutation = Mutation(
@@ -530,8 +535,8 @@ def test_process_frame_post_invariant_rejection_emits_minus_32002(tmp_path: Path
 
     async def body() -> None:
         response = await _process_frame(_mutate_frame(mutation), ctx)
-        assert response["error"]["code"] == -32002
-        assert "validation_failed" in response["error"]["message"]
+        assert response["error"]["code"] == INVALID_PARAMS
+        assert response["error"]["code"] == -32602
 
     _run(body)
 
@@ -618,7 +623,7 @@ def test_mutate_wave_release_unknown_wave_rejected(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        with pytest.raises(ValueError, match="validation_failed"):
+        with pytest.raises(ValueError, match="unknown wave"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         assert state_path.read_bytes() == before_bytes
 
@@ -673,7 +678,7 @@ def test_mutate_event_append_missing_event_type_rejected(tmp_path: Path) -> None
     )
 
     async def body() -> None:
-        with pytest.raises(ValueError, match="validation_failed"):
+        with pytest.raises(ValueError, match="event_type"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         # No state change + no event row from the rejected append.
         assert state_path.read_bytes() == before_bytes
@@ -790,7 +795,7 @@ def test_mutate_roadmap_revise_unknown_op_rejected(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        with pytest.raises(ValueError, match="validation_failed"):
+        with pytest.raises(ValueError, match="unknown roadmap revise op"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         assert state_path.read_bytes() == before_bytes
 
@@ -840,7 +845,7 @@ def test_mutate_roadmap_apply_no_waves_rejected(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        with pytest.raises(ValueError, match="validation_failed"):
+        with pytest.raises(ValueError, match="has no waves"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         assert state_path.read_bytes() == before_bytes
 
@@ -885,7 +890,7 @@ def test_mutate_roadmap_drop_unknown_phase_rejected(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        with pytest.raises(ValueError, match="validation_failed"):
+        with pytest.raises(ValueError, match="unknown phase"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         assert state_path.read_bytes() == before_bytes
 

@@ -35,7 +35,7 @@ Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal, NoReturn
+from typing import Any, Final, Literal, NoReturn
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field
@@ -138,10 +138,10 @@ class DaemonMutationIndeterminate(DaemonUnreachable):
     ``EVENT_APPEND``) would double-apply.
 
     Subclasses :class:`DaemonUnreachable` (exit code 4) because the cause
-    is a lost daemon connection; the distinct class name + ``Indeterminate``
-    ``data.kind`` let operators and CI tell a clean "daemon down" (safe to
-    retry) apart from "daemon dropped mid-write" (re-check state before
-    retrying).
+    is a lost daemon connection; the distinct class name + the
+    ``DaemonMutationIndeterminate`` ``data.kind`` let operators and CI tell
+    a clean "daemon down" (safe to retry) apart from "daemon dropped
+    mid-write" (re-check state before retrying).
     """
 
 
@@ -507,6 +507,11 @@ def emit_error(
 # subclasses. The mapping is consulted by the daemon client when
 # surfacing an RPC failure as a CLI exit.
 
+#: Wire code the daemon emits for a validation_failed rejection (mirrors
+#: ``eawf.daemon.methods.VALIDATION_FAILED``). Single-sourced here so the
+#: client-side comparison sites do not drift from the code table below.
+RPC_VALIDATION_FAILED: Final[int] = -32002
+
 _DAEMON_RPC_MAP: dict[int, tuple[type[CliError], str | None]] = {
     -32700: (InternalError, None),
     -32600: (UserError, "InvalidInput"),
@@ -515,7 +520,7 @@ _DAEMON_RPC_MAP: dict[int, tuple[type[CliError], str | None]] = {
     -32603: (InternalError, None),
     -32000: (InternalError, None),
     -32001: (StateConflict, "LockConflict"),
-    -32002: (ValidationError, None),
+    RPC_VALIDATION_FAILED: (ValidationError, None),
     -32003: (UserError, "NotFound"),
     -32004: (UserError, "ProtocolMismatch"),
     -32005: (StateConflict, "RuntimeUnavailable"),

@@ -330,7 +330,7 @@ def _mutate_via_daemon[FallbackT](
                 f"code={exc.code} message={exc.message!r}"
             )
             return fallback()
-        if exc.code == -32002:
+        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
             raise cli_errors.ValidationFailed(exc.message) from exc
         raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     except (RuntimeError, OSError, TimeoutError) as exc:

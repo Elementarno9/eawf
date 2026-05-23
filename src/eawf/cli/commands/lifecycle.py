@@ -567,7 +567,7 @@ def _wave_close_via_daemon(
                 f"code={exc.code} message={exc.message!r}"
             )
             return False
-        if exc.code == -32002:
+        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
             cli_errors.emit_error(cli_errors.ValidationFailed(exc.message), flags=flags)
             return True
         cli_errors.emit_error(cli_errors.IntegrityViolation(exc.message), flags=flags)

@@ -207,10 +207,11 @@ def _rename_status(
 def mark_applied(wal_dir: Path, record_id: str) -> Path:
     """Rename ``<id>.pending.json`` → ``<id>.applied.json``.
 
-    The caller is responsible for ordering: state.json + event.jsonl
-    are written before this rename, but fsync happens AFTER the rename
-    (between ``mark_applied`` and :func:`mark_fsynced`). Crash between
-    here and ``mark_fsynced`` leaves a recoverable record.
+    The caller is responsible for ordering: state.json is written before
+    this rename (the durable point of no return); event.jsonl is appended
+    AFTER, so a crash between this rename and the event append leaves an
+    APPLIED record that :func:`eawf.daemon.recovery.replay_wal` re-issues.
+    fsync happens in :func:`mark_fsynced`, after the event append.
     """
     dst = _rename_status(wal_dir, record_id, WalStatus.PENDING, WalStatus.APPLIED)
     logger.info(f"mark_applied record={record_id!r}")
