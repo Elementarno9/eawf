@@ -106,6 +106,7 @@ def _wave(
     status: str = "pending",
     deps: list[str] | None = None,
     title: str | None = None,
+    description: str | None = None,
     claim_session_id: str | None = None,
     outcome: str | None = None,
     closed_at: str | None = None,
@@ -114,6 +115,7 @@ def _wave(
         "id": wave_id,
         "iter_id": iter_id,
         "title": title or f"Wave {wave_id}",
+        "description": description,
         "status": status,
         "deps": deps or [],
         "file_scopes": [],
@@ -365,6 +367,77 @@ def test_render_markdown_show_section_emits_only_named_block() -> None:
     assert "## Risks" in md
     assert "## Summary" not in md
     assert "## DAG" not in md
+
+
+def test_build_view_carries_wave_description() -> None:
+    """``build_view`` projects ``Wave.description`` onto ``WaveView``."""
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01", description="Long-form purpose of the wave."))
+    state = State.model_validate(s)
+    view = build_view(state, "P05-I01")
+    assert view.waves[0].description == "Long-form purpose of the wave."
+
+
+def test_render_markdown_surfaces_wave_description_in_detail_block() -> None:
+    """A wave with a description renders a ``### Wave details`` block."""
+    s = _base_state()
+    _add_wave(
+        s,
+        _wave("P05-I01-W01", title="Bound title", description="The longer purpose blurb."),
+    )
+    state = State.model_validate(s)
+    view = build_view(state, "P05-I01")
+    md = render_markdown(view)
+    assert "### Wave details" in md
+    assert "- **P05-I01-W01** — The longer purpose blurb." in md
+    # The compact table cell still carries the bounded title.
+    assert "**P05-I01-W01** Bound title |" in md
+
+
+def test_render_markdown_omits_detail_block_without_description() -> None:
+    """No wave carries a description ⇒ the ``Wave details`` block is absent."""
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01"))
+    state = State.model_validate(s)
+    view = build_view(state, "P05-I01")
+    md = render_markdown(view)
+    assert "### Wave details" not in md
+
+
+def test_render_markdown_detail_block_lists_only_described_waves() -> None:
+    """Only waves with a description appear in the detail block."""
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01", description="Has a blurb."))
+    _add_wave(s, _wave("P05-I01-W02"))
+    state = State.model_validate(s)
+    view = build_view(state, "P05-I01")
+    md = render_markdown(view)
+    assert "- **P05-I01-W01** — Has a blurb." in md
+    assert "P05-I01-W02 —" not in md
+
+
+def test_render_markdown_max_length_title_fits_with_description() -> None:
+    """A 72-char (max) title renders verbatim in the table; blurb in details."""
+    max_title = "x" * 72
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01", title=max_title, description="Overflow text."))
+    state = State.model_validate(s)
+    view = build_view(state, "P05-I01")
+    md = render_markdown(view)
+    # The model bounds title to 72; the table renders it without truncation.
+    assert f"**P05-I01-W01** {max_title} |" in md
+    assert "- **P05-I01-W01** — Overflow text." in md
+
+
+def test_render_json_excludes_wave_description() -> None:
+    """The JSON envelope omits ``description`` so the schema stays conformant."""
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01", description="Should not leak into JSON."))
+    state = State.model_validate(s)
+    view = build_view(state, "P05-I01")
+    env = render_json(view)
+    assert env["waves"]
+    assert "description" not in env["waves"][0]
 
 
 def test_render_json_envelope_contains_all_keys() -> None:

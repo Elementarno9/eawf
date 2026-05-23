@@ -109,6 +109,21 @@ def _state_long_titles() -> State:
     return State.model_validate(payload)
 
 
+def _state_max_length_titles() -> State:
+    """Return the fixture with 72-char (model-max) phase / iter / wave titles.
+
+    W23 bounds every entity ``title`` to ``max_length=72``. This composes a
+    realistic worst case — a title exactly at the cap — so the row-width
+    ellipsis still fits the narrow roadmap pane (titles fit, not overflow).
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    max_title = "T" * 72
+    payload["phases"]["P01"]["title"] = max_title
+    payload["iters"]["P01-I01"]["title"] = max_title
+    payload["waves"]["P01-I01-W01"]["title"] = max_title
+    return State.model_validate(payload)
+
+
 def _state_long_iter_many_waves() -> State:
     """Return the fixture with a long iter title and ~40 waves.
 
@@ -593,6 +608,28 @@ def test_tree_long_wave_title_ellipsizes_to_row_width() -> None:
             wave_label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
             assert ELLIPSIS in wave_label
             assert len(wave_label) <= tree.size.width
+
+    asyncio.run(body())
+
+
+def test_tree_max_length_title_fits_row_width() -> None:
+    """A 72-char (model-max) wave title still fits the tree row width.
+
+    Now that ``title`` is bounded to ``max_length=72`` the worst-case row
+    no longer overflows: the width-aware ellipsis cuts the bounded title to
+    the pane and the rendered label stays within the tree's content width.
+    """
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_max_length_titles()
+            await pilot.pause()
+            wave_label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            assert ELLIPSIS in wave_label  # 72 chars > narrow pane → truncated
+            assert len(wave_label) <= tree.size.width  # fits, never overflows
 
     asyncio.run(body())
 

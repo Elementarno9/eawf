@@ -143,6 +143,10 @@ class SubagentSpec(_SpecModel):
         iter_id: The wave's parent iter id (rendered into the scope
             rationale verbatim, matching the legacy ``wave.iter_id``).
         title: The wave title (rendered into the ``# Wave ...`` header).
+        description: The wave's optional long-form purpose (the ≤500-char
+            field split off the bounded ≤72-char ``title``). Rendered as a
+            ``## Description`` section between the header and ``## Wave
+            tags`` when set; ``None`` omits the section.
         scope_id: The resolved scope id (wave → iter → phase → scope).
         agent_role: The wave's ``agent_role`` value, or ``None``
             (rendered as ``unspecified``).
@@ -164,6 +168,7 @@ class SubagentSpec(_SpecModel):
     wave_id: str
     iter_id: str
     title: str
+    description: str | None = None
     scope_id: str
     agent_role: str | None = None
     effort_bucket: str | None = None
@@ -180,6 +185,11 @@ class SubagentSpec(_SpecModel):
 
     def _render_header(self) -> str:
         return f"# Wave {self.wave_id}: {self.title}"
+
+    def _render_description(self) -> str | None:
+        if self.description is None:
+            return None
+        return f"## Description\n\n{self.description.rstrip()}"
 
     def _render_wave_tags(self) -> str:
         role = self.agent_role if self.agent_role else "unspecified"
@@ -287,24 +297,30 @@ class SubagentSpec(_SpecModel):
     def render(self) -> str:
         """Return the full Markdown wave prompt.
 
-        Sections render in the canonical order — header, wave tags,
-        scope, dependencies, decisions, hypotheses, recent audits,
-        references (omitted when empty), working tree, workflow, out of
-        scope — joined by a blank line. The trailing newline mirrors the
-        legacy renderer so emitting the prompt verbatim stays byte-clean.
+        Sections render in the canonical order — header, description
+        (omitted when unset), wave tags, scope, dependencies, decisions,
+        hypotheses, recent audits, references (omitted when empty), working
+        tree, workflow, out of scope — joined by a blank line. The trailing
+        newline mirrors the legacy renderer so emitting the prompt verbatim
+        stays byte-clean.
 
         Returns:
             The wave prompt as a single string ending in ``"\\n"``.
         """
-        sections: list[str] = [
-            self._render_header(),
-            self._render_wave_tags(),
-            self._render_scope(),
-            self._render_dependencies(),
-            self._render_decisions(),
-            self._render_hypotheses(),
-            self._render_recent_audits(),
-        ]
+        sections: list[str] = [self._render_header()]
+        description = self._render_description()
+        if description is not None:
+            sections.append(description)
+        sections.extend(
+            [
+                self._render_wave_tags(),
+                self._render_scope(),
+                self._render_dependencies(),
+                self._render_decisions(),
+                self._render_hypotheses(),
+                self._render_recent_audits(),
+            ]
+        )
         references = self._render_references()
         if references is not None:
             sections.append(references)

@@ -248,6 +248,37 @@ def test_render_references_section_lands_before_working_tree() -> None:
     assert audits_idx < refs_idx < working_idx
 
 
+# ---- Description -----------------------------------------------------------
+
+
+def test_render_no_description_omits_section() -> None:
+    """A spec without a description omits the ``## Description`` section."""
+    out = _minimal_spec().render()
+    assert "## Description" not in out
+
+
+def test_render_description_section_present_when_set() -> None:
+    """A populated ``description`` renders the ``## Description`` section."""
+    out = _minimal_spec(description="The wave's long-form purpose.").render()
+    assert "## Description" in out
+    assert "The wave's long-form purpose." in out
+
+
+def test_render_description_strips_trailing_whitespace() -> None:
+    """The description body renders with trailing whitespace stripped."""
+    out = _minimal_spec(description="Purpose.\n\n").render()
+    assert "## Description\n\nPurpose." in out
+
+
+def test_render_description_lands_between_header_and_wave_tags() -> None:
+    """``## Description`` sits after the header and before ``## Wave tags``."""
+    out = _minimal_spec(description="Purpose.").render()
+    header_idx = out.index("# Wave P01-I01-W01: Solo wave")
+    desc_idx = out.index("## Description")
+    tags_idx = out.index("## Wave tags")
+    assert header_idx < desc_idx < tags_idx
+
+
 # ---- Boundary: malformed wave id -------------------------------------------
 
 

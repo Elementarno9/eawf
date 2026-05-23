@@ -257,6 +257,7 @@ def build_subagent_spec(
         wave_id=wave.id,
         iter_id=wave.iter_id,
         title=wave.title,
+        description=wave.description,
         scope_id=scope_id,
         agent_role=wave.agent_role.value if wave.agent_role else None,
         effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,

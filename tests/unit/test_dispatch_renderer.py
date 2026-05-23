@@ -132,6 +132,33 @@ def test_build_subagent_spec_unknown_wave_raises_key_error() -> None:
         build_subagent_spec(state, "P01-I01-W99")
 
 
+def test_build_subagent_spec_projects_wave_description() -> None:
+    """``build_subagent_spec`` copies ``Wave.description`` onto the spec."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].description = "Long-form purpose of the first wave."
+    spec = build_subagent_spec(state, "P01-I01-W01")
+    assert spec.description == "Long-form purpose of the first wave."
+
+
+def test_render_wave_prompt_surfaces_description_section() -> None:
+    """A wave with a description renders a ``## Description`` section."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].description = "Why this wave exists in detail."
+    out = render_wave_prompt(state, "P01-I01-W01")
+    assert "## Description" in out
+    assert "Why this wave exists in detail." in out
+
+
+def test_render_wave_prompt_omits_description_section_when_absent() -> None:
+    """A wave without a description omits the ``## Description`` section."""
+    state = _empty_state()
+    _seed_chain(state)
+    out = render_wave_prompt(state, "P01-I01-W01")
+    assert "## Description" not in out
+
+
 # ---- Section coverage -------------------------------------------------------
 
 

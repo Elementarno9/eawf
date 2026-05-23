@@ -133,6 +133,13 @@ class WaveView(_StrictModel):
     claim_session_id: str | None = None
     commit: str | None = None
     outcome: str | None = None
+    # The wave's optional long-form purpose (the ≤500-char field W23 split
+    # off the bounded ≤72-char ``title``). A markdown-only detail-render
+    # field: ``render_markdown`` surfaces it under the waves table, but
+    # ``exclude=True`` drops it from both ``model_dump`` (the JSON envelope)
+    # and the serialization JSON schema — keeping ``plan-view.schema.json``
+    # (WaveView is ``additionalProperties: false``) unchanged.
+    description: str | None = Field(default=None, exclude=True)
 
 
 class DagNode(_StrictModel):
@@ -578,6 +585,7 @@ def build_view(state: State, iter_id: str) -> PlanView:
             claim_session_id=w.claim_session_id,
             commit=derive_wave_sha(w.id),
             outcome=w.outcome,
+            description=w.description,
         )
         for w in waves
     ]
@@ -639,6 +647,9 @@ def render_json(
     iter_dict = view.iter.model_dump(mode="json")
     phase_dict = view.phase.model_dump(mode="json") if view.phase is not None else None
 
+    # ``WaveView.description`` is declared ``exclude=True`` so ``model_dump``
+    # already drops it here — the JSON envelope stays pinned to
+    # ``plan-view.schema.json``. The field surfaces in markdown only.
     waves_dict = [w.model_dump(mode="json") for w in view.waves]
     dag_dict = {
         "nodes": [n.model_dump(mode="json") for n in view.dag.nodes],
@@ -829,6 +840,11 @@ def _format_waves(view: PlanView) -> list[str]:
             f"| {marker} **{w.id}** {w.title} | {suffix} | {bucket} | {role} | "
             f"{w.estimate_eu:g} | {criteria} | {files} |"
         )
+    detail_lines = [f"- **{w.id}** — {w.description}" for w in view.waves if w.description]
+    if detail_lines:
+        lines.append("")
+        lines.append("### Wave details")
+        lines.extend(detail_lines)
     return lines
 
 
