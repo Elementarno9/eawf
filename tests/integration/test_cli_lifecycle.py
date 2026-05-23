@@ -395,6 +395,61 @@ def test_iter_close_with_pending_wave_exits_4(workspace: Path) -> None:
     assert res.exit_code == 2, res.stdout
 
 
+# ---- iter plan (stage PLANNED iter, no current-pointer move) ----------------
+
+
+def test_iter_plan_stages_planned_iter_keeps_current(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
+    res = runner.invoke(app, ["--json", "iter", "plan", "P01-I02", "--title", "Follow-up"])
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert payload["iter"] == "P01-I02"
+    assert payload["status"] == "planned"
+    state = _read_state(workspace)
+    assert state["iters"]["P01-I02"]["status"] == "planned"  # type: ignore[index]
+    # The active iter keeps running — plan must not move the current pointer.
+    assert state["current"]["iter_id"] == "P01-I01"  # type: ignore[index]
+
+
+def test_iter_plan_then_activate_flips_to_active(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
+    assert runner.invoke(app, ["iter", "plan", "P01-I02", "--title", "Next"]).exit_code == 0
+    res = runner.invoke(app, ["iter", "activate", "P01-I02"])
+    assert res.exit_code == 0, res.stdout
+    state = _read_state(workspace)
+    assert state["iters"]["P01-I02"]["status"] == "active"  # type: ignore[index]
+    assert state["current"]["iter_id"] == "P01-I02"  # type: ignore[index]
+
+
+def test_iter_plan_invalid_id_exits_nonzero(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    res = runner.invoke(app, ["iter", "plan", "not-an-iter", "--title", "x"])
+    assert res.exit_code == 1
+    assert "invalid iter id" in res.stdout
+
+
+def test_iter_plan_requires_title(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    res = runner.invoke(app, ["iter", "plan", "P01-I02"])
+    assert res.exit_code == 1
+    assert "--title required" in res.stdout
+
+
+def test_iter_plan_duplicate_exits_nonzero(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
+    assert runner.invoke(app, ["iter", "plan", "P01-I02", "--title", "Next"]).exit_code == 0
+    res = runner.invoke(app, ["iter", "plan", "P01-I02", "--title", "Dup"])
+    assert res.exit_code != 0
+
+
 # ---- wave plan/claim/close/fail --------------------------------------------
 
 

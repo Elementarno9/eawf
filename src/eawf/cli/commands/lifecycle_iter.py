@@ -255,6 +255,45 @@ def iter_activate_cmd(
     )
 
 
+@iter_app.command("plan")
+def iter_plan_cmd(
+    ctx: typer.Context,
+    iter_id: Annotated[str, typer.Argument(help="Iter id to stage (e.g. P03-I02).")],
+    title: Annotated[str | None, typer.Option("--title", help="Iter title.")] = None,
+) -> None:
+    """Stage a PLANNED iter under an open phase without moving the current pointer.
+
+    Companion of ``iter open`` (which opens an ACTIVE iter and switches
+    ``current.iter_id``). Use ``iter plan`` to queue a follow-up iter under an
+    already-active phase while the current iter keeps running; ``iter activate``
+    later flips the staged iter to ACTIVE.
+    """
+    from eawf.lifecycle.transitions import plan_iter
+
+    flags: GlobalFlags = ctx.obj
+    if not is_iter_id(iter_id):
+        cli_errors.emit_error(
+            cli_errors.InvalidInput(f"invalid iter id: {iter_id!r}"),
+            flags=flags,
+        )
+        return
+    if title is None:
+        cli_errors.emit_error(cli_errors.InvalidInput("--title required"), flags=flags)
+        return
+    phase_id = iter_id.split("-", 1)[0]
+    _run_mutation(
+        ctx,
+        command="iter plan",
+        args={"iter_id": iter_id, "phase": phase_id, "title": title},
+        scope_id=iter_id,
+        text=f"iter plan {iter_id} title={title!r}",
+        envelope=lambda: {"iter": iter_id, "title": title, "status": "planned"},
+        mutate=lambda state: _wrap_no_return(
+            plan_iter(state, iter_id=iter_id, phase_id=phase_id, title=title)
+        ),
+    )
+
+
 def _compute_iter_bump_hints(state: State, *, phase_id: str) -> list[str]:
     """Heuristic iter-bump trigger detection. Returns a list of hint tags.
 
