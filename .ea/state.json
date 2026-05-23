@@ -5616,7 +5616,15 @@
         "P27-I02-W27",
         "P27-I02-W28",
         "P27-I02-W29",
-        "P27-I02-W30"
+        "P27-I02-W30",
+        "P27-I02-W31",
+        "P27-I02-W33",
+        "P27-I02-W34",
+        "P27-I02-W35",
+        "P27-I02-W36",
+        "P27-I02-W37",
+        "P27-I02-W38",
+        "P27-I02-W32"
       ]
     },
     "P27-I03": {
@@ -6208,7 +6216,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T13:45:28.860099Z",
+  "updated_at": "2026-05-23T14:02:20.552918Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -16250,6 +16258,251 @@
         "_proxy_enabled merge-fail debug log matches _daemon_reachable bare-key form (<funcname> False reason={exc!s})"
       ],
       "title": "polish: align _proxy_enabled fallback log to sibling bare-key form",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W31": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W32"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/server.py",
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/cli/_dispatch.py"
+      ],
+      "id": "P27-I02-W31",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:52.523094Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "daemon maps validation_failed rejections to wire code -32002 (not -32602); _dispatch.py -32002 branch live; daemon + fallback paths return identical exit code; _process_frame-level wire-code test added"
+      ],
+      "title": "daemon emits -32002 for validation_failed + live client mapping",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W32": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I02-W31"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/_dispatch.py",
+        "src/eawf/cli/_daemon_client.py",
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/daemon/recovery.py",
+        "src/eawf/cli/commands/lifecycle.py"
+      ],
+      "id": "P27-I02-W32",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:02:20.552734Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "transport fallback only on connect-phase failure (definitely-not-applied); mid-call drop/timeout raises indeterminate (no blind re-apply); mark_applied moved before append_envelope in daemon+fallback so crash-window maps to APPLIED and replay re-issues event; docstrings corrected; at-most-once test"
+      ],
+      "title": "guard fallback double-apply + reorder WAL mark_applied",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W33": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/logging/scrub.py"
+      ],
+      "id": "P27-I02-W33",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:53.613300Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "SensitiveScrubber redacts fe80::1",
+        "::1",
+        "::ffff:192.168.0.1 and other compressed IPv6 literals; regression test covers leading-:: and fully-compressed forms"
+      ],
+      "title": "scrub compressed/leading-:: IPv6 forms (security)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W34": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/migrations/_base.py",
+        "src/eawf/migrations/v1_0_to_v1_1.py"
+      ],
+      "id": "P27-I02-W34",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:54.098852Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "run_chain round-trips State.model_validate before write_canonical and restores+raises on failure; empty/whitespace title migrated to a min_length>=1 placeholder; tests cover both"
+      ],
+      "title": "migration run_chain model round-trip + empty-title handling",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/skills/ship.py"
+      ],
+      "id": "P27-I02-W35",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:54.559598Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a build gate in required_before_ship is resolved+run by _run_gauntlet (not silently dropped); test asserts configured build gate executes"
+      ],
+      "title": "ship _run_gauntlet honors configured build gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle_phase.py",
+        "src/eawf/lifecycle/phase.py"
+      ],
+      "id": "P27-I02-W36",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:55.047490Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "iters_without_audit + single_wave_without_decision enforced inside close_phase transition (under lock) so daemon + fallback paths both block; tests cover the daemon-path race"
+      ],
+      "title": "phase-close blockers enforced atomically in close_phase transition",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W37": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/evidence/decision.py",
+        "src/eawf/validate/invariants.py"
+      ],
+      "id": "P27-I02-W37",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:55.517518Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "supersede_decision rejects a new_id that is not ACTIVE (blocks A->B->A cycle); cycle/invariant test added"
+      ],
+      "title": "guard decision supersede cycles",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W38": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/skills/audit.py",
+        "src/eawf/telemetry/projector.py",
+        "src/eawf/cli/commands/metrics.py",
+        "src/eawf/backup/store.py",
+        "src/eawf/telemetry/store/duckdb_store.py",
+        "src/eawf/cli/commands/snapshot.py",
+        "src/eawf/render/pr_body.py"
+      ],
+      "id": "P27-I02-W38",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:01:55.984704Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/audit degrades to partial/needs_user when zero checks run; projector skip-gate consults mtime; backfill docstring + _TS_PATTERN(\\Z) + duckdb all-PK + snapshot dir + pr_body title-match nits resolved; tests updated"
+      ],
+      "title": "audit zero-check signal + projector mtime + nits cleanup",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
