@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 from eawf.config.loader import load_yaml_layer
 
 
@@ -51,7 +51,7 @@ def test_valid_mapping_round_trips(tmp_path: Path) -> None:
 def test_malformed_yaml_raises_validation_failed(tmp_path: Path) -> None:
     target = tmp_path / "broken.yaml"
     target.write_text("planning:\n  approval: [unclosed\n", encoding="utf-8")
-    with pytest.raises(ValidationFailed) as excinfo:
+    with pytest.raises(ValidationError) as excinfo:
         load_yaml_layer(target)
     assert "malformed YAML" in str(excinfo.value)
 
@@ -59,7 +59,7 @@ def test_malformed_yaml_raises_validation_failed(tmp_path: Path) -> None:
 def test_top_level_list_rejected(tmp_path: Path) -> None:
     target = tmp_path / "list.yaml"
     target.write_text("- one\n- two\n", encoding="utf-8")
-    with pytest.raises(ValidationFailed) as excinfo:
+    with pytest.raises(ValidationError) as excinfo:
         load_yaml_layer(target)
     assert "mapping" in str(excinfo.value).lower()
 
@@ -67,7 +67,7 @@ def test_top_level_list_rejected(tmp_path: Path) -> None:
 def test_top_level_scalar_rejected(tmp_path: Path) -> None:
     target = tmp_path / "scalar.yaml"
     target.write_text("just a string\n", encoding="utf-8")
-    with pytest.raises(ValidationFailed):
+    with pytest.raises(ValidationError):
         load_yaml_layer(target)
 
 
@@ -81,6 +81,6 @@ def test_non_string_top_level_key_rejected(tmp_path: Path) -> None:
     target = tmp_path / "intkey.yaml"
     # YAML allows integer keys; we forbid them at the top level.
     target.write_text("42: foo\n", encoding="utf-8")
-    with pytest.raises(ValidationFailed) as excinfo:
+    with pytest.raises(ValidationError) as excinfo:
         load_yaml_layer(target)
     assert "not a string" in str(excinfo.value)

@@ -43,8 +43,9 @@ _SLOW_TIMEOUT: float = 60.0
 def _ensure_git() -> None:
     """Raise :class:`InstrumentMissing` if ``git`` is not on PATH."""
     if shutil.which("git") is None:
-        raise cli_errors.InstrumentMissing(
-            "git executable not found on PATH; install git before using eawf worktree"
+        raise cli_errors.UserError(
+            "git executable not found on PATH; install git before using eawf worktree",
+            kind="InstrumentMissing",
         )
 
 
@@ -56,7 +57,7 @@ def _run(
 ) -> subprocess.CompletedProcess[str]:
     """Invoke *args* via :func:`subprocess.run`, mapping timeout to IntegrityViolation."""
     _ensure_git()
-    logger.info(f"_run: invoking {args} cwd={cwd} timeout={timeout}")
+    logger.info(f"_run invoking args={args} cwd={cwd} timeout={timeout}")
     try:
         return subprocess.run(
             args,
@@ -67,8 +68,8 @@ def _run(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise cli_errors.IntegrityViolation(
-            f"git command timed out after {timeout}s: {' '.join(args)}"
+        raise cli_errors.StateConflict(
+            f"git command timed out after {timeout}s: {' '.join(args)}", kind="IntegrityViolation"
         ) from exc
 
 
@@ -79,8 +80,9 @@ def repo_root(start: Path) -> Path:
     """
     res = _run(["git", "-C", str(start), "rev-parse", "--show-toplevel"])
     if res.returncode != 0:
-        raise cli_errors.NotFound(
-            f"not a git repository at {start}: {(res.stderr or '').strip() or 'unknown'}"
+        raise cli_errors.UserError(
+            f"not a git repository at {start}: {(res.stderr or '').strip() or 'unknown'}",
+            kind="NotFound",
         )
     return Path(res.stdout.strip())
 
@@ -93,8 +95,9 @@ def current_branch(repo: Path) -> str:
     res = _run(["git", "-C", str(repo), "symbolic-ref", "--short", "HEAD"])
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.InvalidInput(
-            f"worktree create requires a non-detached HEAD; got: {stderr or 'unknown'}"
+        raise cli_errors.UserError(
+            f"worktree create requires a non-detached HEAD; got: {stderr or 'unknown'}",
+            kind="InvalidInput",
         )
     return res.stdout.strip()
 
@@ -144,13 +147,20 @@ def worktree_add(
     stderr = (res.stderr or "").strip()
     lower = stderr.lower()
     if "already a working tree" in lower or "is already used" in lower:
-        raise cli_errors.LockConflict(f"git worktree add: {stderr or 'already in use'}")
+        raise cli_errors.StateConflict(
+            f"git worktree add: {stderr or 'already in use'}", kind="LockConflict"
+        )
     if "invalid reference" in lower or "fatal: not a valid ref" in lower:
-        raise cli_errors.InvalidInput(f"git worktree add: {stderr or 'invalid reference'}")
+        raise cli_errors.UserError(
+            f"git worktree add: {stderr or 'invalid reference'}", kind="InvalidInput"
+        )
     if "not a git repository" in lower:
-        raise cli_errors.NotFound(f"git worktree add: {stderr or 'not a git repository'}")
-    raise cli_errors.IntegrityViolation(
-        f"git worktree add failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.UserError(
+            f"git worktree add: {stderr or 'not a git repository'}", kind="NotFound"
+        )
+    raise cli_errors.StateConflict(
+        f"git worktree add failed (rc={res.returncode}): {stderr or 'unknown'}",
+        kind="IntegrityViolation",
     )
 
 
@@ -167,8 +177,9 @@ def worktree_remove(repo: Path, *, path: Path, force: bool = False) -> None:
     res = _run(args, timeout=_SLOW_TIMEOUT)
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git worktree remove failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git worktree remove failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
 
 
@@ -181,8 +192,9 @@ def worktree_list(repo: Path) -> list[dict[str, str]]:
     res = _run(["git", "-C", str(repo), "worktree", "list", "--porcelain"])
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git worktree list failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git worktree list failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
     entries: list[dict[str, str]] = []
     current: dict[str, str] = {}
@@ -211,8 +223,9 @@ def status_porcelain(path: Path) -> list[str]:
     res = _run(["git", "-C", str(path), "status", "--porcelain"])
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git status failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git status failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
     return [line for line in (res.stdout or "").splitlines() if line.strip()]
 
@@ -230,9 +243,10 @@ def rev_list(repo: Path, *, range_spec: str) -> list[str]:
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
         if "unknown revision" in stderr.lower() or "bad revision" in stderr.lower():
-            raise cli_errors.InvalidInput(f"git rev-list: {stderr or range_spec}")
-        raise cli_errors.IntegrityViolation(
-            f"git rev-list failed (rc={res.returncode}): {stderr or 'unknown'}"
+            raise cli_errors.UserError(f"git rev-list: {stderr or range_spec}", kind="InvalidInput")
+        raise cli_errors.StateConflict(
+            f"git rev-list failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
     return [line.strip() for line in (res.stdout or "").splitlines() if line.strip()]
 
@@ -275,9 +289,12 @@ def cherry_pick(repo: Path, *, sha: str) -> tuple[bool, str]:
     if "after resolving the conflicts" in lower or "could not apply" in lower:
         return False, detail
     if "bad revision" in lower or "unknown revision" in lower:
-        raise cli_errors.InvalidInput(f"git cherry-pick: {detail or 'invalid sha'}")
-    raise cli_errors.IntegrityViolation(
-        f"git cherry-pick failed (rc={res.returncode}): {detail or 'unknown'}"
+        raise cli_errors.UserError(
+            f"git cherry-pick: {detail or 'invalid sha'}", kind="InvalidInput"
+        )
+    raise cli_errors.StateConflict(
+        f"git cherry-pick failed (rc={res.returncode}): {detail or 'unknown'}",
+        kind="IntegrityViolation",
     )
 
 
@@ -314,8 +331,9 @@ def cherry_pick_abort(repo: Path) -> None:
     res = _run(["git", "-C", str(repo), "cherry-pick", "--abort"])
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git cherry-pick --abort failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git cherry-pick --abort failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
 
 
@@ -329,9 +347,9 @@ def rebase(repo: Path, *, target: str) -> tuple[bool, str]:
     if "could not apply" in lower or "merge conflict" in lower or "needs merge" in lower:
         return False, detail
     if "unknown revision" in lower or "invalid upstream" in lower:
-        raise cli_errors.InvalidInput(f"git rebase: {detail or target}")
-    raise cli_errors.IntegrityViolation(
-        f"git rebase failed (rc={res.returncode}): {detail or 'unknown'}"
+        raise cli_errors.UserError(f"git rebase: {detail or target}", kind="InvalidInput")
+    raise cli_errors.StateConflict(
+        f"git rebase failed (rc={res.returncode}): {detail or 'unknown'}", kind="IntegrityViolation"
     )
 
 
@@ -349,8 +367,9 @@ def rebase_abort(repo: Path) -> None:
     res = _run(["git", "-C", str(repo), "rebase", "--abort"])
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git rebase --abort failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git rebase --abort failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
 
 
@@ -363,11 +382,13 @@ def merge_ff_only(repo: Path, *, source: str) -> str:
     if res.returncode != 0:
         detail = ((res.stderr or "") + (res.stdout or "")).strip()
         if "non-fast-forward" in detail.lower() or "not possible" in detail.lower():
-            raise cli_errors.IntegrityViolation(
-                f"git merge --ff-only refused (non-fast-forward): {detail or source}"
+            raise cli_errors.StateConflict(
+                f"git merge --ff-only refused (non-fast-forward): {detail or source}",
+                kind="IntegrityViolation",
             )
-        raise cli_errors.IntegrityViolation(
-            f"git merge --ff-only failed (rc={res.returncode}): {detail or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git merge --ff-only failed (rc={res.returncode}): {detail or 'unknown'}",
+            kind="IntegrityViolation",
         )
     head = head_sha(repo)
     return head
@@ -378,8 +399,9 @@ def head_sha(repo: Path) -> str:
     res = _run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"])
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git rev-parse HEAD failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git rev-parse HEAD failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
     return res.stdout.strip()
 
@@ -393,7 +415,7 @@ def branch_delete(repo: Path, *, name: str) -> bool:
     res = _run(["git", "-C", str(repo), "branch", "-D", name])
     if res.returncode != 0:
         logger.warning(
-            f"branch_delete: rc={res.returncode} name={name} stderr={(res.stderr or '').strip()!r}"
+            f"branch_delete rc={res.returncode} name={name} stderr={(res.stderr or '').strip()!r}"
         )
         return False
     return True

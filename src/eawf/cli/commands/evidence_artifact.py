@@ -60,7 +60,9 @@ def artifact_add(
             resolved_scope = scope_id
             if resolved_scope is None:
                 if state.project is None:
-                    raise cli_errors.InvalidInput("scope_id required when state.project is unset")
+                    raise cli_errors.UserError(
+                        "scope_id required when state.project is unset", kind="InvalidInput"
+                    )
                 resolved_scope = state.project.code
             event = artifact_evi.add_artifact(
                 state,
@@ -278,7 +280,9 @@ def artifact_verify(
     flags = _flags(ctx)
     if (artifact_id is None) == (not verify_all):
         cli_errors.emit_error(
-            cli_errors.InvalidInput("exactly one of <artifact-id> or --all must be provided"),
+            cli_errors.UserError(
+                "exactly one of <artifact-id> or --all must be provided", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -292,7 +296,7 @@ def artifact_verify(
         assert artifact_id is not None
         if artifact_id not in state.artifacts:
             cli_errors.emit_error(
-                cli_errors.NotFound(f"artifact not found: {artifact_id!r}"),
+                cli_errors.UserError(f"artifact not found: {artifact_id!r}", kind="NotFound"),
                 flags=flags,
             )
             return
@@ -316,13 +320,13 @@ def artifact_verify(
             f"artifacts failed sha256 check)"
         )
         _emit(payload, text, flags)
-        raise typer.Exit(code=cli_errors.IntegrityViolation.exit_code)
+        raise typer.Exit(code=cli_errors.StateConflict.exit_code)
     if missing:
         text = (
             f"artifact verify: missing files ({len(missing)}/{len(results)} "
             f"artifacts had no resolvable body)"
         )
         _emit(payload, text, flags)
-        raise typer.Exit(code=cli_errors.IntegrityViolation.exit_code)
+        raise typer.Exit(code=cli_errors.StateConflict.exit_code)
     text = f"artifact verify: ok ({len(results)} checked)"
     _emit(payload, text, flags)

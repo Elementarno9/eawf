@@ -50,8 +50,9 @@ def _resolve_role(raw: str) -> AgentSessionRole:
     try:
         return AgentSessionRole(raw.strip().lower())
     except ValueError as exc:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"--role must be one of {[r.value for r in AgentSessionRole]}; got {raw!r}",
+            kind="InvalidInput",
         ) from exc
 
 
@@ -60,16 +61,16 @@ def _resolve_close_status(raw: str) -> AgentSessionStatus:
     try:
         status = AgentSessionStatus(raw.strip().lower())
     except ValueError as exc:
-        raise cli_errors.InvalidInput(
-            f"--status must be one of closed/stale/failed; got {raw!r}",
+        raise cli_errors.UserError(
+            f"--status must be one of closed/stale/failed; got {raw!r}", kind="InvalidInput"
         ) from exc
     if status not in {
         AgentSessionStatus.CLOSED,
         AgentSessionStatus.STALE,
         AgentSessionStatus.FAILED,
     }:
-        raise cli_errors.InvalidInput(
-            f"--status must be one of closed/stale/failed; got {raw!r}",
+        raise cli_errors.UserError(
+            f"--status must be one of closed/stale/failed; got {raw!r}", kind="InvalidInput"
         )
     return status
 
@@ -79,8 +80,9 @@ _VALID_RUNTIMES: frozenset[str] = frozenset({"claude", "opencode", "generic"})
 
 def _validate_runtime(runtime: str) -> str:
     if runtime not in _VALID_RUNTIMES:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"--runtime must be one of {sorted(_VALID_RUNTIMES)}; got {runtime!r}",
+            kind="InvalidInput",
         )
     return runtime
 
@@ -116,7 +118,7 @@ def session_start_cmd(
                     runtime=runtime,
                 )
             except SessionConflict as exc:
-                raise cli_errors.ValidationFailed(str(exc)) from exc
+                raise cli_errors.ValidationError(str(exc)) from exc
         emit_json_or_text(
             payload={
                 "id": result.session.id,
@@ -131,7 +133,7 @@ def session_start_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @session_app.command("checkpoint")
@@ -169,7 +171,7 @@ def session_checkpoint_cmd(
                     file_globs=list(files or []),
                 )
             except SessionNotFound as exc:
-                raise cli_errors.NotFound(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="NotFound") from exc
         emit_json_or_text(
             payload={
                 "id": result.session.id,
@@ -184,7 +186,7 @@ def session_checkpoint_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @session_app.command("close")
@@ -219,7 +221,7 @@ def session_close_cmd(
                     summary=summary,
                 )
             except SessionNotFound as exc:
-                raise cli_errors.NotFound(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="NotFound") from exc
         emit_json_or_text(
             payload={
                 "id": result.session.id,
@@ -236,7 +238,7 @@ def session_close_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @session_app.command("recover")
@@ -297,7 +299,7 @@ def session_recover_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 __all__ = ["session_app"]

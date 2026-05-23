@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 from eawf.config.migration import (
     ACCEPTED_MARKERS,
     CURRENT_MARKER,
@@ -151,13 +151,13 @@ def test_migrate_payload_preserves_existing_telemetry_overrides() -> None:
 
 def test_migrate_payload_missing_marker_raises_validation_failed() -> None:
     """An absent ``schema_version`` is corruption; refuse it."""
-    with pytest.raises(ValidationFailed, match="missing required key"):
+    with pytest.raises(ValidationError, match="missing required key"):
         migrate_config_payload({"planning": {"approval": "ask"}})
 
 
 def test_migrate_payload_unknown_marker_raises_validation_failed() -> None:
     """A marker outside the accepted set raises with the value."""
-    with pytest.raises(ValidationFailed, match="unknown config schema_version"):
+    with pytest.raises(ValidationError, match="unknown config schema_version"):
         migrate_config_payload({"schema_version": "999"})
 
 
@@ -228,7 +228,7 @@ def test_migrate_file_missing_returns_empty(tmp_path: Path) -> None:
 def test_migrate_file_corrupted_yaml_raises(tmp_path: Path) -> None:
     target = tmp_path / "config.yaml"
     target.write_text("planning:\n  - bad indent\n :::", encoding="utf-8")
-    with pytest.raises(ValidationFailed, match="malformed YAML"):
+    with pytest.raises(ValidationError, match="malformed YAML"):
         migrate_config_file(target)
 
 
@@ -236,7 +236,7 @@ def test_migrate_file_top_level_list_rejected(tmp_path: Path) -> None:
     """YAML whose root is a list (not mapping) is rejected."""
     target = tmp_path / "config.yaml"
     target.write_text("- one\n- two\n", encoding="utf-8")
-    with pytest.raises(ValidationFailed, match="must contain a YAML mapping"):
+    with pytest.raises(ValidationError, match="must contain a YAML mapping"):
         migrate_config_file(target)
 
 

@@ -56,7 +56,9 @@ def coauthor_resolve(
             try:
                 message_text = message_file.read_text(encoding="utf-8")
             except OSError as exc:
-                raise cli_errors.InvalidInput(f"cannot read message file: {exc}") from exc
+                raise cli_errors.UserError(
+                    f"cannot read message file: {exc}", kind="InvalidInput"
+                ) from exc
         trailer = resolve_coauthor_trailer(
             vcs.coauthor,
             runtime=runtime,
@@ -65,12 +67,12 @@ def coauthor_resolve(
         )
     except ValidationError as exc:
         cli_errors.emit_error(
-            cli_errors.ValidationFailed(f"vcs.coauthor schema rejected: {exc}"),
+            cli_errors.ValidationError(f"vcs.coauthor schema rejected: {exc}"),
             flags=flags,
         )
         return
     except CoauthorPolicyError as exc:
-        cli_errors.emit_error(cli_errors.ValidationFailed(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
         return
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)

@@ -61,16 +61,17 @@ class CleanupResult:
 def _find_record_for_wave(state: State, wave_id: str) -> WorktreeRecord:
     """Return the :class:`WorktreeRecord` for *wave_id*."""
     if state.worktrees is None:
-        raise cli_errors.NotFound(f"no worktrees recorded for wave {wave_id}")
+        raise cli_errors.UserError(f"no worktrees recorded for wave {wave_id}", kind="NotFound")
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise cli_errors.NotFound(f"unknown wave: {wave_id}")
+        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
     if wave.worktree_id is None:
-        raise cli_errors.NotFound(f"wave {wave_id} has no worktree id stamped")
+        raise cli_errors.UserError(f"wave {wave_id} has no worktree id stamped", kind="NotFound")
     record = state.worktrees.get(wave.worktree_id)
     if record is None:
-        raise cli_errors.NotFound(
-            f"wave {wave_id} references worktree {wave.worktree_id!r} which is not in state"
+        raise cli_errors.UserError(
+            f"wave {wave_id} references worktree {wave.worktree_id!r} which is not in state",
+            kind="NotFound",
         )
     return record
 
@@ -95,9 +96,10 @@ def cleanup_worktree(
     # ---- 1. Refusal guards ----------------------------------------------
     # Conflicted records preserve evidence; --force overrides.
     if record.status == WorktreeStatus.CONFLICTED and not force:
-        raise cli_errors.IntegrityViolation(
+        raise cli_errors.StateConflict(
             f"worktree {record.id!r} is CONFLICTED; preserve evidence and resolve "
-            f"with `eawf worktree merge-back --continue` or pass --force to discard"
+            f"with `eawf worktree merge-back --continue` or pass --force to discard",
+            kind="IntegrityViolation",
         )
 
     # Dirty-tree guard. Skip when status is already MERGED (the
@@ -109,12 +111,15 @@ def cleanup_worktree(
     if worktree_path.exists() and record.status == WorktreeStatus.ACTIVE and not force:
         try:
             dirty = git.status_porcelain(worktree_path)
-        except cli_errors.InstrumentMissing:
+        except cli_errors.UserError as exc:
+            if exc.kind != "InstrumentMissing":
+                raise
             dirty = []
         if dirty:
-            raise cli_errors.IntegrityViolation(
+            raise cli_errors.StateConflict(
                 f"worktree {record.id!r} is dirty (status reports {len(dirty)} entries); "
-                f"commit/discard changes or pass --force"
+                f"commit/discard changes or pass --force",
+                kind="IntegrityViolation",
             )
 
     # ---- 2. Remove via git worktree remove ------------------------------

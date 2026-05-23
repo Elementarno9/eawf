@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.state.enums import DecisionStatus, StoreKind
 from eawf.state.models import Decision, State
@@ -43,19 +43,24 @@ def add_decision(
     """
     decisions: dict[str, Decision] = dict(state.decisions or {})
     if decision_id in decisions:
-        raise InvalidInput(f"decision {decision_id!r} already exists")
+        raise UserError(f"decision {decision_id!r} already exists", kind="InvalidInput")
     if not rationale.strip():
-        raise InvalidInput(f"decision {decision_id!r} must include a non-empty rationale")
+        raise UserError(
+            f"decision {decision_id!r} must include a non-empty rationale", kind="InvalidInput"
+        )
     if supersedes is not None:
         if supersedes == decision_id:
-            raise InvalidInput(f"decision {decision_id!r} cannot supersede itself")
+            raise UserError(
+                f"decision {decision_id!r} cannot supersede itself", kind="InvalidInput"
+            )
         if supersedes not in decisions:
-            raise InvalidInput(f"unknown decision to supersede: {supersedes!r}")
+            raise UserError(f"unknown decision to supersede: {supersedes!r}", kind="InvalidInput")
         parent = decisions[supersedes]
         if parent.status != DecisionStatus.ACTIVE:
-            raise InvalidInput(
+            raise UserError(
                 f"decision {supersedes!r} is {parent.status.value!r}; "
-                "only ACTIVE decisions can be superseded"
+                "only ACTIVE decisions can be superseded",
+                kind="InvalidInput",
             )
 
     now = datetime.now(UTC)
@@ -133,22 +138,24 @@ def supersede_decision(
     """
     decisions: dict[str, Decision] = dict(state.decisions or {})
     if old_id == new_id:
-        raise InvalidInput(f"decision {old_id!r} cannot supersede itself")
+        raise UserError(f"decision {old_id!r} cannot supersede itself", kind="InvalidInput")
     if old_id not in decisions:
-        raise NotFound(f"decision {old_id!r} not found")
+        raise UserError(f"decision {old_id!r} not found", kind="NotFound")
     if new_id not in decisions:
-        raise NotFound(f"superseding decision {new_id!r} not found")
+        raise UserError(f"superseding decision {new_id!r} not found", kind="NotFound")
     old = decisions[old_id]
     if old.status != DecisionStatus.ACTIVE:
-        raise InvalidInput(
-            f"decision {old_id!r} is {old.status.value!r}; only ACTIVE decisions can be superseded"
+        raise UserError(
+            f"decision {old_id!r} is {old.status.value!r}; only ACTIVE decisions can be superseded",
+            kind="InvalidInput",
         )
     new = decisions[new_id]
     # A non-ACTIVE superseder is already retired; reusing it as a superseder
     # would close a supersede cycle (A->B then B->A).
     if new.status != DecisionStatus.ACTIVE:
-        raise InvalidInput(
-            f"decision {new_id!r} is {new.status.value!r}; only ACTIVE decisions can supersede"
+        raise UserError(
+            f"decision {new_id!r} is {new.status.value!r}; only ACTIVE decisions can supersede",
+            kind="InvalidInput",
         )
 
     now = datetime.now(UTC)

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
 from eawf.state.enums import BacklogPriority, BacklogStatus
@@ -34,7 +34,7 @@ def add_backlog(
     """Register a new backlog item in place."""
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id in backlog:
-        raise InvalidInput(f"backlog item {item_id!r} already exists")
+        raise UserError(f"backlog item {item_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
     item = BacklogItem(
@@ -84,13 +84,17 @@ def set_priority(
     """
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id not in backlog:
-        raise NotFound(f"backlog item {item_id!r} not found")
+        raise UserError(f"backlog item {item_id!r} not found", kind="NotFound")
 
     prior = backlog[item_id]
     if prior.status == BacklogStatus.CLOSED:
-        raise InvalidInput(f"backlog item {item_id!r} is closed; cannot change priority")
+        raise UserError(
+            f"backlog item {item_id!r} is closed; cannot change priority", kind="InvalidInput"
+        )
     if prior.priority == priority:
-        raise InvalidInput(f"backlog item {item_id!r} already has priority={priority.value!r}")
+        raise UserError(
+            f"backlog item {item_id!r} already has priority={priority.value!r}", kind="InvalidInput"
+        )
 
     now = datetime.now(UTC)
     updated = prior.model_copy(update={"priority": priority})
@@ -123,9 +127,9 @@ def close_backlog(
     """Close a backlog item in place; requires complete audit."""
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id not in backlog:
-        raise NotFound(f"backlog item {item_id!r} not found")
+        raise UserError(f"backlog item {item_id!r} not found", kind="NotFound")
     if backlog[item_id].status == BacklogStatus.CLOSED:
-        raise InvalidInput(f"backlog item {item_id!r} already closed")
+        raise UserError(f"backlog item {item_id!r} already closed", kind="InvalidInput")
 
     require_complete_audit(state, audit_id)
 

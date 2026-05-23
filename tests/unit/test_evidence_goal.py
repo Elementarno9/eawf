@@ -52,7 +52,7 @@ def test_define_goal_duplicate_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
     goal.define_goal(state, goal_id="G01", title="t", summary="s", scope_id="QR")
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         goal.define_goal(state, goal_id="G01", title="t2", summary="s2", scope_id="QR")
 
 

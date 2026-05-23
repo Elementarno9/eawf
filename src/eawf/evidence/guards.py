@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 from eawf.state.enums import AuditStatus
 from eawf.state.models import State
 
@@ -38,25 +38,27 @@ def require_complete_audit(state: State, audit_id: str | None) -> None:
             because verdict-bearing commands MUST cite an audit.
 
     Raises:
-        ValidationFailed: With a code surrogate (one of ``MISSING``,
+        ValidationError: With a code surrogate (one of ``MISSING``,
             ``UNKNOWN``, ``NOT_COMPLETE``) embedded in the message so callers
             can correlate the exit envelope with the failure mode.
     """
     if audit_id is None:
-        logger.debug("audit-evidence guard: missing --audit")
-        raise ValidationFailed(
+        logger.debug("require_complete_audit missing-audit")
+        raise ValidationError(
             "audit-evidence: --audit is required for verdict-bearing commands (INV.AUDIT.MISSING)"
         )
     audits = state.audits or {}
     if audit_id not in audits:
-        logger.debug(f"audit-evidence guard: unknown audit {audit_id!r}")
-        raise ValidationFailed(
+        logger.debug(f"require_complete_audit unknown-audit audit_id={audit_id!r}")
+        raise ValidationError(
             f"audit-evidence: audit {audit_id!r} not found in state.audits (INV.AUDIT.UNKNOWN)"
         )
     audit = audits[audit_id]
     if audit.status != AuditStatus.COMPLETE:
-        logger.debug(f"audit-evidence guard: audit {audit_id!r} status={audit.status.value!r}")
-        raise ValidationFailed(
+        logger.debug(
+            f"require_complete_audit incomplete audit_id={audit_id!r} status={audit.status.value}"
+        )
+        raise ValidationError(
             f"audit-evidence: audit {audit_id!r} has status "
             f"{audit.status.value!r}; must be 'complete' (INV.AUDIT.NOT_COMPLETE)"
         )

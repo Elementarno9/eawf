@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
 from eawf.state.enums import IncidentCause, IncidentSeverity, IncidentStatus, StoreKind
@@ -36,7 +36,7 @@ def open_incident(
     """Open a new incident in place; return (record, event) envelopes."""
     incidents: dict[str, Incident] = dict(state.incidents or {})
     if incident_id in incidents:
-        raise InvalidInput(f"incident {incident_id!r} already exists")
+        raise UserError(f"incident {incident_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
     incident = Incident(
@@ -96,9 +96,9 @@ def close_incident(
     """Close an incident in place; requires complete audit."""
     incidents: dict[str, Incident] = dict(state.incidents or {})
     if incident_id not in incidents:
-        raise NotFound(f"incident {incident_id!r} not found")
+        raise UserError(f"incident {incident_id!r} not found", kind="NotFound")
     if incidents[incident_id].status == IncidentStatus.RESOLVED:
-        raise InvalidInput(f"incident {incident_id!r} already resolved")
+        raise UserError(f"incident {incident_id!r} already resolved", kind="InvalidInput")
 
     require_complete_audit(state, audit_id)
 
@@ -153,5 +153,5 @@ def view_incident(state: State, incident_id: str) -> Incident:
     """Read-only lookup."""
     incidents = state.incidents or {}
     if incident_id not in incidents:
-        raise NotFound(f"incident {incident_id!r} not found")
+        raise UserError(f"incident {incident_id!r} not found", kind="NotFound")
     return incidents[incident_id]

@@ -158,7 +158,7 @@ def _workflow_metrics(flags: GlobalFlags) -> None:
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
 
     try:
@@ -258,7 +258,7 @@ def _resolve_state_or_emit(flags: GlobalFlags) -> Path | None:
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return None
 
 

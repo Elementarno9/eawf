@@ -288,7 +288,7 @@ def status(
     state_path, _reason = resolve_with_reason(workspace=effective_flags.workspace)
     if not state_path.exists():
         errors.emit_error(
-            errors.NotFound(f"no state.json at {state_path}"),
+            errors.UserError(f"no state.json at {state_path}", kind="NotFound"),
             flags=effective_flags,
         )
         return
@@ -298,7 +298,10 @@ def status(
         state = State.model_validate(payload_dict)
     except ValidationError as exc:
         errors.emit_error(
-            errors.InvalidInput(f"state file failed schema validation: {exc.errors()[0]['msg']}"),
+            errors.UserError(
+                f"state file failed schema validation: {exc.errors()[0]['msg']}",
+                kind="InvalidInput",
+            ),
             flags=effective_flags,
         )
         return

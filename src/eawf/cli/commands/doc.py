@@ -45,11 +45,11 @@ def _load_state(state_path: Path) -> State:
     from eawf.validate.strict import validate_state
 
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = orjson.loads(state_path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
         )
     return report.state

@@ -57,7 +57,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from eawf.cli.errors import InvalidInput, UserDeclined
+from eawf.cli.errors import UserError
 from eawf.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.config.profile import _atomic_write_yaml, _materialise_state_keys
 from eawf.install.steps import (
@@ -436,9 +436,10 @@ def run_wizard_no_input(
     ea_dir = target_dir / ".ea"
     pre_existing = _pre_existing_canonical_files(ea_dir)
     if pre_existing and not force:
-        raise InvalidInput(
+        raise UserError(
             f".ea already initialised at {ea_dir} (found "
-            f"{sorted(pre_existing)}); pass --force to overwrite"
+            f"{sorted(pre_existing)}); pass --force to overwrite",
+            kind="InvalidInput",
         )
 
     state_path_raw = Path(answers.state_path)
@@ -490,7 +491,7 @@ def run_wizard_no_input(
     render_claude_md(claude_md_path)
 
     logger.info(
-        f"run_wizard_no_input: project_code={answers.project_code} "
+        f"run_wizard_no_input project_code={answers.project_code} "
         f"profiles={list(answers.profiles)} state={state_path} "
         f"config={config_path} agents_md={agents_md_path} "
         f"materialised={materialised}"
@@ -511,12 +512,14 @@ def run_wizard_no_input(
 # ---- questionary interactive surface ----------------------------------------
 
 
-class WizardCancelled(UserDeclined):
+class WizardCancelled(UserError):  # noqa: N818 — domain cancel name; kind folds to "WizardCancelled"
     """Operator aborted a wizard prompt (Ctrl-C / EOF / Esc).
 
-    Subclass of :class:`~eawf.cli.errors.UserDeclined` so the CLI handler's
+    Subclass of :class:`~eawf.cli.errors.UserError` so the CLI handler's
     existing ``except cli_errors.CliError`` clause catches it and exits with
-    the canonical ``USER_DECLINED`` code.
+    the canonical ``USER_ERROR`` code. Its concrete class name folds into
+    ``ErrorEnvelope.data.kind`` as ``"WizardCancelled"`` via
+    :func:`eawf.cli.errors.build_envelope`.
     """
 
 
@@ -656,7 +659,7 @@ def _ask_step(step: WizardStep) -> Any:
             step,
         )
         return tuple(item.strip() for item in str(raw).split(",") if item.strip())
-    raise InvalidInput(f"unknown wizard step kind: {step.kind}")
+    raise UserError(f"unknown wizard step kind: {step.kind}", kind="InvalidInput")
 
 
 def run_wizard_interactive(target_dir: Path, *, force: bool = False) -> WizardResult:

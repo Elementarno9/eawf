@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from eawf.cli.errors import InstrumentMissing
+from eawf.cli.errors import UserError
 from eawf.doctor import checks
 
 
@@ -73,8 +73,8 @@ def test_check_tools_available_soft_missing_warns(
 def test_check_tools_available_hard_missing_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _stub_probe_raises(monkeypatch, InstrumentMissing("git missing"))
-    with pytest.raises(InstrumentMissing):
+    _stub_probe_raises(monkeypatch, UserError("git missing", kind="InstrumentMissing"))
+    with pytest.raises(UserError):
         checks.check_tools_available(workspace=tmp_path)
 
 

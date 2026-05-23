@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -43,28 +43,28 @@ def load_yaml_layer(path: Path) -> dict[str, Any]:
             exit-code ``4`` consistently.
     """
     if not path.exists():
-        logger.debug(f"load_yaml_layer: missing file (treating as empty): {path}")
+        logger.debug(f"load_yaml_layer missing-file path={path}; treating as empty")
         return {}
 
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise ValidationFailed(f"cannot read config file {path}: {exc}") from exc
+        raise ValidationError(f"cannot read config file {path}: {exc}") from exc
 
     try:
         parsed = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
-        raise ValidationFailed(f"malformed YAML in {path}: {exc}") from exc
+        raise ValidationError(f"malformed YAML in {path}: {exc}") from exc
 
     if parsed is None:
         return {}
     if not isinstance(parsed, dict):
-        raise ValidationFailed(
+        raise ValidationError(
             f"config file {path} must contain a YAML mapping at the top level, "
             f"got {type(parsed).__name__}"
         )
     # Coerce keys to strings; reject non-string keys explicitly.
     for key in parsed:
         if not isinstance(key, str):
-            raise ValidationFailed(f"config file {path}: top-level key {key!r} is not a string")
+            raise ValidationError(f"config file {path}: top-level key {key!r} is not a string")
     return parsed

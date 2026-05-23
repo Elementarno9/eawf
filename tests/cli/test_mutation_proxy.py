@@ -410,7 +410,7 @@ def test_mutate_via_daemon_validation_failed_maps_to_validation_error(
     def _fallback() -> None:
         pytest.fail("fallback must not run when the daemon rejects with -32002")
 
-    with pytest.raises(cli_errors.ValidationFailed, match="unknown wave"):
+    with pytest.raises(cli_errors.ValidationError, match="unknown wave"):
         _dispatch._mutate_via_daemon(
             MutationKind.WAVE_CLOSE,
             _PARAMS,

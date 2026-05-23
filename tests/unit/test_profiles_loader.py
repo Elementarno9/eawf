@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 from eawf.profiles.loader import list_profiles, load_profile
 from eawf.profiles.models import ProfileBody
 
@@ -64,7 +64,7 @@ def test_loader_python_declares_hard_python_requirement() -> None:
 
 
 def test_loader_unknown_id_raises_invalid_input() -> None:
-    with pytest.raises(InvalidInput) as excinfo:
+    with pytest.raises(UserError) as excinfo:
         load_profile("not-a-profile")
     assert "not-a-profile" in str(excinfo.value)
 

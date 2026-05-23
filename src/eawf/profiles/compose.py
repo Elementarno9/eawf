@@ -60,7 +60,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from typing import Final, Literal
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 from eawf.profiles.models import (
     ComposedProfile,
     InstrumentReq,
@@ -89,14 +89,16 @@ ConflictResolution = Literal["fail", "first-wins"]
 STRICTEST_KEYS: Final[tuple[str, ...]] = ("instrument_requirements[].kind",)
 
 
-class ProfileConflict(ValidationFailed):
+class ProfileConflict(ValidationError):  # noqa: N818 — domain conflict name; kind folds to "ProfileConflict"
     """Two enabled profiles declare each other in ``conflicts_with``.
 
     Raised by :func:`compose` when ``conflict_resolution="fail"`` and the
     composition has at least one undeclared conflict edge. Subclasses
-    :class:`eawf.cli.errors.ValidationFailed` so callers that surface the
+    :class:`eawf.cli.errors.ValidationError` so callers that surface the
     error through ``emit_error`` get the canonical
-    :data:`eawf.cli.exit_codes.VALIDATION_FAILED` exit code.
+    :data:`eawf.cli.exit_codes.VALIDATION_FAILED` exit code. Its concrete
+    class name folds into ``ErrorEnvelope.data.kind`` as
+    ``"ProfileConflict"`` via :func:`eawf.cli.errors.build_envelope`.
     """
 
 

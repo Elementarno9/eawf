@@ -160,19 +160,20 @@ def state_transaction(
         rather than acquiring the lock themselves.*
     """
     if not read_only and daemonless_flag_requested():
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             "--daemonless rejected: this is a mutating verb "
-            "(requires daemon-mediated transactions per V1)"
+            "(requires daemon-mediated transactions per V1)",
+            kind="InvalidInput",
         )
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     try:
         with portalock.acquire(state_path, timeout=timeout):
             raw = state_path.read_bytes()
             payload = orjson.loads(raw)
             report = validate_state(payload, strict_optional=False)
             if report.state is None:
-                raise cli_errors.ValidationFailed(
+                raise cli_errors.ValidationError(
                     "state schema invalid: " + "; ".join(report.schema_errors[:3])
                 )
             state = report.state
@@ -180,17 +181,17 @@ def state_transaction(
             new_payload = state.model_dump(mode="json")
             post = validate_state(new_payload, strict_optional=False)
             if post.state is None:
-                raise cli_errors.ValidationFailed(
+                raise cli_errors.ValidationError(
                     "post-mutation schema invalid: " + "; ".join(post.schema_errors[:3])
                 )
             if post.violations:
                 violation_codes = ",".join(v.code for v in post.violations)
-                raise cli_errors.ValidationFailed(
+                raise cli_errors.ValidationError(
                     f"post-mutation invariants violated: {violation_codes}"
                 )
             atomic_write_json_locked(state_path, new_payload)
     except portalock.LockTimeout as exc:
-        raise cli_errors.LockConflict(str(exc)) from exc
+        raise cli_errors.StateConflict(str(exc), kind="LockConflict") from exc
 
 
 # ---- daemon-proxy resolution helpers ---------------------------------------

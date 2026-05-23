@@ -278,7 +278,7 @@ def roadmap_propose_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -290,7 +290,7 @@ def roadmap_propose_cmd(
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     plan_text = ""
     try:
@@ -310,7 +310,7 @@ def roadmap_propose_cmd(
                     title=final_iter_title,
                 )
             except LifecycleError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             plan_text = _render_propose_plan_text(state, phase_id)
             _append_roadmap_event(
@@ -366,20 +366,22 @@ def _resolve_revisable_phase(state: State, phase_id: str) -> None:
     invariant on its own. CLOSED and ARCHIVED phases are immutable.
     """
     if phase_id not in state.phases:
-        raise cli_errors.NotFound(f"unknown phase {phase_id!r}")
+        raise cli_errors.UserError(f"unknown phase {phase_id!r}", kind="NotFound")
     phase = state.phases[phase_id]
     if phase.status not in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"phase {phase_id!r} has status {phase.status.value!r}; "
-            "revise only works on PLANNED or ACTIVE phases"
+            "revise only works on PLANNED or ACTIVE phases",
+            kind="InvalidInput",
         )
 
 
 def _iter_id_for_phase(state: State, phase_id: str) -> str:
     phase = state.phases[phase_id]
     if not phase.iter_ids:
-        raise cli_errors.InvalidInput(
-            f"phase {phase_id!r} has no iter; propose should have created P##-I01"
+        raise cli_errors.UserError(
+            f"phase {phase_id!r} has no iter; propose should have created P##-I01",
+            kind="InvalidInput",
         )
     return phase.iter_ids[0]
 
@@ -459,15 +461,16 @@ def roadmap_revise_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     selected = [opt for opt in (add_wave, remove_wave, set_deps, retitle) if opt]
     if len(selected) != 1:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                "exactly one of --add-wave/--remove-wave/--set-deps/--retitle must be passed"
+            cli_errors.UserError(
+                "exactly one of --add-wave/--remove-wave/--set-deps/--retitle must be passed",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -476,7 +479,7 @@ def roadmap_revise_cmd(
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
 
     action_summary = ""
@@ -486,7 +489,9 @@ def roadmap_revise_cmd(
                 _resolve_revisable_phase(state, phase_id)
                 if add_wave:
                     if not wave_title or not files:
-                        raise cli_errors.InvalidInput("--add-wave requires --title and --files")
+                        raise cli_errors.UserError(
+                            "--add-wave requires --title and --files", kind="InvalidInput"
+                        )
                     full_wave_id = _coerce_full_wave_id(state, phase_id, add_wave)
                     iter_id = _iter_id_for_phase(state, phase_id)
                     role = AgentSessionRole(agent_role) if agent_role else None
@@ -521,7 +526,7 @@ def roadmap_revise_cmd(
                     edit_wave_plan(state, wave_id=full_wave_id, title=new_title.strip())
                     action_summary = f"retitled {full_wave_id}: {new_title.strip()!r}"
             except LifecycleError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             _append_roadmap_event(
                 state_path,
@@ -559,7 +564,7 @@ def _coerce_full_wave_id(state: State, phase_id: str, candidate: str) -> str:
         full = f"{iter_id}-{candidate}"
         if is_wave_id(full):
             return full
-    raise cli_errors.InvalidInput(f"invalid wave id reference: {candidate!r}")
+    raise cli_errors.UserError(f"invalid wave id reference: {candidate!r}", kind="InvalidInput")
 
 
 @roadmap_app.command("apply")
@@ -596,14 +601,14 @@ def roadmap_apply_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     dag_text = ""
     pending_waves: list[dict[str, Any]] = []
@@ -612,17 +617,19 @@ def roadmap_apply_cmd(
         # mutating-verb gate, and only the approve path appends an EVENT.
         with state_transaction(state_path, read_only=not approve) as state:
             if phase_id not in state.phases:
-                raise cli_errors.NotFound(f"unknown phase {phase_id!r}")
+                raise cli_errors.UserError(f"unknown phase {phase_id!r}", kind="NotFound")
             phase = state.phases[phase_id]
             if phase.status != PhaseStatus.PLANNED:
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"phase {phase_id!r} has status {phase.status.value!r}; "
-                    "only PLANNED phases can be applied"
+                    "only PLANNED phases can be applied",
+                    kind="InvalidInput",
                 )
             pending_waves = _collect_pending_waves(state, phase_id)
             if not pending_waves:
-                raise cli_errors.InvalidInput(
-                    f"phase {phase_id!r} has no pending waves; revise --add-wave before apply"
+                raise cli_errors.UserError(
+                    f"phase {phase_id!r} has no pending waves; revise --add-wave before apply",
+                    kind="InvalidInput",
                 )
             dag_text = _render_apply_dag_text(state, phase_id, pending_waves)
             if approve:
@@ -680,21 +687,21 @@ def roadmap_drop_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     try:
         with state_transaction(state_path) as state:
             try:
                 archive_phase(state, phase_id=phase_id)
             except LifecycleError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             _append_roadmap_event(
                 state_path,
@@ -737,14 +744,14 @@ def roadmap_show_cmd(
     flags: GlobalFlags = ctx.obj
     if phase is not None and not is_phase_id(phase):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     try:
         # Read-only view: read_only=True bypasses the §5.5 --daemonless

@@ -38,11 +38,11 @@ def _load_state(state_path: Path) -> State:
     from eawf.validate.strict import validate_state
 
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = orjson.loads(state_path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
         )
     return report.state
@@ -85,8 +85,9 @@ def pr_render(
     flags: GlobalFlags = ctx.obj
     try:
         if not (is_phase_id(scope_id) or is_iter_id(scope_id)):
-            raise cli_errors.InvalidInput(
-                f"invalid PR scope id: {scope_id!r} (expected P<NN> or P<NN>-I<NN>)"
+            raise cli_errors.UserError(
+                f"invalid PR scope id: {scope_id!r} (expected P<NN> or P<NN>-I<NN>)",
+                kind="InvalidInput",
             )
         state_path, _reason = resolve_with_reason(flags.workspace)
         state = _load_state(state_path)
@@ -94,9 +95,11 @@ def pr_render(
             try:
                 report = validate_markdown_artifact(path.read_text(encoding="utf-8"))
             except OSError as exc:
-                raise cli_errors.InvalidInput(f"cannot read artifact {path}: {exc}") from exc
+                raise cli_errors.UserError(
+                    f"cannot read artifact {path}: {exc}", kind="InvalidInput"
+                ) from exc
             if not report.ok:
-                raise cli_errors.ValidationFailed(
+                raise cli_errors.ValidationError(
                     f"artifact validation failed for {path}: {'; '.join(report.errors)}"
                 )
         composed = None
@@ -117,9 +120,9 @@ def pr_render(
                 kind=pr_kind,
             )
         except PrBodyNotFound as exc:
-            raise cli_errors.NotFound(str(exc)) from exc
+            raise cli_errors.UserError(str(exc), kind="NotFound") from exc
         except PrBodyValidationError as exc:
-            raise cli_errors.ValidationFailed(str(exc)) from exc
+            raise cli_errors.ValidationError(str(exc)) from exc
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

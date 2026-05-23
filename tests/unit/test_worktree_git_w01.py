@@ -63,7 +63,7 @@ def _patch_run(
 
 def test_ensure_git_missing_raises_instrument_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.worktree.git.shutil.which", lambda _name: None)
-    with pytest.raises(cli_errors.InstrumentMissing, match="git executable not found"):
+    with pytest.raises(cli_errors.UserError, match="git executable not found"):
         git._ensure_git()
 
 
@@ -76,7 +76,7 @@ def test_run_timeout_maps_to_integrity_violation(
         raise subprocess.TimeoutExpired(cmd=["git", "status"], timeout=1.0)
 
     monkeypatch.setattr("eawf.worktree.git.subprocess.run", _raise_timeout)
-    with pytest.raises(cli_errors.IntegrityViolation, match="timed out"):
+    with pytest.raises(cli_errors.StateConflict, match="timed out"):
         git._run(["git", "-C", str(tmp_path), "status"])
 
 
@@ -87,7 +87,7 @@ def test_repo_root_outside_repo_raises_not_found(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: not a git repository")
-    with pytest.raises(cli_errors.NotFound, match="not a git repository"):
+    with pytest.raises(cli_errors.UserError, match="not a git repository"):
         git.repo_root(tmp_path)
 
 
@@ -129,7 +129,7 @@ def test_worktree_add_already_in_use_maps_to_lock_conflict(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: 'x' is already used by worktree")
-    with pytest.raises(cli_errors.LockConflict, match="already"):
+    with pytest.raises(cli_errors.StateConflict, match="already"):
         git.worktree_add(tmp_path, branch="b", path=tmp_path / "wt", base="main")
 
 
@@ -137,7 +137,7 @@ def test_worktree_add_invalid_reference_maps_to_invalid_input(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: invalid reference: nope")
-    with pytest.raises(cli_errors.InvalidInput, match="invalid reference"):
+    with pytest.raises(cli_errors.UserError, match="invalid reference"):
         git.worktree_add(tmp_path, branch="b", path=tmp_path / "wt", base="nope")
 
 
@@ -145,7 +145,7 @@ def test_worktree_add_not_a_repo_maps_to_not_found(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: not a git repository")
-    with pytest.raises(cli_errors.NotFound, match="not a git repository"):
+    with pytest.raises(cli_errors.UserError, match="not a git repository"):
         git.worktree_add(tmp_path, branch="b", path=tmp_path / "wt", base="main")
 
 
@@ -153,7 +153,7 @@ def test_worktree_add_unknown_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="some other git boom")
-    with pytest.raises(cli_errors.IntegrityViolation, match="worktree add failed"):
+    with pytest.raises(cli_errors.StateConflict, match="worktree add failed"):
         git.worktree_add(tmp_path, branch="b", path=tmp_path / "wt", base="main")
 
 
@@ -164,7 +164,7 @@ def test_worktree_add_success_returns_none(monkeypatch: pytest.MonkeyPatch, tmp_
 
 def test_worktree_add_real_invalid_base_raises_invalid_input(dirty_repo: Path) -> None:
     """Real git: adding a worktree off a non-existent base raises InvalidInput."""
-    with pytest.raises(cli_errors.InvalidInput):
+    with pytest.raises(cli_errors.UserError):
         git.worktree_add(
             dirty_repo,
             branch="feature/new",
@@ -180,7 +180,7 @@ def test_worktree_remove_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="fatal: cannot remove")
-    with pytest.raises(cli_errors.IntegrityViolation, match="worktree remove failed"):
+    with pytest.raises(cli_errors.StateConflict, match="worktree remove failed"):
         git.worktree_remove(tmp_path, path=tmp_path / "wt")
 
 
@@ -192,7 +192,7 @@ def test_worktree_remove_success_returns_none(
 
 
 def test_worktree_remove_real_missing_path_raises(dirty_repo: Path) -> None:
-    with pytest.raises(cli_errors.IntegrityViolation):
+    with pytest.raises(cli_errors.StateConflict):
         git.worktree_remove(dirty_repo, path=dirty_repo / "no-such-worktree")
 
 
@@ -203,7 +203,7 @@ def test_worktree_list_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="boom")
-    with pytest.raises(cli_errors.IntegrityViolation, match="worktree list failed"):
+    with pytest.raises(cli_errors.StateConflict, match="worktree list failed"):
         git.worktree_list(tmp_path)
 
 
@@ -235,7 +235,7 @@ def test_status_porcelain_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="fatal: not a git repository")
-    with pytest.raises(cli_errors.IntegrityViolation, match="status failed"):
+    with pytest.raises(cli_errors.StateConflict, match="status failed"):
         git.status_porcelain(tmp_path)
 
 
@@ -252,7 +252,7 @@ def test_rev_list_bad_revision_maps_to_invalid_input(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: bad revision 'x..y'")
-    with pytest.raises(cli_errors.InvalidInput, match="rev-list"):
+    with pytest.raises(cli_errors.UserError, match="rev-list"):
         git.rev_list(tmp_path, range_spec="x..y")
 
 
@@ -260,7 +260,7 @@ def test_rev_list_unknown_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="boom")
-    with pytest.raises(cli_errors.IntegrityViolation, match="rev-list failed"):
+    with pytest.raises(cli_errors.StateConflict, match="rev-list failed"):
         git.rev_list(tmp_path, range_spec="a..b")
 
 
@@ -290,7 +290,7 @@ def test_cherry_pick_bad_revision_maps_to_invalid_input(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: bad revision 'zzz'")
-    with pytest.raises(cli_errors.InvalidInput, match="cherry-pick"):
+    with pytest.raises(cli_errors.UserError, match="cherry-pick"):
         git.cherry_pick(tmp_path, sha="zzz")
 
 
@@ -298,7 +298,7 @@ def test_cherry_pick_unknown_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="some weird failure")
-    with pytest.raises(cli_errors.IntegrityViolation, match="cherry-pick failed"):
+    with pytest.raises(cli_errors.StateConflict, match="cherry-pick failed"):
         git.cherry_pick(tmp_path, sha="abc")
 
 
@@ -336,7 +336,7 @@ def test_cherry_pick_now_empty_skip_fails_raises(
         )
 
     monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
-    with pytest.raises(cli_errors.IntegrityViolation):
+    with pytest.raises(cli_errors.StateConflict):
         git.cherry_pick(tmp_path, sha="abc")
 
 
@@ -396,7 +396,7 @@ def test_cherry_pick_continue_now_empty_skip_fails_returns_false(
 
 def test_cherry_pick_abort_failure_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="nothing to abort")
-    with pytest.raises(cli_errors.IntegrityViolation, match="cherry-pick --abort failed"):
+    with pytest.raises(cli_errors.StateConflict, match="cherry-pick --abort failed"):
         git.cherry_pick_abort(tmp_path)
 
 
@@ -426,7 +426,7 @@ def test_rebase_invalid_upstream_maps_to_invalid_input(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: invalid upstream 'nope'")
-    with pytest.raises(cli_errors.InvalidInput, match="rebase"):
+    with pytest.raises(cli_errors.UserError, match="rebase"):
         git.rebase(tmp_path, target="nope")
 
 
@@ -434,7 +434,7 @@ def test_rebase_unknown_failure_maps_to_integrity_violation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="weird rebase boom")
-    with pytest.raises(cli_errors.IntegrityViolation, match="rebase failed"):
+    with pytest.raises(cli_errors.StateConflict, match="rebase failed"):
         git.rebase(tmp_path, target="main")
 
 
@@ -459,7 +459,7 @@ def test_rebase_continue_failure_returns_false(
 
 def test_rebase_abort_failure_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="nothing to abort")
-    with pytest.raises(cli_errors.IntegrityViolation, match="rebase --abort failed"):
+    with pytest.raises(cli_errors.StateConflict, match="rebase --abort failed"):
         git.rebase_abort(tmp_path)
 
 
@@ -475,7 +475,7 @@ def test_merge_ff_only_non_fast_forward_raises(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: Not possible to fast-forward, aborting.")
-    with pytest.raises(cli_errors.IntegrityViolation, match="non-fast-forward"):
+    with pytest.raises(cli_errors.StateConflict, match="non-fast-forward"):
         git.merge_ff_only(tmp_path, source="feature")
 
 
@@ -483,7 +483,7 @@ def test_merge_ff_only_unknown_failure_raises(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_run(monkeypatch, returncode=1, stderr="weird merge boom")
-    with pytest.raises(cli_errors.IntegrityViolation, match="merge --ff-only failed"):
+    with pytest.raises(cli_errors.StateConflict, match="merge --ff-only failed"):
         git.merge_ff_only(tmp_path, source="feature")
 
 
@@ -508,7 +508,7 @@ def test_merge_ff_only_success_returns_head(
 
 def test_head_sha_failure_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_run(monkeypatch, returncode=128, stderr="fatal: ambiguous argument 'HEAD'")
-    with pytest.raises(cli_errors.IntegrityViolation, match="rev-parse HEAD failed"):
+    with pytest.raises(cli_errors.StateConflict, match="rev-parse HEAD failed"):
         git.head_sha(tmp_path)
 
 

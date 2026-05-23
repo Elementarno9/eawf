@@ -78,14 +78,14 @@ def compact_cmd(
     state_dir = state_path.parent
     if not state_dir.exists():
         errors.emit_error(
-            errors.NotFound(f"state directory not found: {state_dir}"),
+            errors.UserError(f"state directory not found: {state_dir}", kind="NotFound"),
             flags=flags,
         )
         return
 
     target_path = _canonical_store_path(state_path, kind)
     if budget is not None:
-        logger.info(f"compact_cmd budget={budget!r} accepted but not enforced (v0.1)")
+        logger.info(f"compact_cmd budget={budget!r}; accepted but not enforced (v0.1)")
 
     report = compact_store(target_path)
 

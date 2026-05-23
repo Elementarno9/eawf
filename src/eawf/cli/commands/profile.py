@@ -86,8 +86,9 @@ def profile_new_cmd(
     workspace = _resolve_workspace(flags)
     if profiles_trust.is_bundled(name) and not force:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"name {name!r} collides with a bundled profile; pass --force to override"
+            cli_errors.UserError(
+                f"name {name!r} collides with a bundled profile; pass --force to override",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -96,9 +97,10 @@ def profile_new_cmd(
         workspace=workspace
     ):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"unknown parent profile {inherit!r}; "
-                f"choose from {list(profiles_discovery.list_profiles_all(workspace=workspace))}"
+                f"choose from {list(profiles_discovery.list_profiles_all(workspace=workspace))}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -106,8 +108,9 @@ def profile_new_cmd(
     target = profiles_discovery.workspace_profiles_dir(workspace) / f"{name}.yaml"
     if target.exists() and not force:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"profile already exists at {target}; pass --force to overwrite"
+            cli_errors.UserError(
+                f"profile already exists at {target}; pass --force to overwrite",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -152,7 +155,9 @@ def profile_validate_cmd(
     flags: GlobalFlags = ctx.obj
     if (name is None) == (not validate_all):
         cli_errors.emit_error(
-            cli_errors.InvalidInput("exactly one of <name> or --all must be provided"),
+            cli_errors.UserError(
+                "exactly one of <name> or --all must be provided", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -168,12 +173,12 @@ def profile_validate_cmd(
     for pid in ids:
         try:
             loc = profiles_discovery.discover_profile(pid, workspace=workspace)
-        except cli_errors.InvalidInput as exc:
+        except cli_errors.UserError as exc:
             failures.append({"profile": pid, "code": "unknown", "message": str(exc)})
             continue
         try:
             profiles_discovery.load_profile_with_discovery(pid, workspace=workspace)
-        except cli_errors.ValidationFailed as exc:
+        except cli_errors.ValidationError as exc:
             failures.append({"profile": pid, "code": "schema_rejected", "message": str(exc)})
             continue
         try:

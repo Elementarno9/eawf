@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 import typer
 
 import eawf
-from eawf.cli.errors import InstrumentMissing, ValidationFailed, emit_error
+from eawf.cli.errors import UserError, ValidationError, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.install.instrument_probe import resolve_cache_path
@@ -242,7 +242,7 @@ def _maybe_clear_cache(workspace: Path | None) -> None:
             target.unlink()
             logger.info(f"_maybe_clear_cache removed={target}")
         except OSError as exc:
-            logger.warning(f"_maybe_clear_cache: cannot remove {target}: {exc}")
+            logger.warning(f"_maybe_clear_cache cannot-remove path={target} err={exc!r}")
 
 
 def _drift_row_to_payload(row: DriftRow) -> dict[str, str]:
@@ -280,7 +280,7 @@ def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
     from eawf.runtimes.probes.sdk_baseline import probe_all
 
     if runtime_id not in RUNTIME_IDS:
-        raise ValidationFailed(
+        raise ValidationError(
             f"unknown runtime: {runtime_id!r} (expected one of {list(RUNTIME_IDS)!r})"
         )
 
@@ -293,7 +293,7 @@ def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
         # Snapshot always returns rows for every probed runtime, so this
         # branch is defence-in-depth; the loader-side schema check would
         # catch a missing row at startup.
-        raise ValidationFailed(f"probe snapshot missing row for runtime: {runtime_id!r}")
+        raise ValidationError(f"probe snapshot missing row for runtime: {runtime_id!r}")
 
     probe = ProbeResult(
         runtime_id=probe_row.runtime_id,
@@ -367,7 +367,7 @@ def doctor(
     if runtime is not None:
         try:
             payload, text = _run_runtime_drift_check(runtime)
-        except ValidationFailed as exc:
+        except ValidationError as exc:
             emit_error(exc, flags=effective_flags)
         emit_json_or_text(payload, text, flags=effective_flags)
         return
@@ -380,7 +380,7 @@ def doctor(
             workspace=effective_flags.workspace,
             reprobe=reprobe,
         )
-    except InstrumentMissing as exc:
+    except UserError as exc:
         emit_error(exc, flags=effective_flags)
 
     payload = to_payload(results)

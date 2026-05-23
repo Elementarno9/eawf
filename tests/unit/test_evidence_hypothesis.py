@@ -84,7 +84,7 @@ def test_define_hypothesis_duplicate_raises(tmp_path: Path) -> None:
         confirm="c",
         reject="r",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         hypothesis.define_hypothesis(
             state,
             hypothesis_id="H03-12",
@@ -99,7 +99,7 @@ def test_define_hypothesis_duplicate_raises(tmp_path: Path) -> None:
 def test_set_verdict_unknown_hypothesis_raises_not_found(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="H99-99"):
+    with pytest.raises(cli_errors.UserError, match="H99-99"):
         hypothesis.set_verdict(
             state,
             hypothesis_id="H99-99",
@@ -120,7 +120,7 @@ def test_set_verdict_missing_audit_raises_validation(tmp_path: Path) -> None:
         confirm="c",
         reject="r",
     )
-    with pytest.raises(cli_errors.ValidationFailed, match="UNKNOWN"):
+    with pytest.raises(cli_errors.ValidationError, match="UNKNOWN"):
         hypothesis.set_verdict(
             state,
             hypothesis_id="H03-12",

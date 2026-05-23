@@ -76,7 +76,7 @@ def test_open_incident_duplicate_raises(tmp_path: Path) -> None:
         severity=IncidentSeverity.LOW,
         title="t",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         incident.open_incident(
             state,
             incident_id="INC-001",
@@ -89,7 +89,7 @@ def test_open_incident_duplicate_raises(tmp_path: Path) -> None:
 def test_close_incident_unknown_raises_not_found(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound):
+    with pytest.raises(cli_errors.UserError):
         incident.close_incident(
             state,
             incident_id="INC-999",
@@ -109,7 +109,7 @@ def test_close_incident_without_complete_audit_raises(tmp_path: Path) -> None:
         severity=IncidentSeverity.HIGH,
         title="t",
     )
-    with pytest.raises(cli_errors.ValidationFailed, match="UNKNOWN"):
+    with pytest.raises(cli_errors.ValidationError, match="UNKNOWN"):
         incident.close_incident(
             state,
             incident_id="INC-001",
@@ -159,7 +159,7 @@ def test_close_incident_happy_with_complete_audit(tmp_path: Path) -> None:
 def test_view_incident_unknown_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound):
+    with pytest.raises(cli_errors.UserError):
         incident.view_incident(state, "INC-999")
 
 

@@ -156,7 +156,7 @@ def show_cmd(
         fmt = _PlanFormat.MARKDOWN
     if md_output and json_requested:
         errors.emit_error(
-            errors.InvalidInput("--md and --json are contradictory"),
+            errors.UserError("--md and --json are contradictory", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -168,7 +168,9 @@ def show_cmd(
         src = ctx.get_parameter_source("fmt")
         if src is click.core.ParameterSource.COMMANDLINE:
             errors.emit_error(
-                errors.InvalidInput("--json and --format markdown are contradictory"),
+                errors.UserError(
+                    "--json and --format markdown are contradictory", kind="InvalidInput"
+                ),
                 flags=flags,
             )
             return
@@ -182,7 +184,9 @@ def show_cmd(
 
     if iter_id is not None and not is_iter_id(iter_id):
         errors.emit_error(
-            errors.InvalidInput(f"invalid iter id: {iter_id!r} (expected P<NN>-I<NN>)"),
+            errors.UserError(
+                f"invalid iter id: {iter_id!r} (expected P<NN>-I<NN>)", kind="InvalidInput"
+            ),
             flags=effective_flags,
         )
         return
@@ -190,7 +194,7 @@ def show_cmd(
     state_path, _reason = resolve_with_reason(workspace=effective_flags.workspace)
     if not state_path.exists():
         errors.emit_error(
-            errors.NotFound(f"no state.json at {state_path}"),
+            errors.UserError(f"no state.json at {state_path}", kind="NotFound"),
             flags=effective_flags,
         )
         return
@@ -200,7 +204,7 @@ def show_cmd(
         state = State.model_validate(payload_dict)
     except ValidationError as exc:
         errors.emit_error(
-            errors.ValidationFailed(
+            errors.ValidationError(
                 f"state file failed schema validation: {exc.errors()[0]['msg']}"
             ),
             flags=effective_flags,
@@ -208,7 +212,7 @@ def show_cmd(
         return
     except orjson.JSONDecodeError as exc:
         errors.emit_error(
-            errors.ValidationFailed(f"state file is not valid JSON: {exc}"),
+            errors.ValidationError(f"state file is not valid JSON: {exc}"),
             flags=effective_flags,
         )
         return
@@ -216,7 +220,9 @@ def show_cmd(
     resolved_iter_id = iter_id if iter_id is not None else state.current.iter_id
     if resolved_iter_id is None:
         errors.emit_error(
-            errors.InvalidInput("no active iter set; pass --iter <ID> explicitly"),
+            errors.UserError(
+                "no active iter set; pass --iter <ID> explicitly", kind="InvalidInput"
+            ),
             flags=effective_flags,
         )
         return
@@ -225,7 +231,7 @@ def show_cmd(
         view = build_view(state, resolved_iter_id)
     except PlanViewNotFound as exc:
         errors.emit_error(
-            errors.NotFound(str(exc)),
+            errors.UserError(str(exc), kind="NotFound"),
             flags=effective_flags,
         )
         return

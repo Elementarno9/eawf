@@ -39,7 +39,7 @@ from typing import Any, Final, Literal
 
 import yaml
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 from eawf.config.defaults import CONFIG_SCHEMA_VERSION
 
 logger = logging.getLogger(__name__)
@@ -80,11 +80,11 @@ def migrate_config_payload(
             wrote one; an absent marker indicates corruption.
     """
     if "schema_version" not in payload:
-        raise ValidationFailed("config layer missing required key 'schema_version'")
+        raise ValidationError("config layer missing required key 'schema_version'")
     raw_marker = payload["schema_version"]
     marker = str(raw_marker)
     if marker not in ACCEPTED_MARKERS:
-        raise ValidationFailed(
+        raise ValidationError(
             f"unknown config schema_version: {raw_marker!r} (accepted: {sorted(ACCEPTED_MARKERS)})"
         )
 
@@ -176,17 +176,17 @@ def migrate_config_file(path: Path) -> tuple[dict[str, Any], bool, Path | None]:
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise ValidationFailed(f"cannot read config file {path}: {exc}") from exc
+        raise ValidationError(f"cannot read config file {path}: {exc}") from exc
 
     try:
         parsed = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
-        raise ValidationFailed(f"malformed YAML in {path}: {exc}") from exc
+        raise ValidationError(f"malformed YAML in {path}: {exc}") from exc
 
     if parsed is None:
         return {}, False, None
     if not isinstance(parsed, dict):
-        raise ValidationFailed(
+        raise ValidationError(
             f"config file {path} must contain a YAML mapping at the top "
             f"level, got {type(parsed).__name__}"
         )

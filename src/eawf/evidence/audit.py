@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.state.enums import AuditKind, AuditStatus, AuditVerdict, StoreKind
 from eawf.state.models import Audit, State
@@ -56,13 +56,16 @@ def add_audit(
     """
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id in audits:
-        raise InvalidInput(f"audit {audit_id!r} already exists")
+        raise UserError(f"audit {audit_id!r} already exists", kind="InvalidInput")
 
     if verdict is not None and report_artifact_id is None:
-        raise InvalidInput(f"audit {audit_id!r} carries verdict={verdict.value!r} but no report")
+        raise UserError(
+            f"audit {audit_id!r} carries verdict={verdict.value!r} but no report",
+            kind="InvalidInput",
+        )
 
     if report_artifact_id is not None and report_artifact_id not in state.artifacts:
-        raise InvalidInput(f"unknown artifact id: {report_artifact_id!r}")
+        raise UserError(f"unknown artifact id: {report_artifact_id!r}", kind="InvalidInput")
 
     status = AuditStatus.COMPLETE if report_artifact_id is not None else AuditStatus.PENDING
 
@@ -136,7 +139,7 @@ def run_audit(
     """
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id in audits:
-        raise InvalidInput(f"audit {audit_id!r} already exists")
+        raise UserError(f"audit {audit_id!r} already exists", kind="InvalidInput")
 
     resolved: list[dict[str, Any]]
     if check_results is not None:
@@ -148,7 +151,9 @@ def run_audit(
         try:
             resolved = json.loads(fixture_path.read_text(encoding="utf-8"))
         except Exception as exc:
-            raise InvalidInput(f"audit run fixture {fixture_path} not valid JSON: {exc}") from exc
+            raise UserError(
+                f"audit run fixture {fixture_path} not valid JSON: {exc}", kind="InvalidInput"
+            ) from exc
     else:
         resolved = [{"name": "stub", "passed": True, "details": "Phase 2 stub"}]
 
@@ -237,7 +242,7 @@ def set_verdict(
     """
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id not in audits:
-        raise NotFound(f"audit {audit_id!r} not found")
+        raise UserError(f"audit {audit_id!r} not found", kind="NotFound")
 
     prior = audits[audit_id]
     new_status: AuditStatus
@@ -245,18 +250,20 @@ def set_verdict(
 
     if prior.status == AuditStatus.PENDING:
         if report_artifact_id is None:
-            raise InvalidInput(
-                f"audit {audit_id!r} is pending; --report required to lift to complete"
+            raise UserError(
+                f"audit {audit_id!r} is pending; --report required to lift to complete",
+                kind="InvalidInput",
             )
         if report_artifact_id not in state.artifacts:
-            raise InvalidInput(f"unknown artifact id: {report_artifact_id!r}")
+            raise UserError(f"unknown artifact id: {report_artifact_id!r}", kind="InvalidInput")
         new_status = AuditStatus.COMPLETE
         new_report = report_artifact_id
     else:
         if report_artifact_id is not None and report_artifact_id != prior.report_artifact_id:
-            raise InvalidInput(
+            raise UserError(
                 f"audit {audit_id!r} already has report={prior.report_artifact_id!r}; "
-                f"cannot replace with {report_artifact_id!r}"
+                f"cannot replace with {report_artifact_id!r}",
+                kind="InvalidInput",
             )
         new_status = prior.status
         new_report = prior.report_artifact_id
@@ -315,7 +322,7 @@ def add_integrity(
     """Append an integrity-check entry to an existing audit (in place)."""
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id not in audits:
-        raise NotFound(f"audit {audit_id!r} not found")
+        raise UserError(f"audit {audit_id!r} not found", kind="NotFound")
 
     now = datetime.now(UTC)
     prior = audits[audit_id]
@@ -367,7 +374,7 @@ def show_audit(state: State, audit_id: str) -> Audit:
     """Read-only lookup."""
     audits = state.audits or {}
     if audit_id not in audits:
-        raise NotFound(f"audit {audit_id!r} not found")
+        raise UserError(f"audit {audit_id!r} not found", kind="NotFound")
     return audits[audit_id]
 
 

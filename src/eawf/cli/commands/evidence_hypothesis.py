@@ -67,7 +67,9 @@ def goal_define(
             resolved_scope = scope_id
             if resolved_scope is None:
                 if state.project is None:
-                    raise cli_errors.InvalidInput("scope_id required when state.project is unset")
+                    raise cli_errors.UserError(
+                        "scope_id required when state.project is unset", kind="InvalidInput"
+                    )
                 resolved_scope = state.project.code
             event = goal_evi.define_goal(
                 state,

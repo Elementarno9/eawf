@@ -86,7 +86,7 @@ def test_add_audit_without_report_lands_pending(tmp_path: Path) -> None:
 def test_add_audit_verdict_without_report_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.InvalidInput, match="no report"):
+    with pytest.raises(cli_errors.UserError, match="no report"):
         audit.add_audit(
             state,
             audit_id="AUD-003",
@@ -108,7 +108,7 @@ def test_add_audit_duplicate_raises(tmp_path: Path) -> None:
         kind=AuditKind.EVALUATION,
         report_artifact_id="ART-001",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         audit.add_audit(
             state,
             audit_id="AUD-001",
@@ -204,7 +204,7 @@ def test_add_integrity_appends_result(tmp_path: Path) -> None:
 def test_add_integrity_unknown_audit_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="AUD-999"):
+    with pytest.raises(cli_errors.UserError, match="AUD-999"):
         audit.add_integrity(
             state,
             audit_id="AUD-999",
@@ -216,7 +216,7 @@ def test_add_integrity_unknown_audit_raises(tmp_path: Path) -> None:
 def test_show_audit_unknown_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound):
+    with pytest.raises(cli_errors.UserError):
         audit.show_audit(state, "AUD-DOES-NOT-EXIST")
 
 
@@ -273,7 +273,7 @@ def test_add_audit_rejects_unknown_report_artifact_id(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
     # No artifact seeded — state.artifacts is empty.
-    with pytest.raises(cli_errors.InvalidInput, match="ART-999"):
+    with pytest.raises(cli_errors.UserError, match="ART-999"):
         audit.add_audit(
             state,
             audit_id="AUD-001",
@@ -323,7 +323,7 @@ def test_set_verdict_pending_without_report_raises(tmp_path: Path) -> None:
         scope_id="QR",
         kind=AuditKind.EVALUATION,
     )
-    with pytest.raises(cli_errors.InvalidInput, match="pending"):
+    with pytest.raises(cli_errors.UserError, match="pending"):
         audit.set_verdict(
             state,
             audit_id="AUD-001",
@@ -335,7 +335,7 @@ def test_set_verdict_pending_without_report_raises(tmp_path: Path) -> None:
 def test_set_verdict_unknown_audit_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="AUD-999"):
+    with pytest.raises(cli_errors.UserError, match="AUD-999"):
         audit.set_verdict(
             state,
             audit_id="AUD-999",
@@ -353,7 +353,7 @@ def test_set_verdict_orphan_report_raises(tmp_path: Path) -> None:
         scope_id="QR",
         kind=AuditKind.EVALUATION,
     )
-    with pytest.raises(cli_errors.InvalidInput, match="ART-999"):
+    with pytest.raises(cli_errors.UserError, match="ART-999"):
         audit.set_verdict(
             state,
             audit_id="AUD-001",
@@ -399,7 +399,7 @@ def test_set_verdict_complete_rejects_differing_report(tmp_path: Path) -> None:
         kind=AuditKind.EVALUATION,
         report_artifact_id="ART-001",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="ART-002"):
+    with pytest.raises(cli_errors.UserError, match="ART-002"):
         audit.set_verdict(
             state,
             audit_id="AUD-001",

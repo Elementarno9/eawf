@@ -44,7 +44,7 @@ def _slugify_wave(wave_id: str) -> str:
     AGENTS.md rule 14 (``feature/eawf-v0.1-pNN-wMM``).
     """
     if not is_wave_id(wave_id):
-        raise cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}")
+        raise cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput")
     parts = wave_id.split("-")
     # parts == ["P05", "I01", "W01"] -> "p05-w01"
     return f"{parts[0].lower()}-{parts[2].lower()}"
@@ -78,8 +78,9 @@ def _validate_path_inside_repo(repo_root: Path, target: Path) -> None:
     target_resolved = target.resolve(strict=False)
     repo_resolved = repo_root.resolve(strict=False)
     if not target_resolved.is_relative_to(repo_resolved):
-        raise cli_errors.InvalidInput(
-            f"worktree path {target_resolved} resolves outside repo root {repo_resolved}"
+        raise cli_errors.UserError(
+            f"worktree path {target_resolved} resolves outside repo root {repo_resolved}",
+            kind="InvalidInput",
         )
 
 
@@ -145,24 +146,28 @@ def create_worktree(
     """
     # ---- 1. Validate wave id + presence -----------------------------------
     if not is_wave_id(wave_id):
-        raise cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}")
+        raise cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput")
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise cli_errors.NotFound(f"unknown wave: {wave_id}")
+        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
     if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"wave {wave_id!r} must be CLAIMED or IN_PROGRESS to create a worktree "
-            f"(current status: {wave.status.value})"
+            f"(current status: {wave.status.value})",
+            kind="InvalidInput",
         )
 
     # ---- 2. Resolve branch + base ----------------------------------------
     chosen_branch = branch or _default_branch_name(wave_id)
     if not chosen_branch.strip() or " " in chosen_branch or "\t" in chosen_branch:
-        raise cli_errors.InvalidInput(
-            f"branch name must be non-empty and whitespace-free: {chosen_branch!r}"
+        raise cli_errors.UserError(
+            f"branch name must be non-empty and whitespace-free: {chosen_branch!r}",
+            kind="InvalidInput",
         )
     if not _BRANCH_NAME_RE.fullmatch(chosen_branch):
-        raise cli_errors.InvalidInput(f"branch name contains illegal characters: {chosen_branch!r}")
+        raise cli_errors.UserError(
+            f"branch name contains illegal characters: {chosen_branch!r}", kind="InvalidInput"
+        )
 
     if base is None:
         # AGENTS.md rule 11: branch from current feature branch HEAD,
@@ -173,9 +178,10 @@ def create_worktree(
         if guarded_default is None and state.project is not None:
             guarded_default = state.project.default_branch
         if guarded_default and chosen_base == guarded_default:
-            raise cli_errors.InvalidInput(
+            raise cli_errors.UserError(
                 f"worktree create refuses to branch from {guarded_default!r}; "
-                f"switch to a feature branch first or pass --base explicitly"
+                f"switch to a feature branch first or pass --base explicitly",
+                kind="InvalidInput",
             )
     else:
         chosen_base = base
@@ -186,15 +192,17 @@ def create_worktree(
             if guarded_default is None and state.project is not None:
                 guarded_default = state.project.default_branch
             if guarded_default and chosen_base == guarded_default:
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"worktree create refuses to branch from {guarded_default!r} "
-                    f"without explicit_base=True"
+                    f"without explicit_base=True",
+                    kind="InvalidInput",
                 )
 
     if git.branch_exists(repo_root, chosen_branch):
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"branch {chosen_branch!r} already exists locally; pick another name "
-            f"or delete the existing branch first"
+            f"or delete the existing branch first",
+            kind="InvalidInput",
         )
 
     # ---- 3. Resolve path + path-traversal guard --------------------------
@@ -203,12 +211,14 @@ def create_worktree(
 
     if chosen_path.exists():
         if any(chosen_path.iterdir()):
-            raise cli_errors.InvalidInput(
-                f"worktree path {chosen_path} is non-empty; refuse to overwrite"
+            raise cli_errors.UserError(
+                f"worktree path {chosen_path} is non-empty; refuse to overwrite",
+                kind="InvalidInput",
             )
         if not force:
-            raise cli_errors.InvalidInput(
-                f"worktree path {chosen_path} already exists (empty); pass --force to reuse"
+            raise cli_errors.UserError(
+                f"worktree path {chosen_path} already exists (empty); pass --force to reuse",
+                kind="InvalidInput",
             )
         # Empty dir + --force: git worktree add will refuse if dir exists,
         # so unlink and let git create it fresh.

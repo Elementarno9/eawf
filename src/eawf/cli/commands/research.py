@@ -34,14 +34,14 @@ def _load_research_envelope(state_path: Path, record_id: str) -> Envelope:
 
     path = store_path(state_path, StoreKind.RESEARCH)
     if not path.exists():
-        raise errors.NotFound("research store is empty")
+        raise errors.UserError("research store is empty", kind="NotFound")
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         envelope = Envelope.model_validate(orjson.loads(line))
         if envelope.id == record_id:
             return envelope
-    raise errors.NotFound(f"research record {record_id!r} not found")
+    raise errors.UserError(f"research record {record_id!r} not found", kind="NotFound")
 
 
 @research_app.command("show")
@@ -63,14 +63,14 @@ def research_show(
         payload = ResearchPayload.model_validate(envelope.payload)
     except (errors.CliError, ValidationError) as exc:
         errors.emit_error(
-            exc if isinstance(exc, errors.CliError) else errors.ValidationFailed(str(exc)),
+            exc if isinstance(exc, errors.CliError) else errors.ValidationError(str(exc)),
             flags=flags,
         )
         return
     if md:
         if flags.json_output:
             errors.emit_error(
-                errors.InvalidInput("--md and --json are contradictory"),
+                errors.UserError("--md and --json are contradictory", kind="InvalidInput"),
                 flags=flags,
             )
             return

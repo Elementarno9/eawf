@@ -449,7 +449,7 @@ def test_actual_start_jsonl_lands_when_commit_state_raises(
     from eawf.cli.commands import estimation as est_cmd
 
     def _boom(*_args: Any, **_kwargs: Any) -> None:
-        raise cli_errors.ValidationFailed("forced for atomicity-ordering test")
+        raise cli_errors.ValidationError("forced for atomicity-ordering test")
 
     monkeypatch.setattr(est_cmd, "_commit_state", _boom)
 

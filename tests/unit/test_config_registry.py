@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 from eawf.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
@@ -129,7 +129,7 @@ def test_coerce_bool_rejects_garbage() -> None:
         type="bool",
         default=False,
     )
-    with pytest.raises(InvalidInput, match="bool"):
+    with pytest.raises(UserError, match="bool"):
         coerce_and_validate(entry, "maybe")
 
 
@@ -157,7 +157,7 @@ def test_coerce_int_below_minimum_rejected() -> None:
         min_value=1,
         max_value=10,
     )
-    with pytest.raises(InvalidInput, match="below minimum"):
+    with pytest.raises(UserError, match="below minimum"):
         coerce_and_validate(entry, "0")
 
 
@@ -171,7 +171,7 @@ def test_coerce_int_above_maximum_rejected() -> None:
         min_value=1,
         max_value=10,
     )
-    with pytest.raises(InvalidInput, match="above maximum"):
+    with pytest.raises(UserError, match="above maximum"):
         coerce_and_validate(entry, "11")
 
 
@@ -183,7 +183,7 @@ def test_coerce_int_rejects_non_integer_string() -> None:
         type="int",
         default=1,
     )
-    with pytest.raises(InvalidInput, match="int"):
+    with pytest.raises(UserError, match="int"):
         coerce_and_validate(entry, "abc")
 
 
@@ -210,7 +210,7 @@ def test_coerce_float_below_minimum_rejected() -> None:
         min_value=0.0,
         max_value=1.0,
     )
-    with pytest.raises(InvalidInput, match="below minimum"):
+    with pytest.raises(UserError, match="below minimum"):
         coerce_and_validate(entry, "-0.1")
 
 
@@ -246,7 +246,7 @@ def test_coerce_choice_rejects_unknown_value() -> None:
         default="alpha",
         choices=("alpha", "beta"),
     )
-    with pytest.raises(InvalidInput, match="not in choices"):
+    with pytest.raises(UserError, match="not in choices"):
         coerce_and_validate(entry, "gamma")
 
 
@@ -283,7 +283,7 @@ def test_coerce_multichoice_rejects_unknown_member() -> None:
         default=[],
         choices=("a", "b"),
     )
-    with pytest.raises(InvalidInput, match="not in choices"):
+    with pytest.raises(UserError, match="not in choices"):
         coerce_and_validate(entry, "a,zz")
 
 

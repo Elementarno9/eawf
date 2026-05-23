@@ -36,7 +36,7 @@ from typing import Any
 
 import orjson
 
-from eawf.cli.errors import NotFound, ValidationFailed
+from eawf.cli.errors import UserError, ValidationError
 from eawf.state.enums import StoreKind
 from eawf.state.models import State
 from eawf.state.urn import build as build_urn
@@ -65,11 +65,11 @@ def load_state(state_path: Path) -> State:
         ValidationFailed: when the on-disk payload is not a valid State.
     """
     if not state_path.exists():
-        raise NotFound(f"state file not found: {state_path}")
+        raise UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = orjson.loads(Path(state_path).read_bytes())
     report = validate_payload(payload, strict_optional=False)
     if report.state is None:
-        raise ValidationFailed(
+        raise ValidationError(
             "state.json failed schema validation: " + "; ".join(report.schema_errors[:3])
         )
     return report.state
@@ -91,7 +91,7 @@ def validate_or_raise(state: State) -> None:
             parts.append(f"schema: {err}")
         for v in report.violations:
             parts.append(f"{v.code} at {v.path}: {v.message}")
-        raise ValidationFailed("post-mutation validation failed: " + "; ".join(parts))
+        raise ValidationError("post-mutation validation failed: " + "; ".join(parts))
 
 
 def atomic_write_state(state_path: Path, state: State) -> None:

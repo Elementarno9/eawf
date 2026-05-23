@@ -37,7 +37,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 from eawf.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.render.envelope import SkillName
 from eawf.skills._common import (
@@ -212,7 +212,7 @@ class InitSkill(Skill):
                 payload={"error": str(exc)[:240]},
             )
             persisted_records.append(evt_id)
-            raise InvalidInput(f"invalid wizard answers: {exc}") from exc
+            raise UserError(f"invalid wizard answers: {exc}", kind="InvalidInput") from exc
 
         evt_id = emit_event(
             state_path=state_path,

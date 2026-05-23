@@ -28,11 +28,11 @@ def _load_state(state_path: Path) -> State:
     from eawf.validate.strict import validate_state
 
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = orjson.loads(state_path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
         )
     return report.state
@@ -48,7 +48,9 @@ def release_changelog(ctx: typer.Context) -> None:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(f"cannot read CHANGELOG.md: {exc}"), flags=flags)
+        cli_errors.emit_error(
+            cli_errors.UserError(f"cannot read CHANGELOG.md: {exc}", kind="NotFound"), flags=flags
+        )
         return
     lines = mine_unreleased_changelog(text)
     payload = {"entries": lines, "count": len(lines)}
@@ -98,11 +100,11 @@ def release_notes(
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(body, encoding="utf-8")
     except ReleaseNotesValidationError as exc:
-        cli_errors.emit_error(cli_errors.ValidationFailed(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
         return
     except OSError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"cannot write release notes: {exc}"),
+            cli_errors.UserError(f"cannot write release notes: {exc}", kind="InvalidInput"),
             flags=flags,
         )
         return

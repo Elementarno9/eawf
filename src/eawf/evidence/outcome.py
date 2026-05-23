@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
 from eawf.state.enums import OutcomeDirection, OutcomeStatus
@@ -32,7 +32,7 @@ def define_outcome(
     """Create a pending :class:`Outcome` in place and return the event envelope."""
     outcomes: dict[str, Outcome] = dict(state.outcomes or {})
     if outcome_id in outcomes:
-        raise InvalidInput(f"outcome {outcome_id!r} already exists")
+        raise UserError(f"outcome {outcome_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
     outcome = Outcome(
@@ -82,7 +82,7 @@ def set_outcome(
     """
     outcomes: dict[str, Outcome] = dict(state.outcomes or {})
     if outcome_id not in outcomes:
-        raise NotFound(f"outcome {outcome_id!r} not found")
+        raise UserError(f"outcome {outcome_id!r} not found", kind="NotFound")
 
     require_complete_audit(state, audit_id)
 

@@ -75,17 +75,21 @@ def phase_open_cmd(
 
     flags: GlobalFlags = ctx.obj
     if title is None:
-        cli_errors.emit_error(cli_errors.InvalidInput("--title required"), flags=flags)
+        cli_errors.emit_error(
+            cli_errors.UserError("--title required", kind="InvalidInput"), flags=flags
+        )
         return
     if (phase_id is None) == (not auto):
         cli_errors.emit_error(
-            cli_errors.InvalidInput("exactly one of <id> or --auto must be provided"),
+            cli_errors.UserError(
+                "exactly one of <id> or --auto must be provided", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if phase_id is not None and not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -125,7 +129,7 @@ def phase_close_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -144,11 +148,11 @@ def phase_close_cmd(
     try:
         checklist = _phase_prepare_close_checklist(preflight_state, phase_id=phase_id)
     except LifecycleError as exc:
-        cli_errors.emit_error(cli_errors.ValidationFailed(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
         return
     if checklist["blockers"]:
         cli_errors.emit_error(
-            cli_errors.ValidationFailed(f"phase close blocked: {'; '.join(checklist['blockers'])}"),
+            cli_errors.ValidationError(f"phase close blocked: {'; '.join(checklist['blockers'])}"),
             flags=flags,
         )
         return
@@ -220,8 +224,9 @@ def _phase_activate_run_git(args: list[str], *, cwd: Path) -> subprocess.Complet
             timeout=_PHASE_ACTIVATE_GIT_TIMEOUT,
         )
     except subprocess.TimeoutExpired as exc:
-        raise cli_errors.IntegrityViolation(
-            f"git command timed out after {_PHASE_ACTIVATE_GIT_TIMEOUT}s: {' '.join(args)}"
+        raise cli_errors.StateConflict(
+            f"git command timed out after {_PHASE_ACTIVATE_GIT_TIMEOUT}s: {' '.join(args)}",
+            kind="IntegrityViolation",
         ) from exc
 
 
@@ -235,8 +240,9 @@ def _phase_activate_dirty_lines(repo: Path) -> list[str]:
     res = _phase_activate_run_git(["git", "-C", str(repo), "status", "--porcelain"], cwd=repo)
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git status failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git status failed (rc={res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
     return [line for line in (res.stdout or "").splitlines() if line.strip()]
 
@@ -307,15 +313,16 @@ def _phase_activate_base_behind_count(repo: Path, *, default_branch: str) -> int
     )
     if count_res.returncode != 0:
         stderr = (count_res.stderr or "").strip()
-        raise cli_errors.IntegrityViolation(
-            f"git rev-list --count failed (rc={count_res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git rev-list --count failed (rc={count_res.returncode}): {stderr or 'unknown'}",
+            kind="IntegrityViolation",
         )
     stdout = (count_res.stdout or "").strip()
     try:
         return int(stdout)
     except ValueError as exc:
-        raise cli_errors.IntegrityViolation(
-            f"git rev-list --count returned non-int output: {stdout!r}"
+        raise cli_errors.StateConflict(
+            f"git rev-list --count returned non-int output: {stdout!r}", kind="IntegrityViolation"
         ) from exc
 
 
@@ -359,9 +366,10 @@ def _phase_activate_git_gates(
     dirty = _phase_activate_dirty_lines(repo)
     if dirty:
         logger.info(f"_phase_activate_git_gates dirty=True entries={len(dirty)} repo={repo}")
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"refusing to activate phase: worktree is dirty ({len(dirty)} entries); "
-            "commit, stash, or discard local changes first"
+            "commit, stash, or discard local changes first",
+            kind="InvalidInput",
         )
     if allow_stale:
         logger.info(
@@ -383,9 +391,10 @@ def _phase_activate_git_gates(
             f"_phase_activate_git_gates behind={behind} "
             f"default_branch={default_branch!r} repo={repo}"
         )
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"refusing to activate phase: HEAD is {behind} commits behind "
-            f"origin/{default_branch}; rebase first (or pass --allow-stale to override)"
+            f"origin/{default_branch}; rebase first (or pass --allow-stale to override)",
+            kind="InvalidInput",
         )
     logger.info(f"_phase_activate_git_gates ok behind=0 default_branch={default_branch!r}")
 
@@ -456,14 +465,14 @@ def phase_activate_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     default_branch = _phase_activate_project_default_branch(state_path)
     if default_branch is not None:
@@ -504,7 +513,7 @@ def phase_reopen_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -623,18 +632,18 @@ def phase_prepare_close_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {phase_id!r}"),
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}"),
+            cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -643,7 +652,9 @@ def phase_prepare_close_cmd(
         state = State.model_validate(payload)
     except PydValidationError as exc:
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(f"state at {state_path} fails schema validation: {exc}"),
+            cli_errors.StateConflict(
+                f"state at {state_path} fails schema validation: {exc}", kind="IntegrityViolation"
+            ),
             flags=flags,
         )
         return
@@ -653,7 +664,7 @@ def phase_prepare_close_cmd(
     try:
         checklist = _phase_prepare_close_checklist(state, phase_id=phase_id)
     except LifecycleError as exc:
-        cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
         return
     if not dry_run:
         version = _state_version(payload)

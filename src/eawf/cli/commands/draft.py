@@ -51,9 +51,9 @@ def _artifact_id(kind: str, slug: str) -> str:
 
 def _validate_kind_slug(kind: str, slug: str) -> None:
     if kind not in _PROMOTABLE_KINDS:
-        raise cli_errors.InvalidInput(f"unsupported draft kind: {kind!r}")
+        raise cli_errors.UserError(f"unsupported draft kind: {kind!r}", kind="InvalidInput")
     if not _SLUG_RE.match(slug):
-        raise cli_errors.InvalidInput(f"invalid slug: {slug!r}")
+        raise cli_errors.UserError(f"invalid slug: {slug!r}", kind="InvalidInput")
 
 
 def _artifact_kind_for(kind: str) -> str:
@@ -162,11 +162,15 @@ def draft_new(
         state_path = resolve_state_path(flags.workspace)
         path = _draft_path(_workspace_root(state_path), kind, slug)
         if path.exists() and not force:
-            raise cli_errors.InvalidInput(f"draft already exists: {kind}/{slug}")
+            raise cli_errors.UserError(f"draft already exists: {kind}/{slug}", kind="InvalidInput")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_new_draft_text(kind, slug, title), encoding="utf-8")
     except (FileNotFoundError, cli_errors.CliError) as exc:
-        err = exc if isinstance(exc, cli_errors.CliError) else cli_errors.NotFound(str(exc))
+        err = (
+            exc
+            if isinstance(exc, cli_errors.CliError)
+            else cli_errors.UserError(str(exc), kind="NotFound")
+        )
         cli_errors.emit_error(err, flags=flags)
         return
     emit_json_or_text({"path": str(path)}, f"draft new {kind}/{slug}", flags=flags)
@@ -224,7 +228,7 @@ def promote_draft(
         root = _workspace_root(state_path)
         src = _draft_path(root, kind, slug)
         if not src.exists():
-            raise cli_errors.NotFound(f"draft not found: {kind}/{slug}")
+            raise cli_errors.UserError(f"draft not found: {kind}/{slug}", kind="NotFound")
         text = src.read_text(encoding="utf-8")
         if scrub:
             text = rewrite_text(text)
@@ -237,13 +241,15 @@ def promote_draft(
             chassis_report = validate_markdown_artifact(text, require_template_sentinel=True)
             report_ok, report_errors = chassis_report.ok, chassis_report.errors
         if not report_ok:
-            raise cli_errors.ValidationFailed("; ".join(report_errors))
+            raise cli_errors.ValidationError("; ".join(report_errors))
         text = _strip_sentinel(text)
         if legacy_chassis:
             text = _strip_yaml_frontmatter(text)
         dest = _artifact_path(root, kind, slug)
         if dest.exists() and not force:
-            raise cli_errors.InvalidInput(f"artifact file already exists: {dest.name}")
+            raise cli_errors.UserError(
+                f"artifact file already exists: {dest.name}", kind="InvalidInput"
+            )
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(text, encoding="utf-8")
         artifact_id = _artifact_id(kind, slug)
@@ -253,7 +259,9 @@ def promote_draft(
         with state_transaction(state_path) as state:
             scope_id = state.project.code if state.project is not None else kind
             if artifact_id in state.artifacts and not force:
-                raise cli_errors.InvalidInput(f"artifact {artifact_id!r} already exists")
+                raise cli_errors.UserError(
+                    f"artifact {artifact_id!r} already exists", kind="InvalidInput"
+                )
             if artifact_id in state.artifacts and force:
                 artifact = state.artifacts[artifact_id]
                 now = datetime.now(UTC)
@@ -284,7 +292,11 @@ def promote_draft(
                 )
             append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
     except (FileNotFoundError, cli_errors.CliError) as exc:
-        err = exc if isinstance(exc, cli_errors.CliError) else cli_errors.NotFound(str(exc))
+        err = (
+            exc
+            if isinstance(exc, cli_errors.CliError)
+            else cli_errors.UserError(str(exc), kind="NotFound")
+        )
         cli_errors.emit_error(err, flags=flags)
         return
     emit_json_or_text(

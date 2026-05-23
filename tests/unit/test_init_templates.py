@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.cli.errors import InvalidInput, ValidationFailed
+from eawf.cli.errors import UserError, ValidationError
 from eawf.profiles.discovery import list_init_templates, load_init_template
 
 SHIPPED_TEMPLATES: tuple[str, ...] = (
@@ -144,14 +144,14 @@ def test_init_templates_include_project_goals_scaffold(template_name: str) -> No
 
 def test_load_init_template_rejects_unknown_name() -> None:
     """Unknown template names exit-3 with the canonical 'choose from' message."""
-    with pytest.raises(InvalidInput) as exc:
+    with pytest.raises(UserError) as exc:
         load_init_template("nonexistent-template")
     assert "unknown init template" in str(exc.value)
     # spike + hybrid are deferred but should still be rejected at the loader
     # surface (the deferral is "do not ship", not "silently allow").
-    with pytest.raises(InvalidInput):
+    with pytest.raises(UserError):
         load_init_template("spike")
-    with pytest.raises(InvalidInput):
+    with pytest.raises(UserError):
         load_init_template("hybrid")
 
 
@@ -168,7 +168,7 @@ def test_load_init_template_rejects_malformed_yaml(tmp_path: Any, monkeypatch: A
         raise yaml.YAMLError("synthetic parse failure")
 
     monkeypatch.setattr(discovery.yaml, "safe_load", _boom)
-    with pytest.raises(ValidationFailed) as exc:
+    with pytest.raises(ValidationError) as exc:
         load_init_template("research")
     assert "malformed YAML" in str(exc.value)
 
@@ -181,6 +181,6 @@ def test_load_init_template_rejects_non_mapping_top_level(monkeypatch: Any) -> N
         return ["not", "a", "mapping"]
 
     monkeypatch.setattr(discovery.yaml, "safe_load", _return_list)
-    with pytest.raises(ValidationFailed) as exc:
+    with pytest.raises(ValidationError) as exc:
         load_init_template("research")
     assert "top-level must be a mapping" in str(exc.value)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.errors import InvalidInput, ValidationFailed
+from eawf.cli.errors import UserError, ValidationError
 from eawf.profiles import discovery
 
 
@@ -80,7 +80,7 @@ def test_user_only_profile_loads(fake_home: Path) -> None:
 
 
 def test_unknown_id_raises_invalid_input(fake_home: Path) -> None:
-    with pytest.raises(InvalidInput):
+    with pytest.raises(UserError):
         discovery.load_profile_with_discovery("doesnotexist")
 
 
@@ -88,7 +88,7 @@ def test_malformed_yaml_raises_validation_failed(fake_home: Path) -> None:
     user_path = discovery.user_profiles_dir() / "broken.yaml"
     user_path.parent.mkdir(parents=True, exist_ok=True)
     user_path.write_text("name: broken\nversion: [unterminated")
-    with pytest.raises(ValidationFailed, match="malformed YAML"):
+    with pytest.raises(ValidationError, match="malformed YAML"):
         discovery.load_profile_with_discovery("broken")
 
 
@@ -96,7 +96,7 @@ def test_schema_violation_raises_validation_failed(fake_home: Path) -> None:
     user_path = discovery.user_profiles_dir() / "bad-schema.yaml"
     user_path.parent.mkdir(parents=True, exist_ok=True)
     user_path.write_text("name: bad-schema\nbogus_extra_field: true\n")
-    with pytest.raises(ValidationFailed, match="schema rejected"):
+    with pytest.raises(ValidationError, match="schema rejected"):
         discovery.load_profile_with_discovery("bad-schema")
 
 

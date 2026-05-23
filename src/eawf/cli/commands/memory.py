@@ -82,15 +82,15 @@ def _load_state(state_path: Path) -> State:
     from eawf.validate.strict import validate_state
 
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = orjson.loads(state_path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state validation failed: {'; '.join(report.schema_errors)}"
         )
     if report.violations:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state invariant violations: {[v.code for v in report.violations]}"
         )
     return report.state
@@ -101,8 +101,9 @@ def _resolve_confidence(raw: str | None) -> Confidence:
         return Confidence.MEDIUM
     key = raw.strip().lower()
     if key not in _CONFIDENCE_FROM_FLAG:
-        raise cli_errors.InvalidInput(
-            f"--confidence must be one of h/m/l (or high/medium/low); got {raw!r}"
+        raise cli_errors.UserError(
+            f"--confidence must be one of h/m/l (or high/medium/low); got {raw!r}",
+            kind="InvalidInput",
         )
     return _CONFIDENCE_FROM_FLAG[key]
 
@@ -113,8 +114,9 @@ def _resolve_status(raw: str | None) -> MemoryStatus | None:
     try:
         return MemoryStatus(raw.strip().lower())
     except ValueError as exc:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"--status must be one of {[s.value for s in MemoryStatus]}; got {raw!r}",
+            kind="InvalidInput",
         ) from exc
 
 
@@ -178,7 +180,7 @@ def memory_add(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("promote")
@@ -233,7 +235,9 @@ def memory_promote(
     target = to.strip().lower()
     if target not in {"memory", "artifact"}:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"--to must be one of memory|artifact; got {to!r}"),
+            cli_errors.UserError(
+                f"--to must be one of memory|artifact; got {to!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -255,13 +259,16 @@ def memory_promote(
         try:
             source_kind_enum = StoreKind(source_kind)
         except ValueError as exc:
-            raise cli_errors.InvalidInput(
-                f"--source-kind must be one of {[k.value for k in StoreKind]}; got {source_kind!r}"
+            raise cli_errors.UserError(
+                f"--source-kind must be one of {[k.value for k in StoreKind]}; got {source_kind!r}",
+                kind="InvalidInput",
             ) from exc
         source_path = store_path(state_path, source_kind_enum)
         with state_transaction(state_path) as state:
             if session not in state.agent_sessions:
-                raise cli_errors.NotFound(f"session {session!r} not in agent_sessions")
+                raise cli_errors.UserError(
+                    f"session {session!r} not in agent_sessions", kind="NotFound"
+                )
             try:
                 result = promote_record(
                     state=state,
@@ -272,7 +279,7 @@ def memory_promote(
                     confidence=conf,
                 )
             except PromotionError as exc:
-                raise cli_errors.NotFound(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="NotFound") from exc
         append_event(
             events_path=events_path,
             event_id=f"{result.record.summary.id}-promote",
@@ -298,7 +305,7 @@ def memory_promote(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 def _memory_promote_to_artifact(
@@ -330,12 +337,14 @@ def _memory_promote_to_artifact(
     flags: GlobalFlags = ctx.obj
     try:
         if source_kind.strip().lower() != StoreKind.MEMORY.value:
-            raise cli_errors.InvalidInput(
-                f"--to artifact requires --source-kind memory; got {source_kind!r}"
+            raise cli_errors.UserError(
+                f"--to artifact requires --source-kind memory; got {source_kind!r}",
+                kind="InvalidInput",
             )
         if artifact_kind.strip().lower() != "decision":
-            raise cli_errors.InvalidInput(
-                f"--artifact-kind must be 'decision' in v0.1; got {artifact_kind!r}"
+            raise cli_errors.UserError(
+                f"--artifact-kind must be 'decision' in v0.1; got {artifact_kind!r}",
+                kind="InvalidInput",
             )
         state_path = resolve_state_path(flags.workspace)
         memory_path = _memory_path_for(state_path)
@@ -343,7 +352,9 @@ def _memory_promote_to_artifact(
         events_path = _events_path_for(state_path)
         with state_transaction(state_path) as state:
             if session not in state.agent_sessions:
-                raise cli_errors.NotFound(f"session {session!r} not in agent_sessions")
+                raise cli_errors.UserError(
+                    f"session {session!r} not in agent_sessions", kind="NotFound"
+                )
             try:
                 result = promote_to_artifact(
                     state=state,
@@ -356,8 +367,8 @@ def _memory_promote_to_artifact(
             except PromotionError as exc:
                 msg = str(exc)
                 if "not in state.memory_index" in msg or "not found" in msg:
-                    raise cli_errors.NotFound(msg) from exc
-                raise cli_errors.InvalidInput(msg) from exc
+                    raise cli_errors.UserError(msg, kind="NotFound") from exc
+                raise cli_errors.UserError(msg, kind="InvalidInput") from exc
         append_event(
             events_path=events_path,
             event_id=f"{result.artifact_id}-from-{source}",
@@ -396,7 +407,7 @@ def _memory_promote_to_artifact(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("list")
@@ -439,7 +450,7 @@ def memory_list(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("compact")
@@ -494,7 +505,7 @@ def memory_compact(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("render-context")
@@ -537,13 +548,17 @@ def memory_render_context(
     fmt_norm = fmt.strip().lower()
     if fmt_norm not in {"markdown", "json"}:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"--format must be markdown|json; got {fmt!r}"),
+            cli_errors.UserError(
+                f"--format must be markdown|json; got {fmt!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if max_entries is not None and max_entries < 0:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"--max-entries must be >= 0; got {max_entries}"),
+            cli_errors.UserError(
+                f"--max-entries must be >= 0; got {max_entries}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -580,7 +595,7 @@ def memory_render_context(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 _ISO_DURATION_RE: re.Pattern[str] = re.compile(
@@ -603,24 +618,26 @@ def _parse_age_days(raw: str | int) -> int:
     """
     if isinstance(raw, int):
         if raw < 0:
-            raise cli_errors.InvalidInput(f"--older-than must be >= 0; got {raw}")
+            raise cli_errors.UserError(f"--older-than must be >= 0; got {raw}", kind="InvalidInput")
         return raw
     text = raw.strip()
     if not text:
-        raise cli_errors.InvalidInput("--older-than must not be empty")
+        raise cli_errors.UserError("--older-than must not be empty", kind="InvalidInput")
     if text.isdigit():
         return int(text)
     match = _ISO_DURATION_RE.match(text)
     if match is None:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"--older-than {text!r} is not a valid ISO 8601 duration "
-            "(expected like P30D, P3M, P1Y) or integer day count"
+            "(expected like P30D, P3M, P1Y) or integer day count",
+            kind="InvalidInput",
         )
     parts = {k: int(v) if v is not None else 0 for k, v in match.groupdict().items()}
     days = parts["days"] + 7 * parts["weeks"] + 30 * parts["months"] + 365 * parts["years"]
     if days <= 0 and text != "P0D":
-        raise cli_errors.InvalidInput(
-            f"--older-than {text!r} resolved to 0 days; specify a positive duration"
+        raise cli_errors.UserError(
+            f"--older-than {text!r} resolved to 0 days; specify a positive duration",
+            kind="InvalidInput",
         )
     return days
 
@@ -669,13 +686,15 @@ def memory_prune(
         try:
             status_filter = MemoryStatus(status.strip().lower())
         except ValueError as exc:
-            raise cli_errors.InvalidInput(
-                f"--status must be one of {[s.value for s in MemoryStatus]}; got {status!r}"
+            raise cli_errors.UserError(
+                f"--status must be one of {[s.value for s in MemoryStatus]}; got {status!r}",
+                kind="InvalidInput",
             ) from exc
         if status_filter == MemoryStatus.ACTIVE and not flags.no_input:
-            raise cli_errors.UserDeclined(
+            raise cli_errors.UserError(
                 "--status active requires --no-input (or an explicit confirm) — "
-                "pruning live entries is irreversible without compaction."
+                "pruning live entries is irreversible without compaction.",
+                kind="UserDeclined",
             )
         state_path = resolve_state_path(flags.workspace)
         memory_path = _memory_path_for(state_path)
@@ -695,7 +714,7 @@ def memory_prune(
                     dry_run=True,
                 )
             except PruneError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             payload = {
                 "pruned_ids": result.pruned_ids,
                 "skipped_ids": result.skipped_ids,
@@ -722,7 +741,7 @@ def memory_prune(
                     dry_run=False,
                 )
             except PruneError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
         append_event(
             events_path=events_path,
             event_id=f"memory-prune-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
@@ -760,7 +779,7 @@ def memory_prune(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("gc")
@@ -789,7 +808,9 @@ def memory_gc(
     flags: GlobalFlags = ctx.obj
     try:
         if threshold_days < 0:
-            raise cli_errors.InvalidInput(f"--threshold-days must be >= 0; got {threshold_days}")
+            raise cli_errors.UserError(
+                f"--threshold-days must be >= 0; got {threshold_days}", kind="InvalidInput"
+            )
         state_path = resolve_state_path(flags.workspace)
         memory_path = _memory_path_for(state_path)
         events_path = _events_path_for(state_path)
@@ -804,7 +825,7 @@ def memory_gc(
                     dry_run=True,
                 )
             except GcError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             payload = {
                 "archived_ids": report.archived_ids,
                 "skipped_ids": report.skipped_ids,
@@ -827,7 +848,7 @@ def memory_gc(
                     dry_run=False,
                 )
             except GcError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
         append_event(
             events_path=events_path,
             event_id=f"memory-gc-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
@@ -853,7 +874,7 @@ def memory_gc(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("tier")
@@ -878,8 +899,9 @@ def memory_tier(
         try:
             target_tier = MemoryTier(tier.strip().lower())
         except ValueError as exc:
-            raise cli_errors.InvalidInput(
-                f"--tier must be one of {[t.value for t in MemoryTier]}; got {tier!r}"
+            raise cli_errors.UserError(
+                f"--tier must be one of {[t.value for t in MemoryTier]}; got {tier!r}",
+                kind="InvalidInput",
             ) from exc
         state_path = resolve_state_path(flags.workspace)
         events_path = _events_path_for(state_path)
@@ -887,7 +909,7 @@ def memory_tier(
             index = state.memory_index or {}
             summary = index.get(mem_id)
             if summary is None:
-                raise cli_errors.NotFound(f"memory entry not found: {mem_id}")
+                raise cli_errors.UserError(f"memory entry not found: {mem_id}", kind="NotFound")
             prior = summary.tier
             index[mem_id] = summary.model_copy(update={"tier": target_tier})
             state.memory_index = index
@@ -915,7 +937,7 @@ def memory_tier(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("view")
@@ -937,10 +959,13 @@ def memory_view(
         state = _load_state(state_path)
         summary = (state.memory_index or {}).get(mem_id)
         if summary is None:
-            raise cli_errors.NotFound(f"memory entry {mem_id!r} not in state.memory_index")
+            raise cli_errors.UserError(
+                f"memory entry {mem_id!r} not in state.memory_index", kind="NotFound"
+            )
         if scope is not None and summary.scope_id != scope:
-            raise cli_errors.InvalidInput(
-                f"scope {scope!r} does not match entry scope {summary.scope_id!r}"
+            raise cli_errors.UserError(
+                f"scope {scope!r} does not match entry scope {summary.scope_id!r}",
+                kind="InvalidInput",
             )
         env = find_envelope(memory_path, mem_id)
         body = env.payload.get("body", "") if env is not None else ""
@@ -963,7 +988,7 @@ def memory_view(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @memory_app.command("stale")
@@ -1010,7 +1035,7 @@ def memory_stale(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 # Re-export to keep the linter quiet about the imported helpers used only above.

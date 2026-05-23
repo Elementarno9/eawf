@@ -103,11 +103,15 @@ def _define_goal_in_thread(
             )
             _io.append_jsonl(_io.store_paths(state_path)[StoreKind.EVENT], event)
         return 0
-    except cli_errors.LockConflict:
+    except cli_errors.StateConflict as exc:
+        if exc.kind != "LockConflict":
+            raise
         return 5
-    except cli_errors.InvalidInput:
+    except cli_errors.UserError as exc:
+        if exc.kind != "InvalidInput":
+            raise
         return 3
-    except cli_errors.ValidationFailed:
+    except cli_errors.ValidationError:
         return 4
 
 

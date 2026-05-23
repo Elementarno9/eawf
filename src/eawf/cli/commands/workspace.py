@@ -162,7 +162,7 @@ def workspace_init_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid workspace code: {code!r}"),
+            cli_errors.UserError(f"invalid workspace code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -170,8 +170,9 @@ def workspace_init_cmd(
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"could not resolve state path; pass -w/--workspace or set EA_STATE: {exc}"
+            cli_errors.UserError(
+                f"could not resolve state path; pass -w/--workspace or set EA_STATE: {exc}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -180,8 +181,9 @@ def workspace_init_cmd(
         with portalock.acquire(state_path, timeout=5.0):
             if state_path.exists() and not force:
                 cli_errors.emit_error(
-                    cli_errors.InvalidInput(
-                        f"state already exists at {state_path}; pass --force to overwrite"
+                    cli_errors.UserError(
+                        f"state already exists at {state_path}; pass --force to overwrite",
+                        kind="InvalidInput",
                     ),
                     flags=flags,
                 )
@@ -194,14 +196,14 @@ def workspace_init_cmd(
 
                 report = _validate_state(payload, strict_optional=False)
                 if report.state is None:
-                    raise cli_errors.ValidationFailed(
+                    raise cli_errors.ValidationError(
                         "workspace init payload invalid: " + "; ".join(report.schema_errors[:3])
                     )
             except PydValidationError as exc:
-                raise cli_errors.ValidationFailed(str(exc)) from exc
+                raise cli_errors.ValidationError(str(exc)) from exc
             atomic_write_json_locked(state_path, payload)
     except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
@@ -248,14 +250,14 @@ def workspace_add_repo_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid repo code: {code!r}"),
+            cli_errors.UserError(f"invalid repo code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
 
     repo_path = Path(path).resolve()
@@ -264,8 +266,9 @@ def workspace_add_repo_cmd(
     effective_title = title or derived_title or code
     if not is_project_code(effective_project_code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"invalid project code on link: {effective_project_code!r}; pass --project-code"
+            cli_errors.UserError(
+                f"invalid project code on link: {effective_project_code!r}; pass --project-code",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -274,13 +277,15 @@ def workspace_add_repo_cmd(
     try:
         with state_transaction(state_path) as state:
             if state.workspace is None:
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"state at {state_path} has no workspace section; "
-                    "run `eawf workspace init` first"
+                    "run `eawf workspace init` first",
+                    kind="InvalidInput",
                 )
             if code in state.workspace.repos:
-                raise cli_errors.InvalidInput(
-                    f"repo {code!r} already linked to workspace {state.workspace.code!r}"
+                raise cli_errors.UserError(
+                    f"repo {code!r} already linked to workspace {state.workspace.code!r}",
+                    kind="InvalidInput",
                 )
             ref = WorkspaceRepoRef(
                 code=code,
@@ -336,22 +341,25 @@ def workspace_remove_repo_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid repo code: {code!r}"),
+            cli_errors.UserError(f"invalid repo code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     try:
         with state_transaction(state_path) as state:
             if state.workspace is None:
-                raise cli_errors.InvalidInput(f"state at {state_path} has no workspace section")
+                raise cli_errors.UserError(
+                    f"state at {state_path} has no workspace section", kind="InvalidInput"
+                )
             if code not in state.workspace.repos:
-                raise cli_errors.NotFound(
-                    f"repo {code!r} not linked to workspace {state.workspace.code!r}"
+                raise cli_errors.UserError(
+                    f"repo {code!r} not linked to workspace {state.workspace.code!r}",
+                    kind="NotFound",
                 )
             new_repos = {k: v for k, v in state.workspace.repos.items() if k != code}
             new_current = (
@@ -393,11 +401,11 @@ def workspace_validate_cmd(ctx: typer.Context) -> None:
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}"),
+            cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -405,7 +413,9 @@ def workspace_validate_cmd(ctx: typer.Context) -> None:
     workspace = payload.get("workspace")
     if not isinstance(workspace, dict):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"state at {state_path} has no workspace section"),
+            cli_errors.UserError(
+                f"state at {state_path} has no workspace section", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -447,11 +457,11 @@ def workspace_status_cmd(ctx: typer.Context) -> None:
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}"),
+            cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -459,7 +469,9 @@ def workspace_status_cmd(ctx: typer.Context) -> None:
     workspace = payload.get("workspace")
     if not isinstance(workspace, dict):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"state at {state_path} has no workspace section"),
+            cli_errors.UserError(
+                f"state at {state_path} has no workspace section", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -556,14 +568,15 @@ def workspace_registry_list_cmd(
         msg = str(exc)
         if "not found" in msg:
             cli_errors.emit_error(
-                cli_errors.NotFound(
+                cli_errors.UserError(
                     "registry not found; run `eawf init` or "
-                    f"`eawf workspace add-repo` first ({exc})"
+                    f"`eawf workspace add-repo` first ({exc})",
+                    kind="NotFound",
                 ),
                 flags=flags,
             )
         else:
-            cli_errors.emit_error(cli_errors.InvalidInput(msg), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(msg, kind="InvalidInput"), flags=flags)
         return
     mtime = registry_mtime(path=registry_path)
     rows: list[dict[str, Any]] = []

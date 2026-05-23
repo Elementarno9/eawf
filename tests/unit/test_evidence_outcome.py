@@ -82,7 +82,7 @@ def test_define_outcome_duplicate_raises(tmp_path: Path) -> None:
         threshold=1.0,
         direction=OutcomeDirection.MIN,
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         outcome.define_outcome(
             state,
             outcome_id="OUT-001",
@@ -96,7 +96,7 @@ def test_define_outcome_duplicate_raises(tmp_path: Path) -> None:
 def test_set_outcome_unknown_outcome_raises_not_found(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="OUT-999"):
+    with pytest.raises(cli_errors.UserError, match="OUT-999"):
         outcome.set_outcome(
             state,
             outcome_id="OUT-999",
@@ -117,7 +117,7 @@ def test_set_outcome_with_unknown_audit_raises_validation(tmp_path: Path) -> Non
         threshold=1.0,
         direction=OutcomeDirection.MIN,
     )
-    with pytest.raises(cli_errors.ValidationFailed, match="UNKNOWN"):
+    with pytest.raises(cli_errors.ValidationError, match="UNKNOWN"):
         outcome.set_outcome(
             state,
             outcome_id="OUT-001",
@@ -154,7 +154,7 @@ def test_set_outcome_with_pending_audit_raises_validation(tmp_path: Path) -> Non
         threshold=1.0,
         direction=OutcomeDirection.MIN,
     )
-    with pytest.raises(cli_errors.ValidationFailed, match="NOT_COMPLETE"):
+    with pytest.raises(cli_errors.ValidationError, match="NOT_COMPLETE"):
         outcome.set_outcome(
             state,
             outcome_id="OUT-001",

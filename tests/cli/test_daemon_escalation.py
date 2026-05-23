@@ -302,7 +302,7 @@ def test_state_transaction_rejects_when_daemonless_flag_set(
     _build_state(state_path)
     _mutation.set_daemonless_flag(True)
     with (
-        pytest.raises(cli_errors.InvalidInput) as excinfo,
+        pytest.raises(cli_errors.UserError) as excinfo,
         _mutation.state_transaction(state_path),
     ):
         pytest.fail("mutating transaction must reject before yielding")
@@ -343,7 +343,7 @@ def test_state_transaction_rejects_before_touching_missing_file(
     missing = tmp_path / ".ea" / "state.json"  # never created
     _mutation.set_daemonless_flag(True)
     with (
-        pytest.raises(cli_errors.InvalidInput),
+        pytest.raises(cli_errors.UserError),
         _mutation.state_transaction(missing),
     ):
         pytest.fail("must reject on the flag before the file-exists check")

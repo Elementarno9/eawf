@@ -85,9 +85,10 @@ def _parse_profiles_csv(csv: str | None) -> list[str] | None:
         return None
     parts = [p.strip() for p in csv.split(",")]
     if any(not p for p in parts):
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"--profiles got an empty entry: {csv!r}; comma-separate "
-            "without trailing/leading commas"
+            "without trailing/leading commas",
+            kind="InvalidInput",
         )
     seen: list[str] = []
     for p in parts:
@@ -141,8 +142,9 @@ def _resolve_profiles_and_template(
         if present
     ]
     if len(chosen) > 1:
-        raise cli_errors.InvalidInput(
-            f"profile-selection flags are mutually exclusive: pass at most one of {chosen}"
+        raise cli_errors.UserError(
+            f"profile-selection flags are mutually exclusive: pass at most one of {chosen}",
+            kind="InvalidInput",
         )
 
     if template is not None:
@@ -152,14 +154,16 @@ def _resolve_profiles_and_template(
             raise
         template_profiles_section = payload.get("profiles", {})
         if not isinstance(template_profiles_section, dict):
-            raise cli_errors.InvalidInput(
-                f"init template {template!r}: 'profiles' section must be a mapping"
+            raise cli_errors.UserError(
+                f"init template {template!r}: 'profiles' section must be a mapping",
+                kind="InvalidInput",
             )
         enabled = template_profiles_section.get("enabled", [])
         if not isinstance(enabled, list) or not enabled:
-            raise cli_errors.InvalidInput(
+            raise cli_errors.UserError(
                 f"init template {template!r}: 'profiles.enabled' must be a "
-                f"non-empty list of profile names"
+                f"non-empty list of profile names",
+                kind="InvalidInput",
             )
         return list(enabled), payload
 
@@ -387,8 +391,9 @@ def init_cmd(
     if flags.no_input:
         if not project_code:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(
-                    "--no-input requires --project-code; pass --project-code DEMO"
+                cli_errors.UserError(
+                    "--no-input requires --project-code; pass --project-code DEMO",
+                    kind="InvalidInput",
                 ),
                 flags=flags,
             )
@@ -410,7 +415,7 @@ def init_cmd(
             )
         except ValidationError as exc:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(_friendly_validation_message(exc)),
+                cli_errors.UserError(_friendly_validation_message(exc), kind="InvalidInput"),
                 flags=flags,
             )
             return
@@ -420,7 +425,9 @@ def init_cmd(
             cli_errors.emit_error(exc, flags=flags)
             return
         except portalock.LockTimeout as exc:
-            cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
+            cli_errors.emit_error(
+                cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags
+            )
             return
         payload = _result_to_payload(result)
         text = (
@@ -439,7 +446,7 @@ def init_cmd(
         result = run_wizard_interactive(target_dir, force=force)
     except ValidationError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(_friendly_validation_message(exc)),
+            cli_errors.UserError(_friendly_validation_message(exc), kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -447,7 +454,7 @@ def init_cmd(
         cli_errors.emit_error(exc, flags=flags)
         return
     except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     payload = _result_to_payload(result)
     text = (

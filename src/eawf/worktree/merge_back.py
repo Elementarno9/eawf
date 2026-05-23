@@ -78,25 +78,27 @@ class MergeBackResult:
 
 def _validate_strategy(strategy: str) -> None:
     if strategy not in _VALID_STRATEGIES:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"unknown merge-back strategy: {strategy!r} "
-            f"(expected one of {sorted(_VALID_STRATEGIES)})"
+            f"(expected one of {sorted(_VALID_STRATEGIES)})",
+            kind="InvalidInput",
         )
 
 
 def _find_record_for_wave(state: State, wave_id: str) -> WorktreeRecord:
     """Return the active :class:`WorktreeRecord` for *wave_id*."""
     if state.worktrees is None:
-        raise cli_errors.NotFound(f"no worktrees recorded for wave {wave_id}")
+        raise cli_errors.UserError(f"no worktrees recorded for wave {wave_id}", kind="NotFound")
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise cli_errors.NotFound(f"unknown wave: {wave_id}")
+        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
     if wave.worktree_id is None:
-        raise cli_errors.NotFound(f"wave {wave_id} has no worktree id stamped")
+        raise cli_errors.UserError(f"wave {wave_id} has no worktree id stamped", kind="NotFound")
     record = state.worktrees.get(wave.worktree_id)
     if record is None:
-        raise cli_errors.NotFound(
-            f"wave {wave_id} references worktree {wave.worktree_id!r} which is not in state"
+        raise cli_errors.UserError(
+            f"wave {wave_id} references worktree {wave.worktree_id!r} which is not in state",
+            kind="NotFound",
         )
     return record
 
@@ -158,7 +160,7 @@ def _cherry_pick_loop(
             picked.append(applied)
             continue
         files = _conflict_files(repo_root)
-        logger.info(f"_cherry_pick_loop conflict at {sha}: files={files} detail={detail!r}")
+        logger.info(f"_cherry_pick_loop conflict sha={sha} files={files} detail={detail!r}")
         return MergeBackResult(
             record=record,
             strategy=STRATEGY_CHERRY_PICK,
@@ -192,7 +194,7 @@ def _rebase_then_ff(
     clean, detail = git.rebase(worktree_path, target=target_branch)
     if not clean:
         files = _conflict_files(worktree_path)
-        logger.info(f"_rebase_then_ff conflict: files={files} detail={detail!r}")
+        logger.info(f"_rebase_then_ff conflict files={files} detail={detail!r}")
         return MergeBackResult(
             record=record,
             strategy=STRATEGY_REBASE_THEN_FF,
@@ -293,9 +295,10 @@ def _continue_resume(
             conflict_commit=None,
         )
 
-    raise cli_errors.IntegrityViolation(
+    raise cli_errors.StateConflict(
         "no in-progress cherry-pick or rebase found; record is CONFLICTED but "
-        "the on-disk state has been cleared (was --abort run manually?)"
+        "the on-disk state has been cleared (was --abort run manually?)",
+        kind="IntegrityViolation",
     )
 
 
@@ -325,7 +328,9 @@ def merge_back(
         A :class:`MergeBackResult` describing the outcome.
     """
     if continue_ and abort:
-        raise cli_errors.InvalidInput("--continue and --abort are mutually exclusive")
+        raise cli_errors.UserError(
+            "--continue and --abort are mutually exclusive", kind="InvalidInput"
+        )
     _validate_strategy(strategy)
     record = _find_record_for_wave(state, wave_id)
     chosen_target = target or record.base_branch
@@ -356,8 +361,9 @@ def merge_back(
 
     if continue_:
         if record.status != WorktreeStatus.CONFLICTED:
-            raise cli_errors.InvalidInput(
-                f"--continue requires record status CONFLICTED; got {record.status.value}"
+            raise cli_errors.UserError(
+                f"--continue requires record status CONFLICTED; got {record.status.value}",
+                kind="InvalidInput",
             )
         result = _continue_resume(repo_root, record=record, target_branch=chosen_target)
     elif strategy == STRATEGY_CHERRY_PICK:

@@ -34,11 +34,11 @@ def _load_state(state_path: Path) -> State:
     from eawf.validate.strict import validate_state
 
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = orjson.loads(state_path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
         )
     return report.state
@@ -50,22 +50,25 @@ def _parse_role(raw: str | None) -> AgentSessionRole | None:
     try:
         return AgentSessionRole(raw.strip().lower())
     except ValueError as exc:
-        raise cli_errors.InvalidInput(
-            f"--role must be one of {[role.value for role in AgentSessionRole]}; got {raw!r}"
+        raise cli_errors.UserError(
+            f"--role must be one of {[role.value for role in AgentSessionRole]}; got {raw!r}",
+            kind="InvalidInput",
         ) from exc
 
 
 def _body_from_json(raw: str | None) -> dict[str, Any]:
     text = raw if raw is not None else sys.stdin.read()
     if not text.strip():
-        raise cli_errors.InvalidInput("--body-json or stdin JSON body is required")
+        raise cli_errors.UserError(
+            "--body-json or stdin JSON body is required", kind="InvalidInput"
+        )
     try:
         decoded = orjson.loads(text)
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.InvalidInput(f"body JSON is invalid: {exc}") from exc
+        raise cli_errors.UserError(f"body JSON is invalid: {exc}", kind="InvalidInput") from exc
     if not isinstance(decoded, dict):
-        raise cli_errors.InvalidInput(
-            f"body JSON must decode to an object; got {type(decoded).__name__}"
+        raise cli_errors.UserError(
+            f"body JSON must decode to an object; got {type(decoded).__name__}", kind="InvalidInput"
         )
     return decoded
 
@@ -114,15 +117,17 @@ def add_report(
         )
     except ValidationError as err:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"agent report body rejected: {err.errors()[0]['msg']}"),
+            cli_errors.UserError(
+                f"agent report body rejected: {err.errors()[0]['msg']}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     except KeyError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
         return
     except (AgentReportRoleMismatchError, AgentReportScrubError) as err:
-        cli_errors.emit_error(cli_errors.ValidationFailed(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.ValidationError(str(err)), flags=flags)
         return
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
@@ -174,7 +179,7 @@ def show_report(
         state_path = resolve_state_path(flags.workspace)
         row = find_agent_report(state_path, report_id, role=_parse_role(role))
         if row is None:
-            raise cli_errors.NotFound(f"agent report not found: {report_id!r}")
+            raise cli_errors.UserError(f"agent report not found: {report_id!r}", kind="NotFound")
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

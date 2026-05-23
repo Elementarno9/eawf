@@ -131,7 +131,9 @@ def audit_run(
 
     try:
         if checks is not None and fixture is not None:
-            raise cli_errors.InvalidInput("audit run accepts --fixture OR --checks, not both")
+            raise cli_errors.UserError(
+                "audit run accepts --fixture OR --checks, not both", kind="InvalidInput"
+            )
 
         check_results_payload: list[dict[str, Any]] | None = None
         if checks is not None:
@@ -301,7 +303,7 @@ def audit_show(
     if md:
         if flags.json_output:
             cli_errors.emit_error(
-                cli_errors.InvalidInput("--md and --json are contradictory"),
+                cli_errors.UserError("--md and --json are contradictory", kind="InvalidInput"),
                 flags=flags,
             )
             return
@@ -389,7 +391,9 @@ def backlog_add(
             resolved_scope = scope_id
             if resolved_scope is None:
                 if state.project is None:
-                    raise cli_errors.InvalidInput("scope_id required when state.project is unset")
+                    raise cli_errors.UserError(
+                        "scope_id required when state.project is unset", kind="InvalidInput"
+                    )
                 resolved_scope = state.project.code
             event = backlog_evi.add_backlog(
                 state,

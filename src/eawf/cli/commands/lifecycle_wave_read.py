@@ -224,14 +224,16 @@ def wave_blocks_rebuild_cmd(
     flags: GlobalFlags = ctx.obj
     if not apply_all:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("pass --all to rebuild every wave's blocks index"),
+            cli_errors.UserError(
+                "pass --all to rebuild every wave's blocks index", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
 
     rewritten: list[dict[str, Any]] = []
@@ -353,14 +355,15 @@ def wave_dispatch_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if runtime not in DISPATCH_RUNTIMES:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}"
+            cli_errors.UserError(
+                f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -371,14 +374,14 @@ def wave_dispatch_cmd(
     state, flags = loaded
     if wave_id not in state.waves:
         cli_errors.emit_error(
-            cli_errors.NotFound(f"unknown wave: {wave_id}"),
+            cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound"),
             flags=flags,
         )
         return
     try:
         dispatch_envelope = render_dispatch_envelope(state, wave_id, runtime)
     except KeyError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     prompt = dispatch_envelope.prompt
     wave = state.waves[wave_id]
@@ -487,7 +490,7 @@ def wave_dispatch_batch_cmd(
         try:
             prompt = render_wave_prompt(state, wid)
         except KeyError as exc:
-            cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
             return
         prompts.append({"wave": wid, "prompt": prompt})
         text_chunks.append(f"---- WAVE {wid} ----\n{prompt}")
@@ -511,13 +514,15 @@ def wave_budget_set_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if tokens < 0:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"--tokens must be non-negative; got {tokens}"),
+            cli_errors.UserError(
+                f"--tokens must be non-negative; got {tokens}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -526,7 +531,7 @@ def wave_budget_set_cmd(
         try:
             budget_set(state, wave_id, tokens)
         except KeyError as exc:
-            raise cli_errors.NotFound(str(exc)) from exc
+            raise cli_errors.UserError(str(exc), kind="NotFound") from exc
 
     _run_mutation(
         ctx,
@@ -563,13 +568,15 @@ def wave_budget_consume_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if tokens < 0:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"--tokens must be non-negative; got {tokens}"),
+            cli_errors.UserError(
+                f"--tokens must be non-negative; got {tokens}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -579,7 +586,7 @@ def wave_budget_consume_cmd(
     def _mutator(state: State) -> None:
         wave_before = state.waves.get(wave_id)
         if wave_before is None:
-            raise cli_errors.NotFound(f"unknown wave {wave_id!r}")
+            raise cli_errors.UserError(f"unknown wave {wave_id!r}", kind="NotFound")
         tokens_before = wave_before.tokens_consumed
         # ``budget_record`` raises ``KeyError`` only when *wave_id* is
         # absent — the pre-check above already filtered that, so no
@@ -589,7 +596,7 @@ def wave_budget_consume_cmd(
         result["tokens_consumed"] = wave.tokens_consumed
         result["token_budget"] = wave.token_budget
         if tag == BLOCK_TAG:
-            raise cli_errors.ValidationFailed(
+            raise cli_errors.ValidationError(
                 f"wave {wave_id!r} would be over token budget "
                 f"(would consume {tokens_before}+{tokens}={wave.tokens_consumed}, "
                 f"budget {wave.token_budget}); "
@@ -639,18 +646,18 @@ def wave_budget_show_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}"),
+            cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -659,13 +666,13 @@ def wave_budget_show_cmd(
         try:
             state = State.model_validate(payload)
         except PydValidationError as exc:
-            raise cli_errors.IntegrityViolation(
-                f"state at {state_path} fails schema validation: {exc}"
+            raise cli_errors.StateConflict(
+                f"state at {state_path} fails schema validation: {exc}", kind="IntegrityViolation"
             ) from exc
         try:
             classification = budget_check(state, wave_id)
         except KeyError as exc:
-            raise cli_errors.NotFound(str(exc)) from exc
+            raise cli_errors.UserError(str(exc), kind="NotFound") from exc
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

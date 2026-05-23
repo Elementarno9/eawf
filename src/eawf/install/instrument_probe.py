@@ -57,7 +57,7 @@ from typing import Literal
 import orjson
 from pydantic import BaseModel, ConfigDict
 
-from eawf.cli.errors import InstrumentMissing
+from eawf.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
 
@@ -264,8 +264,8 @@ def _read_cache(cache_path: Path) -> ProbeReport | None:
         return None
     if report.probe_version != PROBE_VERSION:
         logger.info(
-            f"_read_cache: probe_version {report.probe_version} != current "
-            f"{PROBE_VERSION}; treating cache as stale."
+            f"_read_cache version-mismatch probe_version={report.probe_version} "
+            f"current={PROBE_VERSION}; treating cache as stale"
         )
         return None
     return report
@@ -353,6 +353,6 @@ def probe(
     missing_hard = [r for r in results if r.kind == "hard" and r.status == "fail"]
     if missing_hard:
         names = ", ".join(r.name for r in missing_hard)
-        raise InstrumentMissing(f"required external tool(s) missing: {names}")
+        raise UserError(f"required external tool(s) missing: {names}", kind="InstrumentMissing")
 
     return report

@@ -149,12 +149,14 @@ def _inprocess_validate(
     spec_urn = spec_writer.build_spec_urn(scope_id, repo_code=repo_code)
     file_path = spec_writer.spec_file_path(scope_id, repo_root=repo_root)
     if not file_path.is_file():
-        raise cli_errors.NotFound(f"spec file missing for scope_id={scope_id!r}: {file_path}")
+        raise cli_errors.UserError(
+            f"spec file missing for scope_id={scope_id!r}: {file_path}", kind="NotFound"
+        )
     phase_id = spec_writer.phase_of(scope_id)
     existing = spec_cache.find_cached_entry(spec_urn, phase_id=phase_id)
     if existing is None:
-        raise cli_errors.NotFound(
-            f"scope_id={scope_id!r} not initialised; run `eawf spec init` first"
+        raise cli_errors.UserError(
+            f"scope_id={scope_id!r} not initialised; run `eawf spec init` first", kind="NotFound"
         )
     body = file_path.read_bytes()
     file_sha = spec_writer.blob_sha_for(body)
@@ -213,9 +215,10 @@ def spec_init_cmd(
 
     if _daemon_proxy_enabled_for_spec():
         if not _daemon_reachable():
-            raise cli_errors.IntegrityViolation(
+            raise cli_errors.StateConflict(
                 "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out"
+                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out",
+                kind="IntegrityViolation",
             )
         try:
             with DaemonClient() as client:
@@ -229,7 +232,7 @@ def spec_init_cmd(
             if exc.code == -32601:
                 logger.debug("spec_init daemon method-not-found; falling back to in-process")
             elif exc.code == -32602:
-                raise cli_errors.ValidationFailed(exc.message) from exc
+                raise cli_errors.ValidationError(exc.message) from exc
             else:
                 raise
         else:
@@ -245,9 +248,9 @@ def spec_init_cmd(
             repo_root=repo_root,
         )
     except PydValidationError as exc:
-        raise cli_errors.ValidationFailed(str(exc)) from exc
+        raise cli_errors.ValidationError(str(exc)) from exc
     except ValueError as exc:
-        raise cli_errors.InvalidInput(str(exc)) from exc
+        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
     _emit_result(result, flags=flags)
 
 
@@ -268,9 +271,10 @@ def spec_validate_cmd(
 
     if _daemon_proxy_enabled_for_spec():
         if not _daemon_reachable():
-            raise cli_errors.IntegrityViolation(
+            raise cli_errors.StateConflict(
                 "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out"
+                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out",
+                kind="IntegrityViolation",
             )
         try:
             with DaemonClient() as client:
@@ -283,7 +287,7 @@ def spec_validate_cmd(
             if exc.code == -32601:
                 logger.debug("spec_validate daemon method-not-found; falling back to in-process")
             elif exc.code == -32602:
-                raise cli_errors.ValidationFailed(exc.message) from exc
+                raise cli_errors.ValidationError(exc.message) from exc
             else:
                 raise
         else:
@@ -298,7 +302,7 @@ def spec_validate_cmd(
             repo_root=repo_root,
         )
     except ValueError as exc:
-        raise cli_errors.InvalidInput(str(exc)) from exc
+        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
     _emit_result(result, flags=flags)
 
 
@@ -326,12 +330,15 @@ def spec_promote_cmd(
 
     flags: GlobalFlags = ctx.obj
     if to not in {"READY", "IMPLEMENTED"}:
-        raise cli_errors.InvalidInput(f"--to must be 'READY' or 'IMPLEMENTED', got {to!r}")
+        raise cli_errors.UserError(
+            f"--to must be 'READY' or 'IMPLEMENTED', got {to!r}", kind="InvalidInput"
+        )
     repo_root = (flags.workspace or Path.cwd()).resolve()
 
     if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
-        raise cli_errors.IntegrityViolation(
-            "daemon_required: spec promote requires the daemon up; run `eawf daemon start`"
+        raise cli_errors.StateConflict(
+            "daemon_required: spec promote requires the daemon up; run `eawf daemon start`",
+            kind="IntegrityViolation",
         )
 
     try:
@@ -344,7 +351,7 @@ def spec_promote_cmd(
             )
     except DaemonRpcError as exc:
         if exc.code == -32602:
-            raise cli_errors.ValidationFailed(exc.message) from exc
+            raise cli_errors.ValidationError(exc.message) from exc
         raise
     result["proxied"] = True
     _emit_result(result, flags=flags)
@@ -371,8 +378,9 @@ def spec_archive_cmd(
     repo_root = (flags.workspace or Path.cwd()).resolve()
 
     if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
-        raise cli_errors.IntegrityViolation(
-            "daemon_required: spec archive requires the daemon up; run `eawf daemon start`"
+        raise cli_errors.StateConflict(
+            "daemon_required: spec archive requires the daemon up; run `eawf daemon start`",
+            kind="IntegrityViolation",
         )
 
     try:
@@ -384,7 +392,7 @@ def spec_archive_cmd(
             )
     except DaemonRpcError as exc:
         if exc.code == -32602:
-            raise cli_errors.ValidationFailed(exc.message) from exc
+            raise cli_errors.ValidationError(exc.message) from exc
         raise
     result["proxied"] = True
     _emit_result(result, flags=flags)
@@ -413,16 +421,16 @@ def _parse_spec_urn(urn: str) -> tuple[str, str]:
     try:
         parsed = parse_urn(urn)
     except ValueError as exc:
-        raise cli_errors.InvalidInput(f"invalid spec URN: {exc}") from exc
+        raise cli_errors.UserError(f"invalid spec URN: {exc}", kind="InvalidInput") from exc
     if parsed.kind != "spec":
-        raise cli_errors.InvalidInput(
-            f"URN kind must be 'spec' for `spec show`, got {parsed.kind!r}"
+        raise cli_errors.UserError(
+            f"URN kind must be 'spec' for `spec show`, got {parsed.kind!r}", kind="InvalidInput"
         )
     if parsed.id is None:
-        raise cli_errors.InvalidInput(f"spec URN missing id: {urn!r}")
+        raise cli_errors.UserError(f"spec URN missing id: {urn!r}", kind="InvalidInput")
     parts = parsed.id.split("/")
     if not parts:
-        raise cli_errors.InvalidInput(f"spec URN id is empty: {urn!r}")
+        raise cli_errors.UserError(f"spec URN id is empty: {urn!r}", kind="InvalidInput")
     phase_id = parts[0]
     # URN tail tokens carry the full hyphenated form
     # (``P25`` / ``P25-I01`` / ``P25-I01-W03``); the most-specific
@@ -503,9 +511,9 @@ def spec_show_cmd(
     try:
         entry = spec_cache.find_cached_entry(urn, phase_id=phase_id)
     except spec_cache.SpecCacheReadError as exc:
-        raise cli_errors.ValidationFailed(str(exc)) from exc
+        raise cli_errors.ValidationError(str(exc)) from exc
     if entry is None:
-        raise cli_errors.NotFound(f"spec URN not found in cache: {urn!r}")
+        raise cli_errors.UserError(f"spec URN not found in cache: {urn!r}", kind="NotFound")
     on_disk = repo_root / entry.file_path
     if on_disk.is_file():
         body = on_disk.read_text(encoding="utf-8")
@@ -521,15 +529,18 @@ def spec_show_cmd(
         )
         return
     if not from_git:
-        raise cli_errors.NotFound(
-            f"spec file missing on disk: {on_disk}; pass --from-git to walk git history"
+        raise cli_errors.UserError(
+            f"spec file missing on disk: {on_disk}; pass --from-git to walk git history",
+            kind="NotFound",
         )
     recovered = _git_log_recover(
         repo_root=repo_root,
         repo_relative_path=entry.file_path,
     )
     if recovered is None:
-        raise cli_errors.NotFound(f"no git history for spec file: {entry.file_path}")
+        raise cli_errors.UserError(
+            f"no git history for spec file: {entry.file_path}", kind="NotFound"
+        )
     emit_json_or_text(
         {
             "spec_urn": urn,

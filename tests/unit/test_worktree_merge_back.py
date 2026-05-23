@@ -175,7 +175,7 @@ def test_invalid_strategy_raises_invalid_input(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    with pytest.raises(cli_errors.InvalidInput) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         merge_back(
             state,
             repo_root=repo,
@@ -190,7 +190,7 @@ def test_continue_and_abort_mutually_exclusive(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
-    with pytest.raises(cli_errors.InvalidInput):
+    with pytest.raises(cli_errors.UserError):
         merge_back(
             state,
             repo_root=repo,

@@ -32,7 +32,7 @@ from eawf.audit_dsl import (
     load_spec,
     run_checks,
 )
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 
 # ---- helpers ---------------------------------------------------------------
 
@@ -52,19 +52,19 @@ def _run_one(kind: str, name: str, args: dict[str, Any], cwd: Path) -> CheckResu
 
 
 def test_load_spec_missing_file_raises(tmp_path: Path) -> None:
-    with pytest.raises(InvalidInput, match="not found"):
+    with pytest.raises(UserError, match="not found"):
         load_spec(tmp_path / "nope.yaml")
 
 
 def test_load_spec_invalid_yaml_raises(tmp_path: Path) -> None:
     spec_path = _write_yaml(tmp_path, "schema_version: '1.0'\nchecks: [\n")
-    with pytest.raises(InvalidInput, match="not valid yaml"):
+    with pytest.raises(UserError, match="not valid yaml"):
         load_spec(spec_path)
 
 
 def test_load_spec_empty_document_raises(tmp_path: Path) -> None:
     spec_path = _write_yaml(tmp_path, "")
-    with pytest.raises(InvalidInput, match="empty"):
+    with pytest.raises(UserError, match="empty"):
         load_spec(spec_path)
 
 
@@ -77,7 +77,7 @@ checks:
     args: {}
 """
     spec_path = _write_yaml(tmp_path, body)
-    with pytest.raises(InvalidInput, match="schema mismatch"):
+    with pytest.raises(UserError, match="schema mismatch"):
         load_spec(spec_path)
 
 
@@ -87,7 +87,7 @@ schema_version: "2.0"
 checks: []
 """
     spec_path = _write_yaml(tmp_path, body)
-    with pytest.raises(InvalidInput, match="schema mismatch"):
+    with pytest.raises(UserError, match="schema mismatch"):
         load_spec(spec_path)
 
 
@@ -98,7 +98,7 @@ checks: []
 extra_key: nope
 """
     spec_path = _write_yaml(tmp_path, body)
-    with pytest.raises(InvalidInput, match="schema mismatch"):
+    with pytest.raises(UserError, match="schema mismatch"):
         load_spec(spec_path)
 
 

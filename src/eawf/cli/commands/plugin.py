@@ -119,8 +119,9 @@ _VALID_SCOPES: tuple[str, ...] = ("project", "user")
 def _validate_runtime(runtime: str) -> None:
     """Reject runtimes outside the v0.1 supported list."""
     if runtime not in _SUPPORTED_RUNTIMES:
-        raise cli_errors.InvalidInput(
-            f"unknown runtime {runtime!r}; expected one of {list(_SUPPORTED_RUNTIMES)}"
+        raise cli_errors.UserError(
+            f"unknown runtime {runtime!r}; expected one of {list(_SUPPORTED_RUNTIMES)}",
+            kind="InvalidInput",
         )
 
 
@@ -132,12 +133,13 @@ def _validate_scope(scope: str, *, runtime: str) -> None:
             when *runtime* is ``claude`` and *scope* is ``user``.
     """
     if scope not in _VALID_SCOPES:
-        raise cli_errors.InvalidInput(
-            f"invalid --scope {scope!r}; expected one of {list(_VALID_SCOPES)}"
+        raise cli_errors.UserError(
+            f"invalid --scope {scope!r}; expected one of {list(_VALID_SCOPES)}", kind="InvalidInput"
         )
     if runtime == "claude" and scope == "user":
-        raise cli_errors.InvalidInput(
-            "claude is project-scope only; use the CC marketplace for user-scope installs"
+        raise cli_errors.UserError(
+            "claude is project-scope only; use the CC marketplace for user-scope installs",
+            kind="InvalidInput",
         )
 
 
@@ -157,7 +159,7 @@ def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     if conflict is None:
         return True
     if force:
-        logger.info(f"_claude_conflict_clear bypassed via --force plugin_dir={conflict.plugin_dir}")
+        logger.info(f"_claude_conflict_clear force-bypass plugin_dir={conflict.plugin_dir}")
         return True
     message = (
         f"detected CC marketplace plugin at {conflict.plugin_dir}; "
@@ -166,10 +168,11 @@ def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     )
     if flags.no_input:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"{message}. Rerun without --no-input to confirm, pass --force "
                 "to acknowledge, or `/plugin uninstall eawf@eawf-local` inside "
-                "Claude Code first."
+                "Claude Code first.",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -192,9 +195,7 @@ def _codex_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     if conflict is None:
         return True
     if force:
-        logger.info(
-            f"_codex_user_conflict_clear bypassed via --force plugin_dir={conflict.plugin_dir}"
-        )
+        logger.info(f"_codex_user_conflict_clear force-bypass plugin_dir={conflict.plugin_dir}")
         return True
     message = (
         f"detected user-scope codex eawf install at {conflict.plugin_dir}; "
@@ -203,9 +204,10 @@ def _codex_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     )
     if flags.no_input:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"{message}. Rerun without --no-input to confirm, pass --force "
-                "to acknowledge, or remove the user-scope install first."
+                "to acknowledge, or remove the user-scope install first.",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -229,7 +231,7 @@ def _opencode_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
         return True
     if force:
         logger.info(
-            f"_opencode_user_conflict_clear bypassed via --force plugin_file={conflict.plugin_file}"
+            f"_opencode_user_conflict_clear force-bypass plugin_file={conflict.plugin_file}"
         )
         return True
     message = (
@@ -239,9 +241,10 @@ def _opencode_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     )
     if flags.no_input:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"{message}. Rerun without --no-input to confirm, pass --force "
-                "to acknowledge, or remove the user-scope install first."
+                "to acknowledge, or remove the user-scope install first.",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -700,7 +703,7 @@ def install_cmd(
             )
         except CodexIntegrityViolation as exc:
             cli_errors.emit_error(
-                cli_errors.IntegrityViolation(str(exc)),
+                cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
                 flags=flags,
             )
             return
@@ -734,13 +737,13 @@ def install_cmd(
             )
         except OpencodeIntegrityViolation as exc:
             cli_errors.emit_error(
-                cli_errors.IntegrityViolation(str(exc)),
+                cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
                 flags=flags,
             )
             return
         except ValueError as exc:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(str(exc)),
+                cli_errors.UserError(str(exc), kind="InvalidInput"),
                 flags=flags,
             )
             return
@@ -762,13 +765,13 @@ def install_cmd(
         result = install_plugin(target, force=force, dry_run=dry_run)
     except IntegrityViolation as exc:
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(str(exc)),
+            cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
             flags=flags,
         )
         return
     except ValueError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(str(exc)),
+            cli_errors.UserError(str(exc), kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -816,7 +819,9 @@ def update_cmd(
         try:
             codex_result = codex_install_plugin(target, scope=scope_lit, force=False)
         except CodexIntegrityViolation as exc:
-            cli_errors.emit_error(cli_errors.IntegrityViolation(str(exc)), flags=flags)
+            cli_errors.emit_error(
+                cli_errors.StateConflict(str(exc), kind="IntegrityViolation"), flags=flags
+            )
             return
         emit_json_or_text(
             _codex_install_payload(codex_result),
@@ -828,10 +833,12 @@ def update_cmd(
         try:
             oc_result = opencode_install_plugin(target, scope=scope_lit, force=False)
         except OpencodeIntegrityViolation as exc:
-            cli_errors.emit_error(cli_errors.IntegrityViolation(str(exc)), flags=flags)
+            cli_errors.emit_error(
+                cli_errors.StateConflict(str(exc), kind="IntegrityViolation"), flags=flags
+            )
             return
         except ValueError as exc:
-            cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
             return
         emit_json_or_text(
             _opencode_install_payload(oc_result),
@@ -843,7 +850,7 @@ def update_cmd(
         result: UpdateResult = update_plugin(target)
     except IntegrityViolation as exc:
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(str(exc)),
+            cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
             flags=flags,
         )
         return
@@ -895,9 +902,10 @@ def doctor_cmd(
     target = _resolve_target(flags)
     if strict and runtime not in (None, "claude"):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"--strict applies to the claude checksum sweep only; "
-                f"drop --strict or pass 'claude' (got {runtime!r})"
+                f"drop --strict or pass 'claude' (got {runtime!r})",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -1043,9 +1051,10 @@ def package_cmd(
         return
     if runtime == "opencode":
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 "opencode has no marketplace concept; use "
-                "`eawf plugin install opencode` (project or user scope) instead"
+                "`eawf plugin install opencode` (project or user scope) instead",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -1055,7 +1064,7 @@ def package_cmd(
         try:
             codex_result = codex_package_plugin(resolved_target, force=force, dry_run=dry_run)
         except ValueError as exc:
-            cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
             return
         emit_json_or_text(
             _codex_package_payload(codex_result),
@@ -1080,13 +1089,13 @@ def package_cmd(
         )
     except IntegrityViolation as exc:
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(str(exc)),
+            cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
             flags=flags,
         )
         return
     except ValueError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(str(exc)),
+            cli_errors.UserError(str(exc), kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -1132,9 +1141,10 @@ def _normalise_sync_runtimes(values: list[str]) -> list[str]:
     for value in values:
         canonical_id = _SYNC_RUNTIME_IDS.get(value)
         if canonical_id is None:
-            raise cli_errors.InvalidInput(
+            raise cli_errors.UserError(
                 f"unknown runtime {value!r}; expected one of "
-                f"{sorted(set(_SYNC_RUNTIME_IDS.values()))}"
+                f"{sorted(set(_SYNC_RUNTIME_IDS.values()))}",
+                kind="InvalidInput",
             )
         canonical.append(canonical_id)
     return canonical
@@ -1188,8 +1198,9 @@ def sync_cmd(
     flags: GlobalFlags = ctx.obj
     if scope not in _VALID_SCOPES:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"invalid --scope {scope!r}; expected one of {list(_VALID_SCOPES)}"
+            cli_errors.UserError(
+                f"invalid --scope {scope!r}; expected one of {list(_VALID_SCOPES)}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -1217,7 +1228,7 @@ def sync_cmd(
         )
     except PluginSyncIntegrityError as exc:
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(str(exc)),
+            cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
             flags=flags,
         )
         return

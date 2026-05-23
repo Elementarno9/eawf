@@ -37,7 +37,7 @@ from typing import Any
 import orjson
 import yaml
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.config.layered import LAYER_ORDER, WRITABLE_LAYERS
 from eawf.config.loader import load_yaml_layer
 from eawf.lock import portalock
@@ -90,7 +90,7 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             os.fsync(parent_fd)
         finally:
             os.close(parent_fd)
-        logger.info(f"_atomic_write_yaml wrote {target}")
+        logger.info(f"_atomic_write_yaml wrote path={target}")
     finally:
         with contextlib.suppress(FileNotFoundError):
             tmp.unlink(missing_ok=True)
@@ -114,7 +114,7 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
     """
     if not state_path.exists():
         logger.info(
-            f"_materialise_state_keys: state file absent at {state_path} — "
+            f"_materialise_state_keys state-file-absent path={state_path}; "
             "skipping materialisation; the next eawf init/sync will pick the "
             "profile up from the config file."
         )
@@ -127,13 +127,19 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
             try:
                 raw = state_path.read_bytes()
             except OSError as exc:
-                raise NotFound(f"cannot read state file {state_path}: {exc}") from exc
+                raise UserError(
+                    f"cannot read state file {state_path}: {exc}", kind="NotFound"
+                ) from exc
             try:
                 body = orjson.loads(raw)
             except orjson.JSONDecodeError as exc:
-                raise NotFound(f"state file {state_path} is not valid JSON: {exc}") from exc
+                raise UserError(
+                    f"state file {state_path} is not valid JSON: {exc}", kind="NotFound"
+                ) from exc
             if not isinstance(body, dict):
-                raise NotFound(f"state file {state_path} top-level must be a mapping")
+                raise UserError(
+                    f"state file {state_path} top-level must be a mapping", kind="NotFound"
+                )
 
             added: list[str] = []
             for key in fields:
@@ -146,7 +152,9 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
             atomic_write_json_locked(state_path, body)
             return added
     except portalock.LockTimeout as exc:
-        raise NotFound(f"could not acquire state lock for {state_path}: {exc}") from exc
+        raise UserError(
+            f"could not acquire state lock for {state_path}: {exc}", kind="NotFound"
+        ) from exc
 
 
 def enable_profile(
@@ -178,11 +186,16 @@ def enable_profile(
         NotFound: state file is malformed (read-time only).
     """
     if profile_id not in KNOWN_PROFILES:
-        raise InvalidInput(f"unknown profile {profile_id!r}; choose from {sorted(KNOWN_PROFILES)}")
+        raise UserError(
+            f"unknown profile {profile_id!r}; choose from {sorted(KNOWN_PROFILES)}",
+            kind="InvalidInput",
+        )
     if layer not in LAYER_ORDER:
-        raise InvalidInput(f"unknown layer {layer!r}")
+        raise UserError(f"unknown layer {layer!r}", kind="InvalidInput")
     if layer not in WRITABLE_LAYERS:
-        raise InvalidInput(f"layer {layer!r} is read-only; cannot enable a profile here")
+        raise UserError(
+            f"layer {layer!r} is read-only; cannot enable a profile here", kind="InvalidInput"
+        )
 
     required_fields = KNOWN_PROFILES[profile_id]
 
@@ -205,8 +218,8 @@ def enable_profile(
             _atomic_write_yaml(layer_file_path, existing)
         else:
             logger.info(
-                f"enable_profile: {profile_id!r} already enabled in "
-                f"{layer_file_path}; no write performed."
+                f"enable_profile already-enabled profile_id={profile_id!r} "
+                f"layer={layer_file_path}; no write performed"
             )
 
     materialised: list[str] = []

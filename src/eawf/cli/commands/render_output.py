@@ -87,8 +87,9 @@ def render_output_cmd(
     fmt = format.lower()
     if fmt not in _VALID_FORMATS:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"--format must be one of {sorted(_VALID_FORMATS)}; got {format!r}"
+            cli_errors.UserError(
+                f"--format must be one of {sorted(_VALID_FORMATS)}; got {format!r}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -103,22 +104,22 @@ def render_output_cmd(
             try:
                 env = OutputEnvelope.model_validate_json(stdin_text)
             except ValidationError as exc:
-                raise cli_errors.ValidationFailed(
+                raise cli_errors.ValidationError(
                     f"input is not a valid OutputEnvelope JSON: {exc.errors()[0]['msg']}"
                 ) from exc
             except (orjson.JSONDecodeError, ValueError) as exc:
-                raise cli_errors.ValidationFailed(f"input is not valid JSON: {exc}") from exc
+                raise cli_errors.ValidationError(f"input is not valid JSON: {exc}") from exc
             _emit_markdown(env)
         else:
             # Markdown envelope on stdin → JSON on stdout.
             try:
                 env = from_markdown(stdin_text)
             except (ValueError, ValidationError) as exc:
-                raise cli_errors.ValidationFailed(
+                raise cli_errors.ValidationError(
                     f"input is not a valid envelope markdown: {exc}"
                 ) from exc
             _emit_json(env)
-    except cli_errors.ValidationFailed as err:
+    except cli_errors.ValidationError as err:
         # ``--strict`` and the default both emit-and-exit on malformed
         # input; there is no permissive fallback that would still produce
         # a meaningful envelope, so we treat the two paths identically.

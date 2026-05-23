@@ -27,7 +27,7 @@ from pydantic import ValidationError
 
 from eawf.audit_dsl.models import CheckFile, CheckResult, CheckSpec
 from eawf.audit_dsl.registry import CHECK_REGISTRY
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +46,21 @@ def load_spec(path: Path) -> list[CheckSpec]:
             fails Pydantic validation.
     """
     if not path.is_file():
-        raise InvalidInput(f"audit-check spec {path} not found")
+        raise UserError(f"audit-check spec {path} not found", kind="InvalidInput")
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise InvalidInput(f"audit-check spec {path} not valid yaml: {exc}") from exc
+        raise UserError(
+            f"audit-check spec {path} not valid yaml: {exc}", kind="InvalidInput"
+        ) from exc
     if raw is None:
-        raise InvalidInput(f"audit-check spec {path} is empty")
+        raise UserError(f"audit-check spec {path} is empty", kind="InvalidInput")
     try:
         doc = CheckFile.model_validate(raw)
     except ValidationError as exc:
-        raise InvalidInput(f"audit-check spec {path} schema mismatch: {exc}") from exc
+        raise UserError(
+            f"audit-check spec {path} schema mismatch: {exc}", kind="InvalidInput"
+        ) from exc
     return list(doc.checks)
 
 
@@ -85,7 +89,7 @@ def run_checks(
     out: list[CheckResult] = []
     for spec in specs:
         fn = CHECK_REGISTRY[spec.kind]
-        logger.debug(f"audit_dsl: dispatching {spec.name} kind={spec.kind}")
+        logger.debug(f"run_checks dispatching name={spec.name} kind={spec.kind}")
         out.append(fn(spec, base))
     return out
 

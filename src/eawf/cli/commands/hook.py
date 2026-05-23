@@ -81,8 +81,8 @@ def _parse_event_type(raw: str) -> HookEventType:
         return HookEventType(raw)
     except ValueError as exc:
         valid = sorted(t.value for t in HookEventType)
-        raise cli_errors.InvalidInput(
-            f"unknown event type {raw!r}; expected one of {valid}"
+        raise cli_errors.UserError(
+            f"unknown event type {raw!r}; expected one of {valid}", kind="InvalidInput"
         ) from exc
 
 
@@ -102,10 +102,11 @@ def _parse_payload(stdin_text: str) -> dict[str, Any]:
     try:
         decoded: Any = orjson.loads(stdin_text)
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.InvalidInput(f"stdin is not valid JSON: {exc}") from exc
+        raise cli_errors.UserError(f"stdin is not valid JSON: {exc}", kind="InvalidInput") from exc
     if not isinstance(decoded, dict):
-        raise cli_errors.InvalidInput(
-            f"stdin payload must be a JSON object; got {type(decoded).__name__}"
+        raise cli_errors.UserError(
+            f"stdin payload must be a JSON object; got {type(decoded).__name__}",
+            kind="InvalidInput",
         )
     return cast(dict[str, Any], decoded)
 
@@ -204,11 +205,11 @@ def _load_state(state_path: Path) -> State:
 
     path = state_path
     if not path.exists():
-        raise cli_errors.NotFound(f"state file not found: {path}")
+        raise cli_errors.UserError(f"state file not found: {path}", kind="NotFound")
     payload = orjson.loads(path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
         )
     return report.state
@@ -573,8 +574,9 @@ def run(
 
     if runtime.lower() not in {"claude", "codex", "opencode", "generic"}:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"--runtime must be one of claude/codex/opencode/generic; got {runtime!r}"
+            cli_errors.UserError(
+                f"--runtime must be one of claude/codex/opencode/generic; got {runtime!r}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -599,7 +601,9 @@ def run(
         return
     except ValidationError as err:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"event payload rejected: {err.errors()[0]['msg']}"),
+            cli_errors.UserError(
+                f"event payload rejected: {err.errors()[0]['msg']}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -623,15 +627,17 @@ def run(
             )
         except ValidationError as err:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(f"agent_end payload rejected: {err.errors()[0]['msg']}"),
+                cli_errors.UserError(
+                    f"agent_end payload rejected: {err.errors()[0]['msg']}", kind="InvalidInput"
+                ),
                 flags=flags,
             )
             return
         except KeyError as err:
-            cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
             return
         except (AgentReportRoleMismatchError, AgentReportScrubError) as err:
-            cli_errors.emit_error(cli_errors.ValidationFailed(str(err)), flags=flags)
+            cli_errors.emit_error(cli_errors.ValidationError(str(err)), flags=flags)
             return
         except cli_errors.CliError as err:
             cli_errors.emit_error(err, flags=flags)

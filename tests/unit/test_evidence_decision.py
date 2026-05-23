@@ -46,7 +46,7 @@ def test_add_decision_duplicate_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
     decision.add_decision(state, decision_id="D012", scope_id="QR", summary="s", rationale="r")
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         decision.add_decision(
             state, decision_id="D012", scope_id="QR", summary="s2", rationale="r2"
         )
@@ -55,7 +55,7 @@ def test_add_decision_duplicate_raises(tmp_path: Path) -> None:
 def test_add_decision_empty_rationale_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.InvalidInput, match="rationale"):
+    with pytest.raises(cli_errors.UserError, match="rationale"):
         decision.add_decision(
             state, decision_id="D012", scope_id="QR", summary="s", rationale="   "
         )

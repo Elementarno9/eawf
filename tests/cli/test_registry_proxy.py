@@ -178,7 +178,7 @@ def test_persist_registry_daemon_down_raises_daemon_required(
     monkeypatch.setattr("eawf.cli._mutation._daemon_reachable", lambda *a, **k: False)
 
     candidate = _make_registry({"ABC": ("/repos/abc", None)})
-    with pytest.raises(cli_errors.IntegrityViolation, match="daemon_required"):
+    with pytest.raises(cli_errors.StateConflict, match="daemon_required"):
         repo_cmd._persist_registry(candidate, registry_path)
 
     assert not registry_path.exists()

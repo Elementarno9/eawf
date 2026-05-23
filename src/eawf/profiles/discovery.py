@@ -25,9 +25,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import ValidationError
+from pydantic import ValidationError as PydValidationError
 
-from eawf.cli.errors import InvalidInput, ValidationFailed
+from eawf.cli.errors import UserError, ValidationError
 from eawf.profiles.models import ProfileBody
 
 logger = logging.getLogger(__name__)
@@ -138,7 +138,7 @@ def discover_profile(
             mtime_ns=None,
         )
     choices = list(list_profiles_all(workspace=workspace))
-    raise InvalidInput(f"unknown profile {profile_id!r}; choose from {choices}")
+    raise UserError(f"unknown profile {profile_id!r}; choose from {choices}", kind="InvalidInput")
 
 
 def list_profiles_all(*, workspace: Path | str | None = None) -> tuple[str, ...]:
@@ -165,17 +165,17 @@ def _parse_and_validate(profile_id: str, raw: str) -> ProfileBody:
     try:
         parsed = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
-        raise ValidationFailed(f"profile {profile_id!r}: malformed YAML: {exc}") from exc
+        raise ValidationError(f"profile {profile_id!r}: malformed YAML: {exc}") from exc
     if parsed is None:
         parsed = {}
     if not isinstance(parsed, dict):
-        raise ValidationFailed(
+        raise ValidationError(
             f"profile {profile_id!r}: top-level must be a mapping, got {type(parsed).__name__}"
         )
     try:
         return ProfileBody.model_validate(parsed)
-    except ValidationError as exc:
-        raise ValidationFailed(f"profile {profile_id!r}: schema rejected: {exc}") from exc
+    except PydValidationError as exc:
+        raise ValidationError(f"profile {profile_id!r}: schema rejected: {exc}") from exc
 
 
 def load_profile_with_discovery(
@@ -274,7 +274,10 @@ def load_init_template(template_name: str) -> dict[str, Any]:
     """
     known = list_init_templates()
     if template_name not in known:
-        raise InvalidInput(f"unknown init template: {template_name!r}; choose from {list(known)}")
+        raise UserError(
+            f"unknown init template: {template_name!r}; choose from {list(known)}",
+            kind="InvalidInput",
+        )
     raw = (
         files(_INIT_TEMPLATE_PACKAGE)
         .joinpath(f"{template_name}{_YAML_SUFFIX}")
@@ -283,11 +286,11 @@ def load_init_template(template_name: str) -> dict[str, Any]:
     try:
         parsed: Any = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
-        raise ValidationFailed(f"init template {template_name!r}: malformed YAML: {exc}") from exc
+        raise ValidationError(f"init template {template_name!r}: malformed YAML: {exc}") from exc
     if parsed is None:
         parsed = {}
     if not isinstance(parsed, dict):
-        raise ValidationFailed(
+        raise ValidationError(
             f"init template {template_name!r}: top-level must be a mapping, "
             f"got {type(parsed).__name__}"
         )

@@ -85,19 +85,21 @@ def wave_plan_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid iter id: {iter_id!r}"),
+            cli_errors.UserError(f"invalid iter id: {iter_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if not wave_id.startswith(f"{iter_id}-W"):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"wave id {wave_id!r} does not belong to iter {iter_id!r}"),
+            cli_errors.UserError(
+                f"wave id {wave_id!r} does not belong to iter {iter_id!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -187,15 +189,16 @@ def wave_claim_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if worktree_policy not in {"current_branch", "fresh_branch", "inline"}:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"--worktree-policy must be current_branch|fresh_branch|inline; "
-                f"got {worktree_policy!r}"
+                f"got {worktree_policy!r}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -208,7 +211,7 @@ def wave_claim_cmd(
             and wave.token_budget is not None
             and wave.tokens_consumed >= wave.token_budget
         ):
-            raise cli_errors.ValidationFailed(
+            raise cli_errors.ValidationError(
                 f"wave {wave_id!r} is over token budget "
                 f"({wave.tokens_consumed}/{wave.token_budget}); raise budget or split work"
             )
@@ -287,13 +290,13 @@ def wave_close_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if outcome is None or outcome == "":
         cli_errors.emit_error(
-            cli_errors.InvalidInput("--outcome is required for wave close"),
+            cli_errors.UserError("--outcome is required for wave close", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -379,13 +382,13 @@ def wave_show_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if not show_commit:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("wave show currently requires --commit"),
+            cli_errors.UserError("wave show currently requires --commit", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -420,13 +423,13 @@ def wave_fail_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if reason is None or reason == "":
         cli_errors.emit_error(
-            cli_errors.InvalidInput("--reason is required for wave fail"),
+            cli_errors.UserError("--reason is required for wave fail", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -492,15 +495,16 @@ def wave_update_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     selected = [opt for opt in (files, add_file, remove_file) if opt is not None]
     if len(selected) != 1:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                "exactly one of --files / --add-file / --remove-file must be passed"
+            cli_errors.UserError(
+                "exactly one of --files / --add-file / --remove-file must be passed",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -518,8 +522,9 @@ def wave_update_cmd(
     file_list = [tok.strip() for tok in raw.split(",") if tok.strip()]
     if not file_list:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"--{'files' if mode == 'set' else f'{mode}-file'} requires at least one path"
+            cli_errors.UserError(
+                f"--{'files' if mode == 'set' else f'{mode}-file'} requires at least one path",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -530,9 +535,9 @@ def wave_update_cmd(
     def _mutator(state: State) -> None:
         wave = state.waves.get(wave_id)
         if wave is None:
-            raise cli_errors.NotFound(f"unknown wave: {wave_id!r}")
+            raise cli_errors.UserError(f"unknown wave: {wave_id!r}", kind="NotFound")
         if wave.status not in _WAVE_UPDATE_FILES_ALLOWED_STATUSES:
-            raise cli_errors.ValidationFailed(
+            raise cli_errors.ValidationError(
                 f"wave {wave_id!r} is {wave.status.value!r}; "
                 f"update --files only allowed on PENDING or CLAIMED waves"
             )

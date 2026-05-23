@@ -34,7 +34,7 @@ from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Input, Static
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 from eawf.config.registry import ConfigKey, coerce_and_validate
 
 if TYPE_CHECKING:
@@ -175,7 +175,7 @@ class EditFieldModal(ModalScreen[Any]):
         raw = self.query_one("#edit-field-input", Input).value
         try:
             coerced = coerce_and_validate(self._entry, raw)
-        except InvalidInput as exc:
+        except UserError as exc:
             self._report_error(str(exc))
             return
         logger.info(f"edit_field accept key={self._entry.key!r} type={self._entry.type}")

@@ -782,8 +782,9 @@ class FlowSkill(SkillAction):
         try:
             resume_from = FlowCheckpointPayload.model_validate(ckpt_dict)
         except ValidationError as exc:
-            raise cli_errors.InvalidInput(
-                f"resume_from checkpoint failed validation: {exc.errors()[0].get('msg', exc)}"
+            raise cli_errors.UserError(
+                f"resume_from checkpoint failed validation: {exc.errors()[0].get('msg', exc)}",
+                kind="InvalidInput",
             ) from exc
         resume_from_id = resume_envelope_id if isinstance(resume_envelope_id, str) else None
         return resume_from, resume_from_id

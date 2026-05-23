@@ -3,10 +3,10 @@
 C05 § 5.3 compresses the legacy nine-class taxonomy into five buckets:
 ``UserError``, ``ValidationError``, ``StateConflict``,
 ``DaemonUnreachable``, ``InternalError``. Each maps 1:1 onto the new
-0..5 exit-code surface. Legacy class names (``NotFound``, ``LockConflict``,
-...) remain importable as deprecation-aliased subclasses of the new
-buckets; their legacy specificity is preserved in
-``ErrorEnvelope.data.kind`` per § 5.3 disambiguation.
+0..5 exit-code surface. The legacy class names (``NotFound``,
+``LockConflict``, ...) are gone; callers raise the canonical bucket with
+the fine-grained cause carried in the ``kind=`` constructor kwarg, which
+folds into ``ErrorEnvelope.data.kind`` per § 5.3 disambiguation.
 
 The JSON envelope shape per :class:`ErrorEnvelope` (C05 § 5.4):
 
@@ -65,30 +65,33 @@ def test_each_new_subclass_carries_its_exit_code(cls: type[errors.CliError], cod
     assert isinstance(err, Exception)
 
 
-# --- Legacy nine-class deprecation aliases ---------------------------------
+# --- Legacy cause tags now ride on the bucket's ``kind=`` kwarg ------------
 
 
 @pytest.mark.parametrize(
-    ("legacy_cls", "new_bucket"),
+    ("bucket", "kind"),
     [
-        (errors.NotFound, errors.UserError),
-        (errors.InvalidInput, errors.UserError),
-        (errors.InstrumentMissing, errors.UserError),
-        (errors.UserDeclined, errors.UserError),
-        (errors.ValidationFailed, errors.ValidationError),
-        (errors.LockConflict, errors.StateConflict),
-        (errors.IntegrityViolation, errors.StateConflict),
-        (errors.HookBlocked, errors.StateConflict),
+        (errors.UserError, "NotFound"),
+        (errors.UserError, "InvalidInput"),
+        (errors.UserError, "InstrumentMissing"),
+        (errors.UserError, "UserDeclined"),
+        (errors.ValidationError, None),
+        (errors.StateConflict, "LockConflict"),
+        (errors.StateConflict, "IntegrityViolation"),
+        (errors.StateConflict, "HookBlocked"),
     ],
 )
-def test_legacy_subclass_bridges_to_new_bucket(
-    legacy_cls: type[errors.CliError],
-    new_bucket: type[errors.CliError],
+def test_legacy_cause_rides_on_bucket_kind(
+    bucket: type[errors.CliError],
+    kind: str | None,
 ) -> None:
-    """Legacy class names subclass their new five-bucket parent."""
-    err = legacy_cls("legacy")
-    assert isinstance(err, new_bucket)
-    assert err.exit_code == new_bucket.exit_code
+    """The migrated form ``Bucket(msg, kind=<legacy>)`` carries the right
+    exit code and threads the legacy cause through ``.kind`` (``None`` for
+    ``ValidationError`` whose legacy ``ValidationFailed`` bucket coincides)."""
+    err = bucket("legacy", kind=kind)
+    assert isinstance(err, errors.CliError)
+    assert err.exit_code == bucket.exit_code
+    assert err.kind == kind
 
 
 # --- emit_error / envelope rendering ---------------------------------------
@@ -117,7 +120,7 @@ def test_emit_error_text_envelope_and_exit_code() -> None:
 def test_emit_error_text_envelope_includes_legacy_kind() -> None:
     """Legacy subclass instance emits ``kind: <LegacyName>`` line."""
     flags = GlobalFlags(json_output=False)
-    err = errors.NotFound("scope/.ea missing")
+    err = errors.UserError("scope/.ea missing", kind="NotFound")
     app = _make_emitting_app(err, flags)
     result = runner.invoke(app, [])
     assert result.exit_code == exit_codes.USER_ERROR
@@ -146,7 +149,7 @@ def test_emit_error_json_envelope_shape() -> None:
 def test_emit_error_json_envelope_with_legacy_kind() -> None:
     """Legacy class folds its name into ``data.kind`` automatically."""
     flags = GlobalFlags(json_output=True)
-    err = errors.LockConflict("sibling lock held")
+    err = errors.StateConflict("sibling lock held", kind="LockConflict")
     app = _make_emitting_app(err, flags)
     result = runner.invoke(app, [])
     assert result.exit_code == exit_codes.STATE_CONFLICT
@@ -178,23 +181,23 @@ def test_emit_error_for_clierror_base_uses_internal_code() -> None:
     assert body["exit_name"] == "INTERNAL_ERROR"
 
 
-def test_emit_error_for_legacy_subclasses_fold_to_buckets() -> None:
-    """The envelope reports the new bucket name; legacy name lives in data.kind."""
+def test_emit_error_for_legacy_kinds_fold_to_buckets() -> None:
+    """The envelope reports the bucket name; the threaded ``kind`` lives in data.kind."""
     flags = GlobalFlags(json_output=True)
-    for legacy_cls, bucket_name, code in (
-        (errors.InstrumentMissing, "UserError", exit_codes.USER_ERROR),
-        (errors.UserDeclined, "UserError", exit_codes.USER_ERROR),
-        (errors.IntegrityViolation, "StateConflict", exit_codes.STATE_CONFLICT),
-        (errors.HookBlocked, "StateConflict", exit_codes.STATE_CONFLICT),
+    for bucket, kind, bucket_name, code in (
+        (errors.UserError, "InstrumentMissing", "UserError", exit_codes.USER_ERROR),
+        (errors.UserError, "UserDeclined", "UserError", exit_codes.USER_ERROR),
+        (errors.StateConflict, "IntegrityViolation", "StateConflict", exit_codes.STATE_CONFLICT),
+        (errors.StateConflict, "HookBlocked", "StateConflict", exit_codes.STATE_CONFLICT),
     ):
-        err = legacy_cls("msg")
+        err = bucket("msg", kind=kind)
         app = _make_emitting_app(err, flags)
         result = runner.invoke(app, [])
-        assert result.exit_code == code, legacy_cls.__name__
+        assert result.exit_code == code, kind
         body = json.loads(result.stdout)
         assert body["error"] == bucket_name
         assert body["exit_code"] == code
-        assert body["data"]["kind"] == legacy_cls.__name__
+        assert body["data"]["kind"] == kind
 
 
 # --- ErrorEnvelope direct model tests --------------------------------------
@@ -227,7 +230,7 @@ def test_build_envelope_carries_correlation_and_protocol() -> None:
 
 
 def test_build_envelope_legacy_kind_injected_when_data_omits_it() -> None:
-    err = errors.LockConflict("held")
+    err = errors.StateConflict("held", kind="LockConflict")
     env = errors.build_envelope(err, data={"held_by_pid": 1234})
     assert env.data["kind"] == "LockConflict"
     assert env.data["held_by_pid"] == 1234

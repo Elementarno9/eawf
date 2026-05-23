@@ -29,7 +29,7 @@ import orjson
 import pytest
 import yaml
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.config.profile import KNOWN_PROFILES, enable_profile
 
 
@@ -166,20 +166,20 @@ def test_missing_state_path_does_not_error(tmp_path: Path) -> None:
 
 def test_unknown_profile_raises_invalid_input(tmp_path: Path) -> None:
     layer_file = tmp_path / "config.yaml"
-    with pytest.raises(InvalidInput) as excinfo:
+    with pytest.raises(UserError) as excinfo:
         enable_profile("not-a-profile", layer="repo", layer_file_path=layer_file, state_path=None)
     assert "unknown profile" in str(excinfo.value)
 
 
 def test_unknown_layer_raises_invalid_input(tmp_path: Path) -> None:
     layer_file = tmp_path / "config.yaml"
-    with pytest.raises(InvalidInput):
+    with pytest.raises(UserError):
         enable_profile("python", layer="garbage", layer_file_path=layer_file, state_path=None)
 
 
 def test_built_in_layer_is_read_only(tmp_path: Path) -> None:
     layer_file = tmp_path / "config.yaml"
-    with pytest.raises(InvalidInput) as excinfo:
+    with pytest.raises(UserError) as excinfo:
         enable_profile("python", layer="built-in", layer_file_path=layer_file, state_path=None)
     assert "read-only" in str(excinfo.value)
 
@@ -187,7 +187,7 @@ def test_built_in_layer_is_read_only(tmp_path: Path) -> None:
 def test_env_layer_is_not_writable(tmp_path: Path) -> None:
     """``env`` and ``cli`` are runtime-only; they cannot host a saved profile."""
     layer_file = tmp_path / "config.yaml"
-    with pytest.raises(InvalidInput):
+    with pytest.raises(UserError):
         enable_profile("python", layer="env", layer_file_path=layer_file, state_path=None)
 
 
@@ -195,7 +195,7 @@ def test_malformed_state_file_raises_not_found(tmp_path: Path) -> None:
     layer_file = tmp_path / "config.yaml"
     state_path = tmp_path / "bad-state.json"
     state_path.write_text("not-json", encoding="utf-8")
-    with pytest.raises(NotFound):
+    with pytest.raises(UserError):
         enable_profile("research", layer="repo", layer_file_path=layer_file, state_path=state_path)
 
 
@@ -203,7 +203,7 @@ def test_state_top_level_must_be_mapping(tmp_path: Path) -> None:
     layer_file = tmp_path / "config.yaml"
     state_path = tmp_path / "state.json"
     state_path.write_bytes(orjson.dumps([1, 2, 3]))
-    with pytest.raises(NotFound):
+    with pytest.raises(UserError):
         enable_profile("research", layer="repo", layer_file_path=layer_file, state_path=state_path)
 
 

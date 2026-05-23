@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
 from eawf.state.enums import HypothesisStatus, HypothesisVerdict
@@ -33,7 +33,7 @@ def define_hypothesis(
     """Create a pending :class:`Hypothesis` record in place."""
     hypotheses: dict[str, Hypothesis] = dict(state.hypotheses or {})
     if hypothesis_id in hypotheses:
-        raise InvalidInput(f"hypothesis {hypothesis_id!r} already exists")
+        raise UserError(f"hypothesis {hypothesis_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
     hyp = Hypothesis(
@@ -82,7 +82,7 @@ def set_verdict(
     """
     hypotheses: dict[str, Hypothesis] = dict(state.hypotheses or {})
     if hypothesis_id not in hypotheses:
-        raise NotFound(f"hypothesis {hypothesis_id!r} not found")
+        raise UserError(f"hypothesis {hypothesis_id!r} not found", kind="NotFound")
 
     require_complete_audit(state, audit_id)
 

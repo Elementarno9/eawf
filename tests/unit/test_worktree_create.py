@@ -164,7 +164,7 @@ def test_create_refuses_main_branch(tmp_path: Path) -> None:
     subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=workdir, check=True)
     # Stay on main — do NOT create a feature branch.
     state = _claimed_state()
-    with pytest.raises(cli_errors.InvalidInput) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         create_worktree(state, repo_root=workdir, wave_id="P05-I01-W01")
     assert "refuses to branch from" in str(exc_info.value)
 
@@ -202,7 +202,7 @@ def test_create_refuses_detached_head(tmp_path: Path) -> None:
     ).stdout.strip()
     subprocess.run(["git", "-C", str(repo), "checkout", "-q", sha], check=True)
     state = _claimed_state()
-    with pytest.raises(cli_errors.InvalidInput) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     assert "non-detached HEAD" in str(exc_info.value)
 
@@ -212,7 +212,7 @@ def test_create_refuses_path_outside_repo(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     bogus = tmp_path / "elsewhere" / "wt"
-    with pytest.raises(cli_errors.InvalidInput) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         create_worktree(state, repo_root=repo, wave_id="P05-I01-W01", path=bogus)
     assert "outside repo root" in str(exc_info.value)
 
@@ -226,7 +226,7 @@ def test_create_refuses_existing_branch(tmp_path: Path) -> None:
         check=True,
     )
     state = _claimed_state()
-    with pytest.raises(cli_errors.InvalidInput) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     assert "already exists locally" in str(exc_info.value)
 
@@ -235,7 +235,7 @@ def test_create_missing_wave_raises_not_found(tmp_path: Path) -> None:
     """Unknown wave id -> :class:`NotFound`."""
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
-    with pytest.raises(cli_errors.NotFound):
+    with pytest.raises(cli_errors.UserError):
         create_worktree(state, repo_root=repo, wave_id="P99-I99-W99")
 
 
@@ -253,7 +253,7 @@ def test_create_refuses_invalid_wave_id_regex(tmp_path: Path) -> None:
     """Wave id failing the regex -> :class:`InvalidInput`."""
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
-    with pytest.raises(cli_errors.InvalidInput):
+    with pytest.raises(cli_errors.UserError):
         create_worktree(state, repo_root=repo, wave_id="not-a-wave")
 
 

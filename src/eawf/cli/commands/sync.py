@@ -93,8 +93,8 @@ def _load_state_or_none(state_path: Path) -> State | None:
     payload = orjson.loads(state_path.read_bytes())
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise cli_errors.InvalidInput(
-            f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
+        raise cli_errors.UserError(
+            f"state schema invalid: {'; '.join(report.schema_errors[:3])}", kind="InvalidInput"
         )
     return report.state
 
@@ -199,7 +199,9 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
     try:
         merged, _sources = merge_config(repo=target, workspace=target)
     except Exception as exc:
-        raise cli_errors.InvalidInput(f"layered config merge failed: {exc}") from exc
+        raise cli_errors.UserError(
+            f"layered config merge failed: {exc}", kind="InvalidInput"
+        ) from exc
 
     profiles_section = merged.get("profiles") if isinstance(merged, dict) else None
     if not isinstance(profiles_section, dict):
@@ -208,17 +210,21 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
     if raw_enabled is None:
         return []
     if not isinstance(raw_enabled, list):
-        raise cli_errors.InvalidInput(
-            f"profiles.enabled must be a list of profile ids; got {type(raw_enabled).__name__}"
+        raise cli_errors.UserError(
+            f"profiles.enabled must be a list of profile ids; got {type(raw_enabled).__name__}",
+            kind="InvalidInput",
         )
     enabled = [p for p in raw_enabled if isinstance(p, str)]
     if len(enabled) != len(raw_enabled):
-        raise cli_errors.InvalidInput("profiles.enabled entries must all be strings")
+        raise cli_errors.UserError(
+            "profiles.enabled entries must all be strings", kind="InvalidInput"
+        )
     known = set(list_profiles())
     unknown = sorted(set(enabled) - known)
     if unknown:
-        raise cli_errors.InvalidInput(
-            f"unknown profile(s) in profiles.enabled: {unknown}; choose from {sorted(known)}"
+        raise cli_errors.UserError(
+            f"unknown profile(s) in profiles.enabled: {unknown}; choose from {sorted(known)}",
+            kind="InvalidInput",
         )
     return enabled
 
@@ -518,7 +524,7 @@ def sync_cmd(
     )
     emit_json_or_text(payload, _format_text(payload), flags=flags)
     logger.info(
-        f"sync_cmd: target={target_dir} profiles={enabled_profiles} "
+        f"sync_cmd target={target_dir} profiles={enabled_profiles} "
         f"added={report['regions_added']} updated={report['regions_updated']} "
         f"unchanged={report['regions_unchanged']} "
         f"memory_views_regenerated={report['memory_views_regenerated']}"

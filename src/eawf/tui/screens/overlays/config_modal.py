@@ -60,7 +60,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Input, Static, TabbedContent, TabPane
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 from eawf.config.defaults import built_in_defaults
 from eawf.config.layered import (
     WRITABLE_LAYERS,
@@ -938,7 +938,7 @@ class ConfigModal(ModalScreen[None]):
         raw = message.value
         try:
             coerced = coerce_and_validate(entry, raw)
-        except InvalidInput as exc:
+        except UserError as exc:
             self._report_inline_error(str(exc))
             return
         self._view.dirty = self._drop_if_unchanged(entry, {**self._view.dirty, entry.key: coerced})

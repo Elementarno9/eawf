@@ -91,10 +91,10 @@ def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from eawf.cli.errors import InstrumentMissing
+    from eawf.cli.errors import UserError
 
     def angry_probe(*_args: Any, **_kwargs: Any) -> ProbeReport:
-        raise InstrumentMissing("git missing")
+        raise UserError("git missing", kind="InstrumentMissing")
 
     monkeypatch.setattr("eawf.doctor.checks.probe", angry_probe)
     monkeypatch.chdir(tmp_path)

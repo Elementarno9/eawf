@@ -123,7 +123,7 @@ def show_cmd(
     path, _reason = resolve_with_reason(workspace=effective_ws)
     if not path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {path}"),
+            cli_errors.UserError(f"state file not found: {path}", kind="NotFound"),
             flags=flags,
             data={"path": str(path)},
         )

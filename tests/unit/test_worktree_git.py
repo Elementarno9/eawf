@@ -23,7 +23,7 @@ def test_git_worktree_add_missing_git_raises_instrument_missing(
 ) -> None:
     """``shutil.which("git")`` returning ``None`` -> :class:`InstrumentMissing`."""
     monkeypatch.setattr("eawf.worktree.git.shutil.which", lambda _name: None)
-    with pytest.raises(cli_errors.InstrumentMissing) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         git.worktree_add(
             tmp_path,
             branch="feature/test",
@@ -48,7 +48,7 @@ def test_git_worktree_add_timeout_maps_to_integrity_violation(
         raise subprocess.TimeoutExpired(cmd=["git"], timeout=1.0)
 
     monkeypatch.setattr("eawf.worktree.git.subprocess.run", _raise_timeout)
-    with pytest.raises(cli_errors.IntegrityViolation) as exc_info:
+    with pytest.raises(cli_errors.StateConflict) as exc_info:
         git.worktree_add(
             tmp_path,
             branch="feature/test",
@@ -118,6 +118,6 @@ def test_current_branch_detached_head_raises_invalid_input(
         stderr = "fatal: ref HEAD is not a symbolic ref"
 
     monkeypatch.setattr("eawf.worktree.git.subprocess.run", lambda *_a, **_k: _Result())
-    with pytest.raises(cli_errors.InvalidInput) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         git.current_branch(tmp_path)
     assert "non-detached HEAD" in str(exc_info.value)

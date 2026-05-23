@@ -46,9 +46,10 @@ from typing import Annotated, Any
 
 import orjson
 import typer
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ValidationError as PydValidationError
 
-from eawf.cli.errors import InvalidInput, NotFound, UserDeclined, ValidationFailed, emit_error
+from eawf.cli.errors import StateConflict, UserError, ValidationError, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.config.registry import (
@@ -217,7 +218,7 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             os.fsync(parent_fd)
         finally:
             os.close(parent_fd)
-        logger.info(f"_atomic_write_yaml wrote {target}")
+        logger.info(f"_atomic_write_yaml wrote path={target}")
     finally:
         with contextlib.suppress(FileNotFoundError):
             tmp.unlink(missing_ok=True)
@@ -317,11 +318,10 @@ def _save_value_to_layer(
             from eawf.cli._mutation import _daemon_reachable
 
             if not _daemon_reachable():
-                from eawf.cli.errors import IntegrityViolation
-
-                raise IntegrityViolation(
+                raise StateConflict(
                     "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                    "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out"
+                    "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out",
+                    kind="IntegrityViolation",
                 )
             key_path = key.split(".")
             try:
@@ -369,22 +369,24 @@ def config_get(
     repo, workspace = _resolve_anchors(flags)
     try:
         merged, sources = merge_config(workspace=workspace, repo=repo)
-    except ValidationFailed as exc:
+    except ValidationError as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
     if scope is not None and scope not in LAYER_ORDER:
-        emit_error(InvalidInput(f"unknown scope {scope!r}"), flags=flags)
+        emit_error(UserError(f"unknown scope {scope!r}", kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
     try:
         value = get_dotted(merged, key)
     except KeyError:
-        emit_error(NotFound(f"key not found: {key}"), flags=flags)
+        emit_error(UserError(f"key not found: {key}", kind="NotFound"), flags=flags)
         return  # pragma: no cover
 
     source = sources.get(key, "built-in")
     if scope is not None and source != scope:
-        emit_error(NotFound(f"key {key} not provided by scope {scope}"), flags=flags)
+        emit_error(
+            UserError(f"key {key} not provided by scope {scope}", kind="NotFound"), flags=flags
+        )
         return  # pragma: no cover
 
     payload = {"key": key, "value": value, "source": source}
@@ -415,14 +417,18 @@ def config_set(
 
     if scope == "built-in":
         emit_error(
-            InvalidInput("layer 'built-in' is read-only; choose global|workspace|repo|local"),
+            UserError(
+                "layer 'built-in' is read-only; choose global|workspace|repo|local",
+                kind="InvalidInput",
+            ),
             flags=flags,
         )
         return  # pragma: no cover
     if scope not in WRITABLE_LAYERS:
         emit_error(
-            InvalidInput(
-                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}"
+            UserError(
+                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -431,24 +437,24 @@ def config_set(
     try:
         target_path = layer_path(scope, workspace=workspace, repo=repo)
     except ValueError as exc:
-        emit_error(InvalidInput(str(exc)), flags=flags)
+        emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
     coerced = _coerce_value(value)
     try:
         _save_value_to_layer(target_path=target_path, key=key, value=coerced, repo_root=repo)
-    except ValidationFailed as exc:
+    except ValidationError as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
     except yaml.YAMLError as exc:
         emit_error(
-            ValidationFailed(f"config layer is not valid YAML: {exc}"),
+            ValidationError(f"config layer is not valid YAML: {exc}"),
             flags=flags,
         )
         return  # pragma: no cover
     except OSError as exc:
         emit_error(
-            InvalidInput(f"cannot read or write {target_path}: {exc}"),
+            UserError(f"cannot read or write {target_path}: {exc}", kind="InvalidInput"),
             flags=flags,
         )
         return  # pragma: no cover
@@ -496,19 +502,19 @@ def config_validate(
     # Argument validation (scope shape) before merge so unknown labels exit 3
     # instead of bubbling up through the merge engine.
     if scope is not None and scope not in LAYER_ORDER:
-        emit_error(InvalidInput(f"unknown scope {scope!r}"), flags=flags)
+        emit_error(UserError(f"unknown scope {scope!r}", kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
     try:
         merged, _sources = merge_config(workspace=workspace, repo=repo)
-    except ValidationFailed as exc:
+    except ValidationError as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover
 
     try:
         _ConfigSchema.model_validate(merged)
-    except ValidationError as exc:
-        emit_error(ValidationFailed(f"config schema rejected: {exc}"), flags=flags)
+    except PydValidationError as exc:
+        emit_error(ValidationError(f"config schema rejected: {exc}"), flags=flags)
         return  # pragma: no cover
 
     payload: dict[str, Any] = {"ok": True, "scope": scope}
@@ -525,7 +531,7 @@ def config_validate(
         enabled_raw = profiles_section.get("enabled") or []
         if not isinstance(enabled_raw, list):
             emit_error(
-                ValidationFailed(
+                ValidationError(
                     f"profiles.enabled must be a list, got {type(enabled_raw).__name__}"
                 ),
                 flags=flags,
@@ -535,7 +541,7 @@ def config_validate(
 
         try:
             bodies = [load_profile(pid) for pid in enabled]
-        except InvalidInput as exc:
+        except UserError as exc:
             emit_error(exc, flags=flags)
             return  # pragma: no cover
 
@@ -571,14 +577,18 @@ def profile_enable(
 
     if scope == "built-in":
         emit_error(
-            InvalidInput("layer 'built-in' is read-only; choose global|workspace|repo|local"),
+            UserError(
+                "layer 'built-in' is read-only; choose global|workspace|repo|local",
+                kind="InvalidInput",
+            ),
             flags=flags,
         )
         return  # pragma: no cover
     if scope not in WRITABLE_LAYERS:
         emit_error(
-            InvalidInput(
-                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}"
+            UserError(
+                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -587,7 +597,7 @@ def profile_enable(
     try:
         target_path = layer_path(scope, workspace=workspace, repo=repo)
     except ValueError as exc:
-        emit_error(InvalidInput(str(exc)), flags=flags)
+        emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
     state_path = repo / ".ea" / "state.json"
@@ -600,18 +610,18 @@ def profile_enable(
             layer_file_path=target_path,
             state_path=state_arg,
         )
-    except (InvalidInput, NotFound, ValidationFailed) as exc:
+    except (UserError, ValidationError) as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover
     except yaml.YAMLError as exc:
         emit_error(
-            ValidationFailed(f"config layer is not valid YAML: {exc}"),
+            ValidationError(f"config layer is not valid YAML: {exc}"),
             flags=flags,
         )
         return  # pragma: no cover
     except OSError as exc:
         emit_error(
-            InvalidInput(f"cannot read or write {target_path}: {exc}"),
+            UserError(f"cannot read or write {target_path}: {exc}", kind="InvalidInput"),
             flags=flags,
         )
         return  # pragma: no cover
@@ -661,7 +671,7 @@ def _ensure_menu_answer(value: Any, *, step: str) -> Any:
     distinctly from validation failures.
     """
     if value is None:
-        raise UserDeclined(f"menu cancelled at step {step!r}")
+        raise UserError(f"menu cancelled at step {step!r}", kind="UserDeclined")
     return value
 
 
@@ -743,7 +753,7 @@ def _prompt_for_value(entry: ConfigKey, current: Any) -> Any:
             ).ask(),
             step=entry.key,
         )
-    raise InvalidInput(f"unknown registry type: {entry.type}")
+    raise UserError(f"unknown registry type: {entry.type}", kind="InvalidInput")
 
 
 def _menu_get_current_value(merged: dict[str, Any], entry: ConfigKey) -> Any:
@@ -804,14 +814,18 @@ def config_menu(
 
     if scope == "built-in":
         emit_error(
-            InvalidInput("layer 'built-in' is read-only; choose global|workspace|repo|local"),
+            UserError(
+                "layer 'built-in' is read-only; choose global|workspace|repo|local",
+                kind="InvalidInput",
+            ),
             flags=flags,
         )
         return  # pragma: no cover
     if scope not in WRITABLE_LAYERS:
         emit_error(
-            InvalidInput(
-                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}"
+            UserError(
+                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -820,18 +834,18 @@ def config_menu(
     try:
         target_path = layer_path(scope, workspace=workspace, repo=repo)
     except ValueError as exc:
-        emit_error(InvalidInput(str(exc)), flags=flags)
+        emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
         return  # pragma: no cover
 
     try:
         merged, _sources = merge_config(workspace=workspace, repo=repo)
-    except ValidationFailed as exc:
+    except ValidationError as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover
 
     if not CONFIG_REGISTRY:  # pragma: no cover  defensive — module asserts non-empty
         emit_error(
-            InvalidInput("config metadata registry is empty; cannot open menu"),
+            UserError("config metadata registry is empty; cannot open menu", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -855,7 +869,7 @@ def config_menu(
         fields = keys_for_tab(tab)
         if not fields:  # pragma: no cover  registry invariants assert non-empty per tab
             emit_error(
-                InvalidInput(f"no fields registered under tab {tab!r}"),
+                UserError(f"no fields registered under tab {tab!r}", kind="InvalidInput"),
                 flags=flags,
             )
             return
@@ -879,27 +893,24 @@ def config_menu(
         current_value = _menu_get_current_value(merged, entry)
         raw_answer = _prompt_for_value(entry, current_value)
         coerced = coerce_and_validate(entry, raw_answer)
-    except UserDeclined as exc:
-        emit_error(exc, flags=flags)
-        return  # pragma: no cover
-    except InvalidInput as exc:
+    except UserError as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover
 
     try:
         _save_value_to_layer(target_path=target_path, key=entry.key, value=coerced, repo_root=repo)
-    except ValidationFailed as exc:
+    except ValidationError as exc:
         emit_error(exc, flags=flags)
         return  # pragma: no cover
     except yaml.YAMLError as exc:
         emit_error(
-            ValidationFailed(f"config layer is not valid YAML: {exc}"),
+            ValidationError(f"config layer is not valid YAML: {exc}"),
             flags=flags,
         )
         return  # pragma: no cover
     except OSError as exc:
         emit_error(
-            InvalidInput(f"cannot read or write {target_path}: {exc}"),
+            UserError(f"cannot read or write {target_path}: {exc}", kind="InvalidInput"),
             flags=flags,
         )
         return  # pragma: no cover

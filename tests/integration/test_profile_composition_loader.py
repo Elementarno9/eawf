@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.errors import ValidationFailed
+from eawf.cli.errors import ValidationError
 from eawf.profiles import (
     ComposedProfile,
     ProfileConflict,
@@ -290,7 +290,7 @@ def test_loader_profile_conflict_subclasses_validation_failed(tmp_path: Path) ->
     ws = tmp_path / "ws"
     _write_profile(ws, "alpha", "name: alpha\nconflicts_with: [beta]\n")
     _write_profile(ws, "beta", "name: beta\n")
-    with pytest.raises(ValidationFailed):
+    with pytest.raises(ValidationError):
         load_composed_profile(["alpha", "beta"], workspace=ws)
 
 
@@ -356,7 +356,7 @@ def test_loader_rejects_unknown_top_level_key_in_yaml(tmp_path: Path) -> None:
         unknown_future_key: 42
         """,
     )
-    with pytest.raises(ValidationFailed) as excinfo:
+    with pytest.raises(ValidationError) as excinfo:
         load_composed_profile(["alpha"], workspace=ws)
     assert "alpha" in str(excinfo.value)
 
@@ -371,7 +371,7 @@ def test_loader_rejects_invalid_dispatch_session_policy_in_yaml(tmp_path: Path) 
         dispatch_session_policy: not-a-policy
         """,
     )
-    with pytest.raises(ValidationFailed):
+    with pytest.raises(ValidationError):
         load_composed_profile(["alpha"], workspace=ws)
 
 

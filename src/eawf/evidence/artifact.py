@@ -17,7 +17,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from eawf.cli.errors import InvalidInput, NotFound
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.state.models import Artifact, State
 from eawf.store.envelope import Envelope
@@ -32,7 +32,7 @@ def _validate_artifact_location(uri: str) -> None:
         or PurePosixPath(uri).is_absolute()
         or PureWindowsPath(uri).is_absolute()
     ):
-        raise InvalidInput("artifact uri must not be file:// or absolute path")
+        raise UserError("artifact uri must not be file:// or absolute path", kind="InvalidInput")
 
 
 def add_artifact(
@@ -51,7 +51,7 @@ def add_artifact(
 
     artifacts: dict[str, Artifact] = dict(state.artifacts)
     if artifact_id in artifacts:
-        raise InvalidInput(f"artifact {artifact_id!r} already exists")
+        raise UserError(f"artifact {artifact_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
     artifact = Artifact(
@@ -88,7 +88,7 @@ def add_artifact(
 def show_artifact(state: State, artifact_id: str) -> Artifact:
     """Read-only lookup."""
     if artifact_id not in state.artifacts:
-        raise NotFound(f"artifact {artifact_id!r} not found")
+        raise UserError(f"artifact {artifact_id!r} not found", kind="NotFound")
     return state.artifacts[artifact_id]
 
 
@@ -130,9 +130,11 @@ def update_artifact(
         Event envelope describing the update; caller appends to event.jsonl.
     """
     if sha256 is None and size_bytes is None and uri is None:
-        raise InvalidInput("at least one of sha256, size_bytes, uri must be supplied")
+        raise UserError(
+            "at least one of sha256, size_bytes, uri must be supplied", kind="InvalidInput"
+        )
     if artifact_id not in state.artifacts:
-        raise NotFound(f"artifact {artifact_id!r} not found")
+        raise UserError(f"artifact {artifact_id!r} not found", kind="NotFound")
     if uri is not None:
         _validate_artifact_location(uri)
 

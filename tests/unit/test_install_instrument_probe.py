@@ -22,7 +22,7 @@ from unittest import mock
 
 import pytest
 
-from eawf.cli.errors import InstrumentMissing
+from eawf.cli.errors import UserError
 from eawf.install import instrument_probe
 
 
@@ -99,7 +99,7 @@ def test_probe_hard_missing_raises(tmp_path: Path) -> None:
         mock.patch("eawf.install.instrument_probe.shutil.which", _make_which({"python", "uv"})),
         mock.patch("eawf.install.instrument_probe.subprocess.run", _stub_subprocess_run),
     ):
-        with pytest.raises(InstrumentMissing) as exc:
+        with pytest.raises(UserError) as exc:
             instrument_probe.probe(["core"], cache_path=cache_path)
         assert "git" in str(exc.value)
 

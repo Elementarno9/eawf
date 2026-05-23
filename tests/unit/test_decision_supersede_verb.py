@@ -64,19 +64,19 @@ def test_supersede_decision_flips_both_ends(tmp_path: Path) -> None:
 
 def test_supersede_decision_unknown_old_raises(tmp_path: Path) -> None:
     state = _seed_two_decisions(tmp_path)
-    with pytest.raises(cli_errors.NotFound, match="decision 'D999' not found"):
+    with pytest.raises(cli_errors.UserError, match="decision 'D999' not found"):
         decision.supersede_decision(state, old_id="D999", new_id="D011")
 
 
 def test_supersede_decision_unknown_new_raises(tmp_path: Path) -> None:
     state = _seed_two_decisions(tmp_path)
-    with pytest.raises(cli_errors.NotFound, match="superseding decision 'D999' not found"):
+    with pytest.raises(cli_errors.UserError, match="superseding decision 'D999' not found"):
         decision.supersede_decision(state, old_id="D010", new_id="D999")
 
 
 def test_supersede_decision_self_raises(tmp_path: Path) -> None:
     state = _seed_two_decisions(tmp_path)
-    with pytest.raises(cli_errors.InvalidInput, match="cannot supersede itself"):
+    with pytest.raises(cli_errors.UserError, match="cannot supersede itself"):
         decision.supersede_decision(state, old_id="D010", new_id="D010")
 
 
@@ -84,7 +84,7 @@ def test_supersede_decision_already_superseded_raises(tmp_path: Path) -> None:
     state = _seed_two_decisions(tmp_path)
     decision.add_decision(state, decision_id="D012", scope_id="QR", summary="newer", rationale="r3")
     decision.supersede_decision(state, old_id="D010", new_id="D011")
-    with pytest.raises(cli_errors.InvalidInput, match="only ACTIVE decisions can be superseded"):
+    with pytest.raises(cli_errors.UserError, match="only ACTIVE decisions can be superseded"):
         decision.supersede_decision(state, old_id="D010", new_id="D012")
 
 
@@ -93,7 +93,7 @@ def test_supersede_decision_reverse_link_cycle_raises(tmp_path: Path) -> None:
     # because the superseder (A) is already SUPERSEDED.
     state = _seed_two_decisions(tmp_path)
     decision.supersede_decision(state, old_id="D010", new_id="D011")
-    with pytest.raises(cli_errors.InvalidInput, match="only ACTIVE decisions can supersede"):
+    with pytest.raises(cli_errors.UserError, match="only ACTIVE decisions can supersede"):
         decision.supersede_decision(state, old_id="D011", new_id="D010")
     # State is unchanged by the rejected call: D011 stays the live ACTIVE head.
     assert state.decisions["D011"].status == DecisionStatus.ACTIVE

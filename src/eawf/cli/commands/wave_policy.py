@@ -102,17 +102,19 @@ def policy_set(
     flags: GlobalFlags = ctx.obj
     try:
         if scope_kind not in SANDBOX_SCOPE_KINDS:
-            raise cli_errors.InvalidInput(
-                f"unknown scope_kind {scope_kind!r}; expected one of {list(SANDBOX_SCOPE_KINDS)}"
+            raise cli_errors.UserError(
+                f"unknown scope_kind {scope_kind!r}; expected one of {list(SANDBOX_SCOPE_KINDS)}",
+                kind="InvalidInput",
             )
         state_path = resolve_state_path(flags.workspace)
         with state_transaction(state_path) as state:
             policies = state.sandbox_policies if state.sandbox_policies is not None else {}
             resolved_id = policy_id if policy_id is not None else allocate_policy_id(policies)
             if resolved_id in policies:
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"sandbox policy id {resolved_id!r} already exists; "
-                    "pick another or run `eawf wave policy show` to inspect"
+                    "pick another or run `eawf wave policy show` to inspect",
+                    kind="InvalidInput",
                 )
             try:
                 policy = SandboxPolicy(
@@ -124,7 +126,7 @@ def policy_set(
                     granted_at=datetime.now(UTC),
                 )
             except ValidationError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             policies[resolved_id] = policy
             state.sandbox_policies = policies
             state.updated_at = datetime.now(UTC)
@@ -139,7 +141,7 @@ def policy_set(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @wave_policy_app.command("show")
@@ -163,11 +165,11 @@ def policy_show(
     try:
         state_path = resolve_state_path(flags.workspace)
         if not state_path.exists():
-            raise cli_errors.NotFound(f"state file not found: {state_path}")
+            raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
         payload = orjson.loads(state_path.read_bytes())
         report = validate_state(payload, strict_optional=False)
         if report.state is None:
-            raise cli_errors.ValidationFailed(
+            raise cli_errors.ValidationError(
                 f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
             )
         state: State = report.state
@@ -190,7 +192,7 @@ def policy_show(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 __all__ = ["wave_policy_app"]

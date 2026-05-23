@@ -1,18 +1,22 @@
 """Exit-code-mapped error helpers + ErrorEnvelope for CLI handlers.
 
-The v0.3 CLI surface compresses the legacy nine ``CliError`` subclasses
-into five buckets — ``UserError``, ``ValidationError``,
-``StateConflict``, ``DaemonUnreachable``, ``InternalError`` — that map
-1:1 onto the new 0..5 exit-code surface. Legacy specificity is preserved
-via ``ErrorEnvelope.data.kind`` per the disambiguation rule.
+The v0.3 CLI surface offers exactly five ``CliError`` buckets —
+``UserError``, ``ValidationError``, ``StateConflict``,
+``DaemonUnreachable``, ``InternalError`` — that map 1:1 onto the 0..5
+exit-code surface. Per-cause specificity is preserved via
+``ErrorEnvelope.data.kind`` per the disambiguation rule: callers raise
+the bucket with a fine-grained cause tag in the ``kind=`` constructor
+kwarg, e.g. ``UserError(msg, kind="NotFound")`` or
+``StateConflict(msg, kind="LockConflict")``.
 
-The legacy nine subclasses (``NotFound``, ``InvalidInput``,
+The eight deprecated subclass aliases (``NotFound``, ``InvalidInput``,
 ``ValidationFailed``, ``LockConflict``, ``InstrumentMissing``,
-``UserDeclined``, ``IntegrityViolation``, ``HookBlocked``) remain
-importable as deprecation-aliased subclasses of the new five so the
-~100 existing callsites continue to compile. Downstream waves migrate
-each callsite to raise the new class names directly with the
-appropriate ``data.kind``; once empty, the aliases will be dropped.
+``UserDeclined``, ``IntegrityViolation``, ``HookBlocked``) were removed
+in P27-I03-W18 once every callsite migrated to the bucket + ``kind=``
+form. Domain-specific subclasses that remain (e.g.
+:class:`eawf.install.wizard.WizardCancelled`,
+:class:`eawf.profiles.compose.ProfileConflict`) still fold their concrete
+class name into ``data.kind`` via :func:`build_envelope`.
 
 Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
 
@@ -145,79 +149,6 @@ class DaemonMutationIndeterminate(DaemonUnreachable):
     """
 
 
-# --- Legacy nine-class subclasses (deprecation aliases) --------------------
-# Each legacy class subclasses its new five-class bucket so existing
-# ``raise errors.LockConflict(...)`` callsites keep working unchanged.
-# ``isinstance(err, errors.LockConflict)`` continues to hold for legacy
-# call paths; ``isinstance(err, errors.StateConflict)`` also holds (new
-# bucket). Downstream waves migrate each callsite to either raise the
-# new class with ``data={"kind": "LockConflict"}`` or drop the alias.
-
-
-class NotFound(UserError):  # noqa: N818 — canonical CLI error name
-    """Scope, state file, artifact, or referenced ID was not found.
-
-    Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "NotFound"}``.
-    """
-
-
-class InvalidInput(UserError):  # noqa: N818 — canonical CLI error name
-    """Bad CLI args or schema mismatch on input.
-
-    Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "InvalidInput"}``.
-    """
-
-
-class ValidationFailed(ValidationError):  # noqa: N818 — canonical CLI error name
-    """Strict invariant validation rejected the candidate state.
-
-    Legacy class — deprecated. New callers raise :class:`ValidationError`
-    directly (the legacy and new buckets coincide).
-    """
-
-
-class LockConflict(StateConflict):
-    """Sibling lock held by a live holder, or wait timed out.
-
-    Legacy class — deprecated. New callers raise :class:`StateConflict`
-    with ``data={"kind": "LockConflict"}``.
-    """
-
-
-class InstrumentMissing(UserError):  # noqa: N818 — canonical CLI error name
-    """A required external tool (git, jq, ...) is absent.
-
-    Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "InstrumentMissing"}``.
-    """
-
-
-class UserDeclined(UserError):  # noqa: N818 — canonical CLI error name
-    """User declined at a confirmation gate (or ``--no-input`` aborted it).
-
-    Legacy class — deprecated. New callers raise :class:`UserError` with
-    ``data={"kind": "UserDeclined"}``.
-    """
-
-
-class IntegrityViolation(StateConflict):
-    """Hash mismatch, drift, or corrupted store.
-
-    Legacy class — deprecated. New callers raise :class:`StateConflict`
-    with ``data={"kind": "IntegrityViolation"}``.
-    """
-
-
-class HookBlocked(StateConflict):
-    """Pre-/post-tool hook fail-closed.
-
-    Legacy class — deprecated. New callers raise :class:`StateConflict`
-    with ``data={"kind": "HookBlocked"}``.
-    """
-
-
 # --- ErrorEnvelope ---------------------------------------------------------
 
 
@@ -239,7 +170,7 @@ class ErrorEnvelope(BaseModel):
 
     The five canonical ``error`` subclass names are ``UserError``,
     ``ValidationError``, ``StateConflict``, ``DaemonUnreachable``, and
-    ``InternalError``. Legacy subclass names (``NotFound``,
+    ``InternalError``. Fine-grained cause tags (``NotFound``,
     ``LockConflict``, etc.) surface through ``data.kind`` for CI scripts
     that need fine-grained pivots without growing the exit-code surface.
     """
@@ -278,7 +209,7 @@ class ErrorEnvelope(BaseModel):
 
     data: dict[str, Any] = Field(default_factory=dict)
     """Verb-specific structured context. Always JSON-safe. The ``kind``
-    key preserves the legacy nine-class subclass distinction
+    key carries the fine-grained cause tag
     (``"NotFound"`` / ``"InstrumentMissing"`` / ``"HookBlocked"`` / ...)
     so CI scripts can pivot on specific failure modes without growing
     the exit-code surface."""
@@ -310,7 +241,7 @@ _DEFAULT_HINTS: dict[str, str] = {
     ),
 }
 
-# Per-``data.kind`` refinement preserves legacy specificity inside the
+# Per-``data.kind`` refinement preserves per-cause specificity inside the
 # five buckets.
 _KIND_HINTS: dict[str, str] = {
     "NotFound": "check the scope id or run `eawf state resolve` to see resolved paths",
@@ -332,12 +263,13 @@ _KIND_HINTS: dict[str, str] = {
 
 
 def _canonical_error_name(err: CliError) -> str:
-    """Return the canonical (new five-bucket) class name for *err*.
+    """Return the canonical (five-bucket) class name for *err*.
 
-    Walks the MRO until it hits one of the five new bucket classes. For a
-    legacy subclass like :class:`NotFound`, this returns ``"UserError"``.
-    For a direct ``UserError`` raise, this returns ``"UserError"``.
-    The legacy class name is preserved separately via ``data.kind``.
+    Walks the MRO until it hits one of the five bucket classes. For a
+    domain subclass like :class:`eawf.profiles.compose.ProfileConflict`,
+    this returns ``"ValidationError"``. For a direct ``UserError`` raise,
+    this returns ``"UserError"``. The concrete class name is preserved
+    separately via ``data.kind``.
     """
     for cls in type(err).__mro__:
         name = cls.__name__
@@ -346,12 +278,14 @@ def _canonical_error_name(err: CliError) -> str:
     return "CliError"
 
 
-def _legacy_kind(err: CliError) -> str | None:
-    """Return the legacy class name when *err* is a legacy subclass.
+def _concrete_kind(err: CliError) -> str | None:
+    """Return the concrete class name when *err* is a domain subclass.
 
-    Returns ``None`` when *err* is already a new five-bucket class. This
-    is what gets folded into ``data.kind`` so CI scripts retain their
-    fine-grained pivot.
+    Returns ``None`` when *err* is one of the five bucket classes itself
+    (so the bucket's threaded ``kind=`` tag wins instead). For a domain
+    subclass such as :class:`eawf.install.wizard.WizardCancelled`, this
+    returns its concrete name, which is what gets folded into ``data.kind``
+    so CI scripts retain their fine-grained pivot.
     """
     cls_name = type(err).__name__
     if cls_name in _DEFAULT_HINTS:
@@ -363,9 +297,9 @@ def _resolve_hint(canonical: str, kind: str | None) -> str:
     """Pick the most specific hint for *canonical* + *kind*.
 
     Args:
-        canonical: One of the five new bucket class names.
-        kind: Legacy subclass name (or operator-supplied kind tag) when
-            present.
+        canonical: One of the five bucket class names.
+        kind: Fine-grained cause tag (concrete subclass name or
+            operator-supplied ``kind=``) when present.
 
     Returns:
         The kind-specific hint when one exists; otherwise the bucket
@@ -386,16 +320,16 @@ def build_envelope(
 ) -> ErrorEnvelope:
     """Construct a typed :class:`ErrorEnvelope` for *err*.
 
-    The envelope ``error`` field carries the canonical new-bucket name
+    The envelope ``error`` field carries the canonical bucket name
     (``UserError`` / ``ValidationError`` / ``StateConflict`` /
-    ``DaemonUnreachable`` / ``InternalError``). When *err* is a legacy
-    subclass, the legacy name is preserved in ``data.kind`` per the
-    disambiguation rule. An optional cause-level *error_code* layers the
-    precise :class:`~eawf.cli.error_codes.ErrorCode` over the bucket
+    ``DaemonUnreachable`` / ``InternalError``). When *err* is a domain
+    subclass, its concrete class name is preserved in ``data.kind`` per
+    the disambiguation rule. An optional cause-level *error_code* layers
+    the precise :class:`~eawf.cli.error_codes.ErrorCode` over the bucket
     without changing the exit code.
 
     Args:
-        err: The :class:`CliError` (or legacy subclass) instance.
+        err: The :class:`CliError` (or domain subclass) instance.
         error_code: Optional cause-level
             :class:`~eawf.cli.error_codes.ErrorCode`. Stored as its string
             value so the text branch renders a ``See <code>`` line.
@@ -404,17 +338,17 @@ def build_envelope(
         protocol_version: Daemon protocol version (only set on
             ``ProtocolMismatch``).
         data: Verb-specific structured context. When ``data`` lacks
-            ``kind``, the legacy subclass name (if *err* is a legacy
-            class) or the error's threaded ``kind`` tag (if set, e.g.
+            ``kind``, the concrete subclass name (if *err* is a domain
+            subclass) or the error's threaded ``kind`` tag (if set, e.g.
             from :func:`cli_error_for_rpc`) is injected as ``data.kind``.
 
     Returns:
         A populated :class:`ErrorEnvelope`.
     """
     canonical = _canonical_error_name(err)
-    legacy = _legacy_kind(err)
+    concrete = _concrete_kind(err)
     merged_data: dict[str, Any] = dict(data) if data else {}
-    threaded = legacy if legacy is not None else err.kind
+    threaded = concrete if concrete is not None else err.kind
     if threaded is not None and "kind" not in merged_data:
         merged_data["kind"] = threaded
     kind = merged_data.get("kind")

@@ -141,12 +141,14 @@ wave_app.add_typer(wave_budget_app, name="budget")
 def _read_state_payload(path: Path) -> dict[str, Any]:
     """Read and JSON-decode *path*. Raises ``cli_errors.NotFound`` on miss."""
     if not path.exists():
-        raise cli_errors.NotFound(f"state file not found: {path}")
+        raise cli_errors.UserError(f"state file not found: {path}", kind="NotFound")
     raw = path.read_bytes()
     try:
         return orjson.loads(raw)  # type: ignore[no-any-return]
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.IntegrityViolation(f"corrupted state at {path}: {exc}") from exc
+        raise cli_errors.StateConflict(
+            f"corrupted state at {path}: {exc}", kind="IntegrityViolation"
+        ) from exc
 
 
 def _validate_or_raise(payload: dict[str, Any]) -> State:
@@ -157,7 +159,7 @@ def _validate_or_raise(payload: dict[str, Any]) -> State:
     if not report.ok:
         msgs = list(report.schema_errors)
         msgs.extend(f"{v.code}@{v.path}: {v.message}" for v in report.violations)
-        raise cli_errors.ValidationFailed("; ".join(msgs))
+        raise cli_errors.ValidationError("; ".join(msgs))
     assert report.state is not None  # ok==True guarantees this
     return report.state
 
@@ -294,22 +296,23 @@ def _resolve_commit_sha(ref: str) -> str:
         )
     except subprocess.TimeoutExpired as exc:
         logger.debug(f"resolve_commit_sha ref={ref!r} status=timeout")
-        raise cli_errors.InvalidInput(
-            f"cannot resolve commit ref: {ref!r} (git rev-parse timed out)"
+        raise cli_errors.UserError(
+            f"cannot resolve commit ref: {ref!r} (git rev-parse timed out)", kind="InvalidInput"
         ) from exc
     except (FileNotFoundError, OSError) as exc:
         logger.debug(f"resolve_commit_sha ref={ref!r} status=os-error err={exc!s}")
-        raise cli_errors.InvalidInput(
-            f"cannot resolve commit ref: {ref!r} (git unavailable: {exc!s})"
+        raise cli_errors.UserError(
+            f"cannot resolve commit ref: {ref!r} (git unavailable: {exc!s})", kind="InvalidInput"
         ) from exc
     if out.returncode != 0:
         logger.debug(f"resolve_commit_sha ref={ref!r} status=non-zero rc={out.returncode}")
-        raise cli_errors.InvalidInput(f"cannot resolve commit ref: {ref!r}")
+        raise cli_errors.UserError(f"cannot resolve commit ref: {ref!r}", kind="InvalidInput")
     sha = out.stdout.strip()
     if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha):
         logger.debug(f"resolve_commit_sha ref={ref!r} status=non-canonical sha={sha!r}")
-        raise cli_errors.InvalidInput(
-            f"cannot resolve commit ref: {ref!r} (got non-canonical sha: {sha!r})"
+        raise cli_errors.UserError(
+            f"cannot resolve commit ref: {ref!r} (got non-canonical sha: {sha!r})",
+            kind="InvalidInput",
         )
     logger.info(f"resolve_commit_sha ref={ref!r} sha={sha}")
     return sha
@@ -336,9 +339,10 @@ def _wave_close_via_daemon(
 
     if not _daemon_reachable():
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(
+            cli_errors.StateConflict(
                 "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out"
+                "run `eawf daemon start` or unset daemon.proxy_enabled for the V1 carve-out",
+                kind="IntegrityViolation",
             ),
             flags=flags,
         )
@@ -363,9 +367,11 @@ def _wave_close_via_daemon(
             )
             return False
         if exc.code == cli_errors.RPC_VALIDATION_FAILED:
-            cli_errors.emit_error(cli_errors.ValidationFailed(exc.message), flags=flags)
+            cli_errors.emit_error(cli_errors.ValidationError(exc.message), flags=flags)
             return True
-        cli_errors.emit_error(cli_errors.IntegrityViolation(exc.message), flags=flags)
+        cli_errors.emit_error(
+            cli_errors.StateConflict(exc.message, kind="IntegrityViolation"), flags=flags
+        )
         return True
     except (RuntimeError, OSError, TimeoutError) as exc:
         logger.debug(f"_wave_close_via_daemon transport_error={exc!s}")
@@ -405,11 +411,13 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return None
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}; run `eawf project init`"),
+            cli_errors.UserError(
+                f"state file not found: {state_path}; run `eawf project init`", kind="NotFound"
+            ),
             flags=flags,
         )
         return None
@@ -418,7 +426,9 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
         state = State.model_validate(payload)
     except PydValidationError as exc:
         cli_errors.emit_error(
-            cli_errors.IntegrityViolation(f"state at {state_path} fails schema validation: {exc}"),
+            cli_errors.StateConflict(
+                f"state at {state_path} fails schema validation: {exc}", kind="IntegrityViolation"
+            ),
             flags=flags,
         )
         return None
@@ -440,13 +450,13 @@ def _resolve_iter_for_query(
     if iter_flag is not None:
         if not is_iter_id(iter_flag):
             cli_errors.emit_error(
-                cli_errors.InvalidInput(f"invalid iter id: {iter_flag!r}"),
+                cli_errors.UserError(f"invalid iter id: {iter_flag!r}", kind="InvalidInput"),
                 flags=flags,
             )
             return None
         if iter_flag not in state.iters:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(f"unknown iter {iter_flag!r}"),
+                cli_errors.UserError(f"unknown iter {iter_flag!r}", kind="InvalidInput"),
                 flags=flags,
             )
             return None
@@ -454,8 +464,9 @@ def _resolve_iter_for_query(
     if state.current.iter_id is not None:
         return state.current.iter_id
     cli_errors.emit_error(
-        cli_errors.InvalidInput(
-            "no --iter given and state.current.iter_id is unset; specify --iter"
+        cli_errors.UserError(
+            "no --iter given and state.current.iter_id is unset; specify --iter",
+            kind="InvalidInput",
         ),
         flags=flags,
     )
@@ -530,11 +541,13 @@ def _run_mutation(
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}; run `eawf project init`"),
+            cli_errors.UserError(
+                f"state file not found: {state_path}; run `eawf project init`", kind="NotFound"
+            ),
             flags=flags,
         )
         return
@@ -547,17 +560,18 @@ def _run_mutation(
             try:
                 state = State.model_validate(payload)
             except PydValidationError as exc:
-                raise cli_errors.IntegrityViolation(
-                    f"state at {state_path} fails schema validation: {exc}"
+                raise cli_errors.StateConflict(
+                    f"state at {state_path} fails schema validation: {exc}",
+                    kind="IntegrityViolation",
                 ) from exc
             try:
                 mutate(state)
             except LifecycleError as exc:
                 if closure_kind:
-                    raise cli_errors.ValidationFailed(str(exc)) from exc
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                    raise cli_errors.ValidationError(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             except (PydValidationError, ValueError) as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             resolved_scope_id = scope_id if scope_id is not None else scope_id_factory()
             # The library writer raises ``StateValidationError`` for a
@@ -575,7 +589,7 @@ def _run_mutation(
                     summary=command,
                 )
             except StateValidationError as exc:
-                raise cli_errors.ValidationFailed(str(exc)) from exc
+                raise cli_errors.ValidationError(str(exc)) from exc
 
     # Route through the daemon only when proxying is enabled in the merged
     # config (the post-P24-W10 default). The V1 carve-out
@@ -604,7 +618,7 @@ def _run_mutation(
         else:
             _in_process()
     except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)

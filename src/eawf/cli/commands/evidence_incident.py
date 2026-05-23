@@ -65,7 +65,9 @@ def incident_open(
             resolved_scope = scope_id
             if resolved_scope is None:
                 if state.project is None:
-                    raise cli_errors.InvalidInput("scope_id required when state.project is unset")
+                    raise cli_errors.UserError(
+                        "scope_id required when state.project is unset", kind="InvalidInput"
+                    )
                 resolved_scope = state.project.code
             record, event = incident_evi.open_incident(
                 state,

@@ -55,17 +55,19 @@ def _resolve_state_path(flags: GlobalFlags) -> Path:
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        raise cli_errors.NotFound(str(exc)) from exc
+        raise cli_errors.UserError(str(exc), kind="NotFound") from exc
 
 
 def _read_log(log_path: Path) -> str:
     """Read the CI log file or raise :class:`NotFound` / :class:`InvalidInput`."""
     if not log_path.exists():
-        raise cli_errors.NotFound(f"ci log not found: {log_path}")
+        raise cli_errors.UserError(f"ci log not found: {log_path}", kind="NotFound")
     try:
         return log_path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise cli_errors.InvalidInput(f"could not read ci log {log_path}: {exc}") from exc
+        raise cli_errors.UserError(
+            f"could not read ci log {log_path}: {exc}", kind="InvalidInput"
+        ) from exc
 
 
 def _parse_all(log_text: str) -> list[Failure]:
@@ -131,13 +133,17 @@ def wave_fix_ci_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(parent_wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid parent wave id: {parent_wave_id!r}"),
+            cli_errors.UserError(
+                f"invalid parent wave id: {parent_wave_id!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if new_wave_id is not None and not is_wave_id(new_wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid follow-up wave id: {new_wave_id!r}"),
+            cli_errors.UserError(
+                f"invalid follow-up wave id: {new_wave_id!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -273,7 +279,9 @@ def _plan_follow_up(
         with state_transaction(state_path) as state:
             parent_wave = state.waves.get(parent_wave_id)
             if parent_wave is None:
-                raise cli_errors.NotFound(f"unknown parent wave: {parent_wave_id}")
+                raise cli_errors.UserError(
+                    f"unknown parent wave: {parent_wave_id}", kind="NotFound"
+                )
             iter_id = parent_wave.iter_id
             target_id = new_wave_id or allocate_wave_id(state, iter_id)
             try:
@@ -286,9 +294,9 @@ def _plan_follow_up(
                     deps=[parent_wave_id],
                 )
             except LifecycleError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             except (PydValidationError, ValueError) as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             allocated_id = target_id
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
@@ -340,7 +348,9 @@ def wave_fix_ci_loop_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(parent_wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid parent wave id: {parent_wave_id!r}"),
+            cli_errors.UserError(
+                f"invalid parent wave id: {parent_wave_id!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -398,7 +408,7 @@ def wave_fix_ci_loop_cmd(
                 f"error: ci-fix loop not converging (same failure signature on iter {iter_index})"
             )
             emit_json_or_text(envelope, text, flags=flags)
-            raise typer.Exit(cli_errors.ValidationFailed.exit_code)
+            raise typer.Exit(cli_errors.ValidationError.exit_code)
 
         file_scope = failure_to_file_scope(failures)
         title = f"CI fix follow-up: {summary}"

@@ -92,8 +92,8 @@ def _coerce_confidence(raw: str | None, *, default: Confidence = Confidence.MEDI
     try:
         return Confidence(normalised)
     except ValueError as exc:
-        raise errors.InvalidInput(
-            f"--confidence must be h/m/l (or high/medium/low); got {raw!r}"
+        raise errors.UserError(
+            f"--confidence must be h/m/l (or high/medium/low); got {raw!r}", kind="InvalidInput"
         ) from exc
 
 
@@ -102,20 +102,18 @@ def _load_state(path: Path) -> State:
     from eawf.validate.strict import validate_state
 
     if not path.exists():
-        raise errors.NotFound(f"state file not found: {path}")
+        raise errors.UserError(f"state file not found: {path}", kind="NotFound")
     raw = path.read_bytes()
     payload = orjson.loads(raw)
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise errors.ValidationFailed(
-            "state schema invalid: " + "; ".join(report.schema_errors[:3])
-        )
+        raise errors.ValidationError("state schema invalid: " + "; ".join(report.schema_errors[:3]))
     if report.violations:
         # Pre-existing invariant violations are surfaced but not fatal — the
         # CLI continues on a best-effort basis. Strict validation is reserved
         # for ``eawf validate``.
         logger.warning(
-            f"state has {len(report.violations)} pre-existing invariant violation(s); "
+            f"_load_state pre-existing-violations count={len(report.violations)}; "
             "continuing on best-effort basis"
         )
     return report.state
@@ -136,12 +134,12 @@ def _commit_state(
     payload = state.model_dump(mode="json")
     report = validate_state(payload, strict_optional=False)
     if report.state is None:
-        raise errors.ValidationFailed(
+        raise errors.ValidationError(
             "post-mutation schema invalid: " + "; ".join(report.schema_errors[:3])
         )
     if report.violations:
         codes = sorted({v.code for v in report.violations})
-        raise errors.ValidationFailed(f"post-mutation invariant violations: {', '.join(codes)}")
+        raise errors.ValidationError(f"post-mutation invariant violations: {', '.join(codes)}")
     atomic_write_json_locked(state_path, payload)
 
 
@@ -278,15 +276,16 @@ def _do_estimate(
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        errors.emit_error(errors.NotFound(str(exc)), flags=flags)
+        errors.emit_error(errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
 
     try:
         with portalock.acquire(state_path):
             state = _load_state(state_path)
             if update and (state.estimates is None or scope not in state.estimates):
-                raise errors.NotFound(
-                    f"no estimate exists for scope {scope!r}; use `eawf estimate set`"
+                raise errors.UserError(
+                    f"no estimate exists for scope {scope!r}; use `eawf estimate set`",
+                    kind="NotFound",
                 )
 
             now = datetime.now(UTC)
@@ -373,7 +372,7 @@ def _do_estimate(
         errors.emit_error(exc, flags=flags)
         return
     except portalock.LockTimeout as exc:
-        errors.emit_error(errors.LockConflict(str(exc)), flags=flags)
+        errors.emit_error(errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
 
     payload: dict[str, Any] = {
@@ -417,7 +416,7 @@ def actual_start(
     try:
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        errors.emit_error(errors.NotFound(str(exc)), flags=flags)
+        errors.emit_error(errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
 
     try:
@@ -435,7 +434,7 @@ def actual_start(
                 )
                 if payload is not None:
                     if is_open_for(payload.segments, session_id=session):
-                        raise errors.ValidationFailed(
+                        raise errors.ValidationError(
                             f"actual segment already open for scope={scope!r} session={session!r}"
                         )
                     previous_segments = list(payload.segments)
@@ -504,7 +503,7 @@ def actual_start(
         errors.emit_error(exc, flags=flags)
         return
     except portalock.LockTimeout as exc:
-        errors.emit_error(errors.LockConflict(str(exc)), flags=flags)
+        errors.emit_error(errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
 
     out_payload: dict[str, Any] = {
@@ -552,34 +551,36 @@ def actual_stop(
             try:
                 close_status = ActualStatus(status)
             except ValueError as exc:
-                raise errors.InvalidInput(
-                    f"--status must be 'closed' or 'abandoned' (got {status!r})"
+                raise errors.UserError(
+                    f"--status must be 'closed' or 'abandoned' (got {status!r})",
+                    kind="InvalidInput",
                 ) from exc
 
         try:
             state_path = resolve_state_path(flags.workspace)
         except FileNotFoundError as exc:
-            raise errors.NotFound(str(exc)) from exc
+            raise errors.UserError(str(exc), kind="NotFound") from exc
 
         with portalock.acquire(state_path):
             state = _load_state(state_path)
             actuals: dict[str, ActualSummary] = dict(state.actuals or {})
             existing = actuals.get(scope)
             if existing is None:
-                raise errors.NotFound(f"no active actual for scope {scope!r}")
+                raise errors.UserError(f"no active actual for scope {scope!r}", kind="NotFound")
 
             payload = _read_latest_actual_payload(
                 store_path(state_path, StoreKind.ACTUAL),
                 record_id=existing.current_store_record_id,
             )
             if payload is None:
-                raise errors.NotFound(
-                    f"actuals.jsonl missing record {existing.current_store_record_id!r}"
+                raise errors.UserError(
+                    f"actuals.jsonl missing record {existing.current_store_record_id!r}",
+                    kind="NotFound",
                 )
 
             open_seg = latest_open_segment(payload.segments)
             if open_seg is None:
-                raise errors.ValidationFailed(f"no open segment to close for scope {scope!r}")
+                raise errors.ValidationError(f"no open segment to close for scope {scope!r}")
 
             now = datetime.now(UTC)
             closed = close_segment(
@@ -641,7 +642,7 @@ def actual_stop(
         errors.emit_error(exc, flags=flags)
         return
     except portalock.LockTimeout as exc:
-        errors.emit_error(errors.LockConflict(str(exc)), flags=flags)
+        errors.emit_error(errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
 
     out_payload: dict[str, Any] = {
@@ -686,7 +687,7 @@ def actual_recover(
         try:
             state_path = resolve_state_path(flags.workspace)
         except FileNotFoundError as exc:
-            raise errors.NotFound(str(exc)) from exc
+            raise errors.UserError(str(exc), kind="NotFound") from exc
 
         with portalock.acquire(state_path):
             state = _load_state(state_path)
@@ -790,7 +791,7 @@ def actual_recover(
         errors.emit_error(exc, flags=flags)
         return
     except portalock.LockTimeout as exc:
-        errors.emit_error(errors.LockConflict(str(exc)), flags=flags)
+        errors.emit_error(errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
 
     out_payload: dict[str, Any] = {

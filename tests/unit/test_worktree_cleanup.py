@@ -33,7 +33,7 @@ def test_cleanup_refuses_dirty(tmp_path: Path) -> None:
     record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     # Leave the worktree dirty (untracked file).
     ((repo / record.path) / "scratch.txt").write_text("dirty\n", encoding="utf-8")
-    with pytest.raises(cli_errors.IntegrityViolation) as exc_info:
+    with pytest.raises(cli_errors.StateConflict) as exc_info:
         cleanup_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     assert "dirty" in str(exc_info.value)
 
@@ -103,6 +103,6 @@ def test_cleanup_refuses_conflicted_without_force(tmp_path: Path) -> None:
     # Manually transition to CONFLICTED to model post-merge-back state.
     assert state.worktrees is not None
     state.worktrees[record.id].status = WorktreeStatus.CONFLICTED
-    with pytest.raises(cli_errors.IntegrityViolation) as exc_info:
+    with pytest.raises(cli_errors.StateConflict) as exc_info:
         cleanup_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
     assert "preserve evidence" in str(exc_info.value)

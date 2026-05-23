@@ -176,7 +176,9 @@ def _resolve_skill_name(raw: str) -> SkillName:
     candidate = _normalise_skill_input(raw)
     valid = _all_skill_names()
     if candidate not in valid:
-        raise cli_errors.InvalidInput(f"unknown skill {raw!r}; expected one of {sorted(valid)}")
+        raise cli_errors.UserError(
+            f"unknown skill {raw!r}; expected one of {sorted(valid)}", kind="InvalidInput"
+        )
     # mypy narrows ``candidate`` to the :data:`SkillName` literal via the
     # ``in valid`` membership test, so no cast is required here.
     return candidate
@@ -193,10 +195,11 @@ def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
     try:
         decoded: Any = orjson.loads(stdin_text)
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.InvalidInput(f"stdin is not valid JSON: {exc}") from exc
+        raise cli_errors.UserError(f"stdin is not valid JSON: {exc}", kind="InvalidInput") from exc
     if not isinstance(decoded, dict):
-        raise cli_errors.InvalidInput(
-            f"stdin payload must be a JSON object; got {type(decoded).__name__}"
+        raise cli_errors.UserError(
+            f"stdin payload must be a JSON object; got {type(decoded).__name__}",
+            kind="InvalidInput",
         )
     return cast(dict[str, Any], decoded)
 
@@ -386,8 +389,9 @@ def _resolve_skill_spec(name: SkillName) -> SkillSpec:
     for spec in SKILL_REGISTRY:
         if spec.skill_name == bare:
             return spec
-    raise cli_errors.InvalidInput(
-        f"no SkillSpec registered for {name!r}; SKILL_REGISTRY and SkillName drifted"
+    raise cli_errors.UserError(
+        f"no SkillSpec registered for {name!r}; SKILL_REGISTRY and SkillName drifted",
+        kind="InvalidInput",
     )
 
 
@@ -453,8 +457,9 @@ def list_cmd(
     flags: GlobalFlags = ctx.obj
     if scope not in _SCOPE_CHOICES:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"unknown scope {scope!r}; expected one of {sorted(_SCOPE_CHOICES)}"
+            cli_errors.UserError(
+                f"unknown scope {scope!r}; expected one of {sorted(_SCOPE_CHOICES)}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -529,8 +534,9 @@ def render_cmd(
     try:
         skill_name = _resolve_skill_name(name)
         if format_ not in _RENDER_FORMATS:
-            raise cli_errors.InvalidInput(
-                f"unknown --format {format_!r}; expected one of {sorted(_RENDER_FORMATS)}"
+            raise cli_errors.UserError(
+                f"unknown --format {format_!r}; expected one of {sorted(_RENDER_FORMATS)}",
+                kind="InvalidInput",
             )
         spec = _resolve_skill_spec(skill_name)
     except cli_errors.CliError as err:
@@ -599,11 +605,11 @@ def resume_cmd(
     try:
         state_path = resolve_state_path(effective_ws)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     if not state_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"state file not found: {state_path}"),
+            cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound"),
             flags=flags,
             data={"path": str(state_path)},
         )
@@ -613,7 +619,7 @@ def resume_cmd(
         pause = find_open_pause(state_path, pause_urn)
     except PauseError as exc:
         cli_errors.emit_error(
-            cli_errors.NotFound(str(exc)),
+            cli_errors.UserError(str(exc), kind="NotFound"),
             flags=flags,
             data={"kind": "NotFound", "pause_urn": pause_urn},
         )
@@ -622,7 +628,7 @@ def resume_cmd(
         resolve_pause(state_path, pause_urn=pause_urn, choice=choice)
     except PauseError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(str(exc)),
+            cli_errors.UserError(str(exc), kind="InvalidInput"),
             flags=flags,
             data={"kind": "InvalidInput", "pause_urn": pause_urn, "choice": choice},
         )
@@ -706,9 +712,10 @@ def run_cmd(
 
     if candidate not in _all_skill_names():
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"unknown skill {name!r}; expected one of {sorted(_all_skill_names())} "
-                "or a workspace/user skill"
+                "or a workspace/user skill",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -719,8 +726,10 @@ def run_cmd(
     skill_cls = registry.lookup(skill_name)
     if skill_cls is None:
         cli_errors.emit_error(
-            cli_errors.NotFound(
-                f"skill {skill_name!r} is not installed; see 'eawf skill list' for available skills"
+            cli_errors.UserError(
+                f"skill {skill_name!r} is not installed; "
+                "see 'eawf skill list' for available skills",
+                kind="NotFound",
             ),
             flags=flags,
         )

@@ -108,20 +108,24 @@ def wave_review_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
 
     if findings is not None and diff is not None:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("exactly one of --findings or --diff must be provided"),
+            cli_errors.UserError(
+                "exactly one of --findings or --diff must be provided", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if findings is None and diff is None:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("exactly one of --findings or --diff must be provided"),
+            cli_errors.UserError(
+                "exactly one of --findings or --diff must be provided", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
@@ -166,7 +170,7 @@ def _emit_review_request(
     state, _flags = loaded
     if wave_id not in state.waves:
         cli_errors.emit_error(
-            cli_errors.NotFound(f"unknown wave: {wave_id}"),
+            cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -236,7 +240,7 @@ def _attach_findings(
 
     if not findings_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"findings file not found: {findings_path}"),
+            cli_errors.UserError(f"findings file not found: {findings_path}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -245,7 +249,7 @@ def _attach_findings(
         parsed = parse_findings(raw)
     except ValueError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"malformed findings document: {exc}"),
+            cli_errors.UserError(f"malformed findings document: {exc}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -278,8 +282,9 @@ def _attach_findings(
                 artifact_sha = _file_sha256(findings_path)
                 artifact_size = findings_path.stat().st_size
             except OSError as exc:
-                raise cli_errors.NotFound(
-                    f"findings file disappeared between existence check and read: {exc}"
+                raise cli_errors.UserError(
+                    f"findings file disappeared between existence check and read: {exc}",
+                    kind="NotFound",
                 ) from exc
             event_art = artifact_evi.add_artifact(
                 state,
@@ -337,7 +342,7 @@ def _resolve_state_path(flags: GlobalFlags) -> Path | None:
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.NotFound(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return None
 
 
@@ -345,7 +350,7 @@ def _resolve_wave_or_raise(state: State, wave_id: str) -> Wave:
     """Look up *wave_id*; raise :class:`NotFound` when missing."""
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise cli_errors.NotFound(f"unknown wave: {wave_id}")
+        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
     return wave
 
 
@@ -353,10 +358,14 @@ def _resolve_wave_scope(state: State, wave: Wave) -> str:
     """Walk wave → iter → phase → scope_id; raise on a broken edge."""
     it = state.iters.get(wave.iter_id)
     if it is None:
-        raise cli_errors.NotFound(f"wave {wave.id!r} references unknown iter {wave.iter_id!r}")
+        raise cli_errors.UserError(
+            f"wave {wave.id!r} references unknown iter {wave.iter_id!r}", kind="NotFound"
+        )
     phase = state.phases.get(it.phase_id)
     if phase is None:
-        raise cli_errors.NotFound(f"iter {it.id!r} references unknown phase {it.phase_id!r}")
+        raise cli_errors.UserError(
+            f"iter {it.id!r} references unknown phase {it.phase_id!r}", kind="NotFound"
+        )
     return phase.scope_id
 
 
@@ -377,7 +386,7 @@ def _allocate_audit_id(state: State, *, wave_id: str) -> str:
     for n in range(1, 100):
         if n not in used:
             return f"A{n:02d}{suffix}"
-    raise cli_errors.ValidationFailed(f"audit-id allocation saturated for wave {wave_id!r}")
+    raise cli_errors.ValidationError(f"audit-id allocation saturated for wave {wave_id!r}")
 
 
 def _map_to_audit_verdict(review_verdict: ReviewVerdict) -> AuditVerdict:

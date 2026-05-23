@@ -74,7 +74,7 @@ def test_add_backlog_duplicate_raises(tmp_path: Path) -> None:
     backlog.add_backlog(
         state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         backlog.add_backlog(
             state, item_id="B023", title="t2", priority=BacklogPriority.P3, scope_id="QR"
         )
@@ -83,7 +83,7 @@ def test_add_backlog_duplicate_raises(tmp_path: Path) -> None:
 def test_close_backlog_unknown_raises_not_found(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound):
+    with pytest.raises(cli_errors.UserError):
         backlog.close_backlog(
             state, item_id="B999", resolution="x", commit="abc", audit_id="AUD-001"
         )
@@ -95,7 +95,7 @@ def test_close_backlog_without_complete_audit_raises(tmp_path: Path) -> None:
     backlog.add_backlog(
         state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
     )
-    with pytest.raises(cli_errors.ValidationFailed, match="UNKNOWN"):
+    with pytest.raises(cli_errors.ValidationError, match="UNKNOWN"):
         backlog.close_backlog(
             state, item_id="B023", resolution="x", commit="abc", audit_id="AUD-NOPE"
         )
@@ -146,7 +146,7 @@ def test_set_priority_happy_each_value(tmp_path: Path) -> None:
 def test_set_priority_unknown_raises_not_found(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="B999"):
+    with pytest.raises(cli_errors.UserError, match="B999"):
         backlog.set_priority(state, item_id="B999", priority=BacklogPriority.P1)
 
 
@@ -173,7 +173,7 @@ def test_set_priority_closed_item_raises(tmp_path: Path) -> None:
         commit="abc",
         audit_id="AUD-001",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="closed"):
+    with pytest.raises(cli_errors.UserError, match="closed"):
         backlog.set_priority(state, item_id="B023", priority=BacklogPriority.P0)
 
 
@@ -184,7 +184,7 @@ def test_set_priority_no_op_rejected(tmp_path: Path) -> None:
     backlog.add_backlog(
         state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already has priority"):
+    with pytest.raises(cli_errors.UserError, match="already has priority"):
         backlog.set_priority(state, item_id="B023", priority=BacklogPriority.P2)
 
 

@@ -50,7 +50,7 @@ def test_add_artifact_duplicate_raises(tmp_path: Path) -> None:
     artifact.add_artifact(
         state, artifact_id="ART-001", kind="audit_report", uri="repo:foo.md", scope_id="QR"
     )
-    with pytest.raises(cli_errors.InvalidInput, match="already exists"):
+    with pytest.raises(cli_errors.UserError, match="already exists"):
         artifact.add_artifact(
             state, artifact_id="ART-001", kind="audit_report", uri="repo:bar.md", scope_id="QR"
         )
@@ -67,7 +67,7 @@ def test_add_artifact_duplicate_raises(tmp_path: Path) -> None:
 def test_add_artifact_rejects_local_uri(tmp_path: Path, uri: str) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.InvalidInput, match="uri must not"):
+    with pytest.raises(cli_errors.UserError, match="uri must not"):
         artifact.add_artifact(
             state,
             artifact_id="ART-001",
@@ -87,7 +87,7 @@ def test_artifact_model_has_no_local_path_field() -> None:
 def test_show_artifact_unknown_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="ART-999"):
+    with pytest.raises(cli_errors.UserError, match="ART-999"):
         artifact.show_artifact(state, "ART-999")
 
 
@@ -130,7 +130,7 @@ def test_update_artifact_uri_only(tmp_path: Path) -> None:
 def test_update_artifact_unknown_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.NotFound, match="ART-999"):
+    with pytest.raises(cli_errors.UserError, match="ART-999"):
         artifact.update_artifact(state, artifact_id="ART-999", sha256="c" * 64)
 
 
@@ -144,7 +144,7 @@ def test_update_artifact_no_fields_raises(tmp_path: Path) -> None:
         uri="repo:.ea/artifacts/x.md",
         scope_id="QR",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="at least one"):
+    with pytest.raises(cli_errors.UserError, match="at least one"):
         artifact.update_artifact(state, artifact_id="ART-102")
 
 
@@ -158,7 +158,7 @@ def test_update_artifact_rejects_absolute_uri(tmp_path: Path) -> None:
         uri="repo:.ea/artifacts/x.md",
         scope_id="QR",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="file://"):
+    with pytest.raises(cli_errors.UserError, match="file://"):
         artifact.update_artifact(state, artifact_id="ART-103", uri="/etc/passwd")
 
 

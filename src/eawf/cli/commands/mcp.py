@@ -86,8 +86,9 @@ def _resolve_target(flags: GlobalFlags) -> Path:
 
 def _validate_runtime(runtime: str) -> None:
     if runtime not in _SUPPORTED_RUNTIMES:
-        raise cli_errors.InvalidInput(
-            f"unknown runtime {runtime!r}; expected one of {list(_SUPPORTED_RUNTIMES)}"
+        raise cli_errors.UserError(
+            f"unknown runtime {runtime!r}; expected one of {list(_SUPPORTED_RUNTIMES)}",
+            kind="InvalidInput",
         )
 
 
@@ -95,8 +96,8 @@ def _resolve_risk(raw: str) -> McpRisk:
     try:
         return McpRisk(raw)
     except ValueError as exc:
-        raise cli_errors.InvalidInput(
-            f"--risk must be one of {[r.value for r in McpRisk]}; got {raw!r}"
+        raise cli_errors.UserError(
+            f"--risk must be one of {[r.value for r in McpRisk]}; got {raw!r}", kind="InvalidInput"
         ) from exc
 
 
@@ -152,9 +153,10 @@ def _confirm_install(
     if no_input:
         return
     if not sys.stdin.isatty():
-        raise cli_errors.UserDeclined(
+        raise cli_errors.UserError(
             "stdin is not a TTY and --no-input was not passed; refusing to "
-            "install MCP server without confirmation"
+            "install MCP server without confirmation",
+            kind="UserDeclined",
         )
     env_refs_repr = ", ".join(server.env_refs) if server.env_refs else "(none)"
     prompt = (
@@ -163,7 +165,7 @@ def _confirm_install(
     )
     answer = input(prompt).strip().lower()
     if answer not in {"y", "yes"}:
-        raise cli_errors.UserDeclined(f"user declined install of {server.id!r}")
+        raise cli_errors.UserError(f"user declined install of {server.id!r}", kind="UserDeclined")
 
 
 @mcp_app.command(name="add")
@@ -224,13 +226,14 @@ def add_cmd(
             servers = state.mcp_servers if state.mcp_servers is not None else {}
             existing = servers.get(server_id)
             if existing is not None and existing.owner != "eawf":
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"mcp id {server_id!r} exists with owner={existing.owner!r}; "
-                    "refusing to overwrite"
+                    "refusing to overwrite",
+                    kind="InvalidInput",
                 )
             if existing is not None and not force:
-                raise cli_errors.InvalidInput(
-                    f"mcp id {server_id!r} exists; pass --force to redefine"
+                raise cli_errors.UserError(
+                    f"mcp id {server_id!r} exists; pass --force to redefine", kind="InvalidInput"
                 )
             try:
                 server = McpServer(
@@ -245,7 +248,7 @@ def add_cmd(
                     installed_targets=[],
                 )
             except ValidationError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             servers[server_id] = server
             state.mcp_servers = servers
             state.updated_at = datetime.now(UTC)
@@ -257,7 +260,7 @@ def add_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="install")
@@ -299,13 +302,15 @@ def install_cmd(
             servers = state.mcp_servers or {}
             server = servers.get(server_id)
             if server is None:
-                raise cli_errors.NotFound(
-                    f"mcp id {server_id!r} not registered; run `eawf mcp add` first"
+                raise cli_errors.UserError(
+                    f"mcp id {server_id!r} not registered; run `eawf mcp add` first",
+                    kind="NotFound",
                 )
             if server.owner != "eawf":
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"mcp id {server_id!r} is owner={server.owner!r}; "
-                    "install only manages owner=eawf entries"
+                    "install only manages owner=eawf entries",
+                    kind="InvalidInput",
                 )
             settings_path = (target / ".claude" / "settings.json").resolve()
             _confirm_install(
@@ -323,9 +328,9 @@ def install_cmd(
                     timestamp=timestamp,
                 )
             except IntegrityViolation as exc:
-                raise cli_errors.IntegrityViolation(str(exc)) from exc
+                raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
             except ValueError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
 
             updated = server.model_copy(
                 update={
@@ -360,7 +365,7 @@ def install_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="update")
@@ -408,11 +413,14 @@ def update_cmd(
             servers = state.mcp_servers or {}
             server = servers.get(server_id)
             if server is None:
-                raise cli_errors.NotFound(f"mcp id {server_id!r} not registered; nothing to update")
+                raise cli_errors.UserError(
+                    f"mcp id {server_id!r} not registered; nothing to update", kind="NotFound"
+                )
             if server.owner != "eawf":
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"mcp id {server_id!r} is owner={server.owner!r}; "
-                    "update only manages owner=eawf entries"
+                    "update only manages owner=eawf entries",
+                    kind="InvalidInput",
                 )
             updates: dict[str, object] = {}
             if command is not None:
@@ -426,9 +434,10 @@ def update_cmd(
             if write_capable is not None:
                 updates["write_capable"] = write_capable
             if not updates:
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     "update requires at least one of --command, --arg, --env-ref, "
-                    "--risk, --write-capable"
+                    "--risk, --write-capable",
+                    kind="InvalidInput",
                 )
             try:
                 updated = server.model_copy(update=updates)
@@ -437,7 +446,7 @@ def update_cmd(
                 # before the transaction commits.
                 updated = McpServer.model_validate(updated.model_dump())
             except ValidationError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             servers[server_id] = updated
             state.mcp_servers = servers
             state.updated_at = datetime.now(UTC)
@@ -456,7 +465,7 @@ def update_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="remove")
@@ -501,11 +510,14 @@ def remove_cmd(
             servers = state.mcp_servers or {}
             server = servers.get(server_id)
             if server is None:
-                raise cli_errors.NotFound(f"mcp id {server_id!r} not registered; nothing to remove")
+                raise cli_errors.UserError(
+                    f"mcp id {server_id!r} not registered; nothing to remove", kind="NotFound"
+                )
             if server.owner != "eawf":
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"mcp id {server_id!r} is owner={server.owner!r}; "
-                    "remove only manages owner=eawf entries"
+                    "remove only manages owner=eawf entries",
+                    kind="InvalidInput",
                 )
             if not keep_runtime_entry:
                 targets = [runtime] if runtime is not None else list(server.installed_targets)
@@ -518,9 +530,9 @@ def remove_cmd(
                             force=False,
                         )
                     except IntegrityViolation as exc:
-                        raise cli_errors.IntegrityViolation(str(exc)) from exc
+                        raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
                     except ValueError as exc:
-                        raise cli_errors.InvalidInput(str(exc)) from exc
+                        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
                     runtime_results.append(result)
             del servers[server_id]
             state.mcp_servers = servers if servers else None
@@ -549,7 +561,7 @@ def remove_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="list")
@@ -580,8 +592,8 @@ def list_cmd(
     flags: GlobalFlags = ctx.obj
     try:
         if owner not in _OWNER_FILTERS:
-            raise cli_errors.InvalidInput(
-                f"--owner must be one of {list(_OWNER_FILTERS)}; got {owner!r}"
+            raise cli_errors.UserError(
+                f"--owner must be one of {list(_OWNER_FILTERS)}; got {owner!r}", kind="InvalidInput"
             )
         _validate_runtime(runtime)
         target = (target_dir or _resolve_target(flags)).resolve()
@@ -618,7 +630,7 @@ def list_cmd(
             try:
                 runtime_rows = list_runtime_entries(runtime=runtime, target_dir=target)
             except ValueError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             settings_path = target / ".claude" / "settings.json"
             if not settings_path.exists():
                 notes.append(f"runtime config absent at {settings_path}")
@@ -713,17 +725,19 @@ def grant_cmd(
     flags: GlobalFlags = ctx.obj
     try:
         if scope_kind not in GRANT_SCOPE_KINDS:
-            raise cli_errors.InvalidInput(
-                f"unknown scope_kind {scope_kind!r}; expected one of {list(GRANT_SCOPE_KINDS)}"
+            raise cli_errors.UserError(
+                f"unknown scope_kind {scope_kind!r}; expected one of {list(GRANT_SCOPE_KINDS)}",
+                kind="InvalidInput",
             )
         state_path = resolve_state_path(flags.workspace)
         with state_transaction(state_path) as state:
             grants = state.mcp_grants if state.mcp_grants is not None else {}
             resolved_grant_id = grant_id if grant_id is not None else allocate_grant_id(state)
             if resolved_grant_id in grants:
-                raise cli_errors.InvalidInput(
+                raise cli_errors.UserError(
                     f"mcp grant id {resolved_grant_id!r} already exists; "
-                    "pick another or run `eawf mcp revoke` first"
+                    "pick another or run `eawf mcp revoke` first",
+                    kind="InvalidInput",
                 )
             try:
                 grant = McpGrant(
@@ -734,7 +748,7 @@ def grant_cmd(
                     granted_at=datetime.now(UTC),
                 )
             except ValidationError as exc:
-                raise cli_errors.InvalidInput(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             grants[resolved_grant_id] = grant
             state.mcp_grants = grants
             state.updated_at = datetime.now(UTC)
@@ -748,7 +762,7 @@ def grant_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @mcp_app.command(name="revoke")
@@ -776,8 +790,8 @@ def revoke_cmd(
             grants = state.mcp_grants or {}
             grant = grants.get(grant_id)
             if grant is None:
-                raise cli_errors.NotFound(
-                    f"mcp grant id {grant_id!r} not registered; nothing to revoke"
+                raise cli_errors.UserError(
+                    f"mcp grant id {grant_id!r} not registered; nothing to revoke", kind="NotFound"
                 )
             del grants[grant_id]
             state.mcp_grants = grants if grants else None
@@ -801,7 +815,7 @@ def revoke_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.NotFound(str(err)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 __all__ = ["mcp_app"]

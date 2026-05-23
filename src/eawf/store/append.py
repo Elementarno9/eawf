@@ -23,7 +23,7 @@ import logging
 import os
 from pathlib import Path
 
-from eawf.cli.errors import LockConflict
+from eawf.cli.errors import StateConflict
 from eawf.lock import portalock
 from eawf.store.envelope import Envelope
 
@@ -49,4 +49,6 @@ def append_envelope(path: Path, envelope: Envelope, *, timeout: float = 5.0) -> 
             fh.flush()
             os.fsync(fh.fileno())
     except portalock.LockTimeout as exc:
-        raise LockConflict(f"could not acquire append lock for {path}: {exc}") from exc
+        raise StateConflict(
+            f"could not acquire append lock for {path}: {exc}", kind="LockConflict"
+        ) from exc

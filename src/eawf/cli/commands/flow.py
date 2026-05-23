@@ -85,10 +85,11 @@ def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
     try:
         decoded: Any = orjson.loads(stdin_text)
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.InvalidInput(f"stdin is not valid JSON: {exc}") from exc
+        raise cli_errors.UserError(f"stdin is not valid JSON: {exc}", kind="InvalidInput") from exc
     if not isinstance(decoded, dict):
-        raise cli_errors.InvalidInput(
-            f"stdin payload must be a JSON object; got {type(decoded).__name__}"
+        raise cli_errors.UserError(
+            f"stdin payload must be a JSON object; got {type(decoded).__name__}",
+            kind="InvalidInput",
         )
     return cast(dict[str, Any], decoded)
 
@@ -113,20 +114,22 @@ def _resolve_target_flow_id(
 
     if flow_id_flag is not None:
         if not flow_id_flag.startswith("FL-"):
-            raise cli_errors.InvalidInput(
-                f"--flow-id must look like 'FL-<uuid12>'; got {flow_id_flag!r}"
+            raise cli_errors.UserError(
+                f"--flow-id must look like 'FL-<uuid12>'; got {flow_id_flag!r}", kind="InvalidInput"
             )
         return flow_id_flag
 
     in_progress = in_progress_flow_ids(state_path)
     if not in_progress:
-        raise cli_errors.NotFound(
-            "no in-progress flow run found for the active scope; start one with 'eawf flow run'"
+        raise cli_errors.UserError(
+            "no in-progress flow run found for the active scope; start one with 'eawf flow run'",
+            kind="NotFound",
         )
     if len(in_progress) > 1:
-        raise cli_errors.InvalidInput(
+        raise cli_errors.UserError(
             f"multiple in-progress flow runs found ({sorted(in_progress)}); "
-            "pass '--flow-id <FL-...>' to disambiguate"
+            "pass '--flow-id <FL-...>' to disambiguate",
+            kind="InvalidInput",
         )
     return in_progress[0]
 
@@ -212,14 +215,14 @@ def run_cmd(
     if topic is not None:
         if "topic" in skill_args and skill_args["topic"] != topic:
             logger.debug(
-                f"flow.run: --topic={topic!r} overrides stdin topic={skill_args['topic']!r}"
+                f"run_cmd topic-override topic={topic!r} stdin_topic={skill_args['topic']!r}"
             )
         skill_args["topic"] = topic
     if stop_after is not None:
         if "stop_after" in skill_args and skill_args["stop_after"] != stop_after:
             logger.debug(
-                f"flow.run: --stop-after={stop_after!r} overrides "
-                f"stdin stop_after={skill_args['stop_after']!r}"
+                f"run_cmd stop-after-override stop_after={stop_after!r} "
+                f"stdin_stop_after={skill_args['stop_after']!r}"
             )
         skill_args["stop_after"] = stop_after
 
@@ -238,8 +241,9 @@ def run_cmd(
         ckpt_lookup = load_latest_safe_checkpoint(state_path, target_flow_id)
         if ckpt_lookup is None:
             cli_errors.emit_error(
-                cli_errors.IntegrityViolation(
-                    f"flow {target_flow_id!r} has no last_safe=True checkpoint to resume to"
+                cli_errors.StateConflict(
+                    f"flow {target_flow_id!r} has no last_safe=True checkpoint to resume to",
+                    kind="IntegrityViolation",
                 ),
                 flags=flags,
             )
@@ -360,7 +364,7 @@ def status_cmd(
         state_path = resolve_active_state_path(workspace=flags.workspace)
     except Exception as exc:
         cli_errors.emit_error(
-            cli_errors.NotFound(f"could not resolve state.json: {exc}"),
+            cli_errors.UserError(f"could not resolve state.json: {exc}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -385,14 +389,14 @@ def status_cmd(
             target = recent if recent in latest_records else sorted(latest_records.keys())[0]
         else:
             cli_errors.emit_error(
-                cli_errors.NotFound("no flow records found for the active scope"),
+                cli_errors.UserError("no flow records found for the active scope", kind="NotFound"),
                 flags=flags,
             )
             return
     else:
         if flow_id not in latest_records:
             cli_errors.emit_error(
-                cli_errors.NotFound(f"flow {flow_id!r} not found"),
+                cli_errors.UserError(f"flow {flow_id!r} not found", kind="NotFound"),
                 flags=flags,
             )
             return
@@ -482,7 +486,7 @@ def abort_cmd(
         state_path = resolve_active_state_path(workspace=flags.workspace)
     except Exception as exc:
         cli_errors.emit_error(
-            cli_errors.NotFound(f"could not resolve state.json: {exc}"),
+            cli_errors.UserError(f"could not resolve state.json: {exc}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -495,14 +499,15 @@ def abort_cmd(
         ]
         if not in_progress:
             cli_errors.emit_error(
-                cli_errors.NotFound("no in-progress flow to abort"),
+                cli_errors.UserError("no in-progress flow to abort", kind="NotFound"),
                 flags=flags,
             )
             return
         if len(in_progress) > 1:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(
-                    f"multiple in-progress flows ({sorted(in_progress)}); pass --flow-id"
+                cli_errors.UserError(
+                    f"multiple in-progress flows ({sorted(in_progress)}); pass --flow-id",
+                    kind="InvalidInput",
                 ),
                 flags=flags,
             )
@@ -511,7 +516,7 @@ def abort_cmd(
     else:
         if flow_id not in latest_records:
             cli_errors.emit_error(
-                cli_errors.NotFound(f"flow {flow_id!r} not found"),
+                cli_errors.UserError(f"flow {flow_id!r} not found", kind="NotFound"),
                 flags=flags,
             )
             return

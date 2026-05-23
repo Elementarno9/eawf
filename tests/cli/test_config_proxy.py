@@ -156,7 +156,7 @@ def test_save_value_to_layer_daemon_down_raises_daemon_required(
     monkeypatch.setattr("eawf.cli._mutation._daemon_reachable", lambda *a, **k: False)
     monkeypatch.setattr(config_cmd, "_layer_label_for_path", lambda _p: "repo")
 
-    with pytest.raises(cli_errors.IntegrityViolation, match="daemon_required"):
+    with pytest.raises(cli_errors.StateConflict, match="daemon_required"):
         config_cmd._save_value_to_layer(
             target_path=config_yaml,
             key="vcs.auto_commit",

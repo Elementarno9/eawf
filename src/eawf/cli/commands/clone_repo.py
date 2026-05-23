@@ -46,8 +46,9 @@ _GIT_URL_RE = re.compile(r"^(?:(?:https|ssh|file)://[^\s]+|git@[^:\s]+:[^\s]+)$"
 def _validate_git_url(url: str) -> None:
     """Reject non-URL strings before we shell out to git."""
     if not url or not _GIT_URL_RE.match(url):
-        raise cli_errors.InvalidInput(
-            f"not a git URL: {url!r} (expected https://, ssh://, file://, or git@host:path)"
+        raise cli_errors.UserError(
+            f"not a git URL: {url!r} (expected https://, ssh://, file://, or git@host:path)",
+            kind="InvalidInput",
         )
 
 
@@ -65,8 +66,9 @@ def _derive_target_dir(url: str, target: Path | None) -> Path:
     if last.endswith(".git"):
         last = last[: -len(".git")]
     if not last:
-        raise cli_errors.InvalidInput(
-            f"could not derive target directory from URL {url!r}; pass --target"
+        raise cli_errors.UserError(
+            f"could not derive target directory from URL {url!r}; pass --target",
+            kind="InvalidInput",
         )
     return (Path.cwd() / last).resolve()
 
@@ -87,14 +89,15 @@ def _derive_project_code(target_dir: Path, project_code: str | None) -> str:
     """
     if project_code is not None:
         if not is_project_code(project_code):
-            raise cli_errors.InvalidInput(
-                f"--project-code {project_code!r} must match ^[A-Z][A-Z0-9_-]{{1,15}}$"
+            raise cli_errors.UserError(
+                f"--project-code {project_code!r} must match ^[A-Z][A-Z0-9_-]{{1,15}}$",
+                kind="InvalidInput",
             )
         return project_code
     try:
         return normalize_to_project_code(target_dir.name)
     except ValueError as exc:
-        raise cli_errors.InvalidInput(f"{exc}; pass --project-code") from exc
+        raise cli_errors.UserError(f"{exc}; pass --project-code", kind="InvalidInput") from exc
 
 
 def _git_clone(
@@ -113,8 +116,9 @@ def _git_clone(
       -> :class:`LockConflict` (exit 5) — these are transient by nature.
     """
     if shutil.which("git") is None:
-        raise cli_errors.InstrumentMissing(
-            "git executable not found on PATH; install git before clone-repo"
+        raise cli_errors.UserError(
+            "git executable not found on PATH; install git before clone-repo",
+            kind="InstrumentMissing",
         )
     args: list[str] = ["git", "clone"]
     if branch:
@@ -122,11 +126,13 @@ def _git_clone(
     if depth is not None:
         args.extend(["--depth", str(depth)])
     args.extend([url, str(target_dir)])
-    logger.info(f"_git_clone: invoking {args}")
+    logger.info(f"_git_clone invoking args={args}")
     try:
         res = subprocess.run(args, capture_output=True, text=True, check=False, timeout=300.0)
     except subprocess.TimeoutExpired as exc:
-        raise cli_errors.LockConflict(f"git clone timed out after 300s: {url}") from exc
+        raise cli_errors.StateConflict(
+            f"git clone timed out after 300s: {url}", kind="LockConflict"
+        ) from exc
     if res.returncode != 0:
         stderr = (res.stderr or "").strip()
         # Treat path-shaped failures as bad input; everything else is transient.
@@ -139,11 +145,12 @@ def _git_clone(
         )
         lower = stderr.lower()
         if any(marker.lower() in lower for marker in bad_url_markers):
-            raise cli_errors.InvalidInput(
-                f"git clone failed (rc={res.returncode}): {stderr or 'unknown'}"
+            raise cli_errors.UserError(
+                f"git clone failed (rc={res.returncode}): {stderr or 'unknown'}",
+                kind="InvalidInput",
             )
-        raise cli_errors.LockConflict(
-            f"git clone failed (rc={res.returncode}): {stderr or 'unknown'}"
+        raise cli_errors.StateConflict(
+            f"git clone failed (rc={res.returncode}): {stderr or 'unknown'}", kind="LockConflict"
         )
 
 
@@ -224,8 +231,9 @@ def clone_repo_cmd(
 
     if target_dir.exists() and any(target_dir.iterdir()):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"target directory not empty: {target_dir}; git clone would refuse to write here"
+            cli_errors.UserError(
+                f"target directory not empty: {target_dir}; git clone would refuse to write here",
+                kind="InvalidInput",
             ),
             flags=flags,
         )

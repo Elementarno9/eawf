@@ -83,14 +83,14 @@ def project_init_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid project code: {code!r}"),
+            cli_errors.UserError(f"invalid project code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return  # for type-checkers; emit_error never returns
     domains_list = [d.strip() for d in domains.split(",") if d.strip()]
     if not domains_list:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("--domains must not be empty"),
+            cli_errors.UserError("--domains must not be empty", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -102,8 +102,9 @@ def project_init_cmd(
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"could not resolve state path; pass -w/--workspace or set EA_STATE: {exc}"
+            cli_errors.UserError(
+                f"could not resolve state path; pass -w/--workspace or set EA_STATE: {exc}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -112,8 +113,9 @@ def project_init_cmd(
         with portalock.acquire(state_path, timeout=5.0):
             if state_path.exists():
                 cli_errors.emit_error(
-                    cli_errors.InvalidInput(
-                        f"state already exists at {state_path}; refusing to overwrite"
+                    cli_errors.UserError(
+                        f"state already exists at {state_path}; refusing to overwrite",
+                        kind="InvalidInput",
                     ),
                     flags=flags,
                 )
@@ -142,12 +144,12 @@ def project_init_cmd(
             )
             _write_state_unlocked(state_path, payload)
     except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     except cli_errors.CliError:
         raise
     except (LifecycleError, PydValidationError, ValueError) as exc:
-        cli_errors.emit_error(cli_errors.InvalidInput(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
         return
     emit_json_or_text(
         {"project": code, "title": title, "state_path": str(state_path)},
@@ -176,7 +178,7 @@ def subproject_add_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid subproject code: {code!r}"),
+            cli_errors.UserError(f"invalid subproject code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -211,7 +213,7 @@ def subproject_switch_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid subproject code: {code!r}"),
+            cli_errors.UserError(f"invalid subproject code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -240,7 +242,7 @@ def iter_activate_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid iter id: {iter_id!r}"),
+            cli_errors.UserError(f"invalid iter id: {iter_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -273,12 +275,14 @@ def iter_plan_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid iter id: {iter_id!r}"),
+            cli_errors.UserError(f"invalid iter id: {iter_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     if title is None:
-        cli_errors.emit_error(cli_errors.InvalidInput("--title required"), flags=flags)
+        cli_errors.emit_error(
+            cli_errors.UserError("--title required", kind="InvalidInput"), flags=flags
+        )
         return
     phase_id = iter_id.split("-", 1)[0]
     _run_mutation(
@@ -357,7 +361,9 @@ def iter_open_cmd(
 
     flags: GlobalFlags = ctx.obj
     if title is None:
-        cli_errors.emit_error(cli_errors.InvalidInput("--title required"), flags=flags)
+        cli_errors.emit_error(
+            cli_errors.UserError("--title required", kind="InvalidInput"), flags=flags
+        )
         return
     explicit_iter: str | None = None
     explicit_phase: str | None = phase
@@ -367,8 +373,9 @@ def iter_open_cmd(
             inferred_phase = target.split("-", 1)[0]
             if explicit_phase is not None and explicit_phase != inferred_phase:
                 cli_errors.emit_error(
-                    cli_errors.InvalidInput(
-                        f"--phase {explicit_phase!r} disagrees with iter {target!r}"
+                    cli_errors.UserError(
+                        f"--phase {explicit_phase!r} disagrees with iter {target!r}",
+                        kind="InvalidInput",
                     ),
                     flags=flags,
                 )
@@ -377,26 +384,30 @@ def iter_open_cmd(
         elif is_phase_id(target):
             if explicit_phase is not None and explicit_phase != target:
                 cli_errors.emit_error(
-                    cli_errors.InvalidInput("two different phase ids supplied"),
+                    cli_errors.UserError("two different phase ids supplied", kind="InvalidInput"),
                     flags=flags,
                 )
                 return
             explicit_phase = target
         else:
             cli_errors.emit_error(
-                cli_errors.InvalidInput(f"target must be a phase or iter id: {target!r}"),
+                cli_errors.UserError(
+                    f"target must be a phase or iter id: {target!r}", kind="InvalidInput"
+                ),
                 flags=flags,
             )
             return
     if explicit_phase is None:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("either an explicit iter id or --phase is required"),
+            cli_errors.UserError(
+                "either an explicit iter id or --phase is required", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if not is_phase_id(explicit_phase):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid phase id: {explicit_phase!r}"),
+            cli_errors.UserError(f"invalid phase id: {explicit_phase!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -453,7 +464,7 @@ def iter_close_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid iter id: {iter_id!r}"),
+            cli_errors.UserError(f"invalid iter id: {iter_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return

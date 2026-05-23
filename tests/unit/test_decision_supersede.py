@@ -52,7 +52,7 @@ def test_add_decision_supersedes_flips_parent(tmp_path: Path) -> None:
 def test_add_decision_supersedes_unknown_parent_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.InvalidInput, match="unknown decision to supersede"):
+    with pytest.raises(cli_errors.UserError, match="unknown decision to supersede"):
         decision.add_decision(
             state,
             decision_id="D011",
@@ -66,7 +66,7 @@ def test_add_decision_supersedes_unknown_parent_raises(tmp_path: Path) -> None:
 def test_add_decision_supersedes_self_raises(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    with pytest.raises(cli_errors.InvalidInput, match="cannot supersede itself"):
+    with pytest.raises(cli_errors.UserError, match="cannot supersede itself"):
         decision.add_decision(
             state,
             decision_id="D012",
@@ -89,7 +89,7 @@ def test_add_decision_supersedes_already_superseded_raises(tmp_path: Path) -> No
         rationale="r2",
         supersedes="D010",
     )
-    with pytest.raises(cli_errors.InvalidInput, match="only ACTIVE decisions can be superseded"):
+    with pytest.raises(cli_errors.UserError, match="only ACTIVE decisions can be superseded"):
         decision.add_decision(
             state,
             decision_id="D012",

@@ -70,11 +70,13 @@ def _read_raw_version(state_path: Path) -> str:
             ``schema_version`` key.
     """
     if not state_path.exists():
-        raise cli_errors.NotFound(f"state file not found: {state_path}")
+        raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
     payload = json.loads(state_path.read_bytes())
     version = payload.get("schema_version")
     if not isinstance(version, str):
-        raise cli_errors.InvalidInput(f"state.json has no string schema_version: {state_path}")
+        raise cli_errors.UserError(
+            f"state.json has no string schema_version: {state_path}", kind="InvalidInput"
+        )
     return version
 
 
@@ -124,7 +126,7 @@ def migrate_cmd(
         guard_target_supported(to_version)
     except MigrationError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(str(exc)),
+            cli_errors.UserError(str(exc), kind="InvalidInput"),
             flags=flags,
             error_code=ErrorCode.MIGRATION_TARGET_UNKNOWN,
         )
@@ -136,7 +138,7 @@ def migrate_cmd(
         )
     except MigrationError as exc:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(str(exc)),
+            cli_errors.UserError(str(exc), kind="InvalidInput"),
             flags=flags,
             error_code=ErrorCode.MIGRATION_TARGET_UNKNOWN,
         )
@@ -166,7 +168,7 @@ def migrate_cmd(
             else ErrorCode.MIGRATION_STEP_FAILED
         )
         cli_errors.emit_error(
-            cli_errors.ValidationFailed(str(exc)),
+            cli_errors.ValidationError(str(exc)),
             flags=flags,
             error_code=code,
             data={"step": f"{exc.from_version}->{exc.to_version}", "phase": exc.phase},

@@ -56,7 +56,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
 
@@ -395,7 +395,7 @@ def _coerce_bool(raw: str | bool) -> bool:
         return True
     if lowered in ("false", "no", "n", "0", "off"):
         return False
-    raise InvalidInput(f"cannot coerce {raw!r} to bool")
+    raise UserError(f"cannot coerce {raw!r} to bool", kind="InvalidInput")
 
 
 def _coerce_number(raw: str | int | float, *, want_int: bool) -> int | float:
@@ -411,7 +411,7 @@ def _coerce_number(raw: str | int | float, *, want_int: bool) -> int | float:
         return int(text) if want_int else float(text)
     except ValueError as exc:
         kind = "int" if want_int else "float"
-        raise InvalidInput(f"cannot coerce {raw!r} to {kind}") from exc
+        raise UserError(f"cannot coerce {raw!r} to {kind}", kind="InvalidInput") from exc
 
 
 def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
@@ -437,19 +437,27 @@ def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
     if entry.type == "int":
         value_int = _coerce_number(raw, want_int=True)
         if entry.min_value is not None and value_int < entry.min_value:
-            raise InvalidInput(f"value {value_int} below minimum {entry.min_value} for {entry.key}")
+            raise UserError(
+                f"value {value_int} below minimum {entry.min_value} for {entry.key}",
+                kind="InvalidInput",
+            )
         if entry.max_value is not None and value_int > entry.max_value:
-            raise InvalidInput(f"value {value_int} above maximum {entry.max_value} for {entry.key}")
+            raise UserError(
+                f"value {value_int} above maximum {entry.max_value} for {entry.key}",
+                kind="InvalidInput",
+            )
         return value_int
     if entry.type == "float":
         value_float = _coerce_number(raw, want_int=False)
         if entry.min_value is not None and value_float < entry.min_value:
-            raise InvalidInput(
-                f"value {value_float} below minimum {entry.min_value} for {entry.key}"
+            raise UserError(
+                f"value {value_float} below minimum {entry.min_value} for {entry.key}",
+                kind="InvalidInput",
             )
         if entry.max_value is not None and value_float > entry.max_value:
-            raise InvalidInput(
-                f"value {value_float} above maximum {entry.max_value} for {entry.key}"
+            raise UserError(
+                f"value {value_float} above maximum {entry.max_value} for {entry.key}",
+                kind="InvalidInput",
             )
         return value_float
     if entry.type == "str":
@@ -457,8 +465,9 @@ def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
     if entry.type == "choice":
         text = str(raw)
         if entry.choices is None or text not in entry.choices:
-            raise InvalidInput(
-                f"value {text!r} not in choices {list(entry.choices or ())} for {entry.key}"
+            raise UserError(
+                f"value {text!r} not in choices {list(entry.choices or ())} for {entry.key}",
+                kind="InvalidInput",
             )
         return text
     if entry.type == "multichoice":
@@ -468,14 +477,17 @@ def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
         else:
             items = [chunk.strip() for chunk in str(raw).split(",") if chunk.strip()]
         if entry.choices is None:
-            raise InvalidInput(f"multichoice key {entry.key} declared without choices")
+            raise UserError(
+                f"multichoice key {entry.key} declared without choices", kind="InvalidInput"
+            )
         unknown = [item for item in items if item not in entry.choices]
         if unknown:
-            raise InvalidInput(
-                f"value(s) {unknown!r} not in choices {list(entry.choices)} for {entry.key}"
+            raise UserError(
+                f"value(s) {unknown!r} not in choices {list(entry.choices)} for {entry.key}",
+                kind="InvalidInput",
             )
         return items
-    raise InvalidInput(f"unknown registry type: {entry.type}")
+    raise UserError(f"unknown registry type: {entry.type}", kind="InvalidInput")
 
 
 def _registry_self_check_defaults() -> None:
@@ -488,7 +500,7 @@ def _registry_self_check_defaults() -> None:
     for entry in CONFIG_REGISTRY:
         try:
             coerce_and_validate(entry, entry.default)
-        except InvalidInput as exc:  # pragma: no cover  asserted, not branched
+        except UserError as exc:  # pragma: no cover  asserted, not branched
             raise AssertionError(
                 f"registry entry {entry.key!r}: default {entry.default!r} fails its own "
                 f"declared validation ({exc})"

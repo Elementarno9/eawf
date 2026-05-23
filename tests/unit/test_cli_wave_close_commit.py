@@ -74,7 +74,7 @@ def test_resolve_commit_sha_rejects_non_zero_exit(monkeypatch: pytest.MonkeyPatc
         )
 
     _patch_run(monkeypatch, fake_run)
-    with pytest.raises(cli_errors.InvalidInput) as exc:
+    with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("does-not-exist")
     assert "cannot resolve commit ref: 'does-not-exist'" in str(exc.value)
 
@@ -86,7 +86,7 @@ def test_resolve_commit_sha_rejects_timeout(monkeypatch: pytest.MonkeyPatch) -> 
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=0.1)
 
     _patch_run(monkeypatch, fake_run)
-    with pytest.raises(cli_errors.InvalidInput) as exc:
+    with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("HEAD")
     message = str(exc.value)
     assert "cannot resolve commit ref: 'HEAD'" in message
@@ -100,7 +100,7 @@ def test_resolve_commit_sha_rejects_missing_git(monkeypatch: pytest.MonkeyPatch)
         raise FileNotFoundError("git: not found")
 
     _patch_run(monkeypatch, fake_run)
-    with pytest.raises(cli_errors.InvalidInput) as exc:
+    with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("HEAD")
     assert "cannot resolve commit ref: 'HEAD'" in str(exc.value)
 
@@ -112,7 +112,7 @@ def test_resolve_commit_sha_rejects_blank_stdout(monkeypatch: pytest.MonkeyPatch
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="\n", stderr="")
 
     _patch_run(monkeypatch, fake_run)
-    with pytest.raises(cli_errors.InvalidInput) as exc:
+    with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("HEAD")
     assert "non-canonical sha" in str(exc.value)
 
@@ -124,7 +124,7 @@ def test_resolve_commit_sha_rejects_short_sha_output(monkeypatch: pytest.MonkeyP
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="abc1234\n", stderr="")
 
     _patch_run(monkeypatch, fake_run)
-    with pytest.raises(cli_errors.InvalidInput) as exc:
+    with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("abc1234")
     assert "non-canonical sha" in str(exc.value)
 
@@ -139,6 +139,6 @@ def test_resolve_commit_sha_rejects_non_hex_stdout(monkeypatch: pytest.MonkeyPat
         )
 
     _patch_run(monkeypatch, fake_run)
-    with pytest.raises(cli_errors.InvalidInput) as exc:
+    with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("weird")
     assert "non-canonical sha" in str(exc.value)

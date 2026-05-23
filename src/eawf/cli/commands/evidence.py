@@ -63,7 +63,7 @@ def _state_path(flags: GlobalFlags) -> Path:
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        raise cli_errors.NotFound(str(exc)) from exc
+        raise cli_errors.UserError(str(exc), kind="NotFound") from exc
 
 
 def _emit(payload: dict[str, Any], text: str, flags: GlobalFlags) -> None:

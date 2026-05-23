@@ -117,7 +117,7 @@ def test_wave_land_no_worktree_raises(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
     # Do NOT call create_worktree — leave worktree_id=None.
-    with pytest.raises(cli_errors.NotFound) as exc_info:
+    with pytest.raises(cli_errors.UserError) as exc_info:
         wave_land(state, repo_root=repo, wave_id="P05-I01-W01")
     # The error path goes via merge_back which surfaces "no worktree id stamped".
     assert "worktree" in str(exc_info.value).lower()
@@ -144,7 +144,7 @@ def test_wave_land_conflict_does_not_close_wave(tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "parent v2"], check=True)
 
-    with pytest.raises(cli_errors.IntegrityViolation) as exc_info:
+    with pytest.raises(cli_errors.StateConflict) as exc_info:
         wave_land(state, repo_root=repo, wave_id="P05-I01-W01")
     # The hint references the repair procedure.
     msg = str(exc_info.value)
@@ -241,7 +241,7 @@ def test_wave_land_unknown_wave_raises_not_found(tmp_path: Path) -> None:
     """An unknown wave id surfaces :class:`NotFound` immediately."""
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()
-    with pytest.raises(cli_errors.NotFound):
+    with pytest.raises(cli_errors.UserError):
         wave_land(state, repo_root=repo, wave_id="P99-I99-W99")
 
 
@@ -252,6 +252,6 @@ def test_wave_land_already_closed_wave_raises_validation_failed(tmp_path: Path) 
     # Synthesise a closed wave.
     state.waves["P05-I01-W01"].status = WaveStatus.CLOSED
     state.waves["P05-I01-W01"].outcome = "previously closed"
-    with pytest.raises(cli_errors.ValidationFailed) as exc_info:
+    with pytest.raises(cli_errors.ValidationError) as exc_info:
         wave_land(state, repo_root=repo, wave_id="P05-I01-W01")
     assert "claimed/in_progress" in str(exc_info.value)

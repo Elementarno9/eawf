@@ -92,9 +92,9 @@ def _check_wave_exists_and_active(state: State, wave_id: str) -> None:
     """
     wave = state.waves.get(wave_id)
     if wave is None:
-        raise cli_errors.NotFound(f"unknown wave: {wave_id}")
+        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
     if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
-        raise cli_errors.ValidationFailed(
+        raise cli_errors.ValidationError(
             f"wave {wave_id!r} is not claimed/in_progress "
             f"(status={wave.status.value!r}); cannot land"
         )
@@ -122,7 +122,7 @@ def _refuse_on_conflict(
         f"then run `eawf wave land {wave_id}` again or "
         f"`eawf worktree merge-back --wave {wave_id} --continue`"
     )
-    raise cli_errors.IntegrityViolation(detail)
+    raise cli_errors.StateConflict(detail, kind="IntegrityViolation")
 
 
 def wave_land(
@@ -193,7 +193,7 @@ def wave_land(
         # Close-time rejection is a validation-side failure — the wave
         # was active when we checked but raced into a terminal state
         # before close_wave ran. Surface the canonical exit code.
-        raise cli_errors.ValidationFailed(str(exc)) from exc
+        raise cli_errors.ValidationError(str(exc)) from exc
 
     cleanup_result: CleanupResult | None = None
     worktree_cleaned = False
@@ -345,7 +345,7 @@ def wave_land_batch(
                 keep_worktree=keep_worktree,
             )
         except cli_errors.CliError as exc:
-            logger.info(f"wave_land_batch: stopping at wave={wid} error={exc!s}")
+            logger.info(f"wave_land_batch stopping wave={wid} error={exc!s}")
             return WaveLandBatchResult(
                 landed=landed,
                 failed_wave=wid,

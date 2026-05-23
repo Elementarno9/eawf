@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from eawf.cli.errors import InvalidInput
+from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.state.enums import GoalStatus
 from eawf.state.models import Goal, State
@@ -46,7 +46,7 @@ def define_goal(
     """
     goals: dict[str, Goal] = dict(state.goals or {})
     if goal_id in goals:
-        raise InvalidInput(f"goal {goal_id!r} already exists")
+        raise UserError(f"goal {goal_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
     goal = Goal(

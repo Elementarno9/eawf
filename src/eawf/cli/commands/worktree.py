@@ -71,7 +71,7 @@ def _resolve_state_path(flags: GlobalFlags) -> Path:
     try:
         return resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
-        raise cli_errors.NotFound(str(exc)) from exc
+        raise cli_errors.UserError(str(exc), kind="NotFound") from exc
 
 
 def _resolve_repo_root(state_path: Path) -> Path:
@@ -142,7 +142,7 @@ def worktree_create_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -300,7 +300,7 @@ def worktree_merge_back_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -410,7 +410,7 @@ def worktree_path_fix_cmd(
     flags: GlobalFlags = ctx.obj
     if not apply_all:
         cli_errors.emit_error(
-            cli_errors.InvalidInput("pass --all to rewrite every absolute path"),
+            cli_errors.UserError("pass --all to rewrite every absolute path", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -472,7 +472,7 @@ def worktree_cleanup_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -562,7 +562,7 @@ def wave_land_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid wave id: {wave_id!r}"),
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -638,7 +638,7 @@ def wave_land_batch_cmd(
     flags: GlobalFlags = ctx.obj
     if iter_flag is not None and not is_iter_id(iter_flag):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid iter id: {iter_flag!r}"),
+            cli_errors.UserError(f"invalid iter id: {iter_flag!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -701,7 +701,7 @@ def wave_land_batch_cmd(
         f"error={batch_result.error!r}"
     )
     emit_json_or_text(payload, text, flags=flags)
-    raise typer.Exit(cli_errors.ValidationFailed.exit_code)
+    raise typer.Exit(cli_errors.ValidationError.exit_code)
 
 
 __all__ = [

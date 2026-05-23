@@ -236,12 +236,14 @@ def _load_workspace_payload(workspace_state_path: Path) -> dict[str, Any]:
         IntegrityViolation: When the file content is not valid JSON.
     """
     if not workspace_state_path.exists():
-        raise cli_errors.NotFound(f"workspace state file not found: {workspace_state_path}")
+        raise cli_errors.UserError(
+            f"workspace state file not found: {workspace_state_path}", kind="NotFound"
+        )
     try:
         return orjson.loads(workspace_state_path.read_bytes())  # type: ignore[no-any-return]
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.IntegrityViolation(
-            f"corrupted workspace state at {workspace_state_path}: {exc}"
+        raise cli_errors.StateConflict(
+            f"corrupted workspace state at {workspace_state_path}: {exc}", kind="IntegrityViolation"
         ) from exc
 
 
@@ -253,12 +255,12 @@ def _load_repo_payload(repo_state_path: Path) -> dict[str, Any]:
         IntegrityViolation: When the file content is not valid JSON.
     """
     if not repo_state_path.exists():
-        raise cli_errors.NotFound(f"repo state file not found: {repo_state_path}")
+        raise cli_errors.UserError(f"repo state file not found: {repo_state_path}", kind="NotFound")
     try:
         return orjson.loads(repo_state_path.read_bytes())  # type: ignore[no-any-return]
     except orjson.JSONDecodeError as exc:
-        raise cli_errors.IntegrityViolation(
-            f"corrupted repo state at {repo_state_path}: {exc}"
+        raise cli_errors.StateConflict(
+            f"corrupted repo state at {repo_state_path}: {exc}", kind="IntegrityViolation"
         ) from exc
 
 
@@ -311,13 +313,15 @@ def repo_link_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(workspace_code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid workspace code: {workspace_code!r}"),
+            cli_errors.UserError(
+                f"invalid workspace code: {workspace_code!r}", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if not is_project_code(repo_code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid repo code: {repo_code!r}"),
+            cli_errors.UserError(f"invalid repo code: {repo_code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -336,15 +340,18 @@ def repo_link_cmd(
     ws_section = ws_payload.get("workspace")
     if not isinstance(ws_section, dict):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"state at {workspace_path} has no workspace section"),
+            cli_errors.UserError(
+                f"state at {workspace_path} has no workspace section", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     if ws_section.get("code") != workspace_code:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"workspace code mismatch: arg={workspace_code!r} "
-                f"vs disk={ws_section.get('code')!r}"
+                f"vs disk={ws_section.get('code')!r}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -371,8 +378,9 @@ def repo_link_cmd(
 
     if (ws_section.get("repos") or {}).get(repo_code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
-                f"repo {repo_code!r} already linked to workspace {workspace_code!r}"
+            cli_errors.UserError(
+                f"repo {repo_code!r} already linked to workspace {workspace_code!r}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -408,7 +416,7 @@ def repo_link_cmd(
     ws_report = validate_state(ws_payload, strict_optional=False)
     if ws_report.state is None:
         cli_errors.emit_error(
-            cli_errors.ValidationFailed(
+            cli_errors.ValidationError(
                 "workspace post-link payload invalid: " + "; ".join(ws_report.schema_errors[:3])
             ),
             flags=flags,
@@ -417,7 +425,7 @@ def repo_link_cmd(
     repo_report = validate_state(repo_payload, strict_optional=False)
     if repo_report.state is None:
         cli_errors.emit_error(
-            cli_errors.ValidationFailed(
+            cli_errors.ValidationError(
                 "repo post-link payload invalid: " + "; ".join(repo_report.schema_errors[:3])
             ),
             flags=flags,
@@ -430,7 +438,7 @@ def repo_link_cmd(
         with portalock.acquire(repo_state_path, timeout=5.0):
             atomic_write_json_locked(repo_state_path, repo_payload)
     except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.LockConflict(str(exc)), flags=flags)
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
 
     emit_json_or_text(
@@ -484,7 +492,7 @@ def _read_registry_for_write(registry_path: Path) -> Registry:
         if "not found" in msg:
             # Bootstrap path: first ``repo add`` creates the registry.
             return Registry()
-        raise cli_errors.InvalidInput(msg) from exc
+        raise cli_errors.UserError(msg, kind="InvalidInput") from exc
 
 
 def _daemon_proxy_enabled_for_registry() -> bool:
@@ -598,7 +606,7 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
     try:
         validated = Registry.model_validate(registry.model_dump(mode="json"))
     except PydValidationError as exc:
-        raise cli_errors.ValidationFailed(f"registry post-mutation payload invalid: {exc}") from exc
+        raise cli_errors.ValidationError(f"registry post-mutation payload invalid: {exc}") from exc
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     payload = validated.model_dump(mode="json")
 
@@ -607,9 +615,10 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
         from eawf.cli._mutation import _daemon_reachable
 
         if not _daemon_reachable():
-            raise cli_errors.IntegrityViolation(
+            raise cli_errors.StateConflict(
                 "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
-                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out"
+                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out",
+                kind="IntegrityViolation",
             )
         # Load the on-disk before-image so we can derive operations.
         try:
@@ -619,7 +628,7 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
             if "not found" in msg:
                 on_disk = Registry()
             else:
-                raise cli_errors.InvalidInput(msg) from exc
+                raise cli_errors.UserError(msg, kind="InvalidInput") from exc
         ops = _diff_registries_to_ops(on_disk, validated)
         # Point the daemon at the right registry file for tests; the
         # production daemon ignores the env when its own resolver
@@ -658,7 +667,7 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
         with portalock.acquire(registry_path, timeout=5.0):
             atomic_write_json_locked(registry_path, payload)
     except portalock.LockTimeout as exc:
-        raise cli_errors.LockConflict(str(exc)) from exc
+        raise cli_errors.StateConflict(str(exc), kind="LockConflict") from exc
 
 
 def _derive_code_from_state(repo_path: Path) -> str | None:
@@ -674,7 +683,7 @@ def _derive_code_from_state(repo_path: Path) -> str | None:
     try:
         payload: dict[str, Any] = orjson.loads(candidate.read_bytes())
     except (orjson.JSONDecodeError, OSError) as exc:
-        logger.debug(f"_derive_code_from_state path={candidate!r} unreadable: {exc!r}")
+        logger.debug(f"_derive_code_from_state unreadable path={candidate!r} err={exc!r}")
         return None
     project = payload.get("project")
     if not isinstance(project, dict):
@@ -744,14 +753,16 @@ def _confirm_unrecognised_parent(
     if yes:
         return
     if no_input:
-        raise cli_errors.UserDeclined(
+        raise cli_errors.UserError(
             f"parent dir of {repo_path} is not a recognised workspace home "
-            "and --no-input was passed without --yes; refusing to register"
+            "and --no-input was passed without --yes; refusing to register",
+            kind="UserDeclined",
         )
     if not sys.stdin.isatty():
-        raise cli_errors.UserDeclined(
+        raise cli_errors.UserError(
             f"parent dir of {repo_path} is not a recognised workspace home "
-            "and stdin is not a TTY; pass --yes to confirm"
+            "and stdin is not a TTY; pass --yes to confirm",
+            kind="UserDeclined",
         )
     prompt = (
         f"Path parent {repo_path.parent} is not a recognised workspace home "
@@ -760,7 +771,9 @@ def _confirm_unrecognised_parent(
     )
     answer = input(prompt).strip().lower()
     if answer not in {"y", "yes"}:
-        raise cli_errors.UserDeclined(f"user declined to register path {repo_path}")
+        raise cli_errors.UserError(
+            f"user declined to register path {repo_path}", kind="UserDeclined"
+        )
 
 
 @repo_app.command(name="add")
@@ -838,13 +851,13 @@ def repo_add_cmd(
     resolved_path = path.resolve()
     if not resolved_path.exists():
         cli_errors.emit_error(
-            cli_errors.NotFound(f"path does not exist: {resolved_path}"),
+            cli_errors.UserError(f"path does not exist: {resolved_path}", kind="NotFound"),
             flags=flags,
         )
         return
     if not resolved_path.is_dir():
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"path is not a directory: {resolved_path}"),
+            cli_errors.UserError(f"path is not a directory: {resolved_path}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -852,16 +865,17 @@ def repo_add_cmd(
     derived_code = code or _derive_code_from_state(resolved_path)
     if not derived_code:
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"cannot derive repo code from {resolved_path}; "
-                "pass --code explicitly or run `eawf init` in the target dir"
+                "pass --code explicitly or run `eawf init` in the target dir",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
         return
     if not is_project_code(derived_code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid repo code: {derived_code!r}"),
+            cli_errors.UserError(f"invalid repo code: {derived_code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -916,9 +930,10 @@ def repo_add_cmd(
         return
     if existing is not None and existing.path != str(resolved_path):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(
+            cli_errors.UserError(
                 f"repo code {derived_code!r} already registered at {existing.path}; "
-                f"refusing to overwrite with {resolved_path}"
+                f"refusing to overwrite with {resolved_path}",
+                kind="InvalidInput",
             ),
             flags=flags,
         )
@@ -993,7 +1008,7 @@ def repo_remove_cmd(
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.InvalidInput(f"invalid repo code: {code!r}"),
+            cli_errors.UserError(f"invalid repo code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -1004,15 +1019,17 @@ def repo_remove_cmd(
         msg = str(exc)
         if "not found" in msg:
             cli_errors.emit_error(
-                cli_errors.NotFound(f"registry not found at {target}; nothing to remove"),
+                cli_errors.UserError(
+                    f"registry not found at {target}; nothing to remove", kind="NotFound"
+                ),
                 flags=flags,
             )
         else:
-            cli_errors.emit_error(cli_errors.InvalidInput(msg), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(msg, kind="InvalidInput"), flags=flags)
         return
     if code not in registry.repos:
         cli_errors.emit_error(
-            cli_errors.NotFound(f"repo {code!r} not registered in {target}"),
+            cli_errors.UserError(f"repo {code!r} not registered in {target}", kind="NotFound"),
             flags=flags,
         )
         return
@@ -1089,11 +1106,13 @@ def repo_prune_cmd(
         msg = str(exc)
         if "not found" in msg:
             cli_errors.emit_error(
-                cli_errors.NotFound(f"registry not found at {target}; nothing to prune"),
+                cli_errors.UserError(
+                    f"registry not found at {target}; nothing to prune", kind="NotFound"
+                ),
                 flags=flags,
             )
         else:
-            cli_errors.emit_error(cli_errors.InvalidInput(msg), flags=flags)
+            cli_errors.emit_error(cli_errors.UserError(msg, kind="InvalidInput"), flags=flags)
         return
     dropped: list[dict[str, str]] = []
     survivors: dict[str, RegistryRepoEntry] = {}
@@ -1118,18 +1137,20 @@ def repo_prune_cmd(
     if not yes:
         if flags.no_input:
             cli_errors.emit_error(
-                cli_errors.UserDeclined(
+                cli_errors.UserError(
                     f"--no-input passed without --yes; refusing to prune "
-                    f"{len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}"
+                    f"{len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}",
+                    kind="UserDeclined",
                 ),
                 flags=flags,
             )
             return
         if not sys.stdin.isatty():
             cli_errors.emit_error(
-                cli_errors.UserDeclined(
+                cli_errors.UserError(
                     f"stdin is not a TTY and --yes was not passed; refusing to prune "
-                    f"{len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}"
+                    f"{len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}",
+                    kind="UserDeclined",
                 ),
                 flags=flags,
             )
@@ -1145,7 +1166,7 @@ def repo_prune_cmd(
         )
         if answer not in {"y", "yes"}:
             cli_errors.emit_error(
-                cli_errors.UserDeclined("user declined prune"),
+                cli_errors.UserError("user declined prune", kind="UserDeclined"),
                 flags=flags,
             )
             return
