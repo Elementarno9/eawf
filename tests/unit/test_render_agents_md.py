@@ -17,9 +17,16 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render import regions
-from eawf.render.agents_md import RenderResult, render_agents_md
+from eawf.render.agents_md import (
+    ENTITY_TITLE_MAX,
+    RenderResult,
+    lint_entity_title,
+    render_agents_md,
+)
 from eawf.render.manifest import Manifest
 
 
@@ -345,3 +352,71 @@ def test_render_agents_md_empty_compose_no_regions(tmp_path: Path) -> None:
     assert result.regions_updated == []
     assert result.regions_unchanged == []
     assert manifest.generated == {}
+
+
+def test_lint_entity_title_clean_title_has_no_violations() -> None:
+    """A bounded imperative noun-phrase with no trailing period is clean."""
+    assert lint_entity_title("Add bounded title to entities") == []
+
+
+def test_lint_entity_title_at_cap_is_clean() -> None:
+    """A title of exactly the cap length is accepted (off-by-one boundary)."""
+    title = "x" * ENTITY_TITLE_MAX
+    assert len(title) == 72
+    assert lint_entity_title(title) == []
+
+
+def test_lint_entity_title_over_cap_is_flagged() -> None:
+    """A title one char over the cap is flagged as over-cap (off-by-one boundary)."""
+    title = "x" * (ENTITY_TITLE_MAX + 1)
+    violations = lint_entity_title(title)
+    assert len(violations) == 1
+    assert "73 chars" in violations[0]
+    assert f"{ENTITY_TITLE_MAX}-char cap" in violations[0]
+
+
+def test_lint_entity_title_trailing_period_is_flagged() -> None:
+    """A within-cap title ending in a period is flagged for the trailing period."""
+    violations = lint_entity_title("Adds a bounded title.")
+    assert len(violations) == 1
+    assert "trailing period" in violations[0]
+
+
+def test_lint_entity_title_trailing_period_after_whitespace_is_flagged() -> None:
+    """Trailing whitespace after the period does not hide it from the check."""
+    violations = lint_entity_title("Adds a bounded title.  ")
+    assert len(violations) == 1
+    assert "trailing period" in violations[0]
+
+
+def test_lint_entity_title_both_violations_reported_in_order() -> None:
+    """An over-cap title that also ends in a period yields both messages, cap first."""
+    title = "x" * ENTITY_TITLE_MAX + "yz."
+    violations = lint_entity_title(title)
+    assert len(violations) == 2
+    assert "char cap" in violations[0]
+    assert "trailing period" in violations[1]
+
+
+def test_lint_entity_title_empty_string_is_clean_for_style() -> None:
+    """Empty title trips neither style rule (the model's min_length=1 owns that).
+
+    ``lint_entity_title`` is a style backstop for the over-cap and
+    trailing-period modes only; the non-empty invariant is enforced by the
+    Pydantic ``min_length=1`` bound at the ingestion boundary, so the linter
+    deliberately stays silent on the empty case rather than duplicating it.
+    """
+    assert lint_entity_title("") == []
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Enforce sandbox deny-list at dispatch",
+        "Add title+description to entities",
+        "Surface entity description in detail renders",
+    ],
+)
+def test_lint_entity_title_accepts_real_wave_titles(title: str) -> None:
+    """Representative real wave titles from this phase pass the linter."""
+    assert lint_entity_title(title) == []

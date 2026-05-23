@@ -35,6 +35,7 @@ effect (e.g. ``eawf decisions show``-style read-only renders).
 Public API::
 
     RenderResult                    # dataclass: target + per-region status
+    lint_entity_title(title) -> list[str]
     render_decisions_section(decisions, *, scope_id) -> str
     render_agents_md(
         composed, target, manifest, *, generator, state, decisions_scope_id
@@ -74,6 +75,14 @@ DECISIONS_REGION_ID: str = "decisions"
 #: new D## row, an edited rationale) keeps the same version and surfaces in the
 #: marker's ``hash=`` field instead.
 DECISIONS_REGION_VERSION: str = "1.0"
+
+#: Hard upper bound on an entity ``title`` length, mirroring the
+#: ``max_length=72`` :class:`pydantic.Field` constraint on every
+#: ``State`` entity (``Phase`` / ``Iter`` / ``Wave`` / ``Decision`` /
+#: ``Hypothesis`` / ``BacklogItem`` / ``Incident``). Kept here so the
+#: style backstop (:func:`lint_entity_title`) flags an over-cap title at
+#: the same threshold the model rejects it.
+ENTITY_TITLE_MAX: int = 72
 
 
 @dataclass(frozen=True)
@@ -235,6 +244,49 @@ def render_decisions_section(
                 parts.append(f"- {consequence}")
     logger.info(f"render_decisions_section scope_id={scope_id!r} count={len(selected)} result=ok")
     return "\n".join(parts)
+
+
+def lint_entity_title(title: str) -> list[str]:
+    """Return human-readable violations of the entity-title naming rule.
+
+    The entity-title naming rule (rendered into AGENTS.md by the
+    ``entity-title-naming`` render block) asks for a ``title`` that is an
+    imperative noun-phrase of at most :data:`ENTITY_TITLE_MAX` characters with
+    no trailing period; the long-form purpose belongs in ``description``. This
+    is the style backstop a reviewer (or a future title-authoring command) runs
+    over a candidate title *before* it reaches the model — the
+    ``max_length=72`` :class:`pydantic.Field` bound rejects an over-cap title at
+    the ingestion boundary, but it does not catch a trailing period and it
+    raises rather than collecting both failures, which is unhelpful when the
+    caller wants to report every problem at once.
+
+    Two failure modes are flagged, in declaration order:
+
+    - **Over-cap** — ``len(title)`` exceeds :data:`ENTITY_TITLE_MAX`.
+    - **Trailing period** — ``title`` ends with ``"."`` (after stripping
+      trailing whitespace, so ``"foo. "`` is flagged too).
+
+    A title that violates both modes yields both messages. An empty list means
+    the title is clean.
+
+    Args:
+        title: Candidate entity title to check. Leading/trailing whitespace is
+            considered part of the value (the model does not strip it), so a
+            trailing-space-then-period still trips the trailing-period check.
+
+    Returns:
+        Zero or more violation messages, lowercase-led and period-free per the
+        project error-phrasing convention, suitable for surfacing to a human
+        author. Empty when *title* satisfies the rule.
+    """
+    violations: list[str] = []
+    if len(title) > ENTITY_TITLE_MAX:
+        violations.append(
+            f"title exceeds {ENTITY_TITLE_MAX}-char cap: {len(title)} chars in {title!r}"
+        )
+    if title.rstrip().endswith("."):
+        violations.append(f"title has a trailing period (titles are labels, not prose): {title!r}")
+    return violations
 
 
 def _has_unmanaged_content(text: str) -> bool:
