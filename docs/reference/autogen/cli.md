@@ -267,6 +267,7 @@ Iteration lifecycle (open, close).
 | `activate` | Flip a PLANNED iter to ACTIVE. |
 | `close` | Close an active iter. Rejects when child waves are still open. |
 | `open` | Open an iter. Pass an iter ID or a phase id (auto-allocates iter). |
+| `plan` | Stage a PLANNED iter under an open phase without moving the current pointer. |
 
 ### `eawf mcp`
 

@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "c81c2facc9d6914b",
+    "hash": "01ebca83fdf20341",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -165,6 +165,30 @@
       },
       {
         "name": "security-review",
+        "version": "1.0"
+      },
+      {
+        "name": "refactor-god-class",
+        "version": "1.0"
+      },
+      {
+        "name": "write-adr",
+        "version": "1.0"
+      },
+      {
+        "name": "add-property-test",
+        "version": "1.0"
+      },
+      {
+        "name": "extract-function",
+        "version": "1.0"
+      },
+      {
+        "name": "extract-module",
+        "version": "1.0"
+      },
+      {
+        "name": "graduate-research-code",
         "version": "1.0"
       }
     ],

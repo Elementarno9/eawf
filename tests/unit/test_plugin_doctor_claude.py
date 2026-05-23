@@ -23,7 +23,7 @@ def test_doctor_clean_after_install(tmp_path: Path) -> None:
     assert not report.drifted
     assert not report.missing
     # Total ok count = skills + agents + hooks + settings.
-    assert len(report.ok) == 17 + 8 + 15 + 1
+    assert len(report.ok) == 23 + 8 + 15 + 1
 
 
 def test_doctor_detects_skill_drift(tmp_path: Path) -> None:

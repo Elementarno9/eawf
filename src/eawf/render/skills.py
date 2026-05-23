@@ -14,10 +14,12 @@ Public API::
     render_skill_md(ctx) -> str  # pure: returns the rendered markdown
     SKILL_REGISTRY               # frozen tuple of every Eä skill spec
 
-The ``SKILL_REGISTRY`` carries the v0.1 surface (six core + four meta
-workflow skills, mirroring :data:`~eawf.render.envelope.SkillName`) and
-is consumed by :mod:`eawf.runtimes.claude.plugin_install` to produce
-the deterministic plugin tree the golden test pins.
+The ``SKILL_REGISTRY`` carries the operator-facing workflow skills (six
+core + four meta + the C04b skill-surfaces) plus a tail of model-only
+code-quality playbooks (``user_invocable=False`` — hidden from the slash
+menu but reachable by the model). It is consumed by
+:mod:`eawf.runtimes.claude.plugin_install` to produce the deterministic
+plugin tree the golden test pins.
 """
 
 from __future__ import annotations
@@ -746,6 +748,240 @@ Skill envelope with `header.skill = "/security-review"`. Body carries
 scope_id, spec_path, checks_run, and the per-check findings.
 """
 
+# ---------------------------------------------------------------------------
+# Model-only code-quality skills. These carry no executable skill body in
+# `eawf.skills.registry`; they are prompt-only playbooks the model invokes
+# while editing source. Each renders with `user-invocable: false` so it is
+# hidden from the slash menu, and `disable-model-invocation: false` so the
+# model may still reach for it. Bodies document the canonical refactoring
+# procedure rather than a CLI output contract.
+# ---------------------------------------------------------------------------
+
+_REFACTOR_GOD_CLASS_BODY = """# refactor-god-class
+
+A model-only refactoring playbook. There is no slash command and no CLI
+verb; the model invokes this while editing a module whose single class
+has accreted too many responsibilities.
+
+## When to reach for it
+
+- One class owns parsing, validation, persistence, and presentation.
+- The class exceeds ~300 lines or has more than ~7 public methods that
+  cluster into distinct concerns.
+- Tests for the class need elaborate setup because one method depends on
+  state another method mutates.
+
+## Canonical procedure
+
+1. Map responsibilities. List each public method and tag it with the one
+   concern it serves (parse, validate, compute, persist, render).
+2. Find the seams. Group methods sharing the same tag and the same
+   private state; each group is a candidate collaborator.
+3. Extract the lowest-coupling group first into its own class with a
+   constructor that takes only the state it needs (no back-reference to
+   the god class).
+4. Replace the in-class call sites with delegation to the new
+   collaborator; keep the god class's public API stable for one step so
+   callers do not churn.
+5. Repeat per concern. When the god class is a thin coordinator, decide
+   whether it survives as a facade or dissolves into its callers.
+
+## Guardrails
+
+- One concern per extraction commit; never move two seams at once.
+- Preserve behaviour: run the existing tests after each extraction before
+   moving the next group.
+- Honour the project conventions — `extra="forbid"` on any new Pydantic
+   model, single-responsibility per the AGENTS.md engineering rules, and
+   no speculative abstraction (YAGNI).
+"""
+
+_WRITE_ADR_BODY = """# write-adr
+
+A model-only playbook for drafting an architecture decision record. There
+is no slash command; the model invokes this when a design choice needs a
+durable, reviewable rationale. In an Eä-managed repo the decision itself
+is a typed row in `state.json` — the ADR markdown is the human-readable
+companion, never the source of truth.
+
+## When to reach for it
+
+- Two or more designs were weighed and one was picked.
+- The choice constrains future work (a dependency, a schema shape, a
+   protocol boundary) and a later reader will ask "why this?".
+- An audit or spike produced a verdict that should outlive the session.
+
+## Canonical structure
+
+1. **Context** — the forces in tension, in two or three sentences. State
+   the constraint, not the solution.
+2. **Options** — each candidate as a bullet with its concrete trade-off.
+   Name the option the way the codebase will refer to it.
+3. **Decision** — the chosen option, stated as a present-tense assertion.
+4. **Consequences** — what becomes easy, what becomes hard, what is now
+   forbidden.
+
+## Guardrails
+
+- Reference the audit or spike that justifies the decision so the evidence
+   chain is reconstructible (research-workflow rule).
+- Keep prose scrub-clean: no machine paths, hostnames, or PII; references
+   stay repo-relative, an external URL, or an Eä URN.
+- The ADR records WHY; provenance ids (audit, roundtable) live in the
+   decision row and the commit body, not in source comments (rule 25).
+"""
+
+_ADD_PROPERTY_TEST_BODY = """# add-property-test
+
+A model-only playbook for adding a property-based test. There is no slash
+command; the model invokes this when example-based tests leave a function's
+invariants under-specified.
+
+## When to reach for it
+
+- The function has an algebraic law (round-trip, idempotence,
+   commutativity, monotonicity) that examples only sample.
+- The input space is large and edge cases keep slipping through hand-
+   written cases.
+- A parser/serialiser pair should satisfy `decode(encode(x)) == x`.
+
+## Canonical procedure
+
+1. State the invariant in one sentence ("encoding then decoding returns
+   the input").
+2. Pick the narrowest strategy that generates valid inputs; constrain it
+   so generated values are in-domain rather than filtering after the fact.
+3. Assert the law inside the test body; let the framework shrink failures
+   to a minimal counter-example.
+4. Keep one or two example-based tests alongside for the named boundary
+   cases (empty, single, max-length) the contract calls out.
+5. When a property fails, treat the shrunk counter-example as a new
+   regression fixture before fixing the code.
+
+## Guardrails
+
+- Property tests complement, never replace, the boundary-case AND
+   error-path tests every public function owes (test-discipline rule).
+- Use `pytest.approx` for float laws and `numpy.testing.assert_allclose`
+   for array laws.
+- Name the test `test_<func>_<invariant>` so the law is legible from the
+   test report.
+"""
+
+_EXTRACT_FUNCTION_BODY = """# extract-function
+
+A model-only refactoring playbook. There is no slash command; the model
+invokes this to pull a coherent block out of a long function into a named
+helper.
+
+## When to reach for it
+
+- A function spans more than one screen and reads as several phases.
+- A comment introduces a block ("# now normalise the rows") — the comment
+   is begging to become a function name.
+- The same computation appears in two places (DRY).
+
+## Canonical procedure
+
+1. Identify the block and the minimal set of variables it reads (inputs)
+   and the single value it produces (output). If it produces two, that is
+   two extractions.
+2. Name the helper for WHAT it returns, not how — `normalised_rows`, not
+   `do_step_two`.
+3. Lift the block into a pure function where viable: explicit args in,
+   explicit value out, no hidden state mutation.
+4. Replace the original block with a call; keep the surrounding function's
+   shape so the diff is reviewable.
+5. Give the new helper full type hints, a docstring with a `Raises:` block
+   if it can raise, and boundary + error-path tests if it is public.
+
+## Guardrails
+
+- Stop and reconsider if the helper needs four or more parameters — that
+   often signals a missing value object, not a missing function.
+- Three similar lines are fine; do not extract a one-line helper used once
+   (YAGNI / KISS).
+- Use named arguments once arity reaches three (explicit-over-implicit).
+"""
+
+_EXTRACT_MODULE_BODY = """# extract-module
+
+A model-only refactoring playbook. There is no slash command; the model
+invokes this when a single file has grown to host several unrelated
+concerns that deserve their own module.
+
+## When to reach for it
+
+- One file mixes layers — schema models, business logic, and CLI glue —
+   that the architecture keeps separate elsewhere.
+- The file's imports fan out across many subpackages, signalling it does
+   too much.
+- Two clusters of functions never call each other and share no state.
+
+## Canonical procedure
+
+1. Draw the dependency graph inside the file: which functions call which,
+   which share module-level state. Disjoint clusters are extraction
+   candidates.
+2. Choose the cluster with the fewest inbound edges from the rest of the
+   file — it moves with the least churn.
+3. Create the new module in the layer it belongs to (schema, logic, CLI)
+   per the CLI-is-dispatch / separation-of-concerns rules.
+4. Move the cluster, then fix imports; keep public names stable so callers
+   outside the file change only their import path.
+5. Re-export from the original module only if a published API depended on
+   the old location; otherwise update call sites directly.
+
+## Guardrails
+
+- Respect the layering: CLI imports logic, logic imports schema, never the
+   reverse.
+- Avoid circular imports — if the split would create a cycle, the seam is
+   wrong; find a different cluster.
+- Each module keeps `from __future__ import annotations` and its own
+   `logger = logging.getLogger(__name__)`.
+"""
+
+_GRADUATE_RESEARCH_CODE_BODY = """# graduate-research-code
+
+A model-only playbook for promoting throwaway research/spike code into a
+maintained module. There is no slash command; the model invokes this when
+a notebook or scratch script has proven its idea and must now meet
+production conventions.
+
+## When to reach for it
+
+- A spike under `.ea/local/` (or a notebook) demonstrated a result that a
+   real feature now depends on.
+- The exploratory code lacks types, tests, and error handling but the
+   algorithm is settled.
+- A research artifact is being promoted to `.ea/artifacts/` and its code
+   needs to move out of scratch.
+
+## Canonical procedure
+
+1. Separate the kept algorithm from the exploratory scaffolding (plotting,
+   ad-hoc prints, hard-coded paths). Only the algorithm graduates.
+2. Re-home it into the proper package layer with `from __future__ import
+   annotations`, full type hints, and module-level `logger`.
+3. Replace inline constants and machine paths with parameters or config;
+   scrub any PII or local paths before the code is committed.
+4. Add the test debt the spike skipped: boundary cases, error paths, and
+   `pytest.approx` / `assert_allclose` for any numerics.
+5. Back every quantitative claim the graduated code makes with an audit-
+   recorded artifact so the verify-before-claim rule holds.
+
+## Guardrails
+
+- A spike brief that ratifies a decision promotes from
+   `.ea/local/research/` to `.ea/artifacts/research/` in the same commit
+   that lands the decision (spike-workflow rule).
+- Do not graduate code whose verdict is still open — promote the brief and
+   the decision first.
+- The graduated module obeys the same lint, type, and coverage gates as
+   any other source file; no exceptions for "it was research".
+"""
+
 
 SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
@@ -920,6 +1156,71 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         user_invocable=True,
         disable_model_invocation=False,
         body=_SECURITY_REVIEW_BODY,
+    ),
+    SkillSpec(
+        skill_name="refactor-god-class",
+        description=(
+            "Model-only playbook for splitting a multi-responsibility class"
+            " into single-purpose collaborators."
+        ),
+        argument_hint="",
+        user_invocable=False,
+        disable_model_invocation=False,
+        body=_REFACTOR_GOD_CLASS_BODY,
+    ),
+    SkillSpec(
+        skill_name="write-adr",
+        description=(
+            "Model-only playbook for drafting an architecture decision record"
+            " companion to a typed decision row."
+        ),
+        argument_hint="",
+        user_invocable=False,
+        disable_model_invocation=False,
+        body=_WRITE_ADR_BODY,
+    ),
+    SkillSpec(
+        skill_name="add-property-test",
+        description=(
+            "Model-only playbook for adding a property-based test that pins a function's invariant."
+        ),
+        argument_hint="",
+        user_invocable=False,
+        disable_model_invocation=False,
+        body=_ADD_PROPERTY_TEST_BODY,
+    ),
+    SkillSpec(
+        skill_name="extract-function",
+        description=(
+            "Model-only refactoring playbook for pulling a coherent block out"
+            " of a long function into a named helper."
+        ),
+        argument_hint="",
+        user_invocable=False,
+        disable_model_invocation=False,
+        body=_EXTRACT_FUNCTION_BODY,
+    ),
+    SkillSpec(
+        skill_name="extract-module",
+        description=(
+            "Model-only refactoring playbook for splitting a multi-concern file"
+            " into layered modules."
+        ),
+        argument_hint="",
+        user_invocable=False,
+        disable_model_invocation=False,
+        body=_EXTRACT_MODULE_BODY,
+    ),
+    SkillSpec(
+        skill_name="graduate-research-code",
+        description=(
+            "Model-only playbook for promoting spike/research code into a"
+            " typed, tested, maintained module."
+        ),
+        argument_hint="",
+        user_invocable=False,
+        disable_model_invocation=False,
+        body=_GRADUATE_RESEARCH_CODE_BODY,
     ),
 )
 

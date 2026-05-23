@@ -31,8 +31,18 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.cli.commands.skill import _list_payload
+from eawf.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.render.skills import SKILL_REGISTRY, render_skill_md_from_spec
 from eawf.runtimes.claude.plugin_install import _render_skill
+
+# ``eawf skill render`` is the operator surface over the execution-backed
+# skills (``CANONICAL_SKILL_NAMES``). The render ``SKILL_REGISTRY`` is a
+# superset that also carries model-only code-quality playbooks; those have
+# no execution body and are intentionally not operator-renderable.
+_RENDERABLE_SPECS = [s for s in SKILL_REGISTRY if f"/{s.skill_name}" in set(CANONICAL_SKILL_NAMES)]
+_MODEL_ONLY_SPECS = [
+    s for s in SKILL_REGISTRY if f"/{s.skill_name}" not in set(CANONICAL_SKILL_NAMES)
+]
 
 
 @pytest.fixture
@@ -148,23 +158,23 @@ def test_render_cmd_unknown_format_returns_invalid_input(cli_runner: CliRunner) 
     assert "'skill-md'" in result.stdout
 
 
-def test_render_cmd_every_registry_entry_renders(cli_runner: CliRunner) -> None:
-    """Boundary case: every entry of :data:`SKILL_REGISTRY` renders cleanly
-    via the bare-name form. Catches a future registry addition whose
-    body trips ``StrictUndefined`` in the Jinja2 template.
+def test_render_cmd_every_renderable_entry_renders(cli_runner: CliRunner) -> None:
+    """Boundary case: every execution-backed skill renders cleanly via the
+    bare-name form. Catches a future registry addition whose body trips
+    ``StrictUndefined`` in the Jinja2 template.
     """
-    for spec in SKILL_REGISTRY:
+    for spec in _RENDERABLE_SPECS:
         result = cli_runner.invoke(app, ["skill", "render", spec.skill_name])
         assert result.exit_code == 0, f"skill {spec.skill_name!r} failed: {result.stdout}"
         # Sanity: frontmatter line carries the bare skill name.
         assert f"name: {spec.skill_name}\n" in result.stdout
 
 
-def test_render_cmd_json_for_every_registry_entry(cli_runner: CliRunner) -> None:
-    """Boundary case (JSON branch): every registry entry yields a
+def test_render_cmd_json_for_every_renderable_entry(cli_runner: CliRunner) -> None:
+    """Boundary case (JSON branch): every execution-backed skill yields a
     well-formed JSON object via the slashed form.
     """
-    for spec in SKILL_REGISTRY:
+    for spec in _RENDERABLE_SPECS:
         slashed = f"/{spec.skill_name}"
         result = cli_runner.invoke(app, ["skill", "render", slashed, "--format", "json"])
         assert result.exit_code == 0, f"skill {slashed!r} failed: {result.stdout}"
@@ -172,6 +182,20 @@ def test_render_cmd_json_for_every_registry_entry(cli_runner: CliRunner) -> None
         assert payload["name"] == slashed
         assert isinstance(payload["body"], str)
         assert payload["body"].startswith("---\n")
+
+
+def test_render_cmd_rejects_model_only_skills(cli_runner: CliRunner) -> None:
+    """Model-only code-quality playbooks are not operator-renderable: the
+    ``skill render`` CLI rejects them with :class:`InvalidInput` (exit 1)
+    even though they live in the render ``SKILL_REGISTRY``. They are
+    reachable only as on-disk SKILL.md files the model reads, not via the
+    operator CLI.
+    """
+    assert _MODEL_ONLY_SPECS, "expected at least one model-only skill in the registry"
+    for spec in _MODEL_ONLY_SPECS:
+        result = cli_runner.invoke(app, ["skill", "render", spec.skill_name])
+        assert result.exit_code == 1, f"{spec.skill_name!r} unexpectedly rendered: {result.stdout}"
+        assert "unknown skill" in result.stdout
 
 
 def test_render_cmd_help_documents_format_alternatives(cli_runner: CliRunner) -> None:

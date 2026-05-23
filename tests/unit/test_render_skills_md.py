@@ -39,6 +39,23 @@ _EXPECTED_SKILL_NAMES: set[str] = {
     "compress",
     "wave-spec",
     "security-review",
+    # Model-only code-quality playbooks (user_invocable=False).
+    "refactor-god-class",
+    "write-adr",
+    "add-property-test",
+    "extract-function",
+    "extract-module",
+    "graduate-research-code",
+}
+
+# Model-only skills are hidden from the slash menu but model-invocable.
+_MODEL_ONLY_SKILL_NAMES: set[str] = {
+    "refactor-god-class",
+    "write-adr",
+    "add-property-test",
+    "extract-function",
+    "extract-module",
+    "graduate-research-code",
 }
 
 
@@ -112,10 +129,41 @@ def test_render_skill_md_strips_trailing_body_newlines() -> None:
     assert output.endswith("# x\n"), repr(output[-30:])
 
 
-def test_skill_registry_carries_all_seventeen_skills() -> None:
-    """The registry mirrors :data:`~eawf.render.envelope.SkillName` exactly."""
+def test_skill_registry_carries_every_canonical_skill() -> None:
+    """The registry holds the workflow surface plus the model-only tail."""
     names = {spec.skill_name for spec in SKILL_REGISTRY}
     assert names == _EXPECTED_SKILL_NAMES
+
+
+def test_model_only_skills_are_hidden_but_model_invocable() -> None:
+    """Code-quality playbooks render with ``user-invocable: false`` (hidden
+    from the slash menu) yet stay model-invocable
+    (``disable-model-invocation: false``)."""
+    by_name = {spec.skill_name: spec for spec in SKILL_REGISTRY}
+    for name in _MODEL_ONLY_SKILL_NAMES:
+        spec = by_name[name]
+        assert spec.user_invocable is False, f"{name} must be hidden from the slash menu"
+        assert spec.disable_model_invocation is False, f"{name} must stay model-invocable"
+        output = render_skill_md(
+            SkillTemplateContext(
+                skill_name=spec.skill_name,
+                description=spec.description,
+                argument_hint=spec.argument_hint,
+                user_invocable=spec.user_invocable,
+                disable_model_invocation=spec.disable_model_invocation,
+                body=spec.body,
+            )
+        )
+        assert "\nuser-invocable: false\n" in output
+        assert "\ndisable-model-invocation: false\n" in output
+
+
+def test_workflow_skills_remain_user_invocable() -> None:
+    """The operator-facing workflow skills keep ``user_invocable=True`` so the
+    model-only addition does not accidentally hide a slash command."""
+    by_name = {spec.skill_name: spec for spec in SKILL_REGISTRY}
+    for name in _EXPECTED_SKILL_NAMES - _MODEL_ONLY_SKILL_NAMES:
+        assert by_name[name].user_invocable is True, f"{name} must stay in the slash menu"
 
 
 @pytest.mark.parametrize(
