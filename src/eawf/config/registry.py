@@ -414,6 +414,68 @@ def _coerce_number(raw: str | int | float, *, want_int: bool) -> int | float:
         raise UserError(f"cannot coerce {raw!r} to {kind}", kind="InvalidInput") from exc
 
 
+def _coerce_ranged_number(entry: ConfigKey, raw: Any, *, want_int: bool) -> int | float:
+    """Coerce *raw* to int/float and range-check it against *entry*'s bounds.
+
+    Raises:
+        InvalidInput: When *raw* does not parse as the declared numeric type
+            or falls outside ``[min_value, max_value]``.
+    """
+    value = _coerce_number(raw, want_int=want_int)
+    if entry.min_value is not None and value < entry.min_value:
+        raise UserError(
+            f"value {value} below minimum {entry.min_value} for {entry.key}",
+            kind="InvalidInput",
+        )
+    if entry.max_value is not None and value > entry.max_value:
+        raise UserError(
+            f"value {value} above maximum {entry.max_value} for {entry.key}",
+            kind="InvalidInput",
+        )
+    return value
+
+
+def _coerce_choice(entry: ConfigKey, raw: Any) -> str:
+    """Coerce *raw* to one of *entry*'s declared single-choice options.
+
+    Raises:
+        InvalidInput: When the stringified value is not a declared choice.
+    """
+    text = str(raw)
+    if entry.choices is None or text not in entry.choices:
+        raise UserError(
+            f"value {text!r} not in choices {list(entry.choices or ())} for {entry.key}",
+            kind="InvalidInput",
+        )
+    return text
+
+
+def _coerce_multichoice(entry: ConfigKey, raw: Any) -> list[str]:
+    """Coerce *raw* to a list of *entry*'s declared multi-choice options.
+
+    Accepts a sequence (tuple/list) or a comma-separated string.
+
+    Raises:
+        InvalidInput: When the key declares no choices, or any parsed item is
+            not a declared choice.
+    """
+    if isinstance(raw, (list, tuple)):
+        items = [str(item) for item in raw]
+    else:
+        items = [chunk.strip() for chunk in str(raw).split(",") if chunk.strip()]
+    if entry.choices is None:
+        raise UserError(
+            f"multichoice key {entry.key} declared without choices", kind="InvalidInput"
+        )
+    unknown = [item for item in items if item not in entry.choices]
+    if unknown:
+        raise UserError(
+            f"value(s) {unknown!r} not in choices {list(entry.choices)} for {entry.key}",
+            kind="InvalidInput",
+        )
+    return items
+
+
 def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
     """Convert *raw* into the typed value declared by *entry*.
 
@@ -435,58 +497,15 @@ def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
     if entry.type == "bool":
         return _coerce_bool(raw)
     if entry.type == "int":
-        value_int = _coerce_number(raw, want_int=True)
-        if entry.min_value is not None and value_int < entry.min_value:
-            raise UserError(
-                f"value {value_int} below minimum {entry.min_value} for {entry.key}",
-                kind="InvalidInput",
-            )
-        if entry.max_value is not None and value_int > entry.max_value:
-            raise UserError(
-                f"value {value_int} above maximum {entry.max_value} for {entry.key}",
-                kind="InvalidInput",
-            )
-        return value_int
+        return _coerce_ranged_number(entry, raw, want_int=True)
     if entry.type == "float":
-        value_float = _coerce_number(raw, want_int=False)
-        if entry.min_value is not None and value_float < entry.min_value:
-            raise UserError(
-                f"value {value_float} below minimum {entry.min_value} for {entry.key}",
-                kind="InvalidInput",
-            )
-        if entry.max_value is not None and value_float > entry.max_value:
-            raise UserError(
-                f"value {value_float} above maximum {entry.max_value} for {entry.key}",
-                kind="InvalidInput",
-            )
-        return value_float
+        return _coerce_ranged_number(entry, raw, want_int=False)
     if entry.type == "str":
         return str(raw)
     if entry.type == "choice":
-        text = str(raw)
-        if entry.choices is None or text not in entry.choices:
-            raise UserError(
-                f"value {text!r} not in choices {list(entry.choices or ())} for {entry.key}",
-                kind="InvalidInput",
-            )
-        return text
+        return _coerce_choice(entry, raw)
     if entry.type == "multichoice":
-        # Multichoice accepts a sequence (tuple/list) or a comma-separated string.
-        if isinstance(raw, (list, tuple)):
-            items = [str(item) for item in raw]
-        else:
-            items = [chunk.strip() for chunk in str(raw).split(",") if chunk.strip()]
-        if entry.choices is None:
-            raise UserError(
-                f"multichoice key {entry.key} declared without choices", kind="InvalidInput"
-            )
-        unknown = [item for item in items if item not in entry.choices]
-        if unknown:
-            raise UserError(
-                f"value(s) {unknown!r} not in choices {list(entry.choices)} for {entry.key}",
-                kind="InvalidInput",
-            )
-        return items
+        return _coerce_multichoice(entry, raw)
     raise UserError(f"unknown registry type: {entry.type}", kind="InvalidInput")
 
 

@@ -264,6 +264,129 @@ def _load_repo_payload(repo_state_path: Path) -> dict[str, Any]:
         ) from exc
 
 
+def _resolve_repo_project_code(project: object, *, repo_code: str) -> str:
+    """Return the repo's project code, falling back to *repo_code*.
+
+    Wizard-init repos may carry ``project=None`` or a blank code; in
+    that case the repo code stands in.
+    """
+    code = project.get("code") if isinstance(project, dict) else None
+    if isinstance(code, str) and code:
+        return code
+    return repo_code
+
+
+def _resolve_repo_title(
+    title: str | None,
+    *,
+    project: object,
+    repo_payload: dict[str, Any],
+    repo_code: str,
+) -> str:
+    """Resolve the repo display title via the fallback ladder.
+
+    Precedence: explicit *title* arg, then the repo's project title,
+    then ``indexes.project_title``, then the repo code as last resort.
+    """
+    if title is not None:
+        return title
+    if isinstance(project, dict):
+        candidate = project.get("title")
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    indexes = repo_payload.get("indexes") or {}
+    if isinstance(indexes, dict):
+        candidate = indexes.get("project_title")
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return repo_code
+
+
+def _attach_repo_to_workspace_payload(
+    ws_payload: dict[str, Any],
+    *,
+    ws_section: dict[str, Any],
+    workspace_code: str,
+    repo_code: str,
+    target_dir: Path,
+    repo_title: str,
+    project_code_on_repo: str,
+) -> None:
+    """Append the new repo ref to *ws_payload*'s workspace section in place."""
+    from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
+
+    new_ref = WorkspaceRepoRef(
+        code=repo_code,
+        path=str(target_dir),
+        state_urn=build_urn("state", owner=project_code_on_repo),
+        project_code=project_code_on_repo,
+        title=repo_title,
+        status=ProjectStatus.ACTIVE,
+    )
+    new_repos = dict(ws_section.get("repos") or {})
+    new_repos[repo_code] = new_ref.model_dump(mode="json")
+    ws_payload["workspace"] = WorkspaceIndex(
+        code=workspace_code,
+        title=ws_section.get("title", workspace_code),
+        repos={k: WorkspaceRepoRef.model_validate(v) for k, v in new_repos.items()},
+        current_repo_code=ws_section.get("current_repo_code"),
+    ).model_dump(mode="json")
+    ws_payload["updated_at"] = datetime.now(UTC).isoformat()
+
+
+def _stamp_workspace_code_on_repo_payload(
+    repo_payload: dict[str, Any], *, workspace_code: str
+) -> None:
+    """Record the back-reference workspace code on *repo_payload* in place."""
+    repo_indexes = repo_payload.get("indexes") or {}
+    if not isinstance(repo_indexes, dict):
+        repo_indexes = {}
+    repo_indexes["workspace_code"] = workspace_code
+    repo_payload["indexes"] = repo_indexes
+    repo_payload["updated_at"] = datetime.now(UTC).isoformat()
+
+
+def _validate_link_payload(payload: dict[str, Any], *, label: str, flags: GlobalFlags) -> None:
+    """Validate one post-link state candidate, exiting on schema failure.
+
+    Raises:
+        typer.Exit: via :func:`emit_error` when the payload fails strict
+            validation.
+    """
+    from eawf.validate.strict import validate_state
+
+    report = validate_state(payload, strict_optional=False)
+    if report.state is None:
+        cli_errors.emit_error(
+            cli_errors.ValidationError(
+                f"{label} post-link payload invalid: " + "; ".join(report.schema_errors[:3])
+            ),
+            flags=flags,
+        )
+
+
+def _persist_link_payloads(
+    ws_payload: dict[str, Any],
+    repo_payload: dict[str, Any],
+    *,
+    workspace_path: Path,
+    repo_state_path: Path,
+    flags: GlobalFlags,
+) -> None:
+    """Write both link payloads atomically under their sibling locks.
+
+    Raises:
+        typer.Exit: via :func:`emit_error` when either lock is contended.
+    """
+    try:
+        with portalock.acquire(workspace_path, timeout=5.0):
+            atomic_write_json_locked(workspace_path, ws_payload)
+        with portalock.acquire(repo_state_path, timeout=5.0):
+            atomic_write_json_locked(repo_state_path, repo_payload)
+    except portalock.LockTimeout as exc:
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
+
+
 @repo_app.command(name="link")
 def repo_link_cmd(
     ctx: typer.Context,
@@ -307,8 +430,6 @@ def repo_link_cmd(
     the workspace code on disk disagrees with the *workspace_code* arg, or
     when *repo_code* is already linked.
     """
-    from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
-    from eawf.validate.strict import validate_state
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(workspace_code):
@@ -358,23 +479,10 @@ def repo_link_cmd(
         return
 
     project = repo_payload.get("project") or {}
-    project_code_on_repo = project.get("code") if isinstance(project, dict) else None
-    if not isinstance(project_code_on_repo, str) or not project_code_on_repo:
-        # Wizard-init repos may have project=None; fall back to repo_code.
-        project_code_on_repo = repo_code
-    repo_title = title
-    if repo_title is None and isinstance(project, dict):
-        candidate_title = project.get("title")
-        if isinstance(candidate_title, str) and candidate_title:
-            repo_title = candidate_title
-    if repo_title is None:
-        indexes = repo_payload.get("indexes") or {}
-        if isinstance(indexes, dict):
-            candidate_title = indexes.get("project_title")
-            if isinstance(candidate_title, str) and candidate_title:
-                repo_title = candidate_title
-    if repo_title is None:
-        repo_title = repo_code
+    project_code_on_repo = _resolve_repo_project_code(project, repo_code=repo_code)
+    repo_title = _resolve_repo_title(
+        title, project=project, repo_payload=repo_payload, repo_code=repo_code
+    )
 
     if (ws_section.get("repos") or {}).get(repo_code):
         cli_errors.emit_error(
@@ -386,60 +494,26 @@ def repo_link_cmd(
         )
         return
 
-    new_ref = WorkspaceRepoRef(
-        code=repo_code,
-        path=str(target_dir),
-        state_urn=build_urn("state", owner=project_code_on_repo),
-        project_code=project_code_on_repo,
-        title=repo_title,
-        status=ProjectStatus.ACTIVE,
+    _attach_repo_to_workspace_payload(
+        ws_payload,
+        ws_section=ws_section,
+        workspace_code=workspace_code,
+        repo_code=repo_code,
+        target_dir=target_dir,
+        repo_title=repo_title,
+        project_code_on_repo=project_code_on_repo,
     )
-    new_repos = dict(ws_section.get("repos") or {})
-    new_repos[repo_code] = new_ref.model_dump(mode="json")
-    new_ws_section = WorkspaceIndex(
-        code=workspace_code,
-        title=ws_section.get("title", workspace_code),
-        repos={k: WorkspaceRepoRef.model_validate(v) for k, v in new_repos.items()},
-        current_repo_code=ws_section.get("current_repo_code"),
-    ).model_dump(mode="json")
-    ws_payload["workspace"] = new_ws_section
-    ws_payload["updated_at"] = datetime.now(UTC).isoformat()
+    _stamp_workspace_code_on_repo_payload(repo_payload, workspace_code=workspace_code)
 
-    repo_indexes = repo_payload.get("indexes") or {}
-    if not isinstance(repo_indexes, dict):
-        repo_indexes = {}
-    repo_indexes["workspace_code"] = workspace_code
-    repo_payload["indexes"] = repo_indexes
-    repo_payload["updated_at"] = datetime.now(UTC).isoformat()
-
-    # Validate both candidates before persisting either.
-    ws_report = validate_state(ws_payload, strict_optional=False)
-    if ws_report.state is None:
-        cli_errors.emit_error(
-            cli_errors.ValidationError(
-                "workspace post-link payload invalid: " + "; ".join(ws_report.schema_errors[:3])
-            ),
-            flags=flags,
-        )
-        return
-    repo_report = validate_state(repo_payload, strict_optional=False)
-    if repo_report.state is None:
-        cli_errors.emit_error(
-            cli_errors.ValidationError(
-                "repo post-link payload invalid: " + "; ".join(repo_report.schema_errors[:3])
-            ),
-            flags=flags,
-        )
-        return
-
-    try:
-        with portalock.acquire(workspace_path, timeout=5.0):
-            atomic_write_json_locked(workspace_path, ws_payload)
-        with portalock.acquire(repo_state_path, timeout=5.0):
-            atomic_write_json_locked(repo_state_path, repo_payload)
-    except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
-        return
+    _validate_link_payload(ws_payload, label="workspace", flags=flags)
+    _validate_link_payload(repo_payload, label="repo", flags=flags)
+    _persist_link_payloads(
+        ws_payload,
+        repo_payload,
+        workspace_path=workspace_path,
+        repo_state_path=repo_state_path,
+        flags=flags,
+    )
 
     emit_json_or_text(
         {
@@ -776,6 +850,139 @@ def _confirm_unrecognised_parent(
         )
 
 
+def _resolve_add_identity(resolved_path: Path, *, code: str | None, flags: GlobalFlags) -> str:
+    """Validate the add path and resolve the repo code, exiting on failure.
+
+    Returns:
+        The validated repo code (explicit ``--code`` or derived from the
+        target's ``state.json``).
+
+    Raises:
+        typer.Exit: via :func:`emit_error` when the path is absent / not a
+            directory, the code cannot be derived, or the code fails the
+            project-code regex.
+    """
+    if not resolved_path.exists():
+        cli_errors.emit_error(
+            cli_errors.UserError(f"path does not exist: {resolved_path}", kind="NotFound"),
+            flags=flags,
+        )
+    if not resolved_path.is_dir():
+        cli_errors.emit_error(
+            cli_errors.UserError(f"path is not a directory: {resolved_path}", kind="InvalidInput"),
+            flags=flags,
+        )
+    derived_code = code or _derive_code_from_state(resolved_path)
+    if not derived_code:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"cannot derive repo code from {resolved_path}; "
+                "pass --code explicitly or run `eawf init` in the target dir",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+    if not is_project_code(derived_code):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid repo code: {derived_code!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+    return derived_code
+
+
+def _persist_registry_or_exit(updated: Registry, target: Path, *, flags: GlobalFlags) -> None:
+    """Persist *updated* to *target*, exiting on a CLI error.
+
+    Raises:
+        typer.Exit: via :func:`emit_error` when the persist fails.
+    """
+    try:
+        _persist_registry(updated, target)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+
+
+def _handle_idempotent_readd(
+    registry: Registry,
+    existing: RegistryRepoEntry,
+    *,
+    derived_code: str,
+    resolved_path: Path,
+    target: Path,
+    set_active: bool,
+    flags: GlobalFlags,
+) -> None:
+    """Handle a same-code/same-path re-add: optionally re-activate, then report.
+
+    Writes only when ``--set-active`` flips the active pointer; otherwise
+    the call is a pure no-op that still emits the idempotent envelope.
+    """
+    from eawf.registry import Registry
+
+    if set_active and registry.active_code != derived_code:
+        updated = Registry(
+            version=registry.version,
+            updated_at=datetime.now(UTC),
+            active_code=derived_code,
+            repos=dict(registry.repos),
+        )
+        _persist_registry_or_exit(updated, target, flags=flags)
+    emit_json_or_text(
+        {
+            "code": derived_code,
+            "path": str(resolved_path),
+            "title": existing.title or derived_code,
+            "registry_path": str(target),
+            "added": False,
+            "active": (set_active or registry.active_code == derived_code),
+        },
+        f"repo add {derived_code} (idempotent — already registered at {resolved_path})",
+        flags=flags,
+    )
+
+
+def _insert_new_repo_entry(
+    registry: Registry,
+    *,
+    derived_code: str,
+    resolved_path: Path,
+    effective_title: str,
+    target: Path,
+    set_active: bool,
+    flags: GlobalFlags,
+) -> None:
+    """Insert a fresh registry entry, persist, and emit the success envelope."""
+    from eawf.registry import Registry, RegistryRepoEntry
+
+    new_entry = RegistryRepoEntry(
+        code=derived_code,
+        path=str(resolved_path),
+        title=effective_title,
+        last_seen=datetime.now(UTC),
+    )
+    new_repos = dict(registry.repos)
+    new_repos[derived_code] = new_entry
+    updated = Registry(
+        version=registry.version,
+        updated_at=datetime.now(UTC),
+        active_code=derived_code if set_active else registry.active_code,
+        repos=new_repos,
+    )
+    _persist_registry_or_exit(updated, target, flags=flags)
+    emit_json_or_text(
+        {
+            "code": derived_code,
+            "path": str(resolved_path),
+            "title": effective_title,
+            "registry_path": str(target),
+            "added": True,
+            "active": (set_active or registry.active_code == derived_code),
+        },
+        f"repo add {derived_code} path={resolved_path} title={effective_title!r}",
+        flags=flags,
+    )
+
+
 @repo_app.command(name="add")
 def repo_add_cmd(
     ctx: typer.Context,
@@ -845,40 +1052,9 @@ def repo_add_cmd(
     - 3 (InvalidInput) — missing/invalid code, registry corrupted.
     - 6 (UserDeclined) — TOFU gate declined.
     """
-    from eawf.registry import Registry, RegistryRepoEntry
-
     flags: GlobalFlags = ctx.obj
     resolved_path = path.resolve()
-    if not resolved_path.exists():
-        cli_errors.emit_error(
-            cli_errors.UserError(f"path does not exist: {resolved_path}", kind="NotFound"),
-            flags=flags,
-        )
-        return
-    if not resolved_path.is_dir():
-        cli_errors.emit_error(
-            cli_errors.UserError(f"path is not a directory: {resolved_path}", kind="InvalidInput"),
-            flags=flags,
-        )
-        return
-
-    derived_code = code or _derive_code_from_state(resolved_path)
-    if not derived_code:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"cannot derive repo code from {resolved_path}; "
-                "pass --code explicitly or run `eawf init` in the target dir",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
-        return
-    if not is_project_code(derived_code):
-        cli_errors.emit_error(
-            cli_errors.UserError(f"invalid repo code: {derived_code!r}", kind="InvalidInput"),
-            flags=flags,
-        )
-        return
+    derived_code = _resolve_add_identity(resolved_path, code=code, flags=flags)
     effective_title = title or _derive_title_from_state(resolved_path) or derived_code
 
     try:
@@ -890,41 +1066,22 @@ def repo_add_cmd(
             )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-        return
 
     target = _resolve_registry_path(registry_path)
     try:
         registry = _read_registry_for_write(target)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
-        return
 
     existing = registry.repos.get(derived_code)
     if existing is not None and existing.path == str(resolved_path):
-        # Idempotent: same code + same path means no-op.
-        if set_active and registry.active_code != derived_code:
-            new_repos = dict(registry.repos)
-            updated = Registry(
-                version=registry.version,
-                updated_at=datetime.now(UTC),
-                active_code=derived_code,
-                repos=new_repos,
-            )
-            try:
-                _persist_registry(updated, target)
-            except cli_errors.CliError as err:
-                cli_errors.emit_error(err, flags=flags)
-                return
-        emit_json_or_text(
-            {
-                "code": derived_code,
-                "path": str(resolved_path),
-                "title": existing.title or derived_code,
-                "registry_path": str(target),
-                "added": False,
-                "active": (set_active or registry.active_code == derived_code),
-            },
-            f"repo add {derived_code} (idempotent — already registered at {resolved_path})",
+        _handle_idempotent_readd(
+            registry,
+            existing,
+            derived_code=derived_code,
+            resolved_path=resolved_path,
+            target=target,
+            set_active=set_active,
             flags=flags,
         )
         return
@@ -937,38 +1094,14 @@ def repo_add_cmd(
             ),
             flags=flags,
         )
-        return
 
-    new_entry = RegistryRepoEntry(
-        code=derived_code,
-        path=str(resolved_path),
-        title=effective_title,
-        last_seen=datetime.now(UTC),
-    )
-    new_repos = dict(registry.repos)
-    new_repos[derived_code] = new_entry
-    new_active = derived_code if set_active else registry.active_code
-    updated = Registry(
-        version=registry.version,
-        updated_at=datetime.now(UTC),
-        active_code=new_active,
-        repos=new_repos,
-    )
-    try:
-        _persist_registry(updated, target)
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-        return
-    emit_json_or_text(
-        {
-            "code": derived_code,
-            "path": str(resolved_path),
-            "title": effective_title,
-            "registry_path": str(target),
-            "added": True,
-            "active": (set_active or registry.active_code == derived_code),
-        },
-        f"repo add {derived_code} path={resolved_path} title={effective_title!r}",
+    _insert_new_repo_entry(
+        registry,
+        derived_code=derived_code,
+        resolved_path=resolved_path,
+        effective_title=effective_title,
+        target=target,
+        set_active=set_active,
         flags=flags,
     )
 

@@ -44,7 +44,7 @@ from eawf.state.mutations import MutationKind
 from eawf.state.urn import build as build_urn
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.state.models import Iter, State
 
 logger = logging.getLogger(__name__)
 
@@ -298,6 +298,36 @@ def iter_plan_cmd(
     )
 
 
+def _has_failed_iter_audit(state: State, closed_iters: list[Iter]) -> bool:
+    """Return whether any closed iter carries a non-pass audit verdict."""
+    audits = state.audits or {}
+    for it in closed_iters:
+        if it.audit_id is None:
+            continue
+        audit = audits.get(it.audit_id)
+        if audit is None or audit.verdict is None:
+            continue
+        if audit.verdict != AuditVerdict.PASS:
+            return True
+    return False
+
+
+def _has_wave_with_many_blockers(state: State, phase_wave_ids: list[str]) -> bool:
+    """Return whether any active wave has more than 3 unresolved (non-closed) deps."""
+    for wid in phase_wave_ids:
+        w = state.waves[wid]
+        if w.status not in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+            continue
+        unresolved = [
+            d
+            for d in w.deps
+            if state.waves.get(d) is not None and state.waves[d].status != WaveStatus.CLOSED
+        ]
+        if len(unresolved) > 3:
+            return True
+    return False
+
+
 def _compute_iter_bump_hints(state: State, *, phase_id: str) -> list[str]:
     """Heuristic iter-bump trigger detection. Returns a list of hint tags.
 
@@ -314,29 +344,11 @@ def _compute_iter_bump_hints(state: State, *, phase_id: str) -> list[str]:
     closed_iters = [
         state.iters[iid] for iid in iter_ids if state.iters[iid].status == IterStatus.CLOSED
     ]
-    audits = state.audits or {}
-    for it in closed_iters:
-        if it.audit_id is None:
-            continue
-        audit = audits.get(it.audit_id)
-        if audit is None or audit.verdict is None:
-            continue
-        if audit.verdict != AuditVerdict.PASS:
-            hints.append("previous_iter_audit_failed")
-            break
     phase_wave_ids = [wid for wid, w in state.waves.items() if w.iter_id in set(iter_ids)]
-    for wid in phase_wave_ids:
-        w = state.waves[wid]
-        if w.status not in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
-            continue
-        unresolved = [
-            d
-            for d in w.deps
-            if state.waves.get(d) is not None and state.waves[d].status != WaveStatus.CLOSED
-        ]
-        if len(unresolved) > 3:
-            hints.append("wave_with_many_blockers")
-            break
+    if _has_failed_iter_audit(state, closed_iters):
+        hints.append("previous_iter_audit_failed")
+    if _has_wave_with_many_blockers(state, phase_wave_ids):
+        hints.append("wave_with_many_blockers")
     if len(closed_iters) >= 1 and len(phase_wave_ids) > 6:
         hints.append("phase_scope_expanded")
     return hints

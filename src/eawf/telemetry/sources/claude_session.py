@@ -127,27 +127,34 @@ class ClaudeSessionSource:
         yield _session_from_accumulator(acc, jsonl_path=path)
 
 
-def _fold_record(
-    acc: _SessionAccumulator, record: dict[str, Any], *, fallback_session_id: str
-) -> None:
-    """Fold one transcript record into the running accumulator."""
+def _coerce_str(raw: object) -> str | None:
+    """Return *raw* as a non-empty string, or ``None`` when absent / blank / non-string."""
+    return raw if isinstance(raw, str) and raw else None
+
+
+def _fold_identity(acc: _SessionAccumulator, record: dict[str, Any]) -> None:
+    """Fill the first-seen session-identity fields (session id, cwd, branch)."""
     if acc.session_id is None:
-        session_id = record.get("sessionId")
-        acc.session_id = session_id if isinstance(session_id, str) and session_id else None
+        acc.session_id = _coerce_str(record.get("sessionId"))
     if acc.cwd is None:
-        cwd = record.get("cwd")
-        acc.cwd = cwd if isinstance(cwd, str) and cwd else None
+        acc.cwd = _coerce_str(record.get("cwd"))
     if acc.git_branch_first is None:
-        branch = record.get("gitBranch")
-        acc.git_branch_first = branch if isinstance(branch, str) and branch else None
+        acc.git_branch_first = _coerce_str(record.get("gitBranch"))
 
+
+def _fold_timestamp(acc: _SessionAccumulator, record: dict[str, Any]) -> None:
+    """Widen the session's started/ended window with this record's timestamp."""
     ts = _parse_ts(record.get("timestamp"))
-    if ts is not None:
-        if acc.started_at is None or ts < acc.started_at:
-            acc.started_at = ts
-        if acc.ended_at is None or ts > acc.ended_at:
-            acc.ended_at = ts
+    if ts is None:
+        return
+    if acc.started_at is None or ts < acc.started_at:
+        acc.started_at = ts
+    if acc.ended_at is None or ts > acc.ended_at:
+        acc.ended_at = ts
 
+
+def _fold_lineage(acc: _SessionAccumulator, record: dict[str, Any]) -> None:
+    """Track uuid/parentUuid linkage to derive the orphan rate."""
     uuid = record.get("uuid")
     if isinstance(uuid, str) and uuid:
         acc.seen_uuids.add(uuid)
@@ -157,19 +164,32 @@ def _fold_record(
         if parent not in acc.seen_uuids:
             acc.orphan_count += 1
 
+
+def _fold_assistant_usage(acc: _SessionAccumulator, message: dict[str, Any]) -> None:
+    """Add one assistant turn's model + token usage into the accumulator."""
+    if acc.model_primary is None:
+        acc.model_primary = _coerce_str(message.get("model"))
+    usage = message.get("usage")
+    if isinstance(usage, dict):
+        acc.total_input_tokens += _coerce_int(usage.get("input_tokens"))
+        acc.total_output_tokens += _coerce_int(usage.get("output_tokens"))
+        acc.total_cache_read += _coerce_int(usage.get("cache_read_input_tokens"))
+        acc.total_cache_write += _coerce_int(usage.get("cache_creation_input_tokens"))
+
+
+def _fold_record(
+    acc: _SessionAccumulator, record: dict[str, Any], *, fallback_session_id: str
+) -> None:
+    """Fold one transcript record into the running accumulator."""
+    _fold_identity(acc, record)
+    _fold_timestamp(acc, record)
+    _fold_lineage(acc, record)
+
     if record.get("type") == _ASSISTANT:
         acc.turn_count += 1
         message = record.get("message")
         if isinstance(message, dict):
-            if acc.model_primary is None:
-                model = message.get("model")
-                acc.model_primary = model if isinstance(model, str) and model else None
-            usage = message.get("usage")
-            if isinstance(usage, dict):
-                acc.total_input_tokens += _coerce_int(usage.get("input_tokens"))
-                acc.total_output_tokens += _coerce_int(usage.get("output_tokens"))
-                acc.total_cache_read += _coerce_int(usage.get("cache_read_input_tokens"))
-                acc.total_cache_write += _coerce_int(usage.get("cache_creation_input_tokens"))
+            _fold_assistant_usage(acc, message)
 
     if acc.session_id is None and fallback_session_id:
         acc.session_id = fallback_session_id

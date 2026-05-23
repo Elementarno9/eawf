@@ -23,7 +23,7 @@ import eawf.worktree.git as git
 from eawf.cli import errors as cli_errors
 from eawf.state.enums import WaveStatus, WorktreeStatus
 from eawf.state.ids import is_wave_id
-from eawf.state.models import State, WorktreeRecord
+from eawf.state.models import State, Wave, WorktreeRecord
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,125 @@ def _make_id(wave_id: str, *, now: datetime) -> str:
     return f"WT-{wave_id}-{int(now.timestamp())}"
 
 
+def _validate_wave_for_worktree(state: State, *, wave_id: str) -> Wave:
+    """Validate *wave_id* and return its (CLAIMED/IN_PROGRESS) wave record.
+
+    Raises:
+        InvalidInput: when the wave id is malformed or the wave is not in a
+            worktree-eligible status.
+        NotFound: when the wave id is absent from ``state.waves``.
+    """
+    if not is_wave_id(wave_id):
+        raise cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput")
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
+    if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+        raise cli_errors.UserError(
+            f"wave {wave_id!r} must be CLAIMED or IN_PROGRESS to create a worktree "
+            f"(current status: {wave.status.value})",
+            kind="InvalidInput",
+        )
+    return wave
+
+
+def _resolve_branch_name(branch: str | None, *, wave_id: str) -> str:
+    """Return the validated branch name (explicit or default for *wave_id*).
+
+    Raises:
+        InvalidInput: when the branch name is empty, carries whitespace, or
+            contains characters outside :data:`_BRANCH_NAME_RE`.
+    """
+    chosen_branch = branch or _default_branch_name(wave_id)
+    if not chosen_branch.strip() or " " in chosen_branch or "\t" in chosen_branch:
+        raise cli_errors.UserError(
+            f"branch name must be non-empty and whitespace-free: {chosen_branch!r}",
+            kind="InvalidInput",
+        )
+    if not _BRANCH_NAME_RE.fullmatch(chosen_branch):
+        raise cli_errors.UserError(
+            f"branch name contains illegal characters: {chosen_branch!r}", kind="InvalidInput"
+        )
+    return chosen_branch
+
+
+def _guarded_default_branch(state: State, default_branch: str | None) -> str | None:
+    """Resolve the branch the "refuse to branch from main" guard protects."""
+    if default_branch is not None:
+        return default_branch
+    if state.project is not None:
+        return state.project.default_branch
+    return None
+
+
+def _resolve_base_branch(
+    state: State,
+    *,
+    repo_root: Path,
+    base: str | None,
+    explicit_base: bool,
+    default_branch: str | None,
+) -> str:
+    """Resolve the base ref, refusing to branch from the default branch.
+
+    When *base* is ``None`` the current branch is used (AGENTS.md rule 11);
+    an explicit *base* bypasses the guard only when *explicit_base* is set.
+
+    Raises:
+        InvalidInput: when the resolved base is the guarded default branch
+            and the explicit-override opt-in was not given.
+    """
+    guarded_default = _guarded_default_branch(state, default_branch)
+    if base is None:
+        # The current-branch resolver already refuses detached HEAD with
+        # InvalidInput.
+        chosen_base = git.current_branch(repo_root)
+        if guarded_default and chosen_base == guarded_default:
+            raise cli_errors.UserError(
+                f"worktree create refuses to branch from {guarded_default!r}; "
+                f"switch to a feature branch first or pass --base explicitly",
+                kind="InvalidInput",
+            )
+        return chosen_base
+    if not explicit_base and guarded_default and base == guarded_default:
+        # Library callers passing base= directly must opt into the
+        # explicit-override semantics; otherwise the guard fires.
+        raise cli_errors.UserError(
+            f"worktree create refuses to branch from {guarded_default!r} "
+            f"without explicit_base=True",
+            kind="InvalidInput",
+        )
+    return base
+
+
+def _resolve_worktree_path(
+    repo_root: Path, *, path: Path | None, wave_id: str, force: bool
+) -> Path:
+    """Resolve + validate the on-disk worktree path, clearing an empty dir under *force*.
+
+    Raises:
+        InvalidInput: when the path resolves outside *repo_root*, is a
+            non-empty directory, or already exists (empty) without *force*.
+    """
+    chosen_path = path or _default_path(repo_root, wave_id)
+    _validate_path_inside_repo(repo_root, chosen_path)
+    if chosen_path.exists():
+        if any(chosen_path.iterdir()):
+            raise cli_errors.UserError(
+                f"worktree path {chosen_path} is non-empty; refuse to overwrite",
+                kind="InvalidInput",
+            )
+        if not force:
+            raise cli_errors.UserError(
+                f"worktree path {chosen_path} already exists (empty); pass --force to reuse",
+                kind="InvalidInput",
+            )
+        # Empty dir + --force: git worktree add will refuse if dir exists,
+        # so unlink and let git create it fresh.
+        chosen_path.rmdir()
+    return chosen_path
+
+
 def create_worktree(
     state: State,
     *,
@@ -145,59 +264,17 @@ def create_worktree(
             "already a working tree").
     """
     # ---- 1. Validate wave id + presence -----------------------------------
-    if not is_wave_id(wave_id):
-        raise cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput")
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        raise cli_errors.UserError(f"unknown wave: {wave_id}", kind="NotFound")
-    if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
-        raise cli_errors.UserError(
-            f"wave {wave_id!r} must be CLAIMED or IN_PROGRESS to create a worktree "
-            f"(current status: {wave.status.value})",
-            kind="InvalidInput",
-        )
+    wave = _validate_wave_for_worktree(state, wave_id=wave_id)
 
     # ---- 2. Resolve branch + base ----------------------------------------
-    chosen_branch = branch or _default_branch_name(wave_id)
-    if not chosen_branch.strip() or " " in chosen_branch or "\t" in chosen_branch:
-        raise cli_errors.UserError(
-            f"branch name must be non-empty and whitespace-free: {chosen_branch!r}",
-            kind="InvalidInput",
-        )
-    if not _BRANCH_NAME_RE.fullmatch(chosen_branch):
-        raise cli_errors.UserError(
-            f"branch name contains illegal characters: {chosen_branch!r}", kind="InvalidInput"
-        )
-
-    if base is None:
-        # AGENTS.md rule 11: branch from current feature branch HEAD,
-        # not main. The current-branch resolver already refuses detached
-        # HEAD with InvalidInput.
-        chosen_base = git.current_branch(repo_root)
-        guarded_default = default_branch
-        if guarded_default is None and state.project is not None:
-            guarded_default = state.project.default_branch
-        if guarded_default and chosen_base == guarded_default:
-            raise cli_errors.UserError(
-                f"worktree create refuses to branch from {guarded_default!r}; "
-                f"switch to a feature branch first or pass --base explicitly",
-                kind="InvalidInput",
-            )
-    else:
-        chosen_base = base
-        if not explicit_base:
-            # Library callers passing base= directly must opt into the
-            # explicit-override semantics; otherwise the guard fires.
-            guarded_default = default_branch
-            if guarded_default is None and state.project is not None:
-                guarded_default = state.project.default_branch
-            if guarded_default and chosen_base == guarded_default:
-                raise cli_errors.UserError(
-                    f"worktree create refuses to branch from {guarded_default!r} "
-                    f"without explicit_base=True",
-                    kind="InvalidInput",
-                )
-
+    chosen_branch = _resolve_branch_name(branch, wave_id=wave_id)
+    chosen_base = _resolve_base_branch(
+        state,
+        repo_root=repo_root,
+        base=base,
+        explicit_base=explicit_base,
+        default_branch=default_branch,
+    )
     if git.branch_exists(repo_root, chosen_branch):
         raise cli_errors.UserError(
             f"branch {chosen_branch!r} already exists locally; pick another name "
@@ -206,23 +283,7 @@ def create_worktree(
         )
 
     # ---- 3. Resolve path + path-traversal guard --------------------------
-    chosen_path = path or _default_path(repo_root, wave_id)
-    _validate_path_inside_repo(repo_root, chosen_path)
-
-    if chosen_path.exists():
-        if any(chosen_path.iterdir()):
-            raise cli_errors.UserError(
-                f"worktree path {chosen_path} is non-empty; refuse to overwrite",
-                kind="InvalidInput",
-            )
-        if not force:
-            raise cli_errors.UserError(
-                f"worktree path {chosen_path} already exists (empty); pass --force to reuse",
-                kind="InvalidInput",
-            )
-        # Empty dir + --force: git worktree add will refuse if dir exists,
-        # so unlink and let git create it fresh.
-        chosen_path.rmdir()
+    chosen_path = _resolve_worktree_path(repo_root, path=path, wave_id=wave_id, force=force)
 
     # ---- 4. Shell `git worktree add` -------------------------------------
     chosen_path.parent.mkdir(parents=True, exist_ok=True)

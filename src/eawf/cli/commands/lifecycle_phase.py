@@ -40,6 +40,8 @@ from eawf.state.ids import is_phase_id
 from eawf.state.mutations import MutationKind
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
@@ -528,6 +530,35 @@ def phase_reopen_cmd(
     )
 
 
+def _closed_wave_commit_summary(
+    state: State,
+    *,
+    iter_ids_in_phase: set[str],
+    derive_wave_sha: Callable[[str], str | None],
+) -> dict[str, Any]:
+    """Summarise commit coverage across a phase's CLOSED waves.
+
+    Returns:
+        A dict with ``closed_wave_count``, ``unique_closed_wave_commit_count``,
+        and ``closed_waves_missing_commit`` (sorted wave ids lacking a SHA).
+    """
+    closed_wave_ids = sorted(
+        wid
+        for wid, w in state.waves.items()
+        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+    )
+    closed_wave_shas = [derive_wave_sha(wid) for wid in closed_wave_ids]
+    closed_waves_missing_commit = sorted(
+        wid for wid, sha in zip(closed_wave_ids, closed_wave_shas, strict=True) if not sha
+    )
+    unique_closed_wave_commits = sorted({sha for sha in closed_wave_shas if sha})
+    return {
+        "closed_wave_count": len(closed_wave_ids),
+        "unique_closed_wave_commit_count": len(unique_closed_wave_commits),
+        "closed_waves_missing_commit": closed_waves_missing_commit,
+    }
+
+
 def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, Any]:
     """Compute a structured pre-close checklist for *phase_id*.
 
@@ -544,44 +575,39 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     phase = state.phases.get(phase_id)
     if phase is None:
         raise LifecycleError(f"unknown phase: {phase_id!r}")
+    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
     open_iters = sorted(
         iid
         for iid, it in state.iters.items()
         if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
     )
-    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
     open_waves = sorted(
         wid
         for wid, w in state.waves.items()
         if w.iter_id in iter_ids_in_phase
         and w.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
     )
-    closed_waves = sorted(
-        (wid, w)
-        for wid, w in state.waves.items()
-        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
-    )
-    closed_wave_ids = [wid for wid, _wave in closed_waves]
-    closed_wave_shas = [derive_wave_sha(wid) for wid in closed_wave_ids]
-    closed_waves_missing_commit = sorted(
-        wid for wid, sha in zip(closed_wave_ids, closed_wave_shas, strict=True) if not sha
-    )
-    unique_closed_wave_commits = sorted({sha for sha in closed_wave_shas if sha})
-    scope_collapse_decision = has_scope_collapse_decision(state, phase_id=phase_id)
-    single_wave_without_decision = bool(len(closed_wave_ids) == 1 and not scope_collapse_decision)
     iters_without_audit = sorted(
         iid
         for iid, it in state.iters.items()
         if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+    )
+
+    commit_summary = _closed_wave_commit_summary(
+        state, iter_ids_in_phase=iter_ids_in_phase, derive_wave_sha=derive_wave_sha
+    )
+    scope_collapse_decision = has_scope_collapse_decision(state, phase_id=phase_id)
+    single_wave_without_decision = bool(
+        commit_summary["closed_wave_count"] == 1 and not scope_collapse_decision
     )
     checklist = {
         "phase": phase_id,
         "phase_status": phase.status.value,
         "open_iters": open_iters,
         "open_waves": open_waves,
-        "closed_wave_count": len(closed_wave_ids),
-        "unique_closed_wave_commit_count": len(unique_closed_wave_commits),
-        "closed_waves_missing_commit": closed_waves_missing_commit,
+        "closed_wave_count": commit_summary["closed_wave_count"],
+        "unique_closed_wave_commit_count": commit_summary["unique_closed_wave_commit_count"],
+        "closed_waves_missing_commit": commit_summary["closed_waves_missing_commit"],
         "iters_without_audit": iters_without_audit,
         "scope_collapse_decision": scope_collapse_decision,
         "single_wave_without_decision": single_wave_without_decision,

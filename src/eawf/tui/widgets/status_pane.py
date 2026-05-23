@@ -22,7 +22,8 @@ hex.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.reactive import reactive
 from textual.widgets import Static
@@ -71,6 +72,26 @@ def _active_phase_id(state: State) -> str | None:
     return None
 
 
+#: Counter keys surfaced by :func:`summary_counts`, in render order.
+_COUNT_KEYS: tuple[str, ...] = (
+    "phases_active",
+    "iters_active",
+    "waves_pending",
+    "waves_in_progress",
+    "waves_closed",
+    "waves_total",
+    "waves_failed",
+    "audits_running",
+    "audits_total",
+    "worktrees_active",
+)
+
+
+def _count_status(items: Iterable[Any], status: object) -> int:
+    """Return the number of *items* whose ``.status`` is *status* (identity match)."""
+    return sum(1 for item in items if item.status is status)
+
+
 def summary_counts(state: State | None) -> dict[str, int]:
     """Tally the lifecycle counters the status pane surfaces.
 
@@ -94,34 +115,23 @@ def summary_counts(state: State | None) -> dict[str, int]:
         ``audits_total`` / ``worktrees_active``.
     """
     if state is None:
-        return {
-            "phases_active": 0,
-            "iters_active": 0,
-            "waves_pending": 0,
-            "waves_in_progress": 0,
-            "waves_closed": 0,
-            "waves_total": 0,
-            "waves_failed": 0,
-            "audits_running": 0,
-            "audits_total": 0,
-            "worktrees_active": 0,
-        }
+        return dict.fromkeys(_COUNT_KEYS, 0)
     active_phase_id = _active_phase_id(state)
     active_iter_ids = {iid for iid, it in state.iters.items() if it.phase_id == active_phase_id}
     scoped_waves = [w for w in state.waves.values() if w.iter_id in active_iter_ids]
     audits = (state.audits or {}).values()
     worktrees = (state.worktrees or {}).values()
     return {
-        "phases_active": sum(1 for p in state.phases.values() if p.status is PhaseStatus.ACTIVE),
-        "iters_active": sum(1 for it in state.iters.values() if it.status is IterStatus.ACTIVE),
-        "waves_pending": sum(1 for w in scoped_waves if w.status is WaveStatus.PENDING),
-        "waves_in_progress": sum(1 for w in scoped_waves if w.status is WaveStatus.IN_PROGRESS),
-        "waves_closed": sum(1 for w in scoped_waves if w.status is WaveStatus.CLOSED),
+        "phases_active": _count_status(state.phases.values(), PhaseStatus.ACTIVE),
+        "iters_active": _count_status(state.iters.values(), IterStatus.ACTIVE),
+        "waves_pending": _count_status(scoped_waves, WaveStatus.PENDING),
+        "waves_in_progress": _count_status(scoped_waves, WaveStatus.IN_PROGRESS),
+        "waves_closed": _count_status(scoped_waves, WaveStatus.CLOSED),
         "waves_total": len(scoped_waves),
-        "waves_failed": sum(1 for w in scoped_waves if w.status is WaveStatus.FAILED),
-        "audits_running": sum(1 for a in audits if a.status is AuditStatus.RUNNING),
+        "waves_failed": _count_status(scoped_waves, WaveStatus.FAILED),
+        "audits_running": _count_status(audits, AuditStatus.RUNNING),
         "audits_total": len(state.audits or {}),
-        "worktrees_active": sum(1 for wt in worktrees if wt.status is WorktreeStatus.ACTIVE),
+        "worktrees_active": _count_status(worktrees, WorktreeStatus.ACTIVE),
     }
 
 

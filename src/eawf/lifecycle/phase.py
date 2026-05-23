@@ -98,30 +98,8 @@ def has_scope_collapse_decision(state: State, *, phase_id: str) -> bool:
     return False
 
 
-def close_phase(
-    state: State,
-    *,
-    phase_id: str,
-    audit_id: str,
-    checkpoint: str | None = None,
-) -> Phase:
-    """Close an active phase.
-
-    Rejects when child iters are still open, when the phase has zero waves in
-    :data:`WaveStatus.CLOSED`, when any CLOSED child iter lacks its
-    ``audit_id``, or when the phase landed exactly one closed wave without an
-    ACTIVE decision ratifying the scope collapse.
-
-    The ≥1-closed-wave gate (P19-W03) catches the
-    "single-commit-per-phase" anti-pattern where a runtime ships the
-    entire phase as one commit without closing any waves first. The
-    closed-iter-audit and single-wave-decision gates are enforced here (not
-    only in the CLI pre-flight) so they hold atomically under the write lock
-    on both the daemon-proxy and in-process paths.
-
-    The ``checkpoint`` argument is recorded in the lifecycle event but does
-    not currently mutate the phase record — that field will land in Phase 3
-    when the audit-link table is introduced.
+def _validate_phase_closable(state: State, *, phase_id: str) -> Phase:
+    """Run the close-phase gates and return the closable phase.
 
     Raises:
         LifecycleError: when *phase_id* is unknown, the phase is not in a
@@ -165,6 +143,41 @@ def close_phase(
             f"phase {phase_id!r} has a single closed wave; close_phase requires an active "
             "phase decision documenting scope collapse"
         )
+    return phase
+
+
+def close_phase(
+    state: State,
+    *,
+    phase_id: str,
+    audit_id: str,
+    checkpoint: str | None = None,
+) -> Phase:
+    """Close an active phase.
+
+    Rejects when child iters are still open, when the phase has zero waves in
+    :data:`WaveStatus.CLOSED`, when any CLOSED child iter lacks its
+    ``audit_id``, or when the phase landed exactly one closed wave without an
+    ACTIVE decision ratifying the scope collapse.
+
+    The ≥1-closed-wave gate (P19-W03) catches the
+    "single-commit-per-phase" anti-pattern where a runtime ships the
+    entire phase as one commit without closing any waves first. The
+    closed-iter-audit and single-wave-decision gates are enforced here (not
+    only in the CLI pre-flight) so they hold atomically under the write lock
+    on both the daemon-proxy and in-process paths.
+
+    The ``checkpoint`` argument is recorded in the lifecycle event but does
+    not currently mutate the phase record — that field will land in Phase 3
+    when the audit-link table is introduced.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown, the phase is not in a
+            closable status, child iters are still open, no wave is closed,
+            a CLOSED child iter is missing its audit, or a single-wave phase
+            lacks its scope-collapse decision.
+    """
+    phase = _validate_phase_closable(state, phase_id=phase_id)
     phase.status = PhaseStatus.CLOSED
     phase.closed_at = datetime.now(UTC)
     phase.audit_id = audit_id

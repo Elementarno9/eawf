@@ -105,6 +105,85 @@ def _classify(path: Path, payload: bytes) -> str:
     return "updated"
 
 
+def _guard_managed_file(path: Path, payload: bytes, *, force: bool) -> None:
+    """Refuse to clobber a hand-edited managed file unless *force* is set.
+
+    Raises:
+        IntegrityViolation: when *path* exists, differs from *payload*, and
+            *force* is ``False``.
+    """
+    if path.exists() and not force and path.read_bytes() != payload:
+        raise IntegrityViolation(
+            f"managed file {path} differs from rendered body; rerun with --force to overwrite"
+        )
+
+
+def _write_managed_file(
+    path: Path,
+    payload: bytes,
+    *,
+    force: bool,
+    dry_run: bool,
+    chmod_mode: int | None = None,
+) -> FileDelta:
+    """Integrity-check, classify, and (unless *dry_run*) write one managed file.
+
+    Returns:
+        The :class:`FileDelta` describing the create/update/unchanged action.
+
+    Raises:
+        IntegrityViolation: when the on-disk file was hand-edited and *force*
+            is not set.
+    """
+    _guard_managed_file(path, payload, force=force)
+    action = _classify(path, payload)
+    if not dry_run:
+        _ensure_dir(path.parent)
+        atomic_write_text(path, payload.decode("utf-8"))
+        if chmod_mode is not None:
+            os.chmod(path, chmod_mode)
+    return FileDelta(path=path, action=action)
+
+
+def _write_sidecar(plugin_root: Path, ts: str, *, force: bool, dry_run: bool) -> FileDelta:
+    """Render + write the sidecar, guarding on its fingerprint (not raw bytes).
+
+    The sidecar carries a volatile timestamp, so a hand-edit is detected via
+    :func:`_sidecar_fingerprint` rather than a byte-for-byte comparison.
+
+    Raises:
+        IntegrityViolation: when the on-disk sidecar fingerprint diverges and
+            *force* is not set.
+    """
+    sidecar_path = _sidecar_target(plugin_root)
+    sidecar_payload = _render_sidecar(ts)
+    if (
+        sidecar_path.exists()
+        and not force
+        and _sidecar_fingerprint(sidecar_path.read_bytes()) != _sidecar_fingerprint(sidecar_payload)
+    ):
+        raise IntegrityViolation(
+            f"managed file {sidecar_path} differs from rendered body; "
+            f"rerun with --force to overwrite"
+        )
+    action = _classify(sidecar_path, sidecar_payload)
+    if not dry_run:
+        _ensure_dir(sidecar_path.parent)
+        atomic_write_text(sidecar_path, sidecar_payload.decode("utf-8"))
+    return FileDelta(path=sidecar_path, action=action)
+
+
+def _write_config(target_dir: Path, *, scope: Scope, home: Path | None, dry_run: bool) -> FileDelta:
+    """Patch + write the Codex ``config.toml`` block (no integrity guard)."""
+    config_path = _config_target(target_dir, scope=scope, home=home)
+    config_bytes = _patch_config_toml(config_path)
+    action = _classify(config_path, config_bytes)
+    if not dry_run:
+        _ensure_dir(config_path.parent)
+        atomic_write_text(config_path, config_bytes.decode("utf-8"))
+    return FileDelta(path=config_path, action=action)
+
+
 def _plugin_root(target_dir: Path, *, scope: Scope, home: Path | None = None) -> Path:
     """Return ``<plugin_root>`` for *scope* — Codex-native plugin dir.
 
@@ -323,79 +402,37 @@ def install_plugin(
     ts = timestamp or _DEFAULT_TIMESTAMP
     plugin_root = _plugin_root(target_dir, scope=scope, home=home)
 
-    skill_deltas: list[FileDelta] = []
-    hook_deltas: list[FileDelta] = []
-
-    for spec in SKILL_REGISTRY:
-        path = _skill_target(plugin_root, spec)
-        payload = _render_skill(spec).encode("utf-8")
-        if path.exists() and not force and path.read_bytes() != payload:
-            raise IntegrityViolation(
-                f"managed file {path} differs from rendered body; rerun with --force to overwrite"
-            )
-        action = _classify(path, payload)
-        if not dry_run:
-            _ensure_dir(path.parent)
-            atomic_write_text(path, payload.decode("utf-8"))
-        skill_deltas.append(FileDelta(path=path, action=action))
-
-    for hook_spec in HOOK_REGISTRY:
-        path = _hook_target(plugin_root, hook_spec)
-        payload = render_hook_sh(hook_spec.event_type).encode("utf-8")
-        if path.exists() and not force and path.read_bytes() != payload:
-            raise IntegrityViolation(
-                f"managed file {path} differs from rendered body; rerun with --force to overwrite"
-            )
-        action = _classify(path, payload)
-        if not dry_run:
-            _ensure_dir(path.parent)
-            atomic_write_text(path, payload.decode("utf-8"))
-            os.chmod(path, _HOOK_FILE_MODE)
-        hook_deltas.append(FileDelta(path=path, action=action))
-
-    manifest_path = _manifest_target(plugin_root)
-    manifest_payload = _render_manifest()
-    if manifest_path.exists() and not force and manifest_path.read_bytes() != manifest_payload:
-        raise IntegrityViolation(
-            f"managed file {manifest_path} differs from rendered body; "
-            f"rerun with --force to overwrite"
+    skill_deltas = [
+        _write_managed_file(
+            _skill_target(plugin_root, spec),
+            _render_skill(spec).encode("utf-8"),
+            force=force,
+            dry_run=dry_run,
         )
-    manifest_action = _classify(manifest_path, manifest_payload)
-    if not dry_run:
-        _ensure_dir(manifest_path.parent)
-        atomic_write_text(manifest_path, manifest_payload.decode("utf-8"))
-    manifest_delta = FileDelta(path=manifest_path, action=manifest_action)
-
-    sidecar_path = _sidecar_target(plugin_root)
-    sidecar_payload = _render_sidecar(ts)
-    if (
-        sidecar_path.exists()
-        and not force
-        and _sidecar_fingerprint(sidecar_path.read_bytes()) != _sidecar_fingerprint(sidecar_payload)
-    ):
-        raise IntegrityViolation(
-            f"managed file {sidecar_path} differs from rendered body; "
-            f"rerun with --force to overwrite"
+        for spec in SKILL_REGISTRY
+    ]
+    hook_deltas = [
+        _write_managed_file(
+            _hook_target(plugin_root, hook_spec),
+            render_hook_sh(hook_spec.event_type).encode("utf-8"),
+            force=force,
+            dry_run=dry_run,
+            chmod_mode=_HOOK_FILE_MODE,
         )
-    sidecar_action = _classify(sidecar_path, sidecar_payload)
-    if not dry_run:
-        _ensure_dir(sidecar_path.parent)
-        atomic_write_text(sidecar_path, sidecar_payload.decode("utf-8"))
-    sidecar_delta = FileDelta(path=sidecar_path, action=sidecar_action)
+        for hook_spec in HOOK_REGISTRY
+    ]
 
-    config_path = _config_target(target_dir, scope=scope, home=home)
-    config_bytes = _patch_config_toml(config_path)
-    config_action = _classify(config_path, config_bytes)
-    if not dry_run:
-        _ensure_dir(config_path.parent)
-        atomic_write_text(config_path, config_bytes.decode("utf-8"))
-    config_delta = FileDelta(path=config_path, action=config_action)
+    manifest_delta = _write_managed_file(
+        _manifest_target(plugin_root), _render_manifest(), force=force, dry_run=dry_run
+    )
+    sidecar_delta = _write_sidecar(plugin_root, ts, force=force, dry_run=dry_run)
+    config_delta = _write_config(target_dir, scope=scope, home=home, dry_run=dry_run)
 
     logger.info(
         f"install_plugin runtime=codex scope={scope} plugin_root={plugin_root} "
         f"skills={len(skill_deltas)} hooks={len(hook_deltas)} "
-        f"manifest={manifest_action} sidecar={sidecar_action} config={config_action} "
-        f"dry_run={dry_run}"
+        f"manifest={manifest_delta.action} sidecar={sidecar_delta.action} "
+        f"config={config_delta.action} dry_run={dry_run}"
     )
     return InstallResult(
         target_dir=target_dir,

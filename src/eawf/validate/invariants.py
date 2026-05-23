@@ -13,8 +13,9 @@ the CLI/test contract and must not be renamed without updating fixtures.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from eawf.state.enums import (
     AgentSessionRole,
@@ -33,6 +34,7 @@ from eawf.state.models import Iter, State, Wave
 from eawf.state.urn import parse as parse_urn
 from eawf.store.envelope import Envelope
 from eawf.store.kinds.agent_report import (
+    AgentReportHeader,
     AgentReportPayload,
     AuditorReportBody,
     ExecutorReportBody,
@@ -632,147 +634,140 @@ def _wave_phase_id(state: State, wave_id: str) -> str | None:
     return iter_record.phase_id
 
 
-def check_agent_report_invariants(state: State, reports: Iterable[Envelope]) -> Iterable[Violation]:
-    """Validate typed agent-report store envelopes against state context.
-
-    This helper is separate from :data:`ALL_INVARIANTS` because report rows
-    live in JSONL stores, not inside ``state.json``.
-    """
-    attempts: dict[tuple[AgentSessionRole, str], list[tuple[int, str]]] = {}
-    for envelope in reports:
-        payload = AgentReportPayload.model_validate(envelope.payload)
-        header = payload.header
-        body = payload.body
-        expected_kind = store_kind_for_role(header.role)
-
-        if envelope.kind != expected_kind:
-            yield Violation(
-                code="INV.AGENT_REPORT.STORE_KIND_MISMATCH",
-                path=_report_path(header.report_id, "kind"),
-                message=(
-                    f"agent report {header.report_id!r} has store kind "
-                    f"{envelope.kind.value!r}; expected {expected_kind.value!r}"
-                ),
-            )
-        if envelope.scope_id != header.scope_id:
-            yield Violation(
-                code="INV.AGENT_REPORT.ENVELOPE_SCOPE_MISMATCH",
-                path=_report_path(header.report_id, "scope_id"),
-                message=(
-                    f"agent report {header.report_id!r} envelope scope "
-                    f"{envelope.scope_id!r} does not match header scope {header.scope_id!r}"
-                ),
-            )
-
-        session = state.agent_sessions.get(header.session_id)
-        if session is None:
-            yield Violation(
-                code="INV.AGENT_REPORT.SESSION_MISSING",
-                path=_report_path(header.report_id, "header/session_id"),
-                message=(
-                    f"agent report {header.report_id!r} references missing "
-                    f"session {header.session_id!r}"
-                ),
-            )
-        else:
-            if session.role != header.role:
-                yield Violation(
-                    code="INV.AGENT_REPORT.SESSION_ROLE_MISMATCH",
-                    path=_report_path(header.report_id, "header/session_id"),
-                    message=(
-                        f"agent report {header.report_id!r} role {header.role.value!r} "
-                        f"does not match session {header.session_id!r} role "
-                        f"{session.role.value!r}"
-                    ),
-                )
-            if session.scope_id != header.scope_id:
-                yield Violation(
-                    code="INV.AGENT_REPORT.SESSION_SCOPE_MISMATCH",
-                    path=_report_path(header.report_id, "header/scope_id"),
-                    message=(
-                        f"agent report {header.report_id!r} scope {header.scope_id!r} "
-                        f"does not match session {header.session_id!r} scope "
-                        f"{session.scope_id!r}"
-                    ),
-                )
-
-        if not _scope_exists(state, header.scope_id):
-            yield Violation(
-                code="INV.AGENT_REPORT.SCOPE_MISSING",
-                path=_report_path(header.report_id, "header/scope_id"),
-                message=(
-                    f"agent report {header.report_id!r} references missing "
-                    f"scope {header.scope_id!r}"
-                ),
-            )
-
-        attempts.setdefault((header.role, header.base_id), []).append(
-            (header.attempt, header.report_id)
+def _check_report_envelope_match(
+    envelope: Envelope, header: AgentReportHeader
+) -> Iterable[Violation]:
+    """Yield store-kind and scope mismatches between an envelope and its header."""
+    expected_kind = store_kind_for_role(header.role)
+    if envelope.kind != expected_kind:
+        yield Violation(
+            code="INV.AGENT_REPORT.STORE_KIND_MISMATCH",
+            path=_report_path(header.report_id, "kind"),
+            message=(
+                f"agent report {header.report_id!r} has store kind "
+                f"{envelope.kind.value!r}; expected {expected_kind.value!r}"
+            ),
+        )
+    if envelope.scope_id != header.scope_id:
+        yield Violation(
+            code="INV.AGENT_REPORT.ENVELOPE_SCOPE_MISMATCH",
+            path=_report_path(header.report_id, "scope_id"),
+            message=(
+                f"agent report {header.report_id!r} envelope scope "
+                f"{envelope.scope_id!r} does not match header scope {header.scope_id!r}"
+            ),
         )
 
-        if isinstance(body, ExecutorReportBody):
-            if body.commit_sha is None:
-                yield Violation(
-                    code="INV.AGENT_REPORT.EXECUTOR_COMMIT_MISSING",
-                    path=_report_path(header.report_id, "body/commit_sha"),
-                    message=f"executor report {header.report_id!r} has no commit_sha",
-                )
-            elif body.wave_id not in state.waves:
-                yield Violation(
-                    code="INV.AGENT_REPORT.EXECUTOR_WAVE_MISSING",
-                    path=_report_path(header.report_id, "body/wave_id"),
-                    message=(
-                        f"executor report {header.report_id!r} references "
-                        f"missing wave {body.wave_id!r}"
-                    ),
-                )
 
-        if isinstance(body, ReviewerReportBody) and not body.coverage_refs:
+def _check_report_session_link(state: State, header: AgentReportHeader) -> Iterable[Violation]:
+    """Yield session-presence + role/scope agreement violations for one report."""
+    session = state.agent_sessions.get(header.session_id)
+    if session is None:
+        yield Violation(
+            code="INV.AGENT_REPORT.SESSION_MISSING",
+            path=_report_path(header.report_id, "header/session_id"),
+            message=(
+                f"agent report {header.report_id!r} references missing "
+                f"session {header.session_id!r}"
+            ),
+        )
+        return
+    if session.role != header.role:
+        yield Violation(
+            code="INV.AGENT_REPORT.SESSION_ROLE_MISMATCH",
+            path=_report_path(header.report_id, "header/session_id"),
+            message=(
+                f"agent report {header.report_id!r} role {header.role.value!r} "
+                f"does not match session {header.session_id!r} role "
+                f"{session.role.value!r}"
+            ),
+        )
+    if session.scope_id != header.scope_id:
+        yield Violation(
+            code="INV.AGENT_REPORT.SESSION_SCOPE_MISMATCH",
+            path=_report_path(header.report_id, "header/scope_id"),
+            message=(
+                f"agent report {header.report_id!r} scope {header.scope_id!r} "
+                f"does not match session {header.session_id!r} scope "
+                f"{session.scope_id!r}"
+            ),
+        )
+
+
+def _check_report_body(
+    state: State, header: AgentReportHeader, body: object
+) -> Iterable[Violation]:
+    """Yield role-specific body violations (executor / reviewer / auditor / operator)."""
+    if isinstance(body, ExecutorReportBody):
+        if body.commit_sha is None:
             yield Violation(
-                code="INV.AGENT_REPORT.REVIEWER_COVERAGE_MISSING",
-                path=_report_path(header.report_id, "body/coverage_refs"),
-                message=f"reviewer report {header.report_id!r} has no coverage_refs",
+                code="INV.AGENT_REPORT.EXECUTOR_COMMIT_MISSING",
+                path=_report_path(header.report_id, "body/commit_sha"),
+                message=f"executor report {header.report_id!r} has no commit_sha",
+            )
+        elif body.wave_id not in state.waves:
+            yield Violation(
+                code="INV.AGENT_REPORT.EXECUTOR_WAVE_MISSING",
+                path=_report_path(header.report_id, "body/wave_id"),
+                message=(
+                    f"executor report {header.report_id!r} references missing wave {body.wave_id!r}"
+                ),
+            )
+    elif isinstance(body, ReviewerReportBody) and not body.coverage_refs:
+        yield Violation(
+            code="INV.AGENT_REPORT.REVIEWER_COVERAGE_MISSING",
+            path=_report_path(header.report_id, "body/coverage_refs"),
+            message=f"reviewer report {header.report_id!r} has no coverage_refs",
+        )
+    elif isinstance(body, AuditorReportBody) and not body.criteria:
+        yield Violation(
+            code="INV.AGENT_REPORT.AUDITOR_CRITERIA_MISSING",
+            path=_report_path(header.report_id, "body/criteria"),
+            message=f"auditor report {header.report_id!r} has no criteria",
+        )
+    elif isinstance(body, OperatorReportBody):
+        yield from _check_operator_report_body(state, header, body)
+
+
+def _check_operator_report_body(
+    state: State, header: AgentReportHeader, body: OperatorReportBody
+) -> Iterable[Violation]:
+    """Yield phase-presence + completed-wave linkage violations for an operator report."""
+    if body.phase_id not in state.phases:
+        yield Violation(
+            code="INV.AGENT_REPORT.OPERATOR_PHASE_MISSING",
+            path=_report_path(header.report_id, "body/phase_id"),
+            message=(
+                f"operator report {header.report_id!r} references missing phase {body.phase_id!r}"
+            ),
+        )
+    for wave_id in body.completed_wave_ids:
+        wave_phase_id = _wave_phase_id(state, wave_id)
+        if wave_phase_id is None:
+            yield Violation(
+                code="INV.AGENT_REPORT.OPERATOR_WAVE_MISSING",
+                path=_report_path(header.report_id, "body/completed_wave_ids"),
+                message=(
+                    f"operator report {header.report_id!r} references "
+                    f"missing completed wave {wave_id!r}"
+                ),
+            )
+        elif wave_phase_id != body.phase_id:
+            yield Violation(
+                code="INV.AGENT_REPORT.OPERATOR_WAVE_PHASE_MISMATCH",
+                path=_report_path(header.report_id, "body/completed_wave_ids"),
+                message=(
+                    f"operator report {header.report_id!r} lists wave "
+                    f"{wave_id!r} from phase {wave_phase_id!r}, not "
+                    f"{body.phase_id!r}"
+                ),
             )
 
-        if isinstance(body, AuditorReportBody) and not body.criteria:
-            yield Violation(
-                code="INV.AGENT_REPORT.AUDITOR_CRITERIA_MISSING",
-                path=_report_path(header.report_id, "body/criteria"),
-                message=f"auditor report {header.report_id!r} has no criteria",
-            )
 
-        if isinstance(body, OperatorReportBody):
-            if body.phase_id not in state.phases:
-                yield Violation(
-                    code="INV.AGENT_REPORT.OPERATOR_PHASE_MISSING",
-                    path=_report_path(header.report_id, "body/phase_id"),
-                    message=(
-                        f"operator report {header.report_id!r} references "
-                        f"missing phase {body.phase_id!r}"
-                    ),
-                )
-            for wave_id in body.completed_wave_ids:
-                wave_phase_id = _wave_phase_id(state, wave_id)
-                if wave_phase_id is None:
-                    yield Violation(
-                        code="INV.AGENT_REPORT.OPERATOR_WAVE_MISSING",
-                        path=_report_path(header.report_id, "body/completed_wave_ids"),
-                        message=(
-                            f"operator report {header.report_id!r} references "
-                            f"missing completed wave {wave_id!r}"
-                        ),
-                    )
-                elif wave_phase_id != body.phase_id:
-                    yield Violation(
-                        code="INV.AGENT_REPORT.OPERATOR_WAVE_PHASE_MISMATCH",
-                        path=_report_path(header.report_id, "body/completed_wave_ids"),
-                        message=(
-                            f"operator report {header.report_id!r} lists wave "
-                            f"{wave_id!r} from phase {wave_phase_id!r}, not "
-                            f"{body.phase_id!r}"
-                        ),
-                    )
-
+def _check_report_attempt_sequence(
+    attempts: dict[tuple[AgentSessionRole, str], list[tuple[int, str]]],
+) -> Iterable[Violation]:
+    """Yield duplicate / gap violations over each ``(role, base_id)`` attempt run."""
     for (role, base_id), rows in attempts.items():
         seen: set[int] = set()
         duplicates: set[int] = set()
@@ -806,6 +801,78 @@ def check_agent_report_invariants(state: State, reports: Iterable[Envelope]) -> 
             )
 
 
+def check_agent_report_invariants(state: State, reports: Iterable[Envelope]) -> Iterable[Violation]:
+    """Validate typed agent-report store envelopes against state context.
+
+    This helper is separate from :data:`ALL_INVARIANTS` because report rows
+    live in JSONL stores, not inside ``state.json``.
+    """
+    attempts: dict[tuple[AgentSessionRole, str], list[tuple[int, str]]] = {}
+    for envelope in reports:
+        payload = AgentReportPayload.model_validate(envelope.payload)
+        header = payload.header
+        body = payload.body
+
+        yield from _check_report_envelope_match(envelope, header)
+        yield from _check_report_session_link(state, header)
+        if not _scope_exists(state, header.scope_id):
+            yield Violation(
+                code="INV.AGENT_REPORT.SCOPE_MISSING",
+                path=_report_path(header.report_id, "header/scope_id"),
+                message=(
+                    f"agent report {header.report_id!r} references missing "
+                    f"scope {header.scope_id!r}"
+                ),
+            )
+
+        attempts.setdefault((header.role, header.base_id), []).append(
+            (header.attempt, header.report_id)
+        )
+
+        yield from _check_report_body(state, header, body)
+
+    yield from _check_report_attempt_sequence(attempts)
+
+
+@dataclass(frozen=True)
+class _ClosureRule:
+    """One ``check_closure_timestamps`` table row.
+
+    Attributes:
+        noun: Entity noun used in the violation message (e.g. ``"phase"``).
+        collection: ``id -> entry`` mapping, or ``None`` for absent optional
+            sections (skipped).
+        terminal: Statuses that demand a non-null closure timestamp.
+        ts_field: Attribute carrying the closure timestamp (``closed_at`` for
+            most entities; ``ended_at`` for agent sessions).
+        code: ``INV.CLOSURE.*`` violation code.
+        path_prefix: ``state.json`` pointer prefix (e.g. ``/phases``).
+    """
+
+    noun: str
+    collection: Mapping[str, Any] | None
+    terminal: frozenset[str]
+    ts_field: str
+    code: str
+    path_prefix: str
+
+
+def _check_terminal_timestamp(rule: _ClosureRule) -> Iterable[Violation]:
+    """Yield a violation per terminal entry missing its closure timestamp."""
+    if rule.collection is None:
+        return
+    for entry_id, entry in rule.collection.items():
+        if entry.status in rule.terminal and getattr(entry, rule.ts_field) is None:
+            yield Violation(
+                code=rule.code,
+                path=f"{rule.path_prefix}/{entry_id}/{rule.ts_field}",
+                message=(
+                    f"{rule.noun} {entry_id!r} has terminal status "
+                    f"{entry.status.value!r} but {rule.ts_field} is null"
+                ),
+            )
+
+
 def check_closure_timestamps(state: State) -> Iterable[Violation]:
     """Terminal-status entries must carry their closure timestamp (``INV.CLOSURE.*_NO_TIMESTAMP``).
 
@@ -817,84 +884,66 @@ def check_closure_timestamps(state: State) -> Iterable[Violation]:
     - ``Incident`` in ``{resolved, wont-fix}`` requires ``closed_at`` non-null.
     - ``AgentSession`` in ``{closed, stale, failed}`` requires ``ended_at`` non-null.
     """
-    for phase_id, phase in state.phases.items():
-        if phase.status in _TERMINAL_PHASE_STATUSES and phase.closed_at is None:
-            yield Violation(
-                code="INV.CLOSURE.PHASE_NO_CLOSED_AT",
-                path=f"/phases/{phase_id}/closed_at",
-                message=(
-                    f"phase {phase_id!r} has terminal status "
-                    f"{phase.status.value!r} but closed_at is null"
-                ),
-            )
-
-    for iter_id, it in state.iters.items():
-        if it.status in _TERMINAL_ITER_STATUSES and it.closed_at is None:
-            yield Violation(
-                code="INV.CLOSURE.ITER_NO_CLOSED_AT",
-                path=f"/iters/{iter_id}/closed_at",
-                message=(
-                    f"iter {iter_id!r} has terminal status "
-                    f"{it.status.value!r} but closed_at is null"
-                ),
-            )
-
-    for wave_id, w in state.waves.items():
-        if w.status in _TERMINAL_WAVE_STATUSES and w.closed_at is None:
-            yield Violation(
-                code="INV.CLOSURE.WAVE_NO_CLOSED_AT",
-                path=f"/waves/{wave_id}/closed_at",
-                message=(
-                    f"wave {wave_id!r} has terminal status {w.status.value!r} but closed_at is null"
-                ),
-            )
-
-    if state.goals is not None:
-        for goal_id, goal in state.goals.items():
-            if goal.status in _TERMINAL_GOAL_STATUSES and goal.closed_at is None:
-                yield Violation(
-                    code="INV.CLOSURE.GOAL_NO_CLOSED_AT",
-                    path=f"/goals/{goal_id}/closed_at",
-                    message=(
-                        f"goal {goal_id!r} has terminal status "
-                        f"{goal.status.value!r} but closed_at is null"
-                    ),
-                )
-
-    if state.backlog is not None:
-        for bid, item in state.backlog.items():
-            if item.status in _TERMINAL_BACKLOG_STATUSES and item.closed_at is None:
-                yield Violation(
-                    code="INV.CLOSURE.BACKLOG_NO_CLOSED_AT",
-                    path=f"/backlog/{bid}/closed_at",
-                    message=(
-                        f"backlog item {bid!r} has terminal status "
-                        f"{item.status.value!r} but closed_at is null"
-                    ),
-                )
-
-    if state.incidents is not None:
-        for iid, inc in state.incidents.items():
-            if inc.status in _TERMINAL_INCIDENT_STATUSES and inc.closed_at is None:
-                yield Violation(
-                    code="INV.CLOSURE.INCIDENT_NO_CLOSED_AT",
-                    path=f"/incidents/{iid}/closed_at",
-                    message=(
-                        f"incident {iid!r} has terminal status "
-                        f"{inc.status.value!r} but closed_at is null"
-                    ),
-                )
-
-    for sid, session in state.agent_sessions.items():
-        if session.status in _TERMINAL_SESSION_STATUSES and session.ended_at is None:
-            yield Violation(
-                code="INV.CLOSURE.SESSION_NO_ENDED_AT",
-                path=f"/agent_sessions/{sid}/ended_at",
-                message=(
-                    f"agent session {sid!r} has terminal status "
-                    f"{session.status.value!r} but ended_at is null"
-                ),
-            )
+    rules = (
+        _ClosureRule(
+            "phase",
+            state.phases,
+            _TERMINAL_PHASE_STATUSES,
+            "closed_at",
+            "INV.CLOSURE.PHASE_NO_CLOSED_AT",
+            "/phases",
+        ),
+        _ClosureRule(
+            "iter",
+            state.iters,
+            _TERMINAL_ITER_STATUSES,
+            "closed_at",
+            "INV.CLOSURE.ITER_NO_CLOSED_AT",
+            "/iters",
+        ),
+        _ClosureRule(
+            "wave",
+            state.waves,
+            _TERMINAL_WAVE_STATUSES,
+            "closed_at",
+            "INV.CLOSURE.WAVE_NO_CLOSED_AT",
+            "/waves",
+        ),
+        _ClosureRule(
+            "goal",
+            state.goals,
+            _TERMINAL_GOAL_STATUSES,
+            "closed_at",
+            "INV.CLOSURE.GOAL_NO_CLOSED_AT",
+            "/goals",
+        ),
+        _ClosureRule(
+            "backlog item",
+            state.backlog,
+            _TERMINAL_BACKLOG_STATUSES,
+            "closed_at",
+            "INV.CLOSURE.BACKLOG_NO_CLOSED_AT",
+            "/backlog",
+        ),
+        _ClosureRule(
+            "incident",
+            state.incidents,
+            _TERMINAL_INCIDENT_STATUSES,
+            "closed_at",
+            "INV.CLOSURE.INCIDENT_NO_CLOSED_AT",
+            "/incidents",
+        ),
+        _ClosureRule(
+            "agent session",
+            state.agent_sessions,
+            _TERMINAL_SESSION_STATUSES,
+            "ended_at",
+            "INV.CLOSURE.SESSION_NO_ENDED_AT",
+            "/agent_sessions",
+        ),
+    )
+    for rule in rules:
+        yield from _check_terminal_timestamp(rule)
 
 
 ALL_INVARIANTS: tuple[Invariant, ...] = (
