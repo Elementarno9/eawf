@@ -22,12 +22,20 @@ existing single-command registration in :mod:`eawf.cli.app` stays intact
 - ``eawf metrics variance`` — emit the C09 §5.9.6 M26
   ``eawf_estimate_actual_variance_pct`` gauge from ``state.json`` and feed
   the ship-gate Variance section + the C06 VarianceTile.
+- ``eawf metrics backfill-actuals`` — attach retroactive
+  :class:`~eawf.state.models.ActualSummary` rows to historical CLOSED
+  waves that closed before the W25 auto-record wiring landed, so the
+  variance gauge + bucket calibration fit against the full closed-wave
+  history instead of the handful of post-W25 samples. Mutates
+  ``state.json`` through the canonical writer; idempotent on a re-run.
 
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
-:mod:`eawf.telemetry`. The shared estimation renderer lives in
-:mod:`eawf.render.metrics_view`; the telemetry aggregation + serialisation
-live in :mod:`eawf.telemetry.exporter` and :mod:`eawf.telemetry.projector`.
+:mod:`eawf.telemetry` (or, for ``backfill-actuals``, the pure transform in
+:mod:`eawf.migrations.backfill_actuals`). The shared estimation renderer
+lives in :mod:`eawf.render.metrics_view`; the telemetry aggregation +
+serialisation live in :mod:`eawf.telemetry.exporter` and
+:mod:`eawf.telemetry.projector`.
 """
 
 from __future__ import annotations
@@ -47,6 +55,13 @@ logger = logging.getLogger(__name__)
 
 _TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info", "variance"})
 
+# Estimation sub-verbs that operate on ``state.json`` only — they never open
+# the telemetry cache, so they skip the opt-in gate the telemetry sub-verbs
+# share (``backfill-actuals`` mutates state through the canonical writer).
+_ESTIMATION_SUBCOMMANDS = frozenset({"backfill-actuals"})
+
+_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS | _ESTIMATION_SUBCOMMANDS
+
 _OPT_IN_NUDGE = (
     "telemetry is disabled — no metrics are collected.\n"
     "enable it with: eawf config set telemetry.enabled true\n"
@@ -60,8 +75,8 @@ def metrics_cmd(
     subcommand: Annotated[
         str | None,
         typer.Argument(
-            metavar="[show|export|rebuild|info|variance]",
-            help="Telemetry sub-verb. Omit for the rolling workflow-metrics view.",
+            metavar="[show|export|rebuild|info|variance|backfill-actuals]",
+            help="Metrics sub-verb. Omit for the rolling workflow-metrics view.",
         ),
     ] = None,
     fmt: Annotated[
@@ -83,12 +98,20 @@ def metrics_cmd(
             help="`metrics rebuild`: project only the tail appended since the last scan.",
         ),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="`metrics backfill-actuals`: report the count without writing state.json.",
+        ),
+    ] = False,
 ) -> None:
-    """Dispatch the bare workflow-metrics view or a telemetry sub-verb.
+    """Dispatch the bare workflow-metrics view or a metrics sub-verb.
 
-    Read-only for ``show`` / ``info`` / the bare view; ``export`` may write
-    a file; ``rebuild`` mutates the local telemetry cache only (never
-    ``state.json``).
+    Read-only for ``show`` / ``info`` / ``variance`` / the bare view;
+    ``export`` may write a file; ``rebuild`` mutates the local telemetry
+    cache only (never ``state.json``); ``backfill-actuals`` mutates
+    ``state.json`` through the canonical writer (unless ``--dry-run``).
 
     Raises:
         typer.BadParameter: When *subcommand* is not a recognised sub-verb.
@@ -97,10 +120,10 @@ def metrics_cmd(
     if subcommand is None:
         _workflow_metrics(flags)
         return
-    if subcommand not in _TELEMETRY_SUBCOMMANDS:
+    if subcommand not in _KNOWN_SUBCOMMANDS:
         raise typer.BadParameter(
             f"unknown metrics sub-verb: {subcommand!r} "
-            f"(expected one of {sorted(_TELEMETRY_SUBCOMMANDS)} or no argument)"
+            f"(expected one of {sorted(_KNOWN_SUBCOMMANDS)} or no argument)"
         )
     if subcommand == "show":
         _telemetry_show(flags)
@@ -110,6 +133,8 @@ def metrics_cmd(
         _telemetry_rebuild(flags, full=full, incremental=incremental)
     elif subcommand == "variance":
         _estimate_actual_variance(flags)
+    elif subcommand == "backfill-actuals":
+        _backfill_actuals(flags, dry_run=dry_run)
     else:  # subcommand == "info"
         _telemetry_info(flags)
 
@@ -173,6 +198,49 @@ def _estimate_actual_variance(flags: GlobalFlags) -> None:
     metric = compute_estimate_actual_variance(state)
     payload: dict[str, Any] = metric.model_dump(mode="json")
     text = _render_variance(metric.variance_pct, metric.sample_count)
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _backfill_actuals(flags: GlobalFlags, *, dry_run: bool) -> None:
+    """Attach retroactive actuals to historical CLOSED waves (idempotent).
+
+    Threads the pure :func:`eawf.migrations.backfill_actuals.backfill_actuals`
+    transform through the canonical writer: the mutation runs inside
+    :func:`eawf.cli._mutation.state_transaction`, which routes to the daemon
+    (or the WAL-safe portalock fallback) per AGENTS rule 4. The verb operates
+    on ``state.json`` waves only — it never opens or touches the telemetry
+    cache (``telemetry.db``), so it works regardless of ``telemetry.enabled``.
+    Idempotent: a second run derives no new actuals and reports ``0``.
+
+    With ``dry_run`` the count is computed against an in-memory snapshot and
+    nothing is persisted (no lock, no write).
+
+    Failures map to the canonical CLI exit codes: NotFound (``exit=1``) when
+    no ``state.json`` resolves, ValidationFailed (``exit=2``) on a schema
+    mismatch.
+    """
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence._io import load_state
+    from eawf.migrations.backfill_actuals import backfill_actuals
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    try:
+        if dry_run:
+            snapshot = load_state(state_path)
+            _state, added = backfill_actuals(snapshot)
+        else:
+            with state_transaction(state_path) as state:
+                _state, added = backfill_actuals(state)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+
+    payload: dict[str, Any] = {"actuals_added": added, "dry_run": dry_run}
+    suffix = " (dry-run, not written)" if dry_run else ""
+    text = f"backfilled {added} actual(s){suffix}"
     emit_json_or_text(payload, text, flags=flags)
 
 

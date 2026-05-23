@@ -158,7 +158,7 @@ Manage the eawfd background daemon (run, ping, status, stop, logs).
 
 ### `eawf decision`
 
-Manage decisions (add / list).
+Manage decisions (add / supersede / list / graph).
 
 | Verb | Summary |
 |---|---|
@@ -166,6 +166,7 @@ Manage decisions (add / list).
 | `graph` | Render the decision graph (text, Graphviz DOT, or Mermaid). |
 | `list` | List decisions filtered by scope. |
 | `promote` | — |
+| `supersede` | Supersede an existing decision by another existing decision. |
 
 ### `eawf doc`
 
