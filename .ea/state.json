@@ -2729,6 +2729,96 @@
       "scope_id": "P27-I02-W30",
       "status": "done",
       "updated_at": "2026-05-23T13:45:28.859474Z"
+    },
+    "P27-I02-W31": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W31-close-20260523T145557Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W31",
+      "scope_id": "P27-I02-W31",
+      "status": "done",
+      "updated_at": "2026-05-23T14:55:57.027309Z"
+    },
+    "P27-I02-W32": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W32-close-20260523T145557Z",
+      "elapsed_eu": 1.79,
+      "id": "ACT-P27-I02-W32",
+      "scope_id": "P27-I02-W32",
+      "status": "done",
+      "updated_at": "2026-05-23T14:55:57.975889Z"
+    },
+    "P27-I02-W33": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W33-close-20260523T145558Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W33",
+      "scope_id": "P27-I02-W33",
+      "status": "done",
+      "updated_at": "2026-05-23T14:55:58.908456Z"
+    },
+    "P27-I02-W34": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W34-close-20260523T145559Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W34",
+      "scope_id": "P27-I02-W34",
+      "status": "done",
+      "updated_at": "2026-05-23T14:55:59.836232Z"
+    },
+    "P27-I02-W35": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W35-close-20260523T145600Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W35",
+      "scope_id": "P27-I02-W35",
+      "status": "done",
+      "updated_at": "2026-05-23T14:56:00.739865Z"
+    },
+    "P27-I02-W36": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W36-close-20260523T145601Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W36",
+      "scope_id": "P27-I02-W36",
+      "status": "done",
+      "updated_at": "2026-05-23T14:56:01.676627Z"
+    },
+    "P27-I02-W37": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W37-close-20260523T145602Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W37",
+      "scope_id": "P27-I02-W37",
+      "status": "done",
+      "updated_at": "2026-05-23T14:56:02.592756Z"
+    },
+    "P27-I02-W38": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W38-close-20260523T145603Z",
+      "elapsed_eu": 1.8,
+      "id": "ACT-P27-I02-W38",
+      "scope_id": "P27-I02-W38",
+      "status": "done",
+      "updated_at": "2026-05-23T14:56:03.559371Z"
+    },
+    "P27-I02-W39": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W39-close-20260523T145604Z",
+      "elapsed_eu": 0.29,
+      "id": "ACT-P27-I02-W39",
+      "scope_id": "P27-I02-W39",
+      "status": "done",
+      "updated_at": "2026-05-23T14:56:04.045557Z"
     }
   },
   "agent_sessions": {
@@ -4929,6 +5019,123 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I02-W30",
       "updated_at": "2026-05-23T13:44:06.916220Z"
+    },
+    "P27-I02-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W31-bucket-20260523T145556Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W31",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W31",
+      "updated_at": "2026-05-23T14:55:56.546017Z"
+    },
+    "P27-I02-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W32-bucket-20260523T145557Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I02-W32",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I02-W32",
+      "updated_at": "2026-05-23T14:55:57.493968Z"
+    },
+    "P27-I02-W33": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W33-bucket-20260523T145558Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I02-W33",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I02-W33",
+      "updated_at": "2026-05-23T14:55:58.438879Z"
+    },
+    "P27-I02-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W34-bucket-20260523T145559Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W34",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W34",
+      "updated_at": "2026-05-23T14:55:59.365049Z"
+    },
+    "P27-I02-W35": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W35-bucket-20260523T145600Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I02-W35",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I02-W35",
+      "updated_at": "2026-05-23T14:56:00.283475Z"
+    },
+    "P27-I02-W36": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W36-bucket-20260523T145601Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W36",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W36",
+      "updated_at": "2026-05-23T14:56:01.187563Z"
+    },
+    "P27-I02-W37": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W37-bucket-20260523T145602Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I02-W37",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I02-W37",
+      "updated_at": "2026-05-23T14:56:02.122096Z"
+    },
+    "P27-I02-W38": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W38-bucket-20260523T145603Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W38",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W38",
+      "updated_at": "2026-05-23T14:56:03.068057Z"
+    },
+    "P27-I02-W39": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W39-bucket-20260523T144718Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I02-W39",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I02-W39",
+      "updated_at": "2026-05-23T14:47:18.423114Z"
     }
   },
   "goals": {
@@ -5624,7 +5831,8 @@
         "P27-I02-W36",
         "P27-I02-W37",
         "P27-I02-W38",
-        "P27-I02-W32"
+        "P27-I02-W32",
+        "P27-I02-W39"
       ]
     },
     "P27-I03": {
@@ -6216,7 +6424,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T14:02:20.552918Z",
+  "updated_at": "2026-05-23T14:56:04.045806Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -16267,9 +16475,9 @@
       "blocks": [
         "P27-I02-W32"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:55:57.027309Z",
+      "commit": "d19b50e6ff8f9af91cace9c862c99b2fa7455705",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16282,10 +16490,10 @@
       "id": "P27-I02-W31",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:52.523094Z",
-      "outcome": null,
+      "outcome": "daemon emits -32002 for validation_failed via DaemonValidationError; live client mapping + wire-contract tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "daemon maps validation_failed rejections to wire code -32002 (not -32602); _dispatch.py -32002 branch live; daemon + fallback paths return identical exit code; _process_frame-level wire-code test added"
       ],
@@ -16297,9 +16505,9 @@
     "P27-I02-W32": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:55:57.975889Z",
+      "commit": "3619b567d11d49068591ce389a9d4161d7502257",
       "deps": [
         "P27-I02-W31"
       ],
@@ -16316,10 +16524,10 @@
       "id": "P27-I02-W32",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:02:20.552734Z",
-      "outcome": null,
+      "outcome": "connect-vs-post-send fallback split (DaemonMutationIndeterminate, no blind re-apply); WAL mark_applied before append so replay re-issues",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "transport fallback only on connect-phase failure (definitely-not-applied); mid-call drop/timeout raises indeterminate (no blind re-apply); mark_applied moved before append_envelope in daemon+fallback so crash-window maps to APPLIED and replay re-issues event; docstrings corrected; at-most-once test"
       ],
@@ -16331,9 +16539,9 @@
     "P27-I02-W33": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:55:58.908456Z",
+      "commit": "39c9c4eb764b53e8b0c73ace9a511ee007968cd7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16344,10 +16552,10 @@
       "id": "P27-I02-W33",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:53.613300Z",
-      "outcome": null,
+      "outcome": "SensitiveScrubber redacts compressed/leading-:: + v4-mapped IPv6; 9 regression tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "SensitiveScrubber redacts fe80::1",
         "::1",
@@ -16361,9 +16569,9 @@
     "P27-I02-W34": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:55:59.836232Z",
+      "commit": "d56695e1b6f71ba155b22b038b6d654231e8adff",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16375,10 +16583,10 @@
       "id": "P27-I02-W34",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:54.098852Z",
-      "outcome": null,
+      "outcome": "run_chain round-trips State.model_validate before write + restores on fail; empty title -> placeholder",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "run_chain round-trips State.model_validate before write_canonical and restores+raises on failure; empty/whitespace title migrated to a min_length>=1 placeholder; tests cover both"
       ],
@@ -16390,9 +16598,9 @@
     "P27-I02-W35": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:56:00.739865Z",
+      "commit": "f6ff4d1944b7e183068336c979c48fabd5d5ebf2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16403,10 +16611,10 @@
       "id": "P27-I02-W35",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:54.559598Z",
-      "outcome": null,
+      "outcome": "_ordered_gauntlet_gates runs configured build gate; abort-on-red preserved",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a build gate in required_before_ship is resolved+run by _run_gauntlet (not silently dropped); test asserts configured build gate executes"
       ],
@@ -16418,9 +16626,9 @@
     "P27-I02-W36": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:56:01.676627Z",
+      "commit": "c1fc0f970cb3019619671b308af279c83ce37e45",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16432,10 +16640,10 @@
       "id": "P27-I02-W36",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:55.047490Z",
-      "outcome": null,
+      "outcome": "iters_without_audit + single_wave_without_decision moved into close_phase transition (atomic both paths)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "iters_without_audit + single_wave_without_decision enforced inside close_phase transition (under lock) so daemon + fallback paths both block; tests cover the daemon-path race"
       ],
@@ -16447,9 +16655,9 @@
     "P27-I02-W37": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:56:02.592756Z",
+      "commit": "a9a25e889dc1216969dddcf7fae39451adc498ad",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16461,10 +16669,10 @@
       "id": "P27-I02-W37",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:55.517518Z",
-      "outcome": null,
+      "outcome": "supersede_decision rejects non-ACTIVE superseder + INV.DECISION.SUPERSEDE_CYCLE backstop",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "supersede_decision rejects a new_id that is not ACTIVE (blocks A->B->A cycle); cycle/invariant test added"
       ],
@@ -16476,9 +16684,9 @@
     "P27-I02-W38": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "inline-fixwaves",
+      "closed_at": "2026-05-23T14:56:03.559371Z",
+      "commit": "f1fda437809173d648da9cbce733b59677099fd9",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16495,14 +16703,45 @@
       "id": "P27-I02-W38",
       "iter_id": "P27-I02",
       "opened_at": "2026-05-23T14:01:55.984704Z",
-      "outcome": null,
+      "outcome": "audit malformed-dispatch guard + projector mtime gate + 5 review nits (A/G/H deferred to I03)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "/audit degrades to partial/needs_user when zero checks run; projector skip-gate consults mtime; backfill docstring + _TS_PATTERN(\\Z) + duckdb all-PK + snapshot dir + pr_body title-match nits resolved; tests updated"
       ],
       "title": "audit zero-check signal + projector mtime + nits cleanup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "inline-w39",
+      "closed_at": "2026-05-23T14:56:04.045557Z",
+      "commit": "92a3124c612bde1da3fb94414b26f9ef7ec428e0",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/cli/errors.py",
+        "src/eawf/cli/_dispatch.py",
+        "src/eawf/daemon/wal.py"
+      ],
+      "id": "P27-I02-W39",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T14:47:17.853306Z",
+      "outcome": "narrow daemon -32002 to closure kinds; non-closure -> -32602 matches fallback; client const single-sourced; parity test",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "non-closure lifecycle rejection returns same exit code on daemon + fallback paths (InvalidInput); closure stays ValidationFailed; client -32002 single-sourced; mark_applied + indeterminate docstrings corrected; non-closure parity test added"
+      ],
+      "title": "align daemon validation exit codes with fallback + rpc nits",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
