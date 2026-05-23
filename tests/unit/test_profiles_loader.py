@@ -3,7 +3,7 @@
 The contracts under test:
 
 - ``load_profile("core")`` returns a fully-validated :class:`ProfileBody`.
-- ``list_profiles()`` enumerates every YAML stem under ``data/`` (13 ids).
+- ``list_profiles()`` enumerates every YAML stem under ``data/`` (14 ids).
 - Unknown ids raise :class:`InvalidInput`.
 - Malformed YAML / schema mismatches raise :class:`ValidationFailed`.
 - Required state keys for ``research`` round-trip via the loader.
@@ -18,6 +18,7 @@ from eawf.profiles.loader import list_profiles, load_profile
 from eawf.profiles.models import ProfileBody
 
 _EXPECTED_PROFILES: tuple[str, ...] = (
+    "agent_driven",
     "apps",
     "core",
     "docs",
@@ -33,9 +34,9 @@ _EXPECTED_PROFILES: tuple[str, ...] = (
 )
 
 
-def test_loader_lists_all_thirteen_profiles() -> None:
+def test_loader_lists_all_fourteen_profiles() -> None:
     profiles = list_profiles()
-    assert len(profiles) == 13
+    assert len(profiles) == 14
     expected = (*_EXPECTED_PROFILES, "a11y")
     assert tuple(sorted(profiles)) == tuple(sorted(expected))
 
