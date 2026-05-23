@@ -58,7 +58,6 @@ target) exit 3, and anything that is genuinely a missing scope/state exits 2.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import secrets
@@ -78,10 +77,18 @@ from eawf.cli.scope import resolve_state_path
 from eawf.lock import portalock
 from eawf.state.enums import (
     ScopeKind,
-    StoreKind,
 )
 from eawf.state.ids import (
     is_iter_id,
+)
+from eawf.state.io import (
+    StateValidationError,
+    append_event,
+    build_event_envelope,
+    commit_mutation,
+    fallback_wal_dir,
+    state_version,
+    write_state_unlocked,
 )
 from eawf.state.urn import build as build_urn
 
@@ -142,119 +149,6 @@ def _read_state_payload(path: Path) -> dict[str, Any]:
         raise cli_errors.IntegrityViolation(f"corrupted state at {path}: {exc}") from exc
 
 
-def _write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
-    """Write *data* to *path* atomically WITHOUT acquiring the sibling lock.
-
-    Caller must already hold the lock via :func:`portalock.acquire`. The
-    locked variant lives in :mod:`eawf.state.writer`; the unlocked variant is
-    needed here because the transaction-level lock is held for the entire
-    handler.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = secrets.token_hex(4)
-    tmp = path.with_name(f"{path.name}.tmp.{suffix}")
-    payload = orjson.dumps(dict(data), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
-    try:
-        with tmp.open("wb") as fh:
-            fh.write(payload)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
-        parent_fd = os.open(path.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
-def _state_version(payload: dict[str, Any]) -> str:
-    """Stable hash of a state payload — used as before/after_state_version."""
-    raw = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
-    return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def _build_event_envelope(
-    *,
-    command: str,
-    args: dict[str, Any],
-    scope_id: str,
-    before_version: str,
-    after_version: str,
-    summary: str,
-) -> Any:
-    """Build (but do not append) the canonical ``EVENT``-kind envelope.
-
-    Split out of :func:`_append_event` so the WAL-backed commit path can
-    capture the post-apply envelope in the ``.pending`` record before the
-    state write, then append the *same* envelope after the state lands.
-    The envelope shape mirrors
-    :func:`eawf.daemon.methods.state._build_event_envelope` so the
-    in-process fallback and the daemon-proxy path converge on identical
-    on-disk rows.
-    """
-    from eawf.store.envelope import Envelope
-    from eawf.store.kinds.event import EventPayload
-
-    args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
-    args_hash = hashlib.sha256(args_blob).hexdigest()[:16]
-    now = datetime.now(UTC)
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=EventPayload(
-            timestamp=now,
-            event_type=command,
-            actor="cli",
-            command=command,
-            args_hash=args_hash,
-            before_state_version=before_version,
-            after_state_version=after_version,
-            status="ok",
-            message=summary,
-        ).model_dump(mode="json"),
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _append_event(
-    events_path: Path,
-    *,
-    command: str,
-    args: dict[str, Any],
-    scope_id: str,
-    before_version: str,
-    after_version: str,
-    summary: str,
-) -> None:
-    """Append one ``EVENT``-kind envelope to *events_path*.
-
-    Builds the envelope via :func:`_build_event_envelope` and routes the
-    write through :func:`eawf.store.append.append_envelope`. Caller
-    already holds the state-side sibling lock; the events store uses its
-    own sibling lock so concurrent appends from unrelated callers stay
-    safe.
-    """
-    from eawf.store.append import append_envelope
-
-    envelope = _build_event_envelope(
-        command=command,
-        args=args,
-        scope_id=scope_id,
-        before_version=before_version,
-        after_version=after_version,
-        summary=summary,
-    )
-    append_envelope(events_path, envelope)
-
-
 def _validate_or_raise(payload: dict[str, Any]) -> State:
     """Validate the candidate payload; raise ``ValidationFailed`` on error."""
     from eawf.validate.strict import validate_state as validate_state_payload
@@ -268,117 +162,18 @@ def _validate_or_raise(payload: dict[str, Any]) -> State:
     return report.state
 
 
-def _fallback_wal_dir(state_path: Path) -> Path:
-    """Return the in-process fallback WAL directory for *state_path*.
-
-    The fallback writer is the V1 carve-out (CI / one-shot / recovery
-    shell) — it does not share the daemon's per-user ``<runtime>/wal``.
-    Instead it keeps a repo-local WAL under ``.ea/locks/wal/`` so a crash
-    mid-write is reconcilable on the next mutation against the same
-    repo's ``state.json`` + ``event.jsonl``. ``.ea/locks/`` is gitignored
-    machine-local scratch, the right home for a transient recovery aid.
-    """
-    return state_path.parent / "locks" / "wal"
-
-
-def _commit_mutation(
-    state_path: Path,
-    *,
-    candidate: State,
-    before_version: str,
-    command: str,
-    args: dict[str, Any],
-    scope_id: str,
-    summary: str,
-) -> dict[str, Any]:
-    """Validate + WAL-pending + persist state + append event, crash-safely.
-
-    This is the in-process fallback writer (the V1 carve-out: CI /
-    one-shot / recovery shell). The canonical writer is the daemon
-    (rule 4); this path runs only when the daemon is unavailable, and it
-    mirrors the daemon's outcome-WAL ordering so the *same*
-    :func:`eawf.daemon.recovery.replay_wal` reconciles a crash.
-
-    Order (state-first, WAL-backed):
-
-    1. ``replay_wal`` over the fallback WAL to finish/roll-forward any
-       record a prior crashed fallback left behind (idempotent no-op on
-       a clean WAL).
-    2. Build the post-apply event envelope in memory.
-    3. ``write_pending`` the envelope to the WAL — the durable capture
-       that lets replay re-issue the event row verbatim.
-    4. ``_write_state_unlocked`` persists ``state.json`` (fsynced) — the
-       point of no return.
-    5. ``mark_applied`` retires the WAL record to ``.applied`` **before**
-       the event append.
-    6. ``append_envelope`` lands the event row in ``event.jsonl``, then
-       ``mark_fsynced`` completes the record.
-
-    The invariant this buys: the event row is appended **only after**
-    ``state.json`` is durably written, so a crash never leaves a phantom
-    event (an event whose state change did not commit). Because
-    ``mark_applied`` fires before the event append, a crash in the
-    state-write→event-append window leaves an ``.applied`` record, and
-    the next startup's :func:`eawf.daemon.recovery.replay_wal` re-issues
-    the captured envelope (idempotent on envelope id) so state and the
-    event log stay in sync. ``replay_wal`` only re-issues APPLIED
-    records; a PENDING record (crash before the state write landed) is
-    POISONED and its mutator is never re-run — which is why
-    ``mark_applied`` must precede the append, not follow it.
-
-    Returns the candidate payload (already JSON-mode-dumped) so the
-    caller can compute its own envelope without a second model_dump.
-    """
-    from eawf.daemon import wal
-    from eawf.daemon.recovery import replay_wal
-    from eawf.daemon.wal import WalRecord
-    from eawf.store.append import append_envelope
-    from eawf.store.paths import store_path
-
-    payload = candidate.model_dump(mode="json")
-    # validate the payload that will actually go to disk
-    _validate_or_raise(payload)
-    after_version = _state_version(payload)
-    events_path = store_path(state_path, StoreKind.EVENT)
-    wal_dir = _fallback_wal_dir(state_path)
-
-    # Roll forward any record a prior crashed fallback left behind so the
-    # log never carries an event whose state change is missing, and so a
-    # half-applied prior write completes before this one starts.
-    replay_wal(wal_dir, state_path=state_path, event_path=events_path)
-
-    envelope = _build_event_envelope(
-        command=command,
-        args=args,
-        scope_id=scope_id,
-        before_version=before_version,
-        after_version=after_version,
-        summary=summary,
-    )
-    record_id = uuid.uuid4().hex
-    record = WalRecord(
-        record_id=record_id,
-        envelope=envelope,
-        idempotency_key=None,
-        written_at=datetime.now(UTC),
-        before_state_version=before_version,
-        after_state_version=after_version,
-    )
-    wal.write_pending(wal_dir, record)
-    # ``_write_state_unlocked`` fsyncs state.json — the point of no
-    # return. Mark APPLIED before the event append so a crash in the
-    # state-write→event-append window leaves an APPLIED record that
-    # replay re-issues, not a PENDING one that replay poisons (which
-    # would silently drop the event row). Mirrors the daemon mutator.
-    _write_state_unlocked(state_path, payload)
-    wal.mark_applied(wal_dir, record_id)
-    append_envelope(events_path, envelope)
-    wal.mark_fsynced(wal_dir, record_id)
-    logger.info(
-        f"_commit_mutation command={command!r} scope={scope_id!r} "
-        f"before={before_version} after={after_version} record={record_id!r}"
-    )
-    return payload
+# State-write primitives moved to :mod:`eawf.state.io` (the library) so the
+# CLI layer stays thin dispatch per the "CLI is dispatch; library implements"
+# rule. Re-exported here under their historical private names so the sibling
+# command modules (``lifecycle_iter`` / ``lifecycle_phase`` /
+# ``lifecycle_wave_read``) and ``tests/property/test_wave_claim_property``
+# keep importing them from this module unchanged.
+_write_state_unlocked = write_state_unlocked
+_state_version = state_version
+_build_event_envelope = build_event_envelope
+_append_event = append_event
+_fallback_wal_dir = fallback_wal_dir
+_commit_mutation = commit_mutation
 
 
 def _empty_state_dict(*, project_code: str, project_payload: dict[str, Any]) -> dict[str, Any]:
@@ -748,7 +543,7 @@ def _run_mutation(
         """In-process WAL-backed transaction — the daemon-down fallback."""
         with portalock.acquire(state_path, timeout=5.0):
             payload = _read_state_payload(state_path)
-            before_version = _state_version(payload)
+            before_version = state_version(payload)
             try:
                 state = State.model_validate(payload)
             except PydValidationError as exc:
@@ -765,18 +560,22 @@ def _run_mutation(
                 raise cli_errors.InvalidInput(str(exc)) from exc
             state.updated_at = datetime.now(UTC)
             resolved_scope_id = scope_id if scope_id is not None else scope_id_factory()
-            # ``ValidationFailed`` raised by ``_commit_mutation`` is handled by
-            # the surrounding ``except cli_errors.CliError`` clause below — no
-            # local catch-and-re-raise is required.
-            return _commit_mutation(
-                state_path,
-                candidate=state,
-                before_version=before_version,
-                command=command,
-                args=args,
-                scope_id=resolved_scope_id,
-                summary=command,
-            )
+            # The library writer raises ``StateValidationError`` for a
+            # post-apply invariant rejection; map it onto the CLI
+            # ``ValidationFailed`` bucket (exit 2) so the surrounding
+            # ``except cli_errors.CliError`` clause below surfaces it.
+            try:
+                return commit_mutation(
+                    state_path,
+                    candidate=state,
+                    before_version=before_version,
+                    command=command,
+                    args=args,
+                    scope_id=resolved_scope_id,
+                    summary=command,
+                )
+            except StateValidationError as exc:
+                raise cli_errors.ValidationFailed(str(exc)) from exc
 
     # Route through the daemon only when proxying is enabled in the merged
     # config (the post-P24-W10 default). The V1 carve-out
