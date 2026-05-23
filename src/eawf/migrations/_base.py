@@ -45,7 +45,6 @@ from pathlib import Path
 from typing import Any, Protocol, get_args, runtime_checkable
 
 from eawf.lock import portalock
-from eawf.state.models import State
 from eawf.state.writer import atomic_write_json_locked
 
 logger = logging.getLogger(__name__)
@@ -155,6 +154,13 @@ def model_supported_max_version() -> str:
     the model cannot re-validate. Read-only: bumping the supported set is
     owned by the model, not this helper.
     """
+    # Imported lazily: ``eawf.state.models`` (and its transitive
+    # ``eawf.sandbox.policy``) are heavy modules the CLI tree-build /
+    # shell-completion cold path must not load. Resolving the import at
+    # call time keeps ``import eawf.cli.app`` (which eagerly registers the
+    # ``migrate`` command) off those modules' import graph.
+    from eawf.state.models import State
+
     supported: tuple[str, ...] = tuple(
         str(arg) for arg in get_args(State.model_fields["schema_version"].annotation)
     )

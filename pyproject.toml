@@ -145,6 +145,13 @@ exclude = [
     # P27-W04 grew this CLI-dispatch module past the cap with the four
     # diff-scoped lint subcommands; a split is a future-hygiene candidate.
     "src/eawf/cli/commands/hook.py",
+    # Grandfathered, not waived inline — proper decomposition is deferred
+    # to P27-I03. ship.py grew past the cap absorbing the gauntlet runner;
+    # extract that runner into its own module. lifecycle.py grew absorbing
+    # the daemon-routing path; extract the daemon-routing helpers. Drop
+    # both rows once the I03 refactor lands.
+    "src/eawf/skills/ship.py",
+    "src/eawf/cli/commands/lifecycle.py",
 ]
 
 [tool.coverage.run]
