@@ -31,6 +31,7 @@ from eawf.lifecycle.transitions import (
     remove_wave_plan,
     reopen_phase,
     set_wave_deps,
+    start_wave,
     switch_subproject,
 )
 from eawf.state.enums import (
@@ -482,6 +483,89 @@ def test_fail_wave_happy() -> None:
     w = fail_wave(state, wave_id="P01-I01-W01", reason="tests broke")
     assert w.status == WaveStatus.FAILED
     assert w.outcome == "tests broke"
+
+
+def test_start_wave_unknown_raises() -> None:
+    state = _seed_wave_state()
+    with pytest.raises(LifecycleError, match="unknown wave"):
+        start_wave(state, wave_id="P01-I01-W01")
+
+
+def test_start_wave_pending_rejected() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+    )
+    with pytest.raises(LifecycleError, match="not claimed"):
+        start_wave(state, wave_id="P01-I01-W01")
+
+
+def test_start_wave_terminal_rejected() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+    )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    with pytest.raises(LifecycleError, match="not claimed"):
+        start_wave(state, wave_id="P01-I01-W01")
+
+
+def test_start_wave_happy_claimed_to_in_progress() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+    )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    w = start_wave(state, wave_id="P01-I01-W01")
+    assert w.status == WaveStatus.IN_PROGRESS
+    # The claim binding + active pointer are preserved across the flip.
+    assert w.claim_session_id == "SES-1"
+    assert "P01-I01-W01" in state.current.active_wave_ids
+
+
+def test_start_wave_idempotent_when_already_in_progress() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+    )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    start_wave(state, wave_id="P01-I01-W01")
+    # Second call is a no-op, no error, status unchanged.
+    w = start_wave(state, wave_id="P01-I01-W01")
+    assert w.status == WaveStatus.IN_PROGRESS
+
+
+def test_start_wave_then_close_succeeds() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+    )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    start_wave(state, wave_id="P01-I01-W01")
+    w = close_wave(state, wave_id="P01-I01-W01", outcome="done")
+    assert w.status == WaveStatus.CLOSED
+    assert "P01-I01-W01" not in state.current.active_wave_ids
 
 
 # ---- Planned-scope transitions (W01) ----------------------------------------

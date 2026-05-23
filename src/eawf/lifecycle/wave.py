@@ -386,6 +386,48 @@ def _lower_w_sibling_pending(state: State, wave: Wave) -> list[str]:
     return skipped
 
 
+def start_wave(state: State, *, wave_id: str) -> Wave:
+    """Move a claimed wave to ``in_progress`` at implementation start.
+
+    The inline counterpart to the dispatch runner's head transition
+    (:func:`eawf.daemon.dispatch_runner.run_dispatch`): a non-dispatched
+    wave whose executor begins work flips from :data:`WaveStatus.CLAIMED`
+    to :data:`WaveStatus.IN_PROGRESS` so the wave's status reflects that
+    the claim has been picked up and code is being written. The wave stays
+    on ``current.active_wave_ids`` (it was placed there by
+    :func:`claim_wave`); only the status field changes.
+
+    Re-starting an already-``in_progress`` wave is a no-op (idempotent) so
+    a dispatched wave whose runner already flipped the status, and a retry
+    that re-enters the start path, do not fault.
+
+    Args:
+        state: State to mutate in place.
+        wave_id: Id of the claimed wave to move to ``in_progress``.
+
+    Returns:
+        The mutated :class:`~eawf.state.models.Wave`.
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown, or the wave is in any
+            status other than ``claimed``/``in_progress`` (a pending wave
+            must be claimed first; a terminal wave cannot be re-started).
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise LifecycleError(f"unknown wave {wave_id!r}")
+    if wave.status == WaveStatus.IN_PROGRESS:
+        logger.debug(f"start_wave idempotent wave={wave_id} already in_progress")
+        return wave
+    if wave.status != WaveStatus.CLAIMED:
+        raise LifecycleError(
+            f"wave {wave_id!r} is not claimed (status={wave.status.value!r}); cannot start"
+        )
+    wave.status = WaveStatus.IN_PROGRESS
+    logger.info(f"start_wave wave={wave_id}")
+    return wave
+
+
 def close_wave(
     state: State,
     *,

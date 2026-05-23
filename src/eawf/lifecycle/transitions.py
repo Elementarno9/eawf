@@ -58,6 +58,7 @@ from eawf.lifecycle.wave import (
     release_wave,
     remove_wave_plan,
     set_wave_deps,
+    start_wave,
 )
 
 __all__ = [
@@ -82,5 +83,6 @@ __all__ = [
     "remove_wave_plan",
     "reopen_phase",
     "set_wave_deps",
+    "start_wave",
     "switch_subproject",
 ]

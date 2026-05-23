@@ -51,7 +51,10 @@ from pydantic import TypeAdapter
 
 from eawf.agent_report.store import append_agent_report
 from eawf.evidence._io import load_state
-from eawf.state.enums import AgentReportVerdict, Confidence, StoreKind
+from eawf.lifecycle.wave import start_wave
+from eawf.lock import portalock
+from eawf.state.enums import AgentReportVerdict, Confidence, StoreKind, WaveStatus
+from eawf.state.writer import atomic_write_json_locked
 from eawf.store.append import append_envelope
 from eawf.store.envelope import Envelope
 from eawf.store.kinds.agent_report import ExecutorReportBody
@@ -404,6 +407,56 @@ def emit_agent_end_report(
     return result.envelope.id
 
 
+def _mark_wave_in_progress(ctx: MethodContext, *, wave_id: str) -> bool:
+    """Flip *wave_id* CLAIMED -> IN_PROGRESS through the daemon canonical writer.
+
+    Called at the head of :func:`run_dispatch` so a dispatched wave's
+    ``state.json`` status reflects that the claim has been picked up and
+    implementation has begun. The mutation runs under the same defense-in-
+    depth ``portalock(state.json)`` + locked-atomic-write the daemon's
+    ``state.mutate`` path uses (per the daemon-as-sole-mutator rule), and
+    applies the pure-functional :func:`eawf.lifecycle.wave.start_wave`
+    transition so the inline-start and dispatched-start paths converge on
+    one transition.
+
+    The flip is opt-in and tolerant: it is skipped (returning ``False``)
+    when ``ctx.state_path`` is unset (stateless unit-test contexts) or the
+    wave is absent from state. A wave that is already IN_PROGRESS is a
+    no-op via ``start_wave``'s own idempotency. A wave in any other status
+    (PENDING / terminal) is left untouched — the claim-gate upstream owns
+    that precondition, so the runner does not abort a dispatch over it.
+
+    Args:
+        ctx: Daemon method context — supplies ``state_path``.
+        wave_id: ``W<NN>`` wave being dispatched.
+
+    Returns:
+        ``True`` when the wave was flipped to (or already at) IN_PROGRESS
+        and the new status was persisted; ``False`` when the flip was
+        skipped (no ``state_path``, unknown wave, or a non-claimable
+        status).
+    """
+    if ctx.state_path is None:
+        return False
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            logger.debug(f"_mark_wave_in_progress skip wave={wave_id!r} not in state")
+            return False
+        if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+            logger.debug(
+                f"_mark_wave_in_progress skip wave={wave_id!r} status={wave.status.value!r}"
+            )
+            return False
+        start_wave(state, wave_id=wave_id)
+        state.updated_at = datetime.now(UTC)
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(f"_mark_wave_in_progress wave={wave_id}")
+    return True
+
+
 def run_dispatch(
     ctx: MethodContext,
     *,
@@ -473,6 +526,14 @@ def run_dispatch(
         id, whether a fallback fired, the emitted C09 event ids, and the
         ``agent_end`` report id (``None`` when no report was emitted).
     """
+    # Head transition: a dispatched wave moves CLAIMED -> IN_PROGRESS the
+    # moment the runner starts driving it, so the wave's persisted status
+    # reflects that implementation is underway before any event/report
+    # lands. Skipped when the daemon context carries no state.json
+    # (stateless unit-test contexts) or the wave is not in a claimable
+    # status (the claim-gate upstream owns that precondition).
+    _mark_wave_in_progress(ctx, wave_id=wave_id)
+
     primary_attempt = uuid.uuid4().hex
     event_ids: list[str] = []
     serving_runtime = primary_runtime
