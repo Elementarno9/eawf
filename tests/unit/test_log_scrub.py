@@ -117,6 +117,73 @@ def test_scrub_ipv6_address() -> None:
     assert REDACTION in out
 
 
+def test_scrub_ipv6_full_form_redacted_whole() -> None:
+    # The fully expanded eight-group form must be masked as one token,
+    # not split into surviving hex groups.
+    scrubber = _scrubber()
+    out = scrubber.scrub("a addr=2001:0db8:85a3:0000:0000:8a2e:0370:7334 b")
+    assert out == "a addr=<scrubbed> b"
+
+
+def test_scrub_ipv6_compressed_link_local() -> None:
+    # Regression: the original ``(hex:){2,7}hex`` pattern could not
+    # match a ``::`` form, so ``fe80::1`` leaked verbatim.
+    scrubber = _scrubber()
+    out = scrubber.scrub("iface addr=fe80::1 up")
+    assert "fe80::1" not in out
+    assert out == "iface addr=<scrubbed> up"
+
+
+def test_scrub_ipv6_compressed_loopback() -> None:
+    # Regression: bare-leading ``::1`` leaked because ``\b`` does not
+    # fire before a leading colon.
+    scrubber = _scrubber()
+    out = scrubber.scrub("bind addr=::1 ready")
+    assert "::1" not in out
+    assert out == "bind addr=<scrubbed> ready"
+
+
+def test_scrub_ipv6_v4_mapped_redacted_whole() -> None:
+    # Regression: ``::ffff:192.168.0.1`` was clipped to ``::ffff:`` plus
+    # a separately redacted dotted-quad; the v4-mapped tail must be
+    # masked as a single token.
+    scrubber = _scrubber()
+    out = scrubber.scrub("conn addr=::ffff:192.168.0.1 ok")
+    assert "::ffff:192.168.0.1" not in out
+    assert "192.168.0.1" not in out
+    assert out == "conn addr=<scrubbed> ok"
+
+
+def test_scrub_ipv6_trailing_double_colon() -> None:
+    scrubber = _scrubber()
+    out = scrubber.scrub("route prefix=2001:db8:: set")
+    assert "2001:db8::" not in out
+    assert out == "route prefix=<scrubbed> set"
+
+
+def test_scrub_ipv6_compressed_interior_groups() -> None:
+    scrubber = _scrubber()
+    out = scrubber.scrub("peer addr=2001:db8::8a2e:370:7334 ok")
+    assert "2001:db8::8a2e:370:7334" not in out
+    assert out == "peer addr=<scrubbed> ok"
+
+
+def test_scrub_ipv6_does_not_touch_single_colon_ratio() -> None:
+    # A single colon (``1:2``) is not an IPv6 literal and must survive;
+    # the IPv6 pattern requires a ``::`` or a full eight-group form.
+    scrubber = _scrubber()
+    msg = "balance ratio 1:2 ok"
+    assert scrubber.scrub(msg) == msg
+
+
+def test_scrub_ipv6_does_not_touch_time_string() -> None:
+    # A clock-style ``12:34:56`` has single colons only; it must not be
+    # mistaken for an IPv6 literal.
+    scrubber = _scrubber()
+    msg = "elapsed 12:34:56 done"
+    assert scrubber.scrub(msg) == msg
+
+
 def test_scrub_tilde_home_path() -> None:
     scrubber = _scrubber()
     out = scrubber.scrub("load cfg=~/.eawf/state.json done")

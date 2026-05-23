@@ -115,8 +115,30 @@ class SensitiveScrubber(logging.Filter):
         re.compile(r"ghp_[A-Za-z0-9]{36,}"),  # GitHub PAT
         # IPv6 before IPv4 so an IPv6 literal is matched whole rather
         # than its trailing dotted-quad tail being clipped by the IPv4
-        # pattern. Word boundaries keep dotted version strings intact.
-        re.compile(r"\b(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}\b"),  # IPv6
+        # pattern. The form covers the fully expanded eight-group
+        # address, the v4-embedded full form, and every compressed
+        # ``::`` placement (leading ``::1``, trailing ``fe80::``,
+        # interior ``a::b``, bare ``::``, and the v4-mapped
+        # ``::ffff:1.2.3.4`` tail). The leading negative lookbehind on
+        # hex / colon / dot anchors on the address shape rather than a
+        # word boundary, since ``\b`` does not fire before a leading
+        # ``::`` (``:`` is a non-word character). The left side of the
+        # ``::`` ends on a hex group (no trailing colon) so the colon it
+        # would otherwise consume stays part of the ``::`` marker, and
+        # the right side prefers the greedy v4 tail so a v4-mapped
+        # literal is never clipped to its first dotted octet. A single
+        # colon (``1:2`` ratios, ``C:\`` drives, dotted version strings)
+        # cannot satisfy the ``::`` requirement, so ordinary text is
+        # left intact.
+        re.compile(
+            r"(?<![0-9A-Fa-f:.])(?:"
+            r"(?:[0-9A-Fa-f]{1,4}:){6}(?:\d{1,3}\.){3}\d{1,3}"
+            r"|(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
+            r"|(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?::"
+            r"(?:(?:[0-9A-Fa-f]{1,4}:)*(?:\d{1,3}\.){3}\d{1,3}"
+            r"|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?"
+            r")"
+        ),  # IPv6
         re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),  # IPv4
         re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),  # email
     )
