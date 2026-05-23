@@ -6,7 +6,7 @@ Covers three deliverables:
    C09 §5.9.6 M26 ``eawf_estimate_actual_variance_pct`` gauge.
 2. :func:`eawf.estimation.buckets.calibrate_buckets` — the XS..XL re-fit from
    90-day actuals, including the >25 % drift nudge and its boundary.
-3. :class:`eawf.tui_v2.widgets.variance_tile.VarianceTile` — the colour-
+3. :class:`eawf.tui.widgets.variance_tile.VarianceTile` — the colour-
    banded M26 tile render.
 
 Plus CLI dispatch smoke for ``eawf metrics variance`` and ``eawf calibrate
@@ -36,7 +36,7 @@ from eawf.estimation.metrics import (
 )
 from eawf.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
 from eawf.state.models import ActualSummary, EstimateSummary, State, Wave
-from eawf.tui_v2.widgets.variance_tile import (
+from eawf.tui.widgets.variance_tile import (
     EMPTY_STATE,
     VarianceTile,
     band_var,

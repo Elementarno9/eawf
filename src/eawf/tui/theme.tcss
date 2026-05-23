@@ -1,0 +1,117 @@
+/* Textual theme for the Eä TUI rebuild (tui).
+ *
+ * Structural / layout CSS for the scope screens and chrome. The semantic
+ * colour vars it references ($accent/$primary/$ok/$warn/$err/$muted and
+ * the $status-* lifecycle tints) are NOT defined here: they live in each
+ * Theme's `variables` map in theme.py and are re-resolved by the App when
+ * the active theme changes. Defining them at global scope here would pin
+ * them to one palette and make the runtime /theme swap recolour nothing,
+ * so this file carries layout only and leaves every $var to the theme.
+ *
+ * The $status-* tints are mirrored as hardcoded hex in
+ * roadmap_tree.STATUS_COLOURS because tree node labels are Rich-parsed
+ * and cannot resolve these vars; the per-theme `variables` map is the
+ * canonical palette home for every surface that CAN resolve them.
+ */
+
+Screen {
+    background: $surface;
+    color: $text;
+}
+
+/* --- header: Eä brand outside-left of the scope breadcrumb ---
+ * Brand accent + runtime/clock cell colours are carried inline by the
+ * Header widget's content markup ($accent / $muted) so the runtime
+ * theme swap stays a palette-var rebind; the dock + background live in
+ * the widget DEFAULT_CSS and are restated here for the global default.
+ */
+Header {
+    height: 1;
+    dock: top;
+    background: $panel;
+    color: $text;
+}
+
+/* --- footer: two rows — context key hints (row 1, full width so the
+ * longest scope hint set never clips at 120 cols) + weekly-burn cell and
+ * heartbeat dot (row 2). --- */
+Footer {
+    height: 2;
+    dock: bottom;
+    background: $panel;
+    color: $muted;
+}
+
+Footer .footer-hints {
+    color: $muted;
+}
+
+/* --- heartbeat: accent pulse, err when any pane degraded --- */
+Heartbeat {
+    color: $accent;
+}
+
+Heartbeat.-degraded {
+    color: $err;
+}
+
+/* --- scope-screen body shell (shared by every scope screen) --- */
+#body {
+    height: 1fr;
+}
+
+/* --- quadrant / strip rows + bordered panes (RepoScreen / WorkspaceScreen) --- */
+.row {
+    height: 1fr;
+}
+
+.pane {
+    width: 1fr;
+    height: 1fr;
+    border: solid $accent;
+    padding: 0 1;
+}
+
+.pane.-focused {
+    border: solid $primary;
+}
+
+.pane-title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
+}
+
+/* --- UserScreen weighted sections (attention 3 : effort 2 : portfolio 5) --- */
+.section {
+    width: 1fr;
+    border: solid $accent;
+    padding: 0 1;
+}
+
+#attention {
+    height: 3fr;
+}
+
+#effort {
+    height: 2fr;
+}
+
+#portfolio {
+    height: 5fr;
+}
+
+.section-title {
+    height: 1;
+    color: $accent;
+    text-style: bold;
+}
+
+/* --- degraded banner (mtime-poll fallback active) --- */
+.degraded-banner {
+    height: 1;
+    dock: top;
+    background: $err;
+    color: $text;
+    text-style: bold;
+}

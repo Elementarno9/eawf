@@ -124,15 +124,13 @@ def _dispatch_tui(
     On an interactive TTY this resolves the scope via the cwd-upward
     ladder (``-w/--workspace`` flag wins, else the nearest ``state.json``
     determines ``repo`` vs ``workspace``) and launches the Textual
-    :class:`~eawf.tui_v2.app.EaApp`. When ``--plain`` / ``--no-input`` is
+    :class:`~eawf.tui.app.EaApp`. When ``--plain`` / ``--no-input`` is
     set or stdout is not a TTY it falls back to the deterministic
-    single-frame status emission (:func:`eawf.tui_v2.offline.emit_status`)
+    single-frame status emission (:func:`eawf.tui.offline.emit_status`)
     so headless callers stay script-stable.
 
-    ``tui_v2`` is the only TUI surface — the legacy ``src/eawf/tui/`` tree
-    has been removed (operator decision to defer the legacy TUI), so both
-    the interactive launch and the non-TTY fallback route through
-    ``tui_v2``.
+    ``tui`` is the only TUI surface, so both the interactive launch and
+    the non-TTY fallback route through it.
 
     Args:
         workspace: Optional workspace root from ``-w/--workspace``.
@@ -144,14 +142,14 @@ def _dispatch_tui(
     """
     import sys
 
-    from eawf.tui_v2.offline import emit_status
+    from eawf.tui.offline import emit_status
 
     if no_input or plain or not sys.stdout.isatty():
         return emit_status(workspace=workspace, no_input=no_input, plain=plain)
 
     from eawf.state.enums import ScopeKind
     from eawf.state.resolve import resolve_with_reason
-    from eawf.tui_v2.app import resolve_scope, run_app
+    from eawf.tui.app import resolve_scope, run_app
 
     state_path, _reason = resolve_with_reason(workspace=workspace)
     if state_path.is_file():

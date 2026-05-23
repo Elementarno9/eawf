@@ -86,13 +86,13 @@ def test_layer1_pydantic_ui_scope_without_mockup_fails_at_model_validate() -> No
     # ``model_validate`` time so the failure surfaces before any loader
     # function is called.
     with pytest.raises(ValidationError) as excinfo:
-        _wave_spec(file_scopes=["src/eawf/tui_v2/header.py"])
+        _wave_spec(file_scopes=["src/eawf/tui/header.py"])
     assert "ui-scope wave requires mockup reference" in str(excinfo.value)
 
 
 def test_layer1_pydantic_ui_scope_with_mockup_passes() -> None:
     spec = _wave_spec(
-        file_scopes=["src/eawf/tui_v2/header.py"],
+        file_scopes=["src/eawf/tui/header.py"],
         mockup=WaveMockup(ascii="+---+\n|.|\n+---+"),
     )
     assert spec.mockup is not None

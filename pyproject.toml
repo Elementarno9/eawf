@@ -292,11 +292,11 @@ path = "cli/"
 line = 75
 branch = 65
 
-[tool.eawf.coverage.gates.tui_v2]
+[tool.eawf.coverage.gates.tui]
 # Line + branch waived: Textual widgets render asynchronously and
 # line-cov misreports. Screen coverage is enforced by the snapshot
 # pairing gate (C09 §5.2), not by this line/branch ratchet.
-path = "tui_v2/"
+path = "tui/"
 waive_line = true
 waive_branch = true
 

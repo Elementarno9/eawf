@@ -1,7 +1,7 @@
 """Unit tests for the C06 snapshot harness primitives.
 
 Covers the capture / normalise / golden-compare contract of
-:mod:`eawf.tui_v2.snapshot.pilot_harness`: the ASCII-text capture, the
+:mod:`eawf.tui.snapshot.pilot_harness`: the ASCII-text capture, the
 clock-cell neutralisation (the single non-deterministic element), the
 trailing-blank-row trim, the regen escape hatch, and the drift
 assertion.
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.tui_v2.app import EaApp
-from eawf.tui_v2.snapshot.pilot_harness import (
+from eawf.tui.app import EaApp
+from eawf.tui.snapshot.pilot_harness import (
     SNAPSHOT_REGEN_ENV,
     assert_screen_snapshot,
     capture_screen_text,

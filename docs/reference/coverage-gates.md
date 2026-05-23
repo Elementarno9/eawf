@@ -21,7 +21,7 @@ Measured on 2026-05-22 (full suite, 5139 passed). Headroom = measured − gate.
 | telemetry | `telemetry/` | 94.01% | 93 | +1.0 | 87.91% | 86 | +1.9 |
 | skills | `skills/` | 94.89% | 93 | +1.9 | 82.62% | 81 | +1.6 |
 | cli | `cli/` | 76.57% | 75 | +1.6 | 66.48% | 65 | +1.5 |
-| tui_v2 | `tui_v2/` | 91.60% | waived | n/a | 78.66% | waived | n/a |
+| tui | `tui/` | 91.60% | waived | n/a | 78.66% | waived | n/a |
 | render | `render/` | 90.56% | 89 | +1.6 | 75.61% | 74 | +1.6 |
 | store | `store/` | 98.81% | 97 | +1.8 | 85.71% | 84 | +1.7 |
 | state | `state/` | 99.79% | 98 | +1.8 | 96.74% | 95 | +1.7 |
@@ -41,7 +41,7 @@ Measured on 2026-05-22 (full suite, 5139 passed). Headroom = measured − gate.
 
 ## Waivers
 
-- **`tui_v2/` line + branch — waived.** Textual widgets render asynchronously; line/branch coverage misreports them. Screen coverage is enforced by the snapshot pairing gate (C09 §5.2), not by this ratchet.
+- **`tui/` line + branch — waived.** Textual widgets render asynchronously; line/branch coverage misreports them. Screen coverage is enforced by the snapshot pairing gate (C09 §5.2), not by this ratchet.
 
 ## Adding or tightening a gate
 

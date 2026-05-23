@@ -1,4 +1,4 @@
-"""Golden ASCII snapshot tests for the C06 ``tui_v2`` operator surface.
+"""Golden ASCII snapshot tests for the C06 ``tui`` operator surface.
 
 Drives each key screen / overlay to a known position via Textual's
 ``App.run_test()`` Pilot and asserts the rendered terminal (captured as
@@ -13,7 +13,7 @@ three scope screens (repo / workspace / user) plus two representative
 overlays (help + a destructive confirm) — enough to catch a layout or
 chrome regression on every screen *kind* and the overlay capture path,
 without paying the per-fixture spin-up cost 16 times. The harness
-(:func:`eawf.tui_v2.snapshot.assert_screen_snapshot`) is reusable, so
+(:func:`eawf.tui.snapshot.assert_screen_snapshot`) is reusable, so
 expanding the set later is one ``assert`` per added golden.
 
 Determinism note: the repo / workspace screens carry a ``GitPane`` that
@@ -45,13 +45,13 @@ from textual.widgets import TabbedContent
 from eawf.config.registry import registry_lookup
 from eawf.state.enums import EffortBucket
 from eawf.state.models import State
-from eawf.tui_v2.app import EaApp
-from eawf.tui_v2.screens.overlays.config_modal import ConfigModal
-from eawf.tui_v2.screens.overlays.confirm import ConfirmModal
-from eawf.tui_v2.screens.overlays.detail import DetailModal, resolve_detail
-from eawf.tui_v2.screens.overlays.edit_field import EditFieldModal
-from eawf.tui_v2.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
-from eawf.tui_v2.snapshot import assert_screen_snapshot, settle_screen
+from eawf.tui.app import EaApp
+from eawf.tui.screens.overlays.config_modal import ConfigModal
+from eawf.tui.screens.overlays.confirm import ConfirmModal
+from eawf.tui.screens.overlays.detail import DetailModal, resolve_detail
+from eawf.tui.screens.overlays.edit_field import EditFieldModal
+from eawf.tui.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
+from eawf.tui.snapshot import assert_screen_snapshot, settle_screen
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +81,7 @@ def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import textual.constants as _tc
 
     monkeypatch.setattr(_tc, "TEXTUAL_ANIMATIONS", "none")
-    monkeypatch.setattr("eawf.tui_v2.widgets.git_pane._git_run", lambda *a, **k: None)
+    monkeypatch.setattr("eawf.tui.widgets.git_pane._git_run", lambda *a, **k: None)
     monkeypatch.chdir(tmp_path)
 
 
@@ -146,8 +146,8 @@ def test_workspace_git_pane_dashes_from_repo_cwd(monkeypatch: pytest.MonkeyPatch
     The function-scoped ``monkeypatch.chdir`` is unwound at teardown, so the
     test does not itself leak the repo cwd into a sibling worker.
     """
-    from eawf.tui_v2.widgets.git_pane import DASH as GIT_DASH
-    from eawf.tui_v2.widgets.git_pane import GitPane
+    from eawf.tui.widgets.git_pane import DASH as GIT_DASH
+    from eawf.tui.widgets.git_pane import GitPane
 
     repo_root = Path(__file__).resolve().parents[3]
     assert (repo_root / ".git").exists(), f"expected a git work tree at {repo_root}"

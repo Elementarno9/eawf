@@ -100,12 +100,12 @@ def _phase_spec_factory(**overrides: Any) -> PhaseSpec:
 @pytest.mark.parametrize(
     "scopes,expected",
     [
-        (["src/eawf/tui_v2/app.py"], True),
+        (["src/eawf/tui/app.py"], True),
         (["src/eawf/render/envelope.py"], True),
         (
             [
                 "src/eawf/state/models.py",
-                "src/eawf/tui_v2/widgets/header.py",
+                "src/eawf/tui/widgets/header.py",
             ],
             True,
         ),
@@ -124,7 +124,7 @@ def test_is_ui_scope_matches_prefixes(scopes: list[str], expected: bool) -> None
 
 def test_requires_mockup_reference_fires_when_ui_and_no_mockup_no_waiver() -> None:
     assert requires_mockup_reference(
-        file_scopes=["src/eawf/tui_v2/app.py"],
+        file_scopes=["src/eawf/tui/app.py"],
         mockup_present=False,
         mockup_waiver_reason=None,
     )
@@ -132,7 +132,7 @@ def test_requires_mockup_reference_fires_when_ui_and_no_mockup_no_waiver() -> No
 
 def test_requires_mockup_reference_skips_when_mockup_present() -> None:
     assert not requires_mockup_reference(
-        file_scopes=["src/eawf/tui_v2/app.py"],
+        file_scopes=["src/eawf/tui/app.py"],
         mockup_present=True,
         mockup_waiver_reason=None,
     )
@@ -140,7 +140,7 @@ def test_requires_mockup_reference_skips_when_mockup_present() -> None:
 
 def test_requires_mockup_reference_skips_when_waiver_set() -> None:
     assert not requires_mockup_reference(
-        file_scopes=["src/eawf/tui_v2/app.py"],
+        file_scopes=["src/eawf/tui/app.py"],
         mockup_present=False,
         mockup_waiver_reason="non-rendering helper module",
     )
@@ -168,13 +168,13 @@ def test_requires_mockup_reference_treats_whitespace_waiver_as_missing() -> None
 
 def test_wave_spec_ui_scope_without_mockup_or_waiver_rejected() -> None:
     with pytest.raises(ValidationError) as excinfo:
-        _wave_spec_factory(file_scopes=["src/eawf/tui_v2/app.py"])
+        _wave_spec_factory(file_scopes=["src/eawf/tui/app.py"])
     assert "ui-scope wave requires mockup reference" in str(excinfo.value)
 
 
 def test_wave_spec_ui_scope_with_mockup_accepted() -> None:
     spec = _wave_spec_factory(
-        file_scopes=["src/eawf/tui_v2/app.py"],
+        file_scopes=["src/eawf/tui/app.py"],
         mockup=WaveMockup(ascii="+--header--+\n|...|\n+----+"),
     )
     assert spec.mockup is not None
@@ -200,7 +200,7 @@ def test_wave_spec_mixed_scopes_ui_triggers_heuristic() -> None:
         _wave_spec_factory(
             file_scopes=[
                 "src/eawf/spec/validators.py",
-                "src/eawf/tui_v2/widgets/header.py",
+                "src/eawf/tui/widgets/header.py",
             ]
         )
 

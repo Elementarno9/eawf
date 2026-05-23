@@ -116,7 +116,7 @@ def _read_repo_state_defaults(repo_path: Path) -> tuple[str | None, str | None]:
     try:
         payload: dict[str, Any] = orjson.loads(candidate.read_bytes())
     except (orjson.JSONDecodeError, OSError) as exc:
-        logger.debug(f"_read_repo_state_defaults: ignoring {candidate}: {exc}")
+        logger.debug(f"_read_repo_state_defaults ignoring path={candidate!r} err={exc!r}")
         return None, None
     project = payload.get("project")
     indexes = payload.get("indexes") or {}
@@ -639,7 +639,7 @@ def workspace_registry_status_cmd(
         read_registry,
         registry_mtime,
     )
-    from eawf.tui_v2.offline import offline_render
+    from eawf.tui.offline import offline_render
 
     flags: GlobalFlags = ctx.obj
     rendered = offline_render(registry_path=registry_path, width=width)

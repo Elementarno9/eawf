@@ -52,7 +52,7 @@ class WaveBehavior(_StrictModel):
 class WaveMockup(_StrictModel):
     """ASCII mockup with optional Mermaid diagram.
 
-    UI-scope waves (file_scopes touching ``src/eawf/tui_v2/`` or
+    UI-scope waves (file_scopes touching ``src/eawf/tui/`` or
     ``src/eawf/render/``) require either a mockup or a non-empty
     ``mockup_waiver_reason`` (WSV-07).
     """
@@ -113,7 +113,7 @@ class WaveSpec(_StrictModel):
         """Enforce WSV-07: UI-scope waves cite a mockup or a waiver.
 
         Fires only when at least one ``file_scopes`` entry lives under
-        ``src/eawf/tui_v2/`` or ``src/eawf/render/`` (per the D11
+        ``src/eawf/tui/`` or ``src/eawf/render/`` (per the D11
         heuristic). When the heuristic fires the wave MUST carry either
         a non-None ``mockup`` block OR a non-empty
         ``mockup_waiver_reason`` string. The check delegates to

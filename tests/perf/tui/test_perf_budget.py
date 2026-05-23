@@ -1,4 +1,4 @@
-"""Performance-budget CI gate for the C06 ``tui_v2`` operator surface.
+"""Performance-budget CI gate for the C06 ``tui`` operator surface.
 
 The C06 brief Decision D16 fixes two operator-perceived budgets, measured
 through the Textual ``App.run_test()`` Pilot harness:
@@ -38,8 +38,8 @@ from time import perf_counter
 
 import pytest
 
-from eawf.tui_v2.app import EaApp
-from eawf.tui_v2.snapshot import capture_screen_text
+from eawf.tui.app import EaApp
+from eawf.tui.snapshot import capture_screen_text
 
 #: Aspirational operator budgets per C06 D16 — recorded for traceability;
 #: the live assertions use the harness-realistic ceilings below.
