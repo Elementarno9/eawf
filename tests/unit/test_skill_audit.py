@@ -115,6 +115,20 @@ def test_audit_no_wave_runs_zero_checks_and_stays_ok(state_dir: Path) -> None:
     assert body.findings == []
 
 
+def test_audit_no_wave_skips_auditor_dispatch(state_dir: Path) -> None:
+    """No resolvable wave → no auditor dispatch directive (not a malformed one).
+
+    When ``wave_id`` is absent the wave does not resolve, so the skill must
+    NOT emit an ``AuditorDispatch`` carrying the phase-scope URN fallback and
+    zero criteria — that would render a "spawn an auditor for urn:...:QR/P00
+    with 0 criteria" directive. The directive is omitted entirely instead.
+    """
+    skill = AuditSkill()
+    env = run_skill(skill, _ctx())
+    body = AuditBody.model_validate(cast(dict, env.body))
+    assert body.auditor_dispatch is None
+
+
 def test_audit_no_check_status_is_skipped_by_default(state_dir: Path) -> None:
     """W14 success criterion: no check returns ``skipped`` by default."""
     skill = AuditSkill()

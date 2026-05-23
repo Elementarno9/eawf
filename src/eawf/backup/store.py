@@ -51,7 +51,7 @@ NOTE_FILENAME: str = "note.txt"
 
 # Timestamp dir-name format: ISO-8601 UTC with ``:`` -> ``-`` for fs-safety.
 _TS_FORMAT: str = "%Y-%m-%dT%H-%M-%SZ"
-_TS_PATTERN: re.Pattern[str] = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z$")
+_TS_PATTERN: re.Pattern[str] = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\Z")
 
 # A pre-restore safety copy of the live state.json lands at the repo-root of
 # the per-repo backup dir, named so it sorts after the timestamp dirs.

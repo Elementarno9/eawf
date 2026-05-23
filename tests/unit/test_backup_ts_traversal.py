@@ -84,6 +84,20 @@ def test_get_snapshot_empty_raises(tmp_path: Path) -> None:
         store.get_snapshot("")
 
 
+def test_get_snapshot_trailing_newline_raises(tmp_path: Path) -> None:
+    """An otherwise-valid timestamp with a trailing newline is rejected.
+
+    The pattern anchors on ``\\Z`` (strict end-of-string), not ``$`` (which
+    matches before a trailing ``\\n``), so a ``--ts`` value that smuggles a
+    newline past the timestamp does not pass the guard.
+    """
+    store = _store(tmp_path)
+    ts = format_timestamp(datetime(2026, 5, 17, 12, 0, 0, tzinfo=UTC))
+
+    with pytest.raises(BackupError, match=r"invalid snapshot timestamp"):
+        store.get_snapshot(f"{ts}\n")
+
+
 def test_get_snapshot_error_message_quotes_bad_ts(tmp_path: Path) -> None:
     """The bad value is shown ``!r`` so the rejected input is visible."""
     store = _store(tmp_path)

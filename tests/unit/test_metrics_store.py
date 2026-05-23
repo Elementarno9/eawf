@@ -44,6 +44,7 @@ from eawf.telemetry.store import (
 )
 from eawf.telemetry.store.base import (
     SCHEMA_VERSION,
+    column_names,
     column_sql_type,
     render_create_table,
     render_ddl,
@@ -377,6 +378,37 @@ def test_duckdb_upsert_composite_pk_lists_all_key_columns() -> None:
     assert "ts = excluded.ts" not in sql
     # A non-key column is updated.
     assert "pre_tokens = excluded.pre_tokens" in sql
+
+
+def test_duckdb_upsert_all_pk_columns_emits_do_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When every column is part of the primary key, the upsert emits DO NOTHING.
+
+    With no non-key columns the ``DO UPDATE SET`` clause would be empty —
+    invalid SQL — so the dialect falls back to ``ON CONFLICT (...) DO NOTHING``.
+    No current ``TableSpec`` has an all-key shape, so the primary key for one
+    table is widened to all of its columns to exercise the defensive branch.
+    """
+    from eawf.telemetry.store import duckdb_store
+
+    all_cols = column_names(TelemetryCompaction)
+    monkeypatch.setitem(duckdb_store._PRIMARY_KEYS, "telemetry_compactions", all_cols)
+    store = _duckdb_store_with_recording_conn()
+    row = TelemetryCompaction(
+        session_id="s1",
+        ts=datetime(2026, 5, 22, 9, 0, tzinfo=UTC),
+        pre_tokens=1000,
+        trigger="auto",
+    )
+
+    store.upsert("telemetry_compactions", row)
+
+    sql, _ = store._conn.statements[-1]
+    assert sql.rstrip().endswith("DO NOTHING")
+    assert "DO UPDATE SET" not in sql
+    # The conflict target still lists every key column.
+    assert f"ON CONFLICT ({', '.join(all_cols)}) DO NOTHING" in sql
 
 
 def test_duckdb_round_trip_when_driver_present(tmp_path: Path) -> None:

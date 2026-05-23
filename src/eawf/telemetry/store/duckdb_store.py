@@ -91,10 +91,16 @@ class DuckDbMetricsStore(AbstractMetricsStore):
         values = [encode_value(getattr(row, col)) for col in cols]
         pk = _PRIMARY_KEYS[table]
         update_cols = [col for col in cols if col not in pk]
-        set_clause = ", ".join(f"{col} = excluded.{col}" for col in update_cols)
+        if update_cols:
+            set_clause = ", ".join(f"{col} = excluded.{col}" for col in update_cols)
+            conflict_action = f"DO UPDATE SET {set_clause}"
+        else:
+            # Every column is part of the primary key, so there is nothing to
+            # update on conflict — an empty ``DO UPDATE SET`` is invalid SQL.
+            conflict_action = "DO NOTHING"
         sql = (
             f"INSERT INTO {table} ({col_list}) VALUES ({value_list}) "
-            f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {set_clause}"
+            f"ON CONFLICT ({', '.join(pk)}) {conflict_action}"
         )
         self._execute(sql, values)
 

@@ -16,8 +16,10 @@ Two rebuild modes share one code path:
   :class:`~eawf.telemetry.models.TelemetryFileMeta` per source file and
   projects only the bytes past the recorded ``last_offset`` — the tail
   appended since the last scan — then advances the offset to the new
-  end-of-file. A file whose size is unchanged since the last scan
-  contributes nothing.
+  end-of-file. A file whose size AND mtime are both unchanged since the
+  last scan contributes nothing; a source that rotates / truncates and
+  then refills to the exact previous byte count is caught by the mtime
+  guard and re-scanned rather than skipped.
 
 The offset is a byte position into the source file, tracked per
 ``jsonl_path`` in the ``telemetry_file_meta`` table. Tail bytes are
@@ -166,6 +168,11 @@ class _FileMetaIndex:
         meta = self.by_path.get(path)
         return meta.last_offset if meta is not None else 0
 
+    def mtime_for(self, path: str) -> float | None:
+        """Return the recorded ``mtime`` for *path*, or ``None`` when unseen."""
+        meta = self.by_path.get(path)
+        return meta.mtime if meta is not None else None
+
 
 def rebuild(
     store: AbstractMetricsStore,
@@ -237,26 +244,37 @@ def _project_file(
       ``last_offset`` (a rotated or truncated source), the cursor is reset to
       ``0`` so the fresh content is re-projected from the start instead of
       being skipped forever.
-    * **Unchanged file** — when the file size matches the recorded cursor
-      exactly, nothing has changed since the last scan, so it is skipped
-      (the bounded-rebuild fast path).
+    * **Unchanged file** — when both the file size matches the recorded cursor
+      AND the mtime matches the recorded mtime, nothing has changed since the
+      last scan, so it is skipped (the bounded-rebuild fast path). A
+      size-only check would miss a source that rotates / truncates and then
+      refills to the exact previous byte count — the mtime guard forces a
+      re-scan of that content rather than dropping it.
     * **Fold-whole-file adapters** — only line-independent sources may
       tail-slice; fold-whole-file adapters force a full re-read so a partial
       tail never truncates the session row keyed on the whole file.
     """
-    size = path.stat().st_size
-    if mode is RebuildMode.INCREMENTAL and index.offset_for(str(path)) == size:
-        # An unchanged file (cursor already at end-of-file) contributes
-        # nothing on a re-scan. A shrunk file falls through to the rotation
-        # reset below; a grown file falls through to the tail / full re-read.
+    stat = path.stat()
+    size = stat.st_size
+    if (
+        mode is RebuildMode.INCREMENTAL
+        and index.offset_for(str(path)) == size
+        and index.mtime_for(str(path)) == stat.st_mtime
+    ):
+        # An unchanged file (cursor at end-of-file AND mtime unchanged)
+        # contributes nothing on a re-scan. A size or mtime mismatch falls
+        # through: a shrunk file hits the rotation reset below, a grown or
+        # refilled file falls through to the tail / full re-read.
         report.files_skipped += 1
         return
 
-    start_offset = _start_offset_for(spec.source, path, size=size, mode=mode, index=index)
+    start_offset = _start_offset_for(
+        spec.source, path, size=size, mtime=stat.st_mtime, mode=mode, index=index
+    )
     report.files_scanned += 1
     for row in _iter_rows_from(spec.source, path, start_offset=start_offset):
         _upsert_row_safe(store, spec, row, path, report)
-    _stamp_file_meta(store, path, size=size, index=index)
+    _stamp_file_meta(store, path, size=size, mtime=stat.st_mtime, index=index)
 
 
 def _start_offset_for(
@@ -264,17 +282,22 @@ def _start_offset_for(
     path: Path,
     *,
     size: int,
+    mtime: float,
     mode: RebuildMode,
     index: _FileMetaIndex,
 ) -> int:
     """Resolve the byte offset to start projecting *path* from.
 
     A FULL rebuild always starts at ``0``. In incremental mode the recorded
-    ``last_offset`` is honoured unless one of two conditions forces a full
+    ``last_offset`` is honoured unless one of three conditions forces a full
     re-read from ``0``:
 
     * the file has shrunk below the recorded offset — a rotated or truncated
-      source whose old cursor now points past end-of-file; or
+      source whose old cursor now points past end-of-file;
+    * the file is the same size as the recorded offset (cursor at EOF) but its
+      mtime changed — an in-place rewrite / rotation that refilled to the exact
+      previous byte count, so honouring the stale offset would tail-slice
+      nothing and silently drop the fresh content; or
     * the source folds the whole file into one row rather than emitting one
       row per line, so a tail slice would re-parse a partial fragment and
       overwrite the complete row with a truncated one.
@@ -284,6 +307,7 @@ def _start_offset_for(
             tail-slicing is safe).
         path: The source file being projected.
         size: The current file size in bytes.
+        mtime: The current file modification time.
         mode: The rebuild mode.
         index: The in-memory file-meta cursor cache.
 
@@ -293,7 +317,9 @@ def _start_offset_for(
     if mode is RebuildMode.FULL:
         return 0
     recorded = index.offset_for(str(path))
-    if recorded > size:
+    recorded_mtime = index.mtime_for(str(path))
+    rewritten_at_eof = recorded == size and recorded_mtime is not None and recorded_mtime != mtime
+    if recorded > size or rewritten_at_eof:
         logger.info(
             f"_start_offset_for source={source.source_name} path={str(path)!r} "
             f"recorded={recorded} size={size} reset offset rotated source"
@@ -415,13 +441,18 @@ def _stamp_file_meta(
     path: Path,
     *,
     size: int,
+    mtime: float,
     index: _FileMetaIndex,
 ) -> None:
-    """Advance the ``telemetry_file_meta`` cursor for *path* to end-of-file."""
-    stat = path.stat()
+    """Advance the ``telemetry_file_meta`` cursor for *path* to end-of-file.
+
+    The recorded ``size`` + ``mtime`` are the same values the scan decision in
+    :func:`_project_file` read, so the next incremental skip gate compares
+    against a snapshot consistent with the bytes just projected.
+    """
     meta = TelemetryFileMeta(
         jsonl_path=str(path),
-        mtime=stat.st_mtime,
+        mtime=mtime,
         size=size,
         last_offset=size,
         last_scan_ts=datetime.now(tz=UTC),

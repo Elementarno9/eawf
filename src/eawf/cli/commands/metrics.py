@@ -205,12 +205,13 @@ def _backfill_actuals(flags: GlobalFlags, *, dry_run: bool) -> None:
     """Attach retroactive actuals to historical CLOSED waves (idempotent).
 
     Threads the pure :func:`eawf.migrations.backfill_actuals.backfill_actuals`
-    transform through the canonical writer: the mutation runs inside
-    :func:`eawf.cli._mutation.state_transaction`, which routes to the daemon
-    (or the WAL-safe portalock fallback) per AGENTS rule 4. The verb operates
-    on ``state.json`` waves only — it never opens or touches the telemetry
-    cache (``telemetry.db``), so it works regardless of ``telemetry.enabled``.
-    Idempotent: a second run derives no new actuals and reports ``0``.
+    transform through the writer: the mutation runs inside
+    :func:`eawf.cli._mutation.state_transaction`, which holds
+    ``portalock(state.json)`` across the load + mutate + validate + write
+    cycle. The verb operates on ``state.json`` waves only — it never opens or
+    touches the telemetry cache (``telemetry.db``), so it works regardless of
+    ``telemetry.enabled``. Idempotent: a second run derives no new actuals and
+    reports ``0``.
 
     With ``dry_run`` the count is computed against an in-memory snapshot and
     nothing is persisted (no lock, no write).

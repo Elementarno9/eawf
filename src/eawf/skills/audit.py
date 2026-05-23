@@ -357,23 +357,32 @@ class AuditSkill(Skill):
 
         # Step 7 — dispatch a fresh-context auditor. The skill emits the
         # directive; the runtime spawns the thread so no parent context
-        # leaks into the auditor.
-        criteria = list(wave.success_criteria) if wave else []
-        auditor_dispatch = AuditorDispatch(
-            wave_id=wave_id,
-            diff_base=diff_base,
-            criteria=criteria,
-            instruction=_auditor_instruction(wave_id, diff_base, criteria),
-        )
+        # leaks into the auditor. The directive is emitted only when a wave
+        # actually resolves: without one, ``wave_id`` is the phase-scope URN
+        # fallback and the criteria are empty, which would render a malformed
+        # "spawn an auditor for urn:...:QR/P00 with 0 criteria" directive.
+        if wave is not None:
+            criteria = list(wave.success_criteria)
+            auditor_dispatch: AuditorDispatch | None = AuditorDispatch(
+                wave_id=wave_id,
+                diff_base=diff_base,
+                criteria=criteria,
+                instruction=_auditor_instruction(wave_id, diff_base, criteria),
+            )
+            dispatch_summary = f"audit: dispatch fresh-context auditor for {wave_id}"
+        else:
+            criteria = []
+            auditor_dispatch = None
+            dispatch_summary = "audit: no wave resolved -- auditor dispatch skipped"
         evt_id = emit_event(
             state_path=state_path,
             scope_id=scope_id,
             event_type="audit.dispatch_auditor",
-            summary=f"audit: dispatch fresh-context auditor for {wave_id}",
+            summary=dispatch_summary,
             payload={
                 "wave_id": wave_id,
                 "diff_base": diff_base,
-                "session_policy": auditor_dispatch.session_policy,
+                "dispatched": auditor_dispatch is not None,
                 "criterion_count": len(criteria),
             },
         )

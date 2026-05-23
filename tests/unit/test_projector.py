@@ -19,6 +19,7 @@ is driven through a synthetic per-runtime adapter.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -530,6 +531,61 @@ def test_incremental_reprojects_truncated_to_empty_then_regrown(tmp_path: Path) 
     assert report.incidents == 1
     assert report.files_scanned == 1
     assert "EV-7" in {i.incident_id for i in _incidents(store)}
+    store.close()
+
+
+def test_incremental_reprojects_same_size_refill_via_mtime(tmp_path: Path) -> None:
+    # A source that rotates / truncates and then refills to the EXACT previous
+    # byte count must NOT be treated as unchanged: the size-only skip gate would
+    # drop the fresh content, so the mtime guard forces a re-scan. The two
+    # equal-length env-ids below produce byte-identical file sizes; only the
+    # mtime distinguishes the old projection from the refilled content.
+    path = tmp_path / "events.jsonl"
+    _write_event_file(path, ["EV-1", "EV-2"])
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_EventFileSource(), root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+    size_before = path.stat().st_size
+    recorded_mtime = _file_meta(store, path).mtime
+    assert _incident_count(store) == 2
+
+    # Refill with two NEW rows of the same total length, then bump the mtime
+    # past the recorded one (the size is unchanged on purpose).
+    _write_event_file(path, ["EV-7", "EV-8"])
+    assert path.stat().st_size == size_before
+    os.utime(path, (recorded_mtime + 10.0, recorded_mtime + 10.0))
+
+    report = rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+
+    # The mtime mismatch forced a re-scan (not a skip), so the fresh rows landed.
+    assert report.files_scanned == 1
+    assert report.files_skipped == 0
+    ids = {i.incident_id for i in _incidents(store)}
+    assert {"EV-7", "EV-8"} <= ids
+    store.close()
+
+
+def test_incremental_skips_when_size_and_mtime_both_unchanged(tmp_path: Path) -> None:
+    # The dual of the refill test: when BOTH size and mtime are unchanged the
+    # fast-path skip still fires (the mtime guard does not over-trigger).
+    path = tmp_path / "events.jsonl"
+    _write_event_file(path, ["EV-1", "EV-2"])
+    store = _open_store(tmp_path)
+    spec = SourceSpec(source=_EventFileSource(), root=tmp_path, project_id="p1")
+
+    rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+    recorded_mtime = _file_meta(store, path).mtime
+    # Pin the on-disk mtime to exactly the recorded value so the gate compares
+    # equal even if the first scan's stat rounded differently.
+    os.utime(path, (recorded_mtime, recorded_mtime))
+
+    second = rebuild(store, [spec], mode=RebuildMode.INCREMENTAL)
+
+    assert second.files_scanned == 0
+    assert second.files_skipped == 1
+    assert second.incidents == 0
+    assert _incident_count(store) == 2
     store.close()
 
 
