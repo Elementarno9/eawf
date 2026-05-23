@@ -291,8 +291,9 @@ def test_validate_composed_default_enables_core(repo_root: Path) -> None:
     # Built-in default has profiles.enabled == ["core"].
     assert body["enabled_profiles"] == ["core"]
     assert body["composed"]["name"] == "core"
-    # All 12 profile ids surface in the available list (P14-W11 adds a11y).
-    assert len(body["available_profiles"]) == 12
+    # All 13 profile ids surface in the available list (P14-W11 adds a11y;
+    # P27-I03-W02 adds the opt-in quality code-craft profile).
+    assert len(body["available_profiles"]) == 13
 
 
 def test_validate_composed_with_three_profiles(repo_root: Path) -> None:

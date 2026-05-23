@@ -3,7 +3,7 @@
 The contracts under test:
 
 - ``load_profile("core")`` returns a fully-validated :class:`ProfileBody`.
-- ``list_profiles()`` enumerates every YAML stem under ``data/`` (11 ids).
+- ``list_profiles()`` enumerates every YAML stem under ``data/`` (13 ids).
 - Unknown ids raise :class:`InvalidInput`.
 - Malformed YAML / schema mismatches raise :class:`ValidationFailed`.
 - Required state keys for ``research`` round-trip via the loader.
@@ -26,15 +26,16 @@ _EXPECTED_PROFILES: tuple[str, ...] = (
     "ml",
     "python",
     "quant",
+    "quality",
     "re",
     "research",
     "robotics",
 )
 
 
-def test_loader_lists_all_twelve_profiles() -> None:
+def test_loader_lists_all_thirteen_profiles() -> None:
     profiles = list_profiles()
-    assert len(profiles) == 12
+    assert len(profiles) == 13
     expected = (*_EXPECTED_PROFILES, "a11y")
     assert tuple(sorted(profiles)) == tuple(sorted(expected))
 
