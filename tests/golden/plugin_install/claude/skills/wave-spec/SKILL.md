@@ -25,6 +25,12 @@ disable-model-invocation: true
 - [ ] A Mockup-waiver reason is supplied for non-UI waves that skip the
       ASCII mockup.
 
+## Decision surfaces
+
+A missing `wave_id` degrades to `status=needs_user`, which routes the
+operator to an `AskUserQuestion` prompt for the target wave rather than
+scaffolding against an unresolved id.
+
 ## Output contract
 
 Skill envelope with `header.skill = "/wave-spec"`. Body carries verb,

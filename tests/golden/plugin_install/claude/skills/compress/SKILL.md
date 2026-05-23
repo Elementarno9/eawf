@@ -29,6 +29,13 @@ cache-control hook; the skill records the requested compression.
 - [ ] `tokens_before` is present and > 0.
 - [ ] The target runtime is a known runtime id.
 
+## Decision surfaces
+
+A missing/zero `tokens_before` or an unknown `runtime` degrades to
+`status=needs_user`, which routes the operator to an `AskUserQuestion`
+prompt for the missing input rather than emitting a compression event
+against an unresolved runtime.
+
 ## Output contract
 
 Skill envelope with `header.skill = "/compress"`. Body carries

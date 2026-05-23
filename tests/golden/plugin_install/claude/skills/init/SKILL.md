@@ -19,6 +19,12 @@ disable-model-invocation: true
 - [ ] Working tree is clean before the first init.
 - [ ] Profile composition is declared.
 
+## Decision surfaces
+
+When the wizard pauses on an unanswered question, the `status=needs_user`
+envelope routes the operator to an `AskUserQuestion` prompt for the
+missing field rather than guessing a default.
+
 ## Output contract
 
 Skill envelope wrapping the wizard outcome. `status=needs_user` when

@@ -24,6 +24,12 @@ disable-model-invocation: true
 - [ ] The skill records intent only — the daemon owns the store write.
 - [ ] `save` / `forget` carry a memory entry name.
 
+## Decision surfaces
+
+A named verb (`save` / `forget`) without a `name` degrades to
+`status=needs_user`, which routes the operator to an `AskUserQuestion`
+prompt for the missing entry name rather than inventing one.
+
 ## Output contract
 
 Skill envelope with `header.skill = "/memory"`. Body carries verb, name,

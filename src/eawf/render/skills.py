@@ -447,6 +447,12 @@ _INIT_BODY = """# /init
 - [ ] Working tree is clean before the first init.
 - [ ] Profile composition is declared.
 
+## Decision surfaces
+
+When the wizard pauses on an unanswered question, the `status=needs_user`
+envelope routes the operator to an `AskUserQuestion` prompt for the
+missing field rather than guessing a default.
+
 ## Output contract
 
 Skill envelope wrapping the wizard outcome. `status=needs_user` when
@@ -635,6 +641,12 @@ _MEMORY_BODY = """# /memory
 - [ ] The skill records intent only — the daemon owns the store write.
 - [ ] `save` / `forget` carry a memory entry name.
 
+## Decision surfaces
+
+A named verb (`save` / `forget`) without a `name` degrades to
+`status=needs_user`, which routes the operator to an `AskUserQuestion`
+prompt for the missing entry name rather than inventing one.
+
 ## Output contract
 
 Skill envelope with `header.skill = "/memory"`. Body carries verb, name,
@@ -660,6 +672,13 @@ _AGENT_DISPATCH_BODY = """# /agent-dispatch
 
 - [ ] The wave is claimed before dispatch.
 - [ ] The runtime ladder reflects how the planner sized the wave.
+
+## Decision surfaces
+
+A missing `wave_id` degrades to `status=needs_user`. When no runtime in
+the ladder resolves, the soft `status=partial` routes the operator to an
+`AskUserQuestion` prompt to pin a runtime preference rather than silently
+falling through to the daemon default.
 
 ## Output contract
 
@@ -690,6 +709,13 @@ cache-control hook; the skill records the requested compression.
 - [ ] `tokens_before` is present and > 0.
 - [ ] The target runtime is a known runtime id.
 
+## Decision surfaces
+
+A missing/zero `tokens_before` or an unknown `runtime` degrades to
+`status=needs_user`, which routes the operator to an `AskUserQuestion`
+prompt for the missing input rather than emitting a compression event
+against an unresolved runtime.
+
 ## Output contract
 
 Skill envelope with `header.skill = "/compress"`. Body carries
@@ -714,6 +740,12 @@ _WAVE_SPEC_BODY = """# /wave-spec
 - [ ] The wave exists before `init` / `validate`.
 - [ ] A Mockup-waiver reason is supplied for non-UI waves that skip the
       ASCII mockup.
+
+## Decision surfaces
+
+A missing `wave_id` degrades to `status=needs_user`, which routes the
+operator to an `AskUserQuestion` prompt for the target wave rather than
+scaffolding against an unresolved id.
 
 ## Output contract
 
@@ -741,6 +773,12 @@ a required gate for `phase close`.
 
 - [ ] `spec_path` points at a readable declarative audit spec.
 - [ ] The scope under review is closed.
+
+## Decision surfaces
+
+A missing or unreadable `spec_path` degrades to `status=needs_user`,
+which routes the operator to an `AskUserQuestion` prompt for the audit
+spec rather than running an empty check set.
 
 ## Output contract
 

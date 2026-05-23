@@ -26,6 +26,13 @@ disable-model-invocation: true
 - [ ] The wave is claimed before dispatch.
 - [ ] The runtime ladder reflects how the planner sized the wave.
 
+## Decision surfaces
+
+A missing `wave_id` degrades to `status=needs_user`. When no runtime in
+the ladder resolves, the soft `status=partial` routes the operator to an
+`AskUserQuestion` prompt to pin a runtime preference rather than silently
+falling through to the daemon default.
+
 ## Output contract
 
 Skill envelope with `header.skill = "/agent-dispatch"`. Body carries
