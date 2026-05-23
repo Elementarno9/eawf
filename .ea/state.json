@@ -2829,6 +2829,16 @@
       "scope_id": "P27-I02-W40",
       "status": "done",
       "updated_at": "2026-05-23T15:08:58.452996Z"
+    },
+    "P27-I03-W27": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I03-W27-close-20260523T153957Z",
+      "elapsed_eu": 0.05,
+      "id": "ACT-P27-I03-W27",
+      "scope_id": "P27-I03-W27",
+      "status": "done",
+      "updated_at": "2026-05-23T15:39:57.213565Z"
     }
   },
   "agent_sessions": {
@@ -5180,6 +5190,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I02-W40",
       "updated_at": "2026-05-23T15:08:28.939046Z"
+    },
+    "P27-I03-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I03-W27-bucket-20260523T153840Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I03-W27",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I03-W27",
+      "updated_at": "2026-05-23T15:38:40.737567Z"
     }
   },
   "goals": {
@@ -5914,9 +5937,32 @@
         "P27-I03-W21",
         "P27-I03-W22",
         "P27-I03-W23",
-        "P27-I03-W24",
-        "P27-I03-W25",
-        "P27-I03-W26"
+        "P27-I03-W27"
+      ]
+    },
+    "P27-I04": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P27-I04",
+      "opened_at": "2026-05-23T15:40:28.164443Z",
+      "phase_id": "P27",
+      "status": "planned",
+      "title": "P27-I04: TUI richer views (braille bars, status pane, repo tables)",
+      "wave_ids": [
+        "P27-I04-W01",
+        "P27-I04-W02",
+        "P27-I04-W03",
+        "P27-I04-W04",
+        "P27-I04-W05",
+        "P27-I04-W06",
+        "P27-I04-W07",
+        "P27-I04-W08",
+        "P27-I04-W09",
+        "P27-I04-W10",
+        "P27-I04-W11",
+        "P27-I04-W12"
       ]
     }
   },
@@ -6421,7 +6467,8 @@
       "iter_ids": [
         "P27-I01",
         "P27-I02",
-        "P27-I03"
+        "P27-I03",
+        "P27-I04"
       ],
       "opened_at": "2026-05-18T19:45:11.534597Z",
       "outcome_ids": [],
@@ -6469,7 +6516,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T15:09:42.675037Z",
+  "updated_at": "2026-05-23T15:42:21.910852Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -17544,10 +17591,40 @@
       "tokens_consumed": 0,
       "worktree_id": null
     },
-    "P27-I03-W24": {
+    "P27-I03-W27": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "ops-p27-i03-w27",
+      "closed_at": "2026-05-23T15:39:57.213565Z",
+      "commit": "e877b154fd83063d3710f4eaa2f5ff687c05f83b",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/lifecycle_iter.py",
+        "tests/integration/test_cli_lifecycle.py"
+      ],
+      "id": "P27-I03-W27",
+      "iter_id": "P27-I03",
+      "opened_at": "2026-05-23T15:38:34.603715Z",
+      "outcome": "eawf iter plan verb added + 5 tests; stages PLANNED iter without moving current pointer",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "eawf iter plan <iter-id> --title stages a PLANNED iter without moving current.iter_id; mirrors iter activate; iter activate later flips it ACTIVE"
+      ],
+      "title": "Add 'eawf iter plan' CLI verb (stage PLANNED iter)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W01": {
       "agent_role": "executor",
       "blocks": [
-        "P27-I03-W25"
+        "P27-I04-W03",
+        "P27-I04-W05"
       ],
       "claim_session_id": null,
       "closed_at": null,
@@ -17557,34 +17634,340 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/cli/commands/evidence_incident.py",
-        "pyproject.toml"
+        "src/eawf/daemon/dispatch_runner.py",
+        "src/eawf/state/models.py",
+        "tests/daemon/test_dispatch_cost_accrual.py"
       ],
-      "id": "P27-I03-W24",
-      "iter_id": "P27-I03",
-      "opened_at": "2026-05-22T19:57:15.543434Z",
+      "id": "P27-I04-W01",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:27.795278Z",
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
       "success_criteria": [
-        "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; W27 wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
+        "daemon increments Wave.tokens_consumed on each dispatch_cost C09 event and triggers a STATE_REVISION so live burn gauges advance during execution; new test tests/daemon/test_dispatch_cost_accrual.py asserts tokens_consumed increments live"
+      ],
+      "title": "Live token accrual: dispatch_cost -> tokens_consumed (daemon)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W03",
+        "P27-I04-W04",
+        "P27-I04-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/eu_bar.py",
+        "src/eawf/tui_v2/app.py",
+        "tests/tui_v2/test_widgets_eu_bar.py"
+      ],
+      "id": "P27-I04-W02",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:28.247814Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eu_bar.render_bar_braille fills via U+2800-U+28FF at 2x horizontal sub-resolution and is status-tinted; EaApp.render_mode flips braille<->ascii on FONT_NO_BRAILLE or ui.glyphs and every bar renderer honours the flip"
+      ],
+      "title": "Braille bar renderer + render_mode ASCII fallback",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W01",
+        "P27-I04-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/roadmap_tree.py",
+        "tests/tui_v2/test_widgets_roadmap_tree.py"
+      ],
+      "id": "P27-I04-W03",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:28.698388Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "roadmap_tree pins iter/phase bars flush-right with a blank gap and ellipsizes the title on collision; wave rows render a tokens_consumed/token_budget braille burn bar status-tinted with EMPTY_STATE when no budget"
+      ],
+      "title": "Roadmap flush-right bar pin + wave-row token-burn bar",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/status_pane.py",
+        "tests/tui_v2/test_widgets_status_pane.py"
+      ],
+      "id": "P27-I04-W04",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:29.145923Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "status_pane renders grouped LIFECYCLE/EFFORT/GATES sections; EFFORT shows consumed/estimate EU + signed variance % + EU/day velocity sparkline + ETA; GATES shows live audit_check_* N/M progress"
+      ],
+      "title": "Grouped status pane: LIFECYCLE/EFFORT/GATES + velocity + ETA",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W01",
+        "P27-I04-W04"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/widgets/status_pane.py",
+        "src/eawf/tui_v2/widgets/heartbeat.py",
+        "tests/tui_v2/test_widgets_status_pane.py"
+      ],
+      "id": "P27-I04-W05",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:29.590996Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "status_pane DISPATCH band renders NOW/NEXT/WAIT from a pure build_dispatch_slice (NEXT capped to planning.max_parallel_waves); NOW rows show agent role + a Heartbeat-reuse pulsing dot driven by TICK_PULSE"
+      ],
+      "title": "DISPATCH band (NOW/NEXT/WAIT) + pulsing dot",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/tui_v2/scopes/workspace.py",
+        "src/eawf/tui_v2/widgets/workspace_table.py",
+        "tests/tui_v2/test_scope_workspace.py"
+      ],
+      "id": "P27-I04-W06",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:30.030761Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "workspace scope renders a per-repo DataTable with >=1 row even at N=1; Enter or z zooms the focused repo into a 2x2 quadrant and Esc returns; git columns refresh on TICK_REFRESH and dim on GIT_UNAVAILABLE"
+      ],
+      "title": "Workspace per-repo DataTable + zoom-on-Enter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/scopes/user.py",
+        "tests/tui_v2/test_scope_user.py"
+      ],
+      "id": "P27-I04-W07",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:30.490917Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "user scope renders a portfolio DataTable reusing the workspace table widget family; rows scroll without breaking column widths at large N"
+      ],
+      "title": "User portfolio DataTable",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/toast_emitter.py",
+        "src/eawf/config/registry.py",
+        "tests/tui_v2/test_toast_emitter.py"
+      ],
+      "id": "P27-I04-W08",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:30.941111Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ToastEmitter diffs consecutive State snapshots and emits ambient focus-preserving toasts (wave close / audit verdict / needs-user); first-load and daemon-reconnect flood guards hold; ui.toasts off/important/all gates verbosity"
+      ],
+      "title": "Toast emitter + ui.toasts config key",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W08"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui_v2/screens/overlays/config_modal.py",
+        "src/eawf/config/registry.py",
+        "tests/tui_v2/test_overlays_config_modal.py"
+      ],
+      "id": "P27-I04-W09",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:31.380023Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "config modal surfaces previously-hidden leaf keys (ui.glyphs; ui.dashboard_panes; estimation.display.*; telemetry.*; daemon.*) plus the new ui.toasts via curated CONFIG_REGISTRY rows; no full-catalog browser"
+      ],
+      "title": "Config pane: surface hidden leaf keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W03",
+        "P27-I04-W05",
+        "P27-I04-W07",
+        "P27-I04-W09"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/evidence_incident.py",
+        "pyproject.toml"
+      ],
+      "id": "P27-I04-W10",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:31.828637Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
       ],
       "title": "Deviation cleanup + wheel recalibration",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
-    "P27-I03-W25": {
+    "P27-I04-W11": {
       "agent_role": "executor",
       "blocks": [
-        "P27-I03-W26"
+        "P27-I04-W12"
       ],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
       "deps": [
-        "P27-I03-W24"
+        "P27-I04-W10"
       ],
       "description": null,
       "dispatch_history": [],
@@ -17592,29 +17975,29 @@
       "file_scopes": [
         "src/eawf/_version.py"
       ],
-      "id": "P27-I03-W25",
-      "iter_id": "P27-I03",
-      "opened_at": "2026-05-22T19:57:15.918794Z",
+      "id": "P27-I04-W11",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:32.271297Z",
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
       "success_criteria": [
-        "eawf --version and the wheel METADATA report 0.3.0; the bump rides P27 phase close after every I02 and I03 functional wave is CLOSED (enforced by phase-close timing not explicit deps)"
+        "eawf --version and the wheel METADATA report 0.3.0; the bump rides P27 phase close after every I02 / I03 / I04 functional wave is CLOSED (enforced by phase-close timing not explicit deps)"
       ],
       "title": "Version bump 0.2.0 -> 0.3.0",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
     },
-    "P27-I03-W26": {
+    "P27-I04-W12": {
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
       "deps": [
-        "P27-I03-W25"
+        "P27-I04-W11"
       ],
       "description": null,
       "dispatch_history": [],
@@ -17623,9 +18006,9 @@
         "src/eawf/cli/commands/release.py",
         ".github/workflows/release.yaml"
       ],
-      "id": "P27-I03-W26",
-      "iter_id": "P27-I03",
-      "opened_at": "2026-05-22T19:57:16.303018Z",
+      "id": "P27-I04-W12",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-23T15:41:32.719717Z",
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
