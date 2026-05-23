@@ -30,8 +30,9 @@ import pytest
 from eawf.dispatch import render_dispatch_envelope, render_wave_prompt
 from eawf.dispatch.renderer import DispatchEnvelope
 from eawf.lifecycle.transitions import open_iter, open_phase, plan_wave
+from eawf.sandbox.policy import SandboxPolicy
 from eawf.state.enums import McpRisk, McpStatus, ProjectStatus, ScopeKind
-from eawf.state.models import CurrentPointers, McpServer, Project, State
+from eawf.state.models import CurrentPointers, McpGrant, McpServer, Project, State
 
 # ---- Builders ---------------------------------------------------------------
 
@@ -92,6 +93,34 @@ def _mcp_server(server_id: str, *, command: str = "mcp-stdio-bin") -> McpServer:
         write_capable=False,
         status=McpStatus.CONFIGURED,
         installed_targets=[],
+    )
+
+
+def _wave_grant(grant_id: str, *, server_id: str, wave_id: str = "P01-I01-W01") -> McpGrant:
+    """Construct a wave-scoped :class:`McpGrant` for *server_id*."""
+    return McpGrant(
+        id=grant_id,
+        scope_kind="wave",
+        scope_id=wave_id,
+        server_id=server_id,
+        granted_at=datetime.now(UTC),
+    )
+
+
+def _deny_policy(
+    policy_id: str,
+    *,
+    scope_kind: str,
+    scope_id: str,
+    denied: list[str],
+) -> SandboxPolicy:
+    """Construct a :class:`SandboxPolicy` with a deny-list for enforcement tests."""
+    return SandboxPolicy(
+        id=policy_id,
+        scope_kind=scope_kind,  # type: ignore[arg-type]
+        scope_id=scope_id,
+        denied_tools=denied,
+        granted_at=datetime.now(UTC),
     )
 
 
@@ -284,3 +313,139 @@ def test_render_dispatch_envelope_is_pure_no_state_mutation() -> None:
     render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
     render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
     assert state.mcp_servers is before
+
+
+# ---- SandboxPolicy deny enforcement (W21) -----------------------------------
+
+
+def test_render_dispatch_envelope_wave_deny_removes_projected_tool() -> None:
+    """A wave-scoped deny intersects its tool out — the wave cannot dispatch it.
+
+    The grant projects ``mcp__alpha__*``; a wave-scoped sandbox policy
+    that denies that exact tool must knock it out of ``allowed_tools``, so
+    the dispatched envelope never carries the denied tool.
+    """
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha")}
+    state.mcp_grants = {"GRANT-1": _wave_grant("GRANT-1", server_id="alpha")}
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="wave",
+            scope_id="P01-I01-W01",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
+    assert envelope.allowed_tools == []
+
+
+def test_render_dispatch_envelope_global_deny_removes_projected_tool() -> None:
+    """A global deny applies to every wave and removes the projected tool."""
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha")}
+    state.mcp_grants = {"GRANT-1": _wave_grant("GRANT-1", server_id="alpha")}
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="global",
+            scope_id="global",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
+    assert envelope.allowed_tools == []
+
+
+def test_render_dispatch_envelope_deny_keeps_non_denied_tools() -> None:
+    """Deny only removes the named tool — sibling grants stay in allowed_tools."""
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha"), "beta": _mcp_server("beta")}
+    state.mcp_grants = {
+        "GRANT-1": _wave_grant("GRANT-1", server_id="alpha"),
+        "GRANT-2": _wave_grant("GRANT-2", server_id="beta"),
+    }
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="wave",
+            scope_id="P01-I01-W01",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
+    assert envelope.allowed_tools == ["mcp__beta__*"]
+
+
+def test_render_dispatch_envelope_deny_for_other_wave_does_not_apply() -> None:
+    """A deny scoped at a different wave leaves this wave's tools intact."""
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha")}
+    state.mcp_grants = {"GRANT-1": _wave_grant("GRANT-1", server_id="alpha")}
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="wave",
+            scope_id="P01-I01-W02",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
+    assert envelope.allowed_tools == ["mcp__alpha__*"]
+
+
+def test_render_dispatch_envelope_profile_deny_does_not_apply_to_wave() -> None:
+    """Profile-scoped deny is not resolved on the wave-dispatch path."""
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha")}
+    state.mcp_grants = {"GRANT-1": _wave_grant("GRANT-1", server_id="alpha")}
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="profile",
+            scope_id="research",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
+    assert envelope.allowed_tools == ["mcp__alpha__*"]
+
+
+def test_render_dispatch_envelope_deny_with_no_grants_is_noop() -> None:
+    """Deny with nothing to remove yields an empty allow-list (boundary)."""
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha")}
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="wave",
+            scope_id="P01-I01-W01",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-agent-sdk")
+    assert envelope.allowed_tools == []
+
+
+def test_render_dispatch_envelope_claude_code_ignores_deny_policy() -> None:
+    """Deny enforcement does not touch the claude-code branch (always empty)."""
+    state = _empty_state()
+    _seed_single_wave(state)
+    state.mcp_servers = {"alpha": _mcp_server("alpha")}
+    state.mcp_grants = {"GRANT-1": _wave_grant("GRANT-1", server_id="alpha")}
+    state.sandbox_policies = {
+        "POL-1": _deny_policy(
+            "POL-1",
+            scope_kind="wave",
+            scope_id="P01-I01-W01",
+            denied=["mcp__alpha__*"],
+        ),
+    }
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
+    assert envelope.allowed_tools == []

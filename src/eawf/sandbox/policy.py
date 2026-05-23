@@ -1,10 +1,10 @@
 """Sandbox / permission policy table.
 
 A :class:`SandboxPolicy` declares the tool-allow / tool-deny shape an agent
-session may use under a given scope (wave, profile, or global). In v0.2 the
-table is populated and queryable; enforcement (hard refusal at dispatch
-time) lands in a follow-up wave — the renderer surfaces the allowed-tool
-list in the envelope hint only.
+session may use under a given scope (wave, profile, or global). The table
+is populated and queryable, and :func:`resolve_denied_tools` resolves the
+deny set the dispatcher subtracts from the rendered ``allowed_tools``
+projection so a wave with a denied tool cannot dispatch it.
 
 Layout mirrors :class:`~eawf.state.models.McpGrant`:
 
@@ -67,9 +67,48 @@ def allocate_policy_id(existing: dict[str, SandboxPolicy] | None) -> str:
     return f"{_POLICY_ID_PREFIX}{next_n}"
 
 
+def resolve_denied_tools(
+    policies: dict[str, SandboxPolicy] | None,
+    *,
+    wave_id: str,
+) -> set[str]:
+    """Return the set of tool names denied for *wave_id* by the policy table.
+
+    A policy applies to *wave_id* when it is wave-scoped at that exact wave
+    (``scope_kind == "wave"`` and ``scope_id == wave_id``) or global
+    (``scope_kind == "global"`` — global denials cover every wave). The
+    returned set is the union of those policies' ``denied_tools``.
+
+    Profile-scoped policies are not resolved here: the dispatcher does not
+    yet know the dispatched wave's profile, so profile deny-lists stay out
+    of the wave-dispatch projection (the same scoping ladder the grant
+    projection in :func:`eawf.dispatch.renderer._project_allowed_tools`
+    uses for wave-scoped grants).
+
+    Args:
+        policies: The ``state.sandbox_policies`` map, or ``None`` when no
+            policies are registered.
+        wave_id: The dispatched wave id.
+
+    Returns:
+        The union of denied tool names that apply to *wave_id*. Empty when
+        *policies* is ``None``/empty or no policy targets the wave.
+    """
+    pool = policies or {}
+    denied: set[str] = set()
+    for policy in pool.values():
+        applies = (policy.scope_kind == "wave" and policy.scope_id == wave_id) or (
+            policy.scope_kind == "global"
+        )
+        if applies:
+            denied.update(policy.denied_tools)
+    return denied
+
+
 __all__ = [
     "SANDBOX_SCOPE_KINDS",
     "SandboxPolicy",
     "SandboxPolicyScopeKind",
     "allocate_policy_id",
+    "resolve_denied_tools",
 ]
