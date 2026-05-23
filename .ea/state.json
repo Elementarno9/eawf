@@ -1,5 +1,2655 @@
 {
   "actuals": {
+    "P08-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P08-I01-W01-close-20260510T222929Z",
+      "elapsed_eu": 1.42,
+      "id": "ACT-P08-I01-W01",
+      "scope_id": "P08-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-10T22:29:29.132215Z"
+    },
+    "P08-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P08-I01-W02-close-20260510T221308Z",
+      "elapsed_eu": 0.88,
+      "id": "ACT-P08-I01-W02",
+      "scope_id": "P08-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-10T22:13:08.058437Z"
+    },
+    "P08-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P08-I01-W03-close-20260510T222929Z",
+      "elapsed_eu": 1.43,
+      "id": "ACT-P08-I01-W03",
+      "scope_id": "P08-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-10T22:29:29.549660Z"
+    },
+    "P08-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P08-I01-W04-close-20260510T221308Z",
+      "elapsed_eu": 0.88,
+      "id": "ACT-P08-I01-W04",
+      "scope_id": "P08-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-10T22:13:08.501855Z"
+    },
+    "P08-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P08-I01-W05-close-20260510T224630Z",
+      "elapsed_eu": 1.99,
+      "id": "ACT-P08-I01-W05",
+      "scope_id": "P08-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-10T22:46:30.776412Z"
+    },
+    "P08-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P08-I01-W06-close-20260510T224631Z",
+      "elapsed_eu": 1.99,
+      "id": "ACT-P08-I01-W06",
+      "scope_id": "P08-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-10T22:46:31.147208Z"
+    },
+    "P09-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P09-I01-W01-close-20260511T081814Z",
+      "elapsed_eu": 0.07,
+      "id": "ACT-P09-I01-W01",
+      "scope_id": "P09-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-11T08:18:14.020785Z"
+    },
+    "P09-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P09-I01-W02-close-20260511T082017Z",
+      "elapsed_eu": 0.14,
+      "id": "ACT-P09-I01-W02",
+      "scope_id": "P09-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-11T08:20:17.430900Z"
+    },
+    "P09-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P09-I01-W03-close-20260511T082140Z",
+      "elapsed_eu": 0.18,
+      "id": "ACT-P09-I01-W03",
+      "scope_id": "P09-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-11T08:21:40.313753Z"
+    },
+    "P09-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P09-I01-W04-close-20260511T082358Z",
+      "elapsed_eu": 0.26,
+      "id": "ACT-P09-I01-W04",
+      "scope_id": "P09-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-11T08:23:58.605660Z"
+    },
+    "P10-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P10-I01-W01-close-20260511T104300Z",
+      "elapsed_eu": 0.77,
+      "id": "ACT-P10-I01-W01",
+      "scope_id": "P10-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-11T10:43:00.505929Z"
+    },
+    "P10-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P10-I01-W02-close-20260511T104301Z",
+      "elapsed_eu": 0.77,
+      "id": "ACT-P10-I01-W02",
+      "scope_id": "P10-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-11T10:43:01.565652Z"
+    },
+    "P10-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P10-I01-W03-close-20260511T104302Z",
+      "elapsed_eu": 0.77,
+      "id": "ACT-P10-I01-W03",
+      "scope_id": "P10-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-11T10:43:02.296715Z"
+    },
+    "P10-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P10-I01-W04-close-20260511T105004Z",
+      "elapsed_eu": 1.01,
+      "id": "ACT-P10-I01-W04",
+      "scope_id": "P10-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-11T10:50:04.485389Z"
+    },
+    "P11-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P11-I01-W01-close-20260511T114956Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P11-I01-W01",
+      "scope_id": "P11-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-11T11:49:56.625542Z"
+    },
+    "P11-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P11-I01-W02-close-20260511T114957Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P11-I01-W02",
+      "scope_id": "P11-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-11T11:49:57.680282Z"
+    },
+    "P11-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P11-I01-W03-close-20260511T114958Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P11-I01-W03",
+      "scope_id": "P11-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-11T11:49:58.312420Z"
+    },
+    "P12-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W01-close-20260511T130527Z",
+      "elapsed_eu": 0.26,
+      "id": "ACT-P12-I01-W01",
+      "scope_id": "P12-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-11T13:05:27.792212Z"
+    },
+    "P12-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W02-close-20260511T130907Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P12-I01-W02",
+      "scope_id": "P12-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-11T13:09:07.015750Z"
+    },
+    "P12-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W03-close-20260511T131340Z",
+      "elapsed_eu": 0.53,
+      "id": "ACT-P12-I01-W03",
+      "scope_id": "P12-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-11T13:13:40.278328Z"
+    },
+    "P12-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W04-close-20260511T131603Z",
+      "elapsed_eu": 0.61,
+      "id": "ACT-P12-I01-W04",
+      "scope_id": "P12-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-11T13:16:03.556288Z"
+    },
+    "P12-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W05-close-20260511T131904Z",
+      "elapsed_eu": 0.71,
+      "id": "ACT-P12-I01-W05",
+      "scope_id": "P12-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-11T13:19:04.760498Z"
+    },
+    "P12-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W06-close-20260511T132243Z",
+      "elapsed_eu": 0.83,
+      "id": "ACT-P12-I01-W06",
+      "scope_id": "P12-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-11T13:22:43.169235Z"
+    },
+    "P12-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P12-I01-W07-close-20260511T132444Z",
+      "elapsed_eu": 0.9,
+      "id": "ACT-P12-I01-W07",
+      "scope_id": "P12-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-11T13:24:44.025187Z"
+    },
+    "P13-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W01-close-20260511T141404Z",
+      "elapsed_eu": 0.04,
+      "id": "ACT-P13-I01-W01",
+      "scope_id": "P13-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-11T14:14:04.500555Z"
+    },
+    "P13-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W02-close-20260511T143819Z",
+      "elapsed_eu": 0.85,
+      "id": "ACT-P13-I01-W02",
+      "scope_id": "P13-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-11T14:38:19.212561Z"
+    },
+    "P13-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W03-close-20260511T145023Z",
+      "elapsed_eu": 1.24,
+      "id": "ACT-P13-I01-W03",
+      "scope_id": "P13-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-11T14:50:23.253179Z"
+    },
+    "P13-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W04-close-20260511T143819Z",
+      "elapsed_eu": 0.84,
+      "id": "ACT-P13-I01-W04",
+      "scope_id": "P13-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-11T14:38:19.569156Z"
+    },
+    "P13-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W05-close-20260511T143819Z",
+      "elapsed_eu": 0.84,
+      "id": "ACT-P13-I01-W05",
+      "scope_id": "P13-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-11T14:38:19.919111Z"
+    },
+    "P13-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W06-close-20260511T145304Z",
+      "elapsed_eu": 1.33,
+      "id": "ACT-P13-I01-W06",
+      "scope_id": "P13-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-11T14:53:04.881059Z"
+    },
+    "P13-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P13-I01-W07-close-20260511T143820Z",
+      "elapsed_eu": 0.84,
+      "id": "ACT-P13-I01-W07",
+      "scope_id": "P13-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-11T14:38:20.272524Z"
+    },
+    "P14-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W01-close-20260511T212758Z",
+      "elapsed_eu": 0.91,
+      "id": "ACT-P14-I01-W01",
+      "scope_id": "P14-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-11T21:27:58.133113Z"
+    },
+    "P14-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W02-close-20260511T213158Z",
+      "elapsed_eu": 0.13,
+      "id": "ACT-P14-I01-W02",
+      "scope_id": "P14-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-11T21:31:58.495166Z"
+    },
+    "P14-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W03-close-20260511T213906Z",
+      "elapsed_eu": 0.23,
+      "id": "ACT-P14-I01-W03",
+      "scope_id": "P14-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-11T21:39:06.329869Z"
+    },
+    "P14-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W04-close-20260511T214339Z",
+      "elapsed_eu": 0.14,
+      "id": "ACT-P14-I01-W04",
+      "scope_id": "P14-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-11T21:43:39.087994Z"
+    },
+    "P14-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W05-close-20260511T214943Z",
+      "elapsed_eu": 0.18,
+      "id": "ACT-P14-I01-W05",
+      "scope_id": "P14-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-11T21:49:43.686353Z"
+    },
+    "P14-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W06-close-20260511T215734Z",
+      "elapsed_eu": 0.22,
+      "id": "ACT-P14-I01-W06",
+      "scope_id": "P14-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-11T21:57:34.853049Z"
+    },
+    "P14-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W07-close-20260511T221444Z",
+      "elapsed_eu": 0.56,
+      "id": "ACT-P14-I01-W07",
+      "scope_id": "P14-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-11T22:14:44.738712Z"
+    },
+    "P14-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W08-close-20260511T222414Z",
+      "elapsed_eu": 0.28,
+      "id": "ACT-P14-I01-W08",
+      "scope_id": "P14-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-11T22:24:14.309138Z"
+    },
+    "P14-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W09-close-20260511T223124Z",
+      "elapsed_eu": 0.21,
+      "id": "ACT-P14-I01-W09",
+      "scope_id": "P14-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-11T22:31:24.973405Z"
+    },
+    "P14-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W10-close-20260511T224646Z",
+      "elapsed_eu": 0.5,
+      "id": "ACT-P14-I01-W10",
+      "scope_id": "P14-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-11T22:46:46.811276Z"
+    },
+    "P14-I01-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I01-W11-close-20260511T230122Z",
+      "elapsed_eu": 0.47,
+      "id": "ACT-P14-I01-W11",
+      "scope_id": "P14-I01-W11",
+      "status": "done",
+      "updated_at": "2026-05-11T23:01:22.700165Z"
+    },
+    "P14-I02-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I02-W01-close-20260512T182841Z",
+      "elapsed_eu": 3.09,
+      "id": "ACT-P14-I02-W01",
+      "scope_id": "P14-I02-W01",
+      "status": "done",
+      "updated_at": "2026-05-12T18:28:41.232196Z"
+    },
+    "P14-I03-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P14-I03-W01-close-20260512T185848Z",
+      "elapsed_eu": 0.51,
+      "id": "ACT-P14-I03-W01",
+      "scope_id": "P14-I03-W01",
+      "status": "done",
+      "updated_at": "2026-05-12T18:58:48.589880Z"
+    },
+    "P15-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P15-I01-W01-close-20260513T124240Z",
+      "elapsed_eu": 0.11,
+      "id": "ACT-P15-I01-W01",
+      "scope_id": "P15-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-13T12:42:40.715867Z"
+    },
+    "P15-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P15-I01-W02-close-20260513T124721Z",
+      "elapsed_eu": 0.26,
+      "id": "ACT-P15-I01-W02",
+      "scope_id": "P15-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-13T12:47:21.161183Z"
+    },
+    "P15-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P15-I01-W03-close-20260513T124445Z",
+      "elapsed_eu": 0.17,
+      "id": "ACT-P15-I01-W03",
+      "scope_id": "P15-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-13T12:44:45.255714Z"
+    },
+    "P15-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P15-I01-W04-close-20260513T125054Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P15-I01-W04",
+      "scope_id": "P15-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-13T12:50:54.609631Z"
+    },
+    "P17-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W01-close-20260514T154346Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W01",
+      "scope_id": "P17-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:46.780266Z"
+    },
+    "P17-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W02-close-20260514T154347Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W02",
+      "scope_id": "P17-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:47.592710Z"
+    },
+    "P17-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W03-close-20260514T154348Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W03",
+      "scope_id": "P17-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:48.397007Z"
+    },
+    "P17-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W04-close-20260514T154349Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W04",
+      "scope_id": "P17-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:49.184298Z"
+    },
+    "P17-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W05-close-20260514T154349Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W05",
+      "scope_id": "P17-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:49.971046Z"
+    },
+    "P17-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W06-close-20260514T154350Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W06",
+      "scope_id": "P17-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:50.763454Z"
+    },
+    "P17-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W07-close-20260514T154351Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W07",
+      "scope_id": "P17-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:51.561764Z"
+    },
+    "P17-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W08-close-20260514T154352Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W08",
+      "scope_id": "P17-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:52.364708Z"
+    },
+    "P17-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P17-I01-W09-close-20260514T154353Z",
+      "elapsed_eu": 1.21,
+      "id": "ACT-P17-I01-W09",
+      "scope_id": "P17-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-14T15:43:53.949296Z"
+    },
+    "P18-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W01-close-20260514T172753Z",
+      "elapsed_eu": 0.1,
+      "id": "ACT-P18-I01-W01",
+      "scope_id": "P18-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-14T17:27:53.626739Z"
+    },
+    "P18-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W02-close-20260514T173122Z",
+      "elapsed_eu": 0.22,
+      "id": "ACT-P18-I01-W02",
+      "scope_id": "P18-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-14T17:31:22.164705Z"
+    },
+    "P18-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W03-close-20260514T173723Z",
+      "elapsed_eu": 0.42,
+      "id": "ACT-P18-I01-W03",
+      "scope_id": "P18-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-14T17:37:23.464056Z"
+    },
+    "P18-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W04-close-20260514T174303Z",
+      "elapsed_eu": 0.61,
+      "id": "ACT-P18-I01-W04",
+      "scope_id": "P18-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-14T17:43:03.644964Z"
+    },
+    "P18-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W05-close-20260514T182303Z",
+      "elapsed_eu": 1.94,
+      "id": "ACT-P18-I01-W05",
+      "scope_id": "P18-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-14T18:23:03.412827Z"
+    },
+    "P18-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W06-close-20260514T174649Z",
+      "elapsed_eu": 0.73,
+      "id": "ACT-P18-I01-W06",
+      "scope_id": "P18-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-14T17:46:49.420907Z"
+    },
+    "P18-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W07-close-20260514T175231Z",
+      "elapsed_eu": 0.92,
+      "id": "ACT-P18-I01-W07",
+      "scope_id": "P18-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-14T17:52:31.293757Z"
+    },
+    "P18-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W08-close-20260514T180225Z",
+      "elapsed_eu": 1.25,
+      "id": "ACT-P18-I01-W08",
+      "scope_id": "P18-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-14T18:02:25.477535Z"
+    },
+    "P18-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W09-close-20260514T181519Z",
+      "elapsed_eu": 1.68,
+      "id": "ACT-P18-I01-W09",
+      "scope_id": "P18-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-14T18:15:19.189371Z"
+    },
+    "P18-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W10-close-20260514T175634Z",
+      "elapsed_eu": 1.06,
+      "id": "ACT-P18-I01-W10",
+      "scope_id": "P18-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-14T17:56:34.498700Z"
+    },
+    "P18-I01-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W11-close-20260514T180523Z",
+      "elapsed_eu": 1.35,
+      "id": "ACT-P18-I01-W11",
+      "scope_id": "P18-I01-W11",
+      "status": "done",
+      "updated_at": "2026-05-14T18:05:23.687970Z"
+    },
+    "P18-I01-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W12-close-20260514T180858Z",
+      "elapsed_eu": 1.47,
+      "id": "ACT-P18-I01-W12",
+      "scope_id": "P18-I01-W12",
+      "status": "done",
+      "updated_at": "2026-05-14T18:08:58.311172Z"
+    },
+    "P18-I01-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P18-I01-W13-close-20260514T183444Z",
+      "elapsed_eu": 2.33,
+      "id": "ACT-P18-I01-W13",
+      "scope_id": "P18-I01-W13",
+      "status": "done",
+      "updated_at": "2026-05-14T18:34:44.039998Z"
+    },
+    "P19-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W01-close-20260514T204443Z",
+      "elapsed_eu": 2.8,
+      "id": "ACT-P19-I01-W01",
+      "scope_id": "P19-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-14T20:44:43.535335Z"
+    },
+    "P19-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W02-close-20260514T204531Z",
+      "elapsed_eu": 2.82,
+      "id": "ACT-P19-I01-W02",
+      "scope_id": "P19-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:31.829194Z"
+    },
+    "P19-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W03-close-20260514T204532Z",
+      "elapsed_eu": 2.82,
+      "id": "ACT-P19-I01-W03",
+      "scope_id": "P19-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:32.709985Z"
+    },
+    "P19-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W04-close-20260514T204533Z",
+      "elapsed_eu": 2.82,
+      "id": "ACT-P19-I01-W04",
+      "scope_id": "P19-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:33.590476Z"
+    },
+    "P19-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W05-close-20260514T204534Z",
+      "elapsed_eu": 2.83,
+      "id": "ACT-P19-I01-W05",
+      "scope_id": "P19-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:34.465923Z"
+    },
+    "P19-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W06-close-20260514T204535Z",
+      "elapsed_eu": 2.82,
+      "id": "ACT-P19-I01-W06",
+      "scope_id": "P19-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:35.369313Z"
+    },
+    "P19-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W07-close-20260514T204536Z",
+      "elapsed_eu": 2.82,
+      "id": "ACT-P19-I01-W07",
+      "scope_id": "P19-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:36.301549Z"
+    },
+    "P19-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W08-close-20260514T204537Z",
+      "elapsed_eu": 2.82,
+      "id": "ACT-P19-I01-W08",
+      "scope_id": "P19-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-14T20:45:37.183270Z"
+    },
+    "P19-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W09-close-20260514T220957Z",
+      "elapsed_eu": 0.06,
+      "id": "ACT-P19-I01-W09",
+      "scope_id": "P19-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-14T22:09:57.204744Z"
+    },
+    "P19-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I01-W10-close-20260514T222244Z",
+      "elapsed_eu": 0.02,
+      "id": "ACT-P19-I01-W10",
+      "scope_id": "P19-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-14T22:22:44.054988Z"
+    },
+    "P19-I02-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W11-close-20260515T151857Z",
+      "elapsed_eu": 1.2,
+      "id": "ACT-P19-I02-W11",
+      "scope_id": "P19-I02-W11",
+      "status": "done",
+      "updated_at": "2026-05-15T15:18:57.190971Z"
+    },
+    "P19-I02-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W12-close-20260515T151741Z",
+      "elapsed_eu": 1.14,
+      "id": "ACT-P19-I02-W12",
+      "scope_id": "P19-I02-W12",
+      "status": "done",
+      "updated_at": "2026-05-15T15:17:41.945993Z"
+    },
+    "P19-I02-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W13-close-20260515T153306Z",
+      "elapsed_eu": 1.66,
+      "id": "ACT-P19-I02-W13",
+      "scope_id": "P19-I02-W13",
+      "status": "done",
+      "updated_at": "2026-05-15T15:33:06.789209Z"
+    },
+    "P19-I02-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W14-close-20260515T151741Z",
+      "elapsed_eu": 1.14,
+      "id": "ACT-P19-I02-W14",
+      "scope_id": "P19-I02-W14",
+      "status": "done",
+      "updated_at": "2026-05-15T15:17:41.002945Z"
+    },
+    "P19-I02-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W15-close-20260515T153307Z",
+      "elapsed_eu": 1.66,
+      "id": "ACT-P19-I02-W15",
+      "scope_id": "P19-I02-W15",
+      "status": "done",
+      "updated_at": "2026-05-15T15:33:07.228258Z"
+    },
+    "P19-I02-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W16-close-20260515T151741Z",
+      "elapsed_eu": 1.14,
+      "id": "ACT-P19-I02-W16",
+      "scope_id": "P19-I02-W16",
+      "status": "done",
+      "updated_at": "2026-05-15T15:17:41.485183Z"
+    },
+    "P19-I02-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W17-close-20260515T153306Z",
+      "elapsed_eu": 1.66,
+      "id": "ACT-P19-I02-W17",
+      "scope_id": "P19-I02-W17",
+      "status": "done",
+      "updated_at": "2026-05-15T15:33:06.335759Z"
+    },
+    "P19-I02-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W18-close-20260515T151742Z",
+      "elapsed_eu": 1.14,
+      "id": "ACT-P19-I02-W18",
+      "scope_id": "P19-I02-W18",
+      "status": "done",
+      "updated_at": "2026-05-15T15:17:42.418104Z"
+    },
+    "P19-I02-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W19-close-20260515T151801Z",
+      "elapsed_eu": 1.15,
+      "id": "ACT-P19-I02-W19",
+      "scope_id": "P19-I02-W19",
+      "status": "done",
+      "updated_at": "2026-05-15T15:18:01.828920Z"
+    },
+    "P19-I02-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W20-close-20260515T152027Z",
+      "elapsed_eu": 1.23,
+      "id": "ACT-P19-I02-W20",
+      "scope_id": "P19-I02-W20",
+      "status": "done",
+      "updated_at": "2026-05-15T15:20:27.151013Z"
+    },
+    "P19-I02-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P19-I02-W21-close-20260515T153823Z",
+      "elapsed_eu": 1.83,
+      "id": "ACT-P19-I02-W21",
+      "scope_id": "P19-I02-W21",
+      "status": "done",
+      "updated_at": "2026-05-15T15:38:23.417868Z"
+    },
+    "P20-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W01-close-20260515T165940Z",
+      "elapsed_eu": 4.53,
+      "id": "ACT-P20-I01-W01",
+      "scope_id": "P20-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-15T16:59:40.385437Z"
+    },
+    "P20-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W02-close-20260515T171552Z",
+      "elapsed_eu": 5.07,
+      "id": "ACT-P20-I01-W02",
+      "scope_id": "P20-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-15T17:15:52.187786Z"
+    },
+    "P20-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W03-close-20260515T181157Z",
+      "elapsed_eu": 6.93,
+      "id": "ACT-P20-I01-W03",
+      "scope_id": "P20-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-15T18:11:57.928287Z"
+    },
+    "P20-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W04-close-20260515T182946Z",
+      "elapsed_eu": 7.53,
+      "id": "ACT-P20-I01-W04",
+      "scope_id": "P20-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-15T18:29:46.664544Z"
+    },
+    "P20-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W05-close-20260515T183745Z",
+      "elapsed_eu": 7.79,
+      "id": "ACT-P20-I01-W05",
+      "scope_id": "P20-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-15T18:37:45.457413Z"
+    },
+    "P20-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W06-close-20260515T190719Z",
+      "elapsed_eu": 8.78,
+      "id": "ACT-P20-I01-W06",
+      "scope_id": "P20-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-15T19:07:19.617822Z"
+    },
+    "P20-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W07-close-20260515T185219Z",
+      "elapsed_eu": 8.28,
+      "id": "ACT-P20-I01-W07",
+      "scope_id": "P20-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-15T18:52:19.308774Z"
+    },
+    "P20-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W08-close-20260515T171552Z",
+      "elapsed_eu": 5.05,
+      "id": "ACT-P20-I01-W08",
+      "scope_id": "P20-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-15T17:15:52.681457Z"
+    },
+    "P20-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W09-close-20260515T185629Z",
+      "elapsed_eu": 8.41,
+      "id": "ACT-P20-I01-W09",
+      "scope_id": "P20-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-15T18:56:29.632686Z"
+    },
+    "P20-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W10-close-20260515T165941Z",
+      "elapsed_eu": 4.51,
+      "id": "ACT-P20-I01-W10",
+      "scope_id": "P20-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-15T16:59:41.139622Z"
+    },
+    "P20-I01-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W11-close-20260515T183720Z",
+      "elapsed_eu": 7.77,
+      "id": "ACT-P20-I01-W11",
+      "scope_id": "P20-I01-W11",
+      "status": "done",
+      "updated_at": "2026-05-15T18:37:20.047402Z"
+    },
+    "P20-I01-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W12-close-20260515T174557Z",
+      "elapsed_eu": 6.05,
+      "id": "ACT-P20-I01-W12",
+      "scope_id": "P20-I01-W12",
+      "status": "done",
+      "updated_at": "2026-05-15T17:45:57.407802Z"
+    },
+    "P20-I01-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W13-close-20260515T192416Z",
+      "elapsed_eu": 9.33,
+      "id": "ACT-P20-I01-W13",
+      "scope_id": "P20-I01-W13",
+      "status": "done",
+      "updated_at": "2026-05-15T19:24:16.140805Z"
+    },
+    "P20-I01-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W14-close-20260515T194546Z",
+      "elapsed_eu": 10.05,
+      "id": "ACT-P20-I01-W14",
+      "scope_id": "P20-I01-W14",
+      "status": "done",
+      "updated_at": "2026-05-15T19:45:46.363260Z"
+    },
+    "P20-I01-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I01-W15-close-20260515T172939Z",
+      "elapsed_eu": 5.51,
+      "id": "ACT-P20-I01-W15",
+      "scope_id": "P20-I01-W15",
+      "status": "done",
+      "updated_at": "2026-05-15T17:29:39.964276Z"
+    },
+    "P20-I02-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I02-W01-close-20260515T201004Z",
+      "elapsed_eu": 0.22,
+      "id": "ACT-P20-I02-W01",
+      "scope_id": "P20-I02-W01",
+      "status": "done",
+      "updated_at": "2026-05-15T20:10:04.578780Z"
+    },
+    "P20-I03-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P20-I03-W01-close-20260515T210553Z",
+      "elapsed_eu": 1.16,
+      "id": "ACT-P20-I03-W01",
+      "scope_id": "P20-I03-W01",
+      "status": "done",
+      "updated_at": "2026-05-15T21:05:53.553442Z"
+    },
+    "P22-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W01-close-20260518T190158Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P22-I01-W01",
+      "scope_id": "P22-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-18T19:01:58.119217Z"
+    },
+    "P22-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W02-close-20260518T190417Z",
+      "elapsed_eu": 0.45,
+      "id": "ACT-P22-I01-W02",
+      "scope_id": "P22-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-18T19:04:17.649123Z"
+    },
+    "P22-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W03-close-20260518T190841Z",
+      "elapsed_eu": 0.59,
+      "id": "ACT-P22-I01-W03",
+      "scope_id": "P22-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-18T19:08:41.219577Z"
+    },
+    "P22-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W04-close-20260518T191100Z",
+      "elapsed_eu": 0.67,
+      "id": "ACT-P22-I01-W04",
+      "scope_id": "P22-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-18T19:11:00.735800Z"
+    },
+    "P22-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W05-close-20260518T191258Z",
+      "elapsed_eu": 0.73,
+      "id": "ACT-P22-I01-W05",
+      "scope_id": "P22-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-18T19:12:58.010493Z"
+    },
+    "P22-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W06-close-20260518T192235Z",
+      "elapsed_eu": 1.05,
+      "id": "ACT-P22-I01-W06",
+      "scope_id": "P22-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-18T19:22:35.508658Z"
+    },
+    "P22-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P22-I01-W07-close-20260518T193440Z",
+      "elapsed_eu": 1.45,
+      "id": "ACT-P22-I01-W07",
+      "scope_id": "P22-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-18T19:34:40.697192Z"
+    },
+    "P23-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P23-I01-W01-close-20260518T210102Z",
+      "elapsed_eu": 0.73,
+      "id": "ACT-P23-I01-W01",
+      "scope_id": "P23-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-18T21:01:02.531487Z"
+    },
+    "P23-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P23-I01-W02-close-20260518T210806Z",
+      "elapsed_eu": 0.96,
+      "id": "ACT-P23-I01-W02",
+      "scope_id": "P23-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-18T21:08:06.966026Z"
+    },
+    "P23-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P23-I01-W03-close-20260518T211449Z",
+      "elapsed_eu": 1.18,
+      "id": "ACT-P23-I01-W03",
+      "scope_id": "P23-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-18T21:14:49.754850Z"
+    },
+    "P23-I02-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P23-I02-W01-close-20260518T213827Z",
+      "elapsed_eu": 0.25,
+      "id": "ACT-P23-I02-W01",
+      "scope_id": "P23-I02-W01",
+      "status": "done",
+      "updated_at": "2026-05-18T21:38:27.201933Z"
+    },
+    "P24-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W01-close-20260519T140057Z",
+      "elapsed_eu": 0.86,
+      "id": "ACT-P24-I01-W01",
+      "scope_id": "P24-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-19T14:00:57.771352Z"
+    },
+    "P24-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W02-close-20260519T142348Z",
+      "elapsed_eu": 1.62,
+      "id": "ACT-P24-I01-W02",
+      "scope_id": "P24-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-19T14:23:48.216186Z"
+    },
+    "P24-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W03-close-20260519T142348Z",
+      "elapsed_eu": 1.61,
+      "id": "ACT-P24-I01-W03",
+      "scope_id": "P24-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-19T14:23:48.960125Z"
+    },
+    "P24-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W04-close-20260519T145307Z",
+      "elapsed_eu": 2.59,
+      "id": "ACT-P24-I01-W04",
+      "scope_id": "P24-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-19T14:53:07.577249Z"
+    },
+    "P24-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W05-close-20260519T145308Z",
+      "elapsed_eu": 2.58,
+      "id": "ACT-P24-I01-W05",
+      "scope_id": "P24-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-19T14:53:08.156019Z"
+    },
+    "P24-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W06-close-20260519T145308Z",
+      "elapsed_eu": 2.58,
+      "id": "ACT-P24-I01-W06",
+      "scope_id": "P24-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-19T14:53:08.710098Z"
+    },
+    "P24-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W07-close-20260519T152156Z",
+      "elapsed_eu": 3.54,
+      "id": "ACT-P24-I01-W07",
+      "scope_id": "P24-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-19T15:21:56.694737Z"
+    },
+    "P24-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W08-close-20260519T152157Z",
+      "elapsed_eu": 3.53,
+      "id": "ACT-P24-I01-W08",
+      "scope_id": "P24-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-19T15:21:57.203896Z"
+    },
+    "P24-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W09-close-20260519T155552Z",
+      "elapsed_eu": 4.66,
+      "id": "ACT-P24-I01-W09",
+      "scope_id": "P24-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-19T15:55:52.376324Z"
+    },
+    "P24-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I01-W10-close-20260519T164313Z",
+      "elapsed_eu": 6.24,
+      "id": "ACT-P24-I01-W10",
+      "scope_id": "P24-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-19T16:43:13.692409Z"
+    },
+    "P24-I02-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P24-I02-W01-close-20260519T171838Z",
+      "elapsed_eu": 0.51,
+      "id": "ACT-P24-I02-W01",
+      "scope_id": "P24-I02-W01",
+      "status": "done",
+      "updated_at": "2026-05-19T17:18:38.011077Z"
+    },
+    "P25-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W01-close-20260519T203836Z",
+      "elapsed_eu": 1.69,
+      "id": "ACT-P25-I01-W01",
+      "scope_id": "P25-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-19T20:38:36.980436Z"
+    },
+    "P25-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W02-close-20260519T210351Z",
+      "elapsed_eu": 2.53,
+      "id": "ACT-P25-I01-W02",
+      "scope_id": "P25-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-19T21:03:51.978845Z"
+    },
+    "P25-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W03-close-20260519T210354Z",
+      "elapsed_eu": 2.54,
+      "id": "ACT-P25-I01-W03",
+      "scope_id": "P25-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-19T21:03:54.147809Z"
+    },
+    "P25-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W04-close-20260519T214903Z",
+      "elapsed_eu": 4.04,
+      "id": "ACT-P25-I01-W04",
+      "scope_id": "P25-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-19T21:49:03.515628Z"
+    },
+    "P25-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W05-close-20260519T210615Z",
+      "elapsed_eu": 2.61,
+      "id": "ACT-P25-I01-W05",
+      "scope_id": "P25-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-19T21:06:15.034727Z"
+    },
+    "P25-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W06-close-20260519T203843Z",
+      "elapsed_eu": 1.7,
+      "id": "ACT-P25-I01-W06",
+      "scope_id": "P25-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-19T20:38:43.514078Z"
+    },
+    "P25-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W07-close-20260519T203850Z",
+      "elapsed_eu": 1.7,
+      "id": "ACT-P25-I01-W07",
+      "scope_id": "P25-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-19T20:38:50.123265Z"
+    },
+    "P25-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W08-close-20260519T203856Z",
+      "elapsed_eu": 1.7,
+      "id": "ACT-P25-I01-W08",
+      "scope_id": "P25-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-19T20:38:56.527213Z"
+    },
+    "P25-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W09-close-20260519T203904Z",
+      "elapsed_eu": 1.71,
+      "id": "ACT-P25-I01-W09",
+      "scope_id": "P25-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-19T20:39:04.765920Z"
+    },
+    "P25-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W10-close-20260519T210633Z",
+      "elapsed_eu": 2.62,
+      "id": "ACT-P25-I01-W10",
+      "scope_id": "P25-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-19T21:06:33.976871Z"
+    },
+    "P25-I01-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W11-close-20260519T212828Z",
+      "elapsed_eu": 3.35,
+      "id": "ACT-P25-I01-W11",
+      "scope_id": "P25-I01-W11",
+      "status": "done",
+      "updated_at": "2026-05-19T21:28:28.943257Z"
+    },
+    "P25-I01-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W12-close-20260519T214844Z",
+      "elapsed_eu": 4.03,
+      "id": "ACT-P25-I01-W12",
+      "scope_id": "P25-I01-W12",
+      "status": "done",
+      "updated_at": "2026-05-19T21:48:44.762481Z"
+    },
+    "P25-I01-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W13-close-20260519T212831Z",
+      "elapsed_eu": 3.35,
+      "id": "ACT-P25-I01-W13",
+      "scope_id": "P25-I01-W13",
+      "status": "done",
+      "updated_at": "2026-05-19T21:28:31.789095Z"
+    },
+    "P25-I01-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W14-close-20260519T203915Z",
+      "elapsed_eu": 1.68,
+      "id": "ACT-P25-I01-W14",
+      "scope_id": "P25-I01-W14",
+      "status": "done",
+      "updated_at": "2026-05-19T20:39:15.669200Z"
+    },
+    "P25-I01-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W15-close-20260519T210642Z",
+      "elapsed_eu": 2.59,
+      "id": "ACT-P25-I01-W15",
+      "scope_id": "P25-I01-W15",
+      "status": "done",
+      "updated_at": "2026-05-19T21:06:42.595217Z"
+    },
+    "P25-I01-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W16-close-20260519T210653Z",
+      "elapsed_eu": 2.6,
+      "id": "ACT-P25-I01-W16",
+      "scope_id": "P25-I01-W16",
+      "status": "done",
+      "updated_at": "2026-05-19T21:06:53.092151Z"
+    },
+    "P25-I01-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W17-close-20260519T200359Z",
+      "elapsed_eu": 0.5,
+      "id": "ACT-P25-I01-W17",
+      "scope_id": "P25-I01-W17",
+      "status": "done",
+      "updated_at": "2026-05-19T20:03:59.138813Z"
+    },
+    "P25-I01-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W18-close-20260519T203921Z",
+      "elapsed_eu": 1.68,
+      "id": "ACT-P25-I01-W18",
+      "scope_id": "P25-I01-W18",
+      "status": "done",
+      "updated_at": "2026-05-19T20:39:21.992815Z"
+    },
+    "P25-I01-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P25-I01-W19-close-20260519T220008Z",
+      "elapsed_eu": 0.14,
+      "id": "ACT-P25-I01-W19",
+      "scope_id": "P25-I01-W19",
+      "status": "done",
+      "updated_at": "2026-05-19T22:00:08.337822Z"
+    },
+    "P26-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W01-close-20260520T003451Z",
+      "elapsed_eu": 1.62,
+      "id": "ACT-P26-I01-W01",
+      "scope_id": "P26-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-20T00:34:51.487530Z"
+    },
+    "P26-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W02-close-20260520T001954Z",
+      "elapsed_eu": 0.89,
+      "id": "ACT-P26-I01-W02",
+      "scope_id": "P26-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-20T00:19:54.558852Z"
+    },
+    "P26-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W03-close-20260520T003356Z",
+      "elapsed_eu": 1.36,
+      "id": "ACT-P26-I01-W03",
+      "scope_id": "P26-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-20T00:33:56.431756Z"
+    },
+    "P26-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W04-close-20260520T124750Z",
+      "elapsed_eu": 25.82,
+      "id": "ACT-P26-I01-W04",
+      "scope_id": "P26-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-20T12:47:50.462080Z"
+    },
+    "P26-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W05-close-20260520T130159Z",
+      "elapsed_eu": 26.3,
+      "id": "ACT-P26-I01-W05",
+      "scope_id": "P26-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-20T13:01:59.197220Z"
+    },
+    "P26-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W06-close-20260520T130318Z",
+      "elapsed_eu": 26.34,
+      "id": "ACT-P26-I01-W06",
+      "scope_id": "P26-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-20T13:03:18.225111Z"
+    },
+    "P26-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W07-close-20260520T131508Z",
+      "elapsed_eu": 26.73,
+      "id": "ACT-P26-I01-W07",
+      "scope_id": "P26-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-20T13:15:08.725671Z"
+    },
+    "P26-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W08-close-20260520T131121Z",
+      "elapsed_eu": 26.61,
+      "id": "ACT-P26-I01-W08",
+      "scope_id": "P26-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-20T13:11:21.926362Z"
+    },
+    "P26-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W09-close-20260520T132347Z",
+      "elapsed_eu": 27.02,
+      "id": "ACT-P26-I01-W09",
+      "scope_id": "P26-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-20T13:23:47.492022Z"
+    },
+    "P26-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W10-close-20260520T125908Z",
+      "elapsed_eu": 26.2,
+      "id": "ACT-P26-I01-W10",
+      "scope_id": "P26-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-20T12:59:08.337572Z"
+    },
+    "P26-I01-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W11-close-20260520T131435Z",
+      "elapsed_eu": 26.71,
+      "id": "ACT-P26-I01-W11",
+      "scope_id": "P26-I01-W11",
+      "status": "done",
+      "updated_at": "2026-05-20T13:14:35.597198Z"
+    },
+    "P26-I01-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W12-close-20260520T131041Z",
+      "elapsed_eu": 26.58,
+      "id": "ACT-P26-I01-W12",
+      "scope_id": "P26-I01-W12",
+      "status": "done",
+      "updated_at": "2026-05-20T13:10:41.480376Z"
+    },
+    "P26-I01-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W13-close-20260520T132500Z",
+      "elapsed_eu": 27.06,
+      "id": "ACT-P26-I01-W13",
+      "scope_id": "P26-I01-W13",
+      "status": "done",
+      "updated_at": "2026-05-20T13:25:00.688110Z"
+    },
+    "P26-I01-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W14-close-20260520T133431Z",
+      "elapsed_eu": 27.38,
+      "id": "ACT-P26-I01-W14",
+      "scope_id": "P26-I01-W14",
+      "status": "done",
+      "updated_at": "2026-05-20T13:34:31.635115Z"
+    },
+    "P26-I01-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W15-close-20260520T140514Z",
+      "elapsed_eu": 28.4,
+      "id": "ACT-P26-I01-W15",
+      "scope_id": "P26-I01-W15",
+      "status": "done",
+      "updated_at": "2026-05-20T14:05:14.650535Z"
+    },
+    "P26-I01-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W16-close-20260520T142150Z",
+      "elapsed_eu": 28.95,
+      "id": "ACT-P26-I01-W16",
+      "scope_id": "P26-I01-W16",
+      "status": "done",
+      "updated_at": "2026-05-20T14:21:50.574723Z"
+    },
+    "P26-I01-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W17-close-20260520T143945Z",
+      "elapsed_eu": 29.55,
+      "id": "ACT-P26-I01-W17",
+      "scope_id": "P26-I01-W17",
+      "status": "done",
+      "updated_at": "2026-05-20T14:39:45.525400Z"
+    },
+    "P26-I01-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W18-close-20260520T145738Z",
+      "elapsed_eu": 30.15,
+      "id": "ACT-P26-I01-W18",
+      "scope_id": "P26-I01-W18",
+      "status": "done",
+      "updated_at": "2026-05-20T14:57:38.645421Z"
+    },
+    "P26-I01-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W19-close-20260520T151834Z",
+      "elapsed_eu": 30.84,
+      "id": "ACT-P26-I01-W19",
+      "scope_id": "P26-I01-W19",
+      "status": "done",
+      "updated_at": "2026-05-20T15:18:34.123079Z"
+    },
+    "P26-I01-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W20-close-20260520T154004Z",
+      "elapsed_eu": 31.56,
+      "id": "ACT-P26-I01-W20",
+      "scope_id": "P26-I01-W20",
+      "status": "done",
+      "updated_at": "2026-05-20T15:40:04.079162Z"
+    },
+    "P26-I01-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W21-close-20260520T155710Z",
+      "elapsed_eu": 32.13,
+      "id": "ACT-P26-I01-W21",
+      "scope_id": "P26-I01-W21",
+      "status": "done",
+      "updated_at": "2026-05-20T15:57:10.136021Z"
+    },
+    "P26-I01-W22": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W22-close-20260520T163438Z",
+      "elapsed_eu": 33.38,
+      "id": "ACT-P26-I01-W22",
+      "scope_id": "P26-I01-W22",
+      "status": "done",
+      "updated_at": "2026-05-20T16:34:38.720312Z"
+    },
+    "P26-I01-W23": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W23-close-20260520T002452Z",
+      "elapsed_eu": 0.91,
+      "id": "ACT-P26-I01-W23",
+      "scope_id": "P26-I01-W23",
+      "status": "done",
+      "updated_at": "2026-05-20T00:24:52.616374Z"
+    },
+    "P26-I01-W24": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W24-close-20260520T125719Z",
+      "elapsed_eu": 0.29,
+      "id": "ACT-P26-I01-W24",
+      "scope_id": "P26-I01-W24",
+      "status": "done",
+      "updated_at": "2026-05-20T12:57:19.412387Z"
+    },
+    "P26-I01-W25": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W25-close-20260520T142538Z",
+      "elapsed_eu": 1.37,
+      "id": "ACT-P26-I01-W25",
+      "scope_id": "P26-I01-W25",
+      "status": "done",
+      "updated_at": "2026-05-20T14:25:38.899765Z"
+    },
+    "P26-I01-W26": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W26-close-20260520T143921Z",
+      "elapsed_eu": 1.83,
+      "id": "ACT-P26-I01-W26",
+      "scope_id": "P26-I01-W26",
+      "status": "done",
+      "updated_at": "2026-05-20T14:39:21.535246Z"
+    },
+    "P26-I01-W27": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W27-close-20260520T172907Z",
+      "elapsed_eu": 1.66,
+      "id": "ACT-P26-I01-W27",
+      "scope_id": "P26-I01-W27",
+      "status": "done",
+      "updated_at": "2026-05-20T17:29:07.378405Z"
+    },
+    "P26-I01-W28": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W28-close-20260520T184229Z",
+      "elapsed_eu": 1.03,
+      "id": "ACT-P26-I01-W28",
+      "scope_id": "P26-I01-W28",
+      "status": "done",
+      "updated_at": "2026-05-20T18:42:29.071244Z"
+    },
+    "P26-I01-W29": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W29-close-20260520T191808Z",
+      "elapsed_eu": 0.29,
+      "id": "ACT-P26-I01-W29",
+      "scope_id": "P26-I01-W29",
+      "status": "done",
+      "updated_at": "2026-05-20T19:18:08.967365Z"
+    },
+    "P26-I01-W30": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W30-close-20260520T223751Z",
+      "elapsed_eu": 6.34,
+      "id": "ACT-P26-I01-W30",
+      "scope_id": "P26-I01-W30",
+      "status": "done",
+      "updated_at": "2026-05-20T22:37:51.788581Z"
+    },
+    "P26-I01-W31": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W31-close-20260521T010930Z",
+      "elapsed_eu": 0.67,
+      "id": "ACT-P26-I01-W31",
+      "scope_id": "P26-I01-W31",
+      "status": "done",
+      "updated_at": "2026-05-21T01:09:30.075224Z"
+    },
+    "P26-I01-W32": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W32-close-20260521T010722Z",
+      "elapsed_eu": 0.66,
+      "id": "ACT-P26-I01-W32",
+      "scope_id": "P26-I01-W32",
+      "status": "done",
+      "updated_at": "2026-05-21T01:07:22.638835Z"
+    },
+    "P26-I01-W33": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W33-close-20260521T010602Z",
+      "elapsed_eu": 0.73,
+      "id": "ACT-P26-I01-W33",
+      "scope_id": "P26-I01-W33",
+      "status": "done",
+      "updated_at": "2026-05-21T01:06:02.887629Z"
+    },
+    "P26-I01-W34": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W34-close-20260521T015135Z",
+      "elapsed_eu": 2.13,
+      "id": "ACT-P26-I01-W34",
+      "scope_id": "P26-I01-W34",
+      "status": "done",
+      "updated_at": "2026-05-21T01:51:35.421765Z"
+    },
+    "P26-I01-W35": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W35-close-20260521T021504Z",
+      "elapsed_eu": 2.91,
+      "id": "ACT-P26-I01-W35",
+      "scope_id": "P26-I01-W35",
+      "status": "done",
+      "updated_at": "2026-05-21T02:15:04.988428Z"
+    },
+    "P26-I01-W36": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W36-close-20260521T013229Z",
+      "elapsed_eu": 0.48,
+      "id": "ACT-P26-I01-W36",
+      "scope_id": "P26-I01-W36",
+      "status": "done",
+      "updated_at": "2026-05-21T01:32:29.357233Z"
+    },
+    "P26-I01-W37": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W37-close-20260521T014436Z",
+      "elapsed_eu": 0.32,
+      "id": "ACT-P26-I01-W37",
+      "scope_id": "P26-I01-W37",
+      "status": "done",
+      "updated_at": "2026-05-21T01:44:36.964647Z"
+    },
+    "P26-I01-W38": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W38-close-20260521T021957Z",
+      "elapsed_eu": 0.66,
+      "id": "ACT-P26-I01-W38",
+      "scope_id": "P26-I01-W38",
+      "status": "done",
+      "updated_at": "2026-05-21T02:19:57.990072Z"
+    },
+    "P26-I01-W39": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W39-close-20260521T025117Z",
+      "elapsed_eu": 0.37,
+      "id": "ACT-P26-I01-W39",
+      "scope_id": "P26-I01-W39",
+      "status": "done",
+      "updated_at": "2026-05-21T02:51:17.628447Z"
+    },
+    "P26-I01-W40": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W40-close-20260521T101733Z",
+      "elapsed_eu": 0.43,
+      "id": "ACT-P26-I01-W40",
+      "scope_id": "P26-I01-W40",
+      "status": "done",
+      "updated_at": "2026-05-21T10:17:33.874028Z"
+    },
+    "P26-I01-W42": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W42-close-20260521T112648Z",
+      "elapsed_eu": 0.42,
+      "id": "ACT-P26-I01-W42",
+      "scope_id": "P26-I01-W42",
+      "status": "done",
+      "updated_at": "2026-05-21T11:26:48.862399Z"
+    },
+    "P26-I01-W43": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W43-close-20260521T114319Z",
+      "elapsed_eu": 0.16,
+      "id": "ACT-P26-I01-W43",
+      "scope_id": "P26-I01-W43",
+      "status": "done",
+      "updated_at": "2026-05-21T11:43:19.859391Z"
+    },
+    "P26-I01-W44": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I01-W44-close-20260521T115343Z",
+      "elapsed_eu": 0.38,
+      "id": "ACT-P26-I01-W44",
+      "scope_id": "P26-I01-W44",
+      "status": "done",
+      "updated_at": "2026-05-21T11:53:43.668788Z"
+    },
+    "P26-I02-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W01-close-20260522T013546Z",
+      "elapsed_eu": 3.11,
+      "id": "ACT-P26-I02-W01",
+      "scope_id": "P26-I02-W01",
+      "status": "done",
+      "updated_at": "2026-05-22T01:35:46.061437Z"
+    },
+    "P26-I02-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W02-close-20260522T010812Z",
+      "elapsed_eu": 2.19,
+      "id": "ACT-P26-I02-W02",
+      "scope_id": "P26-I02-W02",
+      "status": "done",
+      "updated_at": "2026-05-22T01:08:12.904285Z"
+    },
+    "P26-I02-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W03-close-20260522T013547Z",
+      "elapsed_eu": 3.11,
+      "id": "ACT-P26-I02-W03",
+      "scope_id": "P26-I02-W03",
+      "status": "done",
+      "updated_at": "2026-05-22T01:35:47.806304Z"
+    },
+    "P26-I02-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W04-close-20260522T011542Z",
+      "elapsed_eu": 2.44,
+      "id": "ACT-P26-I02-W04",
+      "scope_id": "P26-I02-W04",
+      "status": "done",
+      "updated_at": "2026-05-22T01:15:42.277679Z"
+    },
+    "P26-I02-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W05-close-20260522T011600Z",
+      "elapsed_eu": 2.45,
+      "id": "ACT-P26-I02-W05",
+      "scope_id": "P26-I02-W05",
+      "status": "done",
+      "updated_at": "2026-05-22T01:16:00.036401Z"
+    },
+    "P26-I02-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W06-close-20260522T013549Z",
+      "elapsed_eu": 3.11,
+      "id": "ACT-P26-I02-W06",
+      "scope_id": "P26-I02-W06",
+      "status": "done",
+      "updated_at": "2026-05-22T01:35:49.406800Z"
+    },
+    "P26-I02-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W07-close-20260522T013551Z",
+      "elapsed_eu": 3.11,
+      "id": "ACT-P26-I02-W07",
+      "scope_id": "P26-I02-W07",
+      "status": "done",
+      "updated_at": "2026-05-22T01:35:51.110094Z"
+    },
+    "P26-I02-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W08-close-20260522T014023Z",
+      "elapsed_eu": 3.26,
+      "id": "ACT-P26-I02-W08",
+      "scope_id": "P26-I02-W08",
+      "status": "done",
+      "updated_at": "2026-05-22T01:40:23.782521Z"
+    },
+    "P26-I02-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W09-close-20260522T021319Z",
+      "elapsed_eu": 0.03,
+      "id": "ACT-P26-I02-W09",
+      "scope_id": "P26-I02-W09",
+      "status": "done",
+      "updated_at": "2026-05-22T02:13:19.228396Z"
+    },
+    "P26-I02-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W10-close-20260522T023132Z",
+      "elapsed_eu": 0.02,
+      "id": "ACT-P26-I02-W10",
+      "scope_id": "P26-I02-W10",
+      "status": "done",
+      "updated_at": "2026-05-22T02:31:32.025636Z"
+    },
+    "P26-I02-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W11-close-20260522T023650Z",
+      "elapsed_eu": 0.01,
+      "id": "ACT-P26-I02-W11",
+      "scope_id": "P26-I02-W11",
+      "status": "done",
+      "updated_at": "2026-05-22T02:36:50.126351Z"
+    },
+    "P26-I02-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W12-close-20260522T033040Z",
+      "elapsed_eu": 0.93,
+      "id": "ACT-P26-I02-W12",
+      "scope_id": "P26-I02-W12",
+      "status": "done",
+      "updated_at": "2026-05-22T03:30:40.848689Z"
+    },
+    "P26-I02-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W13-close-20260522T033047Z",
+      "elapsed_eu": 0.93,
+      "id": "ACT-P26-I02-W13",
+      "scope_id": "P26-I02-W13",
+      "status": "done",
+      "updated_at": "2026-05-22T03:30:47.655047Z"
+    },
+    "P26-I02-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W14-close-20260522T035736Z",
+      "elapsed_eu": 1.82,
+      "id": "ACT-P26-I02-W14",
+      "scope_id": "P26-I02-W14",
+      "status": "done",
+      "updated_at": "2026-05-22T03:57:36.424584Z"
+    },
+    "P26-I02-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W15-close-20260522T034548Z",
+      "elapsed_eu": 1.43,
+      "id": "ACT-P26-I02-W15",
+      "scope_id": "P26-I02-W15",
+      "status": "done",
+      "updated_at": "2026-05-22T03:45:48.212315Z"
+    },
+    "P26-I02-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W16-close-20260522T033049Z",
+      "elapsed_eu": 0.93,
+      "id": "ACT-P26-I02-W16",
+      "scope_id": "P26-I02-W16",
+      "status": "done",
+      "updated_at": "2026-05-22T03:30:49.226842Z"
+    },
+    "P26-I02-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W17-close-20260522T112313Z",
+      "elapsed_eu": 0.06,
+      "id": "ACT-P26-I02-W17",
+      "scope_id": "P26-I02-W17",
+      "status": "done",
+      "updated_at": "2026-05-22T11:23:13.030005Z"
+    },
+    "P26-I02-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W18-close-20260522T112313Z",
+      "elapsed_eu": 0.06,
+      "id": "ACT-P26-I02-W18",
+      "scope_id": "P26-I02-W18",
+      "status": "done",
+      "updated_at": "2026-05-22T11:23:13.489260Z"
+    },
+    "P26-I02-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W19-close-20260522T112313Z",
+      "elapsed_eu": 0.06,
+      "id": "ACT-P26-I02-W19",
+      "scope_id": "P26-I02-W19",
+      "status": "done",
+      "updated_at": "2026-05-22T11:23:13.958614Z"
+    },
+    "P26-I02-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W20-close-20260522T121456Z",
+      "elapsed_eu": 0.1,
+      "id": "ACT-P26-I02-W20",
+      "scope_id": "P26-I02-W20",
+      "status": "done",
+      "updated_at": "2026-05-22T12:14:56.144676Z"
+    },
+    "P26-I02-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W21-close-20260522T125755Z",
+      "elapsed_eu": 1.53,
+      "id": "ACT-P26-I02-W21",
+      "scope_id": "P26-I02-W21",
+      "status": "done",
+      "updated_at": "2026-05-22T12:57:55.030646Z"
+    },
+    "P26-I02-W22": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W22-close-20260522T130518Z",
+      "elapsed_eu": 1.77,
+      "id": "ACT-P26-I02-W22",
+      "scope_id": "P26-I02-W22",
+      "status": "done",
+      "updated_at": "2026-05-22T13:05:18.906397Z"
+    },
+    "P26-I02-W23": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P26-I02-W23-close-20260522T131023Z",
+      "elapsed_eu": 1.94,
+      "id": "ACT-P26-I02-W23",
+      "scope_id": "P26-I02-W23",
+      "status": "done",
+      "updated_at": "2026-05-22T13:10:23.158383Z"
+    },
+    "P27-I01-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W01-close-20260522T154659Z",
+      "elapsed_eu": 0.96,
+      "id": "ACT-P27-I01-W01",
+      "scope_id": "P27-I01-W01",
+      "status": "done",
+      "updated_at": "2026-05-22T15:46:59.848927Z"
+    },
+    "P27-I01-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W02-close-20260522T174333Z",
+      "elapsed_eu": 4.85,
+      "id": "ACT-P27-I01-W02",
+      "scope_id": "P27-I01-W02",
+      "status": "done",
+      "updated_at": "2026-05-22T17:43:33.203747Z"
+    },
+    "P27-I01-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W03-close-20260522T160234Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W03",
+      "scope_id": "P27-I01-W03",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:34.466015Z"
+    },
+    "P27-I01-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W04-close-20260522T163000Z",
+      "elapsed_eu": 2.39,
+      "id": "ACT-P27-I01-W04",
+      "scope_id": "P27-I01-W04",
+      "status": "done",
+      "updated_at": "2026-05-22T16:30:00.407639Z"
+    },
+    "P27-I01-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W05-close-20260522T163003Z",
+      "elapsed_eu": 2.4,
+      "id": "ACT-P27-I01-W05",
+      "scope_id": "P27-I01-W05",
+      "status": "done",
+      "updated_at": "2026-05-22T16:30:03.404946Z"
+    },
+    "P27-I01-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W06-close-20260522T172631Z",
+      "elapsed_eu": 4.28,
+      "id": "ACT-P27-I01-W06",
+      "scope_id": "P27-I01-W06",
+      "status": "done",
+      "updated_at": "2026-05-22T17:26:31.524538Z"
+    },
+    "P27-I01-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W07-close-20260522T174336Z",
+      "elapsed_eu": 4.85,
+      "id": "ACT-P27-I01-W07",
+      "scope_id": "P27-I01-W07",
+      "status": "done",
+      "updated_at": "2026-05-22T17:43:36.480944Z"
+    },
+    "P27-I01-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W08-close-20260522T160236Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W08",
+      "scope_id": "P27-I01-W08",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:36.452977Z"
+    },
+    "P27-I01-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W09-close-20260522T160238Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W09",
+      "scope_id": "P27-I01-W09",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:38.506997Z"
+    },
+    "P27-I01-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W10-close-20260522T163006Z",
+      "elapsed_eu": 2.4,
+      "id": "ACT-P27-I01-W10",
+      "scope_id": "P27-I01-W10",
+      "status": "done",
+      "updated_at": "2026-05-22T16:30:06.546117Z"
+    },
+    "P27-I01-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W11-close-20260522T163008Z",
+      "elapsed_eu": 2.4,
+      "id": "ACT-P27-I01-W11",
+      "scope_id": "P27-I01-W11",
+      "status": "done",
+      "updated_at": "2026-05-22T16:30:08.877254Z"
+    },
+    "P27-I01-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W12-close-20260522T170258Z",
+      "elapsed_eu": 3.49,
+      "id": "ACT-P27-I01-W12",
+      "scope_id": "P27-I01-W12",
+      "status": "done",
+      "updated_at": "2026-05-22T17:02:58.179497Z"
+    },
+    "P27-I01-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W13-close-20260522T170300Z",
+      "elapsed_eu": 3.49,
+      "id": "ACT-P27-I01-W13",
+      "scope_id": "P27-I01-W13",
+      "status": "done",
+      "updated_at": "2026-05-22T17:03:00.670463Z"
+    },
+    "P27-I01-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W14-close-20260522T172635Z",
+      "elapsed_eu": 4.28,
+      "id": "ACT-P27-I01-W14",
+      "scope_id": "P27-I01-W14",
+      "status": "done",
+      "updated_at": "2026-05-22T17:26:35.120503Z"
+    },
+    "P27-I01-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W15-close-20260522T174339Z",
+      "elapsed_eu": 4.85,
+      "id": "ACT-P27-I01-W15",
+      "scope_id": "P27-I01-W15",
+      "status": "done",
+      "updated_at": "2026-05-22T17:43:39.402229Z"
+    },
+    "P27-I01-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W16-close-20260522T175845Z",
+      "elapsed_eu": 5.35,
+      "id": "ACT-P27-I01-W16",
+      "scope_id": "P27-I01-W16",
+      "status": "done",
+      "updated_at": "2026-05-22T17:58:45.948266Z"
+    },
+    "P27-I01-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W17-close-20260522T160241Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W17",
+      "scope_id": "P27-I01-W17",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:41.170527Z"
+    },
+    "P27-I01-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W18-close-20260522T160245Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W18",
+      "scope_id": "P27-I01-W18",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:45.045107Z"
+    },
+    "P27-I01-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W19-close-20260522T163704Z",
+      "elapsed_eu": 2.63,
+      "id": "ACT-P27-I01-W19",
+      "scope_id": "P27-I01-W19",
+      "status": "done",
+      "updated_at": "2026-05-22T16:37:04.392479Z"
+    },
+    "P27-I01-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W20-close-20260522T160247Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W20",
+      "scope_id": "P27-I01-W20",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:47.395258Z"
+    },
+    "P27-I01-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W21-close-20260522T163707Z",
+      "elapsed_eu": 2.63,
+      "id": "ACT-P27-I01-W21",
+      "scope_id": "P27-I01-W21",
+      "status": "done",
+      "updated_at": "2026-05-22T16:37:07.673751Z"
+    },
+    "P27-I01-W22": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W22-close-20260522T170302Z",
+      "elapsed_eu": 3.49,
+      "id": "ACT-P27-I01-W22",
+      "scope_id": "P27-I01-W22",
+      "status": "done",
+      "updated_at": "2026-05-22T17:03:02.625092Z"
+    },
+    "P27-I01-W23": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W23-close-20260522T174341Z",
+      "elapsed_eu": 4.85,
+      "id": "ACT-P27-I01-W23",
+      "scope_id": "P27-I01-W23",
+      "status": "done",
+      "updated_at": "2026-05-22T17:43:41.741909Z"
+    },
+    "P27-I01-W24": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W24-close-20260522T160249Z",
+      "elapsed_eu": 1.48,
+      "id": "ACT-P27-I01-W24",
+      "scope_id": "P27-I01-W24",
+      "status": "done",
+      "updated_at": "2026-05-22T16:02:49.641832Z"
+    },
+    "P27-I01-W25": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W25-close-20260522T181129Z",
+      "elapsed_eu": 5.77,
+      "id": "ACT-P27-I01-W25",
+      "scope_id": "P27-I01-W25",
+      "status": "done",
+      "updated_at": "2026-05-22T18:11:29.985100Z"
+    },
+    "P27-I01-W26": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W26-close-20260522T181205Z",
+      "elapsed_eu": 5.79,
+      "id": "ACT-P27-I01-W26",
+      "scope_id": "P27-I01-W26",
+      "status": "done",
+      "updated_at": "2026-05-22T18:12:05.379718Z"
+    },
+    "P27-I01-W27": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W27-close-20260522T182139Z",
+      "elapsed_eu": 6.11,
+      "id": "ACT-P27-I01-W27",
+      "scope_id": "P27-I01-W27",
+      "status": "done",
+      "updated_at": "2026-05-22T18:21:39.772442Z"
+    },
+    "P27-I01-W28": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I01-W28-close-20260522T190356Z",
+      "elapsed_eu": 0.54,
+      "id": "ACT-P27-I01-W28",
+      "scope_id": "P27-I01-W28",
+      "status": "done",
+      "updated_at": "2026-05-22T19:03:56.301273Z"
+    },
+    "P27-I02-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W01-close-20260522T220056Z",
+      "elapsed_eu": 4.13,
+      "id": "ACT-P27-I02-W01",
+      "scope_id": "P27-I02-W01",
+      "status": "done",
+      "updated_at": "2026-05-22T22:00:56.914003Z"
+    },
+    "P27-I02-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W02-close-20260522T221357Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W02",
+      "scope_id": "P27-I02-W02",
+      "status": "done",
+      "updated_at": "2026-05-22T22:13:57.452013Z"
+    },
+    "P27-I02-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W03-close-20260522T221359Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W03",
+      "scope_id": "P27-I02-W03",
+      "status": "done",
+      "updated_at": "2026-05-22T22:13:59.308292Z"
+    },
+    "P27-I02-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W04-close-20260522T221401Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W04",
+      "scope_id": "P27-I02-W04",
+      "status": "done",
+      "updated_at": "2026-05-22T22:14:01.267045Z"
+    },
+    "P27-I02-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W05-close-20260522T222709Z",
+      "elapsed_eu": 5.01,
+      "id": "ACT-P27-I02-W05",
+      "scope_id": "P27-I02-W05",
+      "status": "done",
+      "updated_at": "2026-05-22T22:27:09.138554Z"
+    },
+    "P27-I02-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W06-close-20260522T221403Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W06",
+      "scope_id": "P27-I02-W06",
+      "status": "done",
+      "updated_at": "2026-05-22T22:14:03.425059Z"
+    },
+    "P27-I02-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W07-close-20260522T221405Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W07",
+      "scope_id": "P27-I02-W07",
+      "status": "done",
+      "updated_at": "2026-05-22T22:14:05.546685Z"
+    },
+    "P27-I02-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W08-close-20260522T221407Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W08",
+      "scope_id": "P27-I02-W08",
+      "status": "done",
+      "updated_at": "2026-05-22T22:14:07.689514Z"
+    },
+    "P27-I02-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W09-close-20260522T222710Z",
+      "elapsed_eu": 5.01,
+      "id": "ACT-P27-I02-W09",
+      "scope_id": "P27-I02-W09",
+      "status": "done",
+      "updated_at": "2026-05-22T22:27:10.927617Z"
+    },
+    "P27-I02-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W10-close-20260522T220104Z",
+      "elapsed_eu": 4.14,
+      "id": "ACT-P27-I02-W10",
+      "scope_id": "P27-I02-W10",
+      "status": "done",
+      "updated_at": "2026-05-22T22:01:04.957342Z"
+    },
+    "P27-I02-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W11-close-20260522T224127Z",
+      "elapsed_eu": 5.48,
+      "id": "ACT-P27-I02-W11",
+      "scope_id": "P27-I02-W11",
+      "status": "done",
+      "updated_at": "2026-05-22T22:41:27.667596Z"
+    },
+    "P27-I02-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W12-close-20260522T221409Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W12",
+      "scope_id": "P27-I02-W12",
+      "status": "done",
+      "updated_at": "2026-05-22T22:14:09.599954Z"
+    },
+    "P27-I02-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W13-close-20260522T221411Z",
+      "elapsed_eu": 4.57,
+      "id": "ACT-P27-I02-W13",
+      "scope_id": "P27-I02-W13",
+      "status": "done",
+      "updated_at": "2026-05-22T22:14:11.429154Z"
+    },
+    "P27-I02-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W14-close-20260522T222712Z",
+      "elapsed_eu": 5.01,
+      "id": "ACT-P27-I02-W14",
+      "scope_id": "P27-I02-W14",
+      "status": "done",
+      "updated_at": "2026-05-22T22:27:12.959103Z"
+    },
+    "P27-I02-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W15-close-20260522T222714Z",
+      "elapsed_eu": 5.01,
+      "id": "ACT-P27-I02-W15",
+      "scope_id": "P27-I02-W15",
+      "status": "done",
+      "updated_at": "2026-05-22T22:27:14.945264Z"
+    },
+    "P27-I02-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W16-close-20260522T222717Z",
+      "elapsed_eu": 5.01,
+      "id": "ACT-P27-I02-W16",
+      "scope_id": "P27-I02-W16",
+      "status": "done",
+      "updated_at": "2026-05-22T22:27:17.094632Z"
+    },
+    "P27-I02-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W17-close-20260522T224129Z",
+      "elapsed_eu": 5.48,
+      "id": "ACT-P27-I02-W17",
+      "scope_id": "P27-I02-W17",
+      "status": "done",
+      "updated_at": "2026-05-22T22:41:29.499672Z"
+    },
+    "P27-I02-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W18-close-20260522T230952Z",
+      "elapsed_eu": 6.43,
+      "id": "ACT-P27-I02-W18",
+      "scope_id": "P27-I02-W18",
+      "status": "done",
+      "updated_at": "2026-05-22T23:09:52.330059Z"
+    },
+    "P27-I02-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W19-close-20260522T222719Z",
+      "elapsed_eu": 5.01,
+      "id": "ACT-P27-I02-W19",
+      "scope_id": "P27-I02-W19",
+      "status": "done",
+      "updated_at": "2026-05-22T22:27:19.007871Z"
+    },
+    "P27-I02-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W20-close-20260522T224131Z",
+      "elapsed_eu": 5.48,
+      "id": "ACT-P27-I02-W20",
+      "scope_id": "P27-I02-W20",
+      "status": "done",
+      "updated_at": "2026-05-22T22:41:31.313524Z"
+    },
+    "P27-I02-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W21-close-20260522T224309Z",
+      "elapsed_eu": 5.54,
+      "id": "ACT-P27-I02-W21",
+      "scope_id": "P27-I02-W21",
+      "status": "done",
+      "updated_at": "2026-05-22T22:43:09.507190Z"
+    },
+    "P27-I02-W22": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W22-close-20260522T224133Z",
+      "elapsed_eu": 5.48,
+      "id": "ACT-P27-I02-W22",
+      "scope_id": "P27-I02-W22",
+      "status": "done",
+      "updated_at": "2026-05-22T22:41:33.179603Z"
+    },
     "P27-I02-W23": {
       "agent_runtime_eu": null,
       "attention_eu": null,
@@ -20,6 +2670,16 @@
       "status": "done",
       "updated_at": "2026-05-22T23:54:11.295441Z"
     },
+    "P27-I02-W25": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W25-close-20260522T230954Z",
+      "elapsed_eu": 6.43,
+      "id": "ACT-P27-I02-W25",
+      "scope_id": "P27-I02-W25",
+      "status": "done",
+      "updated_at": "2026-05-22T23:09:54.353956Z"
+    },
     "P27-I02-W26": {
       "agent_runtime_eu": null,
       "attention_eu": null,
@@ -29,6 +2689,36 @@
       "scope_id": "P27-I02-W26",
       "status": "done",
       "updated_at": "2026-05-22T23:15:37.898787Z"
+    },
+    "P27-I02-W27": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W27-close-20260523T003319Z",
+      "elapsed_eu": 0.24,
+      "id": "ACT-P27-I02-W27",
+      "scope_id": "P27-I02-W27",
+      "status": "done",
+      "updated_at": "2026-05-23T00:33:19.394809Z"
+    },
+    "P27-I02-W28": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W28-close-20260523T003322Z",
+      "elapsed_eu": 0.24,
+      "id": "ACT-P27-I02-W28",
+      "scope_id": "P27-I02-W28",
+      "status": "done",
+      "updated_at": "2026-05-23T00:33:22.623487Z"
+    },
+    "P27-I02-W29": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W29-close-20260523T003949Z",
+      "elapsed_eu": 0.45,
+      "id": "ACT-P27-I02-W29",
+      "scope_id": "P27-I02-W29",
+      "status": "done",
+      "updated_at": "2026-05-23T00:39:49.379426Z"
     }
   },
   "agent_sessions": {
@@ -2177,6 +4867,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I02-W24",
       "updated_at": "2026-05-22T23:17:13.561489Z"
+    },
+    "P27-I02-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W27-bucket-20260523T002636Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I02-W27",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I02-W27",
+      "updated_at": "2026-05-23T00:26:36.725880Z"
+    },
+    "P27-I02-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W28-bucket-20260523T002638Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I02-W28",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I02-W28",
+      "updated_at": "2026-05-23T00:26:38.234179Z"
+    },
+    "P27-I02-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W29-bucket-20260523T003350Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I02-W29",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I02-W29",
+      "updated_at": "2026-05-23T00:33:50.065302Z"
     }
   },
   "goals": {
@@ -2860,7 +5589,10 @@
         "P27-I02-W23",
         "P27-I02-W24",
         "P27-I02-W25",
-        "P27-I02-W26"
+        "P27-I02-W26",
+        "P27-I02-W27",
+        "P27-I02-W28",
+        "P27-I02-W29"
       ]
     },
     "P27-I03": {
@@ -3452,7 +6184,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-22T23:54:11.812010Z",
+  "updated_at": "2026-05-23T00:39:49.905944Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -13374,6 +16106,102 @@
       "tokens_consumed": 0,
       "worktree_id": "WT-P27-I02-W26-1779491419"
     },
+    "P27-I02-W27": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W29"
+      ],
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-23T00:33:19.394809Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/migrations/_base.py",
+        "pyproject.toml"
+      ],
+      "id": "P27-I02-W27",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T00:26:06.146138Z",
+      "outcome": "landed 1 commit(s) via wave land",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "test_import_budget passes (eawf.state.models no longer eagerly imported by cli.app); test_eawf_loc_cap passes (ship.py + cli/commands/lifecycle.py added to EAWF010 exclude with rationale)"
+      ],
+      "title": "Audit remediation: import-budget lazy import + LOC-cap exclude",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I02-W27-1779495997"
+    },
+    "P27-I02-W28": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I02-W29"
+      ],
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-23T00:33:22.623487Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/_dispatch.py",
+        "src/eawf/cli/commands/state.py",
+        "src/eawf/daemon/main.py",
+        "tests/e2e/test_daemon_e2e.py"
+      ],
+      "id": "P27-I02-W28",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T00:26:18.389216Z",
+      "outcome": "landed 1 commit(s) via wave land",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "generic _mutate_via_daemon routes -32001/-32003/-32005 RPC errors through cli_error_for_rpc (no uncaught DaemonRpcError; specificity reaches operator); RawRpc kind override dropped; live daemon runtime dir + log parent created 0700 via ensure_runtime_dir; stale xfail(strict) removed from test_log_scrubs_home_shaped_paths"
+      ],
+      "title": "Audit fix: daemon error specificity + runtime-dir 0700 + e2e xfail",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I02-W28-1779495999"
+    },
+    "P27-I02-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p27i02",
+      "closed_at": "2026-05-23T00:39:49.379426Z",
+      "commit": null,
+      "deps": [
+        "P27-I02-W27",
+        "P27-I02-W28"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/metrics.py",
+        "docs/reference/autogen/cli.md"
+      ],
+      "id": "P27-I02-W29",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T00:26:18.930669Z",
+      "outcome": "landed 1 commit(s) via wave land",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "eawf metrics backfill-actuals verb routes backfill_actuals through the canonical mutator for closed waves; cli.md autogen regenerated so test_docs_autogen passes"
+      ],
+      "title": "Audit fix: backfill-actuals runner + autogen cli.md regen",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P27-I02-W29-1779496430"
+    },
     "P27-I03-W01": {
       "agent_role": "executor",
       "blocks": [
@@ -15735,6 +18563,39 @@
       "path": ".ea/worktrees/p27-w26",
       "status": "merged",
       "wave_id": "P27-I02-W26"
+    },
+    "WT-P27-I02-W27-1779495997": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w27",
+      "created_at": "2026-05-23T00:26:37.650977Z",
+      "id": "WT-P27-I02-W27-1779495997",
+      "merged_commit": "e3bdc5f",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w27",
+      "status": "merged",
+      "wave_id": "P27-I02-W27"
+    },
+    "WT-P27-I02-W28-1779495999": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w28",
+      "created_at": "2026-05-23T00:26:39.085477Z",
+      "id": "WT-P27-I02-W28-1779495999",
+      "merged_commit": "31fef36",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w28",
+      "status": "merged",
+      "wave_id": "P27-I02-W28"
+    },
+    "WT-P27-I02-W29-1779496430": {
+      "base_branch": "feature/eawf-v0.3-p27",
+      "branch": "feature/eawf-v0.1-p27-w29",
+      "created_at": "2026-05-23T00:33:50.962421Z",
+      "id": "WT-P27-I02-W29-1779496430",
+      "merged_commit": "0b243d4",
+      "owner_session_id": "flow-p27i02",
+      "path": ".ea/worktrees/p27-w29",
+      "status": "merged",
+      "wave_id": "P27-I02-W29"
     }
   }
 }
