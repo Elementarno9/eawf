@@ -36,6 +36,7 @@ Heavy LLM-fanout (steps 4-5) degrade to ``status=needs_user`` with a typed
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -43,11 +44,6 @@ import orjson
 from pydantic import ValidationError
 
 from eawf.render.envelope import SkillName
-from eawf.skills._common import (
-    emit_event,
-    probe_skill_instruments,
-    resolve_active_state_path,
-)
 from eawf.skills.bodies.prep import (
     PrepAcceptance,
     PrepBody,
@@ -55,7 +51,7 @@ from eawf.skills.bodies.prep import (
     PrepWave,
 )
 from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
+from eawf.skills.engine import ActionRun, SkillAction, SkillResult
 from eawf.skills.registry import register
 from eawf.state.enums import PhaseStatus, WaveStatus
 from eawf.state.ids import parents_of
@@ -87,7 +83,7 @@ def _load_state(state_path: Path) -> State | None:
     try:
         return State.model_validate(orjson.loads(state_path.read_bytes()))
     except (orjson.JSONDecodeError, ValidationError) as exc:
-        logger.warning(f"_load_state could not read state at {state_path}: {exc}")
+        logger.warning(f"_load_state read-failed path={state_path} exc={exc}")
         return None
 
 
@@ -168,221 +164,229 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
     return dag, waves
 
 
+_PREP_NEXT_ACTIONS: tuple[str, ...] = ("eawf wave plan", "eawf audit")
+
+
+@dataclass
+class _PrepInputs:
+    """Resolved ``/prep`` inputs gathered before any algorithm step runs.
+
+    Attributes:
+        iter_id: The resolved target iter id (explicit arg or default).
+        approval: The lowered approval mode (``auto`` / ``ask``).
+        fix_mode: Whether ``--fix`` / ``-i`` selected the audit-fix objective.
+        state: The loaded state document, or ``None`` when unreadable.
+        phase_id: The resolved target phase id, or ``None``.
+        phase: The resolved :class:`Phase` record, or ``None``.
+    """
+
+    iter_id: str
+    approval: str
+    fix_mode: bool
+    state: State | None
+    phase_id: str | None
+    phase: Phase | None
+
+
+@dataclass
+class _PrepPlan:
+    """The planned objective + DAG produced by ``/prep``'s execute stage.
+
+    Attributes:
+        objective: The plan objective line.
+        non_goals: The plan's non-goal list.
+        dag: The projected DAG tasks.
+        waves: The projected wave groups.
+    """
+
+    objective: str
+    non_goals: list[str] = field(default_factory=list)
+    dag: list[PrepDagTask] = field(default_factory=list)
+    waves: list[PrepWave] = field(default_factory=list)
+
+
 @register
-class PrepSkill(Skill):
+class PrepSkill(SkillAction):
     """Concrete ``/prep`` skill (Phase 4 W02)."""
 
     name: SkillName = "/prep"
 
-    def probe(self, ctx: SkillContext) -> ProbeOutcome:
-        return probe_skill_instruments()
-
-    def action(self, ctx: SkillContext) -> SkillResult:
-        state_path = resolve_active_state_path()
-        scope_id = ctx.scope
-        args: dict[str, Any] = dict(ctx.args)
-        iter_id = str(args.get("iter_id") or args.get("iter") or _DEFAULT_ITER_ID)
-        approval = str(args.get("approval", "auto")).lower()
-        fix_mode = bool(args.get("fix") or args.get("i"))
-
-        state = _load_state(state_path)
-        phase_id = _resolve_phase_id(args, iter_id, state)
+    def _gather(self, run: ActionRun) -> _PrepInputs:
+        iter_id = str(run.args.get("iter_id") or run.args.get("iter") or _DEFAULT_ITER_ID)
+        state = _load_state(run.state_path)
+        phase_id = _resolve_phase_id(run.args, iter_id, state)
         phase = state.phases.get(phase_id) if (state is not None and phase_id) else None
+        return _PrepInputs(
+            iter_id=iter_id,
+            approval=str(run.args.get("approval", "auto")).lower(),
+            fix_mode=bool(run.args.get("fix") or run.args.get("i")),
+            state=state,
+            phase_id=phase_id,
+            phase=phase,
+        )
 
-        persisted_records: list[str] = []
-        state_mutations: list[str] = []
-        next_actions: list[str] = ["eawf wave plan", "eawf audit"]
-
-        # Lifecycle guard — a CLOSED phase cannot be re-planned. Block with
-        # a reopen repair command before running any algorithm step.
-        if phase is not None and phase.status == PhaseStatus.CLOSED:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="prep.blocked_closed_phase",
-                summary=f"prep: blocked — phase {phase_id} is closed",
-                payload={"phase_id": phase_id, "phase_status": phase.status.value},
-            )
-            persisted_records.append(evt_id)
-            return SkillResult(
-                status="blocked",
-                body=PrepBody(
-                    iter_id=iter_id,
-                    objective=f"Plan {iter_id} (blocked: phase {phase_id} is closed)",
-                    non_goals=["reopen closed phase implicitly"],
-                ).model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=[f"eawf phase reopen {phase_id}"],
-                repair_commands=[f"eawf phase reopen {phase_id}"],
-            )
-
+    def _validate(self, run: ActionRun, inputs: _PrepInputs) -> SkillResult | None:
+        phase = inputs.phase
+        if phase is None:
+            return None
+        # Lifecycle guard — a CLOSED phase cannot be re-planned. Block with a
+        # reopen repair command before running any algorithm step.
+        if phase.status == PhaseStatus.CLOSED:
+            return self._blocked_closed_phase(run, inputs)
         # Idempotency guard — an already-ACTIVE phase is a no-op. Return ok
         # with no_op=True and emit no prep.build_dag event.
-        if phase is not None and phase.status == PhaseStatus.ACTIVE:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="prep.noop_already_active",
-                summary=f"prep: no-op — phase {phase_id} already active",
-                payload={"phase_id": phase_id, "phase_status": phase.status.value},
-            )
-            persisted_records.append(evt_id)
-            return SkillResult(
-                status="ok",
-                body=PrepBody(
-                    iter_id=iter_id,
-                    objective=f"Plan {iter_id} (no-op: phase {phase_id} already active)",
-                    no_op=True,
-                ).model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=next_actions,
-            )
+        if phase.status == PhaseStatus.ACTIVE:
+            return self._noop_active_phase(run, inputs)
+        return None
 
+    def _blocked_closed_phase(self, run: ActionRun, inputs: _PrepInputs) -> SkillResult:
+        assert inputs.phase is not None
+        self._trace(
+            run,
+            "prep.blocked_closed_phase",
+            f"prep: blocked — phase {inputs.phase_id} is closed",
+            {"phase_id": inputs.phase_id, "phase_status": inputs.phase.status.value},
+        )
+        return self._blocked(
+            run,
+            PrepBody(
+                iter_id=inputs.iter_id,
+                objective=f"Plan {inputs.iter_id} (blocked: phase {inputs.phase_id} is closed)",
+                non_goals=["reopen closed phase implicitly"],
+            ).model_dump(mode="json"),
+            next_valid_actions=[f"eawf phase reopen {inputs.phase_id}"],
+            repair_commands=[f"eawf phase reopen {inputs.phase_id}"],
+        )
+
+    def _noop_active_phase(self, run: ActionRun, inputs: _PrepInputs) -> SkillResult:
+        assert inputs.phase is not None
+        self._trace(
+            run,
+            "prep.noop_already_active",
+            f"prep: no-op — phase {inputs.phase_id} already active",
+            {"phase_id": inputs.phase_id, "phase_status": inputs.phase.status.value},
+        )
+        return self._ok(
+            run,
+            PrepBody(
+                iter_id=inputs.iter_id,
+                objective=f"Plan {inputs.iter_id} (no-op: phase {inputs.phase_id} already active)",
+                no_op=True,
+            ).model_dump(mode="json"),
+            next_valid_actions=list(_PREP_NEXT_ACTIONS),
+        )
+
+    def _execute(self, run: ActionRun, inputs: _PrepInputs) -> _PrepPlan:
         # Step 1 — probe ran. Step 2: resolve mode.
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.resolve_mode",
-            summary=f"prep: resolve mode iter={iter_id} fix={fix_mode}",
-            payload={"iter_id": iter_id, "fix_mode": fix_mode},
+        self._trace(
+            run,
+            "prep.resolve_mode",
+            f"prep: resolve mode iter={inputs.iter_id} fix={inputs.fix_mode}",
+            {"iter_id": inputs.iter_id, "fix_mode": inputs.fix_mode},
         )
-        persisted_records.append(evt_id)
-
         # Step 3 — load state.
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.load_state",
-            summary="prep: load state + accepted research + decisions",
-            payload={"phase_id": phase_id, "state_loaded": state is not None},
+        self._trace(
+            run,
+            "prep.load_state",
+            "prep: load state + accepted research + decisions",
+            {"phase_id": inputs.phase_id, "state_loaded": inputs.state is not None},
         )
-        persisted_records.append(evt_id)
-
         # Step 4 — define objective + non-goals.
-        objective = "Apply audit fix-list" if fix_mode else f"Plan {iter_id} per active scope"
-        non_goals: list[str] = ["change project scope", "rewrite closed history"]
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.define_objective",
-            summary=f"prep: objective={objective[:60]}",
-            payload={"objective": objective, "non_goals": non_goals},
+        objective = (
+            "Apply audit fix-list" if inputs.fix_mode else f"Plan {inputs.iter_id} per active scope"
         )
-        persisted_records.append(evt_id)
-
+        non_goals = ["change project scope", "rewrite closed history"]
+        self._trace(
+            run,
+            "prep.define_objective",
+            f"prep: objective={objective[:60]}",
+            {"objective": objective, "non_goals": non_goals},
+        )
         # Step 5 — build DAG from the target phase's PENDING waves. When no
         # phase resolves (no state on disk), the DAG is empty rather than a
         # made-up placeholder.
-        if phase is not None and state is not None:
-            dag, waves = _build_dag_from_phase(phase, state)
+        if inputs.phase is not None and inputs.state is not None:
+            dag, waves = _build_dag_from_phase(inputs.phase, inputs.state)
         else:
             dag, waves = [], []
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.build_dag",
-            summary=f"prep: built DAG with {len(dag)} task(s)",
-            payload={"task_count": len(dag), "phase_id": phase_id},
+        self._trace(
+            run,
+            "prep.build_dag",
+            f"prep: built DAG with {len(dag)} task(s)",
+            {"task_count": len(dag), "phase_id": inputs.phase_id},
         )
-        persisted_records.append(evt_id)
-
         # Step 6 — partition into waves (already grouped per iter above).
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.partition_waves",
-            summary=f"prep: planned {len(waves)} wave(s)",
-            payload={"wave_count": len(waves)},
+        self._trace(
+            run,
+            "prep.partition_waves",
+            f"prep: planned {len(waves)} wave(s)",
+            {"wave_count": len(waves)},
         )
-        persisted_records.append(evt_id)
-
         # Step 7 — estimate (already on PrepWave).
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.estimate",
-            summary="prep: estimated each wave",
-            payload={"total_eu": sum(w.estimate_eu for w in waves)},
+        self._trace(
+            run,
+            "prep.estimate",
+            "prep: estimated each wave",
+            {"total_eu": sum(w.estimate_eu for w in waves)},
         )
-        persisted_records.append(evt_id)
-
         # Step 8 — allocate IDs (placeholder).
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.allocate_ids",
-            summary="prep: allocated task / wave IDs",
-            payload={"iter_id": iter_id},
+        self._trace(
+            run,
+            "prep.allocate_ids",
+            "prep: allocated task / wave IDs",
+            {"iter_id": inputs.iter_id},
         )
-        persisted_records.append(evt_id)
-
         # Step 9 — write plan / spec artefact (v0.1: skipped — no artifact
         # subsystem write here; future wave wires it via add_artifact).
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="prep.write_plan",
-            summary="prep: plan persisted as event payload (v0.1)",
-            payload={"iter_id": iter_id, "wave_count": len(waves)},
+        self._trace(
+            run,
+            "prep.write_plan",
+            "prep: plan persisted as event payload (v0.1)",
+            {"iter_id": inputs.iter_id, "wave_count": len(waves)},
         )
-        persisted_records.append(evt_id)
+        return _PrepPlan(objective=objective, non_goals=non_goals, dag=dag, waves=waves)
 
+    def _render(self, run: ActionRun, inputs: _PrepInputs, outcome: _PrepPlan) -> SkillResult:
         # Step 10 — approval gate.
         body = PrepBody(
-            iter_id=iter_id,
-            objective=objective,
-            non_goals=non_goals,
-            dag=dag,
-            waves=waves,
+            iter_id=inputs.iter_id,
+            objective=outcome.objective,
+            non_goals=outcome.non_goals,
+            dag=outcome.dag,
+            waves=outcome.waves,
             acceptance=PrepAcceptance(
                 checks=["uv run pytest", "uv run mypy src"],
                 baselines=[],
             ),
-            approval_required=approval == "ask",
+            approval_required=inputs.approval == "ask",
         )
-
-        if approval == "ask":
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="prep.approval_gate",
-                summary="prep: approval requested",
-                payload={"approval": approval},
+        if inputs.approval == "ask":
+            self._trace(
+                run,
+                "prep.approval_gate",
+                "prep: approval requested",
+                {"approval": inputs.approval},
             )
-            persisted_records.append(evt_id)
             body.user_question = UserQuestion(
-                question=(f"Plan ready for {iter_id} ({len(waves)} wave(s)). Pick how to proceed."),
+                question=(
+                    f"Plan ready for {inputs.iter_id} "
+                    f"({len(outcome.waves)} wave(s)). Pick how to proceed."
+                ),
                 options=[
-                    UserQuestionOption(
-                        label="approve",
-                        description="Apply the plan and continue.",
-                    ),
-                    UserQuestionOption(
-                        label="edit",
-                        description="Edit the plan before applying.",
-                    ),
-                    UserQuestionOption(
-                        label="cancel",
-                        description="Discard the plan.",
-                    ),
+                    UserQuestionOption(label="approve", description="Apply the plan and continue."),
+                    UserQuestionOption(label="edit", description="Edit the plan before applying."),
+                    UserQuestionOption(label="cancel", description="Discard the plan."),
                 ],
             )
-            return SkillResult(
-                status="needs_user",
-                body=body.model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=next_actions,
+            return self._needs_user(
+                run,
+                body.model_dump(mode="json"),
+                next_valid_actions=list(_PREP_NEXT_ACTIONS),
             )
-
-        return SkillResult(
-            status="ok",
-            body=body.model_dump(mode="json"),
-            persisted_store_records=persisted_records,
-            state_mutations=state_mutations,
-            next_valid_actions=next_actions,
+        return self._ok(
+            run,
+            body.model_dump(mode="json"),
+            next_valid_actions=list(_PREP_NEXT_ACTIONS),
         )
 
 

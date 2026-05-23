@@ -58,6 +58,7 @@ import json
 import logging
 import subprocess
 import uuid
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -67,14 +68,16 @@ from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
 from eawf.render.envelope import OutputEnvelope, SkillName
-from eawf.skills._common import (
-    emit_event,
-    probe_skill_instruments,
-    resolve_active_state_path,
-)
 from eawf.skills.audit import AuditSkill
 from eawf.skills.bodies.flow import FlowBody
-from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult, run_skill
+from eawf.skills.engine import (
+    ActionRun,
+    Skill,
+    SkillAction,
+    SkillContext,
+    SkillResult,
+    run_skill,
+)
 from eawf.skills.polish import PolishSkill
 from eawf.skills.prep import PrepSkill
 from eawf.skills.registry import register
@@ -192,7 +195,7 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
         subprocess.TimeoutExpired,
         OSError,
     ) as exc:
-        logger.debug(f"_run_git: {' '.join(args)!r} failed: {exc}")
+        logger.debug(f"_run_git failed args={' '.join(args)!r} exc={exc}")
         return None
     return proc.stdout.strip()
 
@@ -206,7 +209,7 @@ def _current_git_head(workspace_root: Path) -> str | None:
     # canonical 40-char hex form so the pattern validator on the
     # checkpoint payload accepts the round-trip.
     if len(head) != 40:
-        logger.debug(f"_current_git_head: unexpected length {len(head)} for {head!r}")
+        logger.debug(f"_current_git_head unexpected-length length={len(head)} head={head!r}")
         return None
     return head
 
@@ -288,13 +291,13 @@ def _current_profile_ids(state_path: Path) -> list[str]:
     try:
         from eawf.config.layered import merge_config
     except Exception as exc:  # pragma: no cover - defensive only
-        logger.debug(f"_current_profile_ids: import failed: {exc}")
+        logger.debug(f"_current_profile_ids import-failed exc={exc}")
         return []
     workspace_root = _workspace_root_for_state(state_path)
     try:
         merged, _sources = merge_config(repo=workspace_root, workspace=workspace_root)
     except Exception as exc:
-        logger.debug(f"_current_profile_ids: merge_config raised: {exc}")
+        logger.debug(f"_current_profile_ids merge-config-raised exc={exc}")
         return []
     profiles = merged.get("profiles") if isinstance(merged, dict) else None
     if not isinstance(profiles, dict):
@@ -340,8 +343,8 @@ def compute_drift(
     current_head = _current_git_head(workspace_root)
     if current_head is None and checkpoint.parent_git_head is None:
         logger.debug(
-            "compute_drift: git_head None on both sides (workspace not a git repo "
-            "or git unavailable); skipping git drift comparison"
+            "compute_drift git-head-none-both-sides; workspace not a git repo "
+            "or git unavailable, skipping git drift comparison"
         )
     elif current_head != checkpoint.parent_git_head:
         drift["git_head"] = {
@@ -563,7 +566,7 @@ def load_flow_records(state_path: Path) -> list[tuple[str, dict[str, Any]]]:
         try:
             decoded = orjson.loads(line)
         except orjson.JSONDecodeError as exc:
-            logger.debug(f"load_flow_records: skipping malformed line: {exc}")
+            logger.debug(f"load_flow_records skipping-malformed-line exc={exc}")
             continue
         if not isinstance(decoded, dict):
             continue
@@ -589,7 +592,7 @@ def load_latest_records_per_flow(state_path: Path) -> dict[str, FlowPayload]:
         try:
             record = FlowPayload.model_validate(payload)
         except Exception as exc:
-            logger.debug(f"load_latest_records_per_flow: validation failed: {exc}")
+            logger.debug(f"load_latest_records_per_flow validation-failed exc={exc}")
             continue
         out[record.flow_id] = record
     return out
@@ -614,7 +617,7 @@ def load_latest_safe_checkpoint(
         try:
             ckpt = FlowCheckpointPayload.model_validate(payload)
         except Exception as exc:
-            logger.debug(f"load_latest_safe_checkpoint: validation failed: {exc}")
+            logger.debug(f"load_latest_safe_checkpoint validation-failed exc={exc}")
             continue
         if ckpt.last_safe:
             safe = (envelope_id, ckpt)
@@ -649,8 +652,80 @@ def latest_active_flow_id(state_path: Path) -> str | None:
 # ---- Skill registration ----------------------------------------------------
 
 
+_FLOW_NEXT_ACTIONS: tuple[str, ...] = ("eawf flow status", "eawf audit")
+
+
+def _terminal_flow_status(terminal_status: str) -> FlowStatus:
+    """Map a terminal envelope status onto a :class:`FlowStatus` for the record.
+
+    ``ok`` / ``partial`` → DONE, ``needs_user`` → PAUSED, everything else
+    (``blocked`` / ``failed`` / unrecognised) → BLOCKED so the operator
+    always sees a non-success terminal record.
+    """
+    if terminal_status in {"ok", "partial"}:
+        return FlowStatus.DONE
+    if terminal_status == "needs_user":
+        return FlowStatus.PAUSED
+    return FlowStatus.BLOCKED
+
+
+@dataclass
+class _FlowInputs:
+    """Resolved ``/flow`` inputs gathered before the pipeline runs.
+
+    Attributes:
+        topic: The free-form topic recorded on the body, or ``None``.
+        stop_after: The normalised stop-after short name, or ``None``.
+        args_per_step: The per-step args mapping.
+        resume_from: The validated resume checkpoint, or ``None``.
+        resume_from_id: The resumed checkpoint's envelope id, or ``None``.
+        flow_id: The flow id (caller-supplied or freshly minted).
+        start_index: The first step index to run (resume tail offset).
+    """
+
+    topic: Any
+    stop_after: str | None
+    args_per_step: dict[str, Any]
+    resume_from: FlowCheckpointPayload | None
+    resume_from_id: str | None
+    flow_id: str
+    start_index: int
+
+
+@dataclass
+class _StepResult:
+    """The per-step outcome the loop folds into the run.
+
+    Attributes:
+        status: The step envelope's terminal status.
+        envelope: The step's :class:`OutputEnvelope`.
+        checkpoint_id: The appended checkpoint envelope id.
+        last_safe: Whether the boundary was a safe checkpoint.
+    """
+
+    status: str
+    envelope: OutputEnvelope
+    checkpoint_id: str
+    last_safe: bool
+
+
+@dataclass
+class _FlowRun:
+    """The accumulated result of running the flow's step loop.
+
+    Attributes:
+        steps: The serialised per-step envelopes (post-resume tail only).
+        repair_commands: The failing step's repair commands, or ``None``.
+        last_safe_checkpoint_id: The id of the last safe checkpoint.
+    """
+
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    repair_commands: list[str] | None = None
+    last_safe_checkpoint_id: str | None = None
+
+
 @register
-class FlowSkill(Skill):
+class FlowSkill(SkillAction):
     """Concrete ``/flow`` skill (Phase 4 W03 + Phase 5 W02 resume).
 
     Runs the six core skills sequentially. Short-circuits on the first
@@ -670,280 +745,266 @@ class FlowSkill(Skill):
     # without re-importing the module-private tuple.
     flow_order: tuple[tuple[SkillName, type[Skill]], ...] = _CORE_FLOW_ORDER
 
-    def probe(self, ctx: SkillContext) -> ProbeOutcome:
-        return probe_skill_instruments()
-
-    def action(self, ctx: SkillContext) -> SkillResult:
-        state_path = resolve_active_state_path()
-        scope_id = ctx.scope
-        args: dict[str, Any] = dict(ctx.args)
-        topic = args.get("topic")
-        stop_after = _resolve_stop_after(args.get("stop_after"))
+    def _gather(self, run: ActionRun) -> _FlowInputs:
+        args = run.args
         args_per_step_raw = args.get("args_per_step") or {}
         if not isinstance(args_per_step_raw, dict):
             args_per_step_raw = {}
-        args_per_step: dict[str, Any] = args_per_step_raw
-
-        resume_from_raw = args.get("resume_from")
-        resume_from: FlowCheckpointPayload | None = None
-        resume_from_id: str | None = None
-        if isinstance(resume_from_raw, dict):
-            resume_envelope_id = resume_from_raw.get("__envelope_id__")
-            ckpt_dict = {k: v for k, v in resume_from_raw.items() if k != "__envelope_id__"}
-            try:
-                resume_from = FlowCheckpointPayload.model_validate(ckpt_dict)
-            except ValidationError as exc:
-                raise cli_errors.InvalidInput(
-                    f"resume_from checkpoint failed validation: {exc.errors()[0].get('msg', exc)}"
-                ) from exc
-            if isinstance(resume_envelope_id, str):
-                resume_from_id = resume_envelope_id
-
+        resume_from, resume_from_id = self._parse_resume_from(args.get("resume_from"))
         flow_id_raw = args.get("flow_id")
-        if isinstance(flow_id_raw, str) and flow_id_raw:
-            flow_id = flow_id_raw
+        flow_id = (
+            flow_id_raw
+            if isinstance(flow_id_raw, str) and flow_id_raw
+            else f"FL-{uuid.uuid4().hex[:12]}"
+        )
+        return _FlowInputs(
+            topic=args.get("topic"),
+            stop_after=_resolve_stop_after(args.get("stop_after")),
+            args_per_step=args_per_step_raw,
+            resume_from=resume_from,
+            resume_from_id=resume_from_id,
+            flow_id=flow_id,
+            start_index=0 if resume_from is None else resume_from.step_index + 1,
+        )
+
+    def _parse_resume_from(
+        self, resume_from_raw: Any
+    ) -> tuple[FlowCheckpointPayload | None, str | None]:
+        """Validate the ``resume_from`` arg into a checkpoint + envelope id.
+
+        Raises:
+            InvalidInput: when the supplied checkpoint dict fails validation.
+        """
+        if not isinstance(resume_from_raw, dict):
+            return None, None
+        resume_envelope_id = resume_from_raw.get("__envelope_id__")
+        ckpt_dict = {k: v for k, v in resume_from_raw.items() if k != "__envelope_id__"}
+        try:
+            resume_from = FlowCheckpointPayload.model_validate(ckpt_dict)
+        except ValidationError as exc:
+            raise cli_errors.InvalidInput(
+                f"resume_from checkpoint failed validation: {exc.errors()[0].get('msg', exc)}"
+            ) from exc
+        resume_from_id = resume_envelope_id if isinstance(resume_envelope_id, str) else None
+        return resume_from, resume_from_id
+
+    def _validate(self, run: ActionRun, inputs: _FlowInputs) -> SkillResult | None:
+        # The only up-front guard (resume-checkpoint validation) raises in
+        # ``_gather``; nothing else gates before the loop.
+        return None
+
+    def _execute(self, run: ActionRun, inputs: _FlowInputs) -> _FlowRun:
+        # Re-emit canonical events so observers can distinguish a fresh run
+        # from a resume.
+        if inputs.resume_from is None:
+            self._emit_start(run, inputs)
         else:
-            flow_id = f"FL-{uuid.uuid4().hex[:12]}"
+            self._emit_resume_start(run, inputs)
+        return self._run_steps(run, inputs)
 
-        persisted_records: list[str] = []
-        state_mutations: list[str] = []
-        evidence_refs: list[str] = []
-
-        # Determine the start step index for resume.
-        start_index = 0 if resume_from is None else resume_from.step_index + 1
-        # Re-emit canonical events so observers can distinguish a fresh
-        # run from a resume.
-        if resume_from is None:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="flow.start",
-                summary=f"flow: start topic={topic!r} flow_id={flow_id}",
-                payload={
-                    "topic": topic,
-                    "stop_after": stop_after,
-                    "step_count": len(self.flow_order),
-                    "flow_id": flow_id,
-                },
-            )
-            persisted_records.append(evt_id)
-            # Record the in-progress run summary so a kill leaves a trail
-            # for ``--resume`` to find.
-            policy: dict[str, Any] = {}
-            if stop_after is not None:
-                policy["stop_after"] = stop_after
-            record_id = _emit_flow_record(
-                state_path=state_path,
-                scope_id=scope_id,
-                flow_id=flow_id,
-                goal=str(topic) if topic is not None else "",
-                policy=policy,
-                status=FlowStatus.IN_PROGRESS,
-                last_safe_checkpoint=None,
-                next_action="eawf flow status",
-            )
-            persisted_records.append(record_id)
-        else:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="flow.resume_start",
-                summary=(
-                    f"flow: resume_start flow_id={flow_id} from step_index={resume_from.step_index}"
-                ),
-                payload={
-                    "flow_id": flow_id,
-                    "resume_from_step_index": resume_from.step_index,
-                    "resume_from_step_name": resume_from.step_name,
-                    "resume_from_checkpoint_id": resume_from_id,
-                },
-            )
-            persisted_records.append(evt_id)
-
-        steps: list[dict[str, Any]] = []
-        repair_commands: list[str] | None = None
-        next_actions: list[str] = ["eawf flow status", "eawf audit"]
-        last_safe_checkpoint_id: str | None = resume_from_id if resume_from_id is not None else None
-
-        # Snapshot drift sentinels once at the top of the loop body and
-        # re-snapshot before every step so the checkpoint records the
-        # values at step START, not at runner start.
-        for idx, (skill_name, skill_cls) in enumerate(self.flow_order):
-            if idx < start_index:
-                # Skipped step (resume prefix). ``body.steps`` reflects
-                # the post-resume tail only; the resumed checkpoint id
-                # is recorded separately on
-                # ``body.resume_from_checkpoint_id`` so consumers can
-                # still tie the tail back to the original prefix.
-                continue
-
-            short = _stop_after_short_name(skill_name)
-            # Build a per-step context using explicit-key precedence so an
-            # empty-dict args entry isn't silently dropped to the
-            # short-name fallback (the ``or`` chain it replaced did so
-            # because empty dicts are falsy).
-            step_args = _resolve_step_args(args_per_step, skill_name)
-
-            step_ctx = SkillContext(
-                scope=ctx.scope,
-                session=ctx.session,
-                instrument_probe=dict(ctx.instrument_probe),
-                args=step_args,
-                failure_repair_commands=ctx.failure_repair_commands,
-            )
-
-            # Snapshot drift sentinels BEFORE running the step. Hash the
-            # per-step args dict (not the whole multi-step mapping) so
-            # the checkpoint records which args this step actually
-            # consumed; ``compute_drift`` mirrors this on resume.
-            workspace_root = _workspace_root_for_state(state_path)
-            parent_state_hash = _state_hash(state_path)
-            parent_git_head = _current_git_head(workspace_root)
-            parent_profile_ids = _current_profile_ids(state_path)
-            args_per_step_hash = _canonical_args_per_step_hash(step_args)
-
-            started_at = datetime.now(UTC)
-
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="flow.step_start",
-                summary=f"flow: step {skill_name} starting",
-                payload={"skill": skill_name, "flow_id": flow_id, "step_index": idx},
-            )
-            persisted_records.append(evt_id)
-
-            step_envelope: OutputEnvelope = run_skill(skill_cls(), step_ctx)
-            step_status = step_envelope.header.status
-            steps.append(step_envelope.model_dump(mode="json"))
-            persisted_records.extend(step_envelope.footer.persisted_store_records)
-            state_mutations.extend(step_envelope.footer.state_mutations)
-            evidence_refs.extend(step_envelope.footer.evidence_refs)
-
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="flow.step_end",
-                summary=f"flow: step {skill_name} -> {step_status}",
-                payload={
-                    "skill": skill_name,
-                    "status": step_status,
-                    "flow_id": flow_id,
-                    "step_index": idx,
-                },
-            )
-            persisted_records.append(evt_id)
-
-            # Append the per-step checkpoint.
-            completed_at = datetime.now(UTC)
-            last_safe = is_safe_step_boundary(step_status, skill_name)
-            checkpoint_id = _emit_checkpoint(
-                state_path=state_path,
-                scope_id=scope_id,
-                flow_id=flow_id,
-                step_index=idx,
-                step_name=skill_name,
-                started_at=started_at,
-                completed_at=completed_at,
-                last_safe=last_safe,
-                payload_hash=_payload_hash(step_envelope.body),
-                parent_state_hash=parent_state_hash,
-                parent_git_head=parent_git_head,
-                parent_profile_ids=parent_profile_ids,
-                args_per_step_hash=args_per_step_hash,
-            )
-            persisted_records.append(checkpoint_id)
-            if last_safe:
-                last_safe_checkpoint_id = checkpoint_id
-
-            # Short-circuit on first non-ok status.
-            if step_status != "ok":
-                repair_commands = list(step_envelope.footer.repair_commands or [])
-                evt_id = emit_event(
-                    state_path=state_path,
-                    scope_id=scope_id,
-                    event_type="flow.short_circuit",
-                    summary=f"flow: short-circuit on {skill_name} ({step_status})",
-                    payload={
-                        "skill": skill_name,
-                        "status": step_status,
-                        "flow_id": flow_id,
-                    },
-                )
-                persisted_records.append(evt_id)
-                break
-
-            # ``stop_after`` honours the §14 flag.
-            if stop_after is not None and stop_after == short:
-                evt_id = emit_event(
-                    state_path=state_path,
-                    scope_id=scope_id,
-                    event_type="flow.stop_after",
-                    summary=f"flow: stop-after {short}",
-                    payload={"stop_after": stop_after, "flow_id": flow_id},
-                )
-                persisted_records.append(evt_id)
-                break
-
-        terminal_status = short_circuit_terminal_status([s["header"]["status"] for s in steps])
-
-        # Map terminal flow status onto a FlowStatus enum value for the
-        # final flow_record summary.
-        if terminal_status in {"ok", "partial"}:
-            terminal_flow_status = FlowStatus.DONE
-        elif terminal_status == "blocked":
-            terminal_flow_status = FlowStatus.BLOCKED
-        elif terminal_status == "needs_user":
-            terminal_flow_status = FlowStatus.PAUSED
-        else:
-            # ``failed`` and any unrecognised status fall through to the
-            # FlowStatus.BLOCKED summary so the operator still sees a
-            # non-success terminal record.
-            terminal_flow_status = FlowStatus.BLOCKED
-
-        evt_type = "flow.resume_end" if resume_from is not None else "flow.end"
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type=evt_type,
-            summary=f"flow: end terminal_status={terminal_status} flow_id={flow_id}",
-            payload={
-                "terminal_status": terminal_status,
-                "steps_run": len(steps),
-                "flow_id": flow_id,
+    def _emit_start(self, run: ActionRun, inputs: _FlowInputs) -> None:
+        self._trace(
+            run,
+            "flow.start",
+            f"flow: start topic={inputs.topic!r} flow_id={inputs.flow_id}",
+            {
+                "topic": inputs.topic,
+                "stop_after": inputs.stop_after,
+                "step_count": len(self.flow_order),
+                "flow_id": inputs.flow_id,
             },
         )
-        persisted_records.append(evt_id)
+        # Record the in-progress run summary so a kill leaves a trail for
+        # ``--resume`` to find.
+        policy: dict[str, Any] = {}
+        if inputs.stop_after is not None:
+            policy["stop_after"] = inputs.stop_after
+        record_id = _emit_flow_record(
+            state_path=run.state_path,
+            scope_id=run.scope_id,
+            flow_id=inputs.flow_id,
+            goal=str(inputs.topic) if inputs.topic is not None else "",
+            policy=policy,
+            status=FlowStatus.IN_PROGRESS,
+            last_safe_checkpoint=None,
+            next_action="eawf flow status",
+        )
+        run.records.append(record_id)
 
+    def _emit_resume_start(self, run: ActionRun, inputs: _FlowInputs) -> None:
+        assert inputs.resume_from is not None
+        self._trace(
+            run,
+            "flow.resume_start",
+            (
+                f"flow: resume_start flow_id={inputs.flow_id} "
+                f"from step_index={inputs.resume_from.step_index}"
+            ),
+            {
+                "flow_id": inputs.flow_id,
+                "resume_from_step_index": inputs.resume_from.step_index,
+                "resume_from_step_name": inputs.resume_from.step_name,
+                "resume_from_checkpoint_id": inputs.resume_from_id,
+            },
+        )
+
+    def _run_steps(self, run: ActionRun, inputs: _FlowInputs) -> _FlowRun:
+        flow_run = _FlowRun(last_safe_checkpoint_id=inputs.resume_from_id)
+        for idx, (skill_name, skill_cls) in enumerate(self.flow_order):
+            if idx < inputs.start_index:
+                # Skipped step (resume prefix). ``body.steps`` reflects the
+                # post-resume tail only; the resumed checkpoint id is recorded
+                # separately on ``body.resume_from_checkpoint_id`` so consumers
+                # can still tie the tail back to the original prefix.
+                continue
+            step = self._run_one_step(run, inputs, idx, skill_name, skill_cls)
+            flow_run.steps.append(step.envelope.model_dump(mode="json"))
+            if step.last_safe:
+                flow_run.last_safe_checkpoint_id = step.checkpoint_id
+            # Short-circuit on first non-ok status.
+            if step.status != "ok":
+                flow_run.repair_commands = list(step.envelope.footer.repair_commands or [])
+                self._trace(
+                    run,
+                    "flow.short_circuit",
+                    f"flow: short-circuit on {skill_name} ({step.status})",
+                    {"skill": skill_name, "status": step.status, "flow_id": inputs.flow_id},
+                )
+                break
+            # ``stop_after`` honours the §14 flag.
+            if inputs.stop_after is not None and inputs.stop_after == _stop_after_short_name(
+                skill_name
+            ):
+                self._trace(
+                    run,
+                    "flow.stop_after",
+                    f"flow: stop-after {inputs.stop_after}",
+                    {"stop_after": inputs.stop_after, "flow_id": inputs.flow_id},
+                )
+                break
+        return flow_run
+
+    def _run_one_step(
+        self,
+        run: ActionRun,
+        inputs: _FlowInputs,
+        idx: int,
+        skill_name: SkillName,
+        skill_cls: type[Skill],
+    ) -> _StepResult:
+        # Build a per-step context using explicit-key precedence so an
+        # empty-dict args entry isn't silently dropped to the short-name
+        # fallback (the ``or`` chain it replaced did so because empty dicts
+        # are falsy).
+        step_args = _resolve_step_args(inputs.args_per_step, skill_name)
+        step_ctx = SkillContext(
+            scope=run.ctx.scope,
+            session=run.ctx.session,
+            instrument_probe=dict(run.ctx.instrument_probe),
+            args=step_args,
+            failure_repair_commands=run.ctx.failure_repair_commands,
+        )
+        # Snapshot drift sentinels BEFORE running the step. Hash the per-step
+        # args dict (not the whole multi-step mapping) so the checkpoint
+        # records which args this step actually consumed; ``compute_drift``
+        # mirrors this on resume.
+        workspace_root = _workspace_root_for_state(run.state_path)
+        parent_state_hash = _state_hash(run.state_path)
+        parent_git_head = _current_git_head(workspace_root)
+        parent_profile_ids = _current_profile_ids(run.state_path)
+        args_per_step_hash = _canonical_args_per_step_hash(step_args)
+        started_at = datetime.now(UTC)
+
+        self._trace(
+            run,
+            "flow.step_start",
+            f"flow: step {skill_name} starting",
+            {"skill": skill_name, "flow_id": inputs.flow_id, "step_index": idx},
+        )
+        step_envelope: OutputEnvelope = run_skill(skill_cls(), step_ctx)
+        step_status = step_envelope.header.status
+        run.records.extend(step_envelope.footer.persisted_store_records)
+        run.mutations.extend(step_envelope.footer.state_mutations)
+        run.evidence.extend(step_envelope.footer.evidence_refs)
+        self._trace(
+            run,
+            "flow.step_end",
+            f"flow: step {skill_name} -> {step_status}",
+            {
+                "skill": skill_name,
+                "status": step_status,
+                "flow_id": inputs.flow_id,
+                "step_index": idx,
+            },
+        )
+        # Append the per-step checkpoint.
+        completed_at = datetime.now(UTC)
+        last_safe = is_safe_step_boundary(step_status, skill_name)
+        checkpoint_id = _emit_checkpoint(
+            state_path=run.state_path,
+            scope_id=run.scope_id,
+            flow_id=inputs.flow_id,
+            step_index=idx,
+            step_name=skill_name,
+            started_at=started_at,
+            completed_at=completed_at,
+            last_safe=last_safe,
+            payload_hash=_payload_hash(step_envelope.body),
+            parent_state_hash=parent_state_hash,
+            parent_git_head=parent_git_head,
+            parent_profile_ids=parent_profile_ids,
+            args_per_step_hash=args_per_step_hash,
+        )
+        run.records.append(checkpoint_id)
+        return _StepResult(
+            status=step_status,
+            envelope=step_envelope,
+            checkpoint_id=checkpoint_id,
+            last_safe=last_safe,
+        )
+
+    def _render(self, run: ActionRun, inputs: _FlowInputs, outcome: _FlowRun) -> SkillResult:
+        terminal_status = short_circuit_terminal_status(
+            [s["header"]["status"] for s in outcome.steps]
+        )
+        evt_type = "flow.resume_end" if inputs.resume_from is not None else "flow.end"
+        self._trace(
+            run,
+            evt_type,
+            f"flow: end terminal_status={terminal_status} flow_id={inputs.flow_id}",
+            {
+                "terminal_status": terminal_status,
+                "steps_run": len(outcome.steps),
+                "flow_id": inputs.flow_id,
+            },
+        )
         terminal_record_id = _emit_flow_record(
-            state_path=state_path,
-            scope_id=scope_id,
-            flow_id=flow_id,
-            goal=str(topic) if topic is not None else "",
-            policy={"stop_after": stop_after} if stop_after is not None else {},
-            status=terminal_flow_status,
-            last_safe_checkpoint=last_safe_checkpoint_id,
+            state_path=run.state_path,
+            scope_id=run.scope_id,
+            flow_id=inputs.flow_id,
+            goal=str(inputs.topic) if inputs.topic is not None else "",
+            policy={"stop_after": inputs.stop_after} if inputs.stop_after is not None else {},
+            status=_terminal_flow_status(terminal_status),
+            last_safe_checkpoint=outcome.last_safe_checkpoint_id,
             next_action=None,
         )
-        persisted_records.append(terminal_record_id)
-
+        run.records.append(terminal_record_id)
         body = FlowBody(
-            topic=str(topic) if topic is not None else None,
-            steps=steps,
+            topic=str(inputs.topic) if inputs.topic is not None else None,
+            steps=outcome.steps,
             terminal_status=terminal_status,
             user_question=None,
-            resume_from_checkpoint_id=resume_from_id,
+            resume_from_checkpoint_id=inputs.resume_from_id,
             drift=None,
         )
-
         return SkillResult(
             status=terminal_status,  # type: ignore[arg-type]
             body=body.model_dump(mode="json"),
-            persisted_store_records=persisted_records,
-            state_mutations=state_mutations,
-            evidence_refs=evidence_refs,
-            next_valid_actions=next_actions,
-            repair_commands=repair_commands,
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
+            next_valid_actions=list(_FLOW_NEXT_ACTIONS),
+            repair_commands=outcome.repair_commands,
         )
 
 

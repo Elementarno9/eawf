@@ -34,6 +34,7 @@ import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from eawf.render.envelope import (
@@ -161,6 +162,219 @@ class Skill(ABC):
         """
 
 
+@dataclass
+class ActionRun:
+    """Mutable per-invocation scaffold shared by every staged skill action.
+
+    Built once at the top of :meth:`SkillAction.action` and threaded through
+    the four stage hooks. It owns the resolved state path, the scope id, the
+    parsed args copy, and the three footer accumulators every skill folds
+    into its terminal :class:`SkillResult`. Centralising these here removes
+    the boilerplate that the four god-method ``action()`` implementations
+    each repeated.
+
+    Attributes:
+        ctx: The originating :class:`SkillContext`.
+        state_path: Resolved path of the active ``state.json``.
+        scope_id: The skill's state-scope URN (mirrors ``ctx.scope``).
+        args: A shallow copy of ``ctx.args`` (skills mutate the copy, never
+            the caller's dict).
+        records: URNs of store records appended during the run; grows via
+            :meth:`SkillAction._trace`.
+        mutations: JSONPath-ish strings naming each state mutation.
+        evidence: URNs of supporting evidence.
+    """
+
+    ctx: SkillContext
+    state_path: Path
+    scope_id: str
+    args: dict[str, Any]
+    records: list[str] = field(default_factory=list)
+    mutations: list[str] = field(default_factory=list)
+    evidence: list[str] = field(default_factory=list)
+
+
+class SkillAction(Skill):
+    """Staged base for skills whose ``action()`` is a gather/validate/execute/render pipeline.
+
+    The four original core-skill ``action()`` methods (``/flow``, ``/ship``,
+    ``/research``, ``/prep``) had grown into 200-300 line god-methods. This
+    base extracts their common spine so each concrete skill supplies only the
+    four stage bodies:
+
+    1. :meth:`_gather` — read inputs (args, state, config) into a typed
+       per-skill inputs object. No side effects beyond reads.
+    2. :meth:`_validate` — run the up-front gates. Return a terminal
+       :class:`SkillResult` to short-circuit (blocked / failed / needs_user),
+       or ``None`` to proceed.
+    3. :meth:`_execute` — perform the algorithm's event-emitting work. Return
+       a typed per-skill work product to continue to render, or a terminal
+       :class:`SkillResult` for a mid-pipeline short-circuit (e.g. an
+       approval gate that lands at the end of the algorithm).
+    4. :meth:`_render` — assemble the happy-path body and terminal result.
+
+    Shared mechanics live here: :meth:`_trace` (emit one event and record its
+    id in one call) and the :meth:`_ok` / :meth:`_fail` / :meth:`_needs_user`
+    / :meth:`_blocked` result builders, which fold the run's footer
+    accumulators into the :class:`SkillResult` so subclasses never re-thread
+    them by hand.
+    """
+
+    def probe(self, ctx: SkillContext) -> ProbeOutcome:
+        """Probe the canonical instrument set (core git / python / uv).
+
+        Concrete skills with a richer requirement override this; the default
+        mirrors the historical per-skill body that every core skill shared.
+        """
+        from eawf.skills._common import probe_skill_instruments
+
+        return probe_skill_instruments()
+
+    def action(self, ctx: SkillContext) -> SkillResult:
+        """Run the staged pipeline and return the terminal :class:`SkillResult`.
+
+        The template is fixed: build the run scaffold, gather inputs, run the
+        validation gates (short-circuit on a terminal result), execute the
+        algorithm (short-circuit when execute returns a terminal result),
+        then render the happy-path result.
+        """
+        run = self._begin(ctx)
+        inputs = self._gather(run)
+        gate = self._validate(run, inputs)
+        if gate is not None:
+            return gate
+        outcome = self._execute(run, inputs)
+        if isinstance(outcome, SkillResult):
+            return outcome
+        return self._render(run, inputs, outcome)
+
+    def _begin(self, ctx: SkillContext) -> ActionRun:
+        """Build the per-invocation :class:`ActionRun` scaffold."""
+        from eawf.skills._common import resolve_active_state_path
+
+        return ActionRun(
+            ctx=ctx,
+            state_path=resolve_active_state_path(),
+            scope_id=ctx.scope,
+            args=dict(ctx.args),
+        )
+
+    def _trace(
+        self,
+        run: ActionRun,
+        event_type: str,
+        summary: str,
+        payload: dict[str, Any] | None = None,
+    ) -> str:
+        """Emit one ``EVENT`` envelope and record its id on the run.
+
+        Replaces the ``evt_id = emit_event(...); records.append(evt_id)`` pair
+        that the god-methods repeated at every algorithm step.
+
+        Returns:
+            The freshly minted event-envelope id.
+        """
+        from eawf.skills._common import emit_event
+
+        event_id = emit_event(
+            state_path=run.state_path,
+            scope_id=run.scope_id,
+            event_type=event_type,
+            summary=summary,
+            payload=payload,
+        )
+        run.records.append(event_id)
+        return event_id
+
+    def _ok(
+        self,
+        run: ActionRun,
+        body: EnvelopeBody,
+        *,
+        next_valid_actions: list[str],
+    ) -> SkillResult:
+        """Build a ``status=ok`` result folding the run's accumulators."""
+        return SkillResult(
+            status="ok",
+            body=body,
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
+            next_valid_actions=next_valid_actions,
+        )
+
+    def _fail(
+        self,
+        run: ActionRun,
+        body: EnvelopeBody,
+        *,
+        next_valid_actions: list[str],
+        repair_commands: list[str],
+    ) -> SkillResult:
+        """Build a ``status=failed`` result folding the run's accumulators."""
+        return SkillResult(
+            status="failed",
+            body=body,
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
+            next_valid_actions=next_valid_actions,
+            repair_commands=repair_commands,
+        )
+
+    def _needs_user(
+        self,
+        run: ActionRun,
+        body: EnvelopeBody,
+        *,
+        next_valid_actions: list[str],
+    ) -> SkillResult:
+        """Build a ``status=needs_user`` result folding the run's accumulators."""
+        return SkillResult(
+            status="needs_user",
+            body=body,
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
+            next_valid_actions=next_valid_actions,
+        )
+
+    def _blocked(
+        self,
+        run: ActionRun,
+        body: EnvelopeBody,
+        *,
+        next_valid_actions: list[str],
+        repair_commands: list[str],
+    ) -> SkillResult:
+        """Build a ``status=blocked`` result folding the run's accumulators."""
+        return SkillResult(
+            status="blocked",
+            body=body,
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
+            next_valid_actions=next_valid_actions,
+            repair_commands=repair_commands,
+        )
+
+    @abstractmethod
+    def _gather(self, run: ActionRun) -> Any:
+        """Read inputs into a typed per-skill object (reads only)."""
+
+    @abstractmethod
+    def _validate(self, run: ActionRun, inputs: Any) -> SkillResult | None:
+        """Run the up-front gates; return a terminal result or ``None``."""
+
+    @abstractmethod
+    def _execute(self, run: ActionRun, inputs: Any) -> Any:
+        """Do the event-emitting work; return a work product or a terminal result."""
+
+    @abstractmethod
+    def _render(self, run: ActionRun, inputs: Any, outcome: Any) -> SkillResult:
+        """Assemble the happy-path body and terminal :class:`SkillResult`."""
+
+
 def _build_envelope(
     *,
     skill_name: SkillName,
@@ -247,7 +461,7 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
         probe_outcome = skill.probe(ctx)
     except Exception as exc:
         # Probe must not crash the engine; surface as a failed envelope.
-        logger.exception(f"run_skill: probe raised for skill {skill_name}")
+        logger.exception(f"run_skill probe-raised skill={skill_name}")
         finished_at = datetime.now(UTC)
         return _build_envelope(
             skill_name=skill_name,
@@ -290,7 +504,7 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
         result = skill.action(ctx)
     except Exception as exc:
         # Action must never crash the engine; surface as a failed envelope.
-        logger.exception(f"run_skill: action raised for skill {skill_name}")
+        logger.exception(f"run_skill action-raised skill={skill_name}")
         finished_at = datetime.now(UTC)
         return _build_envelope(
             skill_name=skill_name,
@@ -337,8 +551,10 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
 
 
 __all__ = [
+    "ActionRun",
     "ProbeOutcome",
     "Skill",
+    "SkillAction",
     "SkillContext",
     "SkillResult",
     "run_skill",

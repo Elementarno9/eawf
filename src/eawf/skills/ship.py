@@ -27,6 +27,7 @@ import logging
 import os
 import shlex
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -36,11 +37,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eawf.artifacts.validation import validate_markdown_artifact, validate_text_surface
 from eawf.config.layered import merge_config
 from eawf.render.envelope import SkillName
-from eawf.skills._common import (
-    emit_event,
-    probe_skill_instruments,
-    resolve_active_state_path,
-)
 from eawf.skills.bodies.ship import (
     ShipBody,
     ShipCommitGroup,
@@ -48,7 +44,7 @@ from eawf.skills.bodies.ship import (
     ShipPrGates,
     ShipPush,
 )
-from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
+from eawf.skills.engine import ActionRun, SkillAction, SkillResult
 from eawf.skills.registry import register
 from eawf.state.enums import AuditKind, AuditVerdict
 from eawf.state.ids import is_phase_id, parents_of
@@ -56,6 +52,10 @@ from eawf.state.models import Audit, State
 from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 
 logger = logging.getLogger(__name__)
+
+
+_SHIP_NEXT_ACTIONS: tuple[str, ...] = ("eawf wave close", "eawf audit")
+_ZERO_ESTIMATE: dict[str, float] = {"estimated_eu": 0.0, "actual_eu": 0.0}
 
 
 _VALID_PR_ACTIONS: tuple[str, ...] = ("open", "ready", "draft", "close", "none")
@@ -470,315 +470,309 @@ def _run_gauntlet(acceptance: AcceptanceConfig, cwd: Path) -> list[_GateResult]:
     return results
 
 
+@dataclass
+class _ShipInputs:
+    """Resolved ``/ship`` inputs gathered before any gate runs.
+
+    Attributes:
+        do_commit: Whether ``--commit`` opted into commit-group population.
+        do_push: Whether ``--push`` opted into push population.
+        pr_action: The normalised ``--pr`` action, or ``None``.
+        artifact_paths: The artifact paths to validate.
+        pr_body: The optional PR body text to validate.
+        state: The loaded state document, or ``None``.
+        phase_id: The phase id resolved from the scope, or ``None``.
+        vcs_config: The validated ``vcs`` config surface.
+        acceptance: The validated ``acceptance`` config surface.
+    """
+
+    do_commit: bool
+    do_push: bool
+    pr_action: str | None
+    artifact_paths: list[Path]
+    pr_body: Any
+    state: State | None
+    phase_id: str | None
+    vcs_config: VcsConfig
+    acceptance: AcceptanceConfig
+
+
+@dataclass
+class _ShipArtefacts:
+    """The commit / push / PR artefacts built by the execute stage.
+
+    Attributes:
+        commit_groups: The built commit groups (empty without ``--commit``).
+        push: The push descriptor, or ``None`` without ``--push``.
+        pr: The PR descriptor, or ``None`` without ``--pr``.
+    """
+
+    commit_groups: list[ShipCommitGroup] = field(default_factory=list)
+    push: ShipPush | None = None
+    pr: ShipPr | None = None
+
+
 @register
-class ShipSkill(Skill):
+class ShipSkill(SkillAction):
     """Concrete ``/ship`` skill (Phase 4 W02)."""
 
     name: SkillName = "/ship"
 
-    def probe(self, ctx: SkillContext) -> ProbeOutcome:
-        return probe_skill_instruments()
+    def _gather(self, run: ActionRun) -> _ShipInputs:
+        return _ShipInputs(
+            do_commit=_coerce_bool(run.args.get("commit", False)),
+            do_push=_coerce_bool(run.args.get("push", False)),
+            pr_action=_resolve_pr_action(run.args.get("pr")),
+            artifact_paths=_coerce_path_list(
+                run.args.get("artifact_paths") or run.args.get("artifacts")
+            ),
+            pr_body=run.args.get("pr_body"),
+            state=_load_state(run.state_path),
+            phase_id=_phase_id_from_scope(run.scope_id),
+            vcs_config=_load_vcs_config(run.state_path),
+            acceptance=_load_acceptance_config(run.state_path),
+        )
 
-    def action(self, ctx: SkillContext) -> SkillResult:
-        state_path = resolve_active_state_path()
-        scope_id = ctx.scope
-        args: dict[str, Any] = dict(ctx.args)
+    def _validate(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
+        # Each gate emits its own event (pass and fail) and short-circuits on
+        # failure; the gates run in the documented pipeline order.
+        for gate in (
+            self._gate_artifacts,
+            self._gate_audit,
+            self._gate_merge_method,
+            self._gate_gauntlet,
+        ):
+            failure = gate(run, inputs)
+            if failure is not None:
+                return failure
+        return None
 
-        do_commit = _coerce_bool(args.get("commit", False))
-        do_push = _coerce_bool(args.get("push", False))
-        pr_action = _resolve_pr_action(args.get("pr"))
-        artifact_paths = _coerce_path_list(args.get("artifact_paths") or args.get("artifacts"))
-        pr_body = args.get("pr_body")
-
-        persisted_records: list[str] = []
-        state_mutations: list[str] = []
-        next_actions: list[str] = ["eawf wave close", "eawf audit"]
-
+    def _gate_artifacts(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
         validation_errors: list[str] = []
-        for path in artifact_paths:
+        for path in inputs.artifact_paths:
             try:
                 artifact_report = validate_markdown_artifact(path.read_text(encoding="utf-8"))
             except OSError as exc:
                 validation_errors.append(f"{path}: {exc}")
                 continue
             validation_errors.extend(f"{path}: {error}" for error in artifact_report.errors)
-        if isinstance(pr_body, str):
-            text_report = validate_text_surface(pr_body, surface="pr")
+        if isinstance(inputs.pr_body, str):
+            text_report = validate_text_surface(inputs.pr_body, surface="pr")
             validation_errors.extend(text_report.errors)
-        if validation_errors:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="ship.artifact_gate",
-                summary="ship: artifact validation failed",
-                payload={"errors": validation_errors},
-            )
-            persisted_records.append(evt_id)
-            return SkillResult(
-                status="failed",
-                body=ShipBody(
-                    commit_groups=[],
-                    push=None,
-                    pr=None,
-                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
-                    rollback_notes="artifact validation failed",
-                ).model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=next_actions,
-                repair_commands=["fix artifact validation errors and rerun /ship"],
-            )
+        if not validation_errors:
+            return None
+        self._trace(
+            run,
+            "ship.artifact_gate",
+            "ship: artifact validation failed",
+            {"errors": validation_errors},
+        )
+        return self._ship_failure(
+            run,
+            rollback_notes="artifact validation failed",
+            repair_commands=["fix artifact validation errors and rerun /ship"],
+        )
 
+    def _gate_audit(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
         # Step 1 — probe ran. Step 2: gate on the recorded audit verdict.
-        state = _load_state(state_path)
-        phase_id = _phase_id_from_scope(scope_id)
         audit = (
-            _latest_audit_for_phase(state, phase_id)
-            if state is not None and phase_id is not None
+            _latest_audit_for_phase(inputs.state, inputs.phase_id)
+            if inputs.state is not None and inputs.phase_id is not None
             else None
         )
         # When state or a matching audit is unavailable we cannot gate on a
-        # verdict; degrade open rather than block (the audit row is created
-        # by /audit, which is a precondition the operator owns). When an
-        # audit *does* exist its verdict must be ship-clearing.
+        # verdict; degrade open rather than block (the audit row is created by
+        # /audit, which is a precondition the operator owns). When an audit
+        # *does* exist its verdict must be ship-clearing.
         if audit is not None and audit.verdict not in _SHIP_ALLOWED_VERDICTS:
             verdict_label = audit.verdict.value if audit.verdict is not None else "none"
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="ship.audit_gate",
-                summary=f"ship: audit gate blocked (verdict={verdict_label})",
-                payload={"audit_required": True, "passed": False, "verdict": verdict_label},
+            self._trace(
+                run,
+                "ship.audit_gate",
+                f"ship: audit gate blocked (verdict={verdict_label})",
+                {"audit_required": True, "passed": False, "verdict": verdict_label},
             )
-            persisted_records.append(evt_id)
-            assert phase_id is not None  # narrowed: audit only set when phase_id resolved
-            return SkillResult(
-                status="failed",
-                body=ShipBody(
-                    commit_groups=[],
-                    push=None,
-                    pr=None,
-                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
-                    rollback_notes=f"audit verdict {verdict_label!r} does not clear the ship gate",
-                ).model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=next_actions,
-                repair_commands=[f"/audit {phase_id} --kind ship-gate"],
+            assert inputs.phase_id is not None  # narrowed: audit set only when phase_id resolved
+            return self._ship_failure(
+                run,
+                rollback_notes=f"audit verdict {verdict_label!r} does not clear the ship gate",
+                repair_commands=[f"/audit {inputs.phase_id} --kind ship-gate"],
             )
         verdict_label = (
             audit.verdict.value if audit is not None and audit.verdict is not None else "ungated"
         )
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.audit_gate",
-            summary=f"ship: audit gate passed (verdict={verdict_label})",
-            payload={"audit_required": True, "passed": True, "verdict": verdict_label},
+        self._trace(
+            run,
+            "ship.audit_gate",
+            f"ship: audit gate passed (verdict={verdict_label})",
+            {"audit_required": True, "passed": True, "verdict": verdict_label},
         )
-        persisted_records.append(evt_id)
+        return None
 
-        # Step 2b — gate on the configured PR merge method. Squash is
-        # rejected unless explicitly allowed; rebase / merge clear.
-        vcs_config = _load_vcs_config(state_path)
-        merge_method = vcs_config.pr_merge_method
-        if merge_method == "squash" and not vcs_config.squash_allowed:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="ship.merge_method_gate",
-                summary="ship: merge-method gate blocked (squash not allowed)",
-                payload={"pr_merge_method": merge_method, "squash_allowed": False},
-            )
-            persisted_records.append(evt_id)
-            return SkillResult(
-                status="failed",
-                body=ShipBody(
-                    commit_groups=[],
-                    push=None,
-                    pr=None,
-                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
-                    rollback_notes="squash merge not permitted (set vcs.squash_allowed)",
-                ).model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=next_actions,
-                repair_commands=[
-                    "set vcs.pr_merge_method to rebase (or enable vcs.squash_allowed)"
-                ],
-            )
+    def _gate_merge_method(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
+        # Step 2b — gate on the configured PR merge method. Squash is rejected
+        # unless explicitly allowed; rebase / merge clear.
+        merge_method = inputs.vcs_config.pr_merge_method
+        if merge_method != "squash" or inputs.vcs_config.squash_allowed:
+            return None
+        self._trace(
+            run,
+            "ship.merge_method_gate",
+            "ship: merge-method gate blocked (squash not allowed)",
+            {"pr_merge_method": merge_method, "squash_allowed": False},
+        )
+        return self._ship_failure(
+            run,
+            rollback_notes="squash merge not permitted (set vcs.squash_allowed)",
+            repair_commands=["set vcs.pr_merge_method to rebase (or enable vcs.squash_allowed)"],
+        )
 
+    def _gate_gauntlet(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
         # Step 2c — run the local gauntlet. Each gate named in
         # ``acceptance.required_before_ship`` that maps to a runnable command
         # is executed for real; ANY red gate aborts the ship so a broken tree
         # can never pass. The repo root anchors each subprocess
         # (``state.json`` lives at ``<repo>/.ea/state.json``).
-        acceptance_config = _load_acceptance_config(state_path)
-        repo_root = state_path.parent.parent
-        gate_results = _run_gauntlet(acceptance_config, repo_root)
+        repo_root = run.state_path.parent.parent
+        gate_results = _run_gauntlet(inputs.acceptance, repo_root)
         failed_gates = [r for r in gate_results if not r.passed]
         if failed_gates:
             failed_names = ", ".join(r.name for r in failed_gates)
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="ship.gauntlet_gate",
-                summary=f"ship: gauntlet gate blocked ({failed_names})",
-                payload={"passed": False, "gates": [_gate_failure(r) for r in failed_gates]},
+            self._trace(
+                run,
+                "ship.gauntlet_gate",
+                f"ship: gauntlet gate blocked ({failed_names})",
+                {"passed": False, "gates": [_gate_failure(r) for r in failed_gates]},
             )
-            persisted_records.append(evt_id)
-            return SkillResult(
-                status="failed",
-                body=ShipBody(
-                    commit_groups=[],
-                    push=None,
-                    pr=None,
-                    estimate_vs_actual={"estimated_eu": 0.0, "actual_eu": 0.0},
-                    rollback_notes=f"gauntlet gate failed: {failed_names}",
-                ).model_dump(mode="json"),
-                persisted_store_records=persisted_records,
-                state_mutations=state_mutations,
-                next_valid_actions=next_actions,
+            return self._ship_failure(
+                run,
+                rollback_notes=f"gauntlet gate failed: {failed_names}",
                 repair_commands=[r.command for r in failed_gates],
             )
         if gate_results:
-            evt_id = emit_event(
-                state_path=state_path,
-                scope_id=scope_id,
-                event_type="ship.gauntlet_gate",
-                summary=f"ship: gauntlet gate passed ({len(gate_results)} gate(s))",
-                payload={"passed": True, "gates": [r.name for r in gate_results]},
+            self._trace(
+                run,
+                "ship.gauntlet_gate",
+                f"ship: gauntlet gate passed ({len(gate_results)} gate(s))",
+                {"passed": True, "gates": [r.name for r in gate_results]},
             )
-            persisted_records.append(evt_id)
+        return None
 
-        # Resolve the co-author trailer once for every commit group's
-        # message. Reuses the W12 resolver; never reimplemented here.
-        coauthor_trailer = _resolve_coauthor_trailer_for_ship(vcs_config)
+    def _ship_failure(
+        self, run: ActionRun, *, rollback_notes: str, repair_commands: list[str]
+    ) -> SkillResult:
+        """Build a failed ship result with an empty-artefact :class:`ShipBody`."""
+        return self._fail(
+            run,
+            ShipBody(
+                commit_groups=[],
+                push=None,
+                pr=None,
+                estimate_vs_actual=dict(_ZERO_ESTIMATE),
+                rollback_notes=rollback_notes,
+            ).model_dump(mode="json"),
+            next_valid_actions=list(_SHIP_NEXT_ACTIONS),
+            repair_commands=repair_commands,
+        )
 
+    def _execute(self, run: ActionRun, inputs: _ShipInputs) -> _ShipArtefacts:
+        # Resolve the co-author trailer once for every commit group's message.
+        # Reuses the W12 resolver; never reimplemented here.
+        coauthor_trailer = _resolve_coauthor_trailer_for_ship(inputs.vcs_config)
         # Step 3 — inspect git.
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.inspect_git",
-            summary="ship: inspect git status / diff / scope",
-            payload={"scope_id": scope_id},
+        self._trace(
+            run,
+            "ship.inspect_git",
+            "ship: inspect git status / diff / scope",
+            {"scope_id": run.scope_id},
         )
-        persisted_records.append(evt_id)
-
         # Step 4 — memory review.
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.memory_review",
-            summary="ship: review session memory",
-            payload={"promoted": 0, "pruned": 0},
+        self._trace(
+            run,
+            "ship.memory_review",
+            "ship: review session memory",
+            {"promoted": 0, "pruned": 0},
         )
-        persisted_records.append(evt_id)
-
         # Step 5 — build pending-ship artefact. The commit-group message
-        # carries the resolved co-author trailer so the commit-time
-        # pre-commit hooks find the required trailer already present.
-        commit_groups: list[ShipCommitGroup] = []
-        if do_commit:
-            message = f"[{scope_id}] feat: pending ship"
-            if coauthor_trailer is not None:
-                message = f"{message}\n\n{coauthor_trailer}"
-            commit_groups.append(
-                ShipCommitGroup(
-                    message=message,
-                    files=[],
-                    evidence_refs=[],
-                )
-            )
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.build_pending",
-            summary=f"ship: built pending artefact ({len(commit_groups)} commit group(s))",
-            payload={"commit_groups": len(commit_groups)},
+        # carries the resolved co-author trailer so the commit-time pre-commit
+        # hooks find the required trailer already present.
+        artefacts = _ShipArtefacts(
+            commit_groups=self._build_commit_groups(run, inputs, coauthor_trailer),
         )
-        persisted_records.append(evt_id)
-
+        self._trace(
+            run,
+            "ship.build_pending",
+            f"ship: built pending artefact ({len(artefacts.commit_groups)} commit group(s))",
+            {"commit_groups": len(artefacts.commit_groups)},
+        )
         # Step 6 — commit gate.
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.commit",
-            summary=f"ship: commit={do_commit}",
-            payload={"applied": do_commit},
+        self._trace(
+            run,
+            "ship.commit",
+            f"ship: commit={inputs.do_commit}",
+            {"applied": inputs.do_commit},
         )
-        persisted_records.append(evt_id)
-
         # Step 7 — push gate.
-        push: ShipPush | None = None
-        if do_push:
-            push = ShipPush(ref="HEAD", status="planned")
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.push",
-            summary=f"ship: push={do_push}",
-            payload={"applied": do_push},
+        if inputs.do_push:
+            artefacts.push = ShipPush(ref="HEAD", status="planned")
+        self._trace(
+            run,
+            "ship.push",
+            f"ship: push={inputs.do_push}",
+            {"applied": inputs.do_push},
         )
-        persisted_records.append(evt_id)
-
         # Step 8 — PR action.
-        pr: ShipPr | None = None
-        if pr_action is not None:
-            pr = ShipPr(
-                action=pr_action,
+        if inputs.pr_action is not None:
+            artefacts.pr = ShipPr(
+                action=inputs.pr_action,
                 url=None,
                 template="iter",
-                gates=ShipPrGates(
-                    ci="pending",
-                    reviews="pending",
-                    state_valid=True,
-                ),
+                gates=ShipPrGates(ci="pending", reviews="pending", state_valid=True),
             )
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.pr",
-            summary=f"ship: pr={pr_action or 'none'}",
-            payload={"action": pr_action or "none"},
+        self._trace(
+            run,
+            "ship.pr",
+            f"ship: pr={inputs.pr_action or 'none'}",
+            {"action": inputs.pr_action or "none"},
         )
-        persisted_records.append(evt_id)
-
         # Step 9 — gate evaluation already inside ShipPrGates.
         # Step 10 — record artefacts.
-        evt_id = emit_event(
-            state_path=state_path,
-            scope_id=scope_id,
-            event_type="ship.record",
-            summary="ship: artefacts recorded",
-            payload={
-                "commit": do_commit,
-                "push": do_push,
-                "pr": pr_action or "none",
+        self._trace(
+            run,
+            "ship.record",
+            "ship: artefacts recorded",
+            {
+                "commit": inputs.do_commit,
+                "push": inputs.do_push,
+                "pr": inputs.pr_action or "none",
             },
         )
-        persisted_records.append(evt_id)
-
         # Step 11 — worktree cleanup (v0.1: skipped; the `eawf worktree`
         # surface owns this).
+        return artefacts
 
+    def _build_commit_groups(
+        self, run: ActionRun, inputs: _ShipInputs, coauthor_trailer: str | None
+    ) -> list[ShipCommitGroup]:
+        if not inputs.do_commit:
+            return []
+        message = f"[{run.scope_id}] feat: pending ship"
+        if coauthor_trailer is not None:
+            message = f"{message}\n\n{coauthor_trailer}"
+        return [ShipCommitGroup(message=message, files=[], evidence_refs=[])]
+
+    def _render(self, run: ActionRun, inputs: _ShipInputs, outcome: _ShipArtefacts) -> SkillResult:
         body = ShipBody(
-            commit_groups=commit_groups,
-            push=push,
-            pr=pr,
-            estimate_vs_actual={
-                "estimated_eu": 0.0,
-                "actual_eu": 0.0,
-            },
+            commit_groups=outcome.commit_groups,
+            push=outcome.push,
+            pr=outcome.pr,
+            estimate_vs_actual=dict(_ZERO_ESTIMATE),
             rollback_notes=None,
         )
-
-        return SkillResult(
-            status="ok",
-            body=body.model_dump(mode="json"),
-            persisted_store_records=persisted_records,
-            state_mutations=state_mutations,
-            next_valid_actions=next_actions,
+        return self._ok(
+            run,
+            body.model_dump(mode="json"),
+            next_valid_actions=list(_SHIP_NEXT_ACTIONS),
         )
 
 
