@@ -307,16 +307,24 @@ def _commit_mutation(
     2. Build the post-apply event envelope in memory.
     3. ``write_pending`` the envelope to the WAL — the durable capture
        that lets replay re-issue the event row verbatim.
-    4. ``_write_state_unlocked`` persists ``state.json`` (fsynced).
-    5. ``append_envelope`` lands the event row in ``event.jsonl``.
-    6. ``mark_applied`` → ``mark_fsynced`` retire the WAL record.
+    4. ``_write_state_unlocked`` persists ``state.json`` (fsynced) — the
+       point of no return.
+    5. ``mark_applied`` retires the WAL record to ``.applied`` **before**
+       the event append.
+    6. ``append_envelope`` lands the event row in ``event.jsonl``, then
+       ``mark_fsynced`` completes the record.
 
     The invariant this buys: the event row is appended **only after**
     ``state.json`` is durably written, so a crash never leaves a phantom
-    event (an event whose state change did not commit). A crash between
-    the state write and the event append leaves a ``.pending`` WAL
-    record; the next mutation's ``replay_wal`` reconciles it without
-    duplicating a row that already landed.
+    event (an event whose state change did not commit). Because
+    ``mark_applied`` fires before the event append, a crash in the
+    state-write→event-append window leaves an ``.applied`` record, and
+    the next startup's :func:`eawf.daemon.recovery.replay_wal` re-issues
+    the captured envelope (idempotent on envelope id) so state and the
+    event log stay in sync. ``replay_wal`` only re-issues APPLIED
+    records; a PENDING record (crash before the state write landed) is
+    POISONED and its mutator is never re-run — which is why
+    ``mark_applied`` must precede the append, not follow it.
 
     Returns the candidate payload (already JSON-mode-dumped) so the
     caller can compute its own envelope without a second model_dump.
@@ -357,9 +365,14 @@ def _commit_mutation(
         after_state_version=after_version,
     )
     wal.write_pending(wal_dir, record)
+    # ``_write_state_unlocked`` fsyncs state.json — the point of no
+    # return. Mark APPLIED before the event append so a crash in the
+    # state-write→event-append window leaves an APPLIED record that
+    # replay re-issues, not a PENDING one that replay poisons (which
+    # would silently drop the event row). Mirrors the daemon mutator.
     _write_state_unlocked(state_path, payload)
-    append_envelope(events_path, envelope)
     wal.mark_applied(wal_dir, record_id)
+    append_envelope(events_path, envelope)
     wal.mark_fsynced(wal_dir, record_id)
     logger.info(
         f"_commit_mutation command={command!r} scope={scope_id!r} "

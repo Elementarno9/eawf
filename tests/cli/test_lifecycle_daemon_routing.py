@@ -296,10 +296,13 @@ def test_injected_crash_leaves_no_phantom_event(
 ) -> None:
     """A crash between the state write and the event append yields no phantom event.
 
-    The in-process WAL-backed commit writes state first, then the event.
-    Injecting an ``OSError`` at the event append leaves the state mutated
-    but NO event row for the mutation — there is never an event whose
-    state change did not commit. A ``.pending`` WAL record survives.
+    The in-process WAL-backed commit writes state first, marks the WAL
+    record APPLIED, then appends the event. Injecting an ``OSError`` at
+    the event append leaves the state mutated but NO event row for the
+    mutation — there is never an event whose state change did not commit.
+    Because ``mark_applied`` ran before the append (W32), an ``.applied``
+    record survives for roll-forward (not a ``.pending`` one, which replay
+    would poison and silently drop the row).
     """
     _bootstrap_to_pending_wave(workspace)
     events_before = _event_commands(workspace)
@@ -315,19 +318,23 @@ def test_injected_crash_leaves_no_phantom_event(
 
     # No phantom event: the event log gained nothing for the failed claim.
     assert _event_commands(workspace) == events_before, "no event row without its state change"
-    # A .pending WAL record survives for the next mutation to reconcile.
-    assert list(_wal_dir(workspace).glob("*.pending.json")), "a .pending WAL record survives"
+    # An .applied WAL record survives for the next mutation's replay to
+    # re-issue (not a .pending one — mark_applied ran before the append).
+    assert list(_wal_dir(workspace).glob("*.pending.json")) == []
+    assert list(_wal_dir(workspace).glob("*.applied.json")), "an .applied WAL record survives"
 
 
-def test_next_mutation_reconciles_pending_after_crash(
+def test_next_mutation_reissues_applied_event_after_crash(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The next successful mutation's ``replay_wal`` reconciles the crash record.
+    """The next successful mutation's ``replay_wal`` re-issues the crash record.
 
-    After a crashed event append leaves a ``.pending`` record, the next
-    in-process commit runs ``replay_wal`` first; the stale ``.pending``
-    record is reconciled out of the live WAL set and the event log never
-    grows a phantom row.
+    After a crashed event append leaves an ``.applied`` record
+    (``mark_applied`` ran before the append, W32), the next in-process
+    commit runs ``replay_wal`` first; replay re-issues the ``.applied``
+    record's captured envelope so the event row the crash dropped lands
+    exactly once. Before W32 this row was lost — the ``.pending`` record
+    it used to leave got poisoned, diverging state from the event log.
     """
     from eawf.store import append as append_module
 
@@ -344,25 +351,28 @@ def test_next_mutation_reconciles_pending_after_crash(
 
     monkeypatch.setattr("eawf.store.append.append_envelope", _flaky_append)
 
-    # First claim: state lands, event append crashes.
+    # First claim: state lands, mark_applied runs, event append crashes.
     res1 = runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S-1"])
     assert res1.exit_code != 0, res1.stdout
-    assert list(_wal_dir(workspace).glob("*.pending.json")), "crash leaves a .pending record"
+    assert list(_wal_dir(workspace).glob("*.applied.json")), "crash leaves an .applied record"
+    assert list(_wal_dir(workspace).glob("*.pending.json")) == []
 
-    # A second mutation succeeds; its commit replays the WAL first.
+    # A second mutation succeeds; its commit replays the WAL first, which
+    # re-issues the prior .applied record's envelope.
     res2 = runner.invoke(
         app,
         ["wave", "plan", "P01-I01", "--id", "P01-I01-W02", "--title", "w2", "--files", "src/"],
     )
     assert res2.exit_code == 0, res2.stdout
 
-    # The crash record is no longer live (replay moved it to poisoned/).
+    # Nothing poisoned — an APPLIED record is recovered, not poisoned.
+    assert list(_wal_dir(workspace).glob("*.applied.json")) == []
     assert list(_wal_dir(workspace).glob("*.pending.json")) == []
-    assert list((_wal_dir(workspace) / "poisoned").glob("*.poisoned.json"))
-    # Every event row corresponds to a committed mutation — the dropped
-    # claim row is absent (no phantom event) and the wave plan row is present.
+    assert list((_wal_dir(workspace) / "poisoned").glob("*.poisoned.json")) == []
+    # The dropped claim row was re-issued by replay (recovered, not lost),
+    # and the wave plan rows are present — state and event log stay in sync.
     commands = _event_commands(workspace)
-    assert "wave claim" not in commands
+    assert "wave claim" in commands, "the crashed claim's event row was re-issued by replay"
     assert commands.count("wave plan") == 2  # the bootstrap W01 + the W02 above
 
 

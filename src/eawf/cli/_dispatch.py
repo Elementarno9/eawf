@@ -222,10 +222,18 @@ def _mutate_via_daemon[FallbackT](
     3. On success, return the daemon's result dict verbatim.
     4. When the daemon predates the kind (``-32601`` method-not-found,
        or a ``NotImplementedError`` carried in the RPC message) OR the
-       transport drops (the connect / mutate raises ``OSError`` /
-       ``RuntimeError`` / ``TimeoutError``), invoke *fallback* and
-       return its value — the V1 carve-out lets the in-process writer
-       carry the mutation against a pre-wire daemon.
+       transport drops in the CONNECT phase (``__enter__`` raises
+       ``OSError`` / ``NotImplementedError`` — the request was never
+       sent, so the mutation provably never applied), invoke *fallback*
+       and return its value — the V1 carve-out lets the in-process
+       writer carry the mutation against a pre-wire / unreachable daemon.
+       A POST-SEND transport drop (``state_mutate`` raises
+       ``RuntimeError`` / ``TimeoutError`` / recv-side ``OSError`` after
+       the request was already on the wire) is INDETERMINATE — the
+       daemon may have applied the mutation before dropping — so it
+       raises :class:`~eawf.cli.errors.DaemonMutationIndeterminate`
+       rather than blindly re-running *fallback* (which would
+       double-apply a non-idempotent kind such as ``EVENT_APPEND``).
     5. A ``-32002 validation_failed`` rejection maps to
        :class:`~eawf.cli.errors.ValidationFailed`; any other RPC error
        (``-32001`` lock conflict, ``-32003`` not found, ``-32005``
@@ -247,8 +255,10 @@ def _mutate_via_daemon[FallbackT](
         verb: Operator-facing verb name for the ``--daemonless``
             rejection envelope (e.g. ``"wave close"``).
         fallback: Zero-arg callable run when the daemon cannot serve
-            the mutation (method-not-found or transport drop). Its
-            return value is propagated to the caller unchanged.
+            the mutation (method-not-found or a CONNECT-phase transport
+            drop, where the mutation provably never reached the daemon).
+            Its return value is propagated to the caller unchanged. NOT
+            run on a POST-SEND drop (indeterminate — see step 4).
         idempotency_key: Optional retry key forwarded to the daemon for
             the cross-runtime idempotency window.
         runtime_dir: Optional explicit runtime dir (tests anchor it at a
@@ -263,6 +273,10 @@ def _mutate_via_daemon[FallbackT](
             reject it; ``data.kind="InvalidInput"``).
         DaemonUnreachable: When the auto-spawn failed to expose a
             socket (mapped from the spawn timeout).
+        DaemonMutationIndeterminate: When the connection drops or the
+            read times out AFTER the request was sent (POST-SEND phase) —
+            the write may or may not have applied, so the fallback is not
+            re-run. Exit code 4 (subclass of ``DaemonUnreachable``).
         ValidationFailed: When the daemon rejects the mutation with
             ``-32002 validation_failed``.
         CliError: When the daemon returns any other JSON-RPC error
@@ -284,13 +298,31 @@ def _mutate_via_daemon[FallbackT](
         params=params,
     )
     repo_root = str(((flags.workspace if flags is not None else None) or Path.cwd()).resolve())
+
+    # Phase split so a transport drop is classified by WHEN it happened:
+    #
+    # * CONNECT phase (``__enter__``) — the request was never sent, so the
+    #   daemon provably never applied the mutation → the in-process
+    #   fallback is safe.
+    # * POST-SEND phase (``state_mutate`` → ``call``) — the request was
+    #   already on the wire when the connection dropped / read timed out,
+    #   so the daemon MAY have applied it before dying. Re-running the
+    #   fallback would double-apply a non-idempotent kind (EVENT_APPEND),
+    #   so this is surfaced as the indeterminate error, NOT a blind
+    #   fallback. A ``DaemonRpcError`` is a clean daemon RESPONSE (the
+    #   write outcome is determinate) and keeps its specific mapping.
+    client = DaemonClient(runtime_dir=runtime_dir)
     try:
-        with DaemonClient(runtime_dir=runtime_dir) as client:
-            return client.state_mutate(
-                mutation,
-                idempotency_key=idempotency_key,
-                repo_root=repo_root,
-            )
+        client.__enter__()
+    except (OSError, NotImplementedError) as exc:
+        logger.debug(f"_mutate_via_daemon connect-fallback kind={kind.value} reason={exc!s}")
+        return fallback()
+    try:
+        return client.state_mutate(
+            mutation,
+            idempotency_key=idempotency_key,
+            repo_root=repo_root,
+        )
     except DaemonRpcError as exc:
         if exc.code == -32601 or "NotImplementedError" in (exc.message or ""):
             logger.debug(
@@ -302,8 +334,16 @@ def _mutate_via_daemon[FallbackT](
             raise cli_errors.ValidationFailed(exc.message) from exc
         raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     except (RuntimeError, OSError, TimeoutError) as exc:
-        logger.debug(f"_mutate_via_daemon transport-fallback kind={kind.value} reason={exc!s}")
-        return fallback()
+        logger.debug(
+            f"_mutate_via_daemon indeterminate kind={kind.value} reason={exc!s}; "
+            f"daemon connection lost after the request was sent — not falling back"
+        )
+        raise cli_errors.DaemonMutationIndeterminate(
+            f"daemon connection lost mid-mutation ({kind.value}); "
+            f"the state may or may not have applied — re-check before retrying"
+        ) from exc
+    finally:
+        client.__exit__(None, None, None)
 
 
 __all__ = [

@@ -125,6 +125,26 @@ class InternalError(CliError):
     exit_code = exit_codes.INTERNAL_ERROR
 
 
+class DaemonMutationIndeterminate(DaemonUnreachable):
+    """Daemon connection lost mid-mutation; the write may or may not have applied.
+
+    Raised by the daemon-proxy entry when the request was already sent to
+    the daemon and then the connection dropped or the read timed out
+    before a reply landed (the daemon may have applied the mutation, then
+    died, before answering). Unlike a connect-phase failure — where the
+    mutation provably never reached the daemon and the in-process
+    fallback is safe — this state is **indeterminate**, so the proxy must
+    NOT silently re-run the mutation: a non-idempotent kind (e.g.
+    ``EVENT_APPEND``) would double-apply.
+
+    Subclasses :class:`DaemonUnreachable` (exit code 4) because the cause
+    is a lost daemon connection; the distinct class name + ``Indeterminate``
+    ``data.kind`` let operators and CI tell a clean "daemon down" (safe to
+    retry) apart from "daemon dropped mid-write" (re-check state before
+    retrying).
+    """
+
+
 # --- Legacy nine-class subclasses (deprecation aliases) --------------------
 # Each legacy class subclasses its new five-class bucket so existing
 # ``raise errors.LockConflict(...)`` callsites keep working unchanged.
@@ -303,6 +323,10 @@ _KIND_HINTS: dict[str, str] = {
     "HookBlocked": "the hook printed its reason above; fix the underlying issue and retry",
     "RuntimeUnavailable": (
         "check runtime preference: `eawf runtime list` and `eawf config get runtime.preference`"
+    ),
+    "DaemonMutationIndeterminate": (
+        "the mutation may or may not have applied; re-check state "
+        "(`eawf state show`) before retrying to avoid a double-apply"
     ),
 }
 

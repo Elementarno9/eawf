@@ -1012,6 +1012,110 @@ def test_replay_wal_pending_is_poisoned(tmp_path: Path) -> None:
     _run(body)
 
 
+# ---- state.mutate (WAL mark_applied ordering — S7) --------------------------
+# A crash AFTER the state write but BEFORE the event append must leave an
+# APPLIED record (not a PENDING one) so replay_wal re-issues the event row
+# instead of poisoning it. mark_applied is reordered to fire immediately
+# after the durable state write, before append_envelope.
+
+
+def test_mutate_crash_after_state_write_leaves_applied_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crash between the state write and the event append leaves ``.applied``.
+
+    Regression for the S7 ordering bug: with ``mark_applied`` AFTER the
+    event append, this crash window left a ``.pending`` record that
+    ``replay_wal`` POISONS — silently losing the event row and diverging
+    state from the event log. With ``mark_applied`` moved before the
+    append, the crash leaves an ``.applied`` record that replay re-issues.
+    """
+    from eawf.daemon.methods import state as state_methods
+
+    ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path)
+    before_bytes = state_path.read_bytes()
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated crash between state-write and event-append")
+
+    monkeypatch.setattr(state_methods, "append_envelope", _boom)
+
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id="crash-1",
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        # The simulated crash propagates out of mutate (OSError is not a
+        # validation rejection — it surfaces as an internal error on the
+        # wire). The point is the on-disk WAL/state state it leaves.
+        with pytest.raises(OSError, match="simulated crash"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+
+        # state.json WAS written (the crash is after the durable write).
+        assert state_path.read_bytes() != before_bytes
+        # The WAL record is APPLIED — not PENDING — because mark_applied
+        # ran before the (failing) event append.
+        assert list(wal_dir.glob("*.pending.json")) == []
+        applied = list(wal_dir.glob("*.applied.json"))
+        assert len(applied) == 1
+        # The event row never landed (the append blew up).
+        assert not event_path.exists() or event_path.read_text().strip() == ""
+
+    _run(body)
+
+
+def test_replay_after_crash_reissues_event_for_applied_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end S7: crash → restart → replay re-issues the missing event.
+
+    Drives the full recovery: a mutation crashes after the state write
+    (event append fails), leaving an ``.applied`` record. On the next
+    startup ``replay_wal`` re-issues the captured envelope so the event
+    log matches the already-committed state.
+    """
+    from eawf.daemon.methods import state as state_methods
+
+    ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path)
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated crash between state-write and event-append")
+
+    monkeypatch.setattr(state_methods, "append_envelope", _boom)
+
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id="crash-2",
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(OSError, match="simulated crash"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+
+        # Restore the real append for the replay path.
+        monkeypatch.undo()
+
+        # Replay (uses the real append_envelope again) re-issues the event.
+        report = recovery.replay_wal(wal_dir, state_path, event_path)
+        assert report.applied_count == 1
+        assert report.replayed_event_count == 1
+        assert report.poisoned_count == 0
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+        env = orjson.loads(rows[0])
+        assert env["kind"] == StoreKind.EVENT.value
+        assert env["scope_id"] == "P24-I01-W09"
+        # The record is now fsynced (replay completed it).
+        assert len(list(wal_dir.glob("*.fsynced.json"))) == 1
+
+    _run(body)
+
+
 # ---- state.mutate (param shape errors) -------------------------------------
 
 

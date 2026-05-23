@@ -4,17 +4,20 @@ Per rule 4 + D-SUP-01 the daemon is the canonical writer; the in-process
 path in :func:`eawf.cli.commands.lifecycle._commit_mutation` is the V1
 CI / one-shot / recovery fallback. P27-I02-W18 flipped that fallback from
 the legacy **event-first** ordering to a **state-first, WAL-backed**
-ordering that mirrors the daemon's outcome-WAL algorithm:
+ordering that mirrors the daemon's outcome-WAL algorithm. P27-I02-W32
+then reordered ``mark_applied`` to fire BEFORE the event append:
 
-    replay_wal → write_pending → write state.json → append event.jsonl
-    → mark_applied → mark_fsynced
+    replay_wal → write_pending → write state.json → mark_applied
+    → append event.jsonl → mark_fsynced
 
 The invariant this buys is the inverse of the old one, and the one the
 authority map actually wants: the event row is appended **only after**
 ``state.json`` is durably written, so a crash never leaves a *phantom
-event* (an event whose state change did not commit). A crash between the
-state write and the event append leaves a ``.pending`` WAL record that
-the next mutation's ``replay_wal`` reconciles.
+event* (an event whose state change did not commit). And because
+``mark_applied`` fires before the append, a crash between the state
+write and the event append leaves an ``.applied`` WAL record — which
+``replay_wal`` re-issues the captured envelope for, instead of the
+``.pending`` record it would POISON (silently dropping the event row).
 
 The scenarios below assert the new invariant directly:
 
@@ -23,11 +26,11 @@ The scenarios below assert the new invariant directly:
   call the WAL record has retired to ``.fsynced.json``.
 * No-phantom-event crash: monkey-patching ``append_envelope`` to raise
   ``OSError`` after the state write leaves the new event row absent from
-  ``event.jsonl`` (no phantom event) while a ``.pending`` WAL record
+  ``event.jsonl`` (no phantom event) while an ``.applied`` WAL record
   survives for roll-forward; the CLI exits non-zero.
 * Roll-forward: the next successful mutation runs ``replay_wal`` first,
-  which finishes the half-applied prior write — the event row that was
-  lost to the crash lands exactly once.
+  which re-issues the ``.applied`` record's envelope — the event row that
+  was lost to the crash lands exactly once.
 """
 
 from __future__ import annotations
@@ -172,7 +175,9 @@ def test_phase_open_no_phantom_event_when_append_fails(
     The state-first ordering means the event row is appended only after
     the state write. When the append fails, the log carries no event for
     the mutation — the success criterion's "no event without its state
-    change" holds. A ``.pending`` WAL record survives for roll-forward.
+    change" holds. Because ``mark_applied`` fires before the append, an
+    ``.applied`` WAL record survives for roll-forward (NOT a ``.pending``
+    one, which replay would poison and silently drop the event row).
     """
     _init_project(workspace)
     events_before = _event_commands(workspace)
@@ -193,9 +198,14 @@ def test_phase_open_no_phantom_event_when_append_fails(
     assert _event_commands(workspace) == ["project init"], (
         "event.jsonl must NOT carry a phase open event when the append fails — no phantom event"
     )
-    # A .pending WAL record survives so the next mutation can roll it forward.
-    pending = list(_wal_dir(workspace).glob("*.pending.json"))
-    assert pending, "a .pending WAL record must survive the crashed append"
+    # An .applied WAL record survives so the next mutation's replay re-issues
+    # the dropped event row (the crash window is now mapped to APPLIED, not
+    # PENDING — the latter would be poisoned and the row lost forever).
+    assert list(_wal_dir(workspace).glob("*.pending.json")) == [], (
+        "no .pending record should survive — mark_applied ran before the append"
+    )
+    applied = list(_wal_dir(workspace).glob("*.applied.json"))
+    assert applied, "an .applied WAL record must survive the crashed append"
 
 
 def test_phase_open_crash_then_next_mutation_rolls_forward(
@@ -205,9 +215,11 @@ def test_phase_open_crash_then_next_mutation_rolls_forward(
     """The next successful mutation replays the WAL and recovers the lost row.
 
     Scenario: ``phase open`` writes state but the event append crashes,
-    leaving a ``.pending`` record. The subsequent ``phase open`` runs
-    ``replay_wal`` first; replay reconciles the half-applied prior write,
-    appending the event row that the crash dropped exactly once.
+    leaving an ``.applied`` record (``mark_applied`` ran before the
+    append). The subsequent ``phase open`` runs ``replay_wal`` first;
+    replay re-issues the ``.applied`` record's captured envelope, so the
+    event row the crash dropped lands exactly once — no longer lost to a
+    poisoned ``.pending`` record as it was before W32.
     """
     from eawf.store import append as append_module
 
@@ -224,34 +236,33 @@ def test_phase_open_crash_then_next_mutation_rolls_forward(
 
     monkeypatch.setattr("eawf.store.append.append_envelope", _flaky_append)
 
-    # First phase open: state write lands, event append crashes.
+    # First phase open: state write lands, mark_applied runs, event append
+    # crashes — leaving an .applied record (not a .pending one).
     res1 = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
     assert res1.exit_code != 0, res1.stdout
-    pending_after_crash = list(_wal_dir(workspace).glob("*.pending.json"))
-    assert pending_after_crash, "crash leaves a .pending WAL record"
+    applied_after_crash = list(_wal_dir(workspace).glob("*.applied.json"))
+    assert applied_after_crash, "crash leaves an .applied WAL record"
+    assert list(_wal_dir(workspace).glob("*.pending.json")) == []
 
     # Second phase open succeeds; its commit runs replay_wal first, which
-    # rolls the prior .pending record forward. NOTE: the daemon recovery
-    # poisons .pending records (never re-executes the mutator) — so the
-    # roll-forward outcome here is that the .pending is reconciled out of
-    # the live set, NOT that the dropped row is re-issued (the outcome-WAL
-    # design captures the envelope but pending means "crashed before
-    # durability"). The key invariant under test is that no phantom event
-    # is ever produced and the WAL is reconciled.
+    # re-issues the prior .applied record's envelope (idempotent on
+    # envelope id), recovering the event row the crash dropped. The
+    # outcome-WAL captures the full post-apply envelope, so an APPLIED
+    # record is re-issued verbatim — never poisoned.
     res2 = runner.invoke(app, ["phase", "open", "--auto", "--title", "P2"])
     assert res2.exit_code == 0, res2.stdout
 
-    # The .pending record from the crash is no longer in the live WAL set
-    # (replay moved it to poisoned/), so the log never grows a phantom row.
-    live_pending = list(_wal_dir(workspace).glob("*.pending.json"))
-    assert live_pending == [], "replay_wal reconciled the crashed .pending record"
+    # No .applied/.pending leftovers, and nothing poisoned (the crash window
+    # is APPLIED, which replay recovers — not the PENDING it used to poison).
+    assert list(_wal_dir(workspace).glob("*.applied.json")) == []
+    assert list(_wal_dir(workspace).glob("*.pending.json")) == []
     poisoned = list((_wal_dir(workspace) / "poisoned").glob("*.poisoned.json"))
-    assert poisoned, "the crashed .pending record was poisoned by replay"
+    assert poisoned == [], "an APPLIED record is recovered, never poisoned"
 
-    # Every event row on disk corresponds to a committed mutation — no
-    # phantom event (an event whose state change never landed). The second
-    # phase open's row is present; the first (crashed) one is not.
+    # Both event rows are present: the first (crashed) phase open's row was
+    # re-issued by replay, and the second landed on its own append. No row
+    # is lost — the S7 fix's whole point.
     commands = _event_commands(workspace)
-    assert commands.count("phase open") == 1, (
-        f"exactly one phase open event row should exist, saw {commands!r}"
+    assert commands.count("phase open") == 2, (
+        f"both phase open event rows should exist after roll-forward, saw {commands!r}"
     )

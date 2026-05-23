@@ -18,11 +18,18 @@ Algorithm — the transaction lifecycle:
 6. Build the canonical event envelope (``EventPayload`` body) +
    write the WAL ``.pending.json`` record.
 7. Atomic-write ``state.json`` (existing
-   :func:`eawf.state.writer.atomic_write_json_locked`).
-8. Append the envelope to ``event.jsonl`` via
-   :func:`eawf.store.append.append_envelope`.
-9. WAL ``.pending`` → ``.applied`` → ``.fsynced`` (lock-free renames
-   from :mod:`eawf.daemon.wal`).
+   :func:`eawf.state.writer.atomic_write_json_locked`) — the point of
+   no return (state.json is fsynced here).
+8. WAL ``.pending`` → ``.applied`` rename, BEFORE the event append, so
+   a crash in the state-write→event-append window leaves an APPLIED
+   record. :func:`eawf.daemon.recovery.replay_wal` re-issues the
+   captured envelope for an APPLIED record (idempotent on envelope id),
+   whereas a PENDING record would be POISONED and the event row lost —
+   diverging state from the event log.
+9. Append the envelope to ``event.jsonl`` via
+   :func:`eawf.store.append.append_envelope`, then WAL
+   ``.applied`` → ``.fsynced`` (lock-free renames from
+   :mod:`eawf.daemon.wal`).
 10. Publish the envelope on the subscription bus
     (:meth:`eawf.daemon.bus.EventBus.publish`).
 11. Release portalock; cache the result for the idempotency window;
@@ -817,9 +824,16 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             )
             wal.write_pending(wal_path, record)
 
+            # ``atomic_write_json_locked`` fsyncs state.json — the point of
+            # no return. Mark the record APPLIED immediately after, BEFORE
+            # the event append, so a crash in the state-write→event-append
+            # window leaves an APPLIED record (not a PENDING one). Replay
+            # then re-issues the captured envelope (idempotent on envelope
+            # id); a PENDING record would instead be POISONED and the
+            # event row silently lost, diverging state from the event log.
             atomic_write_json_locked(state_path, new_payload)
-            append_envelope(event_path, envelope)
             wal.mark_applied(wal_path, mutation.mutation_id)
+            append_envelope(event_path, envelope)
             wal.mark_fsynced(wal_path, mutation.mutation_id)
 
             if ctx.bus is not None and hasattr(ctx.bus, "publish"):

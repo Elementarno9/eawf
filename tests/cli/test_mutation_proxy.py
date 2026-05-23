@@ -13,8 +13,14 @@ This suite exercises the branching contract:
 3. **NotImplementedError fallback** — an RPC error whose message
    carries ``NotImplementedError`` (kind reserved but unwired) also
    falls back.
-4. **Transport-error fallback** — a connect / mutate transport drop
-   (``OSError`` / ``TimeoutError``) falls back to the in-process path.
+4. **Connect-phase fallback vs. post-send indeterminate** — a CONNECT
+   drop (``__enter__`` raises ``OSError`` — request never sent) falls
+   back to the in-process path; a POST-SEND drop (``state_mutate``
+   raises ``RuntimeError`` / ``TimeoutError`` after the request was on
+   the wire) is INDETERMINATE and raises
+   :class:`~eawf.cli.errors.DaemonMutationIndeterminate` WITHOUT
+   re-running the fallback (a blind re-run would double-apply a
+   non-idempotent kind).
 5. **Validation rejection** — a ``-32002 validation_failed`` maps to
    :class:`~eawf.cli.errors.ValidationFailed`; the fallback MUST NOT
    run.
@@ -242,21 +248,25 @@ def test_mutate_via_daemon_not_implemented_falls_back(
     assert result == "fell-back"
 
 
-# ---- Scenario 4: transport-error fallback ----------------------------------
+# ---- Scenario 4: connect-phase fallback vs. post-send indeterminate --------
 
 
 class _DownClient:
     """DaemonClient stand-in whose connect fails like a down daemon."""
+
+    exit_called: bool = False
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         pass
 
     def __enter__(self) -> _DownClient:
         # ConnectionRefusedError is an OSError subclass — the transport error a
-        # real connect raises when the daemon socket has no listener.
+        # real connect raises when the daemon socket has no listener. This is
+        # the CONNECT phase: the request was never sent.
         raise ConnectionRefusedError("daemon socket not listening")
 
     def __exit__(self, *_args: Any) -> None:
+        _DownClient.exit_called = True
         return None
 
 
@@ -264,8 +274,16 @@ def test_mutate_via_daemon_connect_transport_error_falls_back(
     monkeypatch: pytest.MonkeyPatch,
     _no_spawn: None,
 ) -> None:
-    """A connect transport drop routes to the in-process fallback."""
+    """A CONNECT-phase transport drop routes to the in-process fallback.
+
+    The connect (``__enter__``) failing means the daemon provably never
+    received the request, so the in-process fallback is safe — the V1
+    carve-out lets the write proceed against an unreachable daemon. The
+    teardown (``__exit__``) MUST NOT run because the context was never
+    successfully entered.
+    """
     _set_client(monkeypatch, _DownClient)
+    _DownClient.exit_called = False
 
     fallback_called = [False]
 
@@ -283,10 +301,15 @@ def test_mutate_via_daemon_connect_transport_error_falls_back(
     )
     assert fallback_called == [True]
     assert result == "in-process"
+    # Connect never succeeded, so the proxy must not call __exit__ on a
+    # half-constructed client (no socket to tear down).
+    assert _DownClient.exit_called is False
 
 
 class _MidMutateDropClient:
     """DaemonClient stand-in that connects but drops the mutate mid-flight."""
+
+    exit_called: bool = False
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         pass
@@ -295,37 +318,83 @@ class _MidMutateDropClient:
         return self
 
     def __exit__(self, *_args: Any) -> None:
+        _MidMutateDropClient.exit_called = True
         return None
 
     def state_mutate(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        # TimeoutError is an OSError subclass — the transport error a real call
-        # raises when the daemon dies between the connect and the reply.
-        raise TimeoutError("daemon call exceeded timeout")
+        # The empty-read path in DaemonClient.call raises this exact
+        # RuntimeError after the request was already sent — the daemon
+        # may have applied the mutation before dropping the connection.
+        raise RuntimeError("daemon closed connection during call method='state.mutate'")
 
 
-def test_mutate_via_daemon_mid_mutate_transport_error_falls_back(
+def test_mutate_via_daemon_post_send_drop_is_indeterminate_no_fallback(
     monkeypatch: pytest.MonkeyPatch,
     _no_spawn: None,
 ) -> None:
-    """A transport drop during the mutate also routes to the fallback."""
-    _set_client(monkeypatch, _MidMutateDropClient)
+    """A POST-SEND transport drop raises indeterminate and does NOT fall back.
 
-    fallback_called = [False]
+    Regression for the double-apply bug: the old code blind-fell-back on
+    ANY transport error, which re-ran the in-process mutation even when
+    the daemon may have already applied it (daemon applied → dropped the
+    connection before replying). Re-running double-applies a
+    non-idempotent kind (EVENT_APPEND). The proxy must now surface the
+    indeterminate error so the operator re-checks before retrying — the
+    fallback MUST NOT run. The client is still torn down (``__exit__``).
+    """
+    _set_client(monkeypatch, _MidMutateDropClient)
+    _MidMutateDropClient.exit_called = False
 
     def _fallback() -> str:
-        fallback_called[0] = True
-        return "in-process"
+        pytest.fail("fallback must not run on a post-send (indeterminate) drop")
 
-    result = _dispatch._mutate_via_daemon(
-        MutationKind.WAVE_CLOSE,
-        _PARAMS,
-        None,
-        scope_id="P24-I01-W09",
-        verb="wave close",
-        fallback=_fallback,
-    )
-    assert fallback_called == [True]
-    assert result == "in-process"
+    with pytest.raises(cli_errors.DaemonMutationIndeterminate, match="may or may not have applied"):
+        _dispatch._mutate_via_daemon(
+            MutationKind.EVENT_APPEND,
+            {"event_type": "audit"},
+            None,
+            scope_id="P24-I01-W09",
+            verb="event append",
+            fallback=_fallback,
+        )
+    # The connection was opened, so teardown must have run.
+    assert _MidMutateDropClient.exit_called is True
+
+
+def test_mutate_via_daemon_post_send_timeout_is_indeterminate(
+    monkeypatch: pytest.MonkeyPatch,
+    _no_spawn: None,
+) -> None:
+    """A post-send TimeoutError is also indeterminate (exit code 4)."""
+
+    class _TimeoutClient:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> _TimeoutClient:
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def state_mutate(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            raise TimeoutError("daemon call exceeded timeout method='state.mutate'")
+
+    _set_client(monkeypatch, _TimeoutClient)
+
+    with pytest.raises(cli_errors.DaemonMutationIndeterminate) as excinfo:
+        _dispatch._mutate_via_daemon(
+            MutationKind.WAVE_CLOSE,
+            _PARAMS,
+            None,
+            scope_id="P24-I01-W09",
+            verb="wave close",
+            fallback=lambda: pytest.fail("fallback must not run"),
+        )
+    # Subclass of DaemonUnreachable → exit code 4, distinct from a clean
+    # validation failure (2) or a connect-phase fallback (which succeeds).
+    assert excinfo.value.exit_code == exit_codes.DAEMON_UNREACHABLE
+    assert isinstance(excinfo.value, cli_errors.DaemonUnreachable)
 
 
 # ---- Scenario 5: validation rejection --------------------------------------
