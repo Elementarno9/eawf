@@ -2819,6 +2819,16 @@
       "scope_id": "P27-I02-W39",
       "status": "done",
       "updated_at": "2026-05-23T14:56:04.045557Z"
+    },
+    "P27-I02-W40": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I02-W40-close-20260523T150858Z",
+      "elapsed_eu": 0.02,
+      "id": "ACT-P27-I02-W40",
+      "scope_id": "P27-I02-W40",
+      "status": "done",
+      "updated_at": "2026-05-23T15:08:58.452996Z"
     }
   },
   "agent_sessions": {
@@ -2856,6 +2866,16 @@
       "size_bytes": null,
       "uri": "repo:.ea/artifacts/audits/2026-05-22-p26-i02-tui-qol.md",
       "urn": "urn:eawf:v1:artifact:P26/A34-P26-tui-qol-report"
+    },
+    "A36-P27-i02-fixes-report": {
+      "created_at": "2026-05-23T15:07:35.038821Z",
+      "id": "A36-P27-i02-fixes-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-23-p27-i02-review-fixes.md",
+      "urn": "urn:eawf:v1:artifact:P27-I02/A36-P27-i02-fixes-report"
     },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
@@ -3713,6 +3733,17 @@
       "scope_id": "EAWF",
       "status": "pending",
       "verdict": null
+    },
+    "A36-P27-i02-fixes": {
+      "check_results": [],
+      "created_at": "2026-05-23T15:07:35.470442Z",
+      "id": "A36-P27-i02-fixes",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "A36-P27-i02-fixes-report",
+      "scope_id": "P27-I02",
+      "status": "complete",
+      "verdict": "minor"
     }
   },
   "backlog": {
@@ -5136,6 +5167,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I02-W39",
       "updated_at": "2026-05-23T14:47:18.423114Z"
+    },
+    "P27-I02-W40": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I02-W40-bucket-20260523T150828Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I02-W40",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I02-W40",
+      "updated_at": "2026-05-23T15:08:28.939046Z"
     }
   },
   "goals": {
@@ -5832,7 +5876,8 @@
         "P27-I02-W37",
         "P27-I02-W38",
         "P27-I02-W32",
-        "P27-I02-W39"
+        "P27-I02-W39",
+        "P27-I02-W40"
       ]
     },
     "P27-I03": {
@@ -6424,7 +6469,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T14:56:04.045806Z",
+  "updated_at": "2026-05-23T15:08:58.453223Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -16742,6 +16787,34 @@
         "non-closure lifecycle rejection returns same exit code on daemon + fallback paths (InvalidInput); closure stays ValidationFailed; client -32002 single-sourced; mark_applied + indeterminate docstrings corrected; non-closure parity test added"
       ],
       "title": "align daemon validation exit codes with fallback + rpc nits",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I02-W40": {
+      "agent_role": "auditor",
+      "blocks": [],
+      "claim_session_id": "inline-w40",
+      "closed_at": "2026-05-23T15:08:58.452996Z",
+      "commit": "6f86e6e7d80e027cefb1b48bdc709e7805c88459",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/artifacts/audits/2026-05-23-p27-i02-review-fixes.md"
+      ],
+      "id": "P27-I02-W40",
+      "iter_id": "P27-I02",
+      "opened_at": "2026-05-23T15:08:28.473001Z",
+      "outcome": "A36 closure audit report committed (minor verdict, 4 I03 followups); backs the iter close",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "A36 ship-gate closure audit report committed with minor verdict + I03 followups"
+      ],
+      "title": "P27-I02 closure audit report (A36)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
