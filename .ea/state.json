@@ -5828,14 +5828,14 @@
       ]
     },
     "P27-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A36-P27-i02-fixes",
+      "closed_at": "2026-05-23T15:09:42.674690Z",
       "description": null,
       "estimate_id": null,
       "id": "P27-I02",
       "opened_at": "2026-05-22T19:55:55.103307Z",
       "phase_id": "P27",
-      "status": "active",
+      "status": "closed",
       "title": "P27-I02: correctness, safety, architecture foundation",
       "wave_ids": [
         "P27-I02-W01",
@@ -6469,7 +6469,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T15:08:58.453223Z",
+  "updated_at": "2026-05-23T15:09:42.675037Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
