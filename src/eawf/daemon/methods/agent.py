@@ -7,18 +7,28 @@ runs :func:`eawf.runtimes.dispatch.resolve_adapter` to pick the
 highest-preference runtime that the skill manifest can host *and* that
 resolves to a concrete adapter (rejecting an off-manifest ``runtime``
 override). The complementary V5 reactive switchover + V8 ``--continue``
-fall-through *policy* lives in :mod:`eawf.runtimes.fallback`; the live
-subprocess spawn + ``state.mutate`` ``AddSessionAttempt`` wiring still
-lands later. Until that lands the method does **not** mutate state and
-does **not** spawn a subprocess — it computes the plan and returns it.
+fall-through *policy* lives in :mod:`eawf.runtimes.fallback`.
+
+When the caller supplies a post-dispatch *outcome* (the model + token
+tally + priced cost, plus an optional error-driven fallback runtime),
+``agent.dispatch`` drives :func:`eawf.daemon.dispatch_runner.run_dispatch`
+so the C09 ``runtime_switched`` (on a V5 fallback) + ``dispatch_cost``
+events land in the live ``event.jsonl`` through the daemon canonical
+writer. This is the production caller for the dispatch runner. The live
+subprocess spawn + token *metering* that will populate the outcome
+automatically — plus the ``state.mutate`` ``AddSessionAttempt`` wiring —
+still lands later; until then the method does **not** spawn a subprocess
+and the caller hands the metering in. When no outcome is supplied (or no
+``event_path`` is configured, as in unit tests) the method computes the
+plan and returns it without emitting events.
 
 ``agent.session`` is a read-only inspection helper that returns the
 typed session table from ``state.json`` for a wave.
 
 ``agent.kill`` is a placeholder that returns ``killed=false`` +
-``signal="term"``; W09 wires the real subprocess-signalling ladder
-(SIGTERM grace window then SIGKILL on POSIX, ``TerminateProcess`` on
-Windows).
+``signal="term"``; a later wave wires the real subprocess-signalling
+ladder (SIGTERM grace window then SIGKILL on POSIX, ``TerminateProcess``
+on Windows).
 """
 
 from __future__ import annotations
@@ -26,19 +36,37 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.daemon.dispatch_runner import DispatchTokens, run_dispatch
 from eawf.daemon.methods import MethodContext, register
 from eawf.evidence._io import load_state
 from eawf.runtimes.dispatch import resolve_adapter
+from eawf.runtimes.manifest import RuntimeId
 from eawf.runtimes.plugin_manifest import SkillManifest
 from eawf.state.enums import DispatchNote
 from eawf.state.models import DispatchAnnotation, SessionAttempt
+from eawf.store.kinds.events.base import RuntimeTriple
+from eawf.telemetry.models import RuntimeErrorClass
+from eawf.telemetry.pricing import PRICING_VERSION
 
 logger = logging.getLogger(__name__)
+
+
+#: Maps a plugin-manifest :data:`~eawf.runtimes.manifest.RuntimeId`
+#: (``"claude-code"`` / ``"codex"`` / ``"opencode"``) to the short
+#: :data:`~eawf.store.kinds.events.base.RuntimeTriple` spelling
+#: (``"claude"`` / ``"codex"`` / ``"opencode"``) the C09 event surface
+#: keys on. Only ``"claude-code"`` differs between the two vocabularies.
+_RUNTIME_TRIPLE: dict[RuntimeId, RuntimeTriple] = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
 
 
 #: Session-policy values accepted by :func:`dispatch`. Only ``"fresh"``
@@ -51,6 +79,51 @@ SessionPolicy = Literal["fresh", "continue", "hybrid"]
 #: SIGTERM; ``"kill"`` maps to SIGKILL (POSIX) /
 #: ``TerminateProcess`` (Windows).
 KillSignal = Literal["term", "kill"]
+
+
+class DispatchOutcome(BaseModel):
+    """Post-dispatch metering the caller hands :func:`dispatch`.
+
+    The live subprocess spawn + token metering that will populate this
+    automatically lands in a later wave; until then the caller supplies
+    the served model + token tally + priced cost, plus an optional
+    error-driven fallback. When :attr:`primary_error` is set the
+    dispatch runner emits a ``runtime_switched`` event and the
+    :attr:`fallback_runtime` serves the dispatch; the cost is always
+    billed against the serving attempt.
+
+    Attributes:
+        model: Model identifier the serving runtime priced its cost
+            against.
+        input_tokens: Non-cached input tokens billed.
+        output_tokens: Output tokens billed.
+        cache_creation_input_tokens: Tokens written to the prompt cache.
+        cache_read_input_tokens: Tokens served from the prompt cache.
+        cost_usd: Priced cost in USD (string-encoded ``Decimal`` for
+            exact accounting on the wire).
+        pricing_version: ``PRICING`` snapshot version pinning
+            *cost_usd*. Defaults to the embedded
+            :data:`~eawf.telemetry.pricing.PRICING_VERSION`.
+        primary_error: Typed
+            :class:`~eawf.telemetry.models.RuntimeErrorClass` member when
+            the primary runtime failed (triggers a V5 fallback +
+            ``runtime_switched`` event), or ``None`` when the primary
+            served the dispatch with no switch.
+        fallback_runtime: Runtime the V5 ladder falls through to when
+            *primary_error* is set. Required whenever *primary_error* is
+            set; ignored otherwise.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = Field(min_length=1)
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    cache_creation_input_tokens: int = Field(ge=0)
+    cache_read_input_tokens: int = Field(ge=0)
+    cost_usd: Decimal = Field(ge=0)
+    pricing_version: str = Field(default=PRICING_VERSION, min_length=1)
+    primary_error: RuntimeErrorClass | None = None
+    fallback_runtime: RuntimeId | None = None
 
 
 class DispatchParams(BaseModel):
@@ -74,6 +147,13 @@ class DispatchParams(BaseModel):
             rejects an off-manifest *runtime* override. When omitted the
             legacy override-or-preference pick (:func:`_pick_runtime`)
             runs unchanged.
+        outcome: Optional post-dispatch metering
+            (:class:`DispatchOutcome`). When supplied *and* the daemon
+            context carries an ``event_path``, the dispatcher drives
+            :func:`eawf.daemon.dispatch_runner.run_dispatch` so the C09
+            ``runtime_switched`` (on a V5 fallback) + ``dispatch_cost``
+            events land in the live event log. When omitted the method
+            stays plan-only.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -81,15 +161,33 @@ class DispatchParams(BaseModel):
     runtime: str | None = None
     session_policy: SessionPolicy = "fresh"
     skill_manifest: SkillManifest | None = None
+    outcome: DispatchOutcome | None = None
 
 
 class DispatchPlan(BaseModel):
-    """W07 dispatch-plan result.
+    """Dispatch-plan result.
 
-    W09 turns this payload into an ``AddSessionAttempt`` mutation
-    against ``state.json`` + the real subprocess spawn. Until W09
-    lands the daemon returns this plan unchanged so callers can
-    exercise the fresh-path shape without state mutation.
+    A later wave turns this payload into an ``AddSessionAttempt``
+    mutation against ``state.json`` + the real subprocess spawn. The
+    daemon returns the plan so callers can exercise the fresh-path shape
+    (attempt number, session id, typed annotation + attempt rows).
+
+    When the caller supplies a :class:`DispatchOutcome` and the daemon
+    context carries an ``event_path``, :attr:`event_ids` carries the ids
+    of the C09 envelopes
+    :func:`eawf.daemon.dispatch_runner.run_dispatch` emitted (the
+    ``runtime_switched`` envelope first when a V5 fallback fired, then
+    ``dispatch_cost``); it is empty otherwise.
+
+    Attributes:
+        session_id: UUID-v4 session id minted for this dispatch.
+        attempt: 1-based attempt number for the wave.
+        pid: Subprocess PID once spawned (``0`` until the spawn lands).
+        runtime: Resolved runtime adapter id (plugin spelling).
+        annotation: Typed dispatch annotation for the attempt.
+        session_attempt: Typed session-attempt row a later wave persists.
+        event_ids: Ids of the C09 envelopes emitted to the live event
+            log, in append order; empty when no outcome was supplied.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -99,6 +197,7 @@ class DispatchPlan(BaseModel):
     runtime: str
     annotation: DispatchAnnotation
     session_attempt: SessionAttempt
+    event_ids: tuple[str, ...] = ()
 
 
 class SessionParams(BaseModel):
@@ -126,7 +225,7 @@ class KillParams(BaseModel):
 
 
 class KillResult(BaseModel):
-    """Result of :func:`kill` (placeholder until W09 wires real signalling)."""
+    """Result of :func:`kill` (placeholder until a later wave wires real signalling)."""
 
     model_config = ConfigDict(extra="forbid")
     killed: bool
@@ -153,6 +252,94 @@ def _pick_runtime(*, override: str | None, preference: list[str] | None) -> str:
     if preference:
         return preference[0]
     raise ValueError("no runtime resolved: pass 'runtime' param or set wave.runtime_preference")
+
+
+def _runtime_triple(runtime_id: str) -> RuntimeTriple:
+    """Translate a plugin-manifest runtime id to its event-surface spelling.
+
+    Args:
+        runtime_id: Resolved runtime adapter id in the plugin-manifest
+            vocabulary (``"claude-code"`` / ``"codex"`` / ``"opencode"``).
+
+    Returns:
+        The short :data:`~eawf.store.kinds.events.base.RuntimeTriple`
+        spelling the C09 event payloads key on.
+
+    Raises:
+        ValueError: When *runtime_id* is not a known plugin-manifest
+            runtime id.
+    """
+    try:
+        return _RUNTIME_TRIPLE[runtime_id]  # type: ignore[index]
+    except KeyError as exc:
+        known = ", ".join(sorted(_RUNTIME_TRIPLE))
+        raise ValueError(f"unknown runtime: {runtime_id!r} (known: {known})") from exc
+
+
+def _emit_dispatch_events(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    runtime: str,
+    outcome: DispatchOutcome,
+    trace_request_id: str | None,
+) -> tuple[str, ...]:
+    """Drive the dispatch runner so the C09 events land in the live log.
+
+    Translates the resolved *runtime* (and the outcome's
+    :attr:`DispatchOutcome.fallback_runtime`) to the event-surface
+    :data:`~eawf.store.kinds.events.base.RuntimeTriple` spelling, then
+    calls :func:`eawf.daemon.dispatch_runner.run_dispatch`, which emits a
+    ``runtime_switched`` event when *outcome* carries a ``primary_error``
+    and always emits a ``dispatch_cost`` event through the daemon
+    canonical writer.
+
+    When no fallback runtime is supplied (the no-error path) the primary
+    runtime stands in as the unused ``fallback_runtime`` argument the
+    runner requires.
+
+    Args:
+        ctx: Daemon method context — supplies ``event_path`` + ``bus``.
+        wave_id: ``W<NN>`` wave being dispatched.
+        runtime: Resolved primary runtime adapter id (plugin spelling).
+        outcome: Post-dispatch metering the caller supplied.
+        trace_request_id: Optional daemon RPC request id for the §5.8
+            correlation chain.
+
+    Returns:
+        The ids of the emitted envelopes, in append order.
+
+    Raises:
+        ValueError: When ``outcome.primary_error`` is set but
+            ``outcome.fallback_runtime`` is unset, or when a runtime id
+            cannot be mapped to its event-surface spelling.
+    """
+    primary_triple = _runtime_triple(runtime)
+    if outcome.primary_error is not None:
+        if outcome.fallback_runtime is None:
+            raise ValueError("fallback_runtime required when primary_error is set")
+        fallback_triple = _runtime_triple(outcome.fallback_runtime)
+    else:
+        fallback_triple = primary_triple
+    tokens = DispatchTokens(
+        input_tokens=outcome.input_tokens,
+        output_tokens=outcome.output_tokens,
+        cache_creation_input_tokens=outcome.cache_creation_input_tokens,
+        cache_read_input_tokens=outcome.cache_read_input_tokens,
+    )
+    result = run_dispatch(
+        ctx,
+        wave_id=wave_id,
+        primary_runtime=primary_triple,
+        fallback_runtime=fallback_triple,
+        model=outcome.model,
+        pricing_version=outcome.pricing_version,
+        primary_error=outcome.primary_error,
+        tokens=tokens,
+        cost_usd=outcome.cost_usd,
+        trace_request_id=trace_request_id,
+    )
+    return result.event_ids
 
 
 def _build_plan(
@@ -231,18 +418,27 @@ def _build_plan(
 
 @register("agent.dispatch")
 async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Build a fresh-dispatch plan for the requested wave.
+    """Build a fresh-dispatch plan and emit its C09 events for the wave.
+
+    Resolves the runtime + builds the dispatch plan (attempt number,
+    session id, typed annotation + attempt rows). When the caller
+    supplies a :class:`DispatchOutcome` *and* the daemon context carries
+    an ``event_path``, the method drives
+    :func:`eawf.daemon.dispatch_runner.run_dispatch`, which emits the C09
+    ``runtime_switched`` (on a V5 fallback) + ``dispatch_cost`` events to
+    the live event log through the daemon canonical writer; the emitted
+    envelope ids ride back on :attr:`DispatchPlan.event_ids`. When no
+    outcome is supplied (or no ``event_path`` is configured, as in unit
+    tests) the method stays plan-only.
 
     The plan is **not yet** persisted to ``state.json`` and the
-    subprocess is **not yet** spawned — W09 wires both. W07 returns the
-    plan unchanged so the wave shape (attempt number, session id,
-    typed annotation + attempt rows) is exercised by callers and
-    snapshot tests.
+    subprocess is **not yet** spawned — a later wave wires both plus the
+    live token metering that will populate the outcome automatically.
 
     Args:
-        ctx: Server context. ``ctx.event_path`` is consulted only by
-            sibling methods; this one needs ``state_path`` (passed via
-            ``ctx`` attribute or omitted in W07 unit tests).
+        ctx: Server context. Needs ``state_path`` to resolve the wave's
+            ``runtime_preference`` and ``event_path`` (+ ``bus``) to emit
+            the dispatch events; both are omitted in unit tests.
         params: JSON-RPC params per :class:`DispatchParams`.
 
     Returns:
@@ -254,9 +450,11 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
             ``skill_manifest`` is supplied and the ``runtime`` override
             is not in its ``runtime`` list
             (:class:`~eawf.runtimes.dispatch.AdapterManifestMismatchError`);
-            or when no manifest-listed runtime resolves to an adapter
-            (:class:`~eawf.runtimes.dispatch.AdapterResolutionError`).
-            The server maps all of these to ``-32602 invalid params``.
+            when no manifest-listed runtime resolves to an adapter
+            (:class:`~eawf.runtimes.dispatch.AdapterResolutionError`);
+            or when an ``outcome`` carries a ``primary_error`` without a
+            ``fallback_runtime``. The server maps all of these to
+            ``-32602 invalid params``.
     """
     args = DispatchParams.model_validate(params)
     if args.session_policy == "continue":
@@ -287,9 +485,21 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
     else:
         runtime = _pick_runtime(override=args.runtime, preference=preference)
     plan = _build_plan(wave_id=args.wave_id, runtime=runtime, state_path=state_path)
+    # The dispatch runner emits to ``event.jsonl`` through the canonical
+    # writer, so it only runs when an outcome is supplied AND the daemon
+    # context is wired to an on-disk event store (unit tests omit both).
+    if args.outcome is not None and ctx.event_path is not None:
+        event_ids = _emit_dispatch_events(
+            ctx,
+            wave_id=args.wave_id,
+            runtime=runtime,
+            outcome=args.outcome,
+            trace_request_id=None,
+        )
+        plan = plan.model_copy(update={"event_ids": event_ids})
     logger.info(
         f"dispatch wave={args.wave_id!r} runtime={runtime!r} "
-        f"attempt={plan.attempt} session={plan.session_id!r}"
+        f"attempt={plan.attempt} session={plan.session_id!r} events={len(plan.event_ids)}"
     )
     return plan.model_dump(mode="json")
 

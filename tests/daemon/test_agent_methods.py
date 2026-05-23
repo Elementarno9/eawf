@@ -26,10 +26,13 @@ from pydantic import ValidationError
 
 from eawf import __version__
 from eawf.daemon import PROTOCOL_VERSION
+from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.agent import dispatch, kill, session
+from eawf.daemon.methods.agent import _runtime_triple, dispatch, kill, session
 from eawf.state.enums import DispatchNote
 from eawf.state.models import SessionAttempt, Wave
+from eawf.store.envelope import Envelope
+from eawf.telemetry.pricing import PRICING_VERSION
 
 pytestmark = pytest.mark.unit
 
@@ -38,7 +41,12 @@ def _now() -> datetime:
     return datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
 
 
-def _build_ctx(*, state_path: Path | None = None) -> MethodContext:
+def _build_ctx(
+    *,
+    state_path: Path | None = None,
+    event_path: Path | None = None,
+    bus: EventBus | None = None,
+) -> MethodContext:
     return MethodContext(
         started_at="2026-05-19T00:00:00+00:00",
         pid=os.getpid(),
@@ -46,7 +54,25 @@ def _build_ctx(*, state_path: Path | None = None) -> MethodContext:
         version=__version__,
         shutdown_event=asyncio.Event(),
         state_path=state_path,
+        event_path=event_path,
+        bus=bus,
     )
+
+
+def _read_envelopes(event_path: Path) -> list[Envelope]:
+    """Return every envelope row from *event_path* in append order."""
+    rows: list[Envelope] = []
+    with event_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                rows.append(Envelope.model_validate_json(line))
+    return rows
+
+
+def _read_event_payloads(event_path: Path) -> list[dict[str, Any]]:
+    """Return the ``payload`` dict of every envelope row in append order."""
+    return [env.payload for env in _read_envelopes(event_path)]
 
 
 def _run(body: Callable[[], Awaitable[None]]) -> None:
@@ -465,5 +491,248 @@ def test_kill_rejects_unknown_signal() -> None:
     async def body() -> None:
         with pytest.raises(ValidationError):
             await kill(ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "hup"})
+
+    _run(body)
+
+
+# --------------------------------------------------------------------------- #
+# Dispatch-runner wiring: agent.dispatch is the production caller for
+# eawf.daemon.dispatch_runner.run_dispatch. When a DispatchOutcome is
+# supplied + the context carries an event_path, the C09 ``runtime_switched``
+# (on a V5 fallback) + ``dispatch_cost`` events land in the live event log.
+# --------------------------------------------------------------------------- #
+
+
+def _outcome(
+    *,
+    primary_error: str | None = None,
+    fallback_runtime: str | None = None,
+) -> dict[str, Any]:
+    """Construct a minimal valid ``DispatchOutcome`` param payload."""
+    payload: dict[str, Any] = {
+        "model": "claude-opus-4-7",
+        "input_tokens": 1200,
+        "output_tokens": 340,
+        "cache_creation_input_tokens": 8000,
+        "cache_read_input_tokens": 64000,
+        "cost_usd": "0.123456",
+    }
+    if primary_error is not None:
+        payload["primary_error"] = primary_error
+    if fallback_runtime is not None:
+        payload["fallback_runtime"] = fallback_runtime
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("runtime_id", "triple"),
+    [("claude-code", "claude"), ("codex", "codex"), ("opencode", "opencode")],
+)
+def test_runtime_triple_maps_plugin_id_to_event_spelling(runtime_id: str, triple: str) -> None:
+    assert _runtime_triple(runtime_id) == triple
+
+
+def test_runtime_triple_rejects_unknown_runtime() -> None:
+    with pytest.raises(ValueError, match="unknown runtime: 'goose'"):
+        _runtime_triple("goose")
+
+
+def test_dispatch_with_outcome_no_error_emits_only_dispatch_cost(tmp_path: Path) -> None:
+    """An outcome with no primary_error emits a single ``dispatch_cost`` row."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    event_path = tmp_path / "store" / "event.jsonl"
+    ctx = _build_ctx(state_path=state_path, event_path=event_path, bus=EventBus())
+
+    async def body() -> None:
+        result: dict[str, Any] = await dispatch(
+            ctx,
+            {"wave_id": "P24-I01-W07", "session_policy": "fresh", "outcome": _outcome()},
+        )
+        assert len(result["event_ids"]) == 1
+        payloads = _read_event_payloads(event_path)
+        assert [p["event_type"] for p in payloads] == ["dispatch_cost"]
+        cost = payloads[0]
+        assert cost["wave_id"] == "P24-I01-W07"
+        assert cost["runtime"] == "claude"
+        assert cost["cost_usd"] == "0.123456"
+        assert cost["pricing_version"] == PRICING_VERSION
+
+    _run(body)
+
+
+def test_dispatch_with_outcome_primary_error_emits_switch_then_cost(tmp_path: Path) -> None:
+    """A V5 fallback emits ``runtime_switched`` then ``dispatch_cost`` to the log."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["codex"]),
+    )
+    event_path = tmp_path / "store" / "event.jsonl"
+    ctx = _build_ctx(state_path=state_path, event_path=event_path, bus=EventBus())
+
+    async def body() -> None:
+        result: dict[str, Any] = await dispatch(
+            ctx,
+            {
+                "wave_id": "P24-I01-W07",
+                "session_policy": "fresh",
+                "outcome": _outcome(
+                    primary_error="RUNTIME_RATE_LIMIT",
+                    fallback_runtime="claude-code",
+                ),
+            },
+        )
+        assert len(result["event_ids"]) == 2
+        envelopes = _read_envelopes(event_path)
+        assert [e.payload["event_type"] for e in envelopes] == [
+            "runtime_switched",
+            "dispatch_cost",
+        ]
+        switched, cost = (e.payload for e in envelopes)
+        assert switched["wave_id"] == "P24-I01-W07"
+        assert switched["runtime_from"] == "codex"
+        assert switched["runtime_to"] == "claude"
+        assert switched["cause"] == "RUNTIME_RATE_LIMIT"
+        # The serving (fallback) attempt is the one the cost is billed against.
+        assert cost["runtime"] == "claude"
+        assert switched["attempt_id_to"] == cost["attempt_id"]
+        # The emitted-envelope ids ride back on the plan in append order.
+        assert list(result["event_ids"]) == [e.id for e in envelopes]
+
+    _run(body)
+
+
+def test_dispatch_with_outcome_but_no_event_path_stays_plan_only(tmp_path: Path) -> None:
+    """Without an event_path the dispatch cannot emit; plan-only, no event_ids."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    ctx = _build_ctx(state_path=state_path, event_path=None)
+
+    async def body() -> None:
+        result: dict[str, Any] = await dispatch(
+            ctx,
+            {"wave_id": "P24-I01-W07", "session_policy": "fresh", "outcome": _outcome()},
+        )
+        assert result["event_ids"] == []
+
+    _run(body)
+
+
+def test_dispatch_without_outcome_emits_nothing(tmp_path: Path) -> None:
+    """No outcome → no run_dispatch call even when an event_path is wired."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    event_path = tmp_path / "store" / "event.jsonl"
+    ctx = _build_ctx(state_path=state_path, event_path=event_path, bus=EventBus())
+
+    async def body() -> None:
+        result: dict[str, Any] = await dispatch(
+            ctx,
+            {"wave_id": "P24-I01-W07", "session_policy": "fresh"},
+        )
+        assert result["event_ids"] == []
+        assert not event_path.exists()
+
+    _run(body)
+
+
+def test_dispatch_outcome_primary_error_without_fallback_raises(tmp_path: Path) -> None:
+    """A primary_error with no fallback_runtime fails fast at -32602."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    event_path = tmp_path / "store" / "event.jsonl"
+    ctx = _build_ctx(state_path=state_path, event_path=event_path, bus=EventBus())
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="fallback_runtime required"):
+            await dispatch(
+                ctx,
+                {
+                    "wave_id": "P24-I01-W07",
+                    "session_policy": "fresh",
+                    "outcome": _outcome(primary_error="RUNTIME_TIMEOUT"),
+                },
+            )
+
+    _run(body)
+
+
+def test_dispatch_outcome_rejects_extra_fields(tmp_path: Path) -> None:
+    """The ``DispatchOutcome`` model forbids unknown keys (extra='forbid')."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    ctx = _build_ctx(state_path=state_path, event_path=tmp_path / "store" / "event.jsonl")
+
+    async def body() -> None:
+        bad = _outcome()
+        bad["rogue"] = True
+        with pytest.raises(ValidationError):
+            await dispatch(
+                ctx,
+                {"wave_id": "P24-I01-W07", "session_policy": "fresh", "outcome": bad},
+            )
+
+    _run(body)
+
+
+def test_dispatch_outcome_rejects_negative_tokens(tmp_path: Path) -> None:
+    """Negative token counts violate the ge=0 bound on ``DispatchOutcome``."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    ctx = _build_ctx(state_path=state_path, event_path=tmp_path / "store" / "event.jsonl")
+
+    async def body() -> None:
+        bad = _outcome()
+        bad["input_tokens"] = -1
+        with pytest.raises(ValidationError):
+            await dispatch(
+                ctx,
+                {"wave_id": "P24-I01-W07", "session_policy": "fresh", "outcome": bad},
+            )
+
+    _run(body)
+
+
+def test_dispatch_outcome_rejects_unknown_fallback_runtime(tmp_path: Path) -> None:
+    """An off-roster fallback runtime is rejected by the RuntimeId literal."""
+    state_path = tmp_path / "state.json"
+    _write_state(
+        state_path,
+        _build_state_payload(wave_id="P24-I01-W07", runtime_preference=["claude-code"]),
+    )
+    ctx = _build_ctx(state_path=state_path, event_path=tmp_path / "store" / "event.jsonl")
+
+    async def body() -> None:
+        with pytest.raises(ValidationError):
+            await dispatch(
+                ctx,
+                {
+                    "wave_id": "P24-I01-W07",
+                    "session_policy": "fresh",
+                    "outcome": _outcome(
+                        primary_error="RUNTIME_TIMEOUT",
+                        fallback_runtime="goose",
+                    ),
+                },
+            )
 
     _run(body)
