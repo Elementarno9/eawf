@@ -5155,7 +5155,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I04-W31"
+    ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -6557,6 +6559,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I04-W30",
       "updated_at": "2026-05-24T17:25:29.068213Z"
+    },
+    "P27-I04-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W31-bucket-20260524T182840Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W31",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W31",
+      "updated_at": "2026-05-24T18:28:40.963835Z"
     }
   },
   "goals": {
@@ -7338,7 +7353,8 @@
         "P27-I04-W27",
         "P27-I04-W28",
         "P27-I04-W29",
-        "P27-I04-W30"
+        "P27-I04-W30",
+        "P27-I04-W31"
       ]
     },
     "P27-I05": {
@@ -7930,7 +7946,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T17:30:02.103588Z",
+  "updated_at": "2026-05-24T18:28:40.964113Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20132,6 +20148,39 @@
         "render_size_bar right-justifies the bucket into a fixed 2-cell field; mixed-bucket wave rows left-align their glyph runs; eu_bar bucket-format tests updated; mixed-bucket roadmap alignment regression added; tui+snapshot+mypy green"
       ],
       "title": "Align wave size-bar glyph runs via fixed-width bucket label",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W31": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "flow-p27i05",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/widgets/markup.py",
+        "src/eawf/tui/widgets/git_pane.py",
+        "src/eawf/tui/widgets/status_pane.py",
+        "tests/tui/test_widgets_markup.py",
+        "tests/snapshots/tui/golden/repo_screen.txt",
+        "tests/snapshots/tui/golden/roadmap_scrolled_long_iter.txt"
+      ],
+      "id": "P27-I04-W31",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T18:28:38.554211Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "escape_markup backslash-escapes brackets; style_labeled_line tints leading label token; status+git panes share helper; markup tests pass; TUI snapshots green"
+      ],
+      "title": "Extract shared markup helper for pane label-tint + bracket escape",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
