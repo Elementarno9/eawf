@@ -3609,6 +3609,16 @@
       "scope_id": "P27-I05-W19",
       "status": "done",
       "updated_at": "2026-05-24T22:54:16.367444Z"
+    },
+    "P27-I05-W20": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W20-close-20260524T231608Z",
+      "elapsed_eu": 44.75,
+      "id": "ACT-P27-I05-W20",
+      "scope_id": "P27-I05-W20",
+      "status": "done",
+      "updated_at": "2026-05-24T23:16:08.248960Z"
     }
   },
   "agent_sessions": {
@@ -7064,6 +7074,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W19",
       "updated_at": "2026-05-24T22:44:22.113391Z"
+    },
+    "P27-I05-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W20-bucket-20260524T225642Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W20",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W20",
+      "updated_at": "2026-05-24T22:56:42.682904Z"
     }
   },
   "goals": {
@@ -8441,7 +8464,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T22:54:16.367712Z",
+  "updated_at": "2026-05-24T23:16:08.249251Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21286,9 +21309,9 @@
       "blocks": [
         "P27-I05-W21"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T23:16:08.248960Z",
+      "commit": "e080355fe01e355f4bbd9c30296bc13fc6351b5c",
       "deps": [
         "P27-I05-W19"
       ],
@@ -21310,10 +21333,10 @@
       "id": "P27-I05-W20",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:37.879673Z",
-      "outcome": null,
+      "outcome": "regrouped 10 platform members under platform/ via codemod-all-refs (no shims); importlib.resources names + 3 EAWF001 log lines fixed; [tool.eawf.lint] config-key guarded; mypy + full suite green (2 pre-existing env-only telemetry failures)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "platform members moved under platform/; importlib.resources names updated; shims at old paths; tests green"
       ],
