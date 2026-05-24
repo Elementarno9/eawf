@@ -3329,6 +3329,16 @@
       "scope_id": "P27-I04-W22",
       "status": "done",
       "updated_at": "2026-05-24T15:20:29.284015Z"
+    },
+    "P27-I04-W23": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W23-close-20260524T154656Z",
+      "elapsed_eu": 0.03,
+      "id": "ACT-P27-I04-W23",
+      "scope_id": "P27-I04-W23",
+      "status": "done",
+      "updated_at": "2026-05-24T15:46:56.032908Z"
     }
   },
   "agent_sessions": {
@@ -6361,6 +6371,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I04-W22",
       "updated_at": "2026-05-24T15:02:08.932644Z"
+    },
+    "P27-I04-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W23-bucket-20260524T154604Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I04-W23",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I04-W23",
+      "updated_at": "2026-05-24T15:46:04.271562Z"
     }
   },
   "goals": {
@@ -7134,7 +7157,8 @@
         "P27-I04-W19",
         "P27-I04-W20",
         "P27-I04-W21",
-        "P27-I04-W22"
+        "P27-I04-W22",
+        "P27-I04-W23"
       ]
     },
     "P27-I05": {
@@ -7726,7 +7750,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T15:20:29.284261Z",
+  "updated_at": "2026-05-24T15:46:56.033417Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19667,6 +19691,37 @@
         "populated-portfolio regression test"
       ],
       "title": "Fix EU-burn DataTable crash with resolved tint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W23": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "local-fix",
+      "closed_at": "2026-05-24T15:46:56.032908Z",
+      "commit": "94864f65984611ef9a863caf108e0cb69604bb62",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/daemon/service_install.py",
+        "tests/daemon/test_service_install.py"
+      ],
+      "id": "P27-I04-W23",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T15:46:00.435285Z",
+      "outcome": "fixed wheel template resolution via bundled-first _template_dir; 3 regression tests; tool reinstalled + verified",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "uv tool wheel resolves templates from eawf/_data/service_templates",
+        "editable checkout falls back to repo-root templates/",
+        "regression tests cover bundled+repo+missing paths"
+      ],
+      "title": "Resolve service templates from bundled wheel data dir",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
