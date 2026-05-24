@@ -3199,6 +3199,36 @@
       "scope_id": "P27-I04-W09",
       "status": "done",
       "updated_at": "2026-05-24T01:43:09.612685Z"
+    },
+    "P27-I04-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W10-close-20260524T024049Z",
+      "elapsed_eu": 0.49,
+      "id": "ACT-P27-I04-W10",
+      "scope_id": "P27-I04-W10",
+      "status": "done",
+      "updated_at": "2026-05-24T02:40:49.524494Z"
+    },
+    "P27-I04-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W11-close-20260524T024050Z",
+      "elapsed_eu": 0.49,
+      "id": "ACT-P27-I04-W11",
+      "scope_id": "P27-I04-W11",
+      "status": "done",
+      "updated_at": "2026-05-24T02:40:50.020978Z"
+    },
+    "P27-I04-W12": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W12-close-20260524T024050Z",
+      "elapsed_eu": 0.48,
+      "id": "ACT-P27-I04-W12",
+      "scope_id": "P27-I04-W12",
+      "status": "done",
+      "updated_at": "2026-05-24T02:40:50.506954Z"
     }
   },
   "agent_sessions": {
@@ -6062,6 +6092,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I04-W09",
       "updated_at": "2026-05-24T01:43:01.083163Z"
+    },
+    "P27-I04-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W10-bucket-20260524T024043Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W10",
+      "updated_at": "2026-05-24T02:40:43.378531Z"
+    },
+    "P27-I04-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W11-bucket-20260524T024043Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W11",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W11",
+      "updated_at": "2026-05-24T02:40:43.834791Z"
+    },
+    "P27-I04-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W12-bucket-20260524T024044Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W12",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W12",
+      "updated_at": "2026-05-24T02:40:44.298632Z"
     }
   },
   "goals": {
@@ -7420,7 +7489,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T02:26:30.360957Z",
+  "updated_at": "2026-05-24T02:40:50.507200Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18952,9 +19021,9 @@
         "P27-I04-W14",
         "P27-I04-W15"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T02:40:49.524494Z",
+      "commit": "fa5ac356e0ffbea2eda4c3363e1d83abfea2840c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18967,10 +19036,10 @@
       "id": "P27-I04-W10",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T02:26:10.395899Z",
-      "outcome": null,
+      "outcome": "TUI stderr log bleed stopped via root-logging swap to TextualHandler in run_app; per-pulse build_dispatch_slice INFO removed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "No stderr-writing log handler is active while the Textual app runs (TUI launch drops or redirects the root StreamHandler to a file or TextualHandler); the per-repaint build_dispatch_slice logger.info is removed or demoted to debug so it never fires on a pulse tick; tests assert the TUI launch path installs no stderr handler and build_dispatch_slice emits no INFO on repaint"
       ],
@@ -18982,9 +19051,9 @@
     "P27-I04-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T02:40:50.020978Z",
+      "commit": "99250db1f1b39e94873b431c4497dac9403a8be7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18996,10 +19065,10 @@
       "id": "P27-I04-W11",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T02:26:14.348972Z",
-      "outcome": null,
+      "outcome": "Roadmap completion bars + N/M counters aligned via fixed-width right-aligned counter field computed across rendered rows",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Roadmap phase and iter completion bars plus their N/M counters align in fixed columns across mixed digit widths (6/6 vs 17/17 vs 21/21); no-data rows align in the same column; wave-row token-burn bars align to the same right edge; roadmap snapshot goldens regenerated; tests assert mixed-digit-width alignment"
       ],
@@ -19013,9 +19082,9 @@
       "blocks": [
         "P27-I04-W13"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T02:40:50.506954Z",
+      "commit": "7f95fe1a12c8c6fcdfc1b65064bf0c9fd12cdbe5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19026,10 +19095,10 @@
       "id": "P27-I04-W12",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T02:26:17.886643Z",
-      "outcome": null,
+      "outcome": "Config modal key column sized from widest per-tab key (floor 24); _field_line + _meta_line share width so type/value columns align",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Config modal key column width is computed from the widest key (per-tab or registry-wide) instead of the hardcoded :<42 so the type tag and value columns align even for long estimation.display.time_quantum_* keys; _field_line and _meta_line share the width; config-modal goldens regenerated; test asserts alignment on the estimation tab"
       ],
