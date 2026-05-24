@@ -131,17 +131,22 @@ def test_workspace_screen_snapshot() -> None:
     asyncio.run(body())
 
 
-def test_workspace_git_pane_dashes_from_repo_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_repo_git_pane_dashes_from_repo_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
     """The git-pane stub — not the chdir — is what guarantees the DASH golden.
 
     Regression for the ubuntu ``pytest -n auto`` drift: a parallel test can
-    leak the repo cwd into the worker, so the workspace git pane probes a
-    real repo and renders the live branch instead of dashes. This test
-    undoes the autouse fixture's chdir (pointing cwd back at the repo root,
-    a genuine git work tree) while keeping the ``_git_run`` stub active, and
-    asserts the GIT pane still resolves to dashes. With the stub gone the
-    pane would render the real branch — so a green assertion here proves the
-    stub neutralizes the cwd leak.
+    leak the repo cwd into the worker, so the repo git pane probes a real
+    repo and renders the live branch instead of dashes. This test undoes the
+    autouse fixture's chdir (pointing cwd back at the repo root, a genuine
+    git work tree) while keeping the ``_git_run`` stub active, and asserts
+    the GIT pane still resolves to dashes. With the stub gone the pane would
+    render the real branch — so a green assertion here proves the stub
+    neutralizes the cwd leak.
+
+    Targets the repo screen: the workspace screen now surfaces git in a
+    per-repo :class:`~eawf.tui.widgets.workspace_table.WorkspaceTable` column
+    (no standalone ``GitPane`` in its table-browse mode), so the
+    standalone-pane cwd-leak guard rides the repo quadrant's git pane.
 
     The function-scoped ``monkeypatch.chdir`` is unwound at teardown, so the
     test does not itself leak the repo cwd into a sibling worker.
@@ -154,7 +159,7 @@ def test_workspace_git_pane_dashes_from_repo_cwd(monkeypatch: pytest.MonkeyPatch
     monkeypatch.chdir(repo_root)
 
     async def body() -> None:
-        app = EaApp(scope="workspace", state_path=_WORKSPACE_STATE)
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             pane = app.screen.query_one(GitPane)

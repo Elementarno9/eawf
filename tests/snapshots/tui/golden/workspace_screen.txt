@@ -1,14 +1,13 @@
  Eä  workspace ❯ EAWF    runtime: idle    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ WORKSPACE                                                                                                            │
-│ LIFECYCLE                                                                                                            │
-│ project:   EAWF                                                                                                      │
-│ phase:     —                                                                                                         │
-│ iter:      —                                                                                                         │
-│ waves:     0 active · 0 pending                                                                                      │
-│ progress:  — no data                                                                                                 │
-│ audits:    0 running · 0 total                                                                                       │
-│ worktrees: 0 active                                                                                                  │
+│  repo  phase      eu         git   age                                                                               │
+│  QR    — no data  — no data  git?  —                                                                                 │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
 │                                                                                                                      │
 │ EFFORT                                                                                                               │
 │ effort:    — no data                                                                                                 │
@@ -17,24 +16,24 @@
 │ eta:       —                                                                                                         │
 │                                                                                                                      │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌──────────────────────────────────────┐┌──────────────────────────────────────┐┌──────────────────────────────────────┐
-│ ROADMAP                              ││ GIT                                  ││ BACKLOG                              │
-│                                      ││ branch:   —                          ││  id  priority  status  title         │
-│                                      ││ status:   —                          ││                                      │
-│                                      ││ upstream: —                          ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-│                                      ││                                      ││                                      │
-└──────────────────────────────────────┘└──────────────────────────────────────┘└──────────────────────────────────────┘
- ↑↓ row  ·  z zoom  ·  Enter open  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ↑↓ row  ·  Enter zoom  ·  z zoom  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit
  weekly burn: — no data                                                                                               •
