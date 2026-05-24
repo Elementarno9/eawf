@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  save layer: repo  (L cycles: global local)  ·  1 unsaved                                                │
       │                                                                                                          │
-      │   audit  estimation  planning  research  runtime  ship  ui  vcs  worktrees                               │
+      │   audit  daemon  estimation  planning  research  runtime  ship  telemetry  ui  vcs  worktrees            │
       │  ╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >* audit.fix_safe                             [bool]         true                                       │
       │     audit.flaky_retry_count                    [int]          1                                          │

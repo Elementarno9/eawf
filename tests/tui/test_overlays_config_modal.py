@@ -30,9 +30,12 @@ from typing import Any
 
 from textual.widgets import Input, Static, TabbedContent
 
+from eawf.cli.errors import UserError
 from eawf.config.registry import (
     CONFIG_REGISTRY,
+    LEAF_KEY_REGISTRY,
     ConfigKey,
+    coerce_and_validate,
     keys_for_tab,
     registry_lookup,
     tabs_sorted,
@@ -240,6 +243,113 @@ def test_save_dirty_fields_empty_is_noop() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Surfaced hidden-leaf-key curation (W09)
+# ---------------------------------------------------------------------------
+
+#: Hidden leaf keys promoted into the curated ``CONFIG_REGISTRY`` so they
+#: appear in the config overlay. ``ui.toasts`` ships from W08; the rest are
+#: surfaced here. The full-catalog ``LEAF_KEY_REGISTRY`` is NOT browsed.
+_SURFACED_KEYS: tuple[str, ...] = (
+    "ui.toasts",
+    "ui.glyphs",
+    "ui.dashboard_panes",
+    "estimation.display.show_category",
+    "estimation.display.show_raw_eu",
+    "estimation.display.show_expected_time",
+    "estimation.display.show_pessimistic_time",
+    "estimation.display.eu_quantum",
+    "estimation.display.time_quantum_under_2h_minutes",
+    "estimation.display.time_quantum_over_2h_minutes",
+    "telemetry.enabled",
+    "telemetry.export.format",
+    "telemetry.window_default",
+    "telemetry.aggregate_window",
+    "telemetry.db_kind",
+    "daemon.proxy_enabled",
+    "daemon.idle_timeout_seconds",
+    "daemon.session_handle_ttl_seconds",
+)
+
+
+def test_surfaced_keys_all_have_curated_rows() -> None:
+    """Every enumerated hidden leaf key now has a ``CONFIG_REGISTRY`` row."""
+    keys = {entry.key for entry in CONFIG_REGISTRY}
+    missing = [key for key in _SURFACED_KEYS if key not in keys]
+    assert not missing, missing
+
+
+def test_surfaced_keys_default_matches_leaf_registry() -> None:
+    """Each surfaced curated row's default mirrors its LEAF_KEY_REGISTRY default."""
+    for key in _SURFACED_KEYS:
+        entry = registry_lookup(key)
+        leaf = LEAF_KEY_REGISTRY[key]
+        assert entry is not None, key
+        # Tuple leaf defaults (list_str) round-trip equal to the curated tuple.
+        assert entry.default == leaf.default, (key, entry.default, leaf.default)
+
+
+def test_surfaced_choice_keys_choices_match_leaf_registry() -> None:
+    """Choice/multichoice rows mirror their LEAF_KEY_REGISTRY ``choices`` set."""
+    for key in _SURFACED_KEYS:
+        entry = registry_lookup(key)
+        leaf = LEAF_KEY_REGISTRY[key]
+        assert entry is not None, key
+        if entry.type in ("choice", "multichoice"):
+            assert entry.choices is not None, key
+            if leaf.choices is not None:
+                assert set(entry.choices) == set(leaf.choices), key
+
+
+def test_surfaced_keys_grouped_under_expected_tab() -> None:
+    """Surfaced rows land under the tab their dotted-key family implies."""
+    expected_tab = {
+        "ui": ("ui.toasts", "ui.glyphs", "ui.dashboard_panes"),
+        "estimation": (
+            "estimation.display.show_category",
+            "estimation.display.eu_quantum",
+        ),
+        "telemetry": ("telemetry.enabled", "telemetry.db_kind"),
+        "daemon": ("daemon.proxy_enabled", "daemon.idle_timeout_seconds"),
+    }
+    for tab, keys in expected_tab.items():
+        tab_keys = {entry.key for entry in keys_for_tab(tab)}
+        for key in keys:
+            assert key in tab_keys, (tab, key)
+
+
+def test_config_registry_is_not_the_full_leaf_catalog() -> None:
+    """The curated registry stays a small subset — no full-catalog browser."""
+    assert len(CONFIG_REGISTRY) < len(LEAF_KEY_REGISTRY)
+    # A leaf key the brief did NOT enumerate must stay hidden from the menu.
+    assert registry_lookup("schema_version") is None
+    assert registry_lookup("cli.canonical_command") is None
+
+
+def test_surfaced_key_edit_validates_via_coerce_and_validate() -> None:
+    """A surfaced choice key coerces a valid value and rejects an invalid one."""
+    entry = registry_lookup("telemetry.db_kind")
+    assert entry is not None and entry.type == "choice"
+    # Boundary: a declared choice round-trips unchanged.
+    assert coerce_and_validate(entry, "duckdb") == "duckdb"
+    # Error path: an undeclared choice is rejected.
+    import pytest
+
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, "postgres")
+
+
+def test_surfaced_int_key_range_rejects_below_minimum() -> None:
+    """A surfaced int key with a lower bound rejects an out-of-range value."""
+    entry = registry_lookup("daemon.idle_timeout_seconds")
+    assert entry is not None and entry.type == "int"
+    assert coerce_and_validate(entry, "0") == 0  # boundary: minimum is allowed
+    import pytest
+
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, "-1")
+
+
+# ---------------------------------------------------------------------------
 # Pilot tests (Textual mount)
 # ---------------------------------------------------------------------------
 
@@ -292,6 +402,32 @@ def test_config_renders_every_registry_key() -> None:
                     assert entry.key in text, (tab, entry.key, text)
                     rendered.add(entry.key)
             assert rendered == {entry.key for entry in CONFIG_REGISTRY}
+
+    asyncio.run(body())
+
+
+def test_surfaced_keys_render() -> None:
+    """The modal surfaces the curated hidden keys plus ``ui.toasts`` (W08)."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            # Map each surfaced key to the rendered text of its field row.
+            for key in _SURFACED_KEYS:
+                entry = registry_lookup(key)
+                assert entry is not None, key
+                tab = entry.tab
+                index = [e.key for e in keys_for_tab(tab)].index(key)
+                row = modal.query_one(f"#{modal._field_row_id(tab, index)}", Static)
+                text = str(row.render())
+                assert key in text, (key, text)
+            # No full-catalog: a leaf key the brief did not surface has no row.
+            rendered = {entry.key for entry in CONFIG_REGISTRY}
+            assert "schema_version" not in rendered
+            assert len(rendered) < len(LEAF_KEY_REGISTRY)
 
     asyncio.run(body())
 

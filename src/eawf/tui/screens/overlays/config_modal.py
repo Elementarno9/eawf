@@ -92,8 +92,10 @@ logger = logging.getLogger(__name__)
 #: * ``"popup"`` — edit via the larger
 #:   :class:`~eawf.tui.screens.overlays.edit_field.EditFieldModal`
 #:   (a ``str`` that is multi-line or wider than the row).
-#: * ``"none"`` — no edit affordance (e.g. the dead ``multichoice``
-#:   scaffold, which has zero registry entries).
+#: * ``"none"`` — no edit affordance; the field is surfaced read-only.
+#:   ``multichoice`` keys (e.g. ``ui.dashboard_panes``) take this path:
+#:   they are shown in the menu for visibility but are not editable from
+#:   the overlay — the operator tunes the list via the CLI / a YAML layer.
 EnterAction = Literal["toggle", "cycle", "inline", "popup", "none"]
 
 #: Field types edited via a text buffer (the inline :class:`Input` or the
