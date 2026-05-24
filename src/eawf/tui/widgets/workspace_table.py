@@ -88,8 +88,12 @@ class RepoRow:
     Attributes:
         code: The repo's project code (the row key).
         path: Absolute on-disk path to the repo working tree.
-        phase_done: Closed child-wave count for the completion bar.
-        phase_total: Total child-wave count for the completion bar.
+        phase_id: The repo's active phase id, or ``None`` when no phase
+            is active.
+        phase_done: Closed wave count for the active phase's completion
+            bar.
+        phase_total: Total wave count for the active phase's completion
+            bar.
         eu_consumed: Effort units consumed (actuals) for the EU-burn bar.
         eu_total: Estimated effort units for the EU-burn bar.
         age: Human-readable last-touch age cell (or a dash).
@@ -102,6 +106,9 @@ class RepoRow:
     eu_consumed: float
     eu_total: float
     age: str
+    # Defaulted (and therefore last in field order) so existing positional
+    # ``RepoRow(...)`` constructions stay valid; ``_repo_row`` always sets it.
+    phase_id: str | None = None
 
 
 def completion_pair(repo_state: dict[str, Any] | None) -> tuple[int, int]:
@@ -126,6 +133,86 @@ def completion_pair(repo_state: dict[str, Any] | None) -> tuple[int, int]:
     total = len(waves)
     closed = sum(1 for w in waves.values() if isinstance(w, dict) and w.get("status") == "closed")
     return (closed, total)
+
+
+def active_phase_completion(repo_state: dict[str, Any] | None) -> tuple[str | None, int, int]:
+    """Return ``(phase_id, closed, total)`` for a repo's active phase.
+
+    Scopes the phase-completion bar to the repo's *active* phase rather
+    than the whole repo: which phase is live, and how many of that
+    phase's waves are closed over how many it owns. A ``None`` / empty /
+    malformed state, or a state with no active phase, yields
+    ``(None, 0, 0)`` so the bar surfaces the empty-state sentinel rather
+    than a fabricated ratio.
+
+    The active phase id resolves from the decoded per-repo state dict
+    (not a typed :class:`~eawf.state.models.State`, since
+    :func:`~eawf.registry.staleness.read_repo_state` returns a raw
+    ``dict``): the ``current.phase_id`` pointer wins when it names an
+    existing phase whose ``status`` is ``"active"``; otherwise the single
+    phase whose ``status`` is ``"active"`` is used; otherwise ``None``.
+
+    Args:
+        repo_state: A decoded per-repo ``state.json`` dict, or ``None``.
+
+    Returns:
+        The ``(phase_id, closed_waves, total_waves)`` triple, scoped to
+        the active phase (or ``(None, 0, 0)`` when no phase is active).
+    """
+    if not repo_state:
+        return (None, 0, 0)
+    phases = repo_state.get("phases")
+    if not isinstance(phases, dict):
+        return (None, 0, 0)
+    phase_id = _active_phase_id(repo_state, phases)
+    if phase_id is None:
+        return (None, 0, 0)
+    iters = repo_state.get("iters")
+    if not isinstance(iters, dict):
+        return (phase_id, 0, 0)
+    phase_iter_ids = {
+        iter_id
+        for iter_id, it in iters.items()
+        if isinstance(it, dict) and it.get("phase_id") == phase_id
+    }
+    waves = repo_state.get("waves")
+    if not isinstance(waves, dict):
+        return (phase_id, 0, 0)
+    phase_waves = [
+        w for w in waves.values() if isinstance(w, dict) and w.get("iter_id") in phase_iter_ids
+    ]
+    total = len(phase_waves)
+    closed = sum(1 for w in phase_waves if w.get("status") == "closed")
+    return (phase_id, closed, total)
+
+
+def _active_phase_id(repo_state: dict[str, Any], phases: dict[str, Any]) -> str | None:
+    """Resolve the active phase id from a decoded per-repo state dict.
+
+    The ``current.phase_id`` pointer wins when it names an existing phase
+    whose ``status`` is ``"active"``; otherwise the single phase whose
+    ``status`` is ``"active"`` is returned; otherwise ``None``. Every
+    dict access is guarded so a partial / malformed state yields ``None``
+    rather than raising out of the render path.
+
+    Args:
+        repo_state: The decoded per-repo ``state.json`` dict.
+        phases: The already-validated ``repo_state["phases"]`` dict.
+
+    Returns:
+        The active phase id, or ``None`` when none is active.
+    """
+    current = repo_state.get("current")
+    if isinstance(current, dict):
+        pointer = current.get("phase_id")
+        if isinstance(pointer, str):
+            phase = phases.get(pointer)
+            if isinstance(phase, dict) and phase.get("status") == "active":
+                return pointer
+    for phase_id, phase in phases.items():
+        if isinstance(phase, dict) and phase.get("status") == "active":
+            return phase_id
+    return None
 
 
 def eu_pair(repo_state: dict[str, Any] | None) -> tuple[float, float]:
@@ -211,11 +298,12 @@ def _repo_row(ref: WorkspaceRepoRef) -> RepoRow:
     """
     repo_path = Path(ref.path)
     repo_state = read_repo_state(repo_path)
-    done, total = completion_pair(repo_state)
+    phase_id, done, total = active_phase_completion(repo_state)
     consumed, eu_total = eu_pair(repo_state)
     return RepoRow(
         code=ref.code,
         path=ref.path,
+        phase_id=phase_id,
         phase_done=done,
         phase_total=total,
         eu_consumed=consumed,
@@ -253,8 +341,9 @@ def _repo_age(repo_path: Path) -> str:
 
 
 def _phase_cell(row: RepoRow, *, mode: RenderMode) -> str:
-    """Render *row*'s phase-completion bar cell (status-tinted)."""
-    return render_completion_bar(row.phase_done, row.phase_total, width=6, mode=mode)
+    """Render *row*'s active-phase id + completion bar cell (status-tinted)."""
+    bar = render_completion_bar(row.phase_done, row.phase_total, width=6, mode=mode)
+    return f"{row.phase_id or '—'} {bar}"
 
 
 def _band_palette(app: App[object]) -> dict[str, str]:
@@ -542,6 +631,7 @@ __all__ = [
     "GIT_UNAVAILABLE_CELL",
     "RepoRow",
     "WorkspaceTable",
+    "active_phase_completion",
     "build_repo_rows",
     "completion_pair",
     "eu_pair",
