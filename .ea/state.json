@@ -4844,7 +4844,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6604,7 +6604,7 @@
       "id": "P27-I04",
       "opened_at": "2026-05-23T15:40:28.164443Z",
       "phase_id": "P27",
-      "status": "planned",
+      "status": "active",
       "title": "P27-I04: TUI richer views (braille bars, status pane, repo tables)",
       "wave_ids": [
         "P27-I04-W01",
@@ -7207,7 +7207,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T01:07:58.258689Z",
+  "updated_at": "2026-05-24T01:08:42.676786Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
