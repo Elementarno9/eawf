@@ -7420,7 +7420,10 @@
         "P27-I05-W21",
         "P27-I05-W22",
         "P27-I05-W23",
-        "P27-I05-W24"
+        "P27-I05-W24",
+        "P27-I05-W25",
+        "P27-I05-W26",
+        "P27-I05-W27"
       ]
     }
   },
@@ -7975,7 +7978,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T18:42:43.681931Z",
+  "updated_at": "2026-05-24T18:43:58.903540Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20858,7 +20861,9 @@
     "P27-I05-W21": {
       "agent_role": "executor",
       "blocks": [
-        "P27-I05-W22"
+        "P27-I05-W22",
+        "P27-I05-W25",
+        "P27-I05-W26"
       ],
       "claim_session_id": null,
       "closed_at": null,
@@ -20930,7 +20935,10 @@
       "closed_at": null,
       "commit": null,
       "deps": [
-        "P27-I05-W22"
+        "P27-I05-W22",
+        "P27-I05-W25",
+        "P27-I05-W26",
+        "P27-I05-W27"
       ],
       "description": null,
       "dispatch_history": [],
@@ -20980,6 +20988,108 @@
         "eawf release tags and triggers the pipeline; publish is un-gated behind an explicit condition; twine check dist/* runs before publish; the pipeline builds and validates"
       ],
       "title": "eawf release verb + un-gate pipeline",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W25": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W23"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W21"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtimes/**",
+        "src/eawf/cli/commands/plugin*.py",
+        "tests/**"
+      ],
+      "id": "P27-I05-W25",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T18:43:38.692830Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "MCP config writers verify written config matches intended grants; plugin doctor detects MCP drift; idempotent re-install goldens; covers Claude .mcp.json + Codex TOML"
+      ],
+      "title": "Harden MCP emit-and-verify across Claude .mcp.json and Codex TOML",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W26": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W23"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W21"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "AGENTS.md",
+        ".claude/skills/**",
+        "src/eawf/lifecycle/**",
+        "src/eawf/cli/commands/lifecycle_wave.py",
+        "tests/**"
+      ],
+      "id": "P27-I05-W26",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T18:43:50.217596Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "AGENTS.md codifies no-manual-line-wrap for rendered markdown + skill output contracts (B063); wave close --commit accepts + normalises full/short SHA to 40-char hex (B045); tests cover both"
+      ],
+      "title": "Add md no-manual-wrap rule + normalise wave-close SHA input",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W27": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W23"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/store/**",
+        ".ea/artifacts/**"
+      ],
+      "id": "P27-I05-W27",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T18:43:50.694390Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "verify each delivered (B003 B015 B021 B026 B028 B044 B056 B064 B010 B048 B065); backlog close each with audit evidence; stale target-phase refs retired"
+      ],
+      "title": "Close 11 already-delivered backlog items with evidence",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
