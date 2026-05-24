@@ -462,12 +462,24 @@ class EaApp(App[None]):
         The ``ctrl+w`` / ``ctrl+r`` / ``ctrl+u`` chords route here too as
         hidden muscle-memory aliases.
 
+        Switching to the user scope rebinds :attr:`state` to a freshly
+        synthesized portfolio state (read from the global registry) before
+        the screen swap, mirroring the ``on_mount`` launch path. The bound
+        repo/workspace state carries ``workspace=None``, so without this
+        rebind the portfolio table would build zero rows; reassigning
+        :attr:`state` fires the table's reactive watcher and rebuilds the
+        rows for the new scope.
+
         Args:
             scope: Target scope name; must be a key of :attr:`SCREENS`.
         """
         if scope not in self.SCREENS:
             logger.warning(f"action_switch_scope unknown scope={scope!r}")
             return
+        if scope == "user":
+            from eawf.tui.scopes.user import synthesize_user_state
+
+            self.state = synthesize_user_state()
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
 
