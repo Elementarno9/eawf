@@ -3409,6 +3409,16 @@
       "scope_id": "P27-I04-W30",
       "status": "done",
       "updated_at": "2026-05-24T17:30:02.103091Z"
+    },
+    "P27-I04-W31": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W31-close-20260524T182939Z",
+      "elapsed_eu": 0.03,
+      "id": "ACT-P27-I04-W31",
+      "scope_id": "P27-I04-W31",
+      "status": "done",
+      "updated_at": "2026-05-24T18:29:39.437996Z"
     }
   },
   "agent_sessions": {
@@ -3466,6 +3476,16 @@
       "size_bytes": null,
       "uri": "repo:.ea/artifacts/audits/2026-05-23-p27-i03-closure.md",
       "urn": "urn:eawf:v1:artifact:P27-I03/A37-P27-i03-report"
+    },
+    "A38-P27-i04-report": {
+      "created_at": "2026-05-24T18:42:40.214198Z",
+      "id": "A38-P27-i04-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-24-p27-i04-closure.md",
+      "urn": "urn:eawf:v1:artifact:P27-I04/A38-P27-i04-report"
     },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
@@ -4355,6 +4375,17 @@
       "scope_id": "P27-I03",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A38-P27-i04": {
+      "check_results": [],
+      "created_at": "2026-05-24T18:42:43.203761Z",
+      "id": "A38-P27-i04",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A38-P27-i04-report",
+      "scope_id": "P27-I04",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -5155,10 +5186,8 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I04-W31"
-    ],
-    "iter_id": "P27-I04",
+    "active_wave_ids": [],
+    "iter_id": null,
     "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
@@ -7314,14 +7343,14 @@
       ]
     },
     "P27-I04": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A38-P27-i04",
+      "closed_at": "2026-05-24T18:42:43.681440Z",
       "description": null,
       "estimate_id": null,
       "id": "P27-I04",
       "opened_at": "2026-05-23T15:40:28.164443Z",
       "phase_id": "P27",
-      "status": "active",
+      "status": "closed",
       "title": "TUI richer views (braille bars, status pane, repo tables)",
       "wave_ids": [
         "P27-I04-W01",
@@ -7946,7 +7975,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T18:28:40.964113Z",
+  "updated_at": "2026-05-24T18:42:43.681931Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20156,8 +20185,8 @@
       "agent_role": "polisher",
       "blocks": [],
       "claim_session_id": "flow-p27i05",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T18:29:39.437996Z",
+      "commit": "aa1b2d9080d1a9ca3fd8765ea6c217d847d4efae",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20173,10 +20202,10 @@
       "id": "P27-I04-W31",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T18:28:38.554211Z",
-      "outcome": null,
+      "outcome": "extracted shared markup helper; status+git panes share escape+label-tint; 13 markup tests + 888 TUI tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "escape_markup backslash-escapes brackets; style_labeled_line tints leading label token; status+git panes share helper; markup tests pass; TUI snapshots green"
       ],
