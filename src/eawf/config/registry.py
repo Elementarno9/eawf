@@ -294,6 +294,18 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("dark", "light", "cb", "auto"),
     ),
     ConfigKey(
+        tab="ui",
+        key="ui.toasts",
+        label="Ambient state-change toast verbosity",
+        type="choice",
+        default="important",
+        description=(
+            "off = no toasts; important = wave close / audit verdict / "
+            "needs-user only (default); all = more verbose."
+        ),
+        choices=("off", "important", "all"),
+    ),
+    ConfigKey(
         tab="vcs",
         key="vcs.auto_commit",
         label="Auto-commit policy",
@@ -989,6 +1001,15 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=(),
         writable_layers=_WRITABLE_GWR,
+    ),
+    LeafKey(
+        key="ui.toasts",
+        domain="ui",
+        type="literal",
+        default="important",
+        writable_layers=("global", "workspace", "repo", "env"),
+        choices=("off", "important", "all"),
+        description="Ambient state-change toast verbosity: off / important / all.",
     ),
     # --- telemetry (C09 surface) ------------------------------------------
     LeafKey(
