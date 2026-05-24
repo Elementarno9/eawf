@@ -70,6 +70,11 @@ logger = logging.getLogger(__name__)
 #: Placeholder shown when a pointer (phase / iter) is unset.
 DASH: str = "—"
 
+#: The four section header literals, recognised by ``_repaint`` so each
+#: gets the bold-accent span whether it lands in a single- or two-column
+#: cell.
+_SECTION_HEADERS: frozenset[str] = frozenset({"LIFECYCLE", "EFFORT", "GATES", "DISPATCH"})
+
 #: Project-code fallback when no project record is loaded.
 DEFAULT_PROJECT_CODE: str = "EAWF"
 
@@ -776,6 +781,144 @@ def build_status_lines(
     return lines
 
 
+#: Inter-column gap between the two status columns (cells). Two spaces
+#: read as a clear column break without wasting width.
+COLUMN_GAP: int = 2
+
+#: Pad the left column to this width before appending the right column.
+#: Sized to the widest LIFECYCLE / GATES line that lands on the left
+#: (``waves:     N active · N pending`` ≈ 30 cells) plus headroom for the
+#: EU/burn bars EFFORT can grow, so a left-cell line never bleeds into the
+#: right column. ``_repaint`` re-splits each two-column row at this offset
+#: to recover the per-cell tokens for header / blocked styling.
+LEFT_COLUMN_WIDTH: int = 36
+
+#: Minimum pane content width (cells) at which the four sections lay out
+#: in two columns. Below it the pane stays single-column (the repo-scope
+#: quadrant, ≈ 56 cells of inner content, sits above this — but the
+#: *content* the pane measures excludes the bordered-pane chrome, so the
+#: narrow quadrant path keys off the live measurement, not this constant).
+#: Set to ``LEFT_COLUMN_WIDTH`` + ``COLUMN_GAP`` + a readable right column
+#: (≈ 36 cells) so both columns clear their widest line before the layout
+#: flips; the repo quadrant's measured content (≈ 54) stays below it and
+#: keeps the single-column render byte-identical to today's.
+TWO_COLUMN_THRESHOLD: int = LEFT_COLUMN_WIDTH + COLUMN_GAP + 36
+
+
+def _section_blocks(
+    state: State | None,
+    *,
+    mode: RenderMode,
+    pulse_lit: bool,
+    pulse_paused: bool,
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Return the four labelled section blocks (header + lines each).
+
+    Each block is a self-contained list whose first entry is the section
+    header literal so the two-column layout can pair whole sections and
+    ``_repaint`` keeps detecting the header at the start of its cell.
+
+    Args:
+        state: The bound state, or ``None``.
+        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        pulse_lit: DISPATCH running-dot pulse phase for this frame.
+        pulse_paused: ``True`` when the pulse is paused (SUSPEND).
+
+    Returns:
+        ``(lifecycle, effort, gates, dispatch)`` blocks, each a list of
+        plain-text lines headed by its section name.
+    """
+    lifecycle = ["LIFECYCLE", *_lifecycle_lines(state)]
+    effort = ["EFFORT", *_effort_lines(state, mode=mode)]
+    gates = ["GATES", *_gate_lines(state, mode=mode)]
+    dispatch = ["DISPATCH", *_dispatch_lines(state, mode=mode, lit=pulse_lit, paused=pulse_paused)]
+    return lifecycle, effort, gates, dispatch
+
+
+def _stack(*blocks: list[str]) -> list[str]:
+    """Stack section *blocks* into one column with a blank line between each."""
+    out: list[str] = []
+    for block in blocks:
+        if out:
+            out.append("")
+        out.extend(block)
+    return out
+
+
+def _two_columns(left: list[str], right: list[str]) -> list[str]:
+    """Lay two stacked columns side by side, padding the shorter to match.
+
+    Each left line is padded to :data:`LEFT_COLUMN_WIDTH` then the
+    :data:`COLUMN_GAP` and the right line are appended; a row past one
+    column's height pads that side with blanks so the surviving column
+    keeps rendering. Trailing whitespace on a right-blank row is stripped
+    so a short right column never trails padding into the snapshot.
+
+    Args:
+        left: The left column's stacked lines.
+        right: The right column's stacked lines.
+
+    Returns:
+        The composed two-column rows, one per ``max(len(left), len(right))``.
+    """
+    rows: list[str] = []
+    height = max(len(left), len(right))
+    pad = " " * (LEFT_COLUMN_WIDTH + COLUMN_GAP)
+    for index in range(height):
+        left_cell = left[index] if index < len(left) else ""
+        right_cell = right[index] if index < len(right) else ""
+        if right_cell:
+            rows.append(f"{left_cell.ljust(LEFT_COLUMN_WIDTH)}{' ' * COLUMN_GAP}{right_cell}")
+        else:
+            rows.append(left_cell if left_cell else pad.rstrip())
+    return rows
+
+
+def build_status_columns(
+    state: State | None,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    pulse_lit: bool = True,
+    pulse_paused: bool = False,
+    width: int,
+) -> list[str]:
+    """Build the status pane's lines, two-column when *width* allows.
+
+    Pure render source — unit-testable without mounting the widget. When
+    *width* is at or above :data:`TWO_COLUMN_THRESHOLD` the four sections
+    lay out in two balanced columns — LIFECYCLE + GATES on the left,
+    EFFORT + DISPATCH on the right — so a wide pane stops wasting space on
+    one tall column. Below the threshold (the narrow repo-scope quadrant)
+    it returns exactly :func:`build_status_lines`'s single-column flat
+    list, byte-identical, so the narrow render is unchanged.
+
+    Each two-column row pads its left cell to :data:`LEFT_COLUMN_WIDTH`;
+    ``_repaint`` re-splits the row at that offset to recover the two cells
+    and apply the header / blocked styling per cell rather than per line.
+
+    Args:
+        state: The bound state, or ``None``.
+        mode: Active render mode (``"braille"`` or ``"ascii"``) threaded
+            from :attr:`eawf.tui.app.EaApp.render_mode`.
+        pulse_lit: DISPATCH running-dot pulse phase for this frame.
+        pulse_paused: ``True`` when the pulse is paused (SUSPEND).
+        width: The live pane content width in cells; ``< 1`` (pre-layout)
+            falls back to the single column.
+
+    Returns:
+        The ordered plain-text rows — two-column when *width* allows, else
+        the single-column flat list.
+    """
+    if width < TWO_COLUMN_THRESHOLD:
+        return build_status_lines(state, mode=mode, pulse_lit=pulse_lit, pulse_paused=pulse_paused)
+    lifecycle, effort, gates, dispatch = _section_blocks(
+        state, mode=mode, pulse_lit=pulse_lit, pulse_paused=pulse_paused
+    )
+    left = _stack(lifecycle, gates)
+    right = _stack(effort, dispatch)
+    return _two_columns(left, right)
+
+
 class StatusPane(Static):
     """Live current-scope status summary pane.
 
@@ -884,32 +1027,76 @@ class StatusPane(Static):
     def _repaint(self) -> None:
         """Re-render the status lines from the current state.
 
-        Section headers carry a bold ``[$accent]…[/]`` span; the blocked
-        line carries the palette error colour; every other line is escaped
-        against accidental markup and rendered plain. The bar/sparkline
-        glyphs honour the app's live :attr:`render_mode`; the DISPATCH dot
-        honours the live pulse phase.
+        Lays the four sections in two columns when the pane is wide enough
+        (:data:`TWO_COLUMN_THRESHOLD`) and one column in the narrow repo
+        quadrant; the live :attr:`content_size` width drives the choice
+        (a pre-layout width of ``0`` falls back to one column). Section
+        headers carry a bold ``[$accent]…[/]`` span; the blocked line
+        carries the palette error colour; every other cell is escaped
+        against accidental markup and rendered plain. In a two-column row
+        the per-cell styling is applied after re-splitting the row at the
+        left-column offset, so a right-column header still highlights. The
+        bar/sparkline glyphs honour the app's live :attr:`render_mode`;
+        the DISPATCH dot honours the live pulse phase.
         """
-        headers = {"LIFECYCLE", "EFFORT", "GATES", "DISPATCH"}
-        rendered: list[str] = []
-        lines = build_status_lines(
+        rows = build_status_columns(
             self.state,
             mode=self._render_mode(),
             pulse_lit=self._pulse_lit,
             pulse_paused=self._pulse_paused,
+            width=self.content_size.width,
         )
-        for line in lines:
-            safe = line.replace("[", "[[")
-            if line in headers:
-                rendered.append(f"[b $accent]{safe}[/]")
-            elif line.startswith("blocked:"):
-                rendered.append(f"[$err]{safe}[/]")
-            else:
-                rendered.append(safe)
+        rendered = [self._style_row(row) for row in rows]
         self.update("\n".join(rendered))
+
+    @staticmethod
+    def _style_cell(cell: str) -> str:
+        """Style one cell: header → accent, blocked → err, else escaped plain.
+
+        Markup-escapes the cell's content regardless so user-derived text
+        never opens a stray markup span.
+
+        Args:
+            cell: The raw (unescaped) cell text.
+
+        Returns:
+            The cell wrapped in its palette span, or the escaped plain text.
+        """
+        safe = cell.replace("[", "[[")
+        if cell in _SECTION_HEADERS:
+            return f"[b $accent]{safe}[/]"
+        if cell.startswith("blocked:"):
+            return f"[$err]{safe}[/]"
+        return safe
+
+    def _style_row(self, row: str) -> str:
+        """Style a row's cells, splitting a two-column row into its two cells.
+
+        A single-column row is styled as one cell. A two-column row (one
+        wider than :data:`LEFT_COLUMN_WIDTH`) is split at the left-column
+        offset so the left and right cells each get header / blocked
+        styling, then re-joined preserving the original gap width.
+
+        Args:
+            row: The composed plain-text row.
+
+        Returns:
+            The markup-styled row.
+        """
+        split = LEFT_COLUMN_WIDTH + COLUMN_GAP
+        if len(row) <= split:
+            return self._style_cell(row)
+        left_cell = row[:LEFT_COLUMN_WIDTH].rstrip()
+        right_cell = row[split:]
+        # Pad to the left column's *visible* width before styling: markup
+        # tags are zero-width on screen, so ljust on the wrapped string
+        # would over-pad. The gap restores the cell's full LEFT_COLUMN_WIDTH.
+        pad = " " * (LEFT_COLUMN_WIDTH - len(left_cell) + COLUMN_GAP)
+        return f"{self._style_cell(left_cell)}{pad}{self._style_cell(right_cell)}"
 
 
 __all__ = [
+    "COLUMN_GAP",
     "DASH",
     "DEFAULT_MAX_PARALLEL_WAVES",
     "DEFAULT_PROJECT_CODE",
@@ -918,10 +1105,13 @@ __all__ = [
     "GATE_PASS",
     "GATE_PENDING",
     "GATE_RUNNING",
+    "LEFT_COLUMN_WIDTH",
+    "TWO_COLUMN_THRESHOLD",
     "VELOCITY_WINDOW_DAYS",
     "DispatchSlice",
     "StatusPane",
     "build_dispatch_slice",
+    "build_status_columns",
     "build_status_lines",
     "build_velocity_eu_per_day",
     "summary_counts",

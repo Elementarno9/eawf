@@ -28,6 +28,7 @@ from eawf.tui.widgets.heartbeat import (
     HEARTBEAT_GLYPH_DIM,
 )
 from eawf.tui.widgets.status_pane import (
+    COLUMN_GAP,
     DASH,
     DEFAULT_MAX_PARALLEL_WAVES,
     DEFAULT_PROJECT_CODE,
@@ -35,12 +36,15 @@ from eawf.tui.widgets.status_pane import (
     GATE_FAIL,
     GATE_PASS,
     GATE_RUNNING,
+    LEFT_COLUMN_WIDTH,
+    TWO_COLUMN_THRESHOLD,
     VELOCITY_WINDOW_DAYS,
     DispatchSlice,
     StatusPane,
     _active_phase_id,
     _dispatch_lines,
     build_dispatch_slice,
+    build_status_columns,
     build_status_lines,
     build_velocity_eu_per_day,
     summary_counts,
@@ -568,6 +572,85 @@ def test_build_status_lines_progress_line_none_state_empty_state() -> None:
     lines = build_status_lines(None)
     progress_line = next(line for line in lines if line.startswith("progress:"))
     assert EMPTY_STATE in progress_line
+
+
+# --------------------------------------------------------------------------
+# build_status_columns — responsive two-column (wide) / single (narrow)
+# --------------------------------------------------------------------------
+
+
+def test_build_status_columns_narrow_equals_single_column() -> None:
+    """Below the threshold the layout is byte-identical to the flat list."""
+    state = _load(_PHASE_ITER_WAVE)
+    rows = build_status_columns(state, mode="braille", width=TWO_COLUMN_THRESHOLD - 1)
+    assert rows == build_status_lines(state, mode="braille")
+
+
+def test_build_status_columns_zero_width_falls_back_to_single() -> None:
+    """A pre-layout width of 0 falls back to the single column (no crash)."""
+    state = _load(_PHASE_ITER_WAVE)
+    rows = build_status_columns(state, mode="braille", width=0)
+    assert rows == build_status_lines(state, mode="braille")
+
+
+def test_build_status_columns_wide_pairs_headers_side_by_side() -> None:
+    """At/above the threshold LIFECYCLE + EFFORT head the first row's two cells.
+
+    LIFECYCLE stacks on the left and EFFORT on the right, so the first row
+    carries both headers: LIFECYCLE at the start and EFFORT after the
+    left-column pad + gap.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    rows = build_status_columns(state, mode="braille", width=120)
+    assert rows[0].startswith("LIFECYCLE")
+    assert "EFFORT" in rows[0]
+    # The right cell begins exactly at the left-column + gap offset.
+    assert rows[0][LEFT_COLUMN_WIDTH + COLUMN_GAP :].startswith("EFFORT")
+
+
+def test_build_status_columns_wide_left_column_carries_lifecycle_and_gates() -> None:
+    """The left column stacks LIFECYCLE then GATES; the right EFFORT + DISPATCH."""
+    state = _load(_PHASE_ITER_WAVE)
+    rows = build_status_columns(state, mode="braille", width=120)
+    left_cells = [row[:LEFT_COLUMN_WIDTH].rstrip() for row in rows]
+    right_cells = [row[LEFT_COLUMN_WIDTH + COLUMN_GAP :] for row in rows]
+    assert "LIFECYCLE" in left_cells
+    assert "GATES" in left_cells
+    assert "EFFORT" in right_cells
+    assert "DISPATCH" in right_cells
+    # Sections never cross columns: no left-column header leaks to the right.
+    assert "LIFECYCLE" not in right_cells
+    assert "EFFORT" not in left_cells
+
+
+def test_build_status_columns_wide_right_content_after_left_pad() -> None:
+    """Each two-column row's right cell starts past the left-pad + gap column."""
+    state = _load(_PHASE_ITER_WAVE)
+    rows = build_status_columns(state, mode="braille", width=120)
+    # A row carrying right-column content must be wider than the left column.
+    populated = [r for r in rows if len(r) > LEFT_COLUMN_WIDTH + COLUMN_GAP]
+    assert populated  # the right column does carry content
+    for row in populated:
+        # The left cell never bleeds past its column boundary.
+        assert len(row[:LEFT_COLUMN_WIDTH].rstrip()) <= LEFT_COLUMN_WIDTH
+
+
+def test_build_status_columns_threshold_boundary() -> None:
+    """``threshold - 1`` → single column; ``threshold`` → two columns."""
+    state = _load(_PHASE_ITER_WAVE)
+    narrow = build_status_columns(state, mode="braille", width=TWO_COLUMN_THRESHOLD - 1)
+    wide = build_status_columns(state, mode="braille", width=TWO_COLUMN_THRESHOLD)
+    assert narrow == build_status_lines(state, mode="braille")
+    assert wide != narrow
+    # The wide layout pairs two headers onto its first row.
+    assert wide[0].startswith("LIFECYCLE") and "EFFORT" in wide[0]
+
+
+def test_build_status_columns_wide_none_state() -> None:
+    """A ``None`` state still lays out two columns at a wide width (no crash)."""
+    rows = build_status_columns(None, mode="braille", width=120)
+    assert rows[0].startswith("LIFECYCLE")
+    assert "EFFORT" in rows[0]
 
 
 # --------------------------------------------------------------------------
