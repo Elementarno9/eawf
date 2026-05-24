@@ -1,22 +1,21 @@
-"""``UserScreen`` — user-scope portfolio screen.
+"""``UserScreen`` — user-scope portfolio DataTable.
 
-The user screen composes three vertical sections — **attention**,
-**effort**, **portfolio** — weighted ``3:2:5``, inside the
-:class:`~eawf.tui.scopes.ScopeScreen` shared chassis (Header + Footer
+The user screen is the cross-repo portfolio view: a full-screen per-repo
+:class:`~eawf.tui.widgets.workspace_table.WorkspaceTable` (one row per
+registered repo, **always at least one** — never a fallback panel) inside
+the shared :class:`~eawf.tui.scopes.ScopeScreen` chassis (Header + Footer
 + Heartbeat reused verbatim).
 
-The dedicated section sub-widgets the brief names (``AttentionList`` —
-cross-repo attention rows; ``EffortBars`` — 7-day EU bars per repo;
-``PortfolioTable`` — the registry portfolio grid) land in a later wave of
-this band. This wave composes the **available** W17 widget catalog in the
-three-section arrangement so the screen renders live today:
-
-* attention (weight 3) — :class:`~eawf.tui.widgets.status_pane.StatusPane`
-  surfacing the blocked / running counters that demand attention;
-* effort (weight 2) — :class:`~eawf.tui.widgets.eu_bar.EUBar` as the
-  compact effort gauge the per-repo ``EffortBars`` expand on;
-* portfolio (weight 5) — :class:`~eawf.tui.widgets.backlog_table.BacklogTable`
-  as the portfolio grid the registry ``PortfolioTable`` replaces.
+It reuses the W06 workspace-table widget family rather than forking a
+second grid — the same status-tinted completion + EU-burn bars, the same
+live git column, the same large-N scroll behaviour. The **only** scope
+difference is the row-activation semantics: the workspace scope zooms the
+focused repo into a 2x2 quadrant, while the user scope has **no zoom
+quadrant** — ``Enter`` opens the focused repo's detail overlay and ``z``
+is a no-op. :class:`PortfolioTable` subclasses the workspace table to
+swap the Enter message (``RepoSelected`` instead of ``RowZoomed``) and
+suppress the ``z`` zoom action; everything else (columns, bars, git
+probe, scroll) is inherited unchanged.
 
 This screen overrides **only** :meth:`compose_body` + its footer hints;
 the entire chassis is inherited from
@@ -25,22 +24,25 @@ the entire chassis is inherited from
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
-from textual.widgets import Static
+from textual.message import Message
+from textual.widgets import DataTable, Static
 
 from eawf.tui.scopes import ScopeScreen
-from eawf.tui.widgets.backlog_table import BacklogTable
-from eawf.tui.widgets.eu_bar import EUBar
-from eawf.tui.widgets.status_pane import StatusPane
+from eawf.tui.widgets.workspace_table import WorkspaceTable
 
-#: Footer hints tuned for the user portfolio screen.
+logger = logging.getLogger(__name__)
+
+#: Footer hints tuned for the user portfolio screen (arrows primary; the
+#: user scope opens repo detail on Enter and has no zoom affordance).
 _USER_HINTS: tuple[str, ...] = (
-    "↑↓ move",
-    "Enter open",
+    "↑↓ row",
+    "Enter detail",
     "w/r/u scope",
     "c config",
     "F5 refresh",
@@ -50,12 +52,56 @@ _USER_HINTS: tuple[str, ...] = (
 )
 
 
-class UserScreen(ScopeScreen):
-    """User-scope screen: attention / effort / portfolio sections.
+class PortfolioTable(WorkspaceTable):
+    """User-scope portfolio grid — the workspace table without zoom.
 
-    Composes :class:`StatusPane` (attention) · :class:`EUBar` (effort) ·
-    :class:`BacklogTable` (portfolio) weighted ``3:2:5`` inside the
-    shared chassis.
+    Reuses every column, bar, git-probe, and scroll behaviour of
+    :class:`~eawf.tui.widgets.workspace_table.WorkspaceTable`; the only
+    override is the row-activation semantics. The user scope has no zoom
+    quadrant, so an Enter selection posts :class:`RepoSelected` (the host
+    opens the repo's detail overlay) and the ``z`` zoom action is a no-op.
+    """
+
+    class RepoSelected(Message):
+        """Posted when the operator opens a repo row (Enter).
+
+        The host :class:`UserScreen` opens the focused repo's detail
+        overlay in response — there is no zoom quadrant in the user scope.
+
+        Attributes:
+            repo_code: The selected repo's project code (the row key).
+        """
+
+        def __init__(self, repo_code: str) -> None:
+            self.repo_code = repo_code
+            super().__init__()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Post :class:`RepoSelected` for the Enter-selected row.
+
+        Overrides the workspace table's zoom message so the user scope
+        opens repo detail instead of mounting a quadrant.
+
+        Args:
+            event: The Textual row-selected event; ``row_key.value`` is the
+                repo code used as the row key.
+        """
+        repo_code = event.row_key.value
+        if repo_code is not None:
+            self.post_message(self.RepoSelected(repo_code))
+
+    def action_zoom_row(self) -> None:
+        """No-op: the user scope has no zoom quadrant (``z`` is inert)."""
+        logger.info("action_zoom_row suppressed scope=user")
+
+
+class UserScreen(ScopeScreen):
+    """User-scope screen: full-screen per-repo portfolio table.
+
+    Composes a :class:`PortfolioTable` (the reused workspace-table family)
+    spanning the body. ``↑↓`` focus a repo; ``Enter`` opens the focused
+    repo's detail overlay; ``z`` is a no-op (no zoom quadrant in this
+    scope). The git column refreshes on the host's refresh tick.
     """
 
     #: ``c`` opens the registry-driven config window via the shared
@@ -70,17 +116,24 @@ class UserScreen(ScopeScreen):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _USER_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the three weighted sections (attention/effort/portfolio)."""
-        with Vertical(id="body"):
-            with Vertical(classes="section", id="attention"):
-                yield Static("ATTENTION", classes="section-title")
-                yield StatusPane(id="attention-status")
-            with Vertical(classes="section", id="effort"):
-                yield Static("EFFORT 7d (EU)", classes="section-title")
-                yield EUBar(id="effort-bar")
-            with Vertical(classes="section", id="portfolio"):
-                yield Static("PORTFOLIO", classes="section-title")
-                yield BacklogTable(id="portfolio-table")
+        """Yield the full-screen portfolio table body."""
+        with Vertical(id="body"), Vertical(classes="pane", id="pane-portfolio"):
+            yield Static("PORTFOLIO", classes="pane-title")
+            yield PortfolioTable(id="portfolio-table")
+
+    def on_portfolio_table_repo_selected(self, message: PortfolioTable.RepoSelected) -> None:
+        """Open the focused repo's detail overlay (the Enter handler).
+
+        Routes the repo code through the shared
+        :meth:`~eawf.tui.scopes.ScopeScreen._open_detail` seam so the
+        drill-in path matches every other row activation — no zoom
+        quadrant is mounted.
+
+        Args:
+            message: The :class:`PortfolioTable.RepoSelected` message
+                carrying the repo code to open detail for.
+        """
+        self._open_detail(message.repo_code)
 
 
-__all__ = ["UserScreen"]
+__all__ = ["PortfolioTable", "UserScreen"]
