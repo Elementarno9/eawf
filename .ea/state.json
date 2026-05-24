@@ -3589,6 +3589,16 @@
       "scope_id": "P27-I05-W17",
       "status": "done",
       "updated_at": "2026-05-24T21:46:43.925611Z"
+    },
+    "P27-I05-W18": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W18-close-20260524T224222Z",
+      "elapsed_eu": 43.63,
+      "id": "ACT-P27-I05-W18",
+      "scope_id": "P27-I05-W18",
+      "status": "done",
+      "updated_at": "2026-05-24T22:42:22.582264Z"
     }
   },
   "agent_sessions": {
@@ -7018,6 +7028,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W17",
       "updated_at": "2026-05-24T20:40:21.228373Z"
+    },
+    "P27-I05-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W18-bucket-20260524T215258Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W18",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W18",
+      "updated_at": "2026-05-24T21:52:58.095346Z"
     }
   },
   "goals": {
@@ -8395,7 +8418,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T21:46:43.925873Z",
+  "updated_at": "2026-05-24T22:42:22.582843Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21170,9 +21193,9 @@
       "blocks": [
         "P27-I05-W19"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T22:42:22.582264Z",
+      "commit": "d12b7f395468ea61ab21a4e4448333799bc779e4",
       "deps": [
         "P27-I05-W17"
       ],
@@ -21187,10 +21210,10 @@
       "id": "P27-I05-W18",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:36.918029Z",
-      "outcome": null,
+      "outcome": "regrouped cli/tui/render under surfaces/ via codemod-all-refs (no shims); pyproject gates + autogen + agents_md/agent_report goldens regenerated; tools/ + 7 TUI _THEME constants + overlay tree + 4 EAWF001 log lines fixed; mypy + full suite green (3 pre-existing env-only failures unrelated)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "surfaces members moved under surfaces/; shims at old paths; cli autogen and tests green"
       ],
