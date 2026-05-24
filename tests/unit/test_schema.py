@@ -6,7 +6,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from eawf.state import schema as schema_mod
+from eawf.docs import autogen as schema_mod
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR = REPO_ROOT / "src" / "eawf" / "schemas"
@@ -19,7 +19,7 @@ def test_state_schema_generates_deterministically() -> None:
 
 
 def test_state_schema_committed_matches_generated(tmp_path: Path) -> None:
-    schema_mod.dump_schemas(tmp_path)
+    schema_mod.dump_bundled_schemas(tmp_path)
     generated = json.loads((tmp_path / "state.schema.json").read_text())
     committed = json.loads((SCHEMAS_DIR / "state.schema.json").read_text())
     assert generated == committed
@@ -85,7 +85,7 @@ def test_placeholder_schema_parses_as_jsonschema() -> None:
 
 def test_skill_output_schema_committed_matches_generated(tmp_path: Path) -> None:
     """Phase 4 W01 generated skill-output schema must match the committed file."""
-    schema_mod.dump_schemas(tmp_path)
+    schema_mod.dump_bundled_schemas(tmp_path)
     generated = json.loads((tmp_path / "skill-output.schema.json").read_text())
     committed = json.loads((SCHEMAS_DIR / "skill-output.schema.json").read_text())
     assert generated == committed
@@ -93,7 +93,7 @@ def test_skill_output_schema_committed_matches_generated(tmp_path: Path) -> None
 
 def test_plan_view_schema_committed_matches_generated(tmp_path: Path) -> None:
     """Phase 5 W05 generated plan-view schema must match the committed file."""
-    schema_mod.dump_schemas(tmp_path)
+    schema_mod.dump_bundled_schemas(tmp_path)
     generated = json.loads((tmp_path / "plan-view.schema.json").read_text())
     committed = json.loads((SCHEMAS_DIR / "plan-view.schema.json").read_text())
     assert generated == committed

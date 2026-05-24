@@ -38,13 +38,15 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import orjson
 from pydantic import BaseModel
 
 from eawf.cli import error_codes as error_codes_mod
 from eawf.cli import exit_codes as exit_codes_mod
 from eawf.render.envelope import OutputEnvelope
+from eawf.render.plan_view import PlanView
 from eawf.state import enums as state_enums
 from eawf.state.models import State
 from eawf.store.kinds.event import Event
@@ -101,6 +103,105 @@ def schema_pages() -> list[GeneratedPage]:
             )
         )
     return pages
+
+
+# --- Bundled runtime schemas (src/eawf/schemas/) ----------------------------
+#
+# The docs-reference dump above emits validation-mode schemas under
+# ``docs/reference/autogen/``. The bundled runtime schemas below are a
+# distinct surface: serialization-mode JSON Schema for the four canonical
+# wire documents, written via orjson and committed under
+# ``src/eawf/schemas/`` as the loadable runtime contract. ``dump_bundled_schemas``
+# is the single generator for those files (test-verified against the
+# committed copies); it lives here so all schema generation shares one home.
+
+_BUNDLED_PLACEHOLDER: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": True,
+}
+
+_BUNDLED_ORJSON_OPTS = orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS
+
+
+def generate_state_schema() -> dict[str, Any]:
+    """Return the JSON Schema for the ``State`` model as a plain dict.
+
+    Uses ``mode="serialization"`` so the schema reflects the wire format
+    (StrEnum values as strings, datetimes as ISO-8601 strings, etc.).
+    ``$schema`` and ``title`` are injected so consumers can rely on them.
+    """
+    schema: dict[str, Any] = State.model_json_schema(mode="serialization")
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["title"] = "EawfState"
+    return schema
+
+
+def generate_skill_output_schema() -> dict[str, Any]:
+    """Return the JSON Schema for :class:`OutputEnvelope` as a plain dict.
+
+    Uses ``mode="serialization"`` so the schema reflects the wire format
+    (datetimes as ISO-8601 strings, ``EnvelopeWarning`` as nested object).
+    ``$schema`` and ``title`` are injected so consumers can rely on them.
+    """
+    schema: dict[str, Any] = OutputEnvelope.model_json_schema(mode="serialization")
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["title"] = "EawfSkillOutput"
+    return schema
+
+
+def generate_plan_view_schema() -> dict[str, Any]:
+    """Return the JSON Schema for :class:`PlanView` as a plain dict.
+
+    Uses ``mode="serialization"`` so the schema mirrors the wire format
+    emitted by ``eawf plan show --json``. ``$schema`` and ``title`` are
+    injected so consumers can rely on them.
+    """
+    schema: dict[str, Any] = PlanView.model_json_schema(mode="serialization", by_alias=True)
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["title"] = "EawfPlanView"
+    return schema
+
+
+def dump_bundled_schemas(output_dir: Path) -> None:
+    """Write the bundled runtime schema files to *output_dir*.
+
+    Files written (deterministic, sorted keys, orjson two-space indent):
+
+    - ``state.schema.json``        — generated from ``State``.
+    - ``config.schema.json``       — placeholder until the config model lands.
+    - ``skill-output.schema.json`` — generated from ``OutputEnvelope``.
+    - ``plan-view.schema.json``    — generated from ``PlanView``.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    state_schema = generate_state_schema()
+    (output_dir / "state.schema.json").write_bytes(
+        orjson.dumps(state_schema, option=_BUNDLED_ORJSON_OPTS) + b"\n"
+    )
+    logger.debug(f"dump_bundled_schemas target={output_dir / 'state.schema.json'}")
+
+    (output_dir / "config.schema.json").write_bytes(
+        orjson.dumps(
+            {**_BUNDLED_PLACEHOLDER, "title": "EawfConfig"},
+            option=_BUNDLED_ORJSON_OPTS,
+        )
+        + b"\n"
+    )
+    logger.debug(f"dump_bundled_schemas target={output_dir / 'config.schema.json'}")
+
+    skill_output_schema = generate_skill_output_schema()
+    (output_dir / "skill-output.schema.json").write_bytes(
+        orjson.dumps(skill_output_schema, option=_BUNDLED_ORJSON_OPTS) + b"\n"
+    )
+    logger.debug(f"dump_bundled_schemas target={output_dir / 'skill-output.schema.json'}")
+
+    plan_view_schema = generate_plan_view_schema()
+    (output_dir / "plan-view.schema.json").write_bytes(
+        orjson.dumps(plan_view_schema, option=_BUNDLED_ORJSON_OPTS) + b"\n"
+    )
+    logger.debug(f"dump_bundled_schemas target={output_dir / 'plan-view.schema.json'}")
 
 
 # --- CLI inventory -----------------------------------------------------------
@@ -453,11 +554,15 @@ __all__ = [
     "all_pages",
     "cli_page",
     "diff_against_disk",
+    "dump_bundled_schemas",
     "dump_schemas",
     "enums_page",
     "error_codes_page",
     "exit_codes_page",
     "generate_all",
+    "generate_plan_view_schema",
+    "generate_skill_output_schema",
+    "generate_state_schema",
     "index_page",
     "schema_page",
     "schema_pages",
