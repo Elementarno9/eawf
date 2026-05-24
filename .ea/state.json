@@ -4844,7 +4844,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P27-I03",
+    "iter_id": null,
     "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6556,14 +6556,14 @@
       ]
     },
     "P27-I03": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A37-P27-i03",
+      "closed_at": "2026-05-24T00:58:00.386620Z",
       "description": null,
       "estimate_id": null,
       "id": "P27-I03",
       "opened_at": "2026-05-22T19:55:55.481661Z",
       "phase_id": "P27",
-      "status": "active",
+      "status": "closed",
       "title": "P27-I03: build-out, rules/skills, hardening, release",
       "wave_ids": [
         "P27-I03-W01",
@@ -7207,7 +7207,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T00:53:38.356857Z",
+  "updated_at": "2026-05-24T00:58:00.387104Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
