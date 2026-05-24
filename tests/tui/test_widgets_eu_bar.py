@@ -17,6 +17,7 @@ from textual.app import ComposeResult
 import eawf.tui.app as eaapp_mod
 from eawf.tui.app import EaApp, probe_braille_coverage, resolve_render_mode
 from eawf.tui.widgets.eu_bar import (
+    _BUCKET_FIELD_WIDTH,
     BAR_CELLS,
     BRAILLE_BASE,
     BRAILLE_LEFT_COL,
@@ -248,7 +249,16 @@ def test_render_completion_bar_empty_state_no_counter() -> None:
 )
 def test_render_size_bar_each_bucket(bucket: str, filled: int) -> None:
     bar = render_size_bar(bucket)
-    assert bar == f"{GLYPH_FULL * filled}{GLYPH_EMPTY * (5 - filled)}  {bucket}"
+    # The bucket label is right-justified in a fixed field so every bucket's
+    # bar string is the same length (so right-pinned glyph runs align).
+    label = f"{bucket:>{_BUCKET_FIELD_WIDTH}}"
+    assert bar == f"{GLYPH_FULL * filled}{GLYPH_EMPTY * (5 - filled)}  {label}"
+
+
+def test_render_size_bar_fixed_width_constant_length() -> None:
+    """Every bucket renders to the same total length (the alignment invariant)."""
+    lengths = {len(render_size_bar(b)) for b in ("XS", "S", "M", "L", "XL")}
+    assert len(lengths) == 1  # one-char and two-char buckets share a width
 
 
 def test_render_size_bar_xs_lights_one_cell() -> None:
@@ -460,10 +470,10 @@ def test_render_completion_bar_empty_state_mode_independent() -> None:
 
 def test_render_size_bar_honours_mode() -> None:
     braille = render_size_bar("M", mode="braille")
-    assert braille.endswith("  M")
+    assert braille.endswith(f"  {'M':>{_BUCKET_FIELD_WIDTH}}")
     assert _BRAILLE_FULL in braille
     ascii_bar = render_size_bar("M", mode="ascii")
-    assert ascii_bar == f"{GLYPH_FULL * 3}{GLYPH_EMPTY * 2}  M"
+    assert ascii_bar == f"{GLYPH_FULL * 3}{GLYPH_EMPTY * 2}  {'M':>{_BUCKET_FIELD_WIDTH}}"
 
 
 def test_render_size_bar_unknown_bucket_empty_state_both_modes() -> None:

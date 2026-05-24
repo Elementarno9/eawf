@@ -1253,3 +1253,48 @@ def test_wave_row_size_bar_repaints_on_render_mode_flip(tmp_path: Path) -> None:
             assert "#" in ascii_label  # the ascii size-bar fill glyph
 
     asyncio.run(body())
+
+
+def _state_mixed_bucket_waves() -> State:
+    """Return the fixture with two same-depth waves of different label widths.
+
+    W01 carries a 1-char bucket (``M``), W02 a 2-char bucket (``XL``).
+    Neither has a token budget, so both render the size bar — the case the
+    fixed-width bucket label must keep glyph-aligned.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["iters"]["P01-I01"]["wave_ids"] = ["P01-I01-W01", "P01-I01-W02"]
+    payload["waves"] = {
+        "P01-I01-W01": _make_wave("P01-I01-W01", "P01-I01", "pending", effort_bucket="M"),
+        "P01-I01-W02": _make_wave("P01-I01-W02", "P01-I01", "pending", effort_bucket="XL"),
+    }
+    return State.model_validate(payload)
+
+
+def test_mixed_bucket_size_bars_align_in_column() -> None:
+    """1-char and 2-char buckets keep their glyph runs in the same column.
+
+    Both wave rows render at the same depth (same budget). With the fixed-
+    width bucket label every size bar is the same length, so the right-pinned
+    glyph run starts in the identical column even though ``M`` is one char
+    narrower than ``XL`` — the alignment defect this fix closes.
+    """
+
+    async def body() -> None:
+        app = _Harness()  # bare harness -> ascii fill (#/-)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_mixed_bucket_waves()
+            await pilot.pause()
+            wave_m = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            wave_xl = next(lbl for lbl in _labels(tree) if "P01-I01-W02" in lbl)
+            assert wave_m.rstrip().endswith("M")
+            assert wave_xl.rstrip().endswith("XL")
+            # Same-depth rows: identical total length (fixed-width label) and a
+            # glyph run starting in the same column. A ragged label would push
+            # the XL row's glyph run one cell left.
+            assert len(wave_m) == len(wave_xl)
+            assert _bar_glyph_start(wave_m) == _bar_glyph_start(wave_xl)
+
+    asyncio.run(body())

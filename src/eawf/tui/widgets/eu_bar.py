@@ -112,6 +112,16 @@ _BUCKET_CELLS: dict[str, int] = {
 #: total overflows the field gracefully rather than truncating.
 _COUNTER_FIELD_WIDTH: int = 7
 
+#: Fixed field width for the right-aligned size-bar bucket label. Buckets
+#: are one (``S`` / ``M`` / ``L``) or two (``XS`` / ``XL``) characters, so
+#: right-justifying every label into a 2-cell field keeps the rendered bar
+#: string a constant length across all buckets. That matters because the
+#: roadmap tree pins the whole bar string flush-right
+#: (:func:`~eawf.tui.widgets.roadmap_tree._pin_bar_right`): an unpadded
+#: label would make a 2-char-bucket row one cell longer, shifting its glyph
+#: run one column left of the 1-char rows. Mirrors :data:`_COUNTER_FIELD_WIDTH`.
+_BUCKET_FIELD_WIDTH: int = 2
+
 
 def _fill_cells(fraction: float) -> int:
     """Return the number of filled cells for *fraction* of the bar.
@@ -369,6 +379,13 @@ def render_size_bar(bucket: str, *, width: int = 5, mode: RenderMode = DEFAULT_R
     maps to a filled-cell count via :data:`_BUCKET_CELLS`; an unrecognised
     bucket yields :data:`EMPTY_STATE` (the wave has no size to show).
 
+    The bucket label is right-justified into a fixed
+    :data:`_BUCKET_FIELD_WIDTH`-cell field so the rendered string is a
+    constant length across all buckets — a tree row that pins the bar
+    flush-right then keeps every bar's glyph run in the same column
+    regardless of whether the bucket is one char (``S`` / ``M`` / ``L``) or
+    two (``XS`` / ``XL``).
+
     Args:
         bucket: The effort-bucket label (``"XS"`` / ``"S"`` / ``"M"`` /
             ``"L"`` / ``"XL"``). Any other value yields the empty state.
@@ -377,8 +394,9 @@ def render_size_bar(bucket: str, *, width: int = 5, mode: RenderMode = DEFAULT_R
         mode: Active render mode (``"braille"`` or ``"ascii"``).
 
     Returns:
-        A plain string of the form ``###--  M`` (bucket ``M``), or
-        :data:`EMPTY_STATE` for an unknown bucket.
+        A plain string of the form ``###--   M`` / ``#----  XS`` (label
+        right-aligned in a 2-cell field), or :data:`EMPTY_STATE` for an
+        unknown bucket.
     """
     cells = _BUCKET_CELLS.get(bucket)
     if cells is None:
@@ -386,7 +404,7 @@ def render_size_bar(bucket: str, *, width: int = 5, mode: RenderMode = DEFAULT_R
     filled = min(cells, width)
     fraction = filled / width if width > 0 else 0.0
     glyphs = _mode_glyphs(fraction, width=width, mode=mode)
-    return f"{glyphs}  {bucket}"
+    return f"{glyphs}  {bucket:>{_BUCKET_FIELD_WIDTH}}"
 
 
 def render_bar_markup(
