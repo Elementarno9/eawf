@@ -51,6 +51,7 @@ from eawf.tui.screens.overlays.config_modal import (
     needs_popup_edit,
     save_dirty_fields,
     toggle_bool,
+    toggle_multichoice_item,
     writable_layers_for,
 )
 from eawf.tui.screens.overlays.confirm import ConfirmModal
@@ -132,6 +133,80 @@ def test_format_value_bool_lowercase() -> None:
     assert format_value(entry, False) == "false"
 
 
+# -- multichoice pure helper (toggle_multichoice_item) ----------------------
+
+
+def _dashboard_panes_entry() -> ConfigKey:
+    """Return the ``ui.dashboard_panes`` multichoice registry entry."""
+    entry = registry_lookup("ui.dashboard_panes")
+    assert entry is not None and entry.type == "multichoice"
+    return entry
+
+
+def test_toggle_multichoice_item_on_from_empty() -> None:
+    """Toggling an item ON from the empty default stages a single-item list."""
+    entry = _dashboard_panes_entry()
+    assert toggle_multichoice_item(entry, {}, {}, item="roadmap") == {
+        "ui.dashboard_panes": ["roadmap"]
+    }
+
+
+def test_toggle_multichoice_item_off_removes() -> None:
+    """Toggling a present item OFF removes it from the staged list."""
+    entry = _dashboard_panes_entry()
+    merged = {"ui": {"dashboard_panes": ["state", "roadmap"]}}
+    assert toggle_multichoice_item(entry, merged, {}, item="roadmap") == {
+        "ui.dashboard_panes": ["state"]
+    }
+
+
+def test_toggle_multichoice_item_preserves_choices_order() -> None:
+    """The staged list follows ``choices`` declaration order, not toggle order.
+
+    Toggling ``roadmap`` then ``state`` (reverse of their declaration order)
+    still stages ``[state, roadmap]`` because ``state`` precedes ``roadmap``
+    in the key's declared ``choices``.
+    """
+    entry = _dashboard_panes_entry()
+    after_roadmap = toggle_multichoice_item(entry, {}, {}, item="roadmap")
+    after_state = toggle_multichoice_item(entry, {}, after_roadmap, item="state")
+    assert after_state == {"ui.dashboard_panes": ["state", "roadmap"]}
+
+
+def test_toggle_multichoice_item_noop_for_unknown_item() -> None:
+    """An item outside the declared choices is a no-op (dirty unchanged)."""
+    entry = _dashboard_panes_entry()
+    assert toggle_multichoice_item(entry, {}, {}, item="bogus") == {}
+
+
+def test_toggle_multichoice_item_noop_on_non_multichoice() -> None:
+    """A non-multichoice field routes through harmlessly (dirty unchanged)."""
+    entry = registry_lookup("planning.approval")  # choice, not multichoice
+    assert entry is not None
+    assert toggle_multichoice_item(entry, {}, {}, item="ask") == {}
+
+
+def test_toggle_multichoice_item_round_trip_drop_if_unchanged() -> None:
+    """Toggling an item on then off nets the persisted value, so drop clears it.
+
+    The dirty map a round-trip leaves carries the empty list (== the
+    persisted default ``()``), so ``ConfigModal._drop_if_unchanged`` removes
+    the key — no spurious dirty mark. Drives the helper with an explicit
+    empty ``merged`` so the persisted value resolves to the registry
+    default regardless of the host machine's layered config.
+    """
+    entry = _dashboard_panes_entry()
+    modal = ConfigModal(workspace=None, repo=Path("/tmp/repo"))
+    modal._merged = {}  # persisted value resolves to the registry default ``()``
+    on = toggle_multichoice_item(entry, modal._merged, {}, item="roadmap")
+    assert on == {"ui.dashboard_panes": ["roadmap"]}
+    off = toggle_multichoice_item(entry, modal._merged, on, item="roadmap")
+    assert off == {"ui.dashboard_panes": []}
+    # The net-empty list equals the persisted default, so drop clears the key.
+    reconciled = modal._drop_if_unchanged(entry, off)
+    assert "ui.dashboard_panes" not in reconciled
+
+
 # -- type -> action dispatch (enter_action / needs_popup_edit) --------------
 
 
@@ -151,6 +226,13 @@ def test_enter_action_int_inline() -> None:
     entry = registry_lookup("audit.flaky_retry_count")  # int
     assert entry is not None
     assert enter_action(entry, 2, row_width=80) == "inline"
+
+
+def test_enter_action_multichoice() -> None:
+    """A multichoice field resolves to the inline checklist action."""
+    entry = registry_lookup("ui.dashboard_panes")  # multichoice
+    assert entry is not None and entry.type == "multichoice"
+    assert enter_action(entry, (), row_width=80) == "multichoice"
 
 
 def _str_key() -> ConfigKey:
@@ -336,6 +418,21 @@ def test_surfaced_key_edit_validates_via_coerce_and_validate() -> None:
 
     with pytest.raises(UserError):
         coerce_and_validate(entry, "postgres")
+
+
+def test_multichoice_coerce_accepts_valid_and_rejects_invalid() -> None:
+    """``coerce_and_validate`` accepts a declared-choice list and rejects others."""
+    import pytest
+
+    entry = registry_lookup("ui.dashboard_panes")
+    assert entry is not None and entry.type == "multichoice"
+    # Boundary: a subset of declared choices round-trips to a list.
+    assert coerce_and_validate(entry, ["state", "roadmap"]) == ["state", "roadmap"]
+    # Boundary: the empty selection validates to an empty list.
+    assert coerce_and_validate(entry, []) == []
+    # Error path: an undeclared item is rejected.
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, ["bogus"])
 
 
 def test_surfaced_int_key_range_rejects_below_minimum() -> None:
@@ -943,6 +1040,210 @@ def test_config_enter_str_with_newline_routes_to_popup() -> None:
             # Routed to the larger popup editor, not an inline input.
             assert isinstance(app.screen, EditFieldModal)
             assert modal._editing_key is None
+
+    asyncio.run(body())
+
+
+# -- multichoice inline checklist (Pilot) -----------------------------------
+
+
+def _goto_dashboard_panes(modal: ConfigModal) -> int:
+    """Activate the ``ui`` tab and point the cursor at ``ui.dashboard_panes``.
+
+    Clears the modal's merged config so the persisted ``ui.dashboard_panes``
+    value resolves to the empty registry default regardless of the host
+    machine's layered config (the YAML layers may pre-set the panes). Returns
+    the field index of ``ui.dashboard_panes`` within the ``ui`` tab.
+    """
+    modal._merged = {}
+    _goto_tab(modal, "ui")
+    fields = keys_for_tab("ui")
+    index = [entry.key for entry in fields].index("ui.dashboard_panes")
+    modal.field_index = index
+    return index
+
+
+def test_config_enter_expands_multichoice_checklist() -> None:
+    """``Enter`` on a multichoice field mounts the inline checklist editor."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_dashboard_panes(modal)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.key == "ui.dashboard_panes"
+            await pilot.press("enter")  # expand the checklist
+            await pilot.pause()
+            assert modal._editing_key == "ui.dashboard_panes"
+            # The modal stays the active screen (no popup pushed).
+            assert app.screen is modal
+            checklist = modal.query_one("#config-multichoice", Static)
+            text = str(checklist.render())
+            # Every declared choice renders as a checklist line.
+            for choice in entry.choices or ():
+                assert choice in text
+            assert "[ ]" in text  # the empty default seeds all-cleared
+
+    asyncio.run(body())
+
+
+def test_config_multichoice_space_toggle_then_enter_commits() -> None:
+    """Space toggles an item, the second Enter commits the staged list.
+
+    Exercises the full operator UX: focus the key, Enter to expand, Space to
+    toggle ``state`` ON, Enter to commit. The dirty map then carries the
+    toggled list and the restored row shows the dirty ``*`` marker.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            index = _goto_dashboard_panes(modal)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None
+            first_choice = (entry.choices or ())[0]  # 'state' (line 0)
+            await pilot.press("enter")  # expand the checklist
+            await pilot.pause()
+            await pilot.press("space")  # toggle the focused line (first choice) ON
+            await pilot.pause()
+            await pilot.press("enter")  # commit + collapse
+            await pilot.pause()
+            # Editor torn down, the toggled list staged, no popup.
+            assert modal._editing_key is None
+            assert modal._view.dirty.get("ui.dashboard_panes") == [first_choice]
+            # The restored static row carries the dirty ``*`` marker.
+            row = modal.query_one(f"#{modal._field_row_id('ui', index)}", Static)
+            assert "*" in str(row.render())
+
+    asyncio.run(body())
+
+
+def test_config_multichoice_commit_saves_through_save_path() -> None:
+    """A committed multichoice list flushes through the existing layered-writer seam."""
+
+    async def body() -> None:
+        calls: list[dict[str, Any]] = []
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app, save_fn=lambda **k: calls.append(k))
+            await pilot.pause()
+            _goto_dashboard_panes(modal)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None
+            first_choice = (entry.choices or ())[0]
+            await pilot.press("enter")  # expand
+            await pilot.pause()
+            await pilot.press("space")  # toggle first choice ON
+            await pilot.pause()
+            await pilot.press("enter")  # commit
+            await pilot.pause()
+            assert modal._view.dirty.get("ui.dashboard_panes") == [first_choice]
+            await pilot.press("s")  # save through the layered writer
+            await pilot.pause()
+            # The save seam was called with the toggled list for the key.
+            saved = [call for call in calls if call["key"] == "ui.dashboard_panes"]
+            assert len(saved) == 1
+            assert saved[0]["value"] == [first_choice]
+            assert str(saved[0]["target_path"]).endswith(".yaml")
+            assert "state.json" not in str(saved[0]["target_path"])
+            assert modal._view.dirty == {}
+
+    asyncio.run(body())
+
+
+def test_config_multichoice_empty_selection_stages_empty_list() -> None:
+    """Toggling everything off (from a non-empty value) stages the empty list.
+
+    Seeds a non-empty dirty value so the checklist opens with items checked,
+    toggles them all off, and commits — the empty list validates and stages
+    (it differs from the empty-default only when the persisted value is
+    non-empty; here the staged ``[]`` nets the persisted default so the
+    dirty mark clears, but the commit path itself raises no error).
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_dashboard_panes(modal)
+            # Seed a staged non-empty selection so the checklist opens checked.
+            modal._view.dirty = {"ui.dashboard_panes": ["state", "roadmap"]}
+            await pilot.pause()
+            await pilot.press("enter")  # expand (state + roadmap checked)
+            await pilot.pause()
+            # Toggle the two checked lines off: line 0 (state), line 1 (roadmap).
+            await pilot.press("space")  # state OFF
+            await pilot.pause()
+            await pilot.press("down")  # focus roadmap
+            await pilot.pause()
+            await pilot.press("space")  # roadmap OFF
+            await pilot.pause()
+            await pilot.press("enter")  # commit the empty selection
+            await pilot.pause()
+            assert modal._editing_key is None
+            # Empty selection nets the persisted empty default → dirty cleared.
+            assert "ui.dashboard_panes" not in modal._view.dirty
+            # No error row lingered and the modal stayed open.
+            assert app.screen is modal
+
+    asyncio.run(body())
+
+
+def test_config_multichoice_esc_cancels_without_staging() -> None:
+    """``Esc`` in the checklist aborts the edit and restores the pre-edit dirty map."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_dashboard_panes(modal)
+            await pilot.pause()
+            await pilot.press("enter")  # expand
+            await pilot.pause()
+            await pilot.press("space")  # toggle a line ON (stages live)
+            await pilot.pause()
+            assert "ui.dashboard_panes" in modal._view.dirty  # live-staged
+            await pilot.press("escape")  # cancel
+            await pilot.pause()
+            assert modal._editing_key is None
+            # Cancel restored the pre-edit (clean) dirty map.
+            assert "ui.dashboard_panes" not in modal._view.dirty
+            assert app.screen is modal  # modal stays open
+
+    asyncio.run(body())
+
+
+def test_config_multichoice_hint_shows_space_toggle() -> None:
+    """While the checklist is open the footer hint advertises Space-toggle keys."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_dashboard_panes(modal)
+            await pilot.pause()
+            await pilot.press("enter")  # expand
+            await pilot.pause()
+            hint = str(modal.query_one("#config-hint", Static).render())
+            assert "Space toggle" in hint
+            assert "Enter commit" in hint
+            assert "Esc cancel" in hint
 
     asyncio.run(body())
 

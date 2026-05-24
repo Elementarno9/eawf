@@ -26,7 +26,10 @@ unambiguous regardless of which field is highlighted.
   field that already holds a newline (or whose value is wider than the
   row) routes to the popup
   :class:`~eawf.tui.screens.overlays.edit_field.EditFieldModal`
-  instead, which gives the operator more room.
+  instead, which gives the operator more room. A ``multichoice`` field
+  (e.g. ``ui.dashboard_panes``) expands into an inline ``[X]`` / ``[ ]``
+  checklist — ``Space`` toggles the focused item, a second ``Enter``
+  commits the staged list, and ``Esc`` cancels.
 * ``s`` — save: flush every dirty field through the layered-config writer.
 * ``r`` — reset: drop every staged (dirty) edit.
 * ``L`` — cycle the writable layer the save targets.
@@ -56,6 +59,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Input, Static, TabbedContent, TabPane
@@ -92,11 +96,12 @@ logger = logging.getLogger(__name__)
 #: * ``"popup"`` — edit via the larger
 #:   :class:`~eawf.tui.screens.overlays.edit_field.EditFieldModal`
 #:   (a ``str`` that is multi-line or wider than the row).
+#: * ``"multichoice"`` — expand the row into an inline ``[X]`` / ``[ ]``
+#:   checklist of the key's :attr:`ConfigKey.choices` (e.g.
+#:   ``ui.dashboard_panes``): ``Space`` toggles the focused item, a second
+#:   ``Enter`` commits the staged list, ``Esc`` cancels.
 #: * ``"none"`` — no edit affordance; the field is surfaced read-only.
-#:   ``multichoice`` keys (e.g. ``ui.dashboard_panes``) take this path:
-#:   they are shown in the menu for visibility but are not editable from
-#:   the overlay — the operator tunes the list via the CLI / a YAML layer.
-EnterAction = Literal["toggle", "cycle", "inline", "popup", "none"]
+EnterAction = Literal["toggle", "cycle", "inline", "popup", "multichoice", "none"]
 
 #: Field types edited via a text buffer (the inline :class:`Input` or the
 #: popup editor) rather than toggled / cycled in place.
@@ -165,6 +170,8 @@ def enter_action(entry: ConfigKey, value: Any, *, row_width: int) -> EnterAction
         return "toggle"
     if entry.type == "choice":
         return "cycle"
+    if entry.type == "multichoice":
+        return "multichoice"
     if entry.type in _SCALAR_TYPES:
         return "popup" if needs_popup_edit(entry, value, row_width=row_width) else "inline"
     return "none"
@@ -236,6 +243,28 @@ def current_value(entry: ConfigKey, merged: dict[str, Any], dirty: dict[str, Any
         return get_dotted(merged, entry.key)
     except KeyError:
         return entry.default
+
+
+def _values_equal(left: Any, right: Any) -> bool:
+    """Return ``True`` when *left* and *right* are equal, list/tuple-agnostic.
+
+    A ``multichoice`` value is staged as a ``list`` (from
+    :func:`coerce_and_validate`) but its registry default / persisted form
+    is a ``tuple`` — ``[] == ()`` is ``False`` in Python, so a naive ``==``
+    would flag a net-unchanged empty selection as dirty. Normalising
+    sequence operands to lists before comparing closes that gap without
+    affecting scalar (``bool`` / ``int`` / ``float`` / ``str``) comparisons.
+
+    Args:
+        left: The staged value.
+        right: The persisted value to compare against.
+
+    Returns:
+        ``True`` when the two are equal under list/tuple normalisation.
+    """
+    if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)):
+        return list(left) == list(right)
+    return bool(left == right)
 
 
 def format_value(entry: ConfigKey, value: Any) -> str:
@@ -328,6 +357,45 @@ def cycle_choice(
     return {**dirty, entry.key: [cycled, *items[1:]]}
 
 
+def toggle_multichoice_item(
+    entry: ConfigKey,
+    merged: dict[str, Any],
+    dirty: dict[str, Any],
+    *,
+    item: str,
+) -> dict[str, Any]:
+    """Return a new dirty map with *item* added to / removed from *entry*'s list.
+
+    The inline checklist editor's space-toggle: resolves the current
+    selected list via :func:`current_value`, flips *item*'s membership, and
+    rebuilds the list in :attr:`ConfigKey.choices` declaration order so the
+    staged value is stable regardless of toggle order. No-op (returns
+    *dirty* unchanged) when *entry* is not a ``multichoice`` field or *item*
+    is not one of its declared choices, so the caller can route every
+    toggle through here harmlessly.
+
+    Args:
+        entry: The multichoice field to toggle an item on.
+        merged: The merged config (resolves the pre-toggle selected list).
+        dirty: The current staged-edit map.
+        item: The choice to add (if absent) or remove (if present).
+
+    Returns:
+        A new dirty map (the input is not mutated), keyed by ``entry.key``
+        with the new selected list in ``choices`` order.
+    """
+    if entry.type != "multichoice" or not entry.choices or item not in entry.choices:
+        return dict(dirty)
+    value = current_value(entry, merged, dirty)
+    selected = {str(member) for member in value} if isinstance(value, (list, tuple)) else set()
+    if item in selected:
+        selected.discard(item)
+    else:
+        selected.add(item)
+    ordered = [choice for choice in entry.choices if choice in selected]
+    return {**dirty, entry.key: ordered}
+
+
 def merged_config(workspace: Path | None, repo: Path | None) -> dict[str, Any]:
     """Best-effort load of the merged layered config.
 
@@ -403,6 +471,157 @@ def save_dirty_fields(
     return saved
 
 
+class MultichoiceChecklist(Static):
+    """Inline ``[X]`` / ``[ ]`` checklist for a ``multichoice`` config key.
+
+    Mounted in place of the focused field row when the operator presses
+    ``Enter`` on a ``multichoice`` field. Each declared choice renders as a
+    ``[X]`` (selected) or ``[ ]`` (cleared) line; a ``>`` caret marks the
+    focused line. The widget owns the keyboard while open:
+
+    * ``↑`` / ``↓`` move the line focus (clamped, no wrap).
+    * ``Space`` toggles the focused line's membership.
+    * ``Enter`` posts :class:`Committed` (the host validates + stages the
+      selected list and tears the editor down).
+    * ``Esc`` posts :class:`Cancelled` (the host tears down without staging).
+
+    The two-``Enter`` semantics — first ``Enter`` (on the field row) opens
+    this widget, the second ``Enter`` (here) commits — hold because this
+    widget binds ``enter`` explicitly to :meth:`action_commit`, not to a
+    toggle: ``Space`` is the sole toggle key, so the focused line is never
+    both toggled and committed by one keystroke.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    MultichoiceChecklist {
+        height: auto;
+        max-height: 12;
+        background: $surface;
+        color: $text;
+    }
+    MultichoiceChecklist:focus {
+        background: $surface;
+    }
+    """
+
+    can_focus = True
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("up", "cursor_up", "up", show=False),
+        Binding("down", "cursor_down", "down", show=False),
+        Binding("k", "cursor_up", "up", show=False),
+        Binding("j", "cursor_down", "down", show=False),
+        Binding("space", "toggle_item", "toggle", show=False),
+        Binding("enter", "commit", "commit", show=False),
+        Binding("escape", "cancel", "cancel", show=False),
+    ]
+
+    class Toggled(Message):
+        """Posted when ``Space`` toggles a checklist line.
+
+        Attributes:
+            item: The choice whose membership the operator flipped.
+        """
+
+        def __init__(self, item: str) -> None:
+            self.item = item
+            super().__init__()
+
+    class Committed(Message):
+        """Posted when the operator presses ``Enter`` to commit the selection.
+
+        Attributes:
+            selected: The selected choices in declaration order.
+        """
+
+        def __init__(self, selected: list[str]) -> None:
+            self.selected = selected
+            super().__init__()
+
+    class Cancelled(Message):
+        """Posted when the operator presses ``Esc`` to abort the edit."""
+
+    #: The line under the checklist cursor. ``↑`` / ``↓`` clamp it to the
+    #: first / last line (no wrap), mirroring the field-row cursor.
+    line_index: reactive[int] = reactive(0)
+
+    def __init__(
+        self,
+        *,
+        choices: tuple[str, ...],
+        selected: list[str],
+        prefix: str,
+        **kwargs: Any,
+    ) -> None:
+        """Construct the checklist for *choices*, pre-checking *selected*.
+
+        Args:
+            choices: The key's declared choices, in render order.
+            selected: The currently-selected subset (seeds the ``[X]`` marks).
+            prefix: Leading pad reused from :meth:`ConfigModal._meta_line`'s
+                key column so each line aligns under the static value cell.
+            **kwargs: Forwarded to :class:`~textual.widgets.Static` (e.g.
+                ``id=`` / ``classes=``).
+        """
+        super().__init__("", markup=False, **kwargs)
+        self._choices = choices
+        self._selected: set[str] = {item for item in selected if item in choices}
+        self._prefix = prefix
+
+    def on_mount(self) -> None:
+        """Paint the initial checklist and focus the widget."""
+        self._repaint()
+        self.focus()
+
+    def selected_items(self) -> list[str]:
+        """Return the selected choices in declaration order."""
+        return [choice for choice in self._choices if choice in self._selected]
+
+    def _repaint(self) -> None:
+        """Repaint every checklist line (cursor caret + ``[X]`` / ``[ ]`` mark)."""
+        lines: list[str] = []
+        for index, choice in enumerate(self._choices):
+            caret = ">" if index == self.line_index else " "
+            mark = "X" if choice in self._selected else " "
+            lines.append(f"{self._prefix}{caret} [{mark}] {choice}")
+        self.update("\n".join(lines))
+
+    def watch_line_index(self) -> None:
+        """Repaint when the line cursor moves."""
+        if self.is_mounted:
+            self._repaint()
+
+    def action_cursor_up(self) -> None:
+        """Move the line cursor up (``↑``), clamped to the first line."""
+        if self.line_index > 0:
+            self.line_index -= 1
+
+    def action_cursor_down(self) -> None:
+        """Move the line cursor down (``↓``), clamped to the last line."""
+        if self.line_index < len(self._choices) - 1:
+            self.line_index += 1
+
+    def action_toggle_item(self) -> None:
+        """Toggle the focused line's membership (``Space``)."""
+        if not self._choices:
+            return
+        item = self._choices[self.line_index]
+        if item in self._selected:
+            self._selected.discard(item)
+        else:
+            self._selected.add(item)
+        self._repaint()
+        self.post_message(self.Toggled(item))
+
+    def action_commit(self) -> None:
+        """Commit the current selection (``Enter`` — the second one)."""
+        self.post_message(self.Committed(self.selected_items()))
+
+    def action_cancel(self) -> None:
+        """Abort the edit without staging (``Esc``)."""
+        self.post_message(self.Cancelled())
+
+
 class ConfigModal(ModalScreen[None]):
     """Registry-driven tabbed config window (Esc/dirty-guard to close).
 
@@ -410,12 +629,14 @@ class ConfigModal(ModalScreen[None]):
     (alphabetical fields per tab). The cursor sits on one field row:
     ``↑`` / ``↓`` move it within the tab (clamped to first / last),
     ``←`` / ``→`` switch tabs, and ``Enter`` is the **sole mutator** —
-    it toggles a ``bool``, forward-cycles a ``choice``, or edits a scalar
+    it toggles a ``bool``, forward-cycles a ``choice``, edits a scalar
     (``int`` / ``float`` / ``str``) inline (a long / multi-line ``str``
-    routes to the popup :class:`EditFieldModal`). ``s`` saves through the
-    layered writer, ``r`` resets staged edits, ``L`` cycles the writable
-    layer, and ``Esc`` cancels an inline edit or else closes (prompting
-    first when there are staged edits).
+    routes to the popup :class:`EditFieldModal`), or expands a
+    ``multichoice`` into an inline ``[X]`` / ``[ ]`` checklist (``Space``
+    toggles, a second ``Enter`` commits). ``s`` saves through the layered
+    writer, ``r`` resets staged edits, ``L`` cycles the writable layer,
+    and ``Esc`` cancels an inline edit or else closes (prompting first
+    when there are staged edits).
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -528,11 +749,15 @@ class ConfigModal(ModalScreen[None]):
         default_layer = "repo" if "repo" in self._layers else self._layers[0]
         self._view = ConfigModalState(layer=default_layer)
         self._merged: dict[str, Any] = merged_config(workspace, repo)
-        #: The field key whose row currently hosts an inline ``Input``, or
-        #: ``None`` when no inline edit is open. Only one row edits at a
-        #: time; while set, ``↑`` / ``↓`` / ``←`` / ``→`` are inert and the
-        #: Input owns ``Enter`` (commit) / ``Esc`` (cancel).
+        #: The field key whose row currently hosts an inline ``Input`` /
+        #: checklist, or ``None`` when no inline edit is open. Only one row
+        #: edits at a time; while set, ``↑`` / ``↓`` / ``←`` / ``→`` are
+        #: inert and the editor owns ``Enter`` (commit) / ``Esc`` (cancel).
         self._editing_key: str | None = None
+        #: Snapshot of the dirty map taken when a ``multichoice`` checklist
+        #: opens. ``Space`` toggles stage live into the dirty map, so a
+        #: cancel restores this snapshot rather than blindly dropping the key.
+        self._multichoice_dirty_snapshot: dict[str, Any] | None = None
 
     # -- composition --------------------------------------------------------
 
@@ -646,10 +871,14 @@ class ConfigModal(ModalScreen[None]):
         The hint reflects the type-dispatched keymap: arrows navigate
         (``↑`` / ``↓`` fields, ``←`` / ``→`` tabs) and ``Enter`` is the
         sole mutator. While an inline edit is open the hint flips to the
-        commit / cancel keys the mounted :class:`Input` owns.
+        commit / cancel keys the mounted :class:`Input` owns; while the
+        ``multichoice`` checklist is open it flips to the Space-toggle /
+        Enter-commit / Esc-cancel keys the checklist owns.
         """
         if self._editing_key is not None:
             entry = registry_lookup(self._editing_key)
+            if entry is not None and entry.type == "multichoice":
+                return "[ ↑/↓ item · Space toggle · Enter commit · Esc cancel ]"
             range_hint = self._range_hint(entry) if entry is not None else ""
             return f"[ {range_hint}Enter commit · Esc cancel ]"
         return "[ ↑/↓ field · ←/→ tab · Enter edit · s save · r reset · L layer · Esc close ]"
@@ -716,7 +945,7 @@ class ConfigModal(ModalScreen[None]):
             *dirty* unchanged, or a copy with *entry*'s key removed when its
             staged value equals the persisted value.
         """
-        if entry.key in dirty and dirty[entry.key] == self._persisted_value(entry):
+        if entry.key in dirty and _values_equal(dirty[entry.key], self._persisted_value(entry)):
             return {key: value for key, value in dirty.items() if key != entry.key}
         return dirty
 
@@ -818,11 +1047,12 @@ class ConfigModal(ModalScreen[None]):
         """Mutate the focused field (``Enter`` — the sole mutator).
 
         Dispatches on the field type via :func:`enter_action`: a ``bool``
-        toggles, a ``choice`` forward-cycles (``a → b → c → a``), and a
-        scalar (``int`` / ``float`` / ``str``) edits inline — a multi-line
-        / over-wide ``str`` routes to the popup :class:`EditFieldModal`
-        instead. Inert while an inline edit is already open and a no-op on
-        an empty tab.
+        toggles, a ``choice`` forward-cycles (``a → b → c → a``), a scalar
+        (``int`` / ``float`` / ``str``) edits inline — a multi-line /
+        over-wide ``str`` routes to the popup :class:`EditFieldModal` — and
+        a ``multichoice`` expands into the inline ``[X]`` / ``[ ]`` checklist
+        editor (:meth:`_begin_multichoice_edit`). Inert while an inline edit
+        is already open and a no-op on an empty tab.
         """
         if self._editing_key is not None:
             return
@@ -843,6 +1073,8 @@ class ConfigModal(ModalScreen[None]):
             self._begin_inline_edit(entry, value)
         elif action == "popup":
             self._open_popup_edit(entry, value)
+        elif action == "multichoice":
+            self._begin_multichoice_edit(entry, value)
 
     def _row_width(self) -> int:
         """Return the content width of a field row (inline-input budget).
@@ -1032,8 +1264,130 @@ class ConfigModal(ModalScreen[None]):
 
         return _on_dismiss
 
+    # -- multichoice inline checklist --------------------------------------
+
+    def _begin_multichoice_edit(self, entry: ConfigKey, value: Any) -> None:
+        """Swap the focused row for the inline ``[X]`` / ``[ ]`` checklist.
+
+        Mounts a :class:`MultichoiceChecklist` (seeded ``[X]`` for the
+        items in *value*) in place of the static field row, hides the row,
+        and focuses the checklist. ``Space`` toggles a line, ``Enter``
+        commits via :meth:`on_multichoice_checklist_committed`, and ``Esc``
+        cancels via :meth:`on_multichoice_checklist_cancelled`. Only one row
+        edits at a time. A no-op when the key declares no choices.
+
+        Args:
+            entry: The multichoice field being edited.
+            value: The field's currently-resolved value (seeds the marks).
+        """
+        if not entry.choices:
+            return
+        tab = self._active_tab()
+        try:
+            row = self.query_one(f"#{self._field_row_id(tab, self.field_index)}", Static)
+        except Exception:  # pragma: no cover - pre-layout guard
+            return
+        self._editing_key = entry.key
+        self._multichoice_dirty_snapshot = dict(self._view.dirty)
+        selected = [str(item) for item in value] if isinstance(value, (list, tuple)) else []
+        checklist = MultichoiceChecklist(
+            choices=entry.choices,
+            selected=selected,
+            prefix=self._meta_line(entry),
+            id="config-multichoice",
+            classes="config-edit-row",
+        )
+        error_row = Static("", classes="config-edit-error", id="config-edit-error", markup=False)
+        row.display = False
+        self.mount(checklist, after=row)
+        self.mount(error_row, after=checklist)
+        self._repaint_hint()
+
+    def on_multichoice_checklist_toggled(self, message: MultichoiceChecklist.Toggled) -> None:
+        """Stage the new selection as the checklist toggles a line (``Space``).
+
+        Keeps the dirty map live with each ``Space`` so the field's ``*``
+        marker (and the saved value) tracks the in-flight selection; the
+        commit path re-validates the final list before teardown.
+        """
+        message.stop()
+        if self._editing_key is None:
+            return
+        entry = registry_lookup(self._editing_key)
+        if entry is None:  # pragma: no cover - editing key always resolves
+            return
+        staged = toggle_multichoice_item(entry, self._merged, self._view.dirty, item=message.item)
+        self._view.dirty = self._drop_if_unchanged(entry, staged)
+
+    def on_multichoice_checklist_committed(self, message: MultichoiceChecklist.Committed) -> None:
+        """Validate + stage the selected list on ``Enter``, then tear down.
+
+        Routes the selected list through :func:`coerce_and_validate`; on
+        success folds the coerced list into the dirty map and tears the
+        checklist down, on failure renders the error inline (reusing the
+        inline-edit error row) and keeps the editor open.
+        """
+        message.stop()
+        if self._editing_key is None:
+            return
+        entry = registry_lookup(self._editing_key)
+        if entry is None:  # pragma: no cover - editing key always resolves
+            self._teardown_multichoice_edit()
+            return
+        try:
+            coerced = coerce_and_validate(entry, message.selected)
+        except UserError as exc:
+            self._report_inline_error(str(exc))
+            return
+        self._view.dirty = self._drop_if_unchanged(entry, {**self._view.dirty, entry.key: coerced})
+        logger.info(f"config_modal multichoice_commit key={entry.key!r} count={len(coerced)}")
+        self._teardown_multichoice_edit()
+
+    def on_multichoice_checklist_cancelled(self, message: MultichoiceChecklist.Cancelled) -> None:
+        """Abort the checklist edit on ``Esc`` without staging."""
+        message.stop()
+        self._cancel_multichoice_edit()
+
+    def _cancel_multichoice_edit(self) -> None:
+        """Abort the checklist edit, restoring the pre-edit dirty map.
+
+        ``Space`` toggles stage live, so a cancel must undo them by
+        restoring the dirty snapshot captured when the editor opened, then
+        tearing the editor down.
+        """
+        if self._editing_key is None:
+            return
+        logger.info(f"config_modal multichoice_cancel key={self._editing_key!r}")
+        if self._multichoice_dirty_snapshot is not None:
+            self._view.dirty = dict(self._multichoice_dirty_snapshot)
+        self._teardown_multichoice_edit()
+
+    def _teardown_multichoice_edit(self) -> None:
+        """Remove the checklist widgets and restore the static row."""
+        for widget_id in ("#config-multichoice", "#config-edit-error"):
+            try:
+                self.query_one(widget_id).remove()
+            except Exception:  # pragma: no cover - already removed
+                continue
+        tab = self._active_tab()
+        try:
+            row = self.query_one(f"#{self._field_row_id(tab, self.field_index)}", Static)
+            row.display = True
+        except Exception:  # pragma: no cover - tab switched mid-edit
+            pass
+        self._editing_key = None
+        self._multichoice_dirty_snapshot = None
+        self.set_focus(None)
+        self._repaint_fields()
+
     def action_save(self) -> None:
-        """Flush staged edits through the layered writer (``s``)."""
+        """Flush staged edits through the layered writer (``s``).
+
+        Inert while an edit is open so a stray ``s`` bubbling up from the
+        focused checklist does not flush mid-edit.
+        """
+        if self._editing_key is not None:
+            return
         if not self._view.dirty:
             self.app.notify("no changes to save", severity="information")
             return
@@ -1055,7 +1409,13 @@ class ConfigModal(ModalScreen[None]):
         self.app.notify(f"saved {saved} key{plural} to {self._view.layer}", severity="information")
 
     def action_reset(self) -> None:
-        """Drop every staged edit (``r``)."""
+        """Drop every staged edit (``r``).
+
+        Inert while an edit is open so a stray ``r`` bubbling up from the
+        focused checklist does not wipe the staged edits mid-edit.
+        """
+        if self._editing_key is not None:
+            return
         if not self._view.dirty:
             return
         self._view.dirty = {}
@@ -1063,7 +1423,13 @@ class ConfigModal(ModalScreen[None]):
         self.app.notify("staged edits reset", severity="information")
 
     def action_cycle_layer(self) -> None:
-        """Cycle the writable layer the save targets (``L``)."""
+        """Cycle the writable layer the save targets (``L``).
+
+        Inert while an edit is open so a stray ``L`` bubbling up from the
+        focused checklist does not cycle the layer mid-edit.
+        """
+        if self._editing_key is not None:
+            return
         if len(self._layers) <= 1:
             return
         index = self._layers.index(self._view.layer)
@@ -1073,15 +1439,19 @@ class ConfigModal(ModalScreen[None]):
     def action_close(self) -> None:
         """Handle ``Esc``: cancel an inline edit, else close (dirty-guarded).
 
-        While an inline edit is open ``Esc`` aborts just that edit (the
-        modal stays open). Otherwise on a clean modal this dismisses
-        immediately, and on a dirty modal it pushes a
+        While an inline edit (scalar ``Input`` or ``multichoice`` checklist)
+        is open ``Esc`` aborts just that edit (the modal stays open).
+        Otherwise on a clean modal this dismisses immediately, and on a
+        dirty modal it pushes a
         :class:`~eawf.tui.screens.overlays.confirm.ConfirmModal` (V15
         dirty-guard), dismissing only when the operator confirms
         discarding the staged edits.
         """
         if self._editing_key is not None:
-            self._cancel_inline_edit()
+            if self._multichoice_dirty_snapshot is not None:
+                self._cancel_multichoice_edit()
+            else:
+                self._cancel_inline_edit()
             return
         if not self._view.dirty:
             self.dismiss(None)
@@ -1167,5 +1537,6 @@ __all__ = [
     "open_config",
     "save_dirty_fields",
     "toggle_bool",
+    "toggle_multichoice_item",
     "writable_layers_for",
 ]
