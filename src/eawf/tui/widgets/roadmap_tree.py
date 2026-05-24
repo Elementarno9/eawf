@@ -4,10 +4,12 @@ A :class:`~textual.widgets.Tree` that renders the full
 phase → iter → wave hierarchy from the reactive
 :class:`~eawf.state.models.State`, prefixing each row with the **V12
 glyph schema** (``- > ~ # x !``) keyed off the row's lifecycle status,
-and surfacing an inline completion bar (closed ÷ total child waves) on
-iter and phase rows. Wave rows carry no inline bar — their effort-size
-gauge lives in the detail modal. Row titles ellipsize to the pane width
-so a long title never wraps or pushes the bar off-screen.
+and surfacing a right-pinned bar on every row: iter and phase rows carry
+a completion bar (closed ÷ total child waves); wave rows carry a live
+token-burn bar (``tokens_consumed ÷ token_budget``), falling back to the
+empty-state sentinel when a wave has no budget. Every bar pins flush at
+the pane right edge with a blank gap — the title ellipsizes if it would
+collide with the bar, never the bar.
 
 This replaces the P20 regression where the "roadmap pane" shipped as a
 flat 5-line numeric counter strip instead of V12's collapsible tree (see
@@ -53,13 +55,19 @@ from eawf.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.tui.widgets.eu_bar import render_completion_bar
+from eawf.tui.widgets.eu_bar import (
+    DEFAULT_RENDER_MODE,
+    EMPTY_STATE,
+    render_bar_plain,
+    render_completion_bar,
+)
 
 if TYPE_CHECKING:
     from textual.events import Resize
     from textual.widgets.tree import TreeNode
 
     from eawf.state.models import Iter, Phase, State, Wave
+    from eawf.tui.widgets.eu_bar import RenderMode
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +75,11 @@ logger = logging.getLogger(__name__)
 #: 5 (one cell per 20 %) so it matches the inline EU bar's width and the
 #: ``<glyph> <id>  <title>  <bar>`` row still fits the narrow roadmap pane.
 COMPLETION_BAR_CELLS: int = 5
+
+#: Minimum blank cells kept between a (possibly truncated) row title and a
+#: right-pinned bar, so the bar never abuts the title even when the title
+#: fills its budget. The title is truncated to leave at least this gap.
+_BAR_GAP: int = 2
 
 #: Single-character ellipsis appended to a title truncated to the row
 #: width. The U+2026 glyph is one cell wide, so the truncated body plus
@@ -294,6 +307,38 @@ def _truncate_body(body: str, budget: int) -> str:
     return f"{body[:keep]}{ELLIPSIS}"
 
 
+def _pin_bar_right(
+    glyph: str, body: str, bar: str, *, budget: int, glyph_colour: str | None
+) -> Text:
+    """Compose a row label with *bar* pinned flush-right after *body*.
+
+    Builds the ``<glyph> <body>`` label (tinted glyph via :func:`_row_label`),
+    truncates *body* so it leaves at least a :data:`_BAR_GAP` blank gap
+    before the bar, then pads with spaces so the bar's trailing cell lands
+    at the right edge of *budget* (the body-region cell count, which already
+    reserves the scrollbar gutter). The title ellipsizes on collision; the
+    bar is never cut.
+
+    Args:
+        glyph: The leading status glyph.
+        body: The row body text (``<id>  <title>``) before truncation.
+        bar: The pre-rendered bar string (plain, no Rich markup).
+        budget: The cell count the body region (``<body> <gap> <bar>``) may
+            occupy — the value :meth:`RoadmapTree._body_budget` returns.
+        glyph_colour: Optional concrete colour for the glyph span.
+
+    Returns:
+        A :class:`~rich.text.Text` for the tree row label with the bar
+        pinned flush-right.
+    """
+    title_budget = max(budget - len(bar) - _BAR_GAP, _MIN_BODY_CHARS)
+    truncated = _truncate_body(body, title_budget)
+    pad = max(budget - len(truncated) - len(bar), _BAR_GAP)
+    label = _row_label(glyph, truncated, glyph_colour)
+    label.append(f"{' ' * pad}{bar}")
+    return label
+
+
 class RoadmapTree(Tree[str]):
     """Collapsible phase → iter → wave tree with V12 status glyphs.
 
@@ -353,17 +398,27 @@ class RoadmapTree(Tree[str]):
 
         Standalone tests that assign :attr:`state` directly do not need
         the app watcher; the guard skips it when the app has no ``state``
-        attribute (e.g. mounted under a bare harness).
+        attribute (e.g. mounted under a bare harness). The same guard
+        wires a ``render_mode`` watcher so a Braille ↔ ASCII flip rebuilds
+        the tree — its bars are baked into the eager row labels, so the
+        flip must re-run :meth:`_rebuild` to repaint them in the new set.
         """
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this widget's reactive."""
         self.state = new_state
+
+    def _on_render_mode(self, _mode: RenderMode) -> None:
+        """Rebuild the tree so its baked-in bars repaint in the flipped set."""
+        if self.state is not None:
+            self._rebuild(self.state)
 
     def watch_state(self, new_state: State | None) -> None:
         """Rebuild the tree whenever the bound state changes."""
@@ -384,6 +439,19 @@ class RoadmapTree(Tree[str]):
         del event
         if self.state is not None:
             self._rebuild(self.state)
+
+    def _render_mode(self) -> RenderMode:
+        """Return the app's live bar render mode, or the safe default.
+
+        Threads :attr:`eawf.tui.app.EaApp.render_mode` into the bar
+        renderers so a Braille ↔ ASCII flip rerenders the tree. Falls back
+        to :data:`~eawf.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` under a bare
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The active ``"braille"`` / ``"ascii"`` mode.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def _body_budget(self, depth: int) -> int:
         """Return the cell budget a row body may occupy at *depth*.
@@ -468,12 +536,16 @@ class RoadmapTree(Tree[str]):
         """
         glyph = _glyph_for(phase.status, PHASE_GLYPHS)
         closed, total = _wave_completion(state, _phase_wave_ids(state, phase))
-        bar = render_completion_bar(closed, total, width=COMPLETION_BAR_CELLS)
-        body = _truncate_body(
-            f"{phase.id}  {phase.title}", self._body_budget(depth=0) - len(bar) - 2
+        bar = render_completion_bar(
+            closed, total, width=COMPLETION_BAR_CELLS, mode=self._render_mode()
         )
-        label = _row_label(glyph, body, _status_colour(phase.status))
-        label.append(f"  {bar}")
+        label = _pin_bar_right(
+            glyph,
+            f"{phase.id}  {phase.title}",
+            bar,
+            budget=self._body_budget(depth=0),
+            glyph_colour=_status_colour(phase.status),
+        )
         node = self.root.add(label, data=phase.id, expand=phase.status is PhaseStatus.ACTIVE)
         for iter_id in phase.iter_ids:
             iter_obj = state.iters.get(iter_id)
@@ -481,7 +553,7 @@ class RoadmapTree(Tree[str]):
                 self._add_iter(state, node, iter_obj)
 
     def _add_iter(self, state: State, parent: TreeNode[str], iter_obj: Iter) -> None:
-        """Add an iter node (with optional inline EU bar) and its waves.
+        """Add an iter node (with a right-pinned completion bar) and its waves.
 
         Args:
             state: The bound state.
@@ -490,12 +562,16 @@ class RoadmapTree(Tree[str]):
         """
         glyph = _glyph_for(iter_obj.status, ITER_GLYPHS)
         closed, total = _wave_completion(state, list(iter_obj.wave_ids))
-        bar = render_completion_bar(closed, total, width=COMPLETION_BAR_CELLS)
-        body = _truncate_body(
-            f"{iter_obj.id}  {iter_obj.title}", self._body_budget(depth=1) - len(bar) - 2
+        bar = render_completion_bar(
+            closed, total, width=COMPLETION_BAR_CELLS, mode=self._render_mode()
         )
-        label = _row_label(glyph, body, _status_colour(iter_obj.status))
-        label.append(f"  {bar}")
+        label = _pin_bar_right(
+            glyph,
+            f"{iter_obj.id}  {iter_obj.title}",
+            bar,
+            budget=self._body_budget(depth=1),
+            glyph_colour=_status_colour(iter_obj.status),
+        )
         node = parent.add(
             label,
             data=iter_obj.id,
@@ -507,16 +583,44 @@ class RoadmapTree(Tree[str]):
                 self._add_wave(node, wave)
 
     def _add_wave(self, parent: TreeNode[str], wave: Wave) -> None:
-        """Add a wave leaf row.
+        """Add a wave leaf row with a right-pinned token-burn bar.
+
+        The bar is the live ``tokens_consumed / token_budget`` braille fill
+        (the same gauge the dispatch band shows), status-tinted via the
+        row's glyph colour. A wave with no ``token_budget`` (``None`` or
+        ``0``) shows :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` pinned
+        right rather than a fabricated 0 % bar.
 
         Args:
             parent: The iter node to attach under.
             wave: The wave to add.
         """
         glyph = _glyph_for(wave.status, WAVE_GLYPHS)
-        body = _truncate_body(f"{wave.id}  {wave.title}", self._body_budget(depth=2))
-        label = _row_label(glyph, body, _status_colour(wave.status))
+        bar = self._wave_burn_bar(wave)
+        label = _pin_bar_right(
+            glyph,
+            f"{wave.id}  {wave.title}",
+            bar,
+            budget=self._body_budget(depth=2),
+            glyph_colour=_status_colour(wave.status),
+        )
         parent.add_leaf(label, data=wave.id)
+
+    def _wave_burn_bar(self, wave: Wave) -> str:
+        """Return the wave's token-burn bar string, or :data:`EMPTY_STATE`.
+
+        Args:
+            wave: The wave whose ``tokens_consumed / token_budget`` to
+                render.
+
+        Returns:
+            A plain braille / ASCII burn bar (mode-honoured), or
+            :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` when the wave has
+            no positive ``token_budget``.
+        """
+        if not wave.token_budget:
+            return EMPTY_STATE
+        return render_bar_plain(wave.tokens_consumed, wave.token_budget, mode=self._render_mode())
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
         """Route Enter on a **wave** leaf to a :class:`WaveSelected` message.
