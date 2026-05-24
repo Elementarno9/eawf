@@ -6822,7 +6822,13 @@
         "P27-I04-W06",
         "P27-I04-W07",
         "P27-I04-W08",
-        "P27-I04-W09"
+        "P27-I04-W09",
+        "P27-I04-W10",
+        "P27-I04-W11",
+        "P27-I04-W12",
+        "P27-I04-W13",
+        "P27-I04-W14",
+        "P27-I04-W15"
       ]
     },
     "P27-I05": {
@@ -7414,7 +7420,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T01:57:17.105025Z",
+  "updated_at": "2026-05-24T02:26:30.360957Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18936,6 +18942,193 @@
         "config modal surfaces previously-hidden leaf keys (ui.glyphs; ui.dashboard_panes; estimation.display.*; telemetry.*; daemon.*) plus the new ui.toasts via curated CONFIG_REGISTRY rows; no full-catalog browser"
       ],
       "title": "Config pane: surface hidden leaf keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W14",
+        "P27-I04-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/app.py",
+        "src/eawf/tui/app.py",
+        "src/eawf/tui/widgets/status_pane.py"
+      ],
+      "id": "P27-I04-W10",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T02:26:10.395899Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "No stderr-writing log handler is active while the Textual app runs (TUI launch drops or redirects the root StreamHandler to a file or TextualHandler); the per-repaint build_dispatch_slice logger.info is removed or demoted to debug so it never fires on a pulse tick; tests assert the TUI launch path installs no stderr handler and build_dispatch_slice emits no INFO on repaint"
+      ],
+      "title": "Fix TUI logging leak to terminal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/widgets/roadmap_tree.py",
+        "src/eawf/tui/widgets/eu_bar.py"
+      ],
+      "id": "P27-I04-W11",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T02:26:14.348972Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Roadmap phase and iter completion bars plus their N/M counters align in fixed columns across mixed digit widths (6/6 vs 17/17 vs 21/21); no-data rows align in the same column; wave-row token-burn bars align to the same right edge; roadmap snapshot goldens regenerated; tests assert mixed-digit-width alignment"
+      ],
+      "title": "Roadmap bar + wave-counter column alignment",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/screens/overlays/config_modal.py"
+      ],
+      "id": "P27-I04-W12",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T02:26:17.886643Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Config modal key column width is computed from the widest key (per-tab or registry-wide) instead of the hardcoded :<42 so the type tag and value columns align even for long estimation.display.time_quantum_* keys; _field_line and _meta_line share the width; config-modal goldens regenerated; test asserts alignment on the estimation tab"
+      ],
+      "title": "Config modal column alignment",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/screens/overlays/config_modal.py"
+      ],
+      "id": "P27-I04-W13",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T02:26:22.752686Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "enter_action returns an editable action for multichoice; Enter expands the focused multichoice row into an inline [X]/[ ] checklist seeded from the current value; Space toggles the focused item; Enter collapses and stages the new list (validated via coerce_and_validate); the staged value saves like any dirty key so ui.dashboard_panes becomes editable and saveable; tests cover toggle on/off",
+        "save round-trip",
+        "empty selection",
+        "validation"
+      ],
+      "title": "Inline space-toggle multichoice editor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/widgets/status_pane.py",
+        "src/eawf/tui/theme.tcss"
+      ],
+      "id": "P27-I04-W14",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T02:26:26.553995Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Status pane renders sections in two columns when pane width is at or above a threshold and collapses to a single column when narrow (repo-scope quadrant); the section builders stay pure; only StatusPane composition and render change plus theme.tcss if needed; tests assert two-column above the threshold and single-column below; goldens regenerated"
+      ],
+      "title": "Responsive two-column status pane",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/app.py",
+        "src/eawf/tui/scopes/user.py"
+      ],
+      "id": "P27-I04-W15",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T02:26:30.360662Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "User-scope launch reads ~/.eawf/registry.json via eawf.registry.read_registry and synthesizes a State whose workspace.repos mirror the registry entries so repos added via 'eawf repo add <path>' render as portfolio rows; an empty or missing registry yields a columns-only table with no crash; tests assert N registry entries map to N rows and an empty registry maps to zero rows"
+      ],
+      "title": "Wire user-scope portfolio to global registry",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
