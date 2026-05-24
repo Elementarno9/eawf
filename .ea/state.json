@@ -3549,6 +3549,16 @@
       "scope_id": "P27-I05-W13",
       "status": "done",
       "updated_at": "2026-05-24T20:08:36.302187Z"
+    },
+    "P27-I05-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W14-close-20260524T201514Z",
+      "elapsed_eu": 38.72,
+      "id": "ACT-P27-I05-W14",
+      "scope_id": "P27-I05-W14",
+      "status": "done",
+      "updated_at": "2026-05-24T20:15:14.896438Z"
     }
   },
   "agent_sessions": {
@@ -6926,6 +6936,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W13",
       "updated_at": "2026-05-24T20:08:27.511560Z"
+    },
+    "P27-I05-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W14-bucket-20260524T200913Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W14",
+      "updated_at": "2026-05-24T20:09:13.111377Z"
     }
   },
   "goals": {
@@ -8303,7 +8326,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T20:08:36.302486Z",
+  "updated_at": "2026-05-24T20:15:14.897055Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20929,8 +20952,8 @@
       "blocks": [
         "P27-I05-W15"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T20:15:14.896438Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -20942,10 +20965,10 @@
       "id": "P27-I05-W14",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:34.943006Z",
-      "outcome": null,
+      "outcome": "GO: regroup feasible (clean 44->6 layer map, revertible git mv, mypy+suite gates per wave). Surfaced ~3425 import edges + ~180 non-code touchpoints (133 string-refs, ~44 pyproject path refs, coverage-gate CI). Operator reconfirmed proceed-now via gate AUQ. Execute codemod-all-refs-per-wave shape (no shim debt). Brief: .ea/local/research/2026-05-24-w14-layered-regroup-feasibility-spike.md",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "kernel codemod prototyped; 249 string-refs audited; go/no-go verdict in brief"
       ],
