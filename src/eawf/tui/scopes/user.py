@@ -25,6 +25,8 @@ the entire chassis is inherited from
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import ClassVar
 
 from textual.app import ComposeResult
@@ -33,10 +35,94 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import DataTable, Static
 
+from eawf.registry.models import Registry, RegistryReadError, read_registry
+from eawf.state.enums import ProjectStatus, ScopeKind
+from eawf.state.models import (
+    CurrentPointers,
+    State,
+    WorkspaceIndex,
+    WorkspaceRepoRef,
+)
+from eawf.state.urn import build as build_urn
 from eawf.tui.scopes import ScopeScreen
 from eawf.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
+
+#: Synthetic owner + code for the portfolio's workspace index. The user
+#: scope has no on-disk workspace ``state.json`` — its aggregate is built
+#: from the global registry — so the synthesized index carries a fixed
+#: code/title rather than a per-repo anchor.
+_PORTFOLIO_CODE = "PORTFOLIO"
+_PORTFOLIO_TITLE = "Portfolio"
+
+
+def synthesize_user_state(*, registry_path: Path | None = None, home: Path | None = None) -> State:
+    """Synthesize a workspace-shaped state for the user portfolio scope.
+
+    The user scope has no on-disk ``state.json`` (it aggregates across
+    repos rather than anchoring on one), so the portfolio table's bound
+    state is built from the global registry ``~/.eawf/registry.json``:
+    each :class:`~eawf.registry.models.RegistryRepoEntry` becomes a
+    :class:`~eawf.state.models.WorkspaceRepoRef` under a synthetic
+    :class:`~eawf.state.models.WorkspaceIndex`, so
+    :func:`~eawf.tui.widgets.workspace_table.build_repo_rows` emits one
+    portfolio row per registered repo. Strictly read-only — never grows
+    the registry (per the explicit-registry-only rule).
+
+    A missing or corrupt registry yields a state with an empty
+    ``workspace.repos`` rather than raising, so the table renders
+    columns-only instead of crashing.
+
+    Args:
+        registry_path: Explicit registry path. When ``None``, falls back
+            to ``~/.eawf/registry.json`` (resolved via *home*).
+        home: Test seam for the default-path branch. Pass a ``tmp_path``
+            root so tests never touch the operator's real registry.
+            Ignored when *registry_path* is supplied directly.
+
+    Returns:
+        A :class:`~eawf.state.models.State` whose ``workspace.repos``
+        mirrors the registry (possibly empty).
+    """
+    try:
+        registry = read_registry(registry_path, home=home)
+    except RegistryReadError as exc:
+        logger.info(f"synthesize_user_state registry_unavailable cause={exc!r}")
+        registry = Registry()
+    repos: dict[str, WorkspaceRepoRef] = {}
+    for code, entry in registry.repos.items():
+        repos[code] = WorkspaceRepoRef(
+            code=entry.code,
+            path=entry.path,
+            state_urn=build_urn("repo", owner=entry.code),
+            project_code=entry.code,
+            title=entry.title or entry.code,
+            status=ProjectStatus.ACTIVE,
+        )
+    workspace = WorkspaceIndex(
+        code=_PORTFOLIO_CODE,
+        title=_PORTFOLIO_TITLE,
+        repos=repos,
+        current_repo_code=registry.active_code,
+    )
+    return State(
+        schema_version="1.1",
+        scope_kind=ScopeKind.WORKSPACE,
+        urn=build_urn("workspace", owner=_PORTFOLIO_CODE),
+        updated_at=datetime.now(UTC),
+        project=None,
+        current=CurrentPointers(),
+        workspace=workspace,
+        phases={},
+        iters={},
+        waves={},
+        artifacts={},
+        agent_sessions={},
+        plugins={},
+        indexes={},
+    )
+
 
 #: Footer hints tuned for the user portfolio screen (arrows primary; the
 #: user scope opens repo detail on Enter and has no zoom affordance).
@@ -136,4 +222,4 @@ class UserScreen(ScopeScreen):
         self._open_detail(message.repo_code)
 
 
-__all__ = ["PortfolioTable", "UserScreen"]
+__all__ = ["PortfolioTable", "UserScreen", "synthesize_user_state"]

@@ -322,6 +322,14 @@ class EaApp(App[None]):
             ),
         )
         await self._binding.connect()
+        # The user (portfolio) scope has no on-disk state.json to bind, so
+        # the binder leaves self.state None. Synthesize a workspace-shaped
+        # state from the global registry here (read-only) so the portfolio
+        # table renders one row per registered repo before first paint.
+        if self._scope == "user" and self.state is None:
+            from eawf.tui.scopes.user import synthesize_user_state
+
+            self.state = synthesize_user_state()
         # Probe Braille coverage and resolve the bar fill mode before the
         # scope screen composes, so the first paint already carries the
         # right glyph set (no flicker from an after-mount flip). The

@@ -25,16 +25,48 @@ import pytest
 from eawf.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.scopes import ScopeScreen, UserScreen
-from eawf.tui.scopes.user import PortfolioTable
+from eawf.tui.scopes.user import PortfolioTable, synthesize_user_state
 from eawf.tui.screens.overlays.config_modal import ConfigModal
 from eawf.tui.screens.overlays.detail import DetailModal
 from eawf.tui.widgets.footer import Footer, Heartbeat
 from eawf.tui.widgets.git_pane import GitFields
 from eawf.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
-from eawf.tui.widgets.workspace_table import WorkspaceTable
+from eawf.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
+
+
+def _write_registry(home: Path, repos: dict[str, dict[str, str]]) -> Path:
+    """Write a ``registry.json`` under *home*/.eawf and return its path.
+
+    Args:
+        home: A ``tmp_path``-rooted fake home directory.
+        repos: Mapping of repo code → entry payload (``code`` / ``path`` /
+            optional ``title``).
+
+    Returns:
+        The written registry path under ``<home>/.eawf/registry.json``.
+    """
+    ea_dir = home / ".eawf"
+    ea_dir.mkdir(parents=True, exist_ok=True)
+    path = ea_dir / "registry.json"
+    payload = {"version": "1", "repos": repos}
+    path.write_bytes(orjson.dumps(payload))
+    return path
+
+
+@pytest.fixture(autouse=True)
+def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point registry resolution at an empty ``tmp_path`` home.
+
+    Any test that launches the user scope with ``state_path=None`` triggers
+    :func:`synthesize_user_state`, which reads ``~/.eawf/registry.json``.
+    Redirecting ``Path.home`` to an empty ``tmp_path`` keeps those launches
+    deterministic and ensures no test ever reads the operator's real
+    registry (which would leak machine paths into a rendered screenshot).
+    """
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
 
 @pytest.fixture(autouse=True)
@@ -363,5 +395,148 @@ def test_user_c_keypress_opens_config_modal() -> None:
             await pilot.press("c")
             await pilot.pause()
             assert isinstance(app.screen, ConfigModal)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# synthesize_user_state — pure helper over the global registry (P27-I04-W15)
+# --------------------------------------------------------------------------
+
+
+def test_synthesize_user_state_maps_registry_entries(tmp_path: Path) -> None:
+    """N registry entries → N workspace repos with the right code + path."""
+    _write_registry(
+        tmp_path,
+        {
+            "ABC": {"code": "ABC", "path": "/abs/path/abc", "title": "Abc repo"},
+            "DEF": {"code": "DEF", "path": "/abs/path/def"},
+        },
+    )
+    state = synthesize_user_state(home=tmp_path)
+    assert state.workspace is not None
+    repos = state.workspace.repos
+    assert set(repos) == {"ABC", "DEF"}
+    assert repos["ABC"].code == "ABC"
+    assert repos["ABC"].path == "/abs/path/abc"
+    assert repos["ABC"].title == "Abc repo"
+    # Missing title falls back to the code.
+    assert repos["DEF"].title == "DEF"
+    assert repos["DEF"].path == "/abs/path/def"
+
+
+def test_synthesize_user_state_via_explicit_registry_path(tmp_path: Path) -> None:
+    """The explicit ``registry_path`` seam bypasses the home resolver."""
+    path = _write_registry(tmp_path, {"GHI": {"code": "GHI", "path": "/abs/path/ghi"}})
+    state = synthesize_user_state(registry_path=path)
+    assert state.workspace is not None
+    assert set(state.workspace.repos) == {"GHI"}
+
+
+def test_synthesize_user_state_build_repo_rows_yields_one_row_per_entry(
+    tmp_path: Path,
+) -> None:
+    """``build_repo_rows`` over the synthesized state yields N rows in order."""
+    _write_registry(
+        tmp_path,
+        {
+            "ABC": {"code": "ABC", "path": "/abs/path/abc"},
+            "DEF": {"code": "DEF", "path": "/abs/path/def"},
+            "GHI": {"code": "GHI", "path": "/abs/path/ghi"},
+        },
+    )
+    state = synthesize_user_state(home=tmp_path)
+    rows = build_repo_rows(state)
+    assert [row.code for row in rows] == ["ABC", "DEF", "GHI"]
+    assert [row.path for row in rows] == [
+        "/abs/path/abc",
+        "/abs/path/def",
+        "/abs/path/ghi",
+    ]
+
+
+def test_synthesize_user_state_empty_registry_yields_zero_rows(tmp_path: Path) -> None:
+    """An empty registry (no repos) → empty workspace → zero rows, no crash."""
+    _write_registry(tmp_path, {})
+    state = synthesize_user_state(home=tmp_path)
+    assert state.workspace is not None
+    assert state.workspace.repos == {}
+    assert build_repo_rows(state) == []
+
+
+def test_synthesize_user_state_missing_registry_yields_empty_repos(
+    tmp_path: Path,
+) -> None:
+    """A missing ``~/.eawf/registry.json`` → empty repos, no exception."""
+    # No registry file written under tmp_path's home.
+    state = synthesize_user_state(home=tmp_path)
+    assert state.workspace is not None
+    assert state.workspace.repos == {}
+    assert build_repo_rows(state) == []
+
+
+def test_synthesize_user_state_repo_ref_urn_is_valid(tmp_path: Path) -> None:
+    """Each synthesized repo ref carries a valid ``urn:eawf:v1:repo`` URN."""
+    _write_registry(tmp_path, {"ABC": {"code": "ABC", "path": "/abs/path/abc"}})
+    state = synthesize_user_state(home=tmp_path)
+    assert state.workspace is not None
+    ref = state.workspace.repos["ABC"]
+    assert ref.state_urn == "urn:eawf:v1:repo:ABC"
+    assert ref.status.value == "active"
+    assert ref.project_code == "ABC"
+
+
+def test_synthesize_user_state_root_shape(tmp_path: Path) -> None:
+    """The synthesized state root carries the workspace scope + empty maps."""
+    _write_registry(tmp_path, {"ABC": {"code": "ABC", "path": "/abs/path/abc"}})
+    state = synthesize_user_state(home=tmp_path)
+    assert state.scope_kind.value == "workspace"
+    assert state.project is None
+    assert state.urn == "urn:eawf:v1:workspace:PORTFOLIO"
+    assert state.phases == {}
+    assert state.waves == {}
+
+
+def test_synthesize_user_state_preserves_active_code_as_current(
+    tmp_path: Path,
+) -> None:
+    """The registry's ``active_code`` carries onto ``current_repo_code``."""
+    ea_dir = tmp_path / ".eawf"
+    ea_dir.mkdir(parents=True, exist_ok=True)
+    (ea_dir / "registry.json").write_bytes(
+        orjson.dumps(
+            {
+                "version": "1",
+                "active_code": "ABC",
+                "repos": {"ABC": {"code": "ABC", "path": "/abs/path/abc"}},
+            }
+        )
+    )
+    state = synthesize_user_state(home=tmp_path)
+    assert state.workspace is not None
+    assert state.workspace.current_repo_code == "ABC"
+
+
+def test_user_scope_none_state_synthesizes_from_registry(tmp_path: Path) -> None:
+    """Launching the user scope with no state binds the synthesized registry state."""
+    _write_registry(
+        tmp_path,
+        {
+            "ABC": {"code": "ABC", "path": "/abs/path/abc"},
+            "DEF": {"code": "DEF", "path": "/abs/path/def"},
+        },
+    )
+
+    async def body() -> None:
+        # state_path=None drives the on_mount synthesis path; the autouse
+        # _isolate_registry fixture has already redirected Path.home to
+        # tmp_path so the real registry is never read.
+        app = EaApp(scope="user", state_path=None)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            table = app.screen.query_one(PortfolioTable)
+            assert table.row_count == 2
+            assert {row.code for row in table.rows_data()} == {"ABC", "DEF"}
 
     asyncio.run(body())
