@@ -23,6 +23,7 @@ from eawf.tui.widgets.eu_bar import (
     BRAILLE_BASE,
     EMPTY_STATE,
     render_bar_plain,
+    render_size_bar,
 )
 from eawf.tui.widgets.roadmap_tree import (
     _BAR_GAP,
@@ -70,6 +71,7 @@ def _make_wave(
     title: str = "wave",
     token_budget: int | None = None,
     tokens_consumed: int = 0,
+    effort_bucket: str | None = None,
 ) -> dict[str, object]:
     """Build a minimal wave payload dict for fixture composition."""
     return {
@@ -83,6 +85,7 @@ def _make_wave(
         "success_criteria": [],
         "token_budget": token_budget,
         "tokens_consumed": tokens_consumed,
+        "effort_bucket": effort_bucket,
         "opened_at": "2026-05-08T00:00:00Z",
         "closed_at": None,
     }
@@ -1138,5 +1141,115 @@ def test_render_bar_plain_matches_wave_row_ascii() -> None:
             label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
             expected = render_bar_plain(500, 1000, mode="ascii")
             assert label.rstrip().endswith(expected)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Wave-row hybrid metric — size bar default, token-burn upgrade (W27)
+# --------------------------------------------------------------------------
+
+
+def _state_wave_hybrid_metric() -> State:
+    """Return the fixture with the three hybrid wave-metric cases.
+
+    W01 carries an ``effort_bucket`` (``L``) but no ``token_budget`` — the
+    size-bar default. W02 carries a positive ``token_budget`` (with a
+    bucket too) — the burn bar wins. W03 carries neither — the empty-state
+    sentinel.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["iters"]["P01-I01"]["wave_ids"] = [
+        "P01-I01-W01",
+        "P01-I01-W02",
+        "P01-I01-W03",
+    ]
+    payload["waves"] = {
+        "P01-I01-W01": _make_wave("P01-I01-W01", "P01-I01", "pending", effort_bucket="L"),
+        "P01-I01-W02": _make_wave(
+            "P01-I01-W02",
+            "P01-I01",
+            "in_progress",
+            token_budget=1000,
+            tokens_consumed=500,
+            effort_bucket="L",
+        ),
+        "P01-I01-W03": _make_wave("P01-I01-W03", "P01-I01", "pending"),
+    }
+    return State.model_validate(payload)
+
+
+def test_wave_row_size_bar_when_bucket_but_no_budget() -> None:
+    """A bucketed wave with no token budget renders the effort-size bar."""
+
+    async def body() -> None:
+        app = _Harness()  # bare harness → DEFAULT_RENDER_MODE == ascii
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_wave_hybrid_metric()
+            await pilot.pause()
+            label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            # The ``L`` size bar (4/5 cells) pins flush-right, no burn pct.
+            assert label.rstrip().endswith(render_size_bar("L", mode="ascii"))
+            assert label.rstrip().endswith("L")
+            assert "%" not in label
+            assert EMPTY_STATE not in label
+
+    asyncio.run(body())
+
+
+def test_wave_row_burn_bar_wins_over_bucket_when_budget_set() -> None:
+    """A positive token budget upgrades the row to the burn bar over the bucket."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_wave_hybrid_metric()
+            await pilot.pause()
+            label = next(lbl for lbl in _labels(tree) if "P01-I01-W02" in lbl)
+            # 500/1000 == 50 % burn bar, not the bucket size bar.
+            assert label.rstrip().endswith("50%")
+            assert not label.rstrip().endswith("L")
+
+    asyncio.run(body())
+
+
+def test_wave_row_empty_state_when_neither_bucket_nor_budget() -> None:
+    """A wave with neither a bucket nor a budget still surfaces EMPTY_STATE."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_wave_hybrid_metric()
+            await pilot.pause()
+            label = next(lbl for lbl in _labels(tree) if "P01-I01-W03" in lbl)
+            assert label.rstrip().endswith(EMPTY_STATE)
+
+    asyncio.run(body())
+
+
+def test_wave_row_size_bar_repaints_on_render_mode_flip(tmp_path: Path) -> None:
+    """A braille↔ascii flip repaints the size bar via the existing rebuild path."""
+    state_path = _write_state(_state_wave_hybrid_metric(), tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.render_mode = "braille"
+            await settle_screen(pilot)
+            tree = app.screen.query_one(RoadmapTree)
+            braille_label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
+            assert _has_braille(braille_label)  # braille glyph run in the size bar
+            app.render_mode = "ascii"
+            await settle_screen(pilot)
+            ascii_label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
+            assert not _has_braille(ascii_label)
+            assert "#" in ascii_label  # the ascii size-bar fill glyph
 
     asyncio.run(body())

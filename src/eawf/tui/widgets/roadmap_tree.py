@@ -5,9 +5,12 @@ phase → iter → wave hierarchy from the reactive
 :class:`~eawf.state.models.State`, prefixing each row with the **V12
 glyph schema** (``- > ~ # x !``) keyed off the row's lifecycle status,
 and surfacing a right-pinned bar on every row: iter and phase rows carry
-a completion bar (closed ÷ total child waves); wave rows carry a live
-token-burn bar (``tokens_consumed ÷ token_budget``), falling back to the
-empty-state sentinel when a wave has no budget. Every bar pins flush at
+a completion bar (closed ÷ total child waves); wave rows carry a hybrid
+size/burn bar — the ``effort_bucket`` size bar (``XS``..``XL``) by
+default, auto-upgrading to the live token-burn bar
+(``tokens_consumed ÷ token_budget``) once a wave carries a budget, and
+falling back to the empty-state sentinel only when it has neither. Every
+bar pins flush at
 the pane right edge with a blank gap — the title ellipsizes if it would
 collide with the bar, never the bar.
 
@@ -60,6 +63,7 @@ from eawf.tui.widgets.eu_bar import (
     EMPTY_STATE,
     render_bar_plain,
     render_completion_bar,
+    render_size_bar,
 )
 
 if TYPE_CHECKING:
@@ -589,13 +593,15 @@ class RoadmapTree(Tree[str]):
                 self._add_wave(node, wave)
 
     def _add_wave(self, parent: TreeNode[str], wave: Wave) -> None:
-        """Add a wave leaf row with a right-pinned token-burn bar.
+        """Add a wave leaf row with a right-pinned hybrid size/burn bar.
 
-        The bar is the live ``tokens_consumed / token_budget`` braille fill
-        (the same gauge the dispatch band shows), status-tinted via the
-        row's glyph colour. A wave with no ``token_budget`` (``None`` or
-        ``0``) shows :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` pinned
-        right rather than a fabricated 0 % bar.
+        The bar is the wave's ``effort_bucket`` size bar by default,
+        auto-upgrading to the live ``tokens_consumed / token_budget`` burn
+        bar (the same gauge the dispatch band shows) once a budget exists,
+        status-tinted via the row's glyph colour. A wave with neither a
+        budget nor a bucket shows
+        :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` pinned right rather
+        than a fabricated 0 % bar.
 
         Args:
             parent: The iter node to attach under.
@@ -613,20 +619,33 @@ class RoadmapTree(Tree[str]):
         parent.add_leaf(label, data=wave.id)
 
     def _wave_burn_bar(self, wave: Wave) -> str:
-        """Return the wave's token-burn bar string, or :data:`EMPTY_STATE`.
+        """Return the wave's hybrid size/burn bar string, or :data:`EMPTY_STATE`.
+
+        Resolves the wave-row gauge in priority order:
+
+        1. A positive ``token_budget`` lights the live
+           ``tokens_consumed / token_budget`` burn bar — the gauge becomes
+           meaningful once v0.4 dispatch assigns per-wave budgets.
+        2. Otherwise an ``effort_bucket`` lights the ``XS``..``XL`` size
+           bar, the populated signal for today's planned waves.
+        3. Neither falls back to the empty-state sentinel.
 
         Args:
-            wave: The wave whose ``tokens_consumed / token_budget`` to
-                render.
+            wave: The wave whose ``token_budget`` / ``tokens_consumed`` and
+                ``effort_bucket`` drive the bar.
 
         Returns:
-            A plain braille / ASCII burn bar (mode-honoured), or
+            A plain braille / ASCII burn bar, a size bar, or
             :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` when the wave has
-            no positive ``token_budget``.
+            neither a positive ``token_budget`` nor an ``effort_bucket``.
         """
-        if not wave.token_budget:
-            return EMPTY_STATE
-        return render_bar_plain(wave.tokens_consumed, wave.token_budget, mode=self._render_mode())
+        if wave.token_budget:
+            return render_bar_plain(
+                wave.tokens_consumed, wave.token_budget, mode=self._render_mode()
+            )
+        if wave.effort_bucket is not None:
+            return render_size_bar(wave.effort_bucket.value, mode=self._render_mode())
+        return EMPTY_STATE
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
         """Route Enter on a **wave** leaf to a :class:`WaveSelected` message.
