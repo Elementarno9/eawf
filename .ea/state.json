@@ -3499,6 +3499,16 @@
       "scope_id": "P27-I05-W08",
       "status": "done",
       "updated_at": "2026-05-24T19:25:25.231828Z"
+    },
+    "P27-I05-W09": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W09-close-20260524T195215Z",
+      "elapsed_eu": 37.96,
+      "id": "ACT-P27-I05-W09",
+      "scope_id": "P27-I05-W09",
+      "status": "done",
+      "updated_at": "2026-05-24T19:52:15.431778Z"
     }
   },
   "agent_sessions": {
@@ -5278,9 +5288,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I05-W09"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I05",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -8203,7 +8211,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T19:26:09.416775Z",
+  "updated_at": "2026-05-24T19:52:15.432373Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20678,8 +20686,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p27-i05",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T19:52:15.431778Z",
+      "commit": "c21e0a157c4541ff85b3d3c02ce1af647a9cd6c4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20695,10 +20703,10 @@
       "id": "P27-I05-W09",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:32.515642Z",
-      "outcome": null,
+      "outcome": "6 god-files split by seam into facades+siblings: repo/plugin/memory (batch A 2f4dd4b), render-skills/flow/config_modal (batch B c21e0a1); public surfaces stable; C901 plugin+repo delisted; ruff/mypy clean (490 files); full suite green minus 2 known telemetry tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "each god-file split by seam; facades stable; C901 entries dropped; tests and golden green"
       ],
