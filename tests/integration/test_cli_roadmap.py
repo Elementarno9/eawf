@@ -329,6 +329,45 @@ def test_roadmap_revise_retitle_iter_status_agnostic_on_active(workspace: Path) 
     assert state["iters"]["P21-I01"]["title"] == "Normalised iter title"
 
 
+def test_roadmap_revise_retitle_iter_on_closed_phase(workspace: Path) -> None:
+    """--retitle on an iter works under a CLOSED phase (cosmetic, skips gate).
+
+    Wave edits keep the PLANNED/ACTIVE gate, but an iter retitle is
+    status-agnostic (id preserved, no lifecycle change), so a CLOSED-phase
+    iter title can still be normalized.
+    """
+    _propose_with_wave(workspace)
+    # Properly close the phase + iter + wave (status + closed_at) so the
+    # post-mutation closure invariants hold; a bare status flip would leave a
+    # structurally invalid CLOSED phase. Exercises the iter-retitle gate-skip.
+    state_path = workspace / ".ea" / "state.json"
+    blob = orjson.loads(state_path.read_bytes())
+    ts = "2026-05-22T00:00:00Z"
+    blob["phases"]["P21"].update(status="closed", closed_at=ts)
+    blob["iters"]["P21-I01"].update(status="closed", closed_at=ts)
+    blob["waves"]["P21-I01-W01"].update(status="closed", closed_at=ts)
+    state_path.write_bytes(orjson.dumps(blob))
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21-I01=Closed-phase normalised"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I01"]["title"] == "Closed-phase normalised"
+
+
+def test_roadmap_revise_retitle_wave_on_closed_phase_rejected(workspace: Path) -> None:
+    """A wave retitle under a CLOSED phase stays gated — only iter retitle skips."""
+    _propose_with_wave(workspace)
+    _set_phase_status(workspace, "P21", "closed")
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "W01=feat: nope"],
+    )
+    assert res.exit_code != 0
+    assert "closed" in res.output.lower()
+
+
 def test_roadmap_revise_active_phase_allows_pending_wave(workspace: Path) -> None:
     """P19-W12: ACTIVE parent + PENDING wave is the new escape hatch."""
     _propose_with_wave(workspace)

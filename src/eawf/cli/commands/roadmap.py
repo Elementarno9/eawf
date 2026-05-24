@@ -487,7 +487,13 @@ def roadmap_revise_cmd(
     try:
         with state_transaction(state_path) as state:
             try:
-                _resolve_revisable_phase(state, phase_id)
+                # An iter retitle is cosmetic (id preserved, no lifecycle
+                # change), so it is status-agnostic and skips the phase gate
+                # that guards wave-plan edits — a CLOSED-phase iter title can
+                # still be normalized. Wave edits keep the PLANNED/ACTIVE gate.
+                is_iter_retitle = bool(retitle and is_iter_id(retitle.partition("=")[0].strip()))
+                if not is_iter_retitle:
+                    _resolve_revisable_phase(state, phase_id)
                 if add_wave:
                     if not wave_title or not files:
                         raise cli_errors.UserError(
