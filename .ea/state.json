@@ -3229,6 +3229,36 @@
       "scope_id": "P27-I04-W12",
       "status": "done",
       "updated_at": "2026-05-24T02:40:50.506954Z"
+    },
+    "P27-I04-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W13-close-20260524T025959Z",
+      "elapsed_eu": 1.12,
+      "id": "ACT-P27-I04-W13",
+      "scope_id": "P27-I04-W13",
+      "status": "done",
+      "updated_at": "2026-05-24T02:59:59.036167Z"
+    },
+    "P27-I04-W14": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W14-close-20260524T025959Z",
+      "elapsed_eu": 1.12,
+      "id": "ACT-P27-I04-W14",
+      "scope_id": "P27-I04-W14",
+      "status": "done",
+      "updated_at": "2026-05-24T02:59:59.530292Z"
+    },
+    "P27-I04-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W15-close-20260524T030000Z",
+      "elapsed_eu": 1.12,
+      "id": "ACT-P27-I04-W15",
+      "scope_id": "P27-I04-W15",
+      "status": "done",
+      "updated_at": "2026-05-24T03:00:00.010439Z"
     }
   },
   "agent_sessions": {
@@ -6131,6 +6161,45 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I04-W12",
       "updated_at": "2026-05-24T02:40:44.298632Z"
+    },
+    "P27-I04-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W13-bucket-20260524T024243Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W13",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W13",
+      "updated_at": "2026-05-24T02:42:43.262931Z"
+    },
+    "P27-I04-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W14-bucket-20260524T024243Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W14",
+      "updated_at": "2026-05-24T02:42:43.851869Z"
+    },
+    "P27-I04-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W15-bucket-20260524T024244Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W15",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W15",
+      "updated_at": "2026-05-24T02:42:44.524419Z"
     }
   },
   "goals": {
@@ -7489,7 +7558,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T02:40:50.507200Z",
+  "updated_at": "2026-05-24T03:00:00.010678Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19110,9 +19179,9 @@
     "P27-I04-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T02:59:59.036167Z",
+      "commit": "e5417757c89c872423815b9d2b1ae303ef18f63f",
       "deps": [
         "P27-I04-W12"
       ],
@@ -19125,10 +19194,10 @@
       "id": "P27-I04-W13",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T02:26:22.752686Z",
-      "outcome": null,
+      "outcome": "Inline space-toggle multichoice checklist editor: Enter expands [X]/[ ] list, Space toggles, second Enter stages via coerce_and_validate; ui.dashboard_panes now editable + saveable",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "enter_action returns an editable action for multichoice; Enter expands the focused multichoice row into an inline [X]/[ ] checklist seeded from the current value; Space toggles the focused item; Enter collapses and stages the new list (validated via coerce_and_validate); the staged value saves like any dirty key so ui.dashboard_panes becomes editable and saveable; tests cover toggle on/off",
         "save round-trip",
@@ -19143,9 +19212,9 @@
     "P27-I04-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T02:59:59.530292Z",
+      "commit": "6d42122875158cd1a77e4884a07b3d89427c5440",
       "deps": [
         "P27-I04-W10"
       ],
@@ -19159,10 +19228,10 @@
       "id": "P27-I04-W14",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T02:26:26.553995Z",
-      "outcome": null,
+      "outcome": "Responsive status pane: pure build_status_columns lays two columns when width>=74 else single; narrow repo quadrant byte-identical",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Status pane renders sections in two columns when pane width is at or above a threshold and collapses to a single column when narrow (repo-scope quadrant); the section builders stay pure; only StatusPane composition and render change plus theme.tcss if needed; tests assert two-column above the threshold and single-column below; goldens regenerated"
       ],
@@ -19174,9 +19243,9 @@
     "P27-I04-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T03:00:00.010439Z",
+      "commit": "3cb745ecbe1413bb05ea4c49cb6b66d15dc055c7",
       "deps": [
         "P27-I04-W10"
       ],
@@ -19190,10 +19259,10 @@
       "id": "P27-I04-W15",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T02:26:30.360662Z",
-      "outcome": null,
+      "outcome": "User-scope portfolio synthesizes a WORKSPACE State from ~/.eawf/registry.json via read_registry; empty/missing registry yields columns-only table, no crash",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "User-scope launch reads ~/.eawf/registry.json via eawf.registry.read_registry and synthesizes a State whose workspace.repos mirror the registry entries so repos added via 'eawf repo add <path>' render as portfolio rows; an empty or missing registry yields a columns-only table with no crash; tests assert N registry entries map to N rows and an empty registry maps to zero rows"
       ],
