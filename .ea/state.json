@@ -5145,7 +5145,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I04-W30"
+    ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -6534,6 +6536,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I04-W29",
       "updated_at": "2026-05-24T17:07:57.238188Z"
+    },
+    "P27-I04-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W30-bucket-20260524T172529Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I04-W30",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I04-W30",
+      "updated_at": "2026-05-24T17:25:29.068213Z"
     }
   },
   "goals": {
@@ -7314,7 +7329,8 @@
         "P27-I04-W26",
         "P27-I04-W27",
         "P27-I04-W28",
-        "P27-I04-W29"
+        "P27-I04-W29",
+        "P27-I04-W30"
       ]
     },
     "P27-I05": {
@@ -7906,7 +7922,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T17:13:09.098839Z",
+  "updated_at": "2026-05-24T17:25:29.068598Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20078,6 +20094,36 @@
         "u then r rebinds repo launch state with phases>0 and scope_kind=repo; repo RoadmapTree repopulates; user breadcrumb reads user; existing user-switch test passes; goldens regenerated"
       ],
       "title": "Scope-switch state rebind + breadcrumb by screen scope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W30": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/tui/widgets/eu_bar.py",
+        "tests/tui/test_widgets_eu_bar.py",
+        "tests/tui/test_widgets_roadmap_tree.py"
+      ],
+      "id": "P27-I04-W30",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T17:25:28.581589Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "render_size_bar right-justifies the bucket into a fixed 2-cell field; mixed-bucket wave rows left-align their glyph runs; eu_bar bucket-format tests updated; mixed-bucket roadmap alignment regression added; tui+snapshot+mypy green"
+      ],
+      "title": "Align wave size-bar glyph runs via fixed-width bucket label",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
