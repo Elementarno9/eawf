@@ -8,13 +8,16 @@ sparkline, and an ETA) and a GATES block (live ``audit_check_*`` N/M
 progress collapsing to the verdict). Rendered as a live pane that watches
 the reactive :class:`~eawf.state.models.State`.
 
-The pane groups its rendered lines into three labelled sections —
-LIFECYCLE / EFFORT / GATES — each built by a dedicated pure function so
-the line set stays unit-testable without mounting the widget. A fourth
-DISPATCH band (NOW / NEXT / WAIT) is a documented follow-up: it appends
-after GATES, so the section-builder seam (:func:`build_status_lines`
-composing the per-section builders in order) leaves a clean attachment
-point for it.
+The pane groups its rendered lines into four labelled sections —
+LIFECYCLE / EFFORT / GATES / DISPATCH — each built by a dedicated pure
+function so the line set stays unit-testable without mounting the widget.
+The DISPATCH band (NOW / NEXT / WAIT) is the live dispatch frontier: NOW
+lists the active waves (pulsing dot + agent role + token-burn bar), NEXT
+the next ready batch (capped to ``planning.max_parallel_waves``), and
+WAIT the PENDING waves blocked by a running wave (with ``← dep`` edge
+labels). Its frontier derives from :func:`build_dispatch_slice` (pure)
+and its running dot pulses on a ``TICK_PULSE`` (~2 Hz) timer reusing the
+heartbeat glyph fade.
 
 The pane is driven by the host :class:`~eawf.tui.app.EaApp` reactive
 ``state``: on mount it seeds from ``app.state`` and registers a watcher so
@@ -36,9 +39,11 @@ from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from pydantic import BaseModel, ConfigDict
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.config.defaults import BUILT_IN_DEFAULTS
 from eawf.state.enums import (
     AuditStatus,
     IterStatus,
@@ -46,6 +51,7 @@ from eawf.state.enums import (
     WaveStatus,
     WorktreeStatus,
 )
+from eawf.state.wave_graph import blocked_by
 from eawf.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
@@ -53,10 +59,11 @@ from eawf.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
 )
+from eawf.tui.widgets.heartbeat import PULSE_INTERVAL_S, pulse_glyph
 from eawf.tui.widgets.variance_tile import render_variance_plain
 
 if TYPE_CHECKING:
-    from eawf.state.models import Audit, State
+    from eawf.state.models import Audit, State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -517,11 +524,227 @@ def _active_audit(state: State | None) -> Audit | None:
     return (state.audits or {}).get(audit_id)
 
 
-def build_status_lines(state: State | None, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> list[str]:
+#: Default NEXT-batch cap when no layered config overrides it — sourced
+#: from the built-in ``planning.max_parallel_waves`` so the band never
+#: hardcodes the window width.
+DEFAULT_MAX_PARALLEL_WAVES: int = BUILT_IN_DEFAULTS["planning"]["max_parallel_waves"]
+
+#: Empty-state line for the DISPATCH band's NOW section.
+DISPATCH_IDLE: str = "idle (no active waves)"
+
+
+class DispatchSlice(BaseModel):
+    """Typed live dispatch frontier: what runs NOW / dispatches NEXT / WAITs.
+
+    The pure render source for the status pane's DISPATCH band. ``now`` is
+    the active-wave pointer set (CLAIMED + IN_PROGRESS); ``next`` is the
+    ready-to-claim batch (deps CLOSED), ordered by ``W##`` and capped to
+    ``planning.max_parallel_waves``; ``wait`` pairs each PENDING wave that
+    is blocked by a currently-active wave with its first blocker id.
+
+    ``next_overflow`` is the count of ready waves beyond the cap (the
+    band's ``+N more`` suffix); it is ``0`` when every ready wave fits.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    now: tuple[str, ...]
+    next: tuple[str, ...]
+    wait: tuple[tuple[str, str | None], ...]
+    next_overflow: int
+
+
+def _wave_index(wave_id: str) -> int | None:
+    """Return a wave id's trailing ``W##`` integer, or ``None``.
+
+    Mirrors the suffix parse :func:`eawf.lifecycle.wave._lower_w_sibling_pending`
+    uses for the monotonic claim gate, re-derived here so the band stays a
+    pure read with no dependency on a private lifecycle internal. The index
+    is the NEXT batch's monotonic sort key: the ready frontier is ordered
+    lowest-``W##``-first so the cap selects the waves the operator dispatches
+    first, matching the lower-sibling claim order.
+
+    Args:
+        wave_id: Wave id (e.g. ``"P01-I01-W03"``).
+
+    Returns:
+        The integer after the trailing ``W``, or ``None`` when the id has
+        no ``W##`` suffix (a malformed or non-wave id).
+    """
+    suffix = wave_id.split("-")[-1]
+    if suffix.startswith("W") and suffix[1:].isdigit():
+        return int(suffix[1:])
+    return None
+
+
+def build_dispatch_slice(
+    state: State | None,
+    *,
+    scope: str | None = None,
+    max_parallel: int = DEFAULT_MAX_PARALLEL_WAVES,
+) -> DispatchSlice:
+    """Compute the live NOW / NEXT / WAIT dispatch frontier from *state*.
+
+    Pure — unit-testable without mounting the widget. Derivation per the
+    tui-richer-views design §8.2:
+
+    * **NOW** — ``state.current.active_wave_ids`` (the CLAIMED +
+      IN_PROGRESS pointer set), in pointer order.
+    * **NEXT** — PENDING waves whose live :func:`blocked_by` view is empty
+      (all deps CLOSED): the ready frontier. Ordered by ``W##`` (the
+      monotonic claim order — lowest dispatches first) and truncated to
+      *max_parallel*; the whole ready frontier is parallel-dispatchable
+      via ``--out-of-order``, so the cap selects the front of the order
+      rather than dropping higher siblings. Ready waves beyond the cap
+      drive ``next_overflow`` (the ``+N more`` suffix).
+    * **WAIT** — PENDING waves whose live blocked-by set intersects NOW,
+      paired with the first blocking active wave id (the ``← dep`` edge
+      label); the edge is ``None`` when a dangling-dep lookup leaves no
+      resolvable blocker.
+
+    NEXT and WAIT are scoped to *scope* (an iter id) when given, else to
+    the active iter (:func:`_active_iter_id`); NOW is always the global
+    active-wave pointer set. A :func:`blocked_by` lookup that hits a
+    dangling dep degrades gracefully (the dep is dropped from the live
+    view, never raised) so the band keeps rendering.
+
+    Args:
+        state: The bound state, or ``None`` (yields an empty slice).
+        scope: Iter id scoping NEXT / WAIT; defaults to the active iter.
+        max_parallel: NEXT-batch cap (``planning.max_parallel_waves``).
+
+    Returns:
+        A :class:`DispatchSlice` with ``now`` / ``next`` / ``wait`` /
+        ``next_overflow`` populated.
+    """
+    if state is None:
+        return DispatchSlice(now=(), next=(), wait=(), next_overflow=0)
+    now = tuple(state.current.active_wave_ids)
+    now_set = set(now)
+    iter_id = scope if scope is not None else _active_iter_id(state)
+    pending = [
+        w
+        for wid, w in state.waves.items()
+        if w.status == WaveStatus.PENDING and (iter_id is None or w.iter_id == iter_id)
+    ]
+    ready: list[Wave] = []
+    waiting: list[tuple[str, str | None]] = []
+    for wave in pending:
+        live_blockers = blocked_by(wave.id, state)
+        if not live_blockers:
+            ready.append(wave)
+            continue
+        active_blockers = [b for b in live_blockers if b in now_set]
+        if active_blockers:
+            waiting.append((wave.id, min(active_blockers)))
+    ready.sort(key=lambda w: (_wave_index(w.id) is None, _wave_index(w.id) or 0, w.id))
+    capped = ready[: max(max_parallel, 0)]
+    overflow = len(ready) - len(capped)
+    waiting.sort(
+        key=lambda pair: (_wave_index(pair[0]) is None, _wave_index(pair[0]) or 0, pair[0])
+    )
+    logger.info(
+        f"build_dispatch_slice now={len(now)} next={len(capped)} "
+        f"wait={len(waiting)} overflow={overflow}"
+    )
+    return DispatchSlice(
+        now=now,
+        next=tuple(w.id for w in capped),
+        wait=tuple(waiting),
+        next_overflow=overflow,
+    )
+
+
+def _now_row(wave_id: str, state: State, *, dot: str, mode: RenderMode) -> str:
+    """Render a single NOW row: pulsing dot + agent role + token-burn bar.
+
+    The token-burn bar reads ``Wave.tokens_consumed`` / ``Wave.token_budget``
+    live; a wave with no budget shows :data:`EMPTY_STATE` (the §8.9 live
+    accrual wave populates the budget). A missing wave (dangling pointer)
+    still renders its id so a NOW pointer drift never blanks the row.
+
+    Args:
+        wave_id: The active wave id to render.
+        state: The bound state.
+        dot: The pre-rendered pulse glyph for this frame.
+        mode: Active render mode (``"braille"`` or ``"ascii"``).
+
+    Returns:
+        The rendered NOW row text.
+    """
+    wave = state.waves.get(wave_id)
+    short = wave_id.split("-")[-1]
+    if wave is None:
+        return f"  {dot} {short}"
+    role = wave.agent_role.value if wave.agent_role is not None else DASH
+    burn = render_eu_bar_plain(wave.tokens_consumed, wave.token_budget or 0, mode=mode)
+    return f"  {dot} {short}  {role}  {burn}"
+
+
+def _dispatch_lines(
+    state: State | None,
+    *,
+    mode: RenderMode,
+    lit: bool = True,
+    paused: bool = False,
+) -> list[str]:
+    """Build the DISPATCH section lines (NOW / NEXT / WAIT frontier).
+
+    NOW renders one row per active wave (pulsing dot + agent role + live
+    token-burn bar), collapsing to :data:`DISPATCH_IDLE` when no wave is
+    active. NEXT and WAIT collapse inline: NEXT lists the ready batch
+    (with a ``+N more`` suffix past the cap), WAIT lists each blocked wave
+    with its ``← dep`` edge label. The running dot fades through the pulse
+    glyph pair; ASCII mode or a paused pulse renders a static dot.
+
+    Args:
+        state: The bound state, or ``None``.
+        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        lit: Pulse phase for this frame (``True`` bright, ``False`` dim).
+        paused: ``True`` when the pulse is paused (SUSPEND) — forces a
+            static dot regardless of *lit*.
+
+    Returns:
+        The ordered DISPATCH lines (no section header).
+    """
+    slice_ = build_dispatch_slice(state)
+    dot = pulse_glyph(lit, mode="ascii" if (mode == "ascii" or paused) else "braille")
+    lines: list[str] = ["NOW"]
+    if not slice_.now or state is None:
+        lines.append(f"  {DISPATCH_IDLE}")
+    else:
+        lines.extend(_now_row(wid, state, dot=dot, mode=mode) for wid in slice_.now)
+    next_short = " ".join(wid.split("-")[-1] for wid in slice_.next)
+    next_body = next_short or DASH
+    if slice_.next_overflow:
+        next_body = f"{next_body} +{slice_.next_overflow} more"
+    lines.append(f"NEXT  {next_body}")
+    if slice_.wait:
+        wait_parts = []
+        for wave_id, blocker in slice_.wait:
+            short = wave_id.split("-")[-1]
+            if blocker is not None:
+                wait_parts.append(f"{short}←{blocker.split('-')[-1]}")
+            else:
+                wait_parts.append(short)
+        wait_body = " ".join(wait_parts)
+    else:
+        wait_body = DASH
+    lines.append(f"WAIT  {wait_body}")
+    return lines
+
+
+def build_status_lines(
+    state: State | None,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    pulse_lit: bool = True,
+    pulse_paused: bool = False,
+) -> list[str]:
     """Build the status pane's grouped text lines from *state*.
 
     Pure render source — unit-testable without mounting the widget. The
-    lines are grouped into three labelled sections, each headed by its
+    lines are grouped into four labelled sections, each headed by its
     name and built by a dedicated section builder:
 
     * ``LIFECYCLE`` — the project / phase / iter pointers, wave counters,
@@ -530,15 +753,18 @@ def build_status_lines(state: State | None, *, mode: RenderMode = DEFAULT_RENDER
       velocity sparkline, and an ETA from the current burn.
     * ``GATES`` — the active audit's live ``N/M`` check progress with
       per-check glyphs, collapsing to the verdict on completion.
-
-    A fourth ``DISPATCH`` band (NOW / NEXT / WAIT) appends after GATES in
-    a follow-up; the per-section composition below is the seam it attaches
-    to.
+    * ``DISPATCH`` — the live NOW / NEXT / WAIT dispatch frontier: active
+      waves (pulsing dot + agent role + token burn), the next ready batch
+      (capped to ``planning.max_parallel_waves``), and PENDING waves
+      blocked by a running wave (with ``← dep`` edge labels).
 
     Args:
         state: The bound state, or ``None``.
         mode: Active render mode (``"braille"`` or ``"ascii"``) threaded
             from :attr:`eawf.tui.app.EaApp.render_mode`.
+        pulse_lit: DISPATCH running-dot pulse phase for this frame.
+        pulse_paused: ``True`` when the pulse is paused (SUSPEND) — the
+            running dot renders static.
 
     Returns:
         The ordered list of plain-text lines, section headers included.
@@ -546,6 +772,11 @@ def build_status_lines(state: State | None, *, mode: RenderMode = DEFAULT_RENDER
     lines = ["LIFECYCLE", *_lifecycle_lines(state)]
     lines += ["", "EFFORT", *_effort_lines(state, mode=mode)]
     lines += ["", "GATES", *_gate_lines(state, mode=mode)]
+    lines += [
+        "",
+        "DISPATCH",
+        *_dispatch_lines(state, mode=mode, lit=pulse_lit, paused=pulse_paused),
+    ]
     return lines
 
 
@@ -553,8 +784,12 @@ class StatusPane(Static):
     """Live current-scope status summary pane.
 
     Watches the host app's reactive ``state`` (seeded on mount) and
-    repaints the grouped LIFECYCLE / EFFORT / GATES block on every
-    revision. Standalone-testable by assigning :attr:`state` directly.
+    repaints the grouped LIFECYCLE / EFFORT / GATES / DISPATCH block on
+    every revision. The DISPATCH band's running dot pulses on a separate
+    ``TICK_PULSE`` (~2 Hz) timer that advances only the dot phase — no
+    frontier recompute or data refetch rides the pulse. The pulse pauses
+    when the terminal loses focus (backgrounded) and resumes on regain.
+    Standalone-testable by assigning :attr:`state` directly.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -568,8 +803,22 @@ class StatusPane(Static):
     #: the first read-only load completes.
     state: reactive[State | None] = reactive(None)
 
+    #: DISPATCH running-dot pulse phase, toggled by the ``TICK_PULSE``
+    #: timer. Watched so each toggle repaints only the dot — the frontier
+    #: data is untouched. Not exported; cosmetic-only.
+    _pulse_lit: reactive[bool] = reactive(True)
+
+    #: ``True`` when the pulse is paused (terminal backgrounded) so the
+    #: running dot renders static and the timer skips the phase toggle.
+    _pulse_paused: reactive[bool] = reactive(False)
+
     def on_mount(self) -> None:
-        """Seed from the app's reactive state and watch for revisions."""
+        """Seed from the app's reactive state and watch for revisions.
+
+        Starts the ``TICK_PULSE`` (~2 Hz) timer driving the DISPATCH
+        running dot and watches the app's terminal focus so the pulse
+        pauses when the terminal is backgrounded.
+        """
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
@@ -577,6 +826,9 @@ class StatusPane(Static):
             self.watch(self.app, "state", self._on_app_state)
         if hasattr(self.app, "render_mode"):
             self.watch(self.app, "render_mode", self._on_render_mode)
+        if hasattr(self.app, "app_focus"):
+            self.watch(self.app, "app_focus", self._on_app_focus)
+        self.set_interval(PULSE_INTERVAL_S, self._tick_pulse)
         self._repaint()
 
     def _on_app_state(self, new_state: State | None) -> None:
@@ -587,8 +839,46 @@ class StatusPane(Static):
         """Repaint when the app flips the bar render mode (Braille ↔ ASCII)."""
         self._repaint()
 
+    def _on_app_focus(self, focused: bool) -> None:
+        """Pause the pulse when the terminal backgrounds; resume on regain.
+
+        Args:
+            focused: ``True`` when the terminal has focus, ``False`` when
+                it is backgrounded (the ``SUSPEND`` analogue).
+        """
+        if focused:
+            self.resume_pulse()
+        else:
+            self.pause_pulse()
+
+    def _tick_pulse(self) -> None:
+        """Advance the DISPATCH dot phase on each ``TICK_PULSE`` tick.
+
+        Cosmetic-only: toggles the pulse phase so the running dot fades
+        bright⇄dim. No frontier recompute or data fetch happens here — a
+        paused pulse skips the toggle entirely.
+        """
+        if not self._pulse_paused:
+            self._pulse_lit = not self._pulse_lit
+
+    def pause_pulse(self) -> None:
+        """Pause the running-dot animation (static dot, no phase toggle)."""
+        self._pulse_paused = True
+
+    def resume_pulse(self) -> None:
+        """Resume the running-dot animation after a pause."""
+        self._pulse_paused = False
+
     def watch_state(self) -> None:
         """Repaint when the bound state changes."""
+        self._repaint()
+
+    def watch__pulse_lit(self) -> None:
+        """Repaint when the DISPATCH dot phase toggles (cosmetic-only)."""
+        self._repaint()
+
+    def watch__pulse_paused(self) -> None:
+        """Repaint when the pulse pauses / resumes (static ↔ animated dot)."""
         self._repaint()
 
     def _render_mode(self) -> RenderMode:
@@ -601,11 +891,18 @@ class StatusPane(Static):
         Section headers carry a bold ``[$accent]…[/]`` span; the blocked
         line carries the palette error colour; every other line is escaped
         against accidental markup and rendered plain. The bar/sparkline
-        glyphs honour the app's live :attr:`render_mode`.
+        glyphs honour the app's live :attr:`render_mode`; the DISPATCH dot
+        honours the live pulse phase.
         """
-        headers = {"LIFECYCLE", "EFFORT", "GATES"}
+        headers = {"LIFECYCLE", "EFFORT", "GATES", "DISPATCH"}
         rendered: list[str] = []
-        for line in build_status_lines(self.state, mode=self._render_mode()):
+        lines = build_status_lines(
+            self.state,
+            mode=self._render_mode(),
+            pulse_lit=self._pulse_lit,
+            pulse_paused=self._pulse_paused,
+        )
+        for line in lines:
             safe = line.replace("[", "[[")
             if line in headers:
                 rendered.append(f"[b $accent]{safe}[/]")
@@ -618,13 +915,17 @@ class StatusPane(Static):
 
 __all__ = [
     "DASH",
+    "DEFAULT_MAX_PARALLEL_WAVES",
     "DEFAULT_PROJECT_CODE",
+    "DISPATCH_IDLE",
     "GATE_FAIL",
     "GATE_PASS",
     "GATE_PENDING",
     "GATE_RUNNING",
     "VELOCITY_WINDOW_DAYS",
+    "DispatchSlice",
     "StatusPane",
+    "build_dispatch_slice",
     "build_status_lines",
     "build_velocity_eu_per_day",
     "summary_counts",

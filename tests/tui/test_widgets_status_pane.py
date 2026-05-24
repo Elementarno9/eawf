@@ -21,15 +21,25 @@ from textual.app import ComposeResult
 
 from eawf.state.models import State
 from eawf.tui.widgets.eu_bar import EMPTY_STATE
+from eawf.tui.widgets.heartbeat import (
+    HEARTBEAT_GLYPH,
+    HEARTBEAT_GLYPH_ASCII,
+    HEARTBEAT_GLYPH_DIM,
+)
 from eawf.tui.widgets.status_pane import (
     DASH,
+    DEFAULT_MAX_PARALLEL_WAVES,
     DEFAULT_PROJECT_CODE,
+    DISPATCH_IDLE,
     GATE_FAIL,
     GATE_PASS,
     GATE_RUNNING,
     VELOCITY_WINDOW_DAYS,
+    DispatchSlice,
     StatusPane,
     _active_phase_id,
+    _dispatch_lines,
+    build_dispatch_slice,
     build_status_lines,
     build_velocity_eu_per_day,
     summary_counts,
@@ -189,9 +199,72 @@ def _state_with_audit(
     return State.model_validate(payload)
 
 
+def _wave_payload(
+    payload: dict[str, Any],
+    *,
+    wave_id: str,
+    status: str,
+    deps: list[str] | None = None,
+    agent_role: str | None = None,
+    tokens_consumed: int = 0,
+    token_budget: int | None = None,
+) -> None:
+    """Splice a :class:`Wave` row onto a fixture payload in place.
+
+    Registers the wave under the active ``P01-I01`` iter and appends it to
+    the iter's ``wave_ids`` so the DISPATCH band scopes it correctly.
+    """
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["waves"][wave_id] = {
+        "id": wave_id,
+        "iter_id": "P01-I01",
+        "title": f"wave {wave_id}",
+        "status": status,
+        "deps": list(deps or []),
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "agent_role": agent_role,
+        "tokens_consumed": tokens_consumed,
+        "token_budget": token_budget,
+        "opened_at": opened,
+        "closed_at": opened if status in {"closed", "failed"} else None,
+    }
+    if wave_id not in payload["iters"]["P01-I01"]["wave_ids"]:
+        payload["iters"]["P01-I01"]["wave_ids"].append(wave_id)
+
+
+def _dispatch_scenario_state() -> State:
+    """Build the §8.8 scenario-1 frontier: NOW W03/W04, NEXT W05/W07, WAIT W06.
+
+    W01/W02 CLOSED (deps for the ready batch); W03/W04 IN_PROGRESS and on
+    ``active_wave_ids`` (NOW); W05/W07 PENDING with all deps CLOSED (NEXT);
+    W06 PENDING blocked on the still-running W03 (WAIT ← W03). W03 carries
+    an agent role + a live token-burn budget for the NOW row.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = payload["phases"]["P01"]["opened_at"]
+    _wave_payload(payload, wave_id="P01-I01-W02", status="closed")
+    _wave_payload(
+        payload,
+        wave_id="P01-I01-W03",
+        status="in_progress",
+        agent_role="executor",
+        tokens_consumed=1400,
+        token_budget=2000,
+    )
+    _wave_payload(payload, wave_id="P01-I01-W04", status="in_progress", agent_role="executor")
+    _wave_payload(payload, wave_id="P01-I01-W05", status="pending", deps=["P01-I01-W01"])
+    _wave_payload(payload, wave_id="P01-I01-W06", status="pending", deps=["P01-I01-W03"])
+    _wave_payload(payload, wave_id="P01-I01-W07", status="pending", deps=["P01-I01-W02"])
+    payload["current"]["active_wave_ids"] = ["P01-I01-W03", "P01-I01-W04"]
+    return State.model_validate(payload)
+
+
 def _section(lines: list[str], header: str) -> list[str]:
     """Return the lines under *header* up to the next blank line / header."""
-    headers = {"LIFECYCLE", "EFFORT", "GATES"}
+    headers = {"LIFECYCLE", "EFFORT", "GATES", "DISPATCH"}
     out: list[str] = []
     collecting = False
     for line in lines:
@@ -427,11 +500,15 @@ def test_build_status_lines_groups_into_three_sections() -> None:
     assert lines.index("LIFECYCLE") < lines.index("EFFORT") < lines.index("GATES")
 
 
-def test_build_status_lines_no_dispatch_band() -> None:
-    """The DISPATCH band is W05's scope — it must not appear yet."""
-    lines = build_status_lines(_load(_ESTIMATES_ACTUALS))
-    assert "DISPATCH" not in lines
-    assert not any(line.lstrip().startswith(("NOW", "NEXT", "WAIT")) for line in lines)
+def test_build_status_lines_dispatch_band_after_gates() -> None:
+    """The DISPATCH band appends after GATES with NOW / NEXT / WAIT rows."""
+    lines = build_status_lines(_load(_PHASE_ITER_WAVE))
+    assert "DISPATCH" in lines
+    assert lines.index("GATES") < lines.index("DISPATCH")
+    dispatch = _section(lines, "DISPATCH")
+    assert dispatch[0] == "NOW"
+    assert any(line.startswith("NEXT") for line in dispatch)
+    assert any(line.startswith("WAIT") for line in dispatch)
 
 
 def test_build_status_lines_none_state_placeholder_frame() -> None:
@@ -755,6 +832,235 @@ def test_build_status_lines_gate_ascii_mode() -> None:
 
 
 # --------------------------------------------------------------------------
+# DISPATCH band — build_dispatch_slice NOW/NEXT/WAIT frontier
+# --------------------------------------------------------------------------
+
+
+def test_dispatch_slice_now_next_wait() -> None:
+    """NOW/NEXT/WAIT derive from the §8.8 scenario-1 frontier fixture."""
+    slice_ = build_dispatch_slice(_dispatch_scenario_state())
+    assert isinstance(slice_, DispatchSlice)
+    assert slice_.now == ("P01-I01-W03", "P01-I01-W04")
+    assert slice_.next == ("P01-I01-W05", "P01-I01-W07")
+    assert slice_.wait == (("P01-I01-W06", "P01-I01-W03"),)
+    assert slice_.next_overflow == 0
+
+
+def test_dispatch_slice_none_state_empty() -> None:
+    """A ``None`` state yields an empty frontier (no NOW/NEXT/WAIT)."""
+    slice_ = build_dispatch_slice(None)
+    assert slice_.now == ()
+    assert slice_.next == ()
+    assert slice_.wait == ()
+    assert slice_.next_overflow == 0
+
+
+def test_dispatch_slice_respects_blocked_by() -> None:
+    """A PENDING wave with an un-CLOSED dep is excluded from NEXT.
+
+    W06 depends on the still-IN_PROGRESS W03, so its live ``blocked_by``
+    view is non-empty — it lands in WAIT, never NEXT.
+    """
+    slice_ = build_dispatch_slice(_dispatch_scenario_state())
+    assert "P01-I01-W06" not in slice_.next
+    waiting_ids = {wid for wid, _ in slice_.wait}
+    assert "P01-I01-W06" in waiting_ids
+
+
+def test_dispatch_slice_frontier_advances_on_close() -> None:
+    """Closing W03 moves it out of NOW and W06 from WAIT into NEXT."""
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = payload["phases"]["P01"]["opened_at"]
+    _wave_payload(payload, wave_id="P01-I01-W03", status="closed")
+    _wave_payload(payload, wave_id="P01-I01-W06", status="pending", deps=["P01-I01-W03"])
+    payload["current"]["active_wave_ids"] = []
+    slice_ = build_dispatch_slice(State.model_validate(payload))
+    assert "P01-I01-W03" not in slice_.now
+    assert "P01-I01-W06" in slice_.next  # dep now CLOSED → ready
+    assert slice_.wait == ()
+
+
+def test_dispatch_next_capped_to_max_parallel() -> None:
+    """More ready waves than the cap → first cap by W## + ``+N more``.
+
+    Nine PENDING waves with deps met; the cap (``DEFAULT_MAX_PARALLEL_WAVES``)
+    bounds NEXT to the lowest-``W##`` batch and ``next_overflow`` carries
+    the remainder for the ``+N more`` suffix.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = payload["phases"]["P01"]["opened_at"]
+    payload["current"]["active_wave_ids"] = []
+    for n in range(2, 11):  # W02..W10 → nine ready PENDING waves
+        _wave_payload(payload, wave_id=f"P01-I01-W{n:02d}", status="pending")
+    slice_ = build_dispatch_slice(State.model_validate(payload))
+    assert len(slice_.next) == DEFAULT_MAX_PARALLEL_WAVES
+    # Lowest W## first: W02..W(2 + cap - 1).
+    expected = tuple(f"P01-I01-W{n:02d}" for n in range(2, 2 + DEFAULT_MAX_PARALLEL_WAVES))
+    assert slice_.next == expected
+    assert slice_.next_overflow == 9 - DEFAULT_MAX_PARALLEL_WAVES
+
+
+def test_dispatch_slice_respects_explicit_max_parallel() -> None:
+    """An explicit ``max_parallel`` overrides the built-in cap for NEXT."""
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = payload["phases"]["P01"]["opened_at"]
+    payload["current"]["active_wave_ids"] = []
+    for n in range(2, 6):  # four ready PENDING waves
+        _wave_payload(payload, wave_id=f"P01-I01-W{n:02d}", status="pending")
+    slice_ = build_dispatch_slice(State.model_validate(payload), max_parallel=2)
+    assert slice_.next == ("P01-I01-W02", "P01-I01-W03")
+    assert slice_.next_overflow == 2
+
+
+def test_dispatch_slice_dangling_dep_degrades_wait_no_crash() -> None:
+    """A WAIT wave whose blocker is dangling renders with no edge label.
+
+    W06 depends on the IN_PROGRESS W03 (a real active blocker → WAIT) and
+    on a dangling ``P01-I01-W99``. The live ``blocked_by`` view skips the
+    dangling id; the active blocker resolves to W03 so the edge survives —
+    and the slice builds without raising.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    _wave_payload(payload, wave_id="P01-I01-W03", status="in_progress")
+    _wave_payload(
+        payload,
+        wave_id="P01-I01-W06",
+        status="pending",
+        deps=["P01-I01-W03", "P01-I01-W99"],
+    )
+    payload["current"]["active_wave_ids"] = ["P01-I01-W03"]
+    slice_ = build_dispatch_slice(State.model_validate(payload))
+    assert slice_.wait == (("P01-I01-W06", "P01-I01-W03"),)
+
+
+def test_dispatch_slice_dangling_only_blocker_drops_wait() -> None:
+    """A PENDING wave blocked solely by a dangling dep is neither NEXT nor WAIT.
+
+    Its live ``blocked_by`` view drops the dangling id, so it is treated as
+    ready (NEXT) rather than crashing — degrading gracefully per §8.8.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["current"]["active_wave_ids"] = []
+    _wave_payload(payload, wave_id="P01-I01-W06", status="pending", deps=["P01-I01-W99"])
+    slice_ = build_dispatch_slice(State.model_validate(payload))
+    assert "P01-I01-W06" in slice_.next
+    assert slice_.wait == ()
+
+
+# --------------------------------------------------------------------------
+# DISPATCH band — _dispatch_lines render (rows, idle, dot, ascii)
+# --------------------------------------------------------------------------
+
+
+def test_dispatch_lines_now_rows_show_role_and_dot() -> None:
+    """NOW rows carry the pulsing dot, the agent role, and a burn bar."""
+    lines = _dispatch_lines(_dispatch_scenario_state(), mode="braille")
+    assert lines[0] == "NOW"
+    w03_row = next(line for line in lines if "W03" in line)
+    assert HEARTBEAT_GLYPH in w03_row  # lit dot (default lit=True)
+    assert "executor" in w03_row
+    assert "#" in w03_row or "⣿" in w03_row  # token-burn fill (1400/2000)
+
+
+def test_dispatch_lines_no_budget_shows_empty_state() -> None:
+    """A NOW wave with no token_budget shows the burn empty-state sentinel."""
+    lines = _dispatch_lines(_dispatch_scenario_state(), mode="braille")
+    w04_row = next(line for line in lines if "W04" in line)
+    assert EMPTY_STATE in w04_row  # W04 carries no token_budget
+
+
+def test_dispatch_lines_idle_when_no_active_waves() -> None:
+    """Empty NOW renders the ``idle (no active waves)`` sentinel."""
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["current"]["active_wave_ids"] = []
+    payload["waves"]["P01-I01-W01"]["status"] = "pending"
+    empty_lines = _dispatch_lines(State.model_validate(payload), mode="braille")
+    assert empty_lines[0] == "NOW"
+    assert f"  {DISPATCH_IDLE}" in empty_lines
+
+
+def test_dispatch_lines_none_state_idle() -> None:
+    """A ``None`` state renders the DISPATCH band as idle, not a crash."""
+    lines = _dispatch_lines(None, mode="braille")
+    assert lines[0] == "NOW"
+    assert f"  {DISPATCH_IDLE}" in lines
+
+
+def test_dispatch_lines_next_wait_collapsed_inline() -> None:
+    """NEXT lists the ready batch; WAIT lists blocked waves with ``←`` edges."""
+    lines = _dispatch_lines(_dispatch_scenario_state(), mode="braille")
+    next_line = next(line for line in lines if line.startswith("NEXT"))
+    wait_line = next(line for line in lines if line.startswith("WAIT"))
+    assert "W05" in next_line and "W07" in next_line
+    assert "W06←W03" in wait_line
+
+
+def test_dispatch_lines_next_overflow_suffix() -> None:
+    """NEXT past the cap carries the ``+N more`` suffix inline."""
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = payload["phases"]["P01"]["opened_at"]
+    payload["current"]["active_wave_ids"] = []
+    for n in range(2, 11):
+        _wave_payload(payload, wave_id=f"P01-I01-W{n:02d}", status="pending")
+    lines = _dispatch_lines(State.model_validate(payload), mode="braille")
+    next_line = next(line for line in lines if line.startswith("NEXT"))
+    assert f"+{9 - DEFAULT_MAX_PARALLEL_WAVES} more" in next_line
+
+
+def test_dispatch_dot_pulse_frame() -> None:
+    """The dot phase advances on TICK_PULSE without recomputing the frontier.
+
+    Toggling the ``lit`` flag flips the rendered dot (bright ⇄ dim) while
+    the NOW/NEXT/WAIT membership is identical across frames — the pulse is
+    cosmetic-only.
+    """
+    state = _dispatch_scenario_state()
+    lit_lines = _dispatch_lines(state, mode="braille", lit=True)
+    dim_lines = _dispatch_lines(state, mode="braille", lit=False)
+    lit_row = next(line for line in lit_lines if "W03" in line)
+    dim_row = next(line for line in dim_lines if "W03" in line)
+    assert HEARTBEAT_GLYPH in lit_row
+    assert HEARTBEAT_GLYPH_DIM in dim_row
+    # Frontier membership (the non-dot content) is unchanged across frames.
+    assert [line for line in lit_lines if line.startswith(("NEXT", "WAIT"))] == [
+        line for line in dim_lines if line.startswith(("NEXT", "WAIT"))
+    ]
+
+
+def test_dispatch_lines_ascii_static_dot() -> None:
+    """ASCII mode renders a single static dot (no bright/dim animation)."""
+    state = _dispatch_scenario_state()
+    lit_lines = _dispatch_lines(state, mode="ascii", lit=True)
+    dim_lines = _dispatch_lines(state, mode="ascii", lit=False)
+    lit_row = next(line for line in lit_lines if "W03" in line)
+    dim_row = next(line for line in dim_lines if "W03" in line)
+    assert HEARTBEAT_GLYPH_ASCII in lit_row
+    assert HEARTBEAT_GLYPH not in lit_row and HEARTBEAT_GLYPH_DIM not in lit_row
+    # The static dot does not change between pulse phases under ASCII.
+    assert lit_row == dim_row
+
+
+def test_dispatch_lines_paused_static_dot() -> None:
+    """A paused pulse (SUSPEND) renders a static dot even in braille mode."""
+    state = _dispatch_scenario_state()
+    paused = _dispatch_lines(state, mode="braille", lit=False, paused=True)
+    row = next(line for line in paused if "W03" in line)
+    assert HEARTBEAT_GLYPH_ASCII in row
+    assert HEARTBEAT_GLYPH_DIM not in row
+
+
+def test_dispatch_slice_is_frozen() -> None:
+    """``DispatchSlice`` is frozen — a render value object, not mutable state."""
+    slice_ = build_dispatch_slice(None)
+    with pytest.raises((TypeError, ValueError)):
+        slice_.now = ("X",)  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------
 # Pilot paint — renders under the real palette
 # --------------------------------------------------------------------------
 
@@ -826,5 +1132,47 @@ def test_status_pane_paints_gate_progress_under_palette() -> None:
             rendered = app.export_screenshot()
             assert "gate:" in rendered
             assert "1/2" in rendered
+
+    asyncio.run(body())
+
+
+def test_status_pane_paints_dispatch_band_under_palette() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(60, 40)) as pilot:
+            await pilot.pause()
+            app.query_one("#sp", StatusPane).state = _dispatch_scenario_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = app.export_screenshot()
+            assert "DISPATCH" in rendered
+            assert "NOW" in rendered
+            assert "NEXT" in rendered
+            assert "WAIT" in rendered
+            assert "executor" in rendered
+
+    asyncio.run(body())
+
+
+def test_status_pane_pulse_pause_resume() -> None:
+    """``pause_pulse`` freezes the dot phase; ``resume_pulse`` re-arms it."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(60, 40)) as pilot:
+            await pilot.pause()
+            pane = app.query_one("#sp", StatusPane)
+            pane.state = _dispatch_scenario_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            pane.pause_pulse()
+            await pilot.pause()
+            assert pane._pulse_paused is True
+            frozen_phase = pane._pulse_lit
+            pane._tick_pulse()  # a tick while paused must not toggle the phase
+            assert pane._pulse_lit == frozen_phase
+            pane.resume_pulse()
+            await pilot.pause()
+            assert pane._pulse_paused is False
 
     asyncio.run(body())
