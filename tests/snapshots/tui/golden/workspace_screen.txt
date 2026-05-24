@@ -1,8 +1,8 @@
  Eä  workspace ❯ EAWF    runtime: idle    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ WORKSPACE                                                                                                            │
-│  repo  phase      eu         git   age                                                                               │
-│  QR    — no data  — no data  git?  —                                                                                 │
+│  repo  phase        eu         git   age                                                                             │
+│  QR    — — no data  — no data  git?  —                                                                               │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
