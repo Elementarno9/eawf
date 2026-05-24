@@ -5278,7 +5278,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I05-W09"
+    ],
     "iter_id": "P27-I05",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -6811,6 +6813,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W08",
       "updated_at": "2026-05-24T19:25:24.729743Z"
+    },
+    "P27-I05-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W09-bucket-20260524T192609Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W09",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W09",
+      "updated_at": "2026-05-24T19:26:09.416283Z"
     }
   },
   "goals": {
@@ -8188,7 +8203,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T19:25:25.232261Z",
+  "updated_at": "2026-05-24T19:26:09.416775Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20662,7 +20677,7 @@
     "P27-I05-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "op-p27-i05",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -20683,7 +20698,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "each god-file split by seam; facades stable; C901 entries dropped; tests and golden green"
       ],
