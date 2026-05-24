@@ -5085,7 +5085,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I04-W24",
+      "P27-I04-W25",
+      "P27-I04-W26"
+    ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -6396,6 +6400,45 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I04-W23",
       "updated_at": "2026-05-24T15:46:04.271562Z"
+    },
+    "P27-I04-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W24-bucket-20260524T162001Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W24",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W24",
+      "updated_at": "2026-05-24T16:20:01.699480Z"
+    },
+    "P27-I04-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W25-bucket-20260524T162002Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W25",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W25",
+      "updated_at": "2026-05-24T16:20:02.173525Z"
+    },
+    "P27-I04-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W26-bucket-20260524T162002Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W26",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W26",
+      "updated_at": "2026-05-24T16:20:02.635827Z"
     }
   },
   "goals": {
@@ -7765,7 +7808,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T16:04:28.412680Z",
+  "updated_at": "2026-05-24T16:20:02.636106Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19744,7 +19787,7 @@
     "P27-I04-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p27i04-w24",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -19761,7 +19804,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "phase column renders active-phase id + phase-scoped closed/total",
         "active phase resolved from repo_state (prefer current.phase_id else lone active; dash when none)",
@@ -19776,7 +19819,7 @@
     "P27-I04-W25": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p27i04-w25",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -19796,7 +19839,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "repo-zoom machinery extracted into shared mixin reused by Workspace and User screens with no workspace behavior change",
         "user-scope Enter and z mount the 2x2 repo quadrant scoped to selected repo state.json; Esc returns",
@@ -19812,7 +19855,7 @@
     "P27-I04-W26": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "p27i04-w26",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -19829,7 +19872,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "_effort_eu denominator = live sum of BUCKET_EU over all active-phase waves with a bucket (any status)",
         "EFFORT scope changed iter to phase to match LIFECYCLE; effort velocity and eta phase-scoped",
