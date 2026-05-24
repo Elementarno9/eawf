@@ -5008,7 +5008,8 @@
       "P27-I04-W18",
       "P27-I04-W19",
       "P27-I04-W20",
-      "P27-I04-W21"
+      "P27-I04-W21",
+      "P27-I04-W22"
     ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
@@ -6294,6 +6295,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I04-W21",
       "updated_at": "2026-05-24T14:26:47.895395Z"
+    },
+    "P27-I04-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W22-bucket-20260524T150208Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W22",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W22",
+      "updated_at": "2026-05-24T15:02:08.932644Z"
     }
   },
   "goals": {
@@ -6322,7 +6336,7 @@
       "opened_at": "2026-05-10T21:46:31.667630Z",
       "phase_id": "P08",
       "status": "closed",
-      "title": "P08-I01: orchestration waves",
+      "title": "orchestration waves",
       "wave_ids": [
         "P08-I01-W02",
         "P08-I01-W03",
@@ -6375,7 +6389,7 @@
       "opened_at": "2026-05-11T11:37:58.709953Z",
       "phase_id": "P11",
       "status": "closed",
-      "title": "P11-I01: plan-mode prep + interactive gates + auto-accept config",
+      "title": "plan-mode prep + interactive gates + auto-accept config",
       "wave_ids": [
         "P11-I01-W01",
         "P11-I01-W02",
@@ -6391,7 +6405,7 @@
       "opened_at": "2026-05-11T12:57:19.867763Z",
       "phase_id": "P12",
       "status": "closed",
-      "title": "P12-I01: backlog cluster waves",
+      "title": "backlog cluster waves",
       "wave_ids": [
         "P12-I01-W01",
         "P12-I01-W02",
@@ -6697,7 +6711,7 @@
       "opened_at": "2026-05-18T18:50:26.968206Z",
       "phase_id": "P22",
       "status": "closed",
-      "title": "P22-I01: stage-0 closure waves",
+      "title": "stage-0 closure waves",
       "wave_ids": [
         "P22-I01-W01",
         "P22-I01-W02",
@@ -6717,7 +6731,7 @@
       "opened_at": "2026-05-18T19:44:49.107239Z",
       "phase_id": "P23",
       "status": "closed",
-      "title": "P23-I01: C01-IMPL kernel waves",
+      "title": "C01-IMPL kernel waves",
       "wave_ids": [
         "P23-I01-W01",
         "P23-I01-W02",
@@ -6733,7 +6747,7 @@
       "opened_at": "2026-05-18T21:30:39.222928Z",
       "phase_id": "P23",
       "status": "closed",
-      "title": "P23-I02: criterion drift detector (F1..F4 cleanup mechanism)",
+      "title": "criterion drift detector (F1..F4 cleanup mechanism)",
       "wave_ids": [
         "P23-I02-W01"
       ]
@@ -6747,7 +6761,7 @@
       "opened_at": "2026-05-18T19:45:10.042950Z",
       "phase_id": "P24",
       "status": "closed",
-      "title": "P24-I01: C02-IMPL daemon waves",
+      "title": "C02-IMPL daemon waves",
       "wave_ids": [
         "P24-I01-W01",
         "P24-I01-W02",
@@ -6770,7 +6784,7 @@
       "opened_at": "2026-05-19T17:03:00.543589Z",
       "phase_id": "P24",
       "status": "closed",
-      "title": "P24-I02: replay_wal + session_ttl wiring (reactive followup)",
+      "title": "replay_wal + session_ttl wiring (reactive followup)",
       "wave_ids": [
         "P24-I02-W01"
       ]
@@ -6784,7 +6798,7 @@
       "opened_at": "2026-05-18T19:45:10.543231Z",
       "phase_id": "P25",
       "status": "closed",
-      "title": "P25-I01: contracts waves (4-way parallel)",
+      "title": "contracts waves (4-way parallel)",
       "wave_ids": [
         "P25-I01-W01",
         "P25-I01-W02",
@@ -6816,7 +6830,7 @@
       "opened_at": "2026-05-18T19:45:11.036158Z",
       "phase_id": "P26",
       "status": "closed",
-      "title": "P26-I01: surfaces waves",
+      "title": "surfaces waves",
       "wave_ids": [
         "P26-I01-W01",
         "P26-I01-W02",
@@ -6873,7 +6887,7 @@
       "opened_at": "2026-05-22T00:01:31.012318Z",
       "phase_id": "P26",
       "status": "closed",
-      "title": "P26-I02: TUI QoL + deferred pull-in",
+      "title": "TUI QoL + deferred pull-in",
       "wave_ids": [
         "P26-I02-W01",
         "P26-I02-W02",
@@ -6909,7 +6923,7 @@
       "opened_at": "2026-05-18T19:45:11.534616Z",
       "phase_id": "P27",
       "status": "closed",
-      "title": "P27-I01: observ + ops waves",
+      "title": "observ + ops waves",
       "wave_ids": [
         "P27-I01-W01",
         "P27-I01-W02",
@@ -6950,7 +6964,7 @@
       "opened_at": "2026-05-22T19:55:55.103307Z",
       "phase_id": "P27",
       "status": "closed",
-      "title": "P27-I02: correctness, safety, architecture foundation",
+      "title": "correctness, safety, architecture foundation",
       "wave_ids": [
         "P27-I02-W01",
         "P27-I02-W02",
@@ -7003,7 +7017,7 @@
       "opened_at": "2026-05-22T19:55:55.481661Z",
       "phase_id": "P27",
       "status": "closed",
-      "title": "P27-I03: build-out, rules/skills, hardening, release",
+      "title": "build-out, rules/skills, hardening, release",
       "wave_ids": [
         "P27-I03-W01",
         "P27-I03-W02",
@@ -7044,7 +7058,7 @@
       "opened_at": "2026-05-23T15:40:28.164443Z",
       "phase_id": "P27",
       "status": "active",
-      "title": "P27-I04: TUI richer views (braille bars, status pane, repo tables)",
+      "title": "TUI richer views (braille bars, status pane, repo tables)",
       "wave_ids": [
         "P27-I04-W01",
         "P27-I04-W02",
@@ -7066,7 +7080,8 @@
         "P27-I04-W18",
         "P27-I04-W19",
         "P27-I04-W20",
-        "P27-I04-W21"
+        "P27-I04-W21",
+        "P27-I04-W22"
       ]
     },
     "P27-I05": {
@@ -7078,7 +7093,7 @@
       "opened_at": "2026-05-24T00:52:30.210157Z",
       "phase_id": "P27",
       "status": "planned",
-      "title": "P27-I05: package hygiene + backlog rollout + layered regroup",
+      "title": "package hygiene + backlog rollout + layered regroup",
       "wave_ids": [
         "P27-I05-W01",
         "P27-I05-W02",
@@ -7658,7 +7673,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T14:26:47.895644Z",
+  "updated_at": "2026-05-24T15:08:29.224353Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19563,6 +19578,42 @@
         "tests added"
       ],
       "title": "Add iter retitle and strip id prefix from titles",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p27i04-w22",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/widgets/eu_bar.py",
+        "src/eawf/tui/widgets/workspace_table.py",
+        "tests/tui/test_widgets_eu_bar.py",
+        "tests/tui/test_scope_workspace.py",
+        "tests/tui/test_palette_command.py"
+      ],
+      "id": "P27-I04-W22",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T15:02:08.461084Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "EU-burn cell emits rich-parseable hex markup not theme vars",
+        "workspace and portfolio tables render with effort data without MarkupError",
+        "status-tint preserved",
+        "palette test isolates registry",
+        "populated-portfolio regression test"
+      ],
+      "title": "Fix EU-burn DataTable crash with resolved tint",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
