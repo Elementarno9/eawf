@@ -32,14 +32,18 @@ from pathlib import Path
 import orjson
 import pytest
 
+from eawf.state.enums import ScopeKind
 from eawf.tui.app import EaApp
-from eawf.tui.scopes import UserScreen
+from eawf.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.tui.scopes.user import PortfolioTable
 from eawf.tui.widgets.git_pane import GitFields
-from eawf.tui.widgets.workspace_table import build_repo_rows
+from eawf.tui.widgets.header import build_breadcrumb
+from eawf.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
+_REPO = _FIXTURES / "03-phase-iter-wave-active.json"
 
 
 def _write_registry(home: Path, repos: dict[str, dict[str, str]]) -> Path:
@@ -143,6 +147,75 @@ def test_action_switch_scope_user_rebinds_state(tmp_path: Path) -> None:
             table = app.screen.query_one(PortfolioTable)
             assert table.row_count == 1
             assert table.rows_data()[0].code == "ABC"
+
+    asyncio.run(body())
+
+
+def test_r_keypress_after_u_rebinds_repo_state(tmp_path: Path) -> None:
+    """Launch repo, press ``u`` then ``r``: the repo state + roadmap restore.
+
+    Regression for the inverse of the W19 ``→user`` fix: switching back to
+    ``repo`` left the stale synthesized portfolio bound (``workspace`` set,
+    no ``phases``), so the repo roadmap rendered empty. The switch now
+    re-reads the launch ``state.json`` for ``repo`` / ``workspace``.
+    """
+    _write_registry(tmp_path, {"ABC": {"code": "ABC", "path": "/abs/path/abc"}})
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert app.state is not None
+            assert app.state.scope_kind is ScopeKind.REPO
+            assert len(app.state.phases) > 0
+            await pilot.press("u")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert isinstance(app.screen, UserScreen)
+            # The user screen breadcrumb reads "user", not the synth "workspace".
+            assert build_breadcrumb(app.state, app._scope).startswith("user")
+            await pilot.press("r")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert isinstance(app.screen, RepoScreen)
+            # The repo state is rebound: scope_kind=repo, phases>0.
+            assert app.state is not None
+            assert app.state.scope_kind is ScopeKind.REPO
+            assert len(app.state.phases) > 0
+            tree = app.screen.query_one("#roadmap-tree", RoadmapTree)
+            assert len(tree.root.children) > 0
+
+    asyncio.run(body())
+
+
+def test_w_keypress_after_u_rebinds_workspace_state(tmp_path: Path) -> None:
+    """Launch workspace, press ``u`` then ``w``: the workspace state restores."""
+    _write_registry(tmp_path, {"ABC": {"code": "ABC", "path": "/abs/path/abc"}})
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.press("u")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert isinstance(app.screen, UserScreen)
+            await pilot.press("w")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert isinstance(app.screen, WorkspaceScreen)
+            assert app.state is not None
+            assert app.state.scope_kind is ScopeKind.WORKSPACE
+            assert app.state.workspace is not None
+            rows = build_repo_rows(app.state)
+            # The launch workspace repos are restored, not the synth portfolio
+            # (which would carry the registry's "ABC").
+            assert len(rows) > 0
+            assert "ABC" not in {row.code for row in rows}
+            table = app.screen.query_one(WorkspaceTable)
+            assert table.row_count == len(rows)
 
     asyncio.run(body())
 

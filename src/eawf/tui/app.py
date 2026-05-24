@@ -462,13 +462,16 @@ class EaApp(App[None]):
         The ``ctrl+w`` / ``ctrl+r`` / ``ctrl+u`` chords route here too as
         hidden muscle-memory aliases.
 
-        Switching to the user scope rebinds :attr:`state` to a freshly
-        synthesized portfolio state (read from the global registry) before
-        the screen swap, mirroring the ``on_mount`` launch path. The bound
-        repo/workspace state carries ``workspace=None``, so without this
-        rebind the portfolio table would build zero rows; reassigning
-        :attr:`state` fires the table's reactive watcher and rebuilds the
-        rows for the new scope.
+        Every scope rebinds :attr:`state` before the screen swap so the
+        target screen never renders against a stale binding. Switching to
+        the user scope rebinds to a freshly synthesized portfolio state
+        (read from the global registry), mirroring the ``on_mount`` launch
+        path; switching to ``repo`` / ``workspace`` re-reads the launch
+        ``state.json`` (read-only) so the quadrant repopulates after a
+        detour through the user scope — without it the user scope's
+        synthesized portfolio (``workspace`` set, no ``phases``) stayed
+        bound and the repo roadmap rendered empty. Reassigning
+        :attr:`state` fires the watchers that rebuild the new screen's rows.
 
         Args:
             scope: Target scope name; must be a key of :attr:`SCREENS`.
@@ -480,6 +483,10 @@ class EaApp(App[None]):
             from eawf.tui.scopes.user import synthesize_user_state
 
             self.state = synthesize_user_state()
+        elif self._state_path is not None:
+            from eawf.tui.state_binding import load_state
+
+            self.state = load_state(self._state_path)
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
 

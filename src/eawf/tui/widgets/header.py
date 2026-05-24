@@ -59,14 +59,23 @@ CRUMB_SEP: str = " ❯ "  # noqa: RUF001
 RUNTIME_IDLE: str = "idle"
 
 
-def build_breadcrumb(state: State | None) -> str:
+def build_breadcrumb(state: State | None, scope: str | None = None) -> str:
     """Build the ``scope > code > phase`` breadcrumb from typed state.
+
+    The leading scope segment comes from *scope* (the active **screen**
+    scope: ``repo`` / ``workspace`` / ``user``) when supplied, falling back
+    to ``state.scope_kind`` otherwise. The override matters for the user
+    scope, whose synthesized portfolio state carries
+    ``scope_kind=workspace`` — without it the user screen's breadcrumb
+    would lead with ``workspace`` instead of ``user``.
 
     Falls back to :data:`DEFAULT_PROJECT_CODE` when no state is loaded so
     the header stays informative during the daemon cold-spawn window.
 
     Args:
         state: The currently bound state, or ``None`` before first load.
+        scope: The active screen scope name to use for the leading segment,
+            or ``None`` to read it from ``state.scope_kind``.
 
     Returns:
         The breadcrumb string (without the brand prefix).
@@ -74,7 +83,8 @@ def build_breadcrumb(state: State | None) -> str:
     if state is None:
         return DEFAULT_PROJECT_CODE
     code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
-    parts: list[str] = [state.scope_kind.value, code]
+    first = scope if scope is not None else state.scope_kind.value
+    parts: list[str] = [first, code]
     if state.current.phase_id is not None:
         parts.append(state.current.phase_id)
     return CRUMB_SEP.join(parts)
@@ -105,7 +115,7 @@ def _clock_text() -> str:
     return f"{datetime.now(UTC):%H:%M} UTC"
 
 
-def render_header(state: State | None) -> str:
+def render_header(state: State | None, scope: str | None = None) -> str:
     """Render the full header content-markup line from *state*.
 
     Pure render source — unit-testable without mounting the widget. The
@@ -115,11 +125,14 @@ def render_header(state: State | None) -> str:
 
     Args:
         state: The currently bound state, or ``None``.
+        scope: The active screen scope name driving the breadcrumb's
+            leading segment, or ``None`` to read it from
+            ``state.scope_kind``.
 
     Returns:
         A Textual content-markup string for the header line.
     """
-    crumb = build_breadcrumb(state)
+    crumb = build_breadcrumb(state, scope)
     runtime = runtime_cell_text(state)
     return (
         f"[$accent][b]{BRAND}[/b][/]  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
@@ -172,8 +185,16 @@ class Header(Static):
         self._repaint()
 
     def _repaint(self) -> None:
-        """Re-render the header line from the current state."""
-        self.update(render_header(self.state))
+        """Re-render the header line from the current state + active scope.
+
+        Reads the host app's active screen scope (``EaApp._scope``) so the
+        breadcrumb's leading segment tracks the screen the operator is on,
+        not the bound state's ``scope_kind`` (which reads ``workspace`` for
+        the user scope's synthesized portfolio). A bare harness without the
+        attribute falls back to ``state.scope_kind``.
+        """
+        scope = getattr(self.app, "_scope", None)
+        self.update(render_header(self.state, scope))
 
 
 __all__ = [
