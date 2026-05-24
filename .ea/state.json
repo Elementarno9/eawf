@@ -3369,6 +3369,26 @@
       "scope_id": "P27-I04-W26",
       "status": "done",
       "updated_at": "2026-05-24T16:32:15.387315Z"
+    },
+    "P27-I04-W27": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W27-close-20260524T170756Z",
+      "elapsed_eu": 0.39,
+      "id": "ACT-P27-I04-W27",
+      "scope_id": "P27-I04-W27",
+      "status": "done",
+      "updated_at": "2026-05-24T17:07:56.297378Z"
+    },
+    "P27-I04-W28": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W28-close-20260524T170756Z",
+      "elapsed_eu": 0.39,
+      "id": "ACT-P27-I04-W28",
+      "scope_id": "P27-I04-W28",
+      "status": "done",
+      "updated_at": "2026-05-24T17:07:56.773411Z"
     }
   },
   "agent_sessions": {
@@ -5116,8 +5136,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P27-I04-W27",
-      "P27-I04-W28"
+      "P27-I04-W29"
     ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
@@ -6494,6 +6513,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I04-W28",
       "updated_at": "2026-05-24T16:57:40.384299Z"
+    },
+    "P27-I04-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W29-bucket-20260524T170757Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W29",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W29",
+      "updated_at": "2026-05-24T17:07:57.238188Z"
     }
   },
   "goals": {
@@ -7866,7 +7898,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T16:57:40.384529Z",
+  "updated_at": "2026-05-24T17:07:57.238693Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19949,8 +19981,8 @@
         "P27-I04-W29"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T17:07:56.297378Z",
+      "commit": "c1fc6d1e204658d04890a92f9a5cdaeb7570cba1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19963,10 +19995,10 @@
       "id": "P27-I04-W27",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T16:56:12.947943Z",
-      "outcome": null,
+      "outcome": "hybrid wave-row metric: effort-bucket size bar default, token-burn upgrade when budget set",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "wave with effort_bucket and no token_budget renders size bar; wave with token_budget>0 renders burn bar; wave with neither renders EMPTY_STATE; bars stay flush-right; goldens regenerated"
       ],
@@ -19981,8 +20013,8 @@
         "P27-I04-W29"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T17:07:56.773411Z",
+      "commit": "8efe434801bd06edaeb6e2ce0779c4298bbded68",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19996,10 +20028,10 @@
       "id": "P27-I04-W28",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T16:56:16.827544Z",
-      "outcome": null,
+      "outcome": "zoom remount race + cached-screen leak fixed; z zoom dropped",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Enter-Esc-Enter raises no DuplicateIds and ends with exactly one zoom-quadrant; zoom then switch scope then return leaves screen not zoomed; footer drops z zoom; Enter still zooms"
       ],
@@ -20011,7 +20043,7 @@
     "P27-I04-W29": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -20033,7 +20065,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "u then r rebinds repo launch state with phases>0 and scope_kind=repo; repo RoadmapTree repopulates; user breadcrumb reads user; existing user-switch test passes; goldens regenerated"
       ],
