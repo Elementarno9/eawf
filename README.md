@@ -99,7 +99,9 @@ uv run mypy src/
 
 ## Docs
 
-See `docs/` — architecture, CLI surface, schemas, policy.
+See `docs/` — architecture, CLI surface, schemas, policy. Start with the
+[source map](docs/architecture/source-map.md) for a one-line-per-package
+index of `src/eawf/`, then the [architecture overview](docs/architecture/overview.md).
 
 ## License
 
