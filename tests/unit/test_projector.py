@@ -7,7 +7,7 @@ Covers the two load-bearing guarantees of the wave:
   replay overwrites in place rather than appending).
 - **``--incremental`` tail scan** — an incremental rebuild projects only the
   rows whose bytes lie past the recorded
-  :class:`~eawf.telemetry.models.TelemetryFileMeta.last_offset`, and
+  :class:`~eawf.observability.telemetry.models.TelemetryFileMeta.last_offset`, and
   advances the offset to the new end-of-file. The fixture projects a file,
   appends rows, rebuilds incrementally, and asserts only the appended rows
   landed.
@@ -27,18 +27,18 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.telemetry.models import (
+from eawf.observability.telemetry.models import (
     TelemetryFileMeta,
     TelemetryIncident,
     TelemetrySession,
 )
-from eawf.telemetry.pricing import PRICING
-from eawf.telemetry.projector import (
+from eawf.observability.telemetry.pricing import PRICING
+from eawf.observability.telemetry.projector import (
     RebuildMode,
     SourceSpec,
     rebuild,
 )
-from eawf.telemetry.store import SqliteMetricsStore
+from eawf.observability.telemetry.store import SqliteMetricsStore
 
 _TS = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
 
@@ -76,7 +76,7 @@ def _append_event_lines(path: Path, env_ids: list[str]) -> None:
 class _EventFileSource:
     """In-test event source: discovers ``events.jsonl`` and yields envelopes.
 
-    Mirrors the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
+    Mirrors the :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol
     over :class:`~eawf.kernel.store.envelope.Envelope` rows so the projector's
     incident path and offset bookkeeping are exercised on a line-per-row
     store. It reports ``source_name = "event_jsonl"`` so the projector treats
@@ -163,7 +163,7 @@ class _FoldWholeFileSource:
     """In-test fold-whole-file source modelling claude/codex/opencode.
 
     Folds the WHOLE discovered file into exactly one
-    :class:`~eawf.telemetry.models.TelemetrySession` row whose ``turn_count``
+    :class:`~eawf.observability.telemetry.models.TelemetrySession` row whose ``turn_count``
     equals the number of non-blank lines and whose ``session_id`` is the file
     stem. This is the shape that makes tail-slicing unsafe: a partial tail
     re-fold would yield a row with a *smaller* turn_count keyed on the same

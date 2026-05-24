@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
-from eawf.telemetry.models import TelemetryIncident, TelemetrySession
-from eawf.telemetry.sources import (
+from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.sources import (
     CodexSessionSource,
     OpenCodeSessionSource,
     SessionSource,
@@ -174,7 +174,9 @@ def test_codex_session_skips_corrupt_line_with_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     source = CodexSessionSource()
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.codex_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.codex_session"
+    ):
         rows = list(source.iter_rows(_CODEX_CORRUPT))
     assert len(rows) == 1
     assert rows[0].session_id == "sess-placeholder-dddd"
@@ -201,7 +203,9 @@ def test_codex_session_all_corrupt_yields_nothing(
 ) -> None:
     path = tmp_path / "rollout-bad.jsonl"
     path.write_text("{bad\n[also bad\n", encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.codex_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.codex_session"
+    ):
         rows = list(CodexSessionSource().iter_rows(path))
     assert rows == []
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 2
@@ -212,7 +216,9 @@ def test_codex_session_non_object_record_is_skipped(
 ) -> None:
     path = tmp_path / "rollout-nonobj.jsonl"
     path.write_text('[1, 2, 3]\n"bare string"\n', encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.codex_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.codex_session"
+    ):
         rows = list(CodexSessionSource().iter_rows(path))
     assert rows == []
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -307,7 +313,9 @@ def test_opencode_session_unknown_fingerprint_emits_incident_and_skips(
     db = tmp_path / "opencode.db"
     _build_opencode_db(db, latest_migration=_UNKNOWN_MIGRATION)
     source = OpenCodeSessionSource()
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.opencode_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.opencode_session"
+    ):
         rows = list(source.iter_rows(db))
     # Projection is skipped entirely on drift.
     assert rows == []
@@ -380,7 +388,9 @@ def test_opencode_session_query_failure_is_skipped_not_raised(
         conn.close()
 
     source = OpenCodeSessionSource()
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.opencode_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.opencode_session"
+    ):
         rows = list(source.iter_rows(db))
     assert rows == []
     assert len(source.drift_incidents) == 1
@@ -428,7 +438,9 @@ def test_opencode_session_part_query_failure_is_skipped(
         conn.close()
 
     source = OpenCodeSessionSource()
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.opencode_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.opencode_session"
+    ):
         rows = list(source.iter_rows(db))
     assert rows == []
     assert len(source.drift_incidents) == 1

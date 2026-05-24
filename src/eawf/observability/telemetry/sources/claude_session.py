@@ -6,14 +6,14 @@ each a *record* of the session. Records carry a ``type`` (``user`` /
 ``gitBranch``, an ISO-8601 ``timestamp``, a ``uuid`` / ``parentUuid`` linkage,
 and (for assistant records) a ``message`` with ``model`` + ``usage`` token
 counts. This adapter folds one transcript file into a single
-:class:`~eawf.telemetry.models.TelemetrySession` row (C09 §5.9.4 — per-session
+:class:`~eawf.observability.telemetry.models.TelemetrySession` row (C09 §5.9.4 — per-session
 projection), summing token usage across assistant turns and deriving the
 session metadata from the first record that carries it.
 
 A line that fails JSON parsing is skipped with a logged ``WARNING`` (file +
 1-based line number) and the fold continues (C09 §6 F3); a transcript with no
 parseable records yields nothing (an empty session is not projected). The
-adapter implements the :class:`~eawf.telemetry.sources.base.SessionSource`
+adapter implements the :class:`~eawf.observability.telemetry.sources.base.SessionSource`
 protocol over :class:`TelemetrySession` rows.
 """
 
@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.models import TelemetrySession
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,8 @@ def _coerce_int(raw: object) -> int:
 class ClaudeSessionSource:
     """Reader for Claude Code transcript logs.
 
-    Implements the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
-    over :class:`~eawf.telemetry.models.TelemetrySession` rows.
+    Implements the :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol
+    over :class:`~eawf.observability.telemetry.models.TelemetrySession` rows.
     """
 
     source_name = "claude"

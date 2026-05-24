@@ -14,7 +14,7 @@ check parameterised over the same six skill cases.
 
 from __future__ import annotations
 
-from eawf.eval.models import EvalScore
-from eawf.eval.score import score_envelope
+from eawf.observability.eval.models import EvalScore
+from eawf.observability.eval.score import score_envelope
 
 __all__ = ["EvalScore", "score_envelope"]

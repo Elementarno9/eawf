@@ -33,6 +33,7 @@ from eawf.kernel.store.kinds.events import (
     DispatchCostPayload,
     RuntimeSwitchedPayload,
 )
+from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
@@ -40,7 +41,6 @@ from eawf.runtime.daemon.dispatch_runner import (
     run_dispatch,
 )
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.telemetry.models import RuntimeErrorClass
 
 _UNION_ADAPTER: TypeAdapter[object] = TypeAdapter(C09EventPayloadUnion)
 

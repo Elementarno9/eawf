@@ -1,12 +1,12 @@
 """SQLite metrics-store backend — the always-available default.
 
 Built on the stdlib :mod:`sqlite3` module so it carries zero extra
-dependency weight. This is the backend :func:`~eawf.telemetry.store.base.
+dependency weight. This is the backend :func:`~eawf.observability.telemetry.store.base.
 open_store` returns when ``duckdb`` is unavailable, and the default for
 operators who do not opt into the heavier DuckDB analytics backend.
 
 The schema DDL and the row read/write plumbing are inherited unchanged
-from :class:`~eawf.telemetry.store.base.AbstractMetricsStore`; this module
+from :class:`~eawf.observability.telemetry.store.base.AbstractMetricsStore`; this module
 supplies only the ``sqlite3`` connection and execution primitives.
 """
 
@@ -17,7 +17,7 @@ import sqlite3
 from collections.abc import Sequence
 from typing import Any
 
-from eawf.telemetry.store.base import AbstractMetricsStore
+from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
 logger = logging.getLogger(__name__)
 

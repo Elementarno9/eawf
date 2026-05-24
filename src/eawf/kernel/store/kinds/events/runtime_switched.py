@@ -15,7 +15,7 @@ from typing import Literal
 from pydantic import ConfigDict
 
 from eawf.kernel.store.kinds.events.base import RuntimeTriple, TracedEventPayload
-from eawf.telemetry.models import RuntimeErrorClass
+from eawf.observability.telemetry.models import RuntimeErrorClass
 
 
 class RuntimeSwitchedPayload(TracedEventPayload):
@@ -31,7 +31,7 @@ class RuntimeSwitchedPayload(TracedEventPayload):
             runtime.
         runtime_from: Runtime that was switched away from.
         runtime_to: Runtime that was switched to.
-        cause: Typed :class:`~eawf.telemetry.models.RuntimeErrorClass`
+        cause: Typed :class:`~eawf.observability.telemetry.models.RuntimeErrorClass`
             member that triggered the switch (scrubbed, daemon-stamped).
         error_detail: Scrubbed stderr / failure detail for diagnosis.
         idempotency_key: De-dup key for the switchover event so a retried

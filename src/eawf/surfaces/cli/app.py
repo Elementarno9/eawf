@@ -209,7 +209,7 @@ register_commands(app)
 def _configure_logging() -> None:
     """Install a scrubbed stderr log sink for the CLI process.
 
-    Attaches a :class:`~eawf.logging.scrub.SensitiveScrubber` to the
+    Attaches a :class:`~eawf.observability.logging.scrub.SensitiveScrubber` to the
     root handler so any library log line the CLI emits (error details,
     resolved state paths) is redacted before it reaches the terminal —
     the CLI is the operator-facing surface and would otherwise print raw
@@ -220,7 +220,7 @@ def _configure_logging() -> None:
     import logging
     import sys
 
-    from eawf.logging.scrub import SensitiveScrubber
+    from eawf.observability.logging.scrub import SensitiveScrubber
 
     root = logging.getLogger()
     if root.handlers:

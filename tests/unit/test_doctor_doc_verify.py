@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.doctor.doc_verify`.
+"""Unit tests for :mod:`eawf.observability.doctor.doc_verify`.
 
 Builds synthetic states, manifests, and on-disk regions in ``tmp_path`` to
 exercise the drift + cross-check pass without depending on the parent repo's
@@ -11,8 +11,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from eawf.doctor.doc_verify import verify_docs
 from eawf.kernel.state.models import State
+from eawf.observability.doctor.doc_verify import verify_docs
 from eawf.surfaces.render.manifest import Manifest, ManifestEntry, save_atomic
 from eawf.surfaces.render.regions import compute_hash
 

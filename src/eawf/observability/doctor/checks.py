@@ -21,7 +21,7 @@ this install workable?".
   synthetic envelope; if this regresses every skill is broken (W08).
 
 The doctor command (`eawf.surfaces.cli.commands.doctor`) consumes the list, formats it
-via :mod:`eawf.doctor.report`, and selects the highest-severity status to
+via :mod:`eawf.observability.doctor.report`, and selects the highest-severity status to
 drive its exit code.
 """
 

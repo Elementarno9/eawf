@@ -32,13 +32,13 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.invariants import check_agent_report_invariants
+from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
     emit_agent_end_report,
     run_dispatch,
 )
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.telemetry.models import RuntimeErrorClass
 
 pytestmark = pytest.mark.integration
 

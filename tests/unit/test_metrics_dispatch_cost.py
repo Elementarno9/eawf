@@ -23,12 +23,12 @@ from pathlib import Path
 
 from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.store.envelope import Envelope
+from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
     run_dispatch,
 )
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.telemetry.models import RuntimeErrorClass
 
 
 def _ctx(event_path: Path) -> MethodContext:

@@ -111,7 +111,7 @@ def doc_verify(
     availability.
     """
     from eawf.docs.autogen import diff_against_disk
-    from eawf.doctor.doc_verify import verify_docs
+    from eawf.observability.doctor.doc_verify import verify_docs
 
     flags: GlobalFlags = ctx.obj
     try:

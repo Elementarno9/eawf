@@ -1,17 +1,17 @@
 """Telemetry aggregator — roll source rows into typed telemetry rows.
 
 The aggregator is the pure, typed seam between the source adapters
-(:mod:`eawf.telemetry.sources`) and the projector
-(:mod:`eawf.telemetry.projector`). It owns two responsibilities (C09
+(:mod:`eawf.observability.telemetry.sources`) and the projector
+(:mod:`eawf.observability.telemetry.projector`). It owns two responsibilities (C09
 §5.9.4):
 
-* **Session rolling** — a :class:`~eawf.telemetry.models.TelemetrySession`
+* **Session rolling** — a :class:`~eawf.observability.telemetry.models.TelemetrySession`
   yielded by a per-runtime adapter is stamped with the project it belongs
   to (the adapters leave ``project_id`` empty), producing the row the
   projector upserts.
 * **Incident classification** — an :class:`~eawf.kernel.store.envelope.Envelope`
   carrying an incident-bearing payload is folded into a
-  :class:`~eawf.telemetry.models.TelemetryIncident`. The incident *cause*
+  :class:`~eawf.observability.telemetry.models.TelemetryIncident`. The incident *cause*
   is resolved through typed :class:`~eawf.kernel.state.enums.IncidentCause`
   lookups keyed on the closed event-type / runtime-error-class
   enumerations — **never** by substring-matching free prose. A payload
@@ -34,8 +34,8 @@ from decimal import Decimal
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.telemetry.models import TelemetryIncident, TelemetrySession
-from eawf.telemetry.pricing import lookup_pricing
+from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.pricing import lookup_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ def roll_session(session: TelemetrySession, *, project_id: str) -> TelemetrySess
     """Stamp a source session row with its project and price its cost.
 
     Per-runtime source adapters yield a
-    :class:`~eawf.telemetry.models.TelemetrySession` with an empty
+    :class:`~eawf.observability.telemetry.models.TelemetrySession` with an empty
     ``project_id`` and a ``Decimal("0")`` ``total_cost_usd`` (they know
     neither the project hash nor the per-token rates); the aggregator stamps
     the project and prices the cost so the projector can upsert a

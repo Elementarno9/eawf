@@ -15,14 +15,14 @@ Each line is a *record* of the form ``{"timestamp", "type", "payload"}`` where
   session totals).
 
 This adapter folds one rollout file into a single
-:class:`~eawf.telemetry.models.TelemetrySession` row (C09 §5.9.4 — per-session
+:class:`~eawf.observability.telemetry.models.TelemetrySession` row (C09 §5.9.4 — per-session
 projection): turn count from ``turn_context`` records, token totals from the
 last ``token_count`` event, session metadata from the first record that carries
 it. A line that fails JSON parsing is skipped with a logged ``WARNING`` (file +
 1-based line number) and the fold continues (C09 §6 F3); a rollout with no
 parseable records yields nothing. Unknown record types are skipped silently for
 forward compatibility. The adapter implements the
-:class:`~eawf.telemetry.sources.base.SessionSource` protocol over
+:class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol over
 :class:`TelemetrySession` rows.
 """
 
@@ -36,7 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.models import TelemetrySession
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +80,8 @@ def _coerce_int(raw: object) -> int:
 class CodexSessionSource:
     """Reader for Codex CLI rollout transcripts.
 
-    Implements the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
-    over :class:`~eawf.telemetry.models.TelemetrySession` rows.
+    Implements the :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol
+    over :class:`~eawf.observability.telemetry.models.TelemetrySession` rows.
     """
 
     source_name = "codex"

@@ -14,9 +14,9 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
   into the local cache. With ``telemetry.enabled=false`` it prints a
   one-time opt-in nudge and returns cleanly (no projection, no metrics).
 - ``eawf metrics export --format prom|json|csv`` — serialise the projected
-  metrics through :mod:`eawf.telemetry.exporter` to stdout or ``--out``.
+  metrics through :mod:`eawf.observability.telemetry.exporter` to stdout or ``--out``.
 - ``eawf metrics rebuild [--full|--incremental]`` — drive the projector
-  (:func:`eawf.telemetry.projector.rebuild`) over the discovered sources.
+  (:func:`eawf.observability.telemetry.projector.rebuild`) over the discovered sources.
 - ``eawf metrics info`` — print cache stats: DB kind, path, schema +
   pricing version, and row counts.
 - ``eawf metrics variance`` — emit the C09 §5.9.6 M26
@@ -31,11 +31,11 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
 
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
-:mod:`eawf.telemetry` (or, for ``backfill-actuals``, the pure transform in
+:mod:`eawf.observability.telemetry` (or, for ``backfill-actuals``, the pure transform in
 :mod:`eawf.kernel.migrations.backfill_actuals`). The shared estimation renderer
 lives in :mod:`eawf.surfaces.render.metrics_view`; the telemetry aggregation +
-serialisation live in :mod:`eawf.telemetry.exporter` and
-:mod:`eawf.telemetry.projector`.
+serialisation live in :mod:`eawf.observability.telemetry.exporter` and
+:mod:`eawf.observability.telemetry.projector`.
 """
 
 from __future__ import annotations
@@ -327,8 +327,8 @@ def _gate_on_opt_in(flags: GlobalFlags) -> tuple[Path, str] | None:
 
 def _telemetry_show(flags: GlobalFlags) -> None:
     """Render the rolling telemetry metrics, or the opt-in nudge when disabled."""
-    from eawf.telemetry.exporter import build_snapshot, render_prom
-    from eawf.telemetry.store import metrics_db_path, open_store
+    from eawf.observability.telemetry.exporter import build_snapshot, render_prom
+    from eawf.observability.telemetry.store import metrics_db_path, open_store
 
     gated = _gate_on_opt_in(flags)
     if gated is None:
@@ -347,8 +347,8 @@ def _telemetry_show(flags: GlobalFlags) -> None:
 
 def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None:
     """Serialise the projected metrics in *fmt* to stdout or *out*."""
-    from eawf.telemetry.exporter import build_snapshot, render
-    from eawf.telemetry.store import metrics_db_path, open_store
+    from eawf.observability.telemetry.exporter import build_snapshot, render
+    from eawf.observability.telemetry.store import metrics_db_path, open_store
 
     if fmt not in ("prom", "json", "csv"):
         raise typer.BadParameter(f"unknown export format: {fmt!r} (expected prom|json|csv)")
@@ -378,9 +378,9 @@ def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None
 
 def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> None:
     """Drive the projector over the discovered sources into the local cache."""
-    from eawf.telemetry.projector import RebuildMode, SourceSpec, rebuild
-    from eawf.telemetry.sources.event_jsonl import EventJsonlSource
-    from eawf.telemetry.store import metrics_db_path, open_store
+    from eawf.observability.telemetry.projector import RebuildMode, SourceSpec, rebuild
+    from eawf.observability.telemetry.sources.event_jsonl import EventJsonlSource
+    from eawf.observability.telemetry.store import metrics_db_path, open_store
 
     if full and incremental:
         raise typer.BadParameter("pass only one of --full / --incremental")
@@ -420,10 +420,10 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
 
 def _telemetry_info(flags: GlobalFlags) -> None:
     """Print cache stats: DB kind, path, schema + pricing version, row counts."""
-    from eawf.telemetry.models import TelemetryIncident, TelemetrySession
-    from eawf.telemetry.pricing import PRICING_VERSION
-    from eawf.telemetry.store import metrics_db_path, open_store
-    from eawf.telemetry.store.base import SCHEMA_VERSION
+    from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+    from eawf.observability.telemetry.pricing import PRICING_VERSION
+    from eawf.observability.telemetry.store import metrics_db_path, open_store
+    from eawf.observability.telemetry.store.base import SCHEMA_VERSION
 
     gated = _gate_on_opt_in(flags)
     if gated is None:

@@ -656,7 +656,7 @@ def _swap_root_logging_to_textual() -> list[logging.Handler]:
     ``stream`` is :data:`sys.stderr` / :data:`sys.stdout` is removed, and a
     :class:`textual.logging.TextualHandler` (which routes to Textual's
     devtools console, never the screen) is installed in its place. The
-    :class:`~eawf.logging.scrub.SensitiveScrubber` is not needed on this
+    :class:`~eawf.observability.logging.scrub.SensitiveScrubber` is not needed on this
     path because the TextualHandler never reaches a terminal.
 
     Returns:

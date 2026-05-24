@@ -45,7 +45,7 @@ def _seed_state(workspace: Path) -> None:
 
 
 def test_doctor_green_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "doctor"])
@@ -56,7 +56,7 @@ def test_doctor_green_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The JSON envelope lists every check ``run_all`` produces (W08: five)."""
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
     result = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
@@ -81,7 +81,7 @@ def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyP
     cache.write_text(json.dumps({"stale": True}), encoding="utf-8")
     assert cache.exists()
 
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "doctor", "--reprobe"])
     assert result.exit_code == 0, result.output
@@ -96,7 +96,7 @@ def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.Monke
     def angry_probe(*_args: Any, **_kwargs: Any) -> ProbeReport:
         raise UserError("git missing", kind="InstrumentMissing")
 
-    monkeypatch.setattr("eawf.doctor.checks.probe", angry_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", angry_probe)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "doctor"])
     assert result.exit_code == 1, result.output

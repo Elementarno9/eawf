@@ -6,8 +6,8 @@ row models retyped from the vendored agent-lens dataclasses, the embedded
 projection that feeds ``eawf metrics``.
 
 This wave (P27-I01-W11) lands the foundation: the row models
-(:mod:`eawf.telemetry.models`) and the Decimal pricing snapshot
-(:mod:`eawf.telemetry.pricing`). The store / sources / projector / exporter
+(:mod:`eawf.observability.telemetry.models`) and the Decimal pricing snapshot
+(:mod:`eawf.observability.telemetry.pricing`). The store / sources / projector / exporter
 modules described in C09 §5.9 land in later waves.
 """
 

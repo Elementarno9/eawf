@@ -37,7 +37,7 @@ from typing import Any, Final, Literal, get_args, get_origin
 
 from pydantic import BaseModel
 
-from eawf.telemetry.models import (
+from eawf.observability.telemetry.models import (
     TelemetryCompaction,
     TelemetryFileMeta,
     TelemetryIncident,
@@ -372,7 +372,7 @@ def open_store(
 
     When ``db_kind == "duckdb"`` but the optional ``duckdb`` package is not
     importable, a warning is logged and a
-    :class:`~eawf.telemetry.store.sqlite_store.SqliteMetricsStore` is
+    :class:`~eawf.observability.telemetry.store.sqlite_store.SqliteMetricsStore` is
     returned instead — so the absence of the optional dependency never
     fails the caller.
 
@@ -388,7 +388,7 @@ def open_store(
         ValueError: ``db_kind`` is not a recognised backend.
     """
 
-    from eawf.telemetry.store.sqlite_store import SqliteMetricsStore
+    from eawf.observability.telemetry.store.sqlite_store import SqliteMetricsStore
 
     if db_kind == "sqlite":
         return SqliteMetricsStore(path)
@@ -401,7 +401,7 @@ def open_store(
                 f"reason='duckdb_not_importable' path={str(path)!r}"
             )
             return SqliteMetricsStore(path)
-        from eawf.telemetry.store.duckdb_store import DuckDbMetricsStore
+        from eawf.observability.telemetry.store.duckdb_store import DuckDbMetricsStore
 
         return DuckDbMetricsStore(path)
     raise ValueError(f"unknown store backend: {db_kind!r}")

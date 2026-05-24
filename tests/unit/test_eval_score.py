@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.eval.score.score_envelope` (B042, P13-W03).
+"""Unit tests for :func:`eawf.observability.eval.score.score_envelope` (B042, P13-W03).
 
 Covers the per-dimension scoring matrix:
 
@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.eval import EvalScore, score_envelope
+from eawf.observability.eval import EvalScore, score_envelope
 from eawf.surfaces.render.envelope import OutputEnvelope
 
 

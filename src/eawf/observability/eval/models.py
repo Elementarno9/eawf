@@ -1,7 +1,7 @@
 """Typed result model for the skill-eval semantic scoring loop (B042).
 
 The :class:`EvalScore` model wraps the output of
-:func:`eawf.eval.score.score_envelope` so callers (the regression test
+:func:`eawf.observability.eval.score.score_envelope` so callers (the regression test
 and operator-facing CLI tools downstream) can read a transparent
 per-dimension breakdown alongside the weighted total.
 

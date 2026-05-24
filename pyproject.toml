@@ -177,7 +177,7 @@ max-complexity = 10
 "src/eawf/surfaces/cli/commands/validate.py" = ["C901"]
 "src/eawf/kernel/config/layered.py" = ["C901"]
 "src/eawf/runtime/daemon/methods/state.py" = ["C901"]
-"src/eawf/doctor/checks.py" = ["C901"]
+"src/eawf/observability/doctor/checks.py" = ["C901"]
 "src/eawf/workflow/lifecycle/wave.py" = ["C901"]
 "src/eawf/memory/promotion.py" = ["C901"]
 "src/eawf/memory/prune.py" = ["C901"]
@@ -193,7 +193,7 @@ max-complexity = 10
 "src/eawf/runtime/runtimes/opencode/plugin_install.py" = ["C901"]
 "src/eawf/runtime/runtimes/plugin_doctor.py" = ["C901"]
 "src/eawf/workflow/skills/_common.py" = ["C901"]
-"src/eawf/telemetry/sources/claude_session.py" = ["C901"]
+"src/eawf/observability/telemetry/sources/claude_session.py" = ["C901"]
 "src/eawf/kernel/validate/invariants.py" = ["C901"]
 "src/eawf/runtime/worktree/create.py" = ["C901"]
 # Test helper (a Tarjan strongly-connected-components routine) that is
@@ -314,7 +314,7 @@ line = 77
 branch = 64
 
 [tool.eawf.coverage.gates.telemetry]
-path = "telemetry/"
+path = "observability/telemetry/"
 line = 93
 branch = 86
 

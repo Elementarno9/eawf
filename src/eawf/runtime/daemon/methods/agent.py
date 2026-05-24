@@ -45,13 +45,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.state.enums import DispatchNote
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
+from eawf.observability.telemetry.models import RuntimeErrorClass
+from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.daemon.dispatch_runner import DispatchTokens, run_dispatch
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.runtimes.dispatch import resolve_adapter
 from eawf.runtime.runtimes.manifest import RuntimeId
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
-from eawf.telemetry.models import RuntimeErrorClass
-from eawf.telemetry.pricing import PRICING_VERSION
 from eawf.workflow.evidence._io import load_state
 
 logger = logging.getLogger(__name__)
@@ -103,9 +103,9 @@ class DispatchOutcome(BaseModel):
             exact accounting on the wire).
         pricing_version: ``PRICING`` snapshot version pinning
             *cost_usd*. Defaults to the embedded
-            :data:`~eawf.telemetry.pricing.PRICING_VERSION`.
+            :data:`~eawf.observability.telemetry.pricing.PRICING_VERSION`.
         primary_error: Typed
-            :class:`~eawf.telemetry.models.RuntimeErrorClass` member when
+            :class:`~eawf.observability.telemetry.models.RuntimeErrorClass` member when
             the primary runtime failed (triggers a V5 fallback +
             ``runtime_switched`` event), or ``None`` when the primary
             served the dispatch with no switch.

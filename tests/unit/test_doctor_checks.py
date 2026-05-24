@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.doctor.checks`.
+"""Unit tests for :mod:`eawf.observability.doctor.checks`.
 
 Each check is exercised in isolation with the instrument probe stubbed out
 so the suite stays hermetic (no calls to the host's ``shutil.which``).
@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from eawf.doctor import checks
+from eawf.observability.doctor import checks
 from eawf.surfaces.cli.errors import UserError
 
 
@@ -22,14 +22,14 @@ def _stub_probe_ok(monkeypatch: pytest.MonkeyPatch, results: list[Any]) -> None:
     def fake(profile_ids: list[str], *, cache_path: Path, reprobe: bool = False) -> ProbeReport:
         return ProbeReport(probe_version=1, profile_ids=profile_ids, results=results)
 
-    monkeypatch.setattr("eawf.doctor.checks.probe", fake)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", fake)
 
 
 def _stub_probe_raises(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
     def fake(*_args: object, **_kwargs: object) -> None:
         raise exc
 
-    monkeypatch.setattr("eawf.doctor.checks.probe", fake)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", fake)
 
 
 def test_check_tools_available_all_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,7 +104,7 @@ def test_check_config_resolves_unknown_profile_warns(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "eawf.doctor.checks.merge_config",
+        "eawf.observability.doctor.checks.merge_config",
         lambda **_: ({"profiles": {"enabled": ["bogus"]}}, {}),
     )
     result = checks.check_config_resolves(workspace=tmp_path)

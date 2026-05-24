@@ -21,15 +21,14 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from eawf.surfaces.cli.app import app
-from eawf.telemetry.models import (
+from eawf.observability.telemetry.models import (
     EndMarker,
     RuntimeErrorClass,
     TelemetryRuntimeSwitch,
     TelemetrySession,
     ToolCallErrorKind,
 )
-from eawf.telemetry.pricing import (
+from eawf.observability.telemetry.pricing import (
     CACHE_READ_MULTIPLIER,
     CACHE_WRITE_1H_MULTIPLIER,
     CACHE_WRITE_5M_MULTIPLIER,
@@ -41,6 +40,7 @@ from eawf.telemetry.pricing import (
     check_pricing_currency,
     lookup_pricing,
 )
+from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.unit
 

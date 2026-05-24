@@ -2,9 +2,9 @@
 
 The projector is the canonical rebuild entry point (C09 §5.9.4): it walks
 the registered source adapters, drives each through the
-:class:`~eawf.telemetry.sources.base.SessionSource` protocol, rolls the
+:class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol, rolls the
 yielded rows through the aggregator, and upserts them into an
-:class:`~eawf.telemetry.store.base.AbstractMetricsStore`.
+:class:`~eawf.observability.telemetry.store.base.AbstractMetricsStore`.
 
 Two rebuild modes share one code path:
 
@@ -13,7 +13,7 @@ Two rebuild modes share one code path:
   table's primary key (W12's ``INSERT OR REPLACE``), so a second full
   rebuild produces byte-identical row counts.
 * :attr:`RebuildMode.INCREMENTAL` consults
-  :class:`~eawf.telemetry.models.TelemetryFileMeta` per source file and
+  :class:`~eawf.observability.telemetry.models.TelemetryFileMeta` per source file and
   projects only the bytes past the recorded ``last_offset`` — the tail
   appended since the last scan — then advances the offset to the new
   end-of-file. A file whose size AND mtime are both unchanged since the
@@ -59,14 +59,14 @@ from enum import StrEnum
 from pathlib import Path
 
 from eawf.kernel.store.envelope import Envelope
-from eawf.telemetry.aggregator import incident_from_envelope, roll_session
-from eawf.telemetry.models import (
+from eawf.observability.telemetry.aggregator import incident_from_envelope, roll_session
+from eawf.observability.telemetry.models import (
     TelemetryFileMeta,
     TelemetryIncident,
     TelemetrySession,
 )
-from eawf.telemetry.sources.base import SessionSource
-from eawf.telemetry.store.base import AbstractMetricsStore
+from eawf.observability.telemetry.sources.base import SessionSource
+from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ class SourceSpec:
 
     Attributes:
         source: The source adapter driven through the
-            :class:`~eawf.telemetry.sources.base.SessionSource` protocol.
+            :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol.
         root: The directory (or state path) the adapter discovers files
             under.
         project_id: The owning project's id, stamped onto session rows by

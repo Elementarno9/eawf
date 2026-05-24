@@ -82,7 +82,7 @@ UserScopeStatus = Literal["ok", "warn", "info"]
 class _UserScopeResult:
     """Stand-alone result for the user-scope probe.
 
-    ``eawf.doctor.checks.CheckResult`` only supports ``ok|warn|fail`` — the
+    ``eawf.observability.doctor.checks.CheckResult`` only supports ``ok|warn|fail`` — the
     user-scope probe wants an ``info`` outcome (no eawf installed via uv
     tool, which is not a problem, just an observation). We keep the existing
     ``CheckResult`` shape untouched and emit this local dataclass instead so
@@ -353,8 +353,8 @@ def doctor(
     ] = False,
 ) -> None:
     """Run install-readiness checks."""
-    from eawf.doctor import checks as doctor_checks
-    from eawf.doctor.report import overall_status, to_payload, to_text
+    from eawf.observability.doctor import checks as doctor_checks
+    from eawf.observability.doctor.report import overall_status, to_payload, to_text
 
     flags: GlobalFlags = ctx.obj
     effective_flags = GlobalFlags(

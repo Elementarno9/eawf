@@ -12,7 +12,7 @@ guard-rail that protects the envelope contract across model/version
 changes. The score test (``test_skill_envelope_score_meets_threshold``)
 adds a P13-W03 / B042 weighted-score regression: each fixture carries a
 per-skill ``eval_score_threshold`` (default ``0.85``) that the live
-envelope must clear via :func:`eawf.eval.score_envelope`.
+envelope must clear via :func:`eawf.observability.eval.score_envelope`.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import cast
 
 import pytest
 
-from eawf.eval import score_envelope
+from eawf.observability.eval import score_envelope
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.engine import Skill, SkillContext, run_skill
 from eawf.workflow.skills.polish import PolishSkill

@@ -1,7 +1,7 @@
 """``eawf bench`` Typer sub-app — perf bench harness.
 
 CLI dispatch only (AGENTS rule 1): every handler parses args, calls into
-:mod:`eawf.bench`, and routes output through
+:mod:`eawf.observability.bench`, and routes output through
 :func:`eawf.surfaces.cli.output.emit_json_or_text`. The harness catalog, corpus
 seeding, and regression logic all live in the library.
 
@@ -38,7 +38,7 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
-    from eawf.bench.harness import BenchResult
+    from eawf.observability.bench.harness import BenchResult
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ def _result_to_dict(result: BenchResult) -> dict[str, object]:
 @bench_app.command("list")
 def bench_list(ctx: typer.Context) -> None:
     """List every fixture size x harness in the catalog."""
-    from eawf.bench import FIXTURE_SIZES, HARNESS_CATALOG
+    from eawf.observability.bench import FIXTURE_SIZES, HARNESS_CATALOG
 
     flags: GlobalFlags = ctx.obj
     payload: dict[str, object] = {
@@ -109,8 +109,8 @@ def bench_run(
     ] = 50,
 ) -> None:
     """Seed a corpus in-memory and time each harness against it."""
-    from eawf.bench import seed_corpus
-    from eawf.bench.harness import run_all, run_harness
+    from eawf.observability.bench import seed_corpus
+    from eawf.observability.bench.harness import run_all, run_harness
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -158,7 +158,7 @@ def bench_compare(
     Exits ``2`` (``VALIDATION_ERROR``) when at least one harness crosses
     ``after >= before * (1 + threshold)``.
     """
-    from eawf.bench.harness import (
+    from eawf.observability.bench.harness import (
         BenchResult,
         compare_results,
         load_thresholds,
@@ -234,7 +234,7 @@ def fixture_seed(
     Re-running with the same size overwrites both files with
     byte-identical content.
     """
-    from eawf.bench import seed_fixture
+    from eawf.observability.bench import seed_fixture
 
     flags: GlobalFlags = ctx.obj
     target = output_dir if output_dir is not None else _resolve_path(flags, _DEFAULT_FIXTURE_DIR)
@@ -280,7 +280,7 @@ def _load_results(path: Path) -> list[BenchResult]:
     Raises:
         UserError: When the file is missing, unparseable, or malformed.
     """
-    from eawf.bench.harness import BenchResult
+    from eawf.observability.bench.harness import BenchResult
 
     if not path.exists():
         raise cli_errors.UserError(f"results file not found: {path}")

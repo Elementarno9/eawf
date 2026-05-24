@@ -282,7 +282,7 @@ def _runtime_default() -> HookRuntime:
 # Each gate is a thin CLI dispatcher: it resolves the files to inspect
 # (explicit args, else the conditional diff scan) and delegates the
 # actual detection to a library surface (the scrubber patterns reused
-# from ``eawf.logging.scrub`` for leaks, the EAWF001 rule for log
+# from ``eawf.observability.logging.scrub`` for leaks, the EAWF001 rule for log
 # format, ``plugin doctor --strict`` for plugin drift). The conditional
 # diff scan keeps each gate a no-op when nothing relevant changed.
 
@@ -330,10 +330,10 @@ def _path_leak_patterns() -> tuple[re.Pattern[str], ...]:
 
     The three home-directory anchors (macOS, Windows, Linux) are the
     leak shapes the path gate rejects; they are sourced from
-    :data:`eawf.logging.scrub.SensitiveScrubber.PATTERNS` so the gate
+    :data:`eawf.observability.logging.scrub.SensitiveScrubber.PATTERNS` so the gate
     and the emit-time scrubber never drift.
     """
-    from eawf.logging.scrub import SensitiveScrubber
+    from eawf.observability.logging.scrub import SensitiveScrubber
 
     return tuple(
         p for p in SensitiveScrubber.PATTERNS if "Users" in p.pattern or "home" in p.pattern
@@ -342,7 +342,7 @@ def _path_leak_patterns() -> tuple[re.Pattern[str], ...]:
 
 def _email_leak_pattern() -> re.Pattern[str]:
     """Return the email pattern reused from the scrubber."""
-    from eawf.logging.scrub import SensitiveScrubber
+    from eawf.observability.logging.scrub import SensitiveScrubber
 
     return next(p for p in SensitiveScrubber.PATTERNS if "@" in p.pattern)
 
@@ -355,7 +355,7 @@ def _allowed_emails() -> frozenset[str]:
     co-author addresses plus the canonical ``pyproject.toml`` author
     rows.
     """
-    from eawf.logging.scrub import _DEFAULT_ALLOWED_EMAILS, _eawf_author_emails
+    from eawf.observability.logging.scrub import _DEFAULT_ALLOWED_EMAILS, _eawf_author_emails
 
     return frozenset(e.casefold() for e in (_DEFAULT_ALLOWED_EMAILS | _eawf_author_emails()))
 

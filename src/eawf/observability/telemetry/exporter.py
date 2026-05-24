@@ -1,7 +1,7 @@
 """Telemetry exporter — Prometheus / JSON / CSV serialisation (C09 §5.9.5).
 
 The exporter is the pure, deterministic seam between the projected metrics
-store (:class:`~eawf.telemetry.store.base.AbstractMetricsStore`) and the
+store (:class:`~eawf.observability.telemetry.store.base.AbstractMetricsStore`) and the
 three operator-facing output formats wired into ``eawf metrics export``:
 
 * ``prom`` — Prometheus textfile-collector v0.0.4 format with one
@@ -12,8 +12,8 @@ three operator-facing output formats wired into ``eawf metrics export``:
 * ``csv`` — a flat ``metric,labels,value`` table for spreadsheet import.
 
 Aggregation is a single pass over the projected
-:class:`~eawf.telemetry.models.TelemetrySession` and
-:class:`~eawf.telemetry.models.TelemetryIncident` rows; the result is a
+:class:`~eawf.observability.telemetry.models.TelemetrySession` and
+:class:`~eawf.observability.telemetry.models.TelemetryIncident` rows; the result is a
 :class:`MetricsSnapshot` of typed metric families. Every step is pure
 (given the same rows it returns byte-identical output) so each format is
 golden-matchable against a seeded fixture DB.
@@ -39,8 +39,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.telemetry.models import TelemetryIncident, TelemetrySession
-from eawf.telemetry.store.base import AbstractMetricsStore
+from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +140,8 @@ def build_snapshot(store: AbstractMetricsStore, *, scope: str) -> MetricsSnapsho
     """Aggregate the projected store rows into a typed metrics snapshot.
 
     One pass over the projected
-    :class:`~eawf.telemetry.models.TelemetrySession` and
-    :class:`~eawf.telemetry.models.TelemetryIncident` rows produces the
+    :class:`~eawf.observability.telemetry.models.TelemetrySession` and
+    :class:`~eawf.observability.telemetry.models.TelemetryIncident` rows produces the
     metric families C09 §5.9.5 surfaces. The aggregation is pure: the same
     store state yields a byte-identical snapshot.
 

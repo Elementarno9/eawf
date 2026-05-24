@@ -1,7 +1,7 @@
 """``eawf doctor`` formatters — JSON envelope + Rich text body.
 
 Both renderers consume the :class:`list[CheckResult]` returned by
-:func:`eawf.doctor.checks.run_all`. The JSON branch produces a stable shape
+:func:`eawf.observability.doctor.checks.run_all`. The JSON branch produces a stable shape
 (``{"ok": bool, "checks": [...]}``) that golden tests can pin; the text
 branch builds a Rich :class:`~rich.table.Table` for the TTY case (with a
 plain fallback when ``flags.plain_output`` is set).
@@ -16,7 +16,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from eawf.doctor.checks import CheckResult
+from eawf.observability.doctor.checks import CheckResult
 
 logger = logging.getLogger(__name__)
 

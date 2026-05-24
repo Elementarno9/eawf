@@ -5,13 +5,13 @@ runtime requirement and is never imported at module top level. Every method
 that needs the driver imports it lazily inside the function body, so:
 
 * importing this module on a host without ``duckdb`` installed never fails;
-* :func:`~eawf.telemetry.store.base.open_store` can ``try`` the lazy
+* :func:`~eawf.observability.telemetry.store.base.open_store` can ``try`` the lazy
   ``from ... import DuckDbMetricsStore`` and fall back to SQLite when the
   driver is absent (the ``ImportError`` surfaces from ``_connect``, but the
   factory pre-checks importability before constructing).
 
 The schema DDL and most row read/write plumbing are inherited from
-:class:`~eawf.telemetry.store.base.AbstractMetricsStore`; this module
+:class:`~eawf.observability.telemetry.store.base.AbstractMetricsStore`; this module
 supplies the DuckDB connection + execution primitives and one
 SQL-dialect override. DuckDB accepts the ``?`` parameter placeholder but
 not the SQLite-only ``INSERT OR REPLACE`` upsert the base emits, so
@@ -27,7 +27,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from eawf.telemetry.store.base import (
+from eawf.observability.telemetry.store.base import (
     TABLES,
     AbstractMetricsStore,
     column_names,
@@ -48,7 +48,7 @@ class DuckDbMetricsStore(AbstractMetricsStore):
 
     The driver is imported lazily inside :meth:`_connect`; constructing the
     store without ``duckdb`` installed raises :class:`ImportError`, which
-    :func:`~eawf.telemetry.store.base.open_store` guards against by
+    :func:`~eawf.observability.telemetry.store.base.open_store` guards against by
     pre-checking importability before it constructs this class.
     """
 

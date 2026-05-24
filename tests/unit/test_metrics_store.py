@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
-from eawf.telemetry.models import (
+from eawf.observability.telemetry.models import (
     TelemetryCompaction,
     TelemetryIncident,
     TelemetryProject,
@@ -36,13 +36,13 @@ from eawf.telemetry.models import (
     TelemetrySession,
     TelemetryToolCall,
 )
-from eawf.telemetry.store import (
+from eawf.observability.telemetry.store import (
     TABLES,
     AbstractMetricsStore,
     SqliteMetricsStore,
     open_store,
 )
-from eawf.telemetry.store.base import (
+from eawf.observability.telemetry.store.base import (
     SCHEMA_VERSION,
     column_names,
     column_sql_type,
@@ -339,7 +339,7 @@ def _duckdb_store_with_recording_conn() -> Any:
     absent) by stubbing ``_connect`` so the upsert SQL can be inspected
     without a live database.
     """
-    from eawf.telemetry.store.duckdb_store import DuckDbMetricsStore
+    from eawf.observability.telemetry.store.duckdb_store import DuckDbMetricsStore
 
     store = DuckDbMetricsStore.__new__(DuckDbMetricsStore)
     store.path = Path("unused.db")
@@ -390,7 +390,7 @@ def test_duckdb_upsert_all_pk_columns_emits_do_nothing(
     No current ``TableSpec`` has an all-key shape, so the primary key for one
     table is widened to all of its columns to exercise the defensive branch.
     """
-    from eawf.telemetry.store import duckdb_store
+    from eawf.observability.telemetry.store import duckdb_store
 
     all_cols = column_names(TelemetryCompaction)
     monkeypatch.setitem(duckdb_store._PRIMARY_KEYS, "telemetry_compactions", all_cols)
@@ -414,7 +414,7 @@ def test_duckdb_upsert_all_pk_columns_emits_do_nothing(
 def test_duckdb_round_trip_when_driver_present(tmp_path: Path) -> None:
     """When ``duckdb`` is installed, the ON CONFLICT upsert actually executes."""
     pytest.importorskip("duckdb")
-    from eawf.telemetry.store.duckdb_store import DuckDbMetricsStore
+    from eawf.observability.telemetry.store.duckdb_store import DuckDbMetricsStore
 
     store = DuckDbMetricsStore(tmp_path / "m.duckdb")
     store.init_schema()

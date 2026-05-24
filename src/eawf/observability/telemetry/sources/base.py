@@ -9,10 +9,10 @@ The protocol is :func:`~typing.runtime_checkable` so callers (and tests) can
 assert structural conformance with ``isinstance``. It is generic over the row
 type each adapter yields:
 
-- :class:`~eawf.telemetry.sources.event_jsonl.EventJsonlSource` yields
+- :class:`~eawf.observability.telemetry.sources.event_jsonl.EventJsonlSource` yields
   :class:`~eawf.kernel.store.envelope.Envelope` rows.
-- :class:`~eawf.telemetry.sources.claude_session.ClaudeSessionSource` yields
-  :class:`~eawf.telemetry.models.TelemetrySession` rows.
+- :class:`~eawf.observability.telemetry.sources.claude_session.ClaudeSessionSource` yields
+  :class:`~eawf.observability.telemetry.models.TelemetrySession` rows.
 
 Sibling waves add per-runtime adapters to this package; they implement this
 same protocol and are driven identically by the projector.

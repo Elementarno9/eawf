@@ -4,8 +4,8 @@ The exporter is pure and deterministic: a seeded fixture DB renders to
 byte-identical ``prom`` / ``json`` / ``csv`` documents on every run. These
 tests:
 
-1. Seed a fixed set of :class:`~eawf.telemetry.models.TelemetrySession` +
-   :class:`~eawf.telemetry.models.TelemetryIncident` rows into a SQLite
+1. Seed a fixed set of :class:`~eawf.observability.telemetry.models.TelemetrySession` +
+   :class:`~eawf.observability.telemetry.models.TelemetryIncident` rows into a SQLite
    metrics store.
 2. Build a snapshot and render each format.
 3. Assert the rendered bytes match the committed golden under
@@ -30,12 +30,12 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
-from eawf.telemetry.exporter import (
+from eawf.observability.telemetry.exporter import (
     build_snapshot,
     render,
 )
-from eawf.telemetry.models import TelemetryIncident, TelemetrySession
-from eawf.telemetry.store import SqliteMetricsStore
+from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.store import SqliteMetricsStore
 
 _GOLDEN_DIR = Path(__file__).resolve().parent.parent / "golden" / "metrics_export"
 _SCOPE = "repo/eawf"

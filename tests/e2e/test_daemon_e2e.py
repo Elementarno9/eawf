@@ -263,7 +263,7 @@ def test_logs_cmd_errors_when_no_log_present(e2e_env: E2EEnv) -> None:
 
 
 # macOS-home scrub pattern is anchored on this directory-name prefix
-# (see eawf.logging.scrub.SensitiveScrubber.PATTERNS). It is assembled
+# (see eawf.observability.logging.scrub.SensitiveScrubber.PATTERNS). It is assembled
 # from parts at runtime — never written as a "/<prefix>/<name>" literal —
 # so the path-leak pre-commit gate does not flag this synthetic fixture.
 _HOME_PREFIX = "Users"
@@ -276,7 +276,7 @@ def test_log_scrubs_home_shaped_paths() -> None:
     Drives a real daemon whose runtime dir is nested under a planted
     home-shaped segment (``<home-prefix>/<name>``), so the ``serve_unix``
     bind line emits an absolute path matching
-    :class:`eawf.logging.scrub.SensitiveScrubber`'s macOS-home pattern.
+    :class:`eawf.observability.logging.scrub.SensitiveScrubber`'s macOS-home pattern.
     The scrubber, once wired onto the file sink, must rewrite that segment
     to ``<scrubbed>`` before the formatter serialises it.
     """

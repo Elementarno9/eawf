@@ -1,7 +1,7 @@
 """``eawf telemetry`` Typer sub-app — observability subsystem surface.
 
 CLI dispatch only (AGENTS rule 1): every handler parses args, calls into
-:mod:`eawf.telemetry`, and routes output through
+:mod:`eawf.observability.telemetry`, and routes output through
 :func:`eawf.surfaces.cli.output.emit_json_or_text`. The pricing snapshot, drift
 detection, and (later waves) the projection all live in the library.
 
@@ -9,7 +9,7 @@ Verbs:
 
 - ``eawf telemetry pricing-currency-check`` — validate the embedded
   ``PRICING`` snapshot's shape + internal currency and emit a typed
-  :class:`~eawf.telemetry.pricing.PricingDriftReport`. With ``--strict``
+  :class:`~eawf.observability.telemetry.pricing.PricingDriftReport`. With ``--strict``
   the verb exits ``2`` (``VALIDATION_ERROR``) on detected drift so the
   weekly CI gate can open an auto-refresh PR.
 """
@@ -26,7 +26,7 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
-    from eawf.telemetry.pricing import PricingDriftReport
+    from eawf.observability.telemetry.pricing import PricingDriftReport
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def pricing_currency_check(
         - ``0`` — snapshot is current (or drift found without ``--strict``).
         - ``2`` (``VALIDATION_ERROR``) — drift found and ``--strict`` set.
     """
-    from eawf.telemetry.pricing import check_pricing_currency
+    from eawf.observability.telemetry.pricing import check_pricing_currency
 
     flags: GlobalFlags = ctx.obj
     report = check_pricing_currency()

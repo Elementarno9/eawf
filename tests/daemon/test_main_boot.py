@@ -32,7 +32,7 @@ import pytest
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
-from eawf.logging.scrub import REDACTION, SensitiveScrubber
+from eawf.observability.logging.scrub import REDACTION, SensitiveScrubber
 from eawf.runtime.daemon import main as daemon_main
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext

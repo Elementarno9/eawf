@@ -60,7 +60,7 @@ def _init_core(target: Path) -> None:
 @pytest.mark.integration
 def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A freshly-initialised workspace reports every check as ``ok``."""
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     _init_core(tmp_path)
 
     res = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
@@ -86,7 +86,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
 @pytest.mark.integration
 def test_cli_doctor_detects_manifest_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Hand-editing AGENTS.md inside a managed region downgrades the check to ``warn``."""
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     _init_core(tmp_path)
 
     agents_md = tmp_path / "AGENTS.md"
@@ -114,7 +114,7 @@ def test_cli_doctor_envelope_roundtrip_check_present(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The render-output round-trip check appears in the doctor envelope."""
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     _init_core(tmp_path)
 
     res = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
@@ -134,7 +134,7 @@ def test_cli_doctor_manifest_absent_is_ok(tmp_path: Path, monkeypatch: pytest.Mo
     ``state_present`` check's job. An uninitialised workspace gets ``warn``
     on ``state_present`` and ``ok`` on ``manifest_in_sync``.
     """
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     res = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
     assert res.exit_code == 0, res.output
@@ -148,7 +148,7 @@ def test_cli_doctor_manifest_malformed_is_fail(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A corrupt manifest reports ``fail`` (not ``warn``) — that is the spec."""
-    monkeypatch.setattr("eawf.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     _init_core(tmp_path)
     manifest_path = tmp_path / ".ea" / "indexes" / "generated.json"
     manifest_path.write_text("{not valid json", encoding="utf-8")

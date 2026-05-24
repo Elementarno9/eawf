@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.logging.scrub import REDACTION, SensitiveScrubber
+from eawf.observability.logging.scrub import REDACTION, SensitiveScrubber
 
 
 def _scrubber() -> SensitiveScrubber:
@@ -339,7 +339,7 @@ def test_scrub_clean_message_unchanged() -> None:
 def test_email_pattern_index_raises_when_no_email_pattern() -> None:
     import re
 
-    from eawf.logging.scrub import _email_pattern_index
+    from eawf.observability.logging.scrub import _email_pattern_index
 
     with pytest.raises(ValueError, match="no email pattern"):
         _email_pattern_index((re.compile(r"\d+"),))

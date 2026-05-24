@@ -26,17 +26,17 @@ import pytest
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.telemetry.aggregator import (
+from eawf.observability.telemetry.aggregator import (
     classify_event_cause,
     default_severity_for,
     incident_from_envelope,
     price_session,
     roll_session,
 )
-from eawf.telemetry.models import TelemetryIncident, TelemetrySession
-from eawf.telemetry.pricing import PRICING
-from eawf.telemetry.projector import RebuildMode, SourceSpec, rebuild
-from eawf.telemetry.store import SqliteMetricsStore
+from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.pricing import PRICING
+from eawf.observability.telemetry.projector import RebuildMode, SourceSpec, rebuild
+from eawf.observability.telemetry.store import SqliteMetricsStore
 
 _TS = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
 

@@ -6,14 +6,14 @@ Unlike the JSONL adapters this one reads a relational store: per-session token /
 turn data is reconstructed by joining ``session`` against ``part`` and decoding
 each ``part.data`` JSON blob (``type == "step-finish"`` rows carry the per-step
 ``tokens`` object). This adapter folds each session into one
-:class:`~eawf.telemetry.models.TelemetrySession` row (C09 §5.9.4).
+:class:`~eawf.observability.telemetry.models.TelemetrySession` row (C09 §5.9.4).
 
 Because the schema rides an external project's drizzle migrations it is not
 stable — tables have already grown 13 → 15 since the spec was written
 (C09 §6 F21). The adapter therefore checks the ``__drizzle_migrations``
 fingerprint before projecting: on a **known** fingerprint it projects normally;
 on an **unknown** fingerprint it records a
-:class:`~eawf.telemetry.models.TelemetryIncident` with cause
+:class:`~eawf.observability.telemetry.models.TelemetryIncident` with cause
 :attr:`~eawf.kernel.state.enums.IncidentCause.EXTERNAL_API_FAILURE` and skips
 projection (yields nothing for that database) rather than crashing on a column
 that has moved. The projector drains :attr:`OpenCodeSessionSource.drift_incidents`
@@ -21,7 +21,7 @@ and upserts the recorded incidents.
 
 The database is opened read-only (``file:<path>?mode=ro``) so eawf never takes a
 write lock or risks corrupting OpenCode's WAL. The adapter implements the
-:class:`~eawf.telemetry.sources.base.SessionSource` protocol over
+:class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol over
 :class:`TelemetrySession` rows.
 """
 
@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
-from eawf.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +94,8 @@ def _drizzle_fingerprint(conn: sqlite3.Connection) -> str | None:
 class OpenCodeSessionSource:
     """Reader for the OpenCode SQLite store.
 
-    Implements the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
-    over :class:`~eawf.telemetry.models.TelemetrySession` rows. Schema-drift
+    Implements the :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol
+    over :class:`~eawf.observability.telemetry.models.TelemetrySession` rows. Schema-drift
     incidents recorded during projection accumulate in
     :attr:`drift_incidents` for the projector to drain.
     """

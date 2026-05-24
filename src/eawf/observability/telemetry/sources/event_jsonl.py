@@ -46,7 +46,7 @@ _STORE_KINDS: tuple[StoreKind, ...] = (StoreKind.EVENT, StoreKind.AUDIT, *_ROLE_
 class EventJsonlSource:
     """Reader for the canonical eawf event / audit / role-report JSONL stores.
 
-    Implements the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
+    Implements the :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol
     over :class:`~eawf.kernel.store.envelope.Envelope` rows.
     """
 

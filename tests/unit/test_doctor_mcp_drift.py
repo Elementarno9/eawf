@@ -6,7 +6,6 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eawf.doctor.checks import check_mcp_drift, run_all
 from eawf.kernel.state.enums import (
     McpRisk,
     McpStatus,
@@ -19,6 +18,7 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
+from eawf.observability.doctor.checks import check_mcp_drift, run_all
 
 
 def _seed_state(workspace: Path, *, servers: dict[str, McpServer] | None = None) -> Path:

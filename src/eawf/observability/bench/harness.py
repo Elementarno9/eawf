@@ -37,7 +37,7 @@ from pathlib import Path
 
 import yaml
 
-from eawf.bench.seed import BenchCorpus
+from eawf.observability.bench.seed import BenchCorpus
 
 logger = logging.getLogger(__name__)
 

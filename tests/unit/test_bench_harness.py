@@ -23,7 +23,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from eawf.bench.harness import (
+from eawf.observability.bench.harness import (
     HARNESS_CATALOG,
     BenchResult,
     compare_results,
@@ -32,7 +32,7 @@ from eawf.bench.harness import (
     run_harness,
     threshold_for_os,
 )
-from eawf.bench.seed import FIXTURE_SIZES, seed_corpus, seed_fixture
+from eawf.observability.bench.seed import FIXTURE_SIZES, seed_corpus, seed_fixture
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()

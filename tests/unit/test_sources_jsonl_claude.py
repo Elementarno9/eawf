@@ -8,9 +8,13 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.store.envelope import Envelope
-from eawf.telemetry.models import TelemetrySession
-from eawf.telemetry.sources import ClaudeSessionSource, EventJsonlSource, SessionSource
-from eawf.telemetry.sources.base import SessionSource as SessionSourceBase
+from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.sources import (
+    ClaudeSessionSource,
+    EventJsonlSource,
+    SessionSource,
+)
+from eawf.observability.telemetry.sources.base import SessionSource as SessionSourceBase
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "telemetry"
 _STORE_FIXTURES = _FIXTURES / "store"
@@ -62,7 +66,9 @@ def test_event_jsonl_skips_corrupt_line_with_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     source = EventJsonlSource()
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.event_jsonl"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.event_jsonl"
+    ):
         rows = list(source.iter_rows(_STORE_FIXTURES / "event.jsonl"))
     # The corrupt mid-file line is skipped; the valid rows around it survive.
     assert len(rows) == 3
@@ -109,7 +115,9 @@ def test_event_jsonl_all_corrupt_yields_nothing(
 ) -> None:
     path = tmp_path / "event.jsonl"
     path.write_text("{not json\n}\n{still not}\n", encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.event_jsonl"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.event_jsonl"
+    ):
         rows = list(EventJsonlSource().iter_rows(path))
     assert rows == []
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 3
@@ -178,7 +186,9 @@ def test_claude_session_skips_corrupt_line_with_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     source = ClaudeSessionSource()
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.claude_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.claude_session"
+    ):
         rows = list(source.iter_rows(_CLAUDE_FIXTURES / "sess-placeholder-bbbb.jsonl"))
     assert len(rows) == 1
     assert rows[0].total_output_tokens == 120
@@ -204,7 +214,9 @@ def test_claude_session_all_corrupt_yields_nothing(
 ) -> None:
     path = tmp_path / "sess.jsonl"
     path.write_text("{bad\n[also bad\n", encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.claude_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.claude_session"
+    ):
         rows = list(ClaudeSessionSource().iter_rows(path))
     assert rows == []
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 2
@@ -215,7 +227,9 @@ def test_claude_session_non_object_record_is_skipped(
 ) -> None:
     path = tmp_path / "sess.jsonl"
     path.write_text('[1, 2, 3]\n"a bare string"\n', encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="eawf.telemetry.sources.claude_session"):
+    with caplog.at_level(
+        logging.WARNING, logger="eawf.observability.telemetry.sources.claude_session"
+    ):
         rows = list(ClaudeSessionSource().iter_rows(path))
     assert rows == []
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]

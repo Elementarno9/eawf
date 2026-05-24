@@ -3,7 +3,7 @@
 Layers a semantic score on top of the shape-only guard introduced in
 P12-W05 (B033). Given a live :class:`~eawf.surfaces.render.envelope.OutputEnvelope`
 and the matching golden-fixture dict, :func:`score_envelope` returns an
-:class:`~eawf.eval.models.EvalScore` with six dimension scores and the
+:class:`~eawf.observability.eval.models.EvalScore` with six dimension scores and the
 weighted total.
 
 Weight table (sums to 1.00):
@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from eawf.eval.models import EvalScore
+from eawf.observability.eval.models import EvalScore
 from eawf.surfaces.render.envelope import OutputEnvelope
 
 logger = logging.getLogger(__name__)

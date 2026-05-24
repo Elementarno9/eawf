@@ -2,7 +2,7 @@
 
 These rows are the typed projection target for the observability subsystem
 (C09 §5.9.2). Each model is retyped from the upstream agent-lens dataclasses
-(see :mod:`eawf.telemetry`'s ``_AGENT_LENS_AUDIT_COMMIT.txt`` for upstream
+(see :mod:`eawf.observability.telemetry`'s ``_AGENT_LENS_AUDIT_COMMIT.txt`` for upstream
 provenance) into a strict Pydantic v2 ``BaseModel`` with
 ``ConfigDict(extra="forbid")`` so the projection rejects unknown columns at
 the boundary instead of silently dropping data.

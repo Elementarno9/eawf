@@ -62,9 +62,9 @@ from eawf.kernel.store.kinds.events import (
     RuntimeSwitchedPayload,
 )
 from eawf.kernel.store.kinds.events.base import RuntimeTriple, TracedEventPayload
+from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.runtime.budget.service import record_consumption
 from eawf.runtime.lock import portalock
-from eawf.telemetry.models import RuntimeErrorClass
 from eawf.workflow.agent_report.store import append_agent_report
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle.wave import start_wave
@@ -235,7 +235,7 @@ def emit_runtime_switched(
         attempt_id_to: Attempt id minted for the replacement runtime.
         runtime_from: Runtime switched away from.
         runtime_to: Runtime switched to.
-        cause: Typed :class:`~eawf.telemetry.models.RuntimeErrorClass`
+        cause: Typed :class:`~eawf.observability.telemetry.models.RuntimeErrorClass`
             member that triggered the switch (scrubbed).
         error_detail: Scrubbed stderr / failure detail for diagnosis.
         idempotency_key: De-dup key so a retried emit does not
@@ -650,7 +650,7 @@ def run_dispatch(
         model: Model the serving runtime priced its cost against.
         pricing_version: ``PRICING`` snapshot version pinning the cost.
         primary_error: Typed
-            :class:`~eawf.telemetry.models.RuntimeErrorClass` member when
+            :class:`~eawf.observability.telemetry.models.RuntimeErrorClass` member when
             the primary runtime fails (triggers a V5 fallback), or ``None``
             when the primary serves the dispatch with no switch.
         tokens: Token tally the serving attempt accrued.
