@@ -3559,6 +3559,16 @@
       "scope_id": "P27-I05-W14",
       "status": "done",
       "updated_at": "2026-05-24T20:15:14.896438Z"
+    },
+    "P27-I05-W15": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W15-close-20260524T202943Z",
+      "elapsed_eu": 39.2,
+      "id": "ACT-P27-I05-W15",
+      "scope_id": "P27-I05-W15",
+      "status": "done",
+      "updated_at": "2026-05-24T20:29:43.653347Z"
     }
   },
   "agent_sessions": {
@@ -6949,6 +6959,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I05-W14",
       "updated_at": "2026-05-24T20:09:13.111377Z"
+    },
+    "P27-I05-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W15-bucket-20260524T201546Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W15",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W15",
+      "updated_at": "2026-05-24T20:15:46.946188Z"
     }
   },
   "goals": {
@@ -8326,7 +8349,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T20:15:14.897055Z",
+  "updated_at": "2026-05-24T20:29:43.654155Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20982,9 +21005,9 @@
       "blocks": [
         "P27-I05-W16"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T20:29:43.653347Z",
+      "commit": "b124442fb6ef7bdb1203fa45ac848c2cde20131c",
       "deps": [
         "P27-I05-W14"
       ],
@@ -21002,10 +21025,10 @@
       "id": "P27-I05-W15",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:35.460258Z",
-      "outcome": null,
+      "outcome": "kernel super-package (state/store/config/validate/spec/migrations) regrouped; ~1378 refs codemod'd; pyproject coverage/mutmut/ruff paths + bundled schemas + autogen regenerated; 21 EAWF001 logs un-grandfathered; mypy+ruff+deptry+import-budget+full suite green (2 dev-only telemetry)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "kernel members moved under kernel/; re-export shims at old paths; mypy and tests and import-budget green"
       ],
