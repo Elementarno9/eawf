@@ -6615,10 +6615,7 @@
         "P27-I04-W06",
         "P27-I04-W07",
         "P27-I04-W08",
-        "P27-I04-W09",
-        "P27-I04-W10",
-        "P27-I04-W11",
-        "P27-I04-W12"
+        "P27-I04-W09"
       ]
     },
     "P27-I05": {
@@ -6652,7 +6649,10 @@
         "P27-I05-W18",
         "P27-I05-W19",
         "P27-I05-W20",
-        "P27-I05-W21"
+        "P27-I05-W21",
+        "P27-I05-W22",
+        "P27-I05-W23",
+        "P27-I05-W24"
       ]
     }
   },
@@ -7207,7 +7207,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T00:58:00.387104Z",
+  "updated_at": "2026-05-24T01:07:58.258689Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18508,9 +18508,7 @@
     },
     "P27-I04-W03": {
       "agent_role": "executor",
-      "blocks": [
-        "P27-I04-W10"
-      ],
+      "blocks": [],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -18575,9 +18573,7 @@
     },
     "P27-I04-W05": {
       "agent_role": "executor",
-      "blocks": [
-        "P27-I04-W10"
-      ],
+      "blocks": [],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -18644,9 +18640,7 @@
     },
     "P27-I04-W07": {
       "agent_role": "executor",
-      "blocks": [
-        "P27-I04-W10"
-      ],
+      "blocks": [],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -18709,9 +18703,7 @@
     },
     "P27-I04-W09": {
       "agent_role": "executor",
-      "blocks": [
-        "P27-I04-W10"
-      ],
+      "blocks": [],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -18737,105 +18729,6 @@
         "config modal surfaces previously-hidden leaf keys (ui.glyphs; ui.dashboard_panes; estimation.display.*; telemetry.*; daemon.*) plus the new ui.toasts via curated CONFIG_REGISTRY rows; no full-catalog browser"
       ],
       "title": "Config pane: surface hidden leaf keys",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
-    "P27-I04-W10": {
-      "agent_role": "executor",
-      "blocks": [
-        "P27-I04-W11"
-      ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
-      "deps": [
-        "P27-I04-W03",
-        "P27-I04-W05",
-        "P27-I04-W07",
-        "P27-I04-W09"
-      ],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "M",
-      "file_scopes": [
-        "src/eawf/cli/commands/evidence_incident.py",
-        "pyproject.toml"
-      ],
-      "id": "P27-I04-W10",
-      "iter_id": "P27-I04",
-      "opened_at": "2026-05-23T15:41:31.828637Z",
-      "outcome": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
-      ],
-      "title": "Deviation cleanup + wheel recalibration",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
-    "P27-I04-W11": {
-      "agent_role": "executor",
-      "blocks": [
-        "P27-I04-W12"
-      ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
-      "deps": [
-        "P27-I04-W10"
-      ],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "XS",
-      "file_scopes": [
-        "src/eawf/_version.py"
-      ],
-      "id": "P27-I04-W11",
-      "iter_id": "P27-I04",
-      "opened_at": "2026-05-23T15:41:32.271297Z",
-      "outcome": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        "eawf --version and the wheel METADATA report 0.3.0; the bump rides P27 phase close after every I02 / I03 / I04 functional wave is CLOSED (enforced by phase-close timing not explicit deps)"
-      ],
-      "title": "Version bump 0.2.0 -> 0.3.0",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
-    "P27-I04-W12": {
-      "agent_role": "executor",
-      "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
-      "deps": [
-        "P27-I04-W11"
-      ],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "M",
-      "file_scopes": [
-        "src/eawf/cli/commands/release.py",
-        ".github/workflows/release.yaml"
-      ],
-      "id": "P27-I04-W12",
-      "iter_id": "P27-I04",
-      "opened_at": "2026-05-23T15:41:32.719717Z",
-      "outcome": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        "eawf release tags and triggers the pipeline; publish is un-gated behind an explicit condition; twine check dist/* runs before publish; the pipeline builds and validates"
-      ],
-      "title": "eawf release verb + un-gate pipeline",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -19483,7 +19376,9 @@
     },
     "P27-I05-W21": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P27-I05-W22"
+      ],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -19508,6 +19403,102 @@
         "old-path shims removed; imports use layered paths; string-refs and golden updated; mypy and full suite green"
       ],
       "title": "Remove transitional import shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W22": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W23"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W21"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/evidence_incident.py",
+        "pyproject.toml"
+      ],
+      "id": "P27-I05-W22",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T01:07:52.372624Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
+      ],
+      "title": "Deviation cleanup + wheel recalibration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W23": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W24"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W22"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/_version.py"
+      ],
+      "id": "P27-I05-W23",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T01:07:55.344902Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf --version and the wheel METADATA report 0.3.0; the bump rides P27 phase close after every I02 / I03 / I04 / I05 functional wave is CLOSED (enforced by phase-close timing not explicit deps)"
+      ],
+      "title": "Version bump 0.2.0 -> 0.3.0",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W23"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/release.py",
+        ".github/workflows/release.yaml"
+      ],
+      "id": "P27-I05-W24",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T01:07:58.258491Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf release tags and triggers the pipeline; publish is un-gated behind an explicit condition; twine check dist/* runs before publish; the pipeline builds and validates"
+      ],
+      "title": "eawf release verb + un-gate pipeline",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
