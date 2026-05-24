@@ -405,9 +405,15 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     rows: list[tuple[str, str]] = [
         ("id", item.id),
         ("title", item.title),
-        ("priority", item.priority.value),
-        ("status", item.status.value),
     ]
+    if item.description is not None:
+        rows.append(("description", item.description))
+    rows.extend(
+        [
+            ("priority", item.priority.value),
+            ("status", item.status.value),
+        ]
+    )
     if item.resolution is not None:
         rows.append(("resolution", item.resolution))
     return DetailCard(title=f"backlog {item.id}", rows=tuple(rows))

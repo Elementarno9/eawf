@@ -616,3 +616,61 @@ def test_detail_modal_row_value_with_bracket_renders() -> None:
             assert "[ab]" in rendered
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Backlog description block (W13)
+# --------------------------------------------------------------------------
+
+
+def _state_with_described_backlog(
+    description: str = "Long-form purpose for this backlog item",
+) -> tuple[State, str]:
+    """Return a state whose first backlog item carries *description*, plus its id.
+
+    The committed backlog fixture leaves ``description`` unset, so the
+    description-block paths need an item with a populated field. The model
+    is frozen — ``model_copy`` makes the edit.
+    """
+    state = _load(_BACKLOG)
+    item_id = next(iter(state.backlog))
+    described = state.backlog[item_id].model_copy(update={"description": description})
+    new_backlog = dict(state.backlog)
+    new_backlog[item_id] = described
+    return state.model_copy(update={"backlog": new_backlog}), item_id
+
+
+def test_resolve_detail_backlog_card_includes_description_under_title() -> None:
+    state, item_id = _state_with_described_backlog("Why this item exists")
+    card = resolve_detail(state, item_id)
+    labels = [label for label, _ in card.rows]
+    assert "description" in labels
+    # The description sits directly under the title row.
+    assert labels.index("description") == labels.index("title") + 1
+    assert ("description", "Why this item exists") in card.rows
+
+
+def test_resolve_detail_backlog_card_omits_description_when_absent() -> None:
+    state = _load(_BACKLOG)
+    item_id = next(iter(state.backlog))
+    card = resolve_detail(state, item_id)
+    labels = {label for label, _ in card.rows}
+    assert "description" not in labels
+
+
+def test_detail_modal_backlog_shows_description_block() -> None:
+    async def body() -> None:
+        state, item_id = _state_with_described_backlog("Persist cost rows regardless")
+        app = EaApp(scope="repo", state_path=_BACKLOG)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            card = resolve_detail(state, item_id)
+            app.push_screen(DetailModal(card))
+            await pilot.pause()
+            modal = app.screen
+            assert isinstance(modal, DetailModal)
+            rendered = capture_screen_text(app)
+            assert "description" in rendered
+            assert "Persist cost rows regardless" in rendered
+
+    asyncio.run(body())
