@@ -3479,6 +3479,26 @@
       "scope_id": "P27-I05-W06",
       "status": "done",
       "updated_at": "2026-05-24T19:07:09.869332Z"
+    },
+    "P27-I05-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W07-close-20260524T192524Z",
+      "elapsed_eu": 37.06,
+      "id": "ACT-P27-I05-W07",
+      "scope_id": "P27-I05-W07",
+      "status": "done",
+      "updated_at": "2026-05-24T19:25:24.238580Z"
+    },
+    "P27-I05-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W08-close-20260524T192525Z",
+      "elapsed_eu": 37.06,
+      "id": "ACT-P27-I05-W08",
+      "scope_id": "P27-I05-W08",
+      "status": "done",
+      "updated_at": "2026-05-24T19:25:25.231828Z"
     }
   },
   "agent_sessions": {
@@ -6765,6 +6785,32 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W06",
       "updated_at": "2026-05-24T19:06:27.821860Z"
+    },
+    "P27-I05-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W07-bucket-20260524T192523Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W07",
+      "updated_at": "2026-05-24T19:25:23.717476Z"
+    },
+    "P27-I05-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W08-bucket-20260524T192524Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W08",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W08",
+      "updated_at": "2026-05-24T19:25:24.729743Z"
     }
   },
   "goals": {
@@ -8142,7 +8188,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T19:07:09.869965Z",
+  "updated_at": "2026-05-24T19:25:25.232261Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20558,9 +20604,9 @@
     "P27-I05-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:25:24.238580Z",
+      "commit": "9038c148ec03435916024827669b3267790fd021",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20572,10 +20618,10 @@
       "id": "P27-I05-W07",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:31.538123Z",
-      "outcome": null,
+      "outcome": "re-sync after state revert: cli/app.py registration wall -> declarative cli/registry.py; import-budget green; CLI surface identical (63 cmds)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "declarative command registry; lazy imports preserved; import-budget passes; wave-era comments normalized"
       ],
@@ -20587,9 +20633,9 @@
     "P27-I05-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:25:25.231828Z",
+      "commit": "42c2e0749089310d1e583627120800abb696168a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20601,10 +20647,10 @@
       "id": "P27-I05-W08",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:32.018513Z",
-      "outcome": null,
+      "outcome": "config registry god-file split into config/registry package with facade; delisted C901+EAWF010; ruff/mypy clean; 582 config tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "registry split by responsibility; facade re-exports stable; dropped from C901; config tests pass"
       ],
