@@ -3599,6 +3599,16 @@
       "scope_id": "P27-I05-W18",
       "status": "done",
       "updated_at": "2026-05-24T22:42:22.582264Z"
+    },
+    "P27-I05-W19": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W19-close-20260524T225416Z",
+      "elapsed_eu": 44.02,
+      "id": "ACT-P27-I05-W19",
+      "scope_id": "P27-I05-W19",
+      "status": "done",
+      "updated_at": "2026-05-24T22:54:16.367444Z"
     }
   },
   "agent_sessions": {
@@ -7041,6 +7051,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W18",
       "updated_at": "2026-05-24T21:52:58.095346Z"
+    },
+    "P27-I05-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W19-bucket-20260524T224422Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W19",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W19",
+      "updated_at": "2026-05-24T22:44:22.113391Z"
     }
   },
   "goals": {
@@ -8418,7 +8441,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T22:42:22.582843Z",
+  "updated_at": "2026-05-24T22:54:16.367712Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21227,9 +21250,9 @@
       "blocks": [
         "P27-I05-W20"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T22:54:16.367444Z",
+      "commit": "54c57d70c5851f7cbc94dc28ac78b5da63d1623b",
       "deps": [
         "P27-I05-W18"
       ],
@@ -21246,10 +21269,10 @@
       "id": "P27-I05-W19",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:37.397933Z",
-      "outcome": null,
+      "outcome": "regrouped telemetry/logging/doctor/bench/eval under observability/ via codemod-all-refs (no shims); telemetry coverage-gate path + C901 ignores fixed; mypy + full suite green (2 pre-existing env-only telemetry failures)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "observability members moved under observability/; shims at old paths; mypy and tests green"
       ],
