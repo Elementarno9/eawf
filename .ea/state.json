@@ -3150,6 +3150,16 @@
       "status": "done",
       "updated_at": "2026-05-24T01:43:08.622214Z"
     },
+    "P27-I04-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W05-close-20260524T015716Z",
+      "elapsed_eu": 20.53,
+      "id": "ACT-P27-I04-W05",
+      "scope_id": "P27-I04-W05",
+      "status": "done",
+      "updated_at": "2026-05-24T01:57:16.614865Z"
+    },
     "P27-I04-W06": {
       "agent_runtime_eu": null,
       "attention_eu": null,
@@ -3159,6 +3169,16 @@
       "scope_id": "P27-I04-W06",
       "status": "done",
       "updated_at": "2026-05-24T01:43:09.133894Z"
+    },
+    "P27-I04-W07": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W07-close-20260524T015717Z",
+      "elapsed_eu": 20.53,
+      "id": "ACT-P27-I04-W07",
+      "scope_id": "P27-I04-W07",
+      "status": "done",
+      "updated_at": "2026-05-24T01:57:17.104732Z"
     },
     "P27-I04-W08": {
       "agent_runtime_eu": null,
@@ -5978,6 +5998,19 @@
       "scope_id": "P27-I04-W04",
       "updated_at": "2026-05-24T01:43:00.104196Z"
     },
+    "P27-I04-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W05-bucket-20260524T015715Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I04-W05",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I04-W05",
+      "updated_at": "2026-05-24T01:57:15.670784Z"
+    },
     "P27-I04-W06": {
       "confidence": "low",
       "current_store_record_id": "EST-P27-I04-W06-bucket-20260524T014300Z",
@@ -5990,6 +6023,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I04-W06",
       "updated_at": "2026-05-24T01:43:00.574711Z"
+    },
+    "P27-I04-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W07-bucket-20260524T015716Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W07",
+      "updated_at": "2026-05-24T01:57:16.130775Z"
     },
     "P27-I04-W08": {
       "confidence": "low",
@@ -7368,7 +7414,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T01:43:09.613301Z",
+  "updated_at": "2026-05-24T01:57:17.105025Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18735,9 +18781,9 @@
     "P27-I04-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-24T01:57:16.614865Z",
+      "commit": "be2b2f09b14c5a3261b2c857f08535fce3d4d475",
       "deps": [
         "P27-I04-W01",
         "P27-I04-W04"
@@ -18753,10 +18799,10 @@
       "id": "P27-I04-W05",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-23T15:41:29.590996Z",
-      "outcome": null,
+      "outcome": "status_pane DISPATCH band renders NOW/NEXT/WAIT from pure build_dispatch_slice (NEXT capped to planning.max_parallel_waves with +N more); NOW rows show agent_role + a Heartbeat-reuse pulsing dot driven by TICK_PULSE; degrades gracefully on dangling deps / ascii / SUSPEND",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "status_pane DISPATCH band renders NOW/NEXT/WAIT from a pure build_dispatch_slice (NEXT capped to planning.max_parallel_waves); NOW rows show agent role + a Heartbeat-reuse pulsing dot driven by TICK_PULSE"
       ],
@@ -18802,9 +18848,9 @@
     "P27-I04-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-24T01:57:17.104732Z",
+      "commit": "76551ae77407f8f73d114820d3ffc907a497f6d6",
       "deps": [
         "P27-I04-W06"
       ],
@@ -18818,10 +18864,10 @@
       "id": "P27-I04-W07",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-23T15:41:30.490917Z",
-      "outcome": null,
+      "outcome": "user scope renders a full-screen portfolio DataTable via a thin PortfolioTable(WorkspaceTable) subclass reusing the W06 family; Enter opens repo detail (no zoom quadrant), z inert; rows scroll at N=30 without breaking column widths",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "user scope renders a portfolio DataTable reusing the workspace table widget family; rows scroll without breaking column widths at large N"
       ],
