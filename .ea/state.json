@@ -3407,6 +3407,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-20-p26-i01-surfaces.md",
       "urn": "urn:eawf:v1:artifact:P26-I01/ART-A32-P26"
     },
+    "ART-research-2026-05-24-python-package-structure": {
+      "created_at": "2026-05-24T00:47:22.443335Z",
+      "id": "ART-research-2026-05-24-python-package-structure",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/research-2026-05-24-python-package-structure.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-research-2026-05-24-python-package-structure"
+    },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
       "created_at": "2026-05-18T19:17:46.268887Z",
       "id": "ART-research-long-term-2026-05-16-c00-spec-index",
@@ -6610,6 +6620,40 @@
         "P27-I04-W11",
         "P27-I04-W12"
       ]
+    },
+    "P27-I05": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P27-I05",
+      "opened_at": "2026-05-24T00:52:30.210157Z",
+      "phase_id": "P27",
+      "status": "planned",
+      "title": "P27-I05: package hygiene + backlog rollout + layered regroup",
+      "wave_ids": [
+        "P27-I05-W01",
+        "P27-I05-W02",
+        "P27-I05-W03",
+        "P27-I05-W04",
+        "P27-I05-W05",
+        "P27-I05-W06",
+        "P27-I05-W07",
+        "P27-I05-W08",
+        "P27-I05-W09",
+        "P27-I05-W10",
+        "P27-I05-W11",
+        "P27-I05-W12",
+        "P27-I05-W13",
+        "P27-I05-W14",
+        "P27-I05-W15",
+        "P27-I05-W16",
+        "P27-I05-W17",
+        "P27-I05-W18",
+        "P27-I05-W19",
+        "P27-I05-W20",
+        "P27-I05-W21"
+      ]
     }
   },
   "mcp_grants": null,
@@ -7114,7 +7158,8 @@
         "P27-I01",
         "P27-I02",
         "P27-I03",
-        "P27-I04"
+        "P27-I04",
+        "P27-I05"
       ],
       "opened_at": "2026-05-18T19:45:11.534597Z",
       "outcome_ids": [],
@@ -7162,7 +7207,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-23T23:40:46.373751Z",
+  "updated_at": "2026-05-24T00:53:38.356857Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18791,6 +18836,678 @@
         "eawf release tags and triggers the pipeline; publish is un-gated behind an explicit condition; twine check dist/* runs before publish; the pipeline builds and validates"
       ],
       "title": "eawf release verb + un-gate pipeline",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/architecture/source-map.md",
+        "README.md"
+      ],
+      "id": "P27-I05-W01",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:52:30.722979Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "source-map lists every top-level package and entry points; doc-verify passes; README links it"
+      ],
+      "title": "Add architecture source-map doc",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "README.md",
+        "docs/architecture/overview.md"
+      ],
+      "id": "P27-I05-W02",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:29.077319Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "README and overview state daemon-canonical mutator; package tree matches current src tree"
+      ],
+      "title": "Refresh stale mutator-authority docs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "pyproject.toml"
+      ],
+      "id": "P27-I05-W03",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:29.577992Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "platformdirs and pydantic-settings removed; jsonschema dev-only; deptry config fixed; deptry clean"
+      ],
+      "title": "Drop unused deps and fix deptry config",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/cli/dispatch.py",
+        ".ea/state.json"
+      ],
+      "id": "P27-I05-W04",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:30.088787Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "register_subcommand removed; no call sites; decision verdict recorded; tests green"
+      ],
+      "title": "Delete dead cli/dispatch.py helper",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/state/schema.py",
+        "src/eawf/docs/autogen.py",
+        "tests/unit/test_schema.py"
+      ],
+      "id": "P27-I05-W05",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:30.574194Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "single dump_schemas home; state/schema.py removed; test repointed; schema output unchanged"
+      ],
+      "title": "Dedup schema-dump into docs/autogen",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/state.json"
+      ],
+      "id": "P27-I05-W06",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:31.056122Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "backlog item links wal_admin.py to v0.4 state.mutate wiring"
+      ],
+      "title": "Track wal_admin wiring as backlog item",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/app.py",
+        "src/eawf/cli/registry.py"
+      ],
+      "id": "P27-I05-W07",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:31.538123Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "declarative command registry; lazy imports preserved; import-budget passes; wave-era comments normalized"
+      ],
+      "title": "Thin cli/app.py registration wall",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/config/registry.py",
+        "src/eawf/config/__init__.py"
+      ],
+      "id": "P27-I05-W08",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:32.018513Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "registry split by responsibility; facade re-exports stable; dropped from C901; config tests pass"
+      ],
+      "title": "Split config/registry.py into submodules",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli/commands/repo.py",
+        "src/eawf/cli/commands/plugin.py",
+        "src/eawf/cli/commands/memory.py",
+        "src/eawf/render/skills.py",
+        "src/eawf/skills/flow.py",
+        "src/eawf/tui/screens/overlays/config_modal.py"
+      ],
+      "id": "P27-I05-W09",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:32.515642Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "each god-file split by seam; facades stable; C901 entries dropped; tests and golden green"
+      ],
+      "title": "Split remaining >1000-loc god-files",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/dead_modules.py"
+      ],
+      "id": "P27-I05-W10",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:32.994491Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "reports AST inbound-zero modules with allowlist for entry points and resource pkgs; report-only"
+      ],
+      "title": "Add dead-file advisory script",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/cli/commands/evidence_backlog.py",
+        "src/eawf/evidence/backlog.py"
+      ],
+      "id": "P27-I05-W11",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:33.481592Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "backlog add --description; backlog edit sets title and description; edit_backlog mutator; boundary and error tests"
+      ],
+      "title": "Add backlog --description and edit verb",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W11"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/state.json"
+      ],
+      "id": "P27-I05-W12",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:33.973558Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "all 65 items have concise title and populated description via backlog edit; lint_entity_title clean"
+      ],
+      "title": "Rewrite all backlog items with title+description",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/screens/overlays/detail.py"
+      ],
+      "id": "P27-I05-W13",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:34.463360Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "detail card shows description block under title; Pilot test asserts render"
+      ],
+      "title": "Render backlog description in TUI detail card",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W14": {
+      "agent_role": "researcher",
+      "blocks": [
+        "P27-I05-W15"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/local/research"
+      ],
+      "id": "P27-I05-W14",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:34.943006Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "kernel codemod prototyped; 249 string-refs audited; go/no-go verdict in brief"
+      ],
+      "title": "Spike: layered package regroup feasibility",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W14"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/state",
+        "src/eawf/store",
+        "src/eawf/config",
+        "src/eawf/validate",
+        "src/eawf/spec",
+        "src/eawf/migrations"
+      ],
+      "id": "P27-I05-W15",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:35.460258Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "kernel members moved under kernel/; re-export shims at old paths; mypy and tests and import-budget green"
+      ],
+      "title": "Regroup kernel/ super-package with shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W17"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W15"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/lifecycle",
+        "src/eawf/evidence",
+        "src/eawf/skills",
+        "src/eawf/agents",
+        "src/eawf/agent_report",
+        "src/eawf/audit_dsl",
+        "src/eawf/dispatch",
+        "src/eawf/pr_review",
+        "src/eawf/estimation"
+      ],
+      "id": "P27-I05-W16",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:35.940871Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "workflow members moved under workflow/; shims at old paths; mypy and tests green"
+      ],
+      "title": "Regroup workflow/ super-package with shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W18"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W16"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/daemon",
+        "src/eawf/runtimes",
+        "src/eawf/mcp",
+        "src/eawf/sandbox",
+        "src/eawf/session",
+        "src/eawf/lock",
+        "src/eawf/budget",
+        "src/eawf/ci_loop",
+        "src/eawf/worktree",
+        "src/eawf/hooks",
+        "src/eawf/vcs"
+      ],
+      "id": "P27-I05-W17",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:36.424611Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "runtime members moved under runtime/; shims at old paths; mypy and tests green"
+      ],
+      "title": "Regroup runtime/ super-package with shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W19"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W17"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/cli",
+        "src/eawf/tui",
+        "src/eawf/render"
+      ],
+      "id": "P27-I05-W18",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:36.918029Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "surfaces members moved under surfaces/; shims at old paths; cli autogen and tests green"
+      ],
+      "title": "Regroup surfaces/ super-package with shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W20"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W18"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/telemetry",
+        "src/eawf/logging",
+        "src/eawf/doctor",
+        "src/eawf/bench",
+        "src/eawf/eval"
+      ],
+      "id": "P27-I05-W19",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:37.397933Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "observability members moved under observability/; shims at old paths; mypy and tests green"
+      ],
+      "title": "Regroup observability/ super-package with shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W19"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/profiles",
+        "src/eawf/registry",
+        "src/eawf/install",
+        "src/eawf/templates",
+        "src/eawf/artifacts",
+        "src/eawf/memory",
+        "src/eawf/scrub",
+        "src/eawf/lint",
+        "src/eawf/backup",
+        "src/eawf/docs"
+      ],
+      "id": "P27-I05-W20",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:37.879673Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "platform members moved under platform/; importlib.resources names updated; shims at old paths; tests green"
+      ],
+      "title": "Regroup platform/ super-package with shims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W20"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf",
+        "tests"
+      ],
+      "id": "P27-I05-W21",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T00:53:38.356677Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "old-path shims removed; imports use layered paths; string-refs and golden updated; mypy and full suite green"
+      ],
+      "title": "Remove transitional import shims",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
