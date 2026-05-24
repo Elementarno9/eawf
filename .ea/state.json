@@ -3619,6 +3619,16 @@
       "scope_id": "P27-I05-W20",
       "status": "done",
       "updated_at": "2026-05-24T23:16:08.248960Z"
+    },
+    "P27-I05-W21": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W21-close-20260524T233051Z",
+      "elapsed_eu": 45.24,
+      "id": "ACT-P27-I05-W21",
+      "scope_id": "P27-I05-W21",
+      "status": "done",
+      "updated_at": "2026-05-24T23:30:51.899187Z"
     }
   },
   "agent_sessions": {
@@ -7087,6 +7097,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W20",
       "updated_at": "2026-05-24T22:56:42.682904Z"
+    },
+    "P27-I05-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W21-bucket-20260524T231815Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W21",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W21",
+      "updated_at": "2026-05-24T23:18:15.058439Z"
     }
   },
   "goals": {
@@ -8464,7 +8487,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T23:16:08.249251Z",
+  "updated_at": "2026-05-24T23:30:51.900171Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21352,9 +21375,9 @@
         "P27-I05-W25",
         "P27-I05-W26"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T23:30:51.899187Z",
+      "commit": "d4f9eb79a8cae874e636f7759772f809583757a5",
       "deps": [
         "P27-I05-W20"
       ],
@@ -21368,10 +21391,10 @@
       "id": "P27-I05-W21",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:38.356677Z",
-      "outcome": null,
+      "outcome": "no shims to remove (codemod-all-refs per W14 GO); verified zero old-path member packages remain; added test_package_layering guard enforcing the six-layer invariant; functional string-refs handled per-wave; mypy + full suite green (2 pre-existing env-only telemetry failures)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "old-path shims removed; imports use layered paths; string-refs and golden updated; mypy and full suite green"
       ],
