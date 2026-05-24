@@ -21,7 +21,7 @@ pytestmark = pytest.mark.unit
 
 def test_daemon_proxy_enabled_default_is_true() -> None:
     """Sanity check: the built-in defaults set ``daemon.proxy_enabled = True``."""
-    from eawf.config.defaults import BUILT_IN_DEFAULTS, built_in_defaults
+    from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS, built_in_defaults
 
     snapshot = built_in_defaults()
     assert snapshot["daemon"]["proxy_enabled"] is True
@@ -37,7 +37,7 @@ def test_daemon_section_carries_idle_timeout_and_session_ttl() -> None:
     will fail here rather than at runtime when the watchdog or session
     sweeper boots without its config.
     """
-    from eawf.config.defaults import built_in_defaults
+    from eawf.kernel.config.defaults import built_in_defaults
 
     snapshot = built_in_defaults()
     daemon = snapshot["daemon"]

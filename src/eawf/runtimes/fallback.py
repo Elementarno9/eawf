@@ -29,10 +29,10 @@ from __future__ import annotations
 import logging
 from enum import StrEnum
 
+from eawf.kernel.state.enums import DispatchNote
+from eawf.kernel.state.models import DispatchAnnotation
+from eawf.kernel.state.types import UtcDatetime
 from eawf.runtimes.adapter import ALL_ERROR_CLASSES, ErrorClass
-from eawf.state.enums import DispatchNote
-from eawf.state.models import DispatchAnnotation
-from eawf.state.types import UtcDatetime
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from eawf.kernel.state.models import Audit
 from eawf.render.artifact_chassis import render_provenance, render_references, render_scrub_status
-from eawf.state.models import Audit
 
 
 def render_audit_markdown(audit: Audit) -> str:

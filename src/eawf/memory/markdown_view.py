@@ -27,8 +27,8 @@ either the prior bytes or the fresh bytes — never a torn write.
 
 Default filtering:
 
-:class:`~eawf.state.enums.MemoryStatus.PRUNED` and
-:class:`~eawf.state.enums.MemoryStatus.SUPERSEDED` entries are excluded from
+:class:`~eawf.kernel.state.enums.MemoryStatus.PRUNED` and
+:class:`~eawf.kernel.state.enums.MemoryStatus.SUPERSEDED` entries are excluded from
 the views by default; ``include_superseded=True`` admits ``SUPERSEDED`` so
 the view doubles as an "is this rule still alive?" reference. ``PRUNED``
 entries are NEVER rendered (they are tombstones).
@@ -39,11 +39,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from eawf.kernel.state.enums import MemoryStatus
+from eawf.kernel.state.models import MemorySummary, State
 from eawf.memory.store import read_envelopes
 from eawf.render._atomic import atomic_write_text
 from eawf.render.regions import replace_region
-from eawf.state.enums import MemoryStatus
-from eawf.state.models import MemorySummary, State
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +192,7 @@ def render_all_views(
     if not scopes:
         # No memory entries qualify — emit nothing. ``init``-only workspaces
         # therefore see no view drift on subsequent ``sync --check`` calls.
-        logger.info(f"render_all_views write={write} count=0 dir={output_dir} (no entries)")
+        logger.info(f"render_all_views write={write} count=0 dir={output_dir}; no entries")
         return []
     paths: list[Path] = []
     if write:

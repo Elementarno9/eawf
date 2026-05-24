@@ -12,9 +12,9 @@ from datetime import UTC, datetime
 from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
-from eawf.state.enums import HypothesisStatus, HypothesisVerdict
-from eawf.state.models import Hypothesis, State
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import HypothesisStatus, HypothesisVerdict
+from eawf.kernel.state.models import Hypothesis, State
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

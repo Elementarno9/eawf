@@ -23,7 +23,7 @@ from pathlib import Path
 
 import yaml
 
-from eawf.config.migration import migrate_config_file, migrate_config_payload
+from eawf.kernel.config.migration import migrate_config_file, migrate_config_payload
 
 # --- in-memory cleanup ------------------------------------------------------
 

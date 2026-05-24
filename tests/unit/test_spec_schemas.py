@@ -3,7 +3,7 @@
 Covers boundary cases (empty list / single / multi) and error paths
 (extra key, wrong type, schema_version mismatch, missing required
 fields, id-nesting violations) for PhaseSpec, IterSpec, WaveSpec and
-their shared building blocks under :mod:`eawf.spec.common`.
+their shared building blocks under :mod:`eawf.kernel.spec.common`.
 """
 
 from __future__ import annotations
@@ -13,19 +13,19 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.spec.common import (
+from eawf.kernel.spec.common import (
     EvidenceRef,
     VerdictCitation,
 )
-from eawf.spec.iter import IterAuditCadence, IterSpec, IterWaveGroup
-from eawf.spec.phase import (
+from eawf.kernel.spec.iter import IterAuditCadence, IterSpec, IterWaveGroup
+from eawf.kernel.spec.phase import (
     PhaseEUEnvelope,
     PhaseKPI,
     PhaseShipCriterion,
     PhaseSpec,
 )
-from eawf.spec.wave import WaveBehavior, WaveMockup, WaveSpec
-from eawf.state.enums import AgentSessionRole, EffortBucket
+from eawf.kernel.spec.wave import WaveBehavior, WaveMockup, WaveSpec
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 # ---- Common building blocks -------------------------------------------------
 
@@ -40,7 +40,7 @@ def _verdict_citation() -> VerdictCitation:
 def test_common_imports_clean() -> None:
     # Re-import smoke test: the four public symbols load without circular
     # import (W01 success criterion #1).
-    from eawf.spec.common import (  # noqa: F401
+    from eawf.kernel.spec.common import (  # noqa: F401
         EvidenceRef,
         VerdictCitation,
     )
@@ -699,7 +699,7 @@ def test_wave_spec_accepts_multi_file_scopes() -> None:
 
 
 def test_package_reexports() -> None:
-    from eawf import spec
+    from eawf.kernel import spec
 
     expected = {
         "BriefPathStr",

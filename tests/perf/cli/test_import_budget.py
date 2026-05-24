@@ -36,7 +36,7 @@ command-handler sweep, tracked as a Phase-2 follow-up):
 
 * ``pydantic`` / ``pydantic_core`` — :mod:`eawf.cli.errors` builds the
   ``ErrorEnvelope`` BaseModel at module load.
-* ``eawf.config.registry`` — :mod:`eawf.cli.help_panels` calls
+* ``eawf.kernel.config.registry`` — :mod:`eawf.cli.help_panels` calls
   ``tabs_sorted()`` at module load to build ``PANEL_ORDER``.
 """
 
@@ -52,18 +52,18 @@ import pytest
 #: Heavy modules the CLI tree-build path (``import eawf.cli.app``) must
 #: NOT load. Each entry was confirmed absent from a fresh-subprocess
 #: ``sys.modules`` dump after the W30 lazy-import sweep. ``pydantic`` /
-#: ``pydantic_core`` / ``eawf.config.registry`` are intentionally
+#: ``pydantic_core`` / ``eawf.kernel.config.registry`` are intentionally
 #: excluded — they are shared-infra residuals (see module docstring).
 FORBIDDEN_MODULES: tuple[str, ...] = (
-    "eawf.state.models",
-    "eawf.validate.strict",
-    "eawf.config.profile",
-    "eawf.config.loader",
-    "eawf.config.layered",
+    "eawf.kernel.state.models",
+    "eawf.kernel.validate.strict",
+    "eawf.kernel.config.profile",
+    "eawf.kernel.config.loader",
+    "eawf.kernel.config.layered",
     "eawf.daemon.main",
     "eawf.mcp.installer",
     "eawf.sandbox.policy",
-    "eawf.store.kinds",
+    "eawf.kernel.store.kinds",
     "eawf.profiles.compose",
     "eawf.profiles.loader",
     "jinja2",

@@ -14,8 +14,8 @@ from pathlib import Path
 import orjson
 from textual.widgets import Markdown, Static, TabbedContent
 
-from eawf.state.enums import EffortBucket
-from eawf.state.models import State
+from eawf.kernel.state.enums import EffortBucket
+from eawf.kernel.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.screens.overlays.detail import (
     _TAB_LABELS,

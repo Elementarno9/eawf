@@ -1,7 +1,7 @@
 """``/wave-spec`` skill — scaffold / validate a WaveSpec for a wave.
 
 ``/wave-spec`` is the skill surface over the WaveSpec deliverable
-document (:class:`eawf.spec.wave.WaveSpec`). Two verbs map onto the
+document (:class:`eawf.kernel.spec.wave.WaveSpec`). Two verbs map onto the
 operator-facing ``eawf spec`` CLI:
 
 - ``/wave-spec init <wave-id>``     → scaffold a new WaveSpec.

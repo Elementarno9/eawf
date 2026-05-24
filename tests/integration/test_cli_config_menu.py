@@ -32,7 +32,7 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 from eawf.cli.commands import config as config_cmd
 from eawf.cli.exit_codes import INVALID_INPUT, USER_DECLINED
-from eawf.config import layered, registry
+from eawf.kernel.config import layered, registry
 
 runner = CliRunner()
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 
-from eawf.state.enums import SpecStatus
+from eawf.kernel.state.enums import SpecStatus
 
 logger = logging.getLogger(__name__)
 

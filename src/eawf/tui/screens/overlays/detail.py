@@ -20,7 +20,7 @@ the resolved entity are built, so an entity with no dispatch history shows
 no ``e`` tab rather than an empty one; a hotkey for an absent tab no-ops.
 
 Entity resolution is a pure function (:func:`resolve_detail`) that takes
-the reactive :class:`~eawf.state.models.State` and the selection id and
+the reactive :class:`~eawf.kernel.state.models.State` and the selection id and
 returns a typed :class:`DetailCard` (title + per-tab section rows). It
 resolves waves, iters, phases, and backlog items; an unknown id yields a
 total fallback card so the drill-in seam never crashes when the state and
@@ -51,7 +51,7 @@ from eawf.tui.widgets.eu_bar import (
 )
 
 if TYPE_CHECKING:
-    from eawf.state.models import State, Wave
+    from eawf.kernel.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +373,7 @@ def _wave_completion(state: State, wave_ids: list[str]) -> tuple[int, int]:
         A ``(closed, total)`` pair; *total* is the count of *wave_ids* that
         resolve to a known wave, *closed* the subset with a CLOSED status.
     """
-    from eawf.state.enums import WaveStatus
+    from eawf.kernel.state.enums import WaveStatus
 
     total = 0
     closed = 0

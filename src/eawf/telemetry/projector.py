@@ -58,7 +58,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
-from eawf.store.envelope import Envelope
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.aggregator import incident_from_envelope, roll_session
 from eawf.telemetry.models import (
     TelemetryFileMeta,

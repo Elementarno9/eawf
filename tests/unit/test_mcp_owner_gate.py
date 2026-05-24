@@ -97,7 +97,7 @@ def tmp_state_with_user_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.delenv("EA_LOCK_TIMEOUT", raising=False)
     # Disable INV.OWNER.MCP_NON_EAWF so the load succeeds. We still
     # exercise the owner-gate guard *inside* the CLI handler.
-    from eawf.validate import invariants
+    from eawf.kernel.validate import invariants
 
     monkeypatch.setattr(
         invariants,

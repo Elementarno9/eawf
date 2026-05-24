@@ -39,8 +39,8 @@ from eawf.audit_dsl.kinds.verify_implements import (
     check_verify_implements,
 )
 from eawf.audit_dsl.models import CheckKind
-from eawf.spec.audit import AUDIT_CADENCE_VALUES, AuditSpec
-from eawf.state.enums import AuditKind
+from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES, AuditSpec
+from eawf.kernel.state.enums import AuditKind
 
 # ---- AuditSpec schema -------------------------------------------------------
 

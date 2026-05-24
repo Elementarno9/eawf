@@ -13,10 +13,10 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import AgentSessionRole
+from eawf.kernel.state.enums import AgentSessionRole
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 agent_report_app = typer.Typer(
     name="agent-report",
@@ -31,7 +31,7 @@ operator_app = typer.Typer(
 
 
 def _load_state(state_path: Path) -> State:
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     if not state_path.exists():
         raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")

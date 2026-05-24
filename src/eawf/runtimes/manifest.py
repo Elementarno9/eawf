@@ -30,7 +30,7 @@ Naming
 ------
 
 The ``runtime`` field uses the canonical runtime identifiers that
-also key :attr:`~eawf.state.models.SessionAttempt.runtime` and
+also key :attr:`~eawf.kernel.state.models.SessionAttempt.runtime` and
 the ``runtime.preference`` config layer:
 
 * ``"claude-code"``

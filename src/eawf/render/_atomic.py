@@ -1,7 +1,7 @@
 """Internal: atomic text-file writes for the render layer.
 
 Mirrors the tempfile + ``fsync`` + :func:`os.replace` + parent-dir ``fsync``
-idiom from :mod:`eawf.state.writer._write_payload`. Used by both the
+idiom from :mod:`eawf.kernel.state.writer._write_payload`. Used by both the
 AGENTS.md and CLAUDE.md renderers — single implementation avoids drift.
 """
 
@@ -17,7 +17,7 @@ from eawf.lock import portalock
 logger = logging.getLogger(__name__)
 
 
-# 5.0 s matches the rest of the codebase (e.g. :mod:`eawf.state.writer`,
+# 5.0 s matches the rest of the codebase (e.g. :mod:`eawf.kernel.state.writer`,
 # :func:`eawf.render.manifest.save_atomic`). Rendering is local file I/O —
 # tempfile + ``os.replace`` + a single sibling lock — so this is generous.
 # If a real-world workload trips ``LockTimeout``, raise to 10 s before
@@ -28,7 +28,7 @@ LOCK_TIMEOUT: float = 5.0
 def atomic_write_text(target: Path, payload: str) -> None:
     """Write *payload* to *target* atomically under a sibling portalock.
 
-    Procedure (mirrors :func:`eawf.state.writer._write_payload`):
+    Procedure (mirrors :func:`eawf.kernel.state.writer._write_payload`):
 
     1. Acquire :func:`eawf.lock.portalock.acquire` on *target* with
        :data:`LOCK_TIMEOUT`.
@@ -59,6 +59,6 @@ def atomic_write_text(target: Path, payload: str) -> None:
                 os.fsync(parent_fd)
             finally:
                 os.close(parent_fd)
-        logger.info(f"render._atomic target={target} bytes={len(encoded)}")
+        logger.info(f"render_atomic target={target} bytes={len(encoded)}")
     finally:
         tmp.unlink(missing_ok=True)

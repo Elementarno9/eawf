@@ -29,7 +29,7 @@ from eawf.agents.specs.models import (
     SubagentSpec,
 )
 from eawf.agents.specs.roles import KEPT_RUNTIMES, render_role_contract
-from eawf.state.enums import AgentSessionRole
+from eawf.kernel.state.enums import AgentSessionRole
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "subagent_spec"
 

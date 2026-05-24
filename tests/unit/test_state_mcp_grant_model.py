@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.state.models.McpGrant`.
+"""Unit tests for :class:`eawf.kernel.state.models.McpGrant`.
 
 Covers:
 
@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.models import McpGrant
+from eawf.kernel.state.models import McpGrant
 
 pytestmark = pytest.mark.unit
 

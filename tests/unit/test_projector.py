@@ -25,8 +25,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from eawf.state.enums import IncidentCause, IncidentSeverity, StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.models import (
     TelemetryFileMeta,
     TelemetryIncident,
@@ -77,7 +77,7 @@ class _EventFileSource:
     """In-test event source: discovers ``events.jsonl`` and yields envelopes.
 
     Mirrors the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
-    over :class:`~eawf.store.envelope.Envelope` rows so the projector's
+    over :class:`~eawf.kernel.store.envelope.Envelope` rows so the projector's
     incident path and offset bookkeeping are exercised on a line-per-row
     store. It reports ``source_name = "event_jsonl"`` so the projector treats
     it as a *line-independent* source and exercises the incremental tail-slice

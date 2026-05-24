@@ -1,7 +1,7 @@
 """DispatchCost-always-recorded invariant test (P27-I01-W16).
 
 The operator decision (D24-adjacent, C09 §5.9) is that a
-:class:`~eawf.store.kinds.events.dispatch_cost.DispatchCostPayload` lands
+:class:`~eawf.kernel.store.kinds.events.dispatch_cost.DispatchCostPayload` lands
 in ``event.jsonl`` **regardless of** ``telemetry.enabled``: telemetry
 gates the *projection* + the ``eawf metrics`` surface, never the raw cost
 event. The cost row is part of the canonical event ledger so a later
@@ -21,13 +21,13 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
-from eawf.config.layered import get_dotted, merge_config
 from eawf.daemon.dispatch_runner import (
     DispatchTokens,
     run_dispatch,
 )
 from eawf.daemon.methods import MethodContext
-from eawf.store.envelope import Envelope
+from eawf.kernel.config.layered import get_dotted, merge_config
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.models import RuntimeErrorClass
 
 

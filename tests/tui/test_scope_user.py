@@ -22,7 +22,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.scopes import ScopeScreen, UserScreen
 from eawf.tui.scopes.user import PortfolioTable, synthesize_user_state

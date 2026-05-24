@@ -35,13 +35,13 @@ from eawf.cli.commands.lifecycle import (
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.ids import is_wave_id
 from eawf.lock import portalock
-from eawf.state.enums import WaveStatus
-from eawf.state.ids import is_wave_id
 
 if TYPE_CHECKING:
     from eawf.dispatch import DispatchEnvelope
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -213,13 +213,13 @@ def wave_blocks_rebuild_cmd(
 
     After the rewrite, primes the typed :class:`WaveDagEdges` cache
     (P20-W15 / B026) by validating every wave's DAG edges through
-    :func:`eawf.state.wave_graph.edges`. The validation exposes the
+    :func:`eawf.kernel.state.wave_graph.edges`. The validation exposes the
     typed deps/blocks/blocked_by triple on the payload so downstream
     consumers (the TUI wave-board in W03) can confirm the rebuild
     landed against the canonical typed surface, not the inline list.
     """
-    from eawf.state import wave_graph
-    from eawf.state.models import State
+    from eawf.kernel.state import wave_graph
+    from eawf.kernel.state.models import State
 
     flags: GlobalFlags = ctx.obj
     if not apply_all:
@@ -641,7 +641,7 @@ def wave_budget_show_cmd(
     from pydantic import ValidationError as PydValidationError
 
     from eawf.budget.service import check_budget as budget_check
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):

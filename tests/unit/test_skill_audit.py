@@ -201,9 +201,9 @@ def _seed_state_with_wave(
     """Write a minimal state.json carrying one wave with criteria + scopes."""
     from datetime import UTC, datetime
 
+    from eawf.kernel.state.enums import ProjectStatus, ScopeKind
+    from eawf.kernel.state.models import CurrentPointers, Project, State
     from eawf.lifecycle.transitions import open_iter, open_phase, plan_wave
-    from eawf.state.enums import ProjectStatus, ScopeKind
-    from eawf.state.models import CurrentPointers, Project, State
 
     state = State.model_validate(
         {

@@ -27,9 +27,9 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import AgentReportPayload
 from eawf.render.envelope import OutputEnvelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import AgentReportPayload
 
 runner = CliRunner()
 

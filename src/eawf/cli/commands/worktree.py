@@ -4,7 +4,7 @@ Subcommands:
 
 - ``worktree create`` — branch from current HEAD, materialise a worktree
   under ``.ea/worktrees/<name>/``, append a
-  :class:`~eawf.state.models.WorktreeRecord`.
+  :class:`~eawf.kernel.state.models.WorktreeRecord`.
 - ``worktree list`` — read-only enumeration with a ``git worktree list
   --porcelain`` cross-check column.
 - ``worktree merge-back`` — replay worktree commits onto the parent
@@ -44,7 +44,7 @@ from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.ids import is_iter_id, is_wave_id
+from eawf.kernel.state.ids import is_iter_id, is_wave_id
 
 logger = logging.getLogger(__name__)
 

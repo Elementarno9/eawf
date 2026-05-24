@@ -1,6 +1,6 @@
 """Wave-level workflow metrics for the ``eawf metrics`` CLI.
 
-This module is **pure** — it consumes a typed :class:`~eawf.state.models.State`
+This module is **pure** — it consumes a typed :class:`~eawf.kernel.state.models.State`
 and returns deterministic :class:`MetricsSummary` records without touching
 disk, locks, or events. The CLI handler in :mod:`eawf.cli.commands.metrics`
 runs this once, then hands the result to the shared renderer in
@@ -10,14 +10,14 @@ overlay, and release-notes inserts).
 The four metrics, in order:
 
 1. **EU variance** — for every CLOSED wave that has both an
-   :class:`~eawf.state.models.EstimateSummary` and an
-   :class:`~eawf.state.models.ActualSummary`, compute
+   :class:`~eawf.kernel.state.models.EstimateSummary` and an
+   :class:`~eawf.kernel.state.models.ActualSummary`, compute
    ``elapsed_eu - expected_eu`` and roll up count / mean / stdev / inside-
    pessimistic share. The "inside pessimistic" share is the fraction of
    samples whose actual EU did not exceed the pessimistic estimate (the
    standard reference-class calibration metric).
 2. **Audit pass rate** — fraction of audits whose
-   :class:`~eawf.state.enums.AuditVerdict` is :data:`AuditVerdict.PASS`
+   :class:`~eawf.kernel.state.enums.AuditVerdict` is :data:`AuditVerdict.PASS`
    across audits with a verdict set. Audits with no verdict yet (e.g.
    PENDING/RUNNING with ``verdict=None``) are excluded from the
    denominator.
@@ -44,14 +44,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.enums import AuditVerdict, WaveStatus
-from eawf.state.models import State, Wave
+from eawf.kernel.state.enums import AuditVerdict, WaveStatus
+from eawf.kernel.state.models import State, Wave
 
 # Schema version for the JSON envelope. Bump only when fields change in a
 # wire-breaking way.
 METRICS_SCHEMA_VERSION: Literal[1] = 1
 
-# Wave-id grammar (mirrors :data:`eawf.state.ids.RE_WAVE`). Used to extract
+# Wave-id grammar (mirrors :data:`eawf.kernel.state.ids.RE_WAVE`). Used to extract
 # the iter suffix (``I01`` vs ``I02+``) for the planned/reactive split
 # without dragging the ``ids`` module into a pure compute path that
 # already has the full wave-id available.
@@ -158,7 +158,7 @@ class EstimateActualVarianceMetric(BaseModel):
 class WeeklyBurnMetric(BaseModel):
     """Rolling-7-day EU consumption rollup against ``Project.weekly_eu_target``.
 
-    ``consumed_eu`` sums :class:`~eawf.state.models.ActualSummary.elapsed_eu`
+    ``consumed_eu`` sums :class:`~eawf.kernel.state.models.ActualSummary.elapsed_eu`
     across actuals whose ``updated_at`` falls inside the trailing
     :data:`WEEKLY_BURN_WINDOW`. ``target_eu`` mirrors
     ``state.project.weekly_eu_target`` (``None`` when the field is unset, in

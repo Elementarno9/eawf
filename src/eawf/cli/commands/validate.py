@@ -4,7 +4,7 @@ Two modes, auto-detected from the file contents:
 
 - **State mode** (default): the file has a top-level ``project`` or
   ``workspace`` key. The validator runs the full schema + invariant
-  pipeline from :mod:`eawf.validate.strict`.
+  pipeline from :mod:`eawf.kernel.validate.strict`.
 - **Envelope mode**: the file has a top-level ``header`` and ``body``.
   The validator runs the §15.1 strict-mode contracts (``needs_user`` →
   ``body.user_question``; ``blocked|failed`` → ``footer.repair_commands``).
@@ -83,7 +83,7 @@ def validate(
 
     The mode is auto-detected from the top-level keys of *target_path*.
     """
-    from eawf.validate.strict import validate_envelope, validate_path
+    from eawf.kernel.validate.strict import validate_envelope, validate_path
 
     raw = orjson.loads(Path(target_path).read_bytes())
     if not isinstance(raw, dict):

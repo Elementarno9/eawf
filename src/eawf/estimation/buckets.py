@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
-from eawf.state.models import ActualSummary, EstimateSummary, State, Wave
+from eawf.kernel.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
+from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 
 BUCKET_EU: dict[EffortBucket, float] = {
     EffortBucket.XS: 0.25,

@@ -7,13 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from eawf.cli.commands.lifecycle import _phase_prepare_close_checklist
-from eawf.lifecycle.transitions import (
-    LifecycleError,
-    open_iter,
-    open_phase,
-    plan_wave,
-)
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     DecisionStatus,
     IterStatus,
     PhaseStatus,
@@ -21,11 +15,17 @@ from eawf.state.enums import (
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     CurrentPointers,
     Decision,
     Project,
     State,
+)
+from eawf.lifecycle.transitions import (
+    LifecycleError,
+    open_iter,
+    open_phase,
+    plan_wave,
 )
 
 

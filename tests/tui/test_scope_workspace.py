@@ -25,7 +25,7 @@ import orjson
 import pytest
 from rich.text import Text
 
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.scopes import ScopeScreen, WorkspaceScreen
 from eawf.tui.screens.overlays.config_modal import ConfigModal

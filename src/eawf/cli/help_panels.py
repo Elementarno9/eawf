@@ -1,7 +1,7 @@
 """Registry-aligned ``rich_help_panel`` assignments for the ``eawf`` CLI.
 
 The interactive ``eawf config`` menu groups operator-tunable keys by the
-:data:`eawf.config.registry.CONFIG_REGISTRY` tab — alphabetical tabs and
+:data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tab — alphabetical tabs and
 alphabetical-by-key fields within each tab (P20-W10). This module extends the
 same alphabetical convention to the top-level ``eawf --help`` listing so the
 two surfaces share one canonical grouping order.
@@ -9,7 +9,7 @@ two surfaces share one canonical grouping order.
 Public API:
 
 - :data:`COMMAND_PANELS` — command name → panel name (panel name is one of
-  the :data:`eawf.config.registry.CONFIG_REGISTRY` tabs).
+  the :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tabs).
 - :data:`PANEL_ORDER` — alphabetical tuple of panel names; the
   :class:`RegistryOrderedTyperGroup` uses this to enforce panel ordering.
 - :func:`panel_for` — resolve a command name to its panel.
@@ -17,7 +17,7 @@ Public API:
   subclass that returns commands sorted by ``(panel, name)`` so Rich's
   panel-grouping rendering emits panels in alphabetical order.
 
-Ordering policy (mirrors :mod:`eawf.config.registry`):
+Ordering policy (mirrors :mod:`eawf.kernel.config.registry`):
 
 * Panels are rendered in alphabetical order of their panel name.
 * Commands within a panel are rendered in alphabetical order of their
@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 
 from typer.core import TyperGroup
 
-from eawf.config.registry import tabs_sorted
+from eawf.kernel.config.registry import tabs_sorted
 
 if TYPE_CHECKING:
     import click
@@ -144,7 +144,7 @@ def _assert_panels_match_registry() -> None:
     Raises:
         AssertionError: When :data:`COMMAND_PANELS` references a panel name
             that no longer appears in :data:`PANEL_ORDER` — typically caused
-            by a tab rename in :data:`eawf.config.registry.CONFIG_REGISTRY`
+            by a tab rename in :data:`eawf.kernel.config.registry.CONFIG_REGISTRY`
             without a matching edit here.
     """
     assigned = set(COMMAND_PANELS.values())

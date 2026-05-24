@@ -3,7 +3,7 @@
 The :mod:`eawf.agents.specs` subpackage owns the typed
 :class:`~eawf.agents.specs.models.SubagentSpec` model and the role
 registry. The dispatch renderer (:mod:`eawf.dispatch.renderer`) builds a
-``SubagentSpec`` from a validated :class:`~eawf.state.models.State`
+``SubagentSpec`` from a validated :class:`~eawf.kernel.state.models.State`
 snapshot and renders it, so the wave prompt is produced from a typed
 spec rather than an ad-hoc string concatenation.
 

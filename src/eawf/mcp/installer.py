@@ -28,9 +28,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from eawf.kernel.state.models import McpServer
 from eawf.mcp.env_ref import assert_no_expansion, render_env_block
 from eawf.render._atomic import atomic_write_text
-from eawf.state.models import McpServer
 
 logger = logging.getLogger(__name__)
 

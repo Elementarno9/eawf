@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from eawf.artifacts.references import citation_numbers_in_text
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.research import ResearchPayload
 from eawf.render.artifact_chassis import (
     render_provenance,
     render_references,
     render_scrub_status,
 )
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.research import ResearchPayload
 
 
 def render_research_markdown(envelope: Envelope, payload: ResearchPayload) -> str:

@@ -23,7 +23,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-import eawf.config.layered as layered
+import eawf.kernel.config.layered as layered
 from eawf.cli.app import app
 from eawf.estimation.buckets import (
     BUCKET_EU,
@@ -34,8 +34,8 @@ from eawf.estimation.metrics import (
     EstimateActualVarianceMetric,
     compute_estimate_actual_variance,
 )
-from eawf.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
-from eawf.state.models import ActualSummary, EstimateSummary, State, Wave
+from eawf.kernel.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
+from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 from eawf.tui.widgets.variance_tile import (
     EMPTY_STATE,
     VarianceTile,

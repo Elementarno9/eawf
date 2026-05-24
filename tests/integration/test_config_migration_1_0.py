@@ -22,7 +22,7 @@ import pytest
 import yaml
 
 from eawf.cli.errors import ValidationError
-from eawf.config.migration import (
+from eawf.kernel.config.migration import (
     ACCEPTED_MARKERS,
     CURRENT_MARKER,
     LEGACY_MARKERS,

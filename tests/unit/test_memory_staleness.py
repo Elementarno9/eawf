@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from eawf.kernel.state.enums import Confidence, MemoryStatus
+from eawf.kernel.state.models import State
 from eawf.memory.staleness import find_stale
 from eawf.memory.store import add_memory
-from eawf.state.enums import Confidence, MemoryStatus
-from eawf.state.models import State
 
 
 def _make_state() -> State:

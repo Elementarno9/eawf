@@ -23,7 +23,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ session_app = typer.Typer(
 
 def _events_path_for(state_path: Path) -> Path:
     """Return the canonical events-store JSONL path next to ``state.json``."""
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.paths import store_path
 
     return store_path(state_path, StoreKind.EVENT)
 

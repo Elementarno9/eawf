@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.config import layered
-from eawf.config.layered import _normalise_runtime_adapters, merge_config
+from eawf.kernel.config import layered
+from eawf.kernel.config.layered import _normalise_runtime_adapters, merge_config
 
 
 @pytest.fixture(autouse=True)

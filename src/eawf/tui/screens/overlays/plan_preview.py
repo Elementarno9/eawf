@@ -10,7 +10,7 @@ AUQ — ``approve`` / ``edit`` / ``reject`` (``approve`` runs
 ``reject``.
 
 This wave lands the **overlay**: the hierarchical tree built from the
-bound :class:`~eawf.state.models.State`, the three-option AUQ, and the
+bound :class:`~eawf.kernel.state.models.State`, the three-option AUQ, and the
 chosen-action result returned through the ``ModalScreen`` dismiss value.
 Wiring the ``approve`` pick to the ``eawf roadmap apply`` CLI verb +
 re-rendering on the Edit-Plan subagent's ``agent_end`` report rides the
@@ -40,7 +40,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Static, Tree
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

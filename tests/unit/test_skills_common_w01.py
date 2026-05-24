@@ -15,9 +15,9 @@ from typing import Any
 import pytest
 
 from eawf.install.instrument_probe import ProbeReport, ProbeResult
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.paths import store_path
 from eawf.skills import _common
-from eawf.state.enums import StoreKind
-from eawf.store.paths import store_path
 
 # --- _project_status -----------------------------------------------------
 
@@ -223,7 +223,7 @@ def test_has_research_profile_true_when_enabled(
     state = tmp_path / ".ea" / "state.json"
     merged = {"profiles": {"enabled": ["core", "research"]}}
     monkeypatch.setattr(
-        "eawf.config.layered.merge_config",
+        "eawf.kernel.config.layered.merge_config",
         lambda **_k: (merged, {}),
     )
     assert _common.has_research_profile(state) is True
@@ -235,7 +235,7 @@ def test_has_research_profile_false_when_not_enabled(
     state = tmp_path / ".ea" / "state.json"
     merged = {"profiles": {"enabled": ["core"]}}
     monkeypatch.setattr(
-        "eawf.config.layered.merge_config",
+        "eawf.kernel.config.layered.merge_config",
         lambda **_k: (merged, {}),
     )
     assert _common.has_research_profile(state) is False
@@ -249,7 +249,7 @@ def test_has_research_profile_false_when_merge_raises(
     def _boom(**_k: Any) -> tuple[dict[str, Any], dict[str, str]]:
         raise RuntimeError("merge boom")
 
-    monkeypatch.setattr("eawf.config.layered.merge_config", _boom)
+    monkeypatch.setattr("eawf.kernel.config.layered.merge_config", _boom)
     assert _common.has_research_profile(state) is False
 
 
@@ -258,7 +258,7 @@ def test_has_research_profile_false_when_profiles_not_dict(
 ) -> None:
     state = tmp_path / ".ea" / "state.json"
     monkeypatch.setattr(
-        "eawf.config.layered.merge_config",
+        "eawf.kernel.config.layered.merge_config",
         lambda **_k: ({"profiles": ["not", "a", "dict"]}, {}),
     )
     assert _common.has_research_profile(state) is False
@@ -269,7 +269,7 @@ def test_has_research_profile_false_when_enabled_not_list(
 ) -> None:
     state = tmp_path / ".ea" / "state.json"
     monkeypatch.setattr(
-        "eawf.config.layered.merge_config",
+        "eawf.kernel.config.layered.merge_config",
         lambda **_k: ({"profiles": {"enabled": "core"}}, {}),
     )
     assert _common.has_research_profile(state) is False

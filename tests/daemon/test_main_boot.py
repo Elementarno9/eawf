@@ -35,10 +35,10 @@ from eawf.daemon.methods import MethodContext
 from eawf.daemon.session import reset_registry
 from eawf.daemon.session_ttl import DEFAULT_TTL_SECONDS
 from eawf.daemon.wal import WalRecord, mark_applied, write_pending
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.store.envelope import Envelope
 from eawf.logging.scrub import REDACTION, SensitiveScrubber
-from eawf.state.enums import StoreKind
-from eawf.state.models import SessionAttempt, Wave
-from eawf.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 

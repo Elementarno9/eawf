@@ -28,7 +28,7 @@ from eawf.cli import error_codes as error_codes_mod
 from eawf.cli import exit_codes as exit_codes_mod
 from eawf.cli.app import app
 from eawf.docs import autogen
-from eawf.state import enums as state_enums
+from eawf.kernel.state import enums as state_enums
 
 runner = CliRunner()
 
@@ -79,7 +79,7 @@ def test_schema_pages_cover_every_canonical_model() -> None:
 
 
 def test_enums_page_lists_every_state_enum() -> None:
-    """Every StrEnum declared in eawf.state.enums appears in enums.md."""
+    """Every StrEnum declared in eawf.kernel.state.enums appears in enums.md."""
     body = autogen.enums_page().body
     enum_names = [
         attr

@@ -42,7 +42,7 @@ from eawf.tui.widgets.heartbeat import HEARTBEAT_GLYPH, HEARTBEAT_INTERVAL_S, He
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 
 #: Default footer key hints (full key names). Screens may pass a

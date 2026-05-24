@@ -33,7 +33,7 @@ from eawf.cli.commands.memory import (
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import MemoryStatus, StoreKind
+from eawf.kernel.state.enums import MemoryStatus, StoreKind
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +141,9 @@ def memory_promote(
 ) -> None:
     """Promote a record. ``--to memory`` (default) or ``--to artifact``."""
     from eawf.cli._mutation import state_transaction
+    from eawf.kernel.store.paths import store_path
     from eawf.memory.promotion import PromotionError, promote_record
     from eawf.session.store import append_event
-    from eawf.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
     target = to.strip().lower()
@@ -234,7 +234,7 @@ def _memory_promote_to_artifact(
     """Handle ``eawf memory promote --to artifact``.
 
     Memory entries (``MEM-…`` IDs) are canonised into a durable
-    :class:`~eawf.state.models.Decision` row. The implementation lives in
+    :class:`~eawf.kernel.state.models.Decision` row. The implementation lives in
     :func:`eawf.memory.promotion.promote_to_artifact`; this CLI shim:
 
     1. Validates that ``--source-kind memory`` is set (the inverse direction
@@ -244,9 +244,9 @@ def _memory_promote_to_artifact(
     3. Emits a ``memory.promote`` event with the artifact ID linked.
     """
     from eawf.cli._mutation import state_transaction
+    from eawf.kernel.store.paths import store_path
     from eawf.memory.promotion import PromotionError, promote_to_artifact
     from eawf.session.store import append_event
-    from eawf.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -337,8 +337,8 @@ def memory_compact(
     ] = None,
 ) -> None:
     """Compact ``memory.jsonl`` (dedup by content; idempotent)."""
+    from eawf.kernel.store.compact import compact_store
     from eawf.session.store import append_event
-    from eawf.store.compact import compact_store
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -672,8 +672,8 @@ def memory_tier(
 ) -> None:
     """Set the tier on a single memory entry."""
     from eawf.cli._mutation import state_transaction
+    from eawf.kernel.state.enums import MemoryTier
     from eawf.session.store import append_event
-    from eawf.state.enums import MemoryTier
 
     flags: GlobalFlags = ctx.obj
     try:

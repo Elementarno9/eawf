@@ -21,13 +21,13 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.state.enums import EffortBucket, WaveStatus
+from eawf.kernel.state.models import Wave
 from eawf.lifecycle.criterion_drift import (
     check_wave_criteria_drift,
     extract_path_globs,
     unresolved_globs,
 )
-from eawf.state.enums import EffortBucket, WaveStatus
-from eawf.state.models import Wave
 
 
 def _make_wave(

@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from eawf.kernel.state.enums import MemoryTier
 from eawf.render.envelope import SkillName
 from eawf.runtimes.plugin_manifest import SkillManifest
 from eawf.skills._common import (
@@ -37,7 +38,6 @@ from eawf.skills._common import (
 )
 from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.skills.registry import register
-from eawf.state.enums import MemoryTier
 
 logger = logging.getLogger(__name__)
 

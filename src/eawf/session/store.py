@@ -16,11 +16,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eawf.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
-from eawf.state.models import AgentSession, State
-from eawf.store.append import append_envelope as _append_canonical
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.event import EventPayload
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.store.append import append_envelope as _append_canonical
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def append_event(
         artifact_ids=list(artifact_ids or []),
     )
     _append_canonical(events_path, env)
-    logger.info(f"events store appended id={event_id} type={event_type} at {events_path}")
+    logger.info(f"events store appended id={event_id} type={event_type} path={events_path}")
     return env
 
 

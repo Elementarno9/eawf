@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from eawf.doctor.doc_verify import verify_docs
+from eawf.kernel.state.models import State
 from eawf.render.manifest import Manifest, ManifestEntry, save_atomic
 from eawf.render.regions import compute_hash
-from eawf.state.models import State
 
 
 def _make_state(

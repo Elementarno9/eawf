@@ -19,9 +19,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from eawf.kernel.state.enums import Confidence, MemoryStatus
+from eawf.kernel.state.models import State
 from eawf.memory.store import find_envelope
-from eawf.state.enums import Confidence, MemoryStatus
-from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 

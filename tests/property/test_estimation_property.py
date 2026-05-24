@@ -35,8 +35,8 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 from eawf.estimation import eu, segments
 from eawf.estimation.recovery import cap_elapsed
-from eawf.state.enums import ActualStatus
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.store.envelope import Envelope
 
 # Conservative ranges: keep multipliers/durations sensible and bounded so the
 # tests run quickly and stay in the regime we actually exercise at runtime.
@@ -276,10 +276,10 @@ def test_cap_elapsed_logs_warning_when_started_at_in_future(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """``cap_elapsed(started_at, now=...)`` must log a ``WARNING`` mentioning
-    'clock skew' when ``started_at > now``.
+    'clock_skew' when ``started_at > now``.
 
     Source: ``src/eawf/estimation/recovery.py:109-112`` — the actual phrasing
-    is ``"clock skew detected: now < started_at by {seconds:.1f}s; clamping to 0"``.
+    is ``"clock_skew_detected delta_s={seconds:.1f}; now precedes started_at, clamping to 0"``.
     """
     now = datetime(2026, 5, 8, 12, 0, 0, tzinfo=UTC)
     started_in_future = now + timedelta(seconds=120)
@@ -297,7 +297,7 @@ def test_cap_elapsed_logs_warning_when_started_at_in_future(
     skew_records = [
         rec
         for rec in caplog.records
-        if "clock skew" in rec.getMessage() and rec.levelname == "WARNING"
+        if "clock_skew" in rec.getMessage() and rec.levelname == "WARNING"
     ]
     assert skew_records, [r.getMessage() for r in caplog.records]
     # The skew magnitude must be present in the message so an operator can see

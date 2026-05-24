@@ -34,13 +34,13 @@ from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import AuditKind, AuditVerdict, StoreKind
-from eawf.state.ids import is_wave_id
+from eawf.kernel.state.enums import AuditKind, AuditVerdict, StoreKind
+from eawf.kernel.state.ids import is_wave_id
 
 if TYPE_CHECKING:
+    from eawf.kernel.state.models import State, Wave
     from eawf.pr_review import Finding
     from eawf.pr_review.policy import ReviewVerdict
-    from eawf.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
 

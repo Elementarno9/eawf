@@ -2,7 +2,7 @@
 
 The brief requires top-level command help to follow the metadata registry
 alphabetical order — panels named after the
-:data:`eawf.config.registry.CONFIG_REGISTRY` tabs, alphabetical between
+:data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tabs, alphabetical between
 panels and alphabetical-by-command-name within each panel.
 
 These tests parse the actual ``eawf --help`` output via Typer's

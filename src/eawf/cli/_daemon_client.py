@@ -33,7 +33,7 @@ import orjson
 
 from eawf.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.daemon.spawn import auto_spawn_daemon
-from eawf.state.mutations import Mutation
+from eawf.kernel.state.mutations import Mutation
 
 logger = logging.getLogger(__name__)
 

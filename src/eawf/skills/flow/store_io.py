@@ -20,12 +20,12 @@ from typing import Any
 
 import orjson
 
+from eawf.kernel.state.enums import FlowStatus, StoreKind
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.flow import FlowCheckpointPayload, FlowPayload
+from eawf.kernel.store.paths import store_path
 from eawf.render.envelope import SkillName
-from eawf.state.enums import FlowStatus, StoreKind
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.flow import FlowCheckpointPayload, FlowPayload
-from eawf.store.paths import store_path
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +148,7 @@ def _emit_checkpoint(
     """Append a :class:`FlowCheckpointPayload` envelope.
 
     Returns the freshly minted envelope id (``EV-...``). The append
-    routes through :func:`eawf.store.append.append_envelope`, so the
+    routes through :func:`eawf.kernel.store.append.append_envelope`, so the
     line is fsynced before this function returns.
     """
     payload = FlowCheckpointPayload(

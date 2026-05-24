@@ -25,9 +25,9 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
+from eawf.kernel.state.enums import McpRisk, McpStatus
+from eawf.kernel.state.models import McpServer
 from eawf.mcp.installer import install_runtime_entry, remove_runtime_entry
-from eawf.state.enums import McpRisk, McpStatus
-from eawf.state.models import McpServer
 
 pytestmark = pytest.mark.integration
 

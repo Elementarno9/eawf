@@ -313,7 +313,7 @@ def probe(
     Args:
         profile_ids: List of enabled profile IDs. Unknown IDs are skipped
             silently — the doctor surface validates IDs against
-            :data:`eawf.config.profile.KNOWN_PROFILES` before calling here.
+            :data:`eawf.kernel.config.profile.KNOWN_PROFILES` before calling here.
         cache_path: Default cache location. Overridden by
             ``EA_INSTRUMENT_PROBE`` when that env var is set.
         reprobe: When True, ignore any cached payload and re-run every spec

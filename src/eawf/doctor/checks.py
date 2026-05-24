@@ -33,19 +33,19 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from eawf.config.layered import merge_config
-from eawf.config.profile import KNOWN_PROFILES
 from eawf.install.instrument_probe import probe
+from eawf.kernel.config.layered import merge_config
+from eawf.kernel.config.profile import KNOWN_PROFILES
+from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.render.drift import detect_drift
 from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
 from eawf.render.manifest import Manifest
 from eawf.render.manifest import load as load_manifest
-from eawf.state.resolve import resolve_with_reason
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +268,7 @@ def _load_mcp_drift_state(workspace: Path) -> tuple[State, Path] | CheckResult:
     """
     import json as _json
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     name = "mcp_drift"
     try:

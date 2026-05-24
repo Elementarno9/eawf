@@ -35,7 +35,10 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.artifacts.validation import validate_markdown_artifact, validate_text_surface
-from eawf.config.layered import merge_config
+from eawf.kernel.config.layered import merge_config
+from eawf.kernel.state.enums import AuditKind, AuditVerdict
+from eawf.kernel.state.ids import is_phase_id, parents_of
+from eawf.kernel.state.models import Audit, State
 from eawf.render.envelope import SkillName
 from eawf.skills.bodies.ship import (
     ShipBody,
@@ -46,9 +49,6 @@ from eawf.skills.bodies.ship import (
 )
 from eawf.skills.engine import ActionRun, SkillAction, SkillResult
 from eawf.skills.registry import register
-from eawf.state.enums import AuditKind, AuditVerdict
-from eawf.state.ids import is_phase_id, parents_of
-from eawf.state.models import Audit, State
 from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 
 logger = logging.getLogger(__name__)
@@ -216,7 +216,7 @@ def _phase_id_from_scope(scope_id: str) -> str | None:
 
     The skill scope arrives as a URN (``urn:eawf:v1:state:QR/P00``) or a
     bare lifecycle id; we take the tail after the final ``/`` then walk up
-    via :func:`eawf.state.ids.parents_of` so an iter / wave scope resolves
+    via :func:`eawf.kernel.state.ids.parents_of` so an iter / wave scope resolves
     to its owning phase.
 
     Args:

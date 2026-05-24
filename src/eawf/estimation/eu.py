@@ -13,7 +13,7 @@ across the whole layer and a single binary-floating-point rounding error breaks
 them.
 
 The CLI/state-layer interface still exposes :class:`float` because the schema
-in :mod:`eawf.state.models` (:class:`EstimateSummary`) is locked to
+in :mod:`eawf.kernel.state.models` (:class:`EstimateSummary`) is locked to
 ``float``. Conversions back to :class:`float` happen only at the very edge,
 via :func:`to_float`.
 """
@@ -119,7 +119,7 @@ def quantize(
 def to_float(value: Decimal) -> float:
     """Convert a Decimal back to float at the schema boundary.
 
-    The state schema (:class:`eawf.state.models.EstimateSummary`) stores
+    The state schema (:class:`eawf.kernel.state.models.EstimateSummary`) stores
     ``expected_eu`` / ``pessimistic_eu`` / ``elapsed_eu`` as ``float``; this
     helper makes the conversion explicit and easy to grep for.
     """

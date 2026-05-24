@@ -10,7 +10,7 @@ The legacy five kinds (``file_exists``, ``path_glob_nonempty``,
 remain inlined in :mod:`eawf.audit_dsl.registry` for now; new kinds
 introduced from C03 onward live here (``verify_implements``,
 ``criterion_in_diff``) so each kind's dependencies (e.g.
-:mod:`eawf.spec`) load lazily.
+:mod:`eawf.kernel.spec`) load lazily.
 """
 
 from __future__ import annotations

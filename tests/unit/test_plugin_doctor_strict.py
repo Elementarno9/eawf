@@ -37,6 +37,13 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 from eawf.cli.exit_codes import INTEGRITY_VIOLATION
 from eawf.dispatch import render_wave_prompt
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    EffortBucket,
+    ProjectStatus,
+    ScopeKind,
+)
+from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.lifecycle.transitions import open_iter, open_phase, plan_wave
 from eawf.lock.portalock import LockTimeout
 from eawf.runtimes.claude.plugin_doctor import (
@@ -44,13 +51,6 @@ from eawf.runtimes.claude.plugin_doctor import (
     plugin_sync_lock,
     plugin_sync_lock_path,
 )
-from eawf.state.enums import (
-    AgentSessionRole,
-    EffortBucket,
-    ProjectStatus,
-    ScopeKind,
-)
-from eawf.state.models import CurrentPointers, Project, State
 
 runner = CliRunner()
 
@@ -380,9 +380,10 @@ def test_codex_dispatch_golden_matches(surface: str, fixture_name: str) -> None:
 
 def test_dispatch_goldens_have_no_machine_paths() -> None:
     """No committed dispatch golden may embed a machine path or PII marker."""
+    home_needle = "/Users/"  # pragma: allowlist secret — leak probe, not a real path
     for golden in sorted(_GOLDEN_DIR.glob("*.txt")):
         body = golden.read_text(encoding="utf-8")
-        assert "/Users/" not in body, f"machine path leaked into {golden.name}"
+        assert home_needle not in body, f"machine path leaked into {golden.name}"
         assert ".ea/worktrees" not in body, f"worktree path leaked into {golden.name}"
 
 

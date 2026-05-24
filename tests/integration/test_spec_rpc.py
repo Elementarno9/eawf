@@ -35,7 +35,7 @@ from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.methods.spec import archive, init, promote, validate
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 pytestmark = pytest.mark.integration
 

@@ -34,15 +34,15 @@ from textual.binding import Binding, BindingType
 from textual.containers import Container, Vertical
 from textual.widgets import Static
 
-from eawf.registry.models import Registry, RegistryReadError, read_registry
-from eawf.state.enums import ProjectStatus, ScopeKind
-from eawf.state.models import (
+from eawf.kernel.state.enums import ProjectStatus, ScopeKind
+from eawf.kernel.state.models import (
     CurrentPointers,
     State,
     WorkspaceIndex,
     WorkspaceRepoRef,
 )
-from eawf.state.urn import build as build_urn
+from eawf.kernel.state.urn import build as build_urn
+from eawf.registry.models import Registry, RegistryReadError, read_registry
 from eawf.tui.scopes import ScopeScreen
 from eawf.tui.scopes._zoom import RepoZoomMixin
 from eawf.tui.widgets.workspace_table import WorkspaceTable
@@ -64,8 +64,8 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
     repos rather than anchoring on one), so the portfolio table's bound
     state is built from the global registry ``~/.eawf/registry.json``:
     each :class:`~eawf.registry.models.RegistryRepoEntry` becomes a
-    :class:`~eawf.state.models.WorkspaceRepoRef` under a synthetic
-    :class:`~eawf.state.models.WorkspaceIndex`, so
+    :class:`~eawf.kernel.state.models.WorkspaceRepoRef` under a synthetic
+    :class:`~eawf.kernel.state.models.WorkspaceIndex`, so
     :func:`~eawf.tui.widgets.workspace_table.build_repo_rows` emits one
     portfolio row per registered repo. Strictly read-only — never grows
     the registry (per the explicit-registry-only rule).
@@ -82,7 +82,7 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
             Ignored when *registry_path* is supplied directly.
 
     Returns:
-        A :class:`~eawf.state.models.State` whose ``workspace.repos``
+        A :class:`~eawf.kernel.state.models.State` whose ``workspace.repos``
         mirrors the registry (possibly empty).
     """
     try:

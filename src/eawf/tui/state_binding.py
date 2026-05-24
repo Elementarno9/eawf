@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 import orjson
 from pydantic import ValidationError
 
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

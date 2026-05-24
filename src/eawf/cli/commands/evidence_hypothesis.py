@@ -23,7 +23,7 @@ from eawf.cli.commands.evidence import (
     hypothesis_app,
     outcome_app,
 )
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     HypothesisStatus,
     HypothesisVerdict,
     OutcomeDirection,

@@ -45,18 +45,18 @@ from typing import Any, Final
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.config.layered import (
+from eawf.daemon.methods import MethodContext, register
+from eawf.kernel.config.layered import (
     branch_config_path,
     global_config_path,
     local_config_path,
     repo_config_path,
     workspace_config_path,
 )
-from eawf.config.loader import load_yaml_layer
-from eawf.config.registry import leaf_key_lookup
-from eawf.daemon.methods import MethodContext, register
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.config.loader import load_yaml_layer
+from eawf.kernel.config.registry import leaf_key_lookup
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -272,17 +272,17 @@ def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
 
     Stays a no-op after the first call for the lifetime of the daemon
     process — mirrors the
-    :data:`eawf.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
+    :data:`eawf.kernel.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
     a stale CLI client does not spam the daemon log.
     """
     global _ANCHOR_FALLBACK_WARN_EMITTED
     if _ANCHOR_FALLBACK_WARN_EMITTED:
         return
     logger.warning(
-        f"daemon_anchor_fallback caller omitted 'repo_root' param; "
-        f"resolving against boot-time state_path={ctx.state_path!r}. "
-        f"Update the caller to pass repo_root explicitly — the boot-"
-        f"time fallback will be removed in a future wave."
+        f"daemon_anchor_fallback state_path={ctx.state_path!r}; "
+        f"caller omitted repo_root, resolving against boot-time state_path. "
+        f"Update the caller to pass repo_root explicitly - the boot-time "
+        f"fallback will be removed in a future wave."
     )
     _ANCHOR_FALLBACK_WARN_EMITTED = True
 
@@ -387,7 +387,7 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             os.fsync(parent_fd)
         finally:
             os.close(parent_fd)
-        logger.info(f"_atomic_write_yaml wrote {target}")
+        logger.info(f"_atomic_write_yaml wrote target={target}")
     finally:
         with contextlib.suppress(FileNotFoundError):
             tmp.unlink(missing_ok=True)

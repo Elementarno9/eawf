@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.validate.invariants.check_mcp_grant_server_ref`.
+"""Unit tests for :func:`eawf.kernel.validate.invariants.check_mcp_grant_server_ref`.
 
 Boundary (clean state) + error (dangling server_id) coverage; also verifies
 the invariant is registered in :data:`ALL_INVARIANTS` so it runs under
@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from eawf.state.models import State
-from eawf.validate.invariants import (
+from eawf.kernel.state.models import State
+from eawf.kernel.validate.invariants import (
     ALL_INVARIANTS,
     Violation,
     check_mcp_grant_server_ref,

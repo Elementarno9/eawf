@@ -89,7 +89,7 @@ def _existing_envelope_ids(event_path: Path) -> set[str]:
 def _append_event_fsynced(event_path: Path, record: WalRecord) -> None:
     """Append *record*'s envelope to *event_path* and fsync.
 
-    Mirrors :func:`eawf.store.append.append_envelope` semantics but
+    Mirrors :func:`eawf.kernel.store.append.append_envelope` semantics but
     does not acquire the JSONL sibling lock — replay runs single-
     threaded at boot before any RPC traffic is accepted, so no
     concurrent appender can race us. Keeping the lock-free path

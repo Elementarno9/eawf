@@ -25,11 +25,11 @@ from typing import Literal
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from eawf.kernel.state.enums import Confidence, MemoryStatus
+from eawf.kernel.state.models import State
+from eawf.kernel.store.compact import compact_store
 from eawf.memory.prune import prune_memory
 from eawf.memory.store import add_memory, read_envelopes
-from eawf.state.enums import Confidence, MemoryStatus
-from eawf.state.models import State
-from eawf.store.compact import compact_store
 
 _OpKind = Literal["add", "prune", "compact"]
 

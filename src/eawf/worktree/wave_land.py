@@ -30,9 +30,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eawf.cli import errors as cli_errors
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.models import State
 from eawf.lifecycle.transitions import LifecycleError, close_wave
-from eawf.state.enums import WaveStatus
-from eawf.state.models import State
 from eawf.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.worktree.merge_back import (
     STRATEGY_CHERRY_PICK,

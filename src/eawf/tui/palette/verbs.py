@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from textual.app import App
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
     from eawf.tui.widgets.backlog_table import BacklogTable
 
 logger = logging.getLogger(__name__)
@@ -333,8 +333,8 @@ def _handle_events(app: App[None], args: str) -> None:
         app: The running App.
         args: The raw ``/events`` arg string (unused this wave).
     """
-    from eawf.state.enums import StoreKind
-    from eawf.store.paths import store_path
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.paths import store_path
     from eawf.tui.screens.overlays.events import load_recent_events, open_events
 
     state_path = getattr(app, "_state_path", None)
@@ -383,7 +383,7 @@ def _persist_theme_choice(app: App[None], name: str) -> None:
         name: The accepted logical theme name to persist.
     """
     from eawf.cli.commands.config import _save_value_to_layer
-    from eawf.config.layered import global_config_path
+    from eawf.kernel.config.layered import global_config_path
 
     try:
         _save_value_to_layer(target_path=global_config_path(), key="ui.theme", value=name)

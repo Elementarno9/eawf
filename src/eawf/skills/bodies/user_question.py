@@ -2,7 +2,7 @@
 
 When a skill terminates with ``header.status == "needs_user"`` it MUST
 populate ``body.user_question`` (per `docs/architecture/envelope.md` render rules).
-The strict validator (:mod:`eawf.validate.strict`) enforces this.
+The strict validator (:mod:`eawf.kernel.validate.strict`) enforces this.
 
 The shape is the 2-4-option ``AskUserQuestion`` payload from the
 proposal: a prompt plus an enumerated list of options the user can pick.

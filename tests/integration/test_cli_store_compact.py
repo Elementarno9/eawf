@@ -16,8 +16,8 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 runner = CliRunner()
 

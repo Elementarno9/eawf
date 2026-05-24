@@ -16,7 +16,7 @@ the command exits 4 (NotFound) without panicking.
 
 The ``metrics backfill-actuals`` sub-verb (P27-I02-W29) is the one
 mutating member: it threads
-:func:`eawf.migrations.backfill_actuals.backfill_actuals` through the
+:func:`eawf.kernel.migrations.backfill_actuals.backfill_actuals` through the
 canonical writer to attach retroactive actuals to historical CLOSED
 waves. Its cases seed CLOSED waves with timestamps + no actuals and
 assert the added count, idempotence on a re-run, and that the telemetry

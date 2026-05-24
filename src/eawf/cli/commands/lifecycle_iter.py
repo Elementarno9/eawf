@@ -31,20 +31,20 @@ from eawf.cli.commands.lifecycle import (
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.lock import portalock
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AuditVerdict,
     IterStatus,
     ProjectStatus,
     StoreKind,
     WaveStatus,
 )
-from eawf.state.ids import is_iter_id, is_phase_id, is_project_code
-from eawf.state.mutations import MutationKind
-from eawf.state.urn import build as build_urn
+from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_project_code
+from eawf.kernel.state.mutations import MutationKind
+from eawf.kernel.state.urn import build as build_urn
+from eawf.lock import portalock
 
 if TYPE_CHECKING:
-    from eawf.state.models import Iter, State
+    from eawf.kernel.state.models import Iter, State
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +76,9 @@ def project_init_cmd(
     """Create a new project record at the active state path (creates the file)."""
     from pydantic import ValidationError as PydValidationError
 
+    from eawf.kernel.state.models import Project
+    from eawf.kernel.store.paths import store_path
     from eawf.lifecycle.transitions import LifecycleError
-    from eawf.state.models import Project
-    from eawf.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):

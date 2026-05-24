@@ -8,7 +8,7 @@ with **no per-scope duplication**. It renders, left to right:
   positioned **outside-left** of the breadcrumb per the operator
   branding convention;
 * a ``scope > code > phase`` breadcrumb derived from the bound
-  :class:`~eawf.state.models.State` (rendered with the angle-ornament
+  :class:`~eawf.kernel.state.models.State` (rendered with the angle-ornament
   separator :data:`CRUMB_SEP`);
 * a runtime cell — ``runtime: idle`` muted when nothing is
   dispatched, flipping to the active runtime when a wave is running;
@@ -38,7 +38,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 #: The brand string rendered outside-left of the scope breadcrumb.
 #: Literal ``Eä`` (capital E + a-umlaut) per the operator branding

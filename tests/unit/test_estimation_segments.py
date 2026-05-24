@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 
 from eawf.estimation import segments
-from eawf.state.enums import ActualStatus
+from eawf.kernel.state.enums import ActualStatus
 
 
 def test_open_segment_starts_active_with_zero_duration() -> None:

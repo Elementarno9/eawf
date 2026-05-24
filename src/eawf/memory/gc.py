@@ -1,8 +1,8 @@
 """Memory GC: archive STALE memory entries older than a threshold.
 
 Soft-archival only. Matched entries' ``MemorySummary.tier`` flips from
-:attr:`~eawf.state.enums.MemoryTier.WORKING` to
-:attr:`~eawf.state.enums.MemoryTier.ARCHIVAL`; the entry remains addressable
+:attr:`~eawf.kernel.state.enums.MemoryTier.WORKING` to
+:attr:`~eawf.kernel.state.enums.MemoryTier.ARCHIVAL`; the entry remains addressable
 via ``memory list`` / ``memory view`` but drops out of the default
 render-context window.
 
@@ -28,9 +28,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from eawf.kernel.state.enums import MemoryStatus, MemoryTier
+from eawf.kernel.state.models import State
 from eawf.memory.store import find_envelope
-from eawf.state.enums import MemoryStatus, MemoryTier
-from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 

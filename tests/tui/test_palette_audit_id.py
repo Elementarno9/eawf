@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 from eawf.tui.palette.verbs import _active_audit_id
 
 
@@ -40,7 +40,7 @@ def _state_with_audits(
             with valid defaults.
 
     Returns:
-        A validated :class:`~eawf.state.models.State`.
+        A validated :class:`~eawf.kernel.state.models.State`.
     """
     audit_payload = {
         aid: {

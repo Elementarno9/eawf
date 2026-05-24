@@ -2,7 +2,7 @@
   "$defs": {
     "EventPayload": {
       "additionalProperties": false,
-      "description": "Payload for an event store record.\n\nLands inside :class:`eawf.store.envelope.Envelope.payload` when the\nenvelope kind is :attr:`StoreKind.EVENT`. The ``event_kind`` field\nis optional during the v0.3-v0.5 migration window so existing rows\n+ the 100+ call sites that pass ``event_type`` keep validating\nwithout backfill; v0.5+ governance flips ``event_kind`` to\nnon-optional once every caller has been migrated.",
+      "description": "Payload for an event store record.\n\nLands inside :class:`eawf.kernel.store.envelope.Envelope.payload` when the\nenvelope kind is :attr:`StoreKind.EVENT`. The ``event_kind`` field\nis optional during the v0.3-v0.5 migration window so existing rows\n+ the 100+ call sites that pass ``event_type`` keep validating\nwithout backfill; v0.5+ governance flips ``event_kind`` to\nnon-optional once every caller has been migrated.",
       "properties": {
         "actor": {
           "title": "Actor",
@@ -156,7 +156,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Canonical event envelope.\n\nThe outer wrapper consumed by C02 streaming, C06 reactivity, C09\ntelemetry projection, and C11 webhook ingress. Distinct from the\ngeneric :class:`eawf.store.envelope.Envelope`: ``Event`` is the\nin-memory + wire shape used by event-bus subscribers; ``Envelope``\nwith ``kind=EVENT`` is the on-disk JSONL row. The two interconvert\nlosslessly (``Envelope.payload`` is :class:`EventPayload`,\n``Envelope.id`` mirrors :attr:`Event.id`, etc.).",
+  "description": "Canonical event envelope.\n\nThe outer wrapper consumed by C02 streaming, C06 reactivity, C09\ntelemetry projection, and C11 webhook ingress. Distinct from the\ngeneric :class:`eawf.kernel.store.envelope.Envelope`: ``Event`` is the\nin-memory + wire shape used by event-bus subscribers; ``Envelope``\nwith ``kind=EVENT`` is the on-disk JSONL row. The two interconvert\nlosslessly (``Envelope.payload`` is :class:`EventPayload`,\n``Envelope.id`` mirrors :attr:`Event.id`, etc.).",
   "properties": {
     "id": {
       "minLength": 1,

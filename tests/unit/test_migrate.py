@@ -4,7 +4,7 @@ The first migration edge (v1.0 -> v1.1) tightens every entity ``title``
 to ``max_length=72`` (copying the full over-cap title into the new
 ``description`` first) and renames ``Decision.summary`` /
 ``Hypothesis.text`` to ``title``. The live
-:class:`eawf.state.models.State` model accepts both ``"1.0"`` and
+:class:`eawf.kernel.state.models.State` model accepts both ``"1.0"`` and
 ``"1.1"``, so a migrated state re-loads under the live model. The suite
 exercises:
 
@@ -41,7 +41,7 @@ from typing import Any
 
 import pytest
 
-from eawf.migrations import (
+from eawf.kernel.migrations import (
     DEFAULT_REGISTRY,
     MigrationError,
     MigrationStepError,
@@ -51,14 +51,14 @@ from eawf.migrations import (
     model_supported_max_version,
     run_chain,
 )
-from eawf.migrations._base import backup_path_for
-from eawf.migrations.v1_0_to_v1_1 import (
+from eawf.kernel.migrations._base import backup_path_for
+from eawf.kernel.migrations.v1_0_to_v1_1 import (
     _DESCRIPTION_MAX,
     _TITLE_MAX,
     MigrationV10ToV11,
     _truncate_title,
 )
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 
 
 @pytest.fixture
@@ -233,7 +233,7 @@ def _write_full_fixture(path: Path) -> dict[str, Any]:
     """Write a full, model-valid raw v1.0 state to *path* and return the dict.
 
     Used by write-path machinery tests so the final-payload round-trip
-    (:func:`eawf.migrations._base.run_chain` MIG-F6) loads the migrated
+    (:func:`eawf.kernel.migrations._base.run_chain` MIG-F6) loads the migrated
     candidate against the live ``State`` model without faulting.
     """
     payload = _minimal_state_v1_0()
@@ -491,9 +491,9 @@ def test_run_chain_routes_write_through_canonical_writer(
     exercised and the lock-acquiring ``atomic_write_json`` bypass is
     never called (AGENTS rule 4 / D-SUP-01).
     """
+    from eawf.kernel.migrations import _base
+    from eawf.kernel.state import writer
     from eawf.lock import portalock
-    from eawf.migrations import _base
-    from eawf.state import writer
 
     state_path = tmp_path / "state.json"
     _write_full_fixture(state_path)

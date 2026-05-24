@@ -7,7 +7,7 @@ refreshed from short ``git`` shell-outs with a ~1 s cache so a
 high-frequency repaint never re-pays the subprocess cost.
 
 Unlike the other widgets this pane is **not** driven by the reactive
-:class:`~eawf.state.models.State`: there is no ``state['git']`` producer
+:class:`~eawf.kernel.state.models.State`: there is no ``state['git']`` producer
 (the earlier surface always rendered dashes off that unwritten slot), so
 the pane reads the live repo directly. Every shell-out is total — a missing
 ``git`` binary, a non-git cwd, a timeout, or no configured upstream each

@@ -29,8 +29,8 @@ from eawf.daemon.bus import (
     catch_up,
 )
 from eawf.daemon.methods import MethodContext, register
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ async def list_events(ctx: MethodContext, params: dict[str, Any]) -> dict[str, A
 
     Args:
         ctx: Server context — must carry ``event_path`` (resolved by
-            :func:`eawf.store.paths.store_path`).
+            :func:`eawf.kernel.store.paths.store_path`).
         params: JSON-RPC params per :class:`ListParams`.
 
     Returns:

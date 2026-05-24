@@ -1,10 +1,10 @@
 """``verify_implements`` audit-DSL kind (C03 W02).
 
 Closes the RC-1 loop named in the C03 brief [3]: at the configured
-cadence (per :class:`~eawf.spec.audit.AuditSpec.cadence`), walks every
-closed-wave :class:`~eawf.spec.wave.WaveSpec` under a phase and greps
+cadence (per :class:`~eawf.kernel.spec.audit.AuditSpec.cadence`), walks every
+closed-wave :class:`~eawf.kernel.spec.wave.WaveSpec` under a phase and greps
 the ``git diff <diff_base>...HEAD`` output for verdict-id markers
-restricted to each wave's :attr:`~eawf.spec.wave.WaveSpec.file_scopes`.
+restricted to each wave's :attr:`~eawf.kernel.spec.wave.WaveSpec.file_scopes`.
 A missing marker fails the gate with a clear ``unmet
 verify-implements`` diagnostic.
 
@@ -12,8 +12,8 @@ Marker grammar
 --------------
 
 Verdict markers are comment-style annotations carrying a
-:data:`~eawf.spec.common.VerdictIdStr` identifier — the same regex
-shape :class:`~eawf.spec.common.VerdictCitation` rejects malformed
+:data:`~eawf.kernel.spec.common.VerdictIdStr` identifier — the same regex
+shape :class:`~eawf.kernel.spec.common.VerdictCitation` rejects malformed
 ids with. Accepted host-comment prefixes:
 
 * ``# IMPLEMENTS: V12``
@@ -32,7 +32,7 @@ The W03 daemon-mediated spec writer + loader is not yet shipped, so
 this kind ships a self-contained frontmatter parser: it reads each
 ``.ea/specs/<phase_id>/**/*.md`` file, splits on the first / second
 ``---`` separators, and validates the YAML head as
-:class:`~eawf.spec.wave.WaveSpec`. Files without a top-level
+:class:`~eawf.kernel.spec.wave.WaveSpec`. Files without a top-level
 ``kind: WaveSpec`` frontmatter row are skipped (PhaseSpec / IterSpec
 files live in the same directory). When W03 lands its loader this
 helper migrates to the canonical surface.
@@ -41,7 +41,7 @@ Cadence
 -------
 
 Per the C03 D10 lock (operator override 2026-05-16 /blitz) the
-:class:`~eawf.spec.audit.AuditSpec.cadence` field configures *when*
+:class:`~eawf.kernel.spec.audit.AuditSpec.cadence` field configures *when*
 this kind fires. The kind itself reads two args — ``cadence`` (the
 AuditSpec value) and ``current_trigger`` (the close event firing the
 audit) — and short-circuits with a pass + ``details="skipped"`` when
@@ -61,12 +61,12 @@ import yaml
 from pydantic import ValidationError
 
 from eawf.audit_dsl.models import CheckResult, CheckSpec
-from eawf.spec.wave import WaveSpec
+from eawf.kernel.spec.wave import WaveSpec
 
 logger = logging.getLogger(__name__)
 
 
-# Verdict-id grammar borrowed from ``eawf.spec.common.VerdictIdStr``.
+# Verdict-id grammar borrowed from ``eawf.kernel.spec.common.VerdictIdStr``.
 # The leading comment marker (``#``, ``//``, ``<!--``) is matched
 # permissively so per-language comment prefixes are accepted without
 # extra wiring.
@@ -74,8 +74,8 @@ VERDICT_MARKER_RE = re.compile(r"(?:#|//|<!--)\s*IMPLEMENTS:\s*([VDRH]\d+(?:-[A-
 
 
 # The four cadence values the AuditSpec.cadence Literal accepts. Mirror
-# of :data:`eawf.spec.audit.AUDIT_CADENCE_VALUES` (declared here too so
-# this module has no eager dependency on :mod:`eawf.spec.audit` for the
+# of :data:`eawf.kernel.spec.audit.AUDIT_CADENCE_VALUES` (declared here too so
+# this module has no eager dependency on :mod:`eawf.kernel.spec.audit` for the
 # cadence short-circuit — the spec model owns the contract, the kind
 # applies it).
 _VALID_CADENCES = {"every-wave", "every-iter", "every-phase", "manual"}

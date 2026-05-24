@@ -32,7 +32,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.config import layered
+from eawf.kernel.config import layered
 from eawf.runtimes.coauthor import (
     COAUTHOR_RUNTIME_ENV_VAR,
     COAUTHOR_RUNTIME_LEGACY_ENV_VAR,

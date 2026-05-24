@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.state.resolve.resolve_with_reason`.
+"""Tests for :func:`eawf.kernel.state.resolve.resolve_with_reason`.
 
 Covers the same precedence as ``cli/scope.py`` (``EA_STATE`` > ``-w`` > pwd)
 but verifies the reason string surfaced to CLI users via ``eawf state resolve``.
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.state.resolve import (
+from eawf.kernel.state.resolve import (
     REASON_ENV,
     REASON_PWD_UPWARD,
     REASON_WORKSPACE_FLAG,

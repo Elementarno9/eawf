@@ -24,7 +24,7 @@ from eawf.cli.commands.evidence import (
     decision_app,
     incident_app,
 )
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     IncidentSeverity,
     StoreKind,
 )

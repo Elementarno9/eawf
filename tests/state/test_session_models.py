@@ -1,7 +1,7 @@
 """Unit tests for the session-handle Pydantic models (P24-W07).
 
-Covers :class:`~eawf.state.models.SessionAttempt`,
-:class:`~eawf.state.models.DispatchAnnotation`, and the additive
+Covers :class:`~eawf.kernel.state.models.SessionAttempt`,
+:class:`~eawf.kernel.state.models.DispatchAnnotation`, and the additive
 ``Wave.sessions`` / ``Wave.runtime_preference`` / ``Wave.dispatch_history``
 fields wired in W07.
 
@@ -19,8 +19,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.enums import DispatchNote, WaveStatus
-from eawf.state.models import DispatchAnnotation, SessionAttempt, Wave
+from eawf.kernel.state.enums import DispatchNote, WaveStatus
+from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
 
 pytestmark = pytest.mark.unit
 

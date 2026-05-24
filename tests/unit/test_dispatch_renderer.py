@@ -15,12 +15,7 @@ import pytest
 
 from eawf.agents.specs.models import SubagentSpec
 from eawf.dispatch import build_subagent_spec, render_wave_prompt
-from eawf.lifecycle.transitions import (
-    open_iter,
-    open_phase,
-    plan_wave,
-)
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
     AuditVerdict,
@@ -32,7 +27,7 @@ from eawf.state.enums import (
     WaveStatus,
     WorktreeStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     Audit,
     CurrentPointers,
     Decision,
@@ -40,6 +35,11 @@ from eawf.state.models import (
     Project,
     State,
     WorktreeRecord,
+)
+from eawf.lifecycle.transitions import (
+    open_iter,
+    open_phase,
+    plan_wave,
 )
 
 # ---- Builders ---------------------------------------------------------------

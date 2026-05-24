@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 
 def _base_envelope(**overrides: object) -> dict[str, object]:

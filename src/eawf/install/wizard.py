@@ -35,13 +35,13 @@ Public API:
 
 Compatibility note (``enable_profile``):
 
-The existing :func:`eawf.config.profile.enable_profile` writes through a
+The existing :func:`eawf.kernel.config.profile.enable_profile` writes through a
 config-layer file and assumes the profile id is recorded under
 ``profiles.enabled`` afterwards. The wizard already writes that section
 itself (so the rendered config is byte-stable across re-runs) — calling
 ``enable_profile`` again would only matter for state-key materialisation.
 For the v0.1 init flow we sidestep ``enable_profile`` entirely and call the
-private :func:`eawf.config.profile._materialise_state_keys` helper directly
+private :func:`eawf.kernel.config.profile._materialise_state_keys` helper directly
 on the freshly-written ``state.json``. This keeps the init transaction
 minimal — no second write to ``config.yaml`` from inside ``enable_profile``,
 no risk of a re-ordered ``profiles.enabled`` entry on a re-run — and is the
@@ -59,14 +59,18 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.cli.errors import UserError
-from eawf.config.defaults import CONFIG_SCHEMA_VERSION
-from eawf.config.profile import _atomic_write_yaml, _materialise_state_keys
 from eawf.install.steps import (
     STEP_LIFECYCLE_DEPTH,
     STEP_RUNTIME,
     WIZARD_STEPS,
     WizardStep,
 )
+from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
+from eawf.kernel.config.profile import _atomic_write_yaml, _materialise_state_keys
+from eawf.kernel.state.enums import ScopeKind
+from eawf.kernel.state.ids import RE_PROJECT_CODE
+from eawf.kernel.state.urn import build as build_urn
+from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.lock import portalock
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
@@ -74,10 +78,6 @@ from eawf.render.agents_md import render_agents_md
 from eawf.render.claude_shim import render_claude_md
 from eawf.render.manifest import Manifest
 from eawf.render.manifest import save_atomic as save_manifest_atomic
-from eawf.state.enums import ScopeKind
-from eawf.state.ids import RE_PROJECT_CODE
-from eawf.state.urn import build as build_urn
-from eawf.state.writer import atomic_write_json_locked
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class WizardAnswers(BaseModel):
     Validation rules:
 
     - ``project_code`` matches the canonical project-code regex
-      (``^[A-Z][A-Z0-9_-]{1,15}$`` — see :mod:`eawf.state.ids`). The wizard
+      (``^[A-Z][A-Z0-9_-]{1,15}$`` — see :mod:`eawf.kernel.state.ids`). The wizard
       rejects empty strings: ``project_code`` is the one prompt without a
       sensible default.
     - ``profiles`` must be a non-empty tuple of strings, each of which is a
@@ -253,7 +253,7 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
 
     Mirrors the shape used by :func:`eawf.cli.commands.lifecycle.project_init_cmd`
     so the two entry-points produce identical state files. We deliberately
-    do NOT instantiate a :class:`~eawf.state.models.Project` here — the
+    do NOT instantiate a :class:`~eawf.kernel.state.models.Project` here — the
     project record requires ``domains`` which the wizard does not collect,
     and the v0.1 init contract permits ``project = null`` (the operator can
     follow up with ``eawf project init``).
@@ -333,7 +333,7 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     Schema notes (P26-W02, C08):
 
     - ``runtime.adapters`` (list) supersedes the v0.1 ``runtime.kind``
-      scalar; the migrator (:mod:`eawf.config.migration`) cleans up
+      scalar; the migrator (:mod:`eawf.kernel.config.migration`) cleans up
       legacy on-disk files that still carry ``kind``.
     - ``runtime.preference`` mirrors ``adapters`` initially — the
       C08 fallback ladder defaults to "primary == first adapter".
@@ -390,7 +390,7 @@ def run_wizard_no_input(
     4. Write ``.ea/config.yaml`` via :func:`_atomic_write_yaml` (held under
        its own lock).
     5. Materialise ``state_extensions.fields_required`` for every selected
-       profile via :func:`eawf.config.profile._materialise_state_keys` —
+       profile via :func:`eawf.kernel.config.profile._materialise_state_keys` —
        the freshly-written state already exists, so the helper is happy.
     6. Compose the selected profiles, render ``AGENTS.md``, persist the
        manifest, then write the ``CLAUDE.md`` shim. Manifest path is

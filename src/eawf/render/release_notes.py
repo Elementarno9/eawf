@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from eawf.artifacts.validation import validate_markdown_artifact
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 
 
 class ReleaseNotesValidationError(ValueError):

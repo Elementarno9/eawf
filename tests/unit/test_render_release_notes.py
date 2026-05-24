@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from eawf.artifacts.validation import validate_markdown_artifact
+from eawf.kernel.state.models import State
 from eawf.render.release_notes import build_release_notes, mine_unreleased_changelog
-from eawf.state.models import State
 
 
 def _state_payload() -> dict[str, Any]:

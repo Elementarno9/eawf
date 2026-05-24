@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from eawf.state.urn import parse as parse_urn
+from eawf.kernel.state.urn import parse as parse_urn
 
 CitationKind = Literal["repo", "url", "urn"]
 

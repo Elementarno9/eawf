@@ -1,4 +1,4 @@
-"""Unit tests for the per-validation index in :mod:`eawf.validate.invariants`.
+"""Unit tests for the per-validation index in :mod:`eawf.kernel.validate.invariants`.
 
 The index is a pure refactor of *how* parent->children lookups happen inside
 the closure invariants. These tests pin three things:
@@ -16,15 +16,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from eawf.state.models import State
-from eawf.validate.invariants import (
+from eawf.kernel.state.models import State
+from eawf.kernel.validate.invariants import (
     ALL_INVARIANTS,
     ValidationIndex,
     Violation,
     build_validation_index,
     check_closure_rules,
 )
-from eawf.validate.strict import validate_state
+from eawf.kernel.validate.strict import validate_state
 
 # ---- Fixture builders -------------------------------------------------------
 

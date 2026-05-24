@@ -21,9 +21,9 @@ from pathlib import Path
 
 import eawf.worktree.git as git
 from eawf.cli import errors as cli_errors
-from eawf.state.enums import WaveStatus, WorktreeStatus
-from eawf.state.ids import is_wave_id
-from eawf.state.models import State, Wave, WorktreeRecord
+from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
+from eawf.kernel.state.ids import is_wave_id
+from eawf.kernel.state.models import State, Wave, WorktreeRecord
 
 logger = logging.getLogger(__name__)
 

@@ -42,9 +42,9 @@ import orjson
 import pytest
 from textual.widgets import TabbedContent
 
-from eawf.config.registry import registry_lookup
-from eawf.state.enums import EffortBucket
-from eawf.state.models import State
+from eawf.kernel.config.registry import registry_lookup
+from eawf.kernel.state.enums import EffortBucket
+from eawf.kernel.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.screens.overlays.config_modal import ConfigModal
 from eawf.tui.screens.overlays.confirm import ConfirmModal

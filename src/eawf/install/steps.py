@@ -34,7 +34,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from eawf.state.ids import RE_PROJECT_CODE
+from eawf.kernel.state.ids import RE_PROJECT_CODE
 
 # Narrow set of input shapes. Adding a new kind requires adding a matching
 # branch in both the questionary surface and :class:`WizardAnswers`;

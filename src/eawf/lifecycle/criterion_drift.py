@@ -22,7 +22,7 @@ import logging
 import re
 from pathlib import Path
 
-from eawf.state.models import Wave
+from eawf.kernel.state.models import Wave
 
 logger = logging.getLogger(__name__)
 

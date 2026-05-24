@@ -17,9 +17,9 @@ from eawf.estimation.buckets import (
     actual_summary_from_timestamps,
     default_estimate_summary,
 )
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
+from eawf.kernel.state.models import State, Wave
 from eawf.lifecycle._errors import LifecycleError
-from eawf.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
-from eawf.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +406,7 @@ def start_wave(state: State, *, wave_id: str) -> Wave:
         wave_id: Id of the claimed wave to move to ``in_progress``.
 
     Returns:
-        The mutated :class:`~eawf.state.models.Wave`.
+        The mutated :class:`~eawf.kernel.state.models.Wave`.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, or the wave is in any

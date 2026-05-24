@@ -24,6 +24,17 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.state.enums import (
+    DecisionStatus,
+    ProjectStatus,
+    ScopeKind,
+)
+from eawf.kernel.state.models import (
+    CurrentPointers,
+    Decision,
+    Project,
+    State,
+)
 from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render import regions
 from eawf.render.agents_md import (
@@ -33,17 +44,6 @@ from eawf.render.agents_md import (
     render_decisions_section,
 )
 from eawf.render.manifest import Manifest
-from eawf.state.enums import (
-    DecisionStatus,
-    ProjectStatus,
-    ScopeKind,
-)
-from eawf.state.models import (
-    CurrentPointers,
-    Decision,
-    Project,
-    State,
-)
 
 # ---- Builders ---------------------------------------------------------------
 

@@ -175,7 +175,7 @@ max-complexity = 10
 "src/eawf/cli/commands/plan.py" = ["C901"]
 "src/eawf/cli/commands/roadmap.py" = ["C901"]
 "src/eawf/cli/commands/validate.py" = ["C901"]
-"src/eawf/config/layered.py" = ["C901"]
+"src/eawf/kernel/config/layered.py" = ["C901"]
 "src/eawf/daemon/methods/state.py" = ["C901"]
 "src/eawf/doctor/checks.py" = ["C901"]
 "src/eawf/lifecycle/wave.py" = ["C901"]
@@ -194,7 +194,7 @@ max-complexity = 10
 "src/eawf/runtimes/plugin_doctor.py" = ["C901"]
 "src/eawf/skills/_common.py" = ["C901"]
 "src/eawf/telemetry/sources/claude_session.py" = ["C901"]
-"src/eawf/validate/invariants.py" = ["C901"]
+"src/eawf/kernel/validate/invariants.py" = ["C901"]
 "src/eawf/worktree/create.py" = ["C901"]
 # Test helper (a Tarjan strongly-connected-components routine) that is
 # inherently branch-dense; grandfathered like the library offenders so the
@@ -247,10 +247,10 @@ max-complexity = 15
 # for how to run a campaign (incl. the non-editable-install requirement
 # and sandbox caveats) and how the score is read.
 paths_to_mutate = [
-    "src/eawf/state/",
+    "src/eawf/kernel/state/",
     "src/eawf/lifecycle/",
     "src/eawf/daemon/",
-    "src/eawf/validate/",
+    "src/eawf/kernel/validate/",
 ]
 # Copy the *whole* ``eawf`` package into mutmut's ``mutants/`` sandbox so
 # the four mutated sub-packages can still import their siblings
@@ -342,12 +342,12 @@ line = 89
 branch = 74
 
 [tool.eawf.coverage.gates.store]
-path = "store/"
+path = "kernel/store/"
 line = 97
 branch = 84
 
 [tool.eawf.coverage.gates.state]
-path = "state/"
+path = "kernel/state/"
 line = 98
 branch = 95
 

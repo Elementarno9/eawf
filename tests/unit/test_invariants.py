@@ -1,4 +1,4 @@
-"""Unit tests for cross-entity invariants in :mod:`eawf.validate.invariants`.
+"""Unit tests for cross-entity invariants in :mod:`eawf.kernel.validate.invariants`.
 
 Each invariant function gets at minimum one happy-path test (no violations)
 and one negative test (a State constructed to trigger that exact code).
@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from eawf.state.models import State
-from eawf.validate.invariants import (
+from eawf.kernel.state.models import State
+from eawf.kernel.validate.invariants import (
     ALL_INVARIANTS,
     Violation,
     check_audit_evidence,

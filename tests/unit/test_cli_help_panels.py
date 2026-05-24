@@ -2,7 +2,7 @@
 
 Cover the boundary cases of the panel mapping helpers plus the import-time
 guard that ties the panel set back to the metadata registry — a future tab
-rename in :data:`eawf.config.registry.CONFIG_REGISTRY` must surface here.
+rename in :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` must surface here.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import importlib
 import pytest
 
 from eawf.cli import help_panels
-from eawf.config.registry import tabs_sorted
+from eawf.kernel.config.registry import tabs_sorted
 
 
 def test_panel_order_matches_registry_tabs_sorted() -> None:

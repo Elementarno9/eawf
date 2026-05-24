@@ -35,7 +35,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
 from eawf.evidence import _io
 from eawf.evidence import goal as goal_evi
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 
 def _seed_state(state_path: Path) -> None:
@@ -167,7 +167,7 @@ def test_concurrent_goal_define_data_invariants(
 
 def test_seeded_state_validates(tmp_path: Path) -> None:
     """Sanity: the seed payload passes schema validation."""
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     state_path = tmp_path / ".ea" / "state.json"
     _seed_state(state_path)

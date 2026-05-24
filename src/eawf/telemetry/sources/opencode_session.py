@@ -14,7 +14,7 @@ stable — tables have already grown 13 → 15 since the spec was written
 fingerprint before projecting: on a **known** fingerprint it projects normally;
 on an **unknown** fingerprint it records a
 :class:`~eawf.telemetry.models.TelemetryIncident` with cause
-:attr:`~eawf.state.enums.IncidentCause.EXTERNAL_API_FAILURE` and skips
+:attr:`~eawf.kernel.state.enums.IncidentCause.EXTERNAL_API_FAILURE` and skips
 projection (yields nothing for that database) rather than crashing on a column
 that has moved. The projector drains :attr:`OpenCodeSessionSource.drift_incidents`
 and upserts the recorded incidents.
@@ -35,7 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.state.enums import IncidentCause, IncidentSeverity
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 from eawf.telemetry.models import TelemetryIncident, TelemetrySession
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ class OpenCodeSessionSource:
 
         On an unknown drizzle-migration fingerprint the adapter records a
         :class:`TelemetryIncident` (cause
-        :attr:`~eawf.state.enums.IncidentCause.EXTERNAL_API_FAILURE`) on
+        :attr:`~eawf.kernel.state.enums.IncidentCause.EXTERNAL_API_FAILURE`) on
         :attr:`drift_incidents` and yields nothing (C09 §6 F21). A missing path
         also yields nothing. A :class:`sqlite3.OperationalError` from the
         relational ``session`` / ``part`` queries (a column or table that moved

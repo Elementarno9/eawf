@@ -9,11 +9,11 @@ record** keyed by a stable ``pause-urn``; answering it appends a matching
 
 Persistence rides the canonical event store
 (``<state>/store/event.jsonl``) through
-:func:`eawf.store.append.append_envelope` — the same daemon-owned append
+:func:`eawf.kernel.store.append.append_envelope` — the same daemon-owned append
 path the lifecycle CLI uses. No new ``StoreKind`` / ``MutationKind`` is
-introduced: a pause is an :class:`~eawf.store.envelope.Envelope` of kind
-:attr:`~eawf.state.enums.StoreKind.EVENT` whose
-:class:`~eawf.store.kinds.event.EventPayload` carries
+introduced: a pause is an :class:`~eawf.kernel.store.envelope.Envelope` of kind
+:attr:`~eawf.kernel.state.enums.StoreKind.EVENT` whose
+:class:`~eawf.kernel.store.kinds.event.EventPayload` carries
 ``event_type="needs_user_pause"`` plus the serialised question in
 ``extras``; a resume carries ``event_type="needs_user_resume"`` plus the
 chosen label. An *open* pause is a pause row whose ``pause-urn`` has no
@@ -35,12 +35,12 @@ from typing import TYPE_CHECKING
 
 import orjson
 
-from eawf.state.enums import StoreKind
-from eawf.state.urn import build as build_urn
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.event import EventPayload
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.urn import build as build_urn
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.paths import store_path
 
 if TYPE_CHECKING:
     from eawf.skills.bodies.user_question import UserQuestion

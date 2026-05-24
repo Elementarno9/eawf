@@ -36,14 +36,14 @@ from eawf.cli import errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
+from eawf.kernel.state.enums import ActualStatus, Confidence, StoreKind
+from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.lock import portalock
 from eawf.lock.stale import is_stale
-from eawf.state.enums import ActualStatus, Confidence, StoreKind
-from eawf.state.writer import atomic_write_json_locked
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
-    from eawf.store.kinds.actual import ActualPayload
+    from eawf.kernel.state.models import State
+    from eawf.kernel.store.kinds.actual import ActualPayload
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ def _coerce_confidence(raw: str | None, *, default: Confidence = Confidence.MEDI
 
 def _load_state(path: Path) -> State:
     """Read and validate ``state.json``; convert errors to CLI exit codes."""
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     if not path.exists():
         raise errors.UserError(f"state file not found: {path}", kind="NotFound")
@@ -130,7 +130,7 @@ def _commit_state(
     Raises :class:`errors.ValidationError` on schema/invariant errors so the
     mutation never lands on disk in an invalid form.
     """
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     payload = state.model_dump(mode="json")
     report = validate_state(payload, strict_optional=False)
@@ -156,10 +156,10 @@ def _emit_event(
     occurred_at: datetime,
 ) -> None:
     """Append an event record to the canonical events store for audit/provenance."""
-    from eawf.store.append import append_envelope as _append_jsonl
-    from eawf.store.envelope import Envelope
-    from eawf.store.kinds.event import EventPayload
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.append import append_envelope as _append_jsonl
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.event import EventPayload
+    from eawf.kernel.store.paths import store_path
 
     envelope = Envelope(
         id=f"EVT-{event_type}-{occurred_at.strftime('%Y%m%dT%H%M%SZ')}-{scope_id}",
@@ -262,11 +262,11 @@ def _do_estimate(
     from eawf.estimation.eu import expected_eu as calc_expected_eu
     from eawf.estimation.eu import pessimistic_eu as calc_pessimistic_eu
     from eawf.estimation.eu import quantize, render_display
-    from eawf.state.models import EstimateSummary
-    from eawf.store.append import append_envelope as _append_jsonl
-    from eawf.store.envelope import Envelope
-    from eawf.store.kinds.estimate import EstimatePayload
-    from eawf.store.paths import store_path
+    from eawf.kernel.state.models import EstimateSummary
+    from eawf.kernel.store.append import append_envelope as _append_jsonl
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.estimate import EstimatePayload
+    from eawf.kernel.store.paths import store_path
 
     try:
         confidence = _coerce_confidence(confidence_raw)
@@ -407,11 +407,11 @@ def actual_start(
     *audit-evidence-style* invariant guarding actuals integrity.
     """
     from eawf.estimation.segments import is_open_for, open_segment
-    from eawf.state.models import ActualSummary
-    from eawf.store.append import append_envelope as _append_jsonl
-    from eawf.store.envelope import Envelope
-    from eawf.store.kinds.actual import ActualPayload
-    from eawf.store.paths import store_path
+    from eawf.kernel.state.models import ActualSummary
+    from eawf.kernel.store.append import append_envelope as _append_jsonl
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.actual import ActualPayload
+    from eawf.kernel.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -536,10 +536,10 @@ def actual_stop(
 ) -> None:
     """Close the latest open segment for *scope* and write the elapsed EU."""
     from eawf.estimation.segments import close_segment, latest_open_segment
-    from eawf.state.models import ActualSummary
-    from eawf.store.append import append_envelope as _append_jsonl
-    from eawf.store.envelope import Envelope
-    from eawf.store.paths import store_path
+    from eawf.kernel.state.models import ActualSummary
+    from eawf.kernel.store.append import append_envelope as _append_jsonl
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
 
@@ -676,10 +676,10 @@ def actual_recover(
     """
     from eawf.estimation.recovery import cap_elapsed
     from eawf.estimation.segments import latest_open_segment
-    from eawf.state.models import ActualSummary
-    from eawf.store.append import append_envelope as _append_jsonl
-    from eawf.store.envelope import Envelope
-    from eawf.store.paths import store_path
+    from eawf.kernel.state.models import ActualSummary
+    from eawf.kernel.store.append import append_envelope as _append_jsonl
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
     recovered: list[dict[str, Any]] = []
@@ -818,10 +818,10 @@ def _read_latest_actual_payload(
     """Return the latest ``ActualPayload`` for *record_id* in *jsonl_path*.
 
     Compaction-aware: when multiple envelopes share the same id, the *last*
-    line wins (matches :func:`eawf.store.compact.compact_store` semantics).
+    line wins (matches :func:`eawf.kernel.store.compact.compact_store` semantics).
     """
-    from eawf.store.envelope import Envelope
-    from eawf.store.kinds.actual import ActualPayload
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.actual import ActualPayload
 
     if not jsonl_path.exists():
         return None

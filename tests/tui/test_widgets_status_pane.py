@@ -21,8 +21,8 @@ import pytest
 from textual.app import ComposeResult
 
 from eawf.estimation.buckets import BUCKET_EU
-from eawf.state.enums import EffortBucket
-from eawf.state.models import State
+from eawf.kernel.state.enums import EffortBucket
+from eawf.kernel.state.models import State
 from eawf.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.tui.widgets.heartbeat import (
     HEARTBEAT_GLYPH,

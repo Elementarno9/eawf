@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from eawf.config import layered
+from eawf.kernel.config import layered
 from eawf.render.envelope import EnvelopeWarning
 from eawf.skills.bodies.ship import ShipBody
 from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill

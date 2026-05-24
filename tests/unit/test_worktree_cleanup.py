@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from eawf.cli import errors as cli_errors
-from eawf.state.enums import WorktreeStatus
+from eawf.kernel.state.enums import WorktreeStatus
 from eawf.worktree.cleanup import cleanup_worktree
 from eawf.worktree.create import create_worktree
 from eawf.worktree.git import worktree_list

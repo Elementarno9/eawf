@@ -1,13 +1,13 @@
-"""Unit tests for :func:`eawf.validate.invariants.check_sandbox_policy_scope_ref`."""
+"""Unit tests for :func:`eawf.kernel.validate.invariants.check_sandbox_policy_scope_ref`."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
 
+from eawf.kernel.state.models import State
+from eawf.kernel.validate.invariants import check_sandbox_policy_scope_ref
 from eawf.sandbox.policy import SandboxPolicy
-from eawf.state.models import State
-from eawf.validate.invariants import check_sandbox_policy_scope_ref
 
 
 def _base_state() -> dict[str, Any]:

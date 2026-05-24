@@ -102,7 +102,7 @@ def _serialise(manifest: Manifest) -> bytes:
 def save_atomic(path: Path, manifest: Manifest) -> None:
     """Persist *manifest* atomically to *path*.
 
-    Procedure (mirrors :func:`eawf.state.writer.atomic_write_json`):
+    Procedure (mirrors :func:`eawf.kernel.state.writer.atomic_write_json`):
 
     1. Acquire ``portalock.acquire(path)`` (sibling lock, default 5 s timeout).
     2. Serialise to a sibling tempfile ``<path>.tmp.<hex4>``.
@@ -133,6 +133,6 @@ def save_atomic(path: Path, manifest: Manifest) -> None:
                 os.fsync(parent_fd)
             finally:
                 os.close(parent_fd)
-            logger.info(f"render.manifest path={path} bytes={len(payload)}")
+            logger.info(f"render_manifest path={path} bytes={len(payload)}")
         finally:
             tmp.unlink(missing_ok=True)

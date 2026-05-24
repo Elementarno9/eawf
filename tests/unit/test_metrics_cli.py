@@ -26,7 +26,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-import eawf.config.layered as layered
+import eawf.kernel.config.layered as layered
 from eawf.cli.app import app
 
 runner = CliRunner()

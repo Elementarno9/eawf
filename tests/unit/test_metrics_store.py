@@ -27,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from eawf.state.enums import IncidentCause, IncidentSeverity
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 from eawf.telemetry.models import (
     TelemetryCompaction,
     TelemetryIncident,

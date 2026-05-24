@@ -15,7 +15,7 @@ import orjson
 import pytest
 from textual.app import ComposeResult
 
-from eawf.state.models import BacklogItem, State
+from eawf.kernel.state.models import BacklogItem, State
 from eawf.tui.widgets.backlog_table import (
     _ELLIPSIS,
     _TITLE_MIN_WIDTH,

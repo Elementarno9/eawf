@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.state.enums import McpRisk, McpStatus
+from eawf.kernel.state.models import McpServer
 from eawf.mcp import installer
 from eawf.mcp.installer import (
     IntegrityViolation,
@@ -30,8 +32,6 @@ from eawf.mcp.installer import (
     list_runtime_entries,
     remove_runtime_entry,
 )
-from eawf.state.enums import McpRisk, McpStatus
-from eawf.state.models import McpServer
 
 pytestmark = pytest.mark.unit
 

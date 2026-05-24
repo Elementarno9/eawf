@@ -49,7 +49,7 @@ from eawf.tui.widgets.workspace_table import WorkspaceTable
 if TYPE_CHECKING:
     from textual.screen import Screen
 
-    from eawf.state.models import State, WorkspaceRepoRef
+    from eawf.kernel.state.models import State, WorkspaceRepoRef
 
     _Base = Screen[None]
 else:
@@ -201,7 +201,7 @@ class RepoZoomMixin(_Base):
                 index.
 
         Returns:
-            The :class:`~eawf.state.models.WorkspaceRepoRef`, or ``None``
+            The :class:`~eawf.kernel.state.models.WorkspaceRepoRef`, or ``None``
             when the bound state has no such repo.
         """
         state: State | None = getattr(self.app, "state", None)

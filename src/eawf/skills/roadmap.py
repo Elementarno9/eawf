@@ -48,6 +48,8 @@ from typing import Any
 import orjson
 from pydantic import ValidationError
 
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.models import Phase, State
 from eawf.render.envelope import SkillName
 from eawf.skills._common import (
     emit_event,
@@ -58,8 +60,6 @@ from eawf.skills.bodies.roadmap import RoadmapBody, RoadmapItem
 from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.skills.registry import register
-from eawf.state.enums import WaveStatus
-from eawf.state.models import Phase, State
 
 logger = logging.getLogger(__name__)
 

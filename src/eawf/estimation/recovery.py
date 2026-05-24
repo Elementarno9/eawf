@@ -25,10 +25,10 @@ from pathlib import Path
 
 from eawf.estimation.eu import as_decimal
 from eawf.estimation.segments import latest_open_segment
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.state.models import ActualSummary
+from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.lock.stale import STALE_HEARTBEAT_SECONDS, is_stale
-from eawf.state.enums import ActualStatus
-from eawf.state.models import ActualSummary
-from eawf.store.kinds.actual import ActualPayload
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,8 @@ def cap_elapsed(
     raw_seconds = (now - started_at).total_seconds()
     if raw_seconds < 0:
         logger.warning(
-            f"clock skew detected: now < started_at by {-raw_seconds:.1f}s; clamping to 0"
+            f"clock_skew_detected delta_s={-raw_seconds:.1f}; "
+            f"now precedes started_at, clamping to 0"
         )
         capped_seconds = 0.0
     else:

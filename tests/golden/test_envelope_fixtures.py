@@ -25,8 +25,8 @@ from typing import Any
 import jsonschema
 import pytest
 
+from eawf.kernel.validate.strict import validate_envelope
 from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
-from eawf.validate.strict import validate_envelope
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "envelope"
 _SCHEMA_PATH: Path = (

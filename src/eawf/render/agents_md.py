@@ -16,7 +16,7 @@ Per ``docs/policy/agents-claude-md.md``:
   or between blocks) round-trips byte-stably — that is the contract that
   makes "re-render is safe" hold.
 - Atomically write the new file content via tempfile + ``os.replace`` under a
-  portalock — same discipline as :mod:`eawf.state.writer`.
+  portalock — same discipline as :mod:`eawf.kernel.state.writer`.
 - Update a :class:`~eawf.render.manifest.Manifest` so drift detection
   (:mod:`eawf.render.drift`) and ``eawf doctor`` know the renderer's view of
   what's on disk. The caller is responsible for persisting the manifest via
@@ -24,7 +24,7 @@ Per ``docs/policy/agents-claude-md.md``:
   callers can batch multiple targets into a single manifest write.
 
 The optional ``state``/``decisions_scope_id`` kwargs on
-:func:`render_agents_md` plumb typed :class:`~eawf.state.models.Decision`
+:func:`render_agents_md` plumb typed :class:`~eawf.kernel.state.models.Decision`
 records into a managed ``decisions`` region (id ``DECISIONS_REGION_ID``),
 so the on-disk Decisions section is driven by state.json rather than
 hardcoded prose in a YAML profile body. The body text is produced by
@@ -52,11 +52,11 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.kernel.state.models import Decision, State
 from eawf.profiles.models import ComposedProfile, RenderBlock
 from eawf.render import regions
 from eawf.render._atomic import atomic_write_text
 from eawf.render.manifest import Manifest, ManifestEntry
-from eawf.state.models import Decision, State
 
 logger = logging.getLogger(__name__)
 
@@ -196,12 +196,12 @@ def render_decisions_section(
 
     Args:
         decisions: Typed Decision records keyed by id (the
-            :attr:`~eawf.state.models.State.decisions` mapping). ``None`` is
+            :attr:`~eawf.kernel.state.models.State.decisions` mapping). ``None`` is
             treated as an empty dict for caller convenience (the state field
             defaults to ``{}`` but optional-typed sister fields sometimes
             arrive as ``None``).
         scope_id: When supplied, only Decisions whose
-            :attr:`~eawf.state.models.Decision.scope_id` equals this value
+            :attr:`~eawf.kernel.state.models.Decision.scope_id` equals this value
             render. ``None`` (default) means "include all decisions" — useful
             for project-wide AGENTS.md emission where every Decision is in
             scope by definition.
@@ -333,7 +333,7 @@ def render_agents_md(
     4. When *state* is supplied, append/replace a managed
        ``DECISIONS_REGION_ID`` region whose body is produced by
        :func:`render_decisions_section` against the typed
-       :attr:`~eawf.state.models.State.decisions` map. This is how the
+       :attr:`~eawf.kernel.state.models.State.decisions` map. This is how the
        AGENTS.md "Decisions" section stays in sync with state.json
        rather than carrying hardcoded prose in a YAML profile body.
     5. Acquire portalock on *target*, atomically write the new text via
@@ -353,7 +353,7 @@ def render_agents_md(
         generator: Recorded on each :class:`ManifestEntry`. Defaults to
             ``"eawf-render"``; init / sync may pass profile-scoped names like
             ``"profile:python"``.
-        state: Optional typed :class:`~eawf.state.models.State`. When
+        state: Optional typed :class:`~eawf.kernel.state.models.State`. When
             supplied, a managed ``DECISIONS_REGION_ID`` region is emitted
             with body computed from ``state.decisions`` via
             :func:`render_decisions_section`. When ``None`` (current default)

@@ -2,7 +2,7 @@
 
 A *segment* is a contiguous interval ``[started_at, ended_at]`` for a given
 ``(scope_id, session_id)`` pair. The store representation is
-:class:`eawf.store.kinds.actual.ActualSegment`; this module wraps that with
+:class:`eawf.kernel.store.kinds.actual.ActualSegment`; this module wraps that with
 the v0.1 open/close transitions.
 
 Conventions:
@@ -25,8 +25,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from eawf.estimation.eu import as_decimal
-from eawf.state.enums import ActualStatus
-from eawf.store.kinds.actual import ActualSegment
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.store.kinds.actual import ActualSegment
 
 
 def open_segment(

@@ -23,7 +23,7 @@ existing single-command registration in :mod:`eawf.cli.app` stays intact
   ``eawf_estimate_actual_variance_pct`` gauge from ``state.json`` and feed
   the ship-gate Variance section + the C06 VarianceTile.
 - ``eawf metrics backfill-actuals`` — attach retroactive
-  :class:`~eawf.state.models.ActualSummary` rows to historical CLOSED
+  :class:`~eawf.kernel.state.models.ActualSummary` rows to historical CLOSED
   waves that closed before the W25 auto-record wiring landed, so the
   variance gauge + bucket calibration fit against the full closed-wave
   history instead of the handful of post-W25 samples. Mutates
@@ -32,7 +32,7 @@ existing single-command registration in :mod:`eawf.cli.app` stays intact
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
 :mod:`eawf.telemetry` (or, for ``backfill-actuals``, the pure transform in
-:mod:`eawf.migrations.backfill_actuals`). The shared estimation renderer
+:mod:`eawf.kernel.migrations.backfill_actuals`). The shared estimation renderer
 lives in :mod:`eawf.render.metrics_view`; the telemetry aggregation +
 serialisation live in :mod:`eawf.telemetry.exporter` and
 :mod:`eawf.telemetry.projector`.
@@ -204,7 +204,7 @@ def _estimate_actual_variance(flags: GlobalFlags) -> None:
 def _backfill_actuals(flags: GlobalFlags, *, dry_run: bool) -> None:
     """Attach retroactive actuals to historical CLOSED waves (idempotent).
 
-    Threads the pure :func:`eawf.migrations.backfill_actuals.backfill_actuals`
+    Threads the pure :func:`eawf.kernel.migrations.backfill_actuals.backfill_actuals`
     transform through the writer: the mutation runs inside
     :func:`eawf.cli._mutation.state_transaction`, which holds
     ``portalock(state.json)`` across the load + mutate + validate + write
@@ -222,7 +222,7 @@ def _backfill_actuals(flags: GlobalFlags, *, dry_run: bool) -> None:
     """
     from eawf.cli._mutation import state_transaction
     from eawf.evidence._io import load_state
-    from eawf.migrations.backfill_actuals import backfill_actuals
+    from eawf.kernel.migrations.backfill_actuals import backfill_actuals
 
     state_path = _resolve_state_or_emit(flags)
     if state_path is None:
@@ -283,7 +283,7 @@ def _read_telemetry_config(state_path: Path) -> tuple[bool, str]:
         ``(telemetry.enabled, telemetry.db_kind)`` resolved through the
         layered config merge anchored at the project repo root.
     """
-    from eawf.config.layered import get_dotted, merge_config
+    from eawf.kernel.config.layered import get_dotted, merge_config
 
     repo_root = state_path.parent.parent
     merged, _sources = merge_config(repo=repo_root)

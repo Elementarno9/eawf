@@ -1,6 +1,6 @@
 """Opaque session-log handle registry for the daemon.
 
-:class:`~eawf.state.models.SessionAttempt.session_log_handle` is an
+:class:`~eawf.kernel.state.models.SessionAttempt.session_log_handle` is an
 **opaque** string — never an absolute filesystem path. The path
 itself stays out of ``state.json`` + ``event.jsonl`` to satisfy AGENTS
 rule 16 (secrets / PII hygiene); the daemon's in-process map below is
@@ -15,7 +15,7 @@ The registry round-trip:
    (``urn:eawf:v1:session-log:<runtime>:<uuid>``) and returns the
    handle.
 3. The handle goes into ``state.json`` /
-   :class:`~eawf.state.models.SessionAttempt` /
+   :class:`~eawf.kernel.state.models.SessionAttempt` /
    ``event.jsonl`` — never the path.
 4. Consumers that need the real path (TUI tail, log inspector) call
    :func:`resolve_session_log` against the handle. Unknown handles
@@ -106,7 +106,7 @@ def register_session_log(
 
     Returns:
         The opaque handle to embed in
-        :class:`~eawf.state.models.SessionAttempt.session_log_handle`.
+        :class:`~eawf.kernel.state.models.SessionAttempt.session_log_handle`.
 
     Raises:
         ValueError: When *runtime* is empty.

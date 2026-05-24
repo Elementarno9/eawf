@@ -43,7 +43,7 @@ def coauthor_resolve(
     """Resolve the configured co-author trailer."""
     from pydantic import ValidationError
 
-    from eawf.config.layered import merge_config
+    from eawf.kernel.config.layered import merge_config
     from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 
     flags: GlobalFlags = ctx.obj

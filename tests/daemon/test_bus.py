@@ -23,8 +23,8 @@ from eawf.daemon.bus import (
     Subscriber,
     catch_up,
 )
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 

@@ -3,7 +3,7 @@
 These tests pin the canonical shape that C02 streaming, C06 reactivity,
 C09 telemetry projection, and C11 webhook ingress all consume. Any
 future module that imports ``Event`` MUST go through
-``eawf.store.kinds.event`` (or its re-export at ``eawf.store``) — never
+``eawf.kernel.store.kinds.event`` (or its re-export at ``eawf.kernel.store``) — never
 define its own event envelope.
 """
 
@@ -15,10 +15,10 @@ from typing import get_args
 import pytest
 from pydantic import ValidationError
 
-from eawf.store import Event as EventReExport
-from eawf.store import EventKind as EventKindReExport
-from eawf.store import EventPayload as EventPayloadReExport
-from eawf.store.kinds.event import Event, EventKind, EventPayload
+from eawf.kernel.store import Event as EventReExport
+from eawf.kernel.store import EventKind as EventKindReExport
+from eawf.kernel.store import EventPayload as EventPayloadReExport
+from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
 
 
 def _valid_payload(**overrides: object) -> dict[str, object]:
@@ -52,15 +52,15 @@ def _valid_event(**overrides: object) -> dict[str, object]:
 
 
 def test_event_importable_from_canonical_module() -> None:
-    """C07b §5.4 / Q14: Event lives at eawf.store.kinds.event."""
+    """C07b §5.4 / Q14: Event lives at eawf.kernel.store.kinds.event."""
     assert Event is EventReExport
     assert EventPayload is EventPayloadReExport
     assert EventKind is EventKindReExport
 
 
 def test_event_re_exported_at_package_root() -> None:
-    """Callers should be able to write ``from eawf.store import Event``."""
-    from eawf import store
+    """Callers should be able to write ``from eawf.kernel.store import Event``."""
+    from eawf.kernel import store
 
     assert store.Event is Event
     assert store.EventPayload is EventPayload

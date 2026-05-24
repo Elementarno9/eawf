@@ -14,10 +14,10 @@ from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 if TYPE_CHECKING:
-    from eawf.store.envelope import Envelope
+    from eawf.kernel.store.envelope import Envelope
 
 research_app = typer.Typer(
     name="research",
@@ -29,8 +29,8 @@ install_promote_command(research_app, "research")
 
 
 def _load_research_envelope(state_path: Path, record_id: str) -> Envelope:
-    from eawf.store.envelope import Envelope
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.paths import store_path
 
     path = store_path(state_path, StoreKind.RESEARCH)
     if not path.exists():
@@ -53,8 +53,8 @@ def research_show(
     """Show one research store record."""
     from pydantic import ValidationError
 
+    from eawf.kernel.store.kinds.research import ResearchPayload
     from eawf.render.research import render_research_markdown
-    from eawf.store.kinds.research import ResearchPayload
 
     flags: GlobalFlags = ctx.obj
     try:

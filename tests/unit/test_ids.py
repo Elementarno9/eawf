@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.state import ids
+from eawf.kernel.state import ids
 
 
 @pytest.mark.parametrize(

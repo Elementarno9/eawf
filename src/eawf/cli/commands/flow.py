@@ -33,10 +33,10 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli import exit_codes
 from eawf.cli.flags import GlobalFlags
-from eawf.state.enums import FlowStatus
+from eawf.kernel.state.enums import FlowStatus
 
 if TYPE_CHECKING:
-    from eawf.store.kinds.flow import FlowCheckpointPayload
+    from eawf.kernel.store.kinds.flow import FlowCheckpointPayload
 
 logger = logging.getLogger(__name__)
 
@@ -311,8 +311,8 @@ def _latest_checkpoint_for(
     flow_id: str,
 ) -> tuple[str, FlowCheckpointPayload] | None:
     """Return the most recent checkpoint (safe or not) for *flow_id*."""
+    from eawf.kernel.store.kinds.flow import FlowCheckpointPayload
     from eawf.skills.flow import load_flow_records
-    from eawf.store.kinds.flow import FlowCheckpointPayload
 
     last: tuple[str, FlowCheckpointPayload] | None = None
     for envelope_id, payload in load_flow_records(state_path):

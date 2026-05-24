@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import logging
 
+from eawf.kernel.state.enums import SubprojectStatus
+from eawf.kernel.state.models import State, Subproject
 from eawf.lifecycle._errors import LifecycleError
-from eawf.state.enums import SubprojectStatus
-from eawf.state.models import State, Subproject
 
 logger = logging.getLogger(__name__)
 

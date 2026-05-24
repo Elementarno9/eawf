@@ -2,7 +2,7 @@
 
 The Textual config window: a :class:`~textual.screen.ModalScreen` opened
 by the global ``c`` keypress and the ``/config`` palette verb. It renders
-**every** operator-tunable key from :data:`eawf.config.registry.CONFIG_REGISTRY`
+**every** operator-tunable key from :data:`eawf.kernel.config.registry.CONFIG_REGISTRY`
 in alphabetical tabs (alphabetical fields within each tab), so the surface
 auto-covers any key added to the registry later — the registry is the
 single source of truth shared with the ``eawf config`` CLI menu, so the
@@ -69,8 +69,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, Static, TabbedContent, TabPane
 
 from eawf.cli.errors import UserError
-from eawf.config.layered import get_dotted
-from eawf.config.registry import (
+from eawf.kernel.config.layered import get_dotted
+from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
     coerce_and_validate,

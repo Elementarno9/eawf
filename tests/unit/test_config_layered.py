@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.config.layered`.
+"""Unit tests for :mod:`eawf.kernel.config.layered`.
 
 The layered merge engine is the core of ``eawf config get/set/validate``. The
 contract under test:
@@ -27,9 +27,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.config import layered
-from eawf.config.defaults import BUILT_IN_DEFAULTS
-from eawf.config.layered import LAYER_ORDER, merge_config
+from eawf.kernel.config import layered
+from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
+from eawf.kernel.config.layered import LAYER_ORDER, merge_config
 
 
 @pytest.fixture(autouse=True)

@@ -27,7 +27,7 @@ P11:
 
 from __future__ import annotations
 
-from eawf.config.defaults import BUILT_IN_DEFAULTS
+from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.render.skills import SKILL_REGISTRY
 
 _FLOW_STAGES: tuple[str, ...] = (

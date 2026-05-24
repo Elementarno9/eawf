@@ -35,7 +35,7 @@ from eawf.cli.commands.repo import (
 )
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.ids import is_project_code
+from eawf.kernel.state.ids import is_project_code
 
 if TYPE_CHECKING:
     from eawf.registry import Registry, RegistryRepoEntry

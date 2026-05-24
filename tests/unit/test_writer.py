@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.state import writer
+from eawf.kernel.state import writer
 
 
 def test_atomic_write_creates_file(tmp_path: Path) -> None:

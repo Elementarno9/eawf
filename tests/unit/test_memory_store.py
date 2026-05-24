@@ -6,6 +6,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eawf.kernel.state.enums import Confidence, MemoryStatus
+from eawf.kernel.state.models import State
 from eawf.memory.store import (
     MemoryRecord,
     add_memory,
@@ -13,8 +15,6 @@ from eawf.memory.store import (
     find_envelope,
     read_envelopes,
 )
-from eawf.state.enums import Confidence, MemoryStatus
-from eawf.state.models import State
 
 
 def _make_state() -> State:

@@ -3,10 +3,10 @@
 The runner is the daemon-internal component that drives a single wave
 dispatch attempt and emits the C09 typed ``EventPayload`` sub-classes
 (``runtime_switched`` on a V5 fallback, ``dispatch_cost`` post-dispatch)
-defined in :mod:`eawf.store.kinds.events`.
+defined in :mod:`eawf.kernel.store.kinds.events`.
 
 Every event the runner produces is routed through the **daemon canonical
-writer** for ``event.jsonl`` — :func:`eawf.store.append.append_envelope`
+writer** for ``event.jsonl`` — :func:`eawf.kernel.store.append.append_envelope`
 under the per-file portalock + fsync — and then published to the
 subscription bus via :meth:`eawf.daemon.bus.EventBus.publish`. This
 mirrors the :func:`eawf.daemon.methods.state.mutate` persistence path so
@@ -18,7 +18,7 @@ authority for the event store stays with the canonical append helper
 
 The typed payload is validated through :data:`C09EventPayloadUnion`
 *before* it is folded into the generic
-:class:`eawf.store.envelope.Envelope` ``payload`` dict, so a payload
+:class:`eawf.kernel.store.envelope.Envelope` ``payload`` dict, so a payload
 whose body does not match its ``event_type`` discriminator fails fast
 with :class:`pydantic.ValidationError` at emit time rather than at
 projection time (the §5.11 discriminator-emit invariant).
@@ -27,10 +27,10 @@ On dispatch completion the runner also emits a typed ``agent_end``
 executor report through the canonical agent-report writer
 :func:`eawf.agent_report.store.append_agent_report` (the same writer the
 operator-facing ``eawf hook event`` AGENT_END path uses). The report
-uses the dispatched wave's executor :class:`~eawf.state.models.AgentSession`
+uses the dispatched wave's executor :class:`~eawf.kernel.state.models.AgentSession`
 as authority — role, scope, attempt, and store kind are derived from the
 session — so the persisted row passes
-:func:`eawf.validate.invariants.check_agent_report_invariants`. Report
+:func:`eawf.kernel.validate.invariants.check_agent_report_invariants`. Report
 emission is opt-in: it fires only when the caller supplies the
 ``session_id`` of the executor session AND the daemon context is wired to
 an on-disk ``state.json`` (plan-only and stateless unit-test contexts
@@ -52,21 +52,21 @@ from pydantic import TypeAdapter
 from eawf.agent_report.store import append_agent_report
 from eawf.budget.service import record_consumption
 from eawf.evidence._io import load_state
-from eawf.lifecycle.wave import start_wave
-from eawf.lock import portalock
-from eawf.state.enums import AgentReportVerdict, Confidence, StoreKind, WaveStatus
-from eawf.state.io import state_version
-from eawf.state.writer import atomic_write_json_locked
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import ExecutorReportBody
-from eawf.store.kinds.event import EventPayload
-from eawf.store.kinds.events import (
+from eawf.kernel.state.enums import AgentReportVerdict, Confidence, StoreKind, WaveStatus
+from eawf.kernel.state.io import state_version
+from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.kinds.events import (
     C09EventPayloadUnion,
     DispatchCostPayload,
     RuntimeSwitchedPayload,
 )
-from eawf.store.kinds.events.base import RuntimeTriple, TracedEventPayload
+from eawf.kernel.store.kinds.events.base import RuntimeTriple, TracedEventPayload
+from eawf.lifecycle.wave import start_wave
+from eawf.lock import portalock
 from eawf.telemetry.models import RuntimeErrorClass
 
 if TYPE_CHECKING:
@@ -171,7 +171,7 @@ def _emit(
     Validates *payload* through :data:`C09EventPayloadUnion` (fail-fast on
     a discriminator/body mismatch), wraps the validated body in the generic
     :class:`Envelope`, appends it through
-    :func:`eawf.store.append.append_envelope` (the canonical event-store
+    :func:`eawf.kernel.store.append.append_envelope` (the canonical event-store
     writer), then publishes to the subscription bus when one is attached.
 
     Args:
@@ -456,7 +456,7 @@ def _completion_verdict(*, switched: bool) -> AgentReportVerdict:
         switched: ``True`` when a V5 fallback fired during the dispatch.
 
     Returns:
-        The derived :class:`~eawf.state.enums.AgentReportVerdict`.
+        The derived :class:`~eawf.kernel.state.enums.AgentReportVerdict`.
     """
     if switched:
         return AgentReportVerdict.PASS_WITH_FOLLOWUPS
@@ -479,14 +479,14 @@ def emit_agent_end_report(
 ) -> str:
     """Emit a typed ``agent_end`` executor report on dispatch completion.
 
-    Builds an :class:`~eawf.store.kinds.agent_report.ExecutorReportBody`
+    Builds an :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
     and persists it through the canonical agent-report writer
     :func:`eawf.agent_report.store.append_agent_report`, using the
-    executor :class:`~eawf.state.models.AgentSession` named by
+    executor :class:`~eawf.kernel.state.models.AgentSession` named by
     *session_id* as authority. The writer derives the report's role,
     scope, attempt number, and store kind from the session, so the
     persisted envelope passes
-    :func:`eawf.validate.invariants.check_agent_report_invariants`.
+    :func:`eawf.kernel.validate.invariants.check_agent_report_invariants`.
 
     The dispatched *wave_id* is used as the report ``base_id`` so retried
     dispatches for the same wave append monotonic attempts under one

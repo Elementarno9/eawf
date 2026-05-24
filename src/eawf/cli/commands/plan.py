@@ -5,7 +5,7 @@ Renders the active iteration plan as either a deterministic markdown body
 ``src/eawf/schemas/plan-view.schema.json`` (tooling).
 
 Resolves the active iter (``state.current.iter_id``) when ``--iter`` is
-omitted, then projects the validated :class:`~eawf.state.models.State`
+omitted, then projects the validated :class:`~eawf.kernel.state.models.State`
 through :func:`eawf.render.plan_view.build_view`. The handler is a pure
 projection — read-only over ``state.json`` (rule 4: no lock acquisition,
 no JSONL appends, no state mutations).
@@ -37,8 +37,8 @@ from eawf.cli import errors
 from eawf.cli.commands.draft import install_promote_command
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.ids import is_iter_id
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.ids import is_iter_id
+from eawf.kernel.state.resolve import resolve_with_reason
 
 if TYPE_CHECKING:
     pass
@@ -131,6 +131,7 @@ def show_cmd(
     """Print the active iter plan view (markdown or JSON)."""
     from pydantic import ValidationError
 
+    from eawf.kernel.state.models import State
     from eawf.render.plan_view import (
         PlanSection as RenderPlanSection,
     )
@@ -140,7 +141,6 @@ def show_cmd(
         render_json,
         render_markdown,
     )
-    from eawf.state.models import State
 
     # The registered ``--show`` choices use the local :class:`PlanSection`
     # mirror so the command tree builds without importing the heavy

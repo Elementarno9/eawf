@@ -1,11 +1,11 @@
 """event_jsonl source adapter — reader for the canonical eawf JSONL stores.
 
 The projector ingests three canonical JSONL stores under ``<state_dir>/store``
-(C09 §5.9.4): ``event.jsonl`` (typed :class:`~eawf.store.kinds.event.EventPayload`
+(C09 §5.9.4): ``event.jsonl`` (typed :class:`~eawf.kernel.store.kinds.event.EventPayload`
 envelopes), ``audit.jsonl`` (audit records), and the per-role report stores
 (``<role>_report.jsonl``). This adapter is the single reader for all three: it
 discovers the files under a project root and yields each line as a validated
-:class:`~eawf.store.envelope.Envelope`.
+:class:`~eawf.kernel.store.envelope.Envelope`.
 
 A line that fails JSON parsing or :class:`Envelope` validation is **skipped**
 with a logged ``WARNING`` carrying the file and 1-based line number, and the
@@ -23,9 +23,9 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.paths import store_path
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class EventJsonlSource:
     """Reader for the canonical eawf event / audit / role-report JSONL stores.
 
     Implements the :class:`~eawf.telemetry.sources.base.SessionSource` protocol
-    over :class:`~eawf.store.envelope.Envelope` rows.
+    over :class:`~eawf.kernel.store.envelope.Envelope` rows.
     """
 
     source_name = "event_jsonl"
@@ -56,7 +56,7 @@ class EventJsonlSource:
         """Yield the existing canonical store files under *root*.
 
         *root* is a project state path (the ``.ea/state.json`` file or the
-        ``.ea`` directory's state path); :func:`~eawf.store.paths.store_path`
+        ``.ea`` directory's state path); :func:`~eawf.kernel.store.paths.store_path`
         derives each ``<state_dir>/store/<kind>.jsonl`` location. Only files
         that exist are yielded — a never-emitted store is silently skipped
         (C09 §6 F2).

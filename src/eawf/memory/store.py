@@ -21,11 +21,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eawf.state.enums import Confidence, MemoryStatus, StoreKind
-from eawf.state.models import MemorySummary, State
-from eawf.store.append import append_envelope as _append_canonical
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.memory import MemoryPayload
+from eawf.kernel.state.enums import Confidence, MemoryStatus, StoreKind
+from eawf.kernel.state.models import MemorySummary, State
+from eawf.kernel.store.append import append_envelope as _append_canonical
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.memory import MemoryPayload
 
 logger = logging.getLogger(__name__)
 
@@ -93,11 +93,11 @@ def append_envelope(memory_path: Path, env: Envelope) -> None:
     """Append a single :class:`Envelope` to *memory_path* under sibling lock.
 
     Thin compatibility wrapper around
-    :func:`eawf.store.append.append_envelope`; the underlying writer is the
+    :func:`eawf.kernel.store.append.append_envelope`; the underlying writer is the
     single canonical helper.
     """
     _append_canonical(memory_path, env)
-    logger.info(f"memory store appended id={env.id} at {memory_path}")
+    logger.info(f"memory store appended id={env.id} path={memory_path}")
 
 
 def add_memory(

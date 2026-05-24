@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from eawf.state import writer
+from eawf.kernel.state import writer
 
 # orjson serialises integers as 64-bit; constrain to avoid out-of-range TypeError.
 _INT64_MIN = -(2**63)

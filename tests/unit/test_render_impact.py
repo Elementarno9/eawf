@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from eawf.kernel.state.models import State
 from eawf.render.impact import build_impact_graph, render_dot, render_text
-from eawf.state.models import State
 
 
 def _base_state() -> dict[str, Any]:

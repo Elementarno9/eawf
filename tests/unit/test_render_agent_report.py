@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.agent_report import render_agent_report
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
     AgentReportHeader,
     AgentReportPayload,
@@ -26,6 +25,7 @@ from eawf.store.kinds.agent_report import (
     ReviewerReportBody,
     ReviewFinding,
 )
+from eawf.render.agent_report import render_agent_report
 
 GOLDEN_DIR = Path(__file__).resolve().parent.parent / "golden" / "agent_report"
 

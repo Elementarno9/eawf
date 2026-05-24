@@ -109,7 +109,7 @@ def test_quality_profile_renders_verification_subheadings(tmp_path: Path) -> Non
 
 def test_quality_profile_not_in_builtin_default() -> None:
     """The profile is opt-in: the built-in default enables only ``core``."""
-    from eawf.config.defaults import built_in_defaults
+    from eawf.kernel.config.defaults import built_in_defaults
 
     enabled = built_in_defaults().get("profiles", {}).get("enabled", [])
     assert _PROFILE_ID not in enabled

@@ -153,7 +153,7 @@ def _atomic_write_bytes(target: Path, payload: bytes) -> None:
     """Write *payload* to *target* via tempfile + ``fsync`` + ``os.replace``.
 
     Lock-agnostic — the caller acquires the sibling portalock when one is
-    needed. Mirrors :func:`eawf.state.writer._write_payload` (and the WAL's
+    needed. Mirrors :func:`eawf.kernel.state.writer._write_payload` (and the WAL's
     private byte-writer) rather than importing it, matching the codebase
     convention of keeping the byte-swap idiom co-located with its callers.
 

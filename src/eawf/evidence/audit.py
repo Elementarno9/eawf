@@ -24,9 +24,9 @@ from typing import Any
 
 from eawf.cli.errors import UserError
 from eawf.evidence import _io
-from eawf.state.enums import AuditKind, AuditStatus, AuditVerdict, StoreKind
-from eawf.state.models import Audit, State
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import AuditKind, AuditStatus, AuditVerdict, StoreKind
+from eawf.kernel.state.models import Audit, State
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

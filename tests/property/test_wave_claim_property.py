@@ -41,9 +41,9 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from eawf.cli.commands import lifecycle as lc
+from eawf.kernel.state.models import State
 from eawf.lifecycle.transitions import LifecycleError, claim_wave
 from eawf.lock import portalock
-from eawf.state.models import State
 
 
 def _seed_state(state_path: Path) -> None:

@@ -27,10 +27,10 @@ import logging
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.store.kinds.agent_report import store_kind_for_role
 from eawf.render.agents import AGENT_REGISTRY
 from eawf.runtimes.manifest import RuntimeId
-from eawf.state.enums import AgentSessionRole
-from eawf.store.kinds.agent_report import store_kind_for_role
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class RoleSpec(BaseModel):
     """Typed contract for one subagent role across kept runtimes.
 
     Attributes:
-        role: The canonical :class:`~eawf.state.enums.AgentSessionRole`.
+        role: The canonical :class:`~eawf.kernel.state.enums.AgentSessionRole`.
         summary: One-sentence description (matches the role's
             ``AgentSpec.description`` in
             :data:`eawf.render.agents.AGENT_REGISTRY`).
@@ -113,7 +113,7 @@ def _build_registry() -> dict[AgentSessionRole, RoleSpec]:
 
     Each :class:`eawf.render.agents.AgentSpec` row supplies the summary
     and body; the role's report store kind is read from
-    :func:`eawf.store.kinds.agent_report.store_kind_for_role`. Building
+    :func:`eawf.kernel.store.kinds.agent_report.store_kind_for_role`. Building
     once at import time keeps the registry a frozen lookup.
 
     Returns:

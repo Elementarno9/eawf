@@ -43,9 +43,9 @@ from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.methods.state import digest, mutate, read
 from eawf.daemon.wal import WalStatus
-from eawf.state.enums import StoreKind
-from eawf.state.mutations import Mutation, MutationKind
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.mutations import Mutation, MutationKind
+from eawf.kernel.store.paths import store_path
 
 pytestmark = pytest.mark.unit
 

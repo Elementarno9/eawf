@@ -1,7 +1,7 @@
 """``eawf calibrate`` Typer sub-app — effort-bucket re-fit surface.
 
 CLI dispatch only (AGENTS rule 1): the handler resolves the state path,
-reads the typed :class:`~eawf.state.models.State`, and routes the re-fit
+reads the typed :class:`~eawf.kernel.state.models.State`, and routes the re-fit
 into :mod:`eawf.estimation.buckets`. The handler is read-only — it surfaces
 a calibration verdict + nudges; it never mutates the configured centroids
 or ``state.json`` (applying a nudge is an explicit follow-up operator

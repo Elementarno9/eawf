@@ -2,7 +2,7 @@
 
 A :class:`~textual.widgets.Tree` that renders the full
 phase → iter → wave hierarchy from the reactive
-:class:`~eawf.state.models.State`, prefixing each row with the **V12
+:class:`~eawf.kernel.state.models.State`, prefixing each row with the **V12
 glyph schema** (``- > ~ # x !``) keyed off the row's lifecycle status,
 and surfacing a right-pinned bar on every row: iter and phase rows carry
 a completion bar (closed ÷ total child waves); wave rows carry a hybrid
@@ -53,7 +53,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Tree
 
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     IterStatus,
     PhaseStatus,
     WaveStatus,
@@ -70,7 +70,7 @@ if TYPE_CHECKING:
     from textual.events import Resize
     from textual.widgets.tree import TreeNode
 
-    from eawf.state.models import Iter, Phase, State, Wave
+    from eawf.kernel.state.models import Iter, Phase, State, Wave
     from eawf.tui.widgets.eu_bar import RenderMode
 
 logger = logging.getLogger(__name__)

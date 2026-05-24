@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from eawf.store.kinds.events import (
+from eawf.kernel.store.kinds.events import (
     C09EventPayloadUnion,
     CacheMislayerAlarmPayload,
     DispatchCostPayload,
@@ -300,14 +300,14 @@ def test_union_member_is_strict_base_model() -> None:
 
 
 def test_c09_event_type_tags_match_union_members() -> None:
-    from eawf.store.kinds.events import C09_EVENT_TYPE_TAGS
+    from eawf.kernel.store.kinds.events import C09_EVENT_TYPE_TAGS
 
     assert frozenset(_BUILDERS) == C09_EVENT_TYPE_TAGS
 
 
 @pytest.mark.parametrize("kind", list(_BUILDERS))
 def test_validate_event_payload_routes_c09_to_union(kind: str) -> None:
-    from eawf.store.kinds.event import validate_event_payload
+    from eawf.kernel.store.kinds.event import validate_event_payload
 
     builder, model = _BUILDERS[kind]
     parsed = validate_event_payload(builder())
@@ -315,7 +315,7 @@ def test_validate_event_payload_routes_c09_to_union(kind: str) -> None:
 
 
 def test_validate_event_payload_routes_flat_to_event_payload() -> None:
-    from eawf.store.kinds.event import EventPayload, validate_event_payload
+    from eawf.kernel.store.kinds.event import EventPayload, validate_event_payload
 
     flat = {
         "timestamp": _TS,
@@ -332,14 +332,14 @@ def test_validate_event_payload_routes_flat_to_event_payload() -> None:
 
 
 def test_validate_event_payload_rejects_garbage_c09_body() -> None:
-    from eawf.store.kinds.event import validate_event_payload
+    from eawf.kernel.store.kinds.event import validate_event_payload
 
     with pytest.raises(ValidationError):
         validate_event_payload({"event_type": "dispatch_cost", "rogue": True})
 
 
 def test_validate_event_payload_rejects_unknown_event_type() -> None:
-    from eawf.store.kinds.event import validate_event_payload
+    from eawf.kernel.store.kinds.event import validate_event_payload
 
     with pytest.raises(ValidationError):
         validate_event_payload({"event_type": "totally_unknown"})

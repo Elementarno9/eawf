@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from eawf.kernel.state.enums import ProjectStatus, ScopeKind
+from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.lifecycle.transitions import (
     LifecycleError,
     claim_wave,
@@ -20,8 +22,6 @@ from eawf.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
-from eawf.state.enums import ProjectStatus, ScopeKind
-from eawf.state.models import CurrentPointers, Project, State
 
 
 def _empty_state() -> State:

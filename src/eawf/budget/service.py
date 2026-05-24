@@ -4,8 +4,8 @@ Two concerns live here:
 
 * **State mutation** — :func:`set_budget`, :func:`record_consumption`,
   and :func:`check_budget` operate on a live
-  :class:`~eawf.state.models.State` and mutate the targeted
-  :class:`~eawf.state.models.Wave` in place. They do **not** touch
+  :class:`~eawf.kernel.state.models.State` and mutate the targeted
+  :class:`~eawf.kernel.state.models.Wave` in place. They do **not** touch
   ``state.json`` directly — persistence is the CLI / daemon handler's
   job (it wraps the call in the locked transaction).
 
@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from eawf.budget.policy import classify
-from eawf.state.models import State, Wave
+from eawf.kernel.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
 

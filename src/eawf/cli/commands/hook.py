@@ -42,8 +42,8 @@ from eawf.cli.scope import resolve_state_path
 if TYPE_CHECKING:
     from eawf.hooks.event import HookEvent, HookEventType, HookRuntime
     from eawf.hooks.runner import HookResult
+    from eawf.kernel.state.models import State
     from eawf.render.envelope import EnvelopeStatus, OutputEnvelope
-    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +202,7 @@ def _envelope_for(
 
 def _load_state(state_path: Path) -> State:
     """Load and validate state from *state_path*."""
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     path = state_path
     if not path.exists():

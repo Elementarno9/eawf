@@ -6,7 +6,7 @@ The W02 skills all follow the same shape::
     2. Resolve the active state path (env / workspace flag / pwd upward).
     3. Execute the §14 algorithm steps; each step appends one ``EVENT``
        envelope to ``store/event.jsonl`` via
-       :func:`eawf.store.append.append_envelope`.
+       :func:`eawf.kernel.store.append.append_envelope`.
     4. Optionally mutate state via
        :func:`eawf.cli._mutation.state_transaction`.
     5. Populate the per-skill body model from :mod:`eawf.skills.bodies`
@@ -36,16 +36,16 @@ from eawf.install.instrument_probe import (
     ProbeResult,
 )
 from eawf.install.instrument_probe import probe as run_probe
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.paths import store_path
 from eawf.render.envelope import (
     EnvelopeWarning,
     InstrumentStatus,
 )
 from eawf.skills.engine import ProbeOutcome
-from eawf.state.enums import StoreKind
-from eawf.state.resolve import resolve_with_reason
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.paths import store_path
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def probe_skill_instruments(
             python + uv.
         state_path: Optional state path used to derive the probe-cache
             location. ``None`` resolves the canonical ``.ea/state.json``
-            position via :func:`eawf.state.resolve.resolve_with_reason`.
+            position via :func:`eawf.kernel.state.resolve.resolve_with_reason`.
     """
     pids = list(profile_ids)
     if state_path is None:
@@ -210,7 +210,7 @@ def emit_event(
     Returns the freshly minted envelope id so the caller can fold it into
     its persisted-store-records list.
 
-    The append routes through :func:`eawf.store.append.append_envelope`,
+    The append routes through :func:`eawf.kernel.store.append.append_envelope`,
     which acquires the events.jsonl sibling lock; this is independent of
     any state-mutation transaction the caller might be holding (the two
     locks are on distinct files).
@@ -278,7 +278,7 @@ def has_research_profile(state_path: Path) -> bool:
     pulls Yaml + Pydantic loaders).
     """
     try:
-        from eawf.config.layered import merge_config
+        from eawf.kernel.config.layered import merge_config
     except Exception:  # pragma: no cover - defensive only
         return False
     anchor = state_path.parent.parent

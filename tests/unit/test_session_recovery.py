@@ -5,6 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    AgentSessionStatus,
+)
+from eawf.kernel.state.models import State
 from eawf.session.recovery import DEFAULT_AGE_MINUTES, recover_sessions
 from eawf.session.store import (
     append_event,
@@ -12,11 +17,6 @@ from eawf.session.store import (
     close_session,
     start_session,
 )
-from eawf.state.enums import (
-    AgentSessionRole,
-    AgentSessionStatus,
-)
-from eawf.state.models import State
 
 
 def _make_state() -> State:

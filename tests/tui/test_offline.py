@@ -16,8 +16,8 @@ from pathlib import Path
 
 import orjson
 
+from eawf.kernel.state.models import State
 from eawf.render.brand import BRAND_LITERAL
-from eawf.state.models import State
 from eawf.tui.offline import build_status_text, emit_status, offline_render
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"

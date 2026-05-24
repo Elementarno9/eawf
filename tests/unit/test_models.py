@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.state import models
+from eawf.kernel.state import models
 
 
 @pytest.mark.parametrize(

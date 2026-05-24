@@ -2,7 +2,7 @@
 
 These tests assert that the three dispatch-side event kinds
 (``runtime_switched``, ``session_continued``, ``session_failover``)
-flow through :class:`~eawf.store.kinds.event.Event` — the single
+flow through :class:`~eawf.kernel.store.kinds.event.Event` — the single
 source of truth from W06 — never through an adapter-private envelope.
 
 The :func:`emit_runtime_event` helper centralises construction; the
@@ -18,12 +18,12 @@ from datetime import UTC, datetime
 
 import pytest
 
+from eawf.kernel.store import Event as EventReExport
+from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
 from eawf.runtimes.adapter import (
     DispatchEventKind,
     emit_runtime_event,
 )
-from eawf.store import Event as EventReExport
-from eawf.store.kinds.event import Event, EventKind, EventPayload
 
 
 def _occurred() -> datetime:
@@ -99,10 +99,10 @@ def test_session_failover_event_emits_canonical_shape() -> None:
 
 @pytest.mark.integration
 def test_canonical_event_re_export_identity() -> None:
-    """D14 / XB07: ``eawf.store.Event`` re-exports the canonical model.
+    """D14 / XB07: ``eawf.kernel.store.Event`` re-exports the canonical model.
 
     Adapters import :func:`emit_runtime_event` which calls into
-    :class:`eawf.store.kinds.event.Event`; the package-root re-export
+    :class:`eawf.kernel.store.kinds.event.Event`; the package-root re-export
     MUST be the same object so callers reading either path get a
     single source of truth.
     """

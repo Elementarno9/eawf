@@ -39,7 +39,7 @@ from eawf.cli.commands.lifecycle import wave_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.ids import is_wave_id
+from eawf.kernel.state.ids import is_wave_id
 
 if TYPE_CHECKING:
     from eawf.ci_loop.policy import Failure

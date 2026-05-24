@@ -1,4 +1,4 @@
-"""Latency benchmark for :func:`eawf.validate.strict.validate_state`.
+"""Latency benchmark for :func:`eawf.kernel.validate.strict.validate_state`.
 
 P27 W17 replaced the nested ``O(parents * children)`` closure scans in the
 invariant layer with a per-validation index built once per ``validate_state``
@@ -28,7 +28,7 @@ from typing import Any
 
 import pytest
 
-from eawf.validate.strict import ValidationReport, validate_state
+from eawf.kernel.validate.strict import ValidationReport, validate_state
 
 #: Documented budget for ``validate_state`` on the medium fixture. W17's
 #: success criterion is "at or below ~1.1 ms". The indexed implementation

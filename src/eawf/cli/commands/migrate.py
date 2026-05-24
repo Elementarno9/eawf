@@ -2,8 +2,8 @@
 
 CLI dispatch only (AGENTS rule 1): the handlers parse args, resolve the
 ``state.json`` path, and delegate the chain machinery to
-:mod:`eawf.migrations`. The write routes through the migration package's
-:func:`eawf.migrations.write_canonical` — the daemon canonical-writer
+:mod:`eawf.kernel.migrations`. The write routes through the migration package's
+:func:`eawf.kernel.migrations.write_canonical` — the daemon canonical-writer
 primitive (``portalock`` + ``atomic_write_json_locked``), never the
 lock-acquiring ``atomic_write_json`` bypass (AGENTS rule 4 / D-SUP-01).
 
@@ -35,7 +35,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.error_codes import ErrorCode
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.migrations import (
+from eawf.kernel.migrations import (
     DEFAULT_REGISTRY,
     MigrationError,
     MigrationStepError,
@@ -44,7 +44,7 @@ from eawf.migrations import (
     guard_target_supported,
     run_chain,
 )
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.resolve import resolve_with_reason
 
 logger = logging.getLogger(__name__)
 

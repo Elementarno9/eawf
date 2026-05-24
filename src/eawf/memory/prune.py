@@ -1,7 +1,7 @@
 """Memory prune (soft-delete-only).
 
 Pruning a memory entry flips its
-:class:`~eawf.state.enums.MemoryStatus` to :class:`MemoryStatus.PRUNED` in the
+:class:`~eawf.kernel.state.enums.MemoryStatus` to :class:`MemoryStatus.PRUNED` in the
 state cache and appends a fresh JSONL envelope carrying the same ``id`` plus
 ``payload.expired_at = <now>``. The original record is preserved — compaction
 reclaims space later (`memory compact` keeps the latest envelope per id, so
@@ -30,9 +30,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from eawf.kernel.state.enums import MemoryStatus
+from eawf.kernel.state.models import State
 from eawf.memory.store import append_envelope, find_envelope
-from eawf.state.enums import MemoryStatus
-from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 

@@ -12,6 +12,20 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.state.enums import (
+    DecisionStatus,
+    IterStatus,
+    PhaseStatus,
+    ProjectStatus,
+    ScopeKind,
+    WaveStatus,
+)
+from eawf.kernel.state.models import (
+    CurrentPointers,
+    Decision,
+    Project,
+    State,
+)
 from eawf.lifecycle.transitions import (
     LifecycleError,
     activate_iter,
@@ -35,20 +49,6 @@ from eawf.lifecycle.transitions import (
     set_wave_deps,
     start_wave,
     switch_subproject,
-)
-from eawf.state.enums import (
-    DecisionStatus,
-    IterStatus,
-    PhaseStatus,
-    ProjectStatus,
-    ScopeKind,
-    WaveStatus,
-)
-from eawf.state.models import (
-    CurrentPointers,
-    Decision,
-    Project,
-    State,
 )
 
 
@@ -755,7 +755,7 @@ def test_archive_phase_cascades_planned_iter_to_abandoned() -> None:
 
 def test_archive_phase_leaves_no_pending_waves_validates() -> None:
     """After cascade, the candidate state passes closure-timestamp invariants."""
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")

@@ -20,6 +20,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 
+from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtimes.adapter import (
     ErrorClass,
     RuntimeAdapter,
@@ -27,7 +28,6 @@ from eawf.runtimes.adapter import (
 )
 from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.selector import runtime_supports
-from eawf.state.models import SessionAttempt, Wave
 
 logger = logging.getLogger(__name__)
 

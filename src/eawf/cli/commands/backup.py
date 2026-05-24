@@ -41,7 +41,7 @@ from eawf.backup import (
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.resolve import resolve_with_reason
 
 logger = logging.getLogger(__name__)
 

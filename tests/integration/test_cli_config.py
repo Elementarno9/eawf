@@ -11,7 +11,7 @@ Verifies the full CLI surface against a tmp-path repo:
   read-only).
 
 To keep the host's actual ``~/.config/eawf/config.yaml`` out of every run, the
-fixture redirects :func:`eawf.config.layered.global_config_path` to a per-test
+fixture redirects :func:`eawf.kernel.config.layered.global_config_path` to a per-test
 tmp path. ``Path.cwd()`` is the anchor for the ``repo`` layer; the test changes
 into the tmp repo via ``monkeypatch.chdir``.
 """
@@ -28,7 +28,7 @@ import yaml
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.config import layered
+from eawf.kernel.config import layered
 
 runner = CliRunner()
 

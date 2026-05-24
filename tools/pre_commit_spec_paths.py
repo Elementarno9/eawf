@@ -9,7 +9,7 @@ carries citation contract. Glob patterns (any ref containing
 ``*``) inside ``## Tests`` are also skipped as scope hints. This
 is the second of the three-layer enforcement stack:
 
-1. **Pydantic load** — :mod:`eawf.spec.wave` + :mod:`eawf.spec.validators`
+1. **Pydantic load** — :mod:`eawf.kernel.spec.wave` + :mod:`eawf.kernel.spec.validators`
    reject empty / non-existent paths at ``model_validate`` and loader
    call sites.
 2. **Pre-commit (this script)** — catches the case where the test path

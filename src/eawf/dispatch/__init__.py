@@ -3,7 +3,7 @@
 Public API:
 
 - :func:`build_subagent_spec` — project a validated
-  :class:`~eawf.state.models.State` snapshot + wave id into a typed
+  :class:`~eawf.kernel.state.models.State` snapshot + wave id into a typed
   :class:`~eawf.agents.specs.models.SubagentSpec` by walking the
   wave → iter → phase → scope chain and collecting attached decisions,
   hypotheses, and recent audits.

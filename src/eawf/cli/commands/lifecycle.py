@@ -74,14 +74,13 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.lock import portalock
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     ScopeKind,
 )
-from eawf.state.ids import (
+from eawf.kernel.state.ids import (
     is_iter_id,
 )
-from eawf.state.io import (
+from eawf.kernel.state.io import (
     StateValidationError,
     append_event,
     build_event_envelope,
@@ -90,11 +89,12 @@ from eawf.state.io import (
     state_version,
     write_state_unlocked,
 )
-from eawf.state.urn import build as build_urn
+from eawf.kernel.state.urn import build as build_urn
+from eawf.lock import portalock
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
-    from eawf.state.mutations import MutationKind
+    from eawf.kernel.state.models import State
+    from eawf.kernel.state.mutations import MutationKind
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ def _read_state_payload(path: Path) -> dict[str, Any]:
 
 def _validate_or_raise(payload: dict[str, Any]) -> State:
     """Validate the candidate payload; raise ``ValidationError`` on error."""
-    from eawf.validate.strict import validate_state as validate_state_payload
+    from eawf.kernel.validate.strict import validate_state as validate_state_payload
 
     report = validate_state_payload(payload, strict_optional=False)
     if not report.ok:
@@ -167,7 +167,7 @@ def _validate_or_raise(payload: dict[str, Any]) -> State:
     return report.state
 
 
-# State-write primitives moved to :mod:`eawf.state.io` (the library) so the
+# State-write primitives moved to :mod:`eawf.kernel.state.io` (the library) so the
 # CLI layer stays thin dispatch per the "CLI is dispatch; library implements"
 # rule. Re-exported here under their historical private names so the sibling
 # command modules (``lifecycle_iter`` / ``lifecycle_phase`` /
@@ -338,7 +338,7 @@ def _wave_close_via_daemon(
     """
     from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
     from eawf.cli._mutation import _daemon_reachable
-    from eawf.state.mutations import Mutation, MutationKind
+    from eawf.kernel.state.mutations import Mutation, MutationKind
 
     if not _daemon_reachable():
         cli_errors.emit_error(
@@ -408,7 +408,7 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
     """
     from pydantic import ValidationError as PydValidationError
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -505,10 +505,10 @@ def _run_mutation(
     Per rule 4 + D-SUP-01 the daemon is the canonical writer. When
     *mutation_kind* is supplied the call routes through the generic
     :func:`eawf.cli._dispatch._mutate_via_daemon` shim — escalate to the
-    daemon, marshal one typed :class:`~eawf.state.mutations.Mutation`, and
+    daemon, marshal one typed :class:`~eawf.kernel.state.mutations.Mutation`, and
     fall back to the in-process WAL-backed write only when the daemon is
     unavailable or predates the kind (the V1 CI/recovery carve-out). Verbs
-    whose transition has no :class:`~eawf.state.mutations.MutationKind`
+    whose transition has no :class:`~eawf.kernel.state.mutations.MutationKind`
     yet (``wave update`` / ``subproject add``·``switch`` / ``iter
     activate`` / ``phase reopen`` / ``wave budget set``·``consume``) omit
     *mutation_kind* and run the in-process WAL-backed path directly.
@@ -531,8 +531,8 @@ def _run_mutation(
     """
     from pydantic import ValidationError as PydValidationError
 
+    from eawf.kernel.state.models import State
     from eawf.lifecycle.transitions import LifecycleError
-    from eawf.state.models import State
 
     if (scope_id is None) == (scope_id_factory is None):
         raise ValueError("exactly one of scope_id or scope_id_factory must be provided")

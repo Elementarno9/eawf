@@ -19,8 +19,8 @@ import orjson
 import pytest
 from textual.logging import TextualHandler
 
-from eawf.state.enums import ScopeKind
-from eawf.state.models import State
+from eawf.kernel.state.enums import ScopeKind
+from eawf.kernel.state.models import State
 from eawf.tui.app import (
     BRAND,
     DEFAULT_PROJECT_CODE,

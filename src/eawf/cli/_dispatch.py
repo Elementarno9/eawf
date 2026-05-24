@@ -31,7 +31,7 @@ The helpers here are intentionally side-effect-light:
   can open its :class:`~eawf.cli._daemon_client.DaemonClient`.
 * :func:`_mutate_via_daemon` builds on :func:`escalate_mutation` to
   provide the single generic daemon-proxy entry: it escalates, marshals
-  one typed :class:`~eawf.state.mutations.Mutation` across
+  one typed :class:`~eawf.kernel.state.mutations.Mutation` across
   ``state.mutate``, and falls back to a caller-supplied in-process
   callable when the daemon predates the kind or the transport drops
   (the V1 carve-out).
@@ -51,7 +51,7 @@ from eawf.cli.flags import GlobalFlags
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from eawf.state.mutations import MutationKind
+    from eawf.kernel.state.mutations import MutationKind
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ def _mutate_via_daemon[FallbackT](
        refuse ``--daemonless`` / ``EAWF_DAEMONLESS=1`` and auto-spawn a
        daemon when none is up. A daemonless mutating call raises here
        before any wire traffic.
-    2. Build a typed :class:`~eawf.state.mutations.Mutation` (fresh
+    2. Build a typed :class:`~eawf.kernel.state.mutations.Mutation` (fresh
        ``mutation_id``) and dispatch it across the daemon's
        ``state.mutate`` RPC.
     3. On success, return the daemon's result dict verbatim.
@@ -286,7 +286,7 @@ def _mutate_via_daemon[FallbackT](
             ``except CliError`` handler renders it.
     """
     from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
-    from eawf.state.mutations import Mutation
+    from eawf.kernel.state.mutations import Mutation
 
     escalate_mutation(verb, flags=flags, runtime_dir=runtime_dir)
 

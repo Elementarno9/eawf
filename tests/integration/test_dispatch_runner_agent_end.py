@@ -7,7 +7,7 @@ report-on-completion path of
 
 The load-bearing assertion is the wave's success criterion: the emitted
 ``agent_end`` row carries a valid verdict AND
-:func:`eawf.validate.invariants.check_agent_report_invariants` returns no
+:func:`eawf.kernel.validate.invariants.check_agent_report_invariants` returns no
 violations for it. The runner emits through the canonical agent-report
 writer (:func:`eawf.agent_report.store.append_agent_report`) so the
 persisted envelope is indistinguishable from one written by the
@@ -28,17 +28,17 @@ from eawf.daemon.dispatch_runner import (
     run_dispatch,
 )
 from eawf.daemon.methods import MethodContext
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
-from eawf.state.models import State
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportPayload,
     ExecutorReportBody,
     store_kind_for_role,
 )
-from eawf.store.paths import store_path
+from eawf.kernel.store.paths import store_path
+from eawf.kernel.validate.invariants import check_agent_report_invariants
 from eawf.telemetry.models import RuntimeErrorClass
-from eawf.validate.invariants import check_agent_report_invariants
 
 pytestmark = pytest.mark.integration
 

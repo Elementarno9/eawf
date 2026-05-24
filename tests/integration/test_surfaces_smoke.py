@@ -41,7 +41,7 @@ from typer.testing import CliRunner
 from eawf.cli import exit_codes
 from eawf.cli.app import app
 from eawf.cli.errors import ErrorEnvelope
-from eawf.config import layered
+from eawf.kernel.config import layered
 from eawf.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter

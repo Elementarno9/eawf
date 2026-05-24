@@ -7,13 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eawf.doctor.checks import check_mcp_drift, run_all
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     McpRisk,
     McpStatus,
     ProjectStatus,
     ScopeKind,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     CurrentPointers,
     McpServer,
     Project,

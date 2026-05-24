@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from eawf.state.enums import MemoryTier
-from eawf.state.models import MemorySummary
+from eawf.kernel.state.enums import MemoryTier
+from eawf.kernel.state.models import MemorySummary
 
 
 def test_memory_tier_enum_members() -> None:

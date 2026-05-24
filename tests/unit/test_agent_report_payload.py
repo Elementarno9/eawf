@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportEvidenceRef,
     AgentReportFollowup,
     AgentReportHeader,

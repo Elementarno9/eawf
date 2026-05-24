@@ -37,6 +37,8 @@ from eawf import __version__
 from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.methods.agent import dispatch
+from eawf.kernel.state.enums import DispatchNote
+from eawf.kernel.state.models import Wave
 from eawf.runtimes.adapter import ALL_ERROR_CLASSES, RuntimeAdapter
 from eawf.runtimes.dispatch import (
     AdapterManifestMismatchError,
@@ -52,8 +54,6 @@ from eawf.runtimes.fallback import (
     switch_runtime_annotation,
 )
 from eawf.runtimes.plugin_manifest import SkillManifest
-from eawf.state.enums import DispatchNote
-from eawf.state.models import Wave
 
 pytestmark = pytest.mark.unit
 

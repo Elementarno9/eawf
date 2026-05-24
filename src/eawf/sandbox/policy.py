@@ -6,7 +6,7 @@ is populated and queryable, and :func:`resolve_denied_tools` resolves the
 deny set the dispatcher subtracts from the rendered ``allowed_tools``
 projection so a wave with a denied tool cannot dispatch it.
 
-Layout mirrors :class:`~eawf.state.models.McpGrant`:
+Layout mirrors :class:`~eawf.kernel.state.models.McpGrant`:
 
 - ``id`` follows ``POL-<n>``;
 - ``scope_kind`` ∈ ``{"wave", "profile", "global"}``;
@@ -23,7 +23,7 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.types import UtcDatetime
+from eawf.kernel.state.types import UtcDatetime
 
 logger = logging.getLogger(__name__)
 

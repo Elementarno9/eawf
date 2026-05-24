@@ -1,7 +1,7 @@
-"""Unit tests for :class:`eawf.store.kinds.incident.IncidentPayload`.
+"""Unit tests for :class:`eawf.kernel.store.kinds.incident.IncidentPayload`.
 
 Covers the C09 V7 incident-cause taxonomy promotion: ``cause`` is a required
-typed :class:`~eawf.state.enums.IncidentCause` member and the legacy
+typed :class:`~eawf.kernel.state.enums.IncidentCause` member and the legacy
 ``root_cause`` free-string field is removed (clean break, ``extra="forbid"``).
 """
 
@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.enums import IncidentCause, IncidentSeverity, StoreKind
-from eawf.store.envelope import Envelope
-from eawf.store.kinds import PAYLOAD_MODELS
-from eawf.store.kinds.incident import IncidentPayload
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds import PAYLOAD_MODELS
+from eawf.kernel.store.kinds.incident import IncidentPayload
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "store" / "incident_sample.json"
 

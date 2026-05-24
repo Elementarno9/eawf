@@ -1,6 +1,6 @@
 """Audit-evidence write-time guards.
 
-The :mod:`eawf.validate.invariants` module owns the post-mutation invariant
+The :mod:`eawf.kernel.validate.invariants` module owns the post-mutation invariant
 ``check_audit_evidence`` which fires ``INV.AUDIT.OUTCOME_MISSING_AUDIT`` and
 ``INV.AUDIT.HYPOTHESIS_MISSING_AUDIT`` when a met/missed outcome or a
 verdicted hypothesis lacks an ``audit_id``. That invariant is necessary but
@@ -23,8 +23,8 @@ from __future__ import annotations
 import logging
 
 from eawf.cli.errors import ValidationError
-from eawf.state.enums import AuditStatus
-from eawf.state.models import State
+from eawf.kernel.state.enums import AuditStatus
+from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

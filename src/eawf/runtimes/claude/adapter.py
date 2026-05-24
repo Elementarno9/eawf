@@ -1,7 +1,7 @@
 """Claude Code adapter — implements :class:`RuntimeAdapter`.
 
 The :meth:`open_session` / :meth:`continue_session` methods return
-fully-typed :class:`~eawf.state.models.SessionAttempt` rows. In
+fully-typed :class:`~eawf.kernel.state.models.SessionAttempt` rows. In
 v0.3-v0.5 the live subprocess spawn lives in the daemon dispatch
 router; the adapter's role here is to construct the typed row + parse
 subprocess outcomes.
@@ -14,6 +14,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 
+from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtimes.adapter import (
     ErrorClass,
     RuntimeAdapter,
@@ -21,7 +22,6 @@ from eawf.runtimes.adapter import (
 )
 from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.selector import runtime_supports
-from eawf.state.models import SessionAttempt, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class ClaudeAdapter:
 
     Implements :class:`~eawf.runtimes.adapter.RuntimeAdapter`. ``id``
     + ``cli_binary`` follow the canonical naming per
-    :class:`~eawf.state.models.SessionAttempt.runtime`.
+    :class:`~eawf.kernel.state.models.SessionAttempt.runtime`.
     """
 
     id: str = "claude-code"

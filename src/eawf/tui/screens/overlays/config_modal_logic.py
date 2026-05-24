@@ -27,14 +27,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.config.defaults import built_in_defaults
-from eawf.config.layered import (
+from eawf.kernel.config.defaults import built_in_defaults
+from eawf.kernel.config.layered import (
     WRITABLE_LAYERS,
     get_dotted,
     layer_path,
     merge_config,
 )
-from eawf.config.registry import (
+from eawf.kernel.config.registry import (
     ConfigKey,
     coerce_and_validate,
     registry_lookup,
@@ -393,7 +393,7 @@ def save_dirty_fields(
     Args:
         dirty: The staged-edit map to flush.
         layer: The writable layer to write to (resolved to a YAML path
-            via :func:`eawf.config.layered.layer_path`).
+            via :func:`eawf.kernel.config.layered.layer_path`).
         workspace: Workspace anchor for the ``workspace`` layer.
         repo: Repo anchor for the ``repo`` / ``local`` layers.
         save_fn: Test seam — defaults to

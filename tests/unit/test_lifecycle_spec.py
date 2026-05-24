@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pytest
 
+from eawf.kernel.state.enums import SpecStatus
 from eawf.lifecycle.spec import (
     SPEC_TRANSITIONS,
     SpecTransitionError,
@@ -22,7 +23,6 @@ from eawf.lifecycle.spec import (
     next_spec_statuses,
     validate_spec_transition,
 )
-from eawf.state.enums import SpecStatus
 
 
 def test_spec_transitions_match_c01_dag() -> None:

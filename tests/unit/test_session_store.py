@@ -8,6 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    AgentSessionStatus,
+)
+from eawf.kernel.state.models import State
 from eawf.session.store import (
     SessionConflict,
     SessionNotFound,
@@ -16,11 +21,6 @@ from eawf.session.store import (
     close_session,
     start_session,
 )
-from eawf.state.enums import (
-    AgentSessionRole,
-    AgentSessionStatus,
-)
-from eawf.state.models import State
 
 
 def _make_state() -> State:

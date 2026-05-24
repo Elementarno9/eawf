@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.state.migration`.
+"""Unit tests for :mod:`eawf.kernel.state.migration`.
 
 Covers :func:`abandon_orphaned_waves`: it abandons non-terminal waves and
 iters orphaned under a terminal phase, leaves already-terminal records and
@@ -13,16 +13,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     IterStatus,
     PhaseStatus,
     ProjectStatus,
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.migration import abandon_orphaned_waves
-from eawf.state.models import CurrentPointers, Project, State
-from eawf.validate.strict import validate_state
+from eawf.kernel.state.migration import abandon_orphaned_waves
+from eawf.kernel.state.models import CurrentPointers, Project, State
+from eawf.kernel.validate.strict import validate_state
 
 _TS = datetime(2026, 5, 18, 12, 0, 0, tzinfo=UTC).isoformat()
 

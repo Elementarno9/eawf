@@ -5,13 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from eawf.cli.commands.lifecycle import _compute_iter_bump_hints
-from eawf.lifecycle.transitions import (
-    close_iter,
-    open_iter,
-    open_phase,
-    plan_wave,
-)
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
     AuditVerdict,
@@ -19,11 +13,17 @@ from eawf.state.enums import (
     ProjectStatus,
     ScopeKind,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     Audit,
     CurrentPointers,
     Project,
     State,
+)
+from eawf.lifecycle.transitions import (
+    close_iter,
+    open_iter,
+    open_phase,
+    plan_wave,
 )
 
 

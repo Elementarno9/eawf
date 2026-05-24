@@ -2,9 +2,9 @@
 
 A workspace state is a parent-of-repos state document with
 ``scope_kind == "workspace"``, no embedded ``project``, and a
-:class:`~eawf.state.models.WorkspaceIndex` populated under ``workspace``.
+:class:`~eawf.kernel.state.models.WorkspaceIndex` populated under ``workspace``.
 Each entry in ``workspace.repos`` is a
-:class:`~eawf.state.models.WorkspaceRepoRef` recording the on-disk path and
+:class:`~eawf.kernel.state.models.WorkspaceRepoRef` recording the on-disk path and
 canonical URN of a repo-scoped state that the workspace tracks.
 
 Subcommands (state-file path):
@@ -49,11 +49,11 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
+from eawf.kernel.state.enums import ProjectStatus, ScopeKind
+from eawf.kernel.state.ids import is_project_code
+from eawf.kernel.state.urn import build as build_urn
+from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.lock import portalock
-from eawf.state.enums import ProjectStatus, ScopeKind
-from eawf.state.ids import is_project_code
-from eawf.state.urn import build as build_urn
-from eawf.state.writer import atomic_write_json_locked
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +194,7 @@ def workspace_init_cmd(
             try:
                 # Round-trip through the model to enforce schema invariants
                 # before we touch disk.
-                from eawf.validate.strict import validate_state as _validate_state
+                from eawf.kernel.validate.strict import validate_state as _validate_state
 
                 report = _validate_state(payload, strict_optional=False)
                 if report.state is None:
@@ -247,7 +247,7 @@ def workspace_add_repo_cmd(
     supply both via ``--project-code`` / ``--title``.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
+    from eawf.kernel.state.models import WorkspaceIndex, WorkspaceRepoRef
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
@@ -338,7 +338,7 @@ def workspace_remove_repo_cmd(
     ``store/event.jsonl`` once this command lands inside ``state_transaction``.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.state.models import WorkspaceIndex
+    from eawf.kernel.state.models import WorkspaceIndex
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):

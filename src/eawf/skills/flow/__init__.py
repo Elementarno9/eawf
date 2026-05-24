@@ -78,6 +78,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from eawf.cli import errors as cli_errors
+from eawf.kernel.state.enums import FlowStatus
+from eawf.kernel.store.kinds.flow import FlowCheckpointPayload
 from eawf.render.envelope import OutputEnvelope, SkillName
 from eawf.skills.audit import AuditSkill
 from eawf.skills.bodies.flow import FlowBody
@@ -105,8 +107,6 @@ from eawf.skills.registry import register
 from eawf.skills.research import ResearchSkill
 from eawf.skills.review import ReviewSkill
 from eawf.skills.ship import ShipSkill
-from eawf.state.enums import FlowStatus
-from eawf.store.kinds.flow import FlowCheckpointPayload
 
 logger = logging.getLogger(__name__)
 
@@ -301,13 +301,13 @@ def _payload_hash(body: Any) -> str:
 def _current_profile_ids(state_path: Path) -> list[str]:
     """Return the sorted list of merged enabled profile ids.
 
-    Reuses :func:`eawf.config.layered.merge_config` against the workspace
+    Reuses :func:`eawf.kernel.config.layered.merge_config` against the workspace
     root so the fixture-friendly cases (no config files) still produce a
     stable empty list. Any unexpected exception collapses to ``[]`` so
     drift detection sees "no profile change" rather than crashing.
     """
     try:
-        from eawf.config.layered import merge_config
+        from eawf.kernel.config.layered import merge_config
     except Exception as exc:  # pragma: no cover - defensive only
         logger.debug(f"_current_profile_ids import-failed exc={exc}")
         return []

@@ -40,7 +40,7 @@ from eawf.daemon.methods.config import (
     set_layer_value,
     set_wave_value,
 )
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 pytestmark = pytest.mark.unit
 

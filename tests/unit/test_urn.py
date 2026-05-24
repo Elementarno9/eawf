@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.state import urn
+from eawf.kernel.state import urn
 
 
 def test_parse_repo_urn() -> None:

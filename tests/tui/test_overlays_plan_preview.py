@@ -50,7 +50,7 @@ def _push_plan(app: EaApp, plan: PlanTree, sink: list[str]) -> PlanPreviewModal:
 
 
 def _load_state() -> object:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     raw = json.loads(_PHASE_ITER_WAVE.read_text())
     return State.model_validate(raw)

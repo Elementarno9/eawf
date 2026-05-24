@@ -1,6 +1,6 @@
 """Read-only ``plan_view`` renderer for ``eawf plan show``.
 
-Pure projection over a validated :class:`~eawf.state.models.State`. Builds a
+Pure projection over a validated :class:`~eawf.kernel.state.models.State`. Builds a
 :class:`PlanView` that captures every aspect of an active iter (waves, DAG,
 acceptance checks, composed risks, summary) and renders it as either a
 deterministic markdown body or a JSON envelope.
@@ -52,8 +52,7 @@ from eawf.estimation.buckets import (
     timestamp_actual_eu,
     wave_estimate_eu,
 )
-from eawf.lifecycle.wave_sha import derive_wave_sha
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     BacklogPriority,
     BacklogStatus,
     HypothesisVerdict,
@@ -61,7 +60,7 @@ from eawf.state.enums import (
     IncidentStatus,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     Audit,
     BacklogItem,
     Hypothesis,
@@ -71,6 +70,7 @@ from eawf.state.models import (
     State,
     Wave,
 )
+from eawf.lifecycle.wave_sha import derive_wave_sha
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class _StrictModel(BaseModel):
 
 
 class IterView(_StrictModel):
-    """Compact projection of :class:`~eawf.state.models.Iter`."""
+    """Compact projection of :class:`~eawf.kernel.state.models.Iter`."""
 
     id: str
     phase_id: str
@@ -111,7 +111,7 @@ class IterView(_StrictModel):
 
 
 class PhaseView(_StrictModel):
-    """Compact projection of :class:`~eawf.state.models.Phase`."""
+    """Compact projection of :class:`~eawf.kernel.state.models.Phase`."""
 
     id: str
     title: str
@@ -119,7 +119,7 @@ class PhaseView(_StrictModel):
 
 
 class WaveView(_StrictModel):
-    """Compact projection of :class:`~eawf.state.models.Wave`."""
+    """Compact projection of :class:`~eawf.kernel.state.models.Wave`."""
 
     id: str
     title: str

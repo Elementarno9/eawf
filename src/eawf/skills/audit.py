@@ -64,6 +64,7 @@ import orjson
 
 from eawf.audit_dsl.models import CheckSpec
 from eawf.audit_dsl.runner import run_checks
+from eawf.kernel.state.models import State, Wave
 from eawf.render.envelope import EnvelopeStatus, SkillName
 from eawf.skills._common import (
     emit_event,
@@ -80,7 +81,6 @@ from eawf.skills.bodies.audit import (
 )
 from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.skills.registry import register
-from eawf.state.models import State, Wave
 
 logger = logging.getLogger(__name__)
 

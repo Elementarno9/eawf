@@ -11,7 +11,7 @@ row — none of those reach this overlay). The modal presents a single
 and dismisses with the typed value, ``Esc`` cancels (dismisses ``None``).
 
 Validation reports **inline below the input** rather than via a toast:
-the field's :func:`~eawf.config.registry.coerce_and_validate` runs on the
+the field's :func:`~eawf.kernel.config.registry.coerce_and_validate` runs on the
 raw buffer; on failure the error string renders in a dim-error row under
 the input and the overlay stays open so the operator can correct the
 value without retyping from scratch. On success the coerced (typed)
@@ -35,7 +35,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, Static
 
 from eawf.cli.errors import UserError
-from eawf.config.registry import ConfigKey, coerce_and_validate
+from eawf.kernel.config.registry import ConfigKey, coerce_and_validate
 
 if TYPE_CHECKING:
     from textual.app import App

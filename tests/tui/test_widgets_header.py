@@ -15,8 +15,8 @@ from pathlib import Path
 import orjson
 from textual.app import ComposeResult
 
-from eawf.state.enums import ScopeKind
-from eawf.state.models import State
+from eawf.kernel.state.enums import ScopeKind
+from eawf.kernel.state.models import State
 from eawf.tui.widgets.header import (
     BRAND,
     CRUMB_SEP,

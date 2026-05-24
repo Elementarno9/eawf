@@ -1,7 +1,7 @@
 """Typed subagent-spec model (P27-I03-W14).
 
 A :class:`SubagentSpec` is the typed intermediate the dispatch renderer
-builds from a validated :class:`~eawf.state.models.State` snapshot. Before
+builds from a validated :class:`~eawf.kernel.state.models.State` snapshot. Before
 this wave the wave prompt was assembled by concatenating section strings
 straight out of ``State``; now the renderer projects ``State`` into a
 ``SubagentSpec`` and the spec renders itself. The two-step seam means the

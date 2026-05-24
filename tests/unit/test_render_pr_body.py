@@ -10,19 +10,10 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.artifacts.references import Citation
-from eawf.profiles.models import ComposedProfile, RenderBlock
-from eawf.render.pr_body import (
-    PrBodyInput,
-    PrBodyNotFound,
-    build_pr_body,
-    collect_pr_report_inputs,
-    infer_pr_kind,
-    resolve_pr_phase_id,
-)
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
-from eawf.state.models import State
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
     AgentReportEvidenceRef,
     AgentReportHeader,
@@ -33,7 +24,16 @@ from eawf.store.kinds.agent_report import (
     ReviewerReportBody,
     store_kind_for_role,
 )
-from eawf.store.paths import store_path
+from eawf.kernel.store.paths import store_path
+from eawf.profiles.models import ComposedProfile, RenderBlock
+from eawf.render.pr_body import (
+    PrBodyInput,
+    PrBodyNotFound,
+    build_pr_body,
+    collect_pr_report_inputs,
+    infer_pr_kind,
+    resolve_pr_phase_id,
+)
 
 NOW = datetime(2026, 5, 14, tzinfo=UTC)
 

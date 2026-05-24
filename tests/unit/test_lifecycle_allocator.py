@@ -11,25 +11,25 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.lifecycle.allocator import (
-    allocate_iter_id,
-    allocate_phase_id,
-    allocate_wave_id,
-)
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     IterStatus,
     PhaseStatus,
     ProjectStatus,
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     CurrentPointers,
     Iter,
     Phase,
     Project,
     State,
     Wave,
+)
+from eawf.lifecycle.allocator import (
+    allocate_iter_id,
+    allocate_phase_id,
+    allocate_wave_id,
 )
 
 

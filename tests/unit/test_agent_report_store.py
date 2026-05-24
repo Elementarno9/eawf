@@ -13,11 +13,11 @@ from eawf.agent_report.store import (
     AgentReportScrubError,
     append_agent_report,
 )
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
-from eawf.state.models import State
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import AgentReportPayload, ExecutorReportBody
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ExecutorReportBody
+from eawf.kernel.store.paths import store_path
 
 
 def _state() -> State:

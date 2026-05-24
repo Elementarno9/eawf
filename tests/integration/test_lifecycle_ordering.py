@@ -109,7 +109,7 @@ def test_phase_open_writes_state_before_event(
     state_before_open = orjson.loads(state_path.read_bytes())
     assert state_before_open["phases"] == {}, "no phases before phase open"
 
-    from eawf.store import append as append_module
+    from eawf.kernel.store import append as append_module
 
     captured: dict[str, Any] = {}
     real_append: Any = append_module.append_envelope
@@ -121,7 +121,7 @@ def test_phase_open_writes_state_before_event(
     # ``append_envelope`` is the seam ``_commit_mutation`` calls after the
     # state write; spy on it so we observe the on-disk state at the instant
     # the event row lands.
-    monkeypatch.setattr("eawf.store.append.append_envelope", _spy_append)
+    monkeypatch.setattr("eawf.kernel.store.append.append_envelope", _spy_append)
 
     res = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
     assert res.exit_code == 0, res.stdout
@@ -188,7 +188,7 @@ def test_phase_open_no_phantom_event_when_append_fails(
 
     # ``append_envelope`` is lazy-imported inside ``_commit_mutation`` from
     # its source module, so the failure seam is patched at the source.
-    monkeypatch.setattr("eawf.store.append.append_envelope", _fail_append)
+    monkeypatch.setattr("eawf.kernel.store.append.append_envelope", _fail_append)
 
     res = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
     assert res.exit_code != 0, res.stdout
@@ -221,7 +221,7 @@ def test_phase_open_crash_then_next_mutation_rolls_forward(
     event row the crash dropped lands exactly once — no longer lost to a
     poisoned ``.pending`` record as it was before W32.
     """
-    from eawf.store import append as append_module
+    from eawf.kernel.store import append as append_module
 
     _init_project(workspace)
 
@@ -234,7 +234,7 @@ def test_phase_open_crash_then_next_mutation_rolls_forward(
             raise OSError("simulated event store failure (first append only)")
         real_append(*args, **kwargs)
 
-    monkeypatch.setattr("eawf.store.append.append_envelope", _flaky_append)
+    monkeypatch.setattr("eawf.kernel.store.append.append_envelope", _flaky_append)
 
     # First phase open: state write lands, mark_applied runs, event append
     # crashes — leaving an .applied record (not a .pending one).

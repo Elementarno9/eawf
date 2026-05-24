@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-from eawf.state.enums import AgentReportVerdict, AgentSessionRole, Confidence, StoreKind
-from eawf.state.models import State
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence, StoreKind
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
     AgentReportEvidenceRef,
     AgentReportHeader,
@@ -22,7 +22,7 @@ from eawf.store.kinds.agent_report import (
     ReviewerReportBody,
     store_kind_for_role,
 )
-from eawf.validate.invariants import Violation, check_agent_report_invariants
+from eawf.kernel.validate.invariants import Violation, check_agent_report_invariants
 
 pytestmark = pytest.mark.unit
 

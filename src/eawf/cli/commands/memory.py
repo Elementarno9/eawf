@@ -26,7 +26,7 @@ Sub-commands:
   memory entry up into a durable artifact (``--to artifact``).
 - ``prune``          — soft-delete: flip matched entries' status to ``PRUNED``.
 - ``list``           — list memory entries from the cache (optionally filtered).
-- ``compact``        — wrap :func:`eawf.store.compact.compact_store` for ``memory.jsonl``.
+- ``compact``        — wrap :func:`eawf.kernel.store.compact.compact_store` for ``memory.jsonl``.
 - ``render-context`` — produce a token-budgeted context block.
 - ``view``           — show one memory entry (cache + envelope body).
 - ``stale``          — list stale candidates (low-confidence + over-age).
@@ -48,10 +48,10 @@ import orjson
 import typer
 
 from eawf.cli import errors as cli_errors
-from eawf.state.enums import Confidence, MemoryStatus, StoreKind
+from eawf.kernel.state.enums import Confidence, MemoryStatus, StoreKind
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 #: Mirrors :data:`eawf.memory.render_context.DEFAULT_BUDGET`; inlined as a
 #: literal so the ``memory render-context --budget`` default does not import
@@ -79,21 +79,21 @@ _CONFIDENCE_FROM_FLAG: dict[str, Confidence] = {
 
 def _memory_path_for(state_path: Path) -> Path:
     """Return the canonical memory-store JSONL location next to ``state.json``."""
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.paths import store_path
 
     return store_path(state_path, StoreKind.MEMORY)
 
 
 def _events_path_for(state_path: Path) -> Path:
     """Return the canonical events-store JSONL location next to ``state.json``."""
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.paths import store_path
 
     return store_path(state_path, StoreKind.EVENT)
 
 
 def _load_state(state_path: Path) -> State:
     """Read + schema-validate a state document. Used by read-only handlers."""
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     if not state_path.exists():
         raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")

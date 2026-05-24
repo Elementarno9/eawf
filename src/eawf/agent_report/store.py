@@ -10,11 +10,10 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from eawf.scrub.scan import ScrubFinding, scan_text
-from eawf.state.models import AgentSession, State
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
     AgentReportHeader,
     AgentReportPayload,
@@ -22,7 +21,8 @@ from eawf.store.kinds.agent_report import (
     report_store_urn,
     store_kind_for_role,
 )
-from eawf.store.paths import store_path
+from eawf.kernel.store.paths import store_path
+from eawf.scrub.scan import ScrubFinding, scan_text
 
 _BODY_ADAPTER: TypeAdapter[AgentReportBody] = TypeAdapter(AgentReportBody)
 

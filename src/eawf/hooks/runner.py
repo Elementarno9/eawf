@@ -19,7 +19,7 @@ Design rules per Phase 4 W04 design spec §3.3 / acceptance §3:
   :attr:`HookResult.duration_ms`; tests assert ``>= 0``.
 - The runner MUST NOT mutate ``state.json`` directly (rule 4). Append-only
   bookkeeping is the caller's responsibility (the CLI handler routes
-  results to ``events.jsonl`` via :func:`eawf.store.append.append_envelope`).
+  results to ``events.jsonl`` via :func:`eawf.kernel.store.append.append_envelope`).
 """
 
 from __future__ import annotations
@@ -149,8 +149,8 @@ class HookRunner:
             except Exception as exc:
                 duration_ms = (time.perf_counter() - started) * 1000.0
                 logger.exception(
-                    f"HookRunner.run_event: hook {name!r} raised for event "
-                    f"{event.event_type.value!r}"
+                    f"run_event hook={name!r} event={event.event_type.value!r} "
+                    f"status=raised; hook raised during event dispatch"
                 )
                 results.append(
                     HookResult(

@@ -17,11 +17,11 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.ids import is_iter_id, is_phase_id
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.ids import is_iter_id, is_phase_id
+from eawf.kernel.state.resolve import resolve_with_reason
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ pr_app = typer.Typer(
 
 
 def _load_state(state_path: Path) -> State:
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     if not state_path.exists():
         raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
@@ -70,7 +70,7 @@ def pr_render(
 ) -> None:
     """Render the PR body for a phase or iter as Markdown (or JSON envelope)."""
     from eawf.artifacts.validation import validate_markdown_artifact
-    from eawf.config.layered import merge_config
+    from eawf.kernel.config.layered import merge_config
     from eawf.profiles.compose import compose
     from eawf.profiles.loader import load_profile
     from eawf.render.pr_body import (

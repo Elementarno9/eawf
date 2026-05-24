@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.enums import StoreKind
-from eawf.store import compact
-from eawf.store.compact import CompactReport, compact_store
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store import compact
+from eawf.kernel.store.compact import CompactReport, compact_store
+from eawf.kernel.store.envelope import Envelope
 
 
 def _write_env(path: Path, env: Envelope) -> None:

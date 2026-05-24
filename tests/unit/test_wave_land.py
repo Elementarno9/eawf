@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 
 from eawf.cli import errors as cli_errors
-from eawf.state.enums import WaveStatus, WorktreeStatus
-from eawf.state.models import (
+from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
+from eawf.kernel.state.models import (
     Iter,
     Wave,
 )

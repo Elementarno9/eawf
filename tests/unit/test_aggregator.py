@@ -5,7 +5,7 @@ Covers the two load-bearing guarantees of the aggregator:
 - **Session rolling** — :func:`roll_session` stamps a source session row
   with its owning ``project_id`` and fail-fasts on an empty project id.
 - **Typed incident classification** — incident causes are resolved through
-  the closed :class:`~eawf.state.enums.IncidentCause` lookups keyed on the
+  the closed :class:`~eawf.kernel.state.enums.IncidentCause` lookups keyed on the
   ``event_type`` / ``RuntimeErrorClass`` enumerations, **never** by
   substring-matching prose. The tests prove that a ``runtime_switched``
   event whose ``cause`` is a typed ``RuntimeErrorClass`` resolves to the
@@ -24,8 +24,8 @@ from typing import Any
 
 import pytest
 
-from eawf.state.enums import IncidentCause, IncidentSeverity, StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.aggregator import (
     classify_event_cause,
     default_severity_for,

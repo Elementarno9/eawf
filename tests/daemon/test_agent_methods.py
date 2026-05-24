@@ -29,9 +29,9 @@ from eawf.daemon import PROTOCOL_VERSION
 from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.methods.agent import _runtime_triple, dispatch, kill, session
-from eawf.state.enums import DispatchNote
-from eawf.state.models import SessionAttempt, Wave
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import DispatchNote
+from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.pricing import PRICING_VERSION
 
 pytestmark = pytest.mark.unit

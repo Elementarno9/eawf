@@ -16,7 +16,7 @@ import pytest
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
 from eawf.evidence import _io, goal
-from eawf.state.enums import GoalStatus, StoreKind
+from eawf.kernel.state.enums import GoalStatus, StoreKind
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

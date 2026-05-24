@@ -21,17 +21,17 @@ Boundaries
   state, expired session); the daemon catches this and falls back to
   fresh via the V8 fall-through.
 * :func:`emit_runtime_event` — helper that constructs canonical
-  :class:`~eawf.store.kinds.event.Event` rows for the three
+  :class:`~eawf.kernel.store.kinds.event.Event` rows for the three
   dispatch-side event kinds adapters emit: ``runtime_switched``,
   ``session_continued``, ``session_failover``. The ``Event`` model
-  from :mod:`eawf.store.kinds.event` is the single source of truth;
+  from :mod:`eawf.kernel.store.kinds.event` is the single source of truth;
   adapters never roll their own envelope.
 
 Naming convention
 -----------------
 
 The adapter ``id`` strings are the canonical runtime identifiers used
-in :class:`~eawf.state.models.SessionAttempt.runtime`,
+in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 ``runtime.preference`` config keys, and the dispatch CLI flag:
 
 * ``"claude-code"``
@@ -43,9 +43,9 @@ from __future__ import annotations
 
 from typing import Final, Literal, Protocol, runtime_checkable
 
-from eawf.state.models import SessionAttempt, Wave
-from eawf.state.types import UtcDatetime
-from eawf.store.kinds.event import Event, EventKind, EventPayload
+from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.state.types import UtcDatetime
+from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
 
 # ---------------------------------------------------------------------------
 # Closed error-class set (§5.5)
@@ -92,7 +92,7 @@ class SessionResumeFailedError(Exception):
 
     The daemon's dispatch router catches this exception and falls back
     to a fresh ``open_session`` call, annotating the resulting
-    :class:`~eawf.state.models.DispatchAnnotation` with
+    :class:`~eawf.kernel.state.models.DispatchAnnotation` with
     ``DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`` (per the V8
     fall-through).
     """
@@ -116,7 +116,7 @@ class RuntimeAdapter(Protocol):
 
     Attributes:
         id: Canonical runtime identifier (e.g. ``"claude-code"``).
-            Matches :attr:`~eawf.state.models.SessionAttempt.runtime`.
+            Matches :attr:`~eawf.kernel.state.models.SessionAttempt.runtime`.
         cli_binary: Bare CLI binary name (e.g. ``"claude"``).
         accepts_continue: Whether the runtime supports session
             resume via a ``--continue`` / ``resume`` verb (V8
@@ -173,7 +173,7 @@ class RuntimeAdapter(Protocol):
     ) -> str:
         """Return the daemon-internal opaque handle for the session log.
 
-        Per :class:`~eawf.state.models.SessionAttempt.session_log_handle`
+        Per :class:`~eawf.kernel.state.models.SessionAttempt.session_log_handle`
         (rule 16 secrets / PII hygiene): the returned string is an
         opaque URN-shaped handle the daemon resolves via its
         in-process map — never a filesystem path stamped onto
@@ -209,7 +209,7 @@ class RuntimeAdapter(Protocol):
 
 
 # The dispatch-side event kinds adapters emit. Subset of the closed
-# ``EventKind`` literal at :data:`eawf.store.kinds.event.EventKind`;
+# ``EventKind`` literal at :data:`eawf.kernel.store.kinds.event.EventKind`;
 # narrowing here documents what adapters are allowed to emit (the
 # router emits the wave / phase lifecycle kinds).
 DispatchEventKind = Literal[
@@ -236,7 +236,7 @@ def emit_runtime_event(
 ) -> Event:
     """Construct a canonical :class:`Event` for adapter-side emission.
 
-    The :class:`~eawf.store.kinds.event.Event` model is the **single
+    The :class:`~eawf.kernel.store.kinds.event.Event` model is the **single
     source of truth** — adapters do NOT roll their own envelope. This
     helper centralises the construction so every
     adapter populates ``event_kind`` from the closed Literal subset

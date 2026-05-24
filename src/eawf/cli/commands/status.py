@@ -45,11 +45,11 @@ import typer
 from eawf.cli import errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.enums import WaveStatus
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.resolve import resolve_with_reason
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +271,7 @@ def status(
     """Print active pointers, blockers, and git head for the current state."""
     from pydantic import ValidationError
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     flags: GlobalFlags = ctx.obj
     # ``scope`` is captured for forward compatibility (per-command option) but

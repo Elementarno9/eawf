@@ -27,8 +27,8 @@ from typing import Final
 
 import orjson
 
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +318,7 @@ def catch_up(
     Args:
         subscriber: Live subscriber returned by :meth:`EventBus.register`.
         event_path: Path to ``event.jsonl`` (typically resolved via
-            :func:`eawf.store.paths.store_path`).
+            :func:`eawf.kernel.store.paths.store_path`).
         max_events: Hard bound on the number of envelopes the caller
             is willing to replay. Default is :data:`CATCH_UP_MAX`.
 

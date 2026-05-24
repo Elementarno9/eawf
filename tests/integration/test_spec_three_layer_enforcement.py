@@ -7,7 +7,7 @@ end-to-end:
 - **Layer 1 — Pydantic + loader.** A WaveSpec that names a missing
   test path passes ``model_validate`` (paths are not checked at the
   Pydantic level) but fails when the loader function
-  :func:`eawf.spec.validators.validate_wave_spec_at_load` is invoked
+  :func:`eawf.kernel.spec.validators.validate_wave_spec_at_load` is invoked
   against a temp project root.
 - **Layer 1 (UI heuristic).** A UI-scope WaveSpec without mockup +
   without waiver fails at ``model_validate`` time — the heuristic
@@ -30,10 +30,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from eawf.spec.common import VerdictCitation
-from eawf.spec.validators import SpecValidationError, validate_wave_spec_at_load
-from eawf.spec.wave import WaveBehavior, WaveMockup, WaveSpec
-from eawf.state.enums import AgentSessionRole, EffortBucket
+from eawf.kernel.spec.common import VerdictCitation
+from eawf.kernel.spec.validators import SpecValidationError, validate_wave_spec_at_load
+from eawf.kernel.spec.wave import WaveBehavior, WaveMockup, WaveSpec
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 # Path to the hook script (resolved from the test's repo so the script
 # call works no matter where pytest runs from).

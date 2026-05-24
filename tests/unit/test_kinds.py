@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     AuditKind,
@@ -17,24 +17,24 @@ from eawf.state.enums import (
     IncidentSeverity,
     StoreKind,
 )
-from eawf.store.envelope import Envelope
-from eawf.store.kinds import PAYLOAD_MODELS
-from eawf.store.kinds.actual import ActualPayload
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds import PAYLOAD_MODELS
+from eawf.kernel.store.kinds.actual import ActualPayload
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportPayload,
     ExecutorReportBody,
     report_store_urn,
     role_for_store_kind,
     store_kind_for_role,
 )
-from eawf.store.kinds.audit import AuditPayload
-from eawf.store.kinds.decision import DecisionPayload
-from eawf.store.kinds.estimate import EstimatePayload
-from eawf.store.kinds.event import EventPayload
-from eawf.store.kinds.flow import FlowPayload
-from eawf.store.kinds.incident import IncidentPayload
-from eawf.store.kinds.memory import MemoryPayload
-from eawf.store.kinds.research import ResearchPayload
+from eawf.kernel.store.kinds.audit import AuditPayload
+from eawf.kernel.store.kinds.decision import DecisionPayload
+from eawf.kernel.store.kinds.estimate import EstimatePayload
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.kinds.flow import FlowPayload
+from eawf.kernel.store.kinds.incident import IncidentPayload
+from eawf.kernel.store.kinds.memory import MemoryPayload
+from eawf.kernel.store.kinds.research import ResearchPayload
 
 
 def _make_envelope(kind: StoreKind, payload: dict[str, object]) -> Envelope:

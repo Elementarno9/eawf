@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.config.loader`.
+"""Unit tests for :mod:`eawf.kernel.config.loader`.
 
 Contracts under test:
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from eawf.cli.errors import ValidationError
-from eawf.config.loader import load_yaml_layer
+from eawf.kernel.config.loader import load_yaml_layer
 
 
 def test_missing_file_returns_empty_dict(tmp_path: Path) -> None:

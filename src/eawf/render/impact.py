@@ -1,7 +1,7 @@
 """Read-only file-impact graph renderer for ``eawf impact``.
 
-Pure projection over a validated :class:`~eawf.state.models.State`. Each
-:class:`~eawf.state.models.Decision` is joined to the waves that landed
+Pure projection over a validated :class:`~eawf.kernel.state.models.State`. Each
+:class:`~eawf.kernel.state.models.Decision` is joined to the waves that landed
 under its scope and the file globs those waves touch (``wave.file_scopes``).
 
 Join rule:
@@ -26,8 +26,8 @@ import logging
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.ids import is_phase_id
-from eawf.state.models import State
+from eawf.kernel.state.ids import is_phase_id
+from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

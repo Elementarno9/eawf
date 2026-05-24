@@ -27,19 +27,19 @@ from eawf.cli.commands.lifecycle import (
     wave_app,
 )
 from eawf.cli.flags import GlobalFlags
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
     WaveStatus,
 )
-from eawf.state.ids import (
+from eawf.kernel.state.ids import (
     is_iter_id,
     is_wave_id,
 )
-from eawf.state.mutations import MutationKind
+from eawf.kernel.state.mutations import MutationKind
 
 if TYPE_CHECKING:
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +279,7 @@ def wave_close_cmd(
 
     P24-W09 canary: when ``daemon.proxy_enabled=true`` the close
     proxies through the daemon's ``state.mutate`` RPC (typed
-    :class:`~eawf.state.mutations.Mutation` payload with
+    :class:`~eawf.kernel.state.mutations.Mutation` payload with
     ``kind=WAVE_CLOSE``); otherwise the legacy in-process path runs.
     Both paths converge on the same ``state.json`` + ``event.jsonl``
     on-disk shape.

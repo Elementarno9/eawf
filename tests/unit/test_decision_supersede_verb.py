@@ -2,7 +2,7 @@
 
 Covers the standalone :func:`eawf.evidence.decision.supersede_decision`
 mutator (both ends of the link flip) and
-:func:`eawf.validate.invariants.check_decision_supersede_link` (both
+:func:`eawf.kernel.validate.invariants.check_decision_supersede_link` (both
 directions of the status/link agreement rule).
 """
 
@@ -16,9 +16,9 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.evidence import _io, decision
-from eawf.state.enums import DecisionStatus
-from eawf.state.models import State
-from eawf.validate.invariants import Violation, check_decision_supersede_link
+from eawf.kernel.state.enums import DecisionStatus
+from eawf.kernel.state.models import State
+from eawf.kernel.validate.invariants import Violation, check_decision_supersede_link
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

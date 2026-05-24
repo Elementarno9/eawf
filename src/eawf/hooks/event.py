@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.types import UtcDatetime
+from eawf.kernel.state.types import UtcDatetime
 
 
 class HookEventType(StrEnum):

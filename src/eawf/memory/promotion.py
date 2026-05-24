@@ -11,10 +11,10 @@ Two directions are supported:
 
 2. :func:`promote_to_artifact` (NEW in W03) — memory entry → durable artifact.
    A memory entry that has matured into a hard rule can be canonised as a
-   :class:`~eawf.state.models.Decision` row; the promoter allocates a new
+   :class:`~eawf.kernel.state.models.Decision` row; the promoter allocates a new
    ``DEC-<UTC-date>-<NN>`` id, writes a ``decision.jsonl`` envelope, mirrors
    a :class:`Decision` into ``state.decisions``, flips the source memory's
-   :class:`~eawf.state.enums.MemoryStatus` to ``SUPERSEDED``, and links the
+   :class:`~eawf.kernel.state.enums.MemoryStatus` to ``SUPERSEDED``, and links the
    pair via a fresh memory envelope carrying
    ``payload.promoted_to_artifact_id``.
 
@@ -29,10 +29,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eawf.kernel.state.enums import Confidence, DecisionStatus, MemoryStatus, StoreKind
+from eawf.kernel.state.models import Decision, MemorySummary, State
+from eawf.kernel.store.envelope import Envelope
 from eawf.memory.store import MemoryRecord, add_memory, append_envelope, find_envelope
-from eawf.state.enums import Confidence, DecisionStatus, MemoryStatus, StoreKind
-from eawf.state.models import Decision, MemorySummary, State
-from eawf.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.state.enums import ScopeKind
+from eawf.kernel.state.enums import ScopeKind
 from eawf.tui.app import EaApp
 from eawf.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.tui.scopes.user import PortfolioTable

@@ -8,12 +8,12 @@ the C09 §5.11 success criteria require:
    post-dispatch step emits a ``dispatch_cost`` event, both readable from
    ``event.jsonl``.
 2. Events route through the **daemon canonical writer**
-   (:func:`eawf.store.append.append_envelope` + the subscription bus),
+   (:func:`eawf.kernel.store.append.append_envelope` + the subscription bus),
    never a direct ``event.jsonl`` open or ``atomic_write_json`` — verified
    by reading the rows the writer produced and asserting the bus saw the
    same envelopes + ``ctx.last_event_id`` advanced.
 3. Every emitted envelope passes discriminated-union validation
-   (:data:`eawf.store.kinds.events.C09EventPayloadUnion`) — and a payload
+   (:data:`eawf.kernel.store.kinds.events.C09EventPayloadUnion`) — and a payload
    whose body contradicts its ``event_type`` tag fails fast at validation.
 """
 
@@ -33,9 +33,9 @@ from eawf.daemon.dispatch_runner import (
     run_dispatch,
 )
 from eawf.daemon.methods import MethodContext
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.events import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.events import (
     C09EventPayloadUnion,
     DispatchCostPayload,
     RuntimeSwitchedPayload,

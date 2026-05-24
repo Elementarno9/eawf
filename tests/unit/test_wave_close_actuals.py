@@ -1,8 +1,8 @@
 """Auto-recorded actuals on wave close + default estimate on claim (P27-I02-W25).
 
 These tests close the estimation learning loop: claiming a wave seeds a
-default :class:`~eawf.state.models.EstimateSummary` from its effort bucket,
-and closing a wave records an :class:`~eawf.state.models.ActualSummary` from
+default :class:`~eawf.kernel.state.models.EstimateSummary` from its effort bucket,
+and closing a wave records an :class:`~eawf.kernel.state.models.ActualSummary` from
 the open->close wall-clock span. Together they give
 :func:`~eawf.estimation.metrics.compute_estimate_actual_variance` a sample to
 report instead of "no data".
@@ -24,14 +24,7 @@ from eawf.estimation.buckets import (
     default_estimate_summary,
 )
 from eawf.estimation.metrics import compute_estimate_actual_variance
-from eawf.lifecycle.transitions import (
-    claim_wave,
-    close_wave,
-    open_iter,
-    open_phase,
-    plan_wave,
-)
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     ActualStatus,
     Confidence,
     EffortBucket,
@@ -39,7 +32,14 @@ from eawf.state.enums import (
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.models import CurrentPointers, Project, State
+from eawf.kernel.state.models import CurrentPointers, Project, State
+from eawf.lifecycle.transitions import (
+    claim_wave,
+    close_wave,
+    open_iter,
+    open_phase,
+    plan_wave,
+)
 
 
 def _empty_state() -> State:

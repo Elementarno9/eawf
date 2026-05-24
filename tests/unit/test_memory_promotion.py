@@ -8,6 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.state.enums import Confidence, DecisionStatus, MemoryStatus, StoreKind
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
 from eawf.memory.promotion import (
     PromotionError,
     promote_record,
@@ -15,9 +18,6 @@ from eawf.memory.promotion import (
     supersede,
 )
 from eawf.memory.store import add_memory
-from eawf.state.enums import Confidence, DecisionStatus, MemoryStatus, StoreKind
-from eawf.state.models import State
-from eawf.store.envelope import Envelope
 
 
 def _make_state() -> State:

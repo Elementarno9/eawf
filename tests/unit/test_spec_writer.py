@@ -1,10 +1,10 @@
-"""Unit tests for :mod:`eawf.spec.writer` + :mod:`eawf.spec.cache`.
+"""Unit tests for :mod:`eawf.kernel.spec.writer` + :mod:`eawf.kernel.spec.cache`.
 
 Exercises the daemon-internal writer helpers without spinning up the
 daemon. Covers:
 
 * Scope classification + path resolution (phase / iter / wave).
-* URN construction (round-trips through :mod:`eawf.state.urn`).
+* URN construction (round-trips through :mod:`eawf.kernel.state.urn`).
 * Scaffolded body shape + blob SHA.
 * Cache document upsert + read-back.
 * ``git rm`` helper against a tmp git repo.
@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.spec import cache as spec_cache
-from eawf.spec import writer as spec_writer
+from eawf.kernel.spec import cache as spec_cache
+from eawf.kernel.spec import writer as spec_writer
 
 pytestmark = pytest.mark.unit
 
@@ -81,8 +81,8 @@ def test_build_spec_urn_iter() -> None:
 
 
 def test_build_spec_urn_wave_round_trips() -> None:
-    """Wave URN round-trips through :func:`eawf.state.urn.parse`."""
-    from eawf.state.urn import parse as parse_urn
+    """Wave URN round-trips through :func:`eawf.kernel.state.urn.parse`."""
+    from eawf.kernel.state.urn import parse as parse_urn
 
     urn = spec_writer.build_spec_urn("P25-I01-W03", repo_code="EAWF")
     parsed = parse_urn(urn)

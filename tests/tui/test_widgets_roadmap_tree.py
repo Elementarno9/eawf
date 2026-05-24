@@ -15,8 +15,8 @@ from pathlib import Path
 import orjson
 from textual.app import ComposeResult
 
-from eawf.state.enums import IterStatus, PhaseStatus, WaveStatus
-from eawf.state.models import State
+from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
+from eawf.kernel.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
 from eawf.tui.widgets.eu_bar import (

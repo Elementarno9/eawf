@@ -16,8 +16,8 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 
-from eawf.state.enums import ActualStatus
-from eawf.state.models import ActualSummary, State
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.state.models import ActualSummary, State
 from eawf.tui.widgets import eu_bar
 from eawf.tui.widgets.footer import (
     DEFAULT_HINTS,
@@ -50,7 +50,7 @@ def _state(*, weekly_eu_target: float | None, actual_eu: float | None) -> State:
             ``elapsed_eu``; ``None`` leaves ``actuals`` empty.
 
     Returns:
-        A validated :class:`~eawf.state.models.State`.
+        A validated :class:`~eawf.kernel.state.models.State`.
     """
     payload: dict[str, object] = {
         "schema_version": "1.0",

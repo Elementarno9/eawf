@@ -17,8 +17,8 @@ from eawf.budget.service import (
     record_consumption,
     set_budget,
 )
-from eawf.state.enums import ScopeKind, WaveStatus
-from eawf.state.models import State, Wave
+from eawf.kernel.state.enums import ScopeKind, WaveStatus
+from eawf.kernel.state.models import State, Wave
 
 
 def _state_with_wave(wave_id: str = "P01-I01-W01") -> State:

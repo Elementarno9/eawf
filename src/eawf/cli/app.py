@@ -147,8 +147,8 @@ def _dispatch_tui(
     if no_input or plain or not sys.stdout.isatty():
         return emit_status(workspace=workspace, no_input=no_input, plain=plain)
 
-    from eawf.state.enums import ScopeKind
-    from eawf.state.resolve import resolve_with_reason
+    from eawf.kernel.state.enums import ScopeKind
+    from eawf.kernel.state.resolve import resolve_with_reason
     from eawf.tui.app import resolve_scope, run_app
 
     state_path, _reason = resolve_with_reason(workspace=workspace)

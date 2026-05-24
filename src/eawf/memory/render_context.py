@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eawf.kernel.state.enums import Confidence, MemoryStatus
+from eawf.kernel.state.models import MemorySummary, State
 from eawf.memory.store import find_envelope
-from eawf.state.enums import Confidence, MemoryStatus
-from eawf.state.models import MemorySummary, State
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +100,8 @@ def render_context(
       ascending memory ID.
     - ``tokens_used <= budget`` ALWAYS. When the very first block already
       exceeds the budget, the function emits zero blocks rather than overflow.
-      :class:`~eawf.state.enums.MemoryStatus.PRUNED` entries are unconditionally
-      excluded; :class:`~eawf.state.enums.MemoryStatus.SUPERSEDED` entries are
+      :class:`~eawf.kernel.state.enums.MemoryStatus.PRUNED` entries are unconditionally
+      excluded; :class:`~eawf.kernel.state.enums.MemoryStatus.SUPERSEDED` entries are
       excluded by default and admitted only when ``include_superseded=True``.
     - ``included_ids`` and ``skipped_ids`` are disjoint; their union covers
       every entry the active/superseded filter admitted.
@@ -114,7 +114,7 @@ def render_context(
             ``DEFAULT_BUDGET`` (4096).
         now: Override for the current time (for tests). Defaults to UTC now.
         include_superseded: When ``True``, entries with
-            :class:`~eawf.state.enums.MemoryStatus.SUPERSEDED` are also
+            :class:`~eawf.kernel.state.enums.MemoryStatus.SUPERSEDED` are also
             considered. ``PRUNED`` is never admitted.
         max_entries: Optional cap on the count of included entries. The
             budget still wins on either side: an entry that would exceed

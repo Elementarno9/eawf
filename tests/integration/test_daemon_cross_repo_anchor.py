@@ -3,7 +3,7 @@
 The daemon is one per user (one UDS / named pipe) and serves many repos.
 Before P26-W03 the ``state.*`` and ``config.*`` RPCs resolved every
 path-join against the **boot-time** ``ctx.state_path``, which was set
-once at daemon start via :func:`eawf.state.resolve.resolve_with_reason`.
+once at daemon start via :func:`eawf.kernel.state.resolve.resolve_with_reason`.
 A cross-repo invocation from a different cwd was mis-routed against the
 daemon's own anchor — worse, if the daemon happened to be launched
 from a cwd where the upward ``.ea/state.json`` walk fell off the root
@@ -57,8 +57,8 @@ from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.methods import state as state_methods
 from eawf.daemon.server import serve_unix
-from eawf.state.enums import StoreKind
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.paths import store_path
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),

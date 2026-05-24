@@ -22,8 +22,8 @@ from eawf.daemon.wal import (
     mark_applied,
     write_pending,
 )
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 

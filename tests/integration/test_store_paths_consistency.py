@@ -30,7 +30,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 runner = CliRunner()
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"

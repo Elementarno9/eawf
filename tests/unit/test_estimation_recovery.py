@@ -11,10 +11,10 @@ import pytest
 
 from eawf.estimation import recovery
 from eawf.estimation.segments import open_segment
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.state.models import ActualSummary
+from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.lock.stale import STALE_HEARTBEAT_SECONDS
-from eawf.state.enums import ActualStatus
-from eawf.state.models import ActualSummary
-from eawf.store.kinds.actual import ActualPayload
 
 
 def _summary(scope: str, status: ActualStatus = ActualStatus.ACTIVE) -> ActualSummary:
@@ -133,7 +133,7 @@ def test_cap_elapsed_negative_now_clamped_to_zero(
         )
     assert capped_ended_at == started
     assert elapsed_eu == Decimal(0)
-    skew_records = [r for r in caplog.records if "clock skew" in r.message]
+    skew_records = [r for r in caplog.records if "clock_skew" in r.message]
     assert skew_records, f"expected a clock-skew WARNING, got {[r.message for r in caplog.records]}"
     assert skew_records[0].levelname == "WARNING"
 

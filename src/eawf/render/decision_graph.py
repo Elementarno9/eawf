@@ -1,6 +1,6 @@
 """Read-only decision-graph renderer for ``eawf decision graph``.
 
-Pure projection over a validated :class:`~eawf.state.models.State`. Builds a
+Pure projection over a validated :class:`~eawf.kernel.state.models.State`. Builds a
 :class:`DecisionGraph` (nodes + edges) and renders it as deterministic text,
 Graphviz DOT, or Mermaid markdown.
 
@@ -26,7 +26,7 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

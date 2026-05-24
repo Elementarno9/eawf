@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.state import enums
+from eawf.kernel.state import enums
 
 # --- Core 4 tests from spec ---
 

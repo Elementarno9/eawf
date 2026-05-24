@@ -18,8 +18,8 @@ import warnings
 
 import pytest
 
+from eawf.kernel.state.enums import McpRisk
 from eawf.mcp.catalog import KNOWN_MCPS, McpCatalogEntry
-from eawf.state.enums import McpRisk
 
 pytestmark = pytest.mark.unit
 

@@ -8,7 +8,7 @@ consults to decide proxy-vs-fallback:
   common chokepoint every state-mutating CLI verb routes through (and
   the fallback the daemon-proxy entry falls back to). Acquires the
   sibling lock for ``state.json``, yields the typed
-  :class:`~eawf.state.models.State` for the caller to mutate in place,
+  :class:`~eawf.kernel.state.models.State` for the caller to mutate in place,
   then validates and atomically writes it back. The full read-modify-
   write runs under one lock acquisition so concurrent writers serialise.
   Because it is the shared write path, the ``--daemonless`` rejection
@@ -46,10 +46,10 @@ from pathlib import Path
 import orjson
 
 from eawf.cli import errors as cli_errors
+from eawf.kernel.state.models import State
+from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.validate.strict import validate_state
 from eawf.lock import portalock
-from eawf.state.models import State
-from eawf.state.writer import atomic_write_json_locked
-from eawf.validate.strict import validate_state
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +211,7 @@ def _proxy_enabled(workspace: Path | None) -> bool:
 
     if os.environ.get("EAWF_DAEMONLESS", "") == "1":
         return False
-    from eawf.config.layered import merge_config
+    from eawf.kernel.config.layered import merge_config
 
     repo = workspace if workspace is not None else Path.cwd()
     try:

@@ -16,7 +16,7 @@ Subcommands:
   verbs (``wave claim``, ``phase open``, ...) are the supported mutation
   surface (``state mutate`` is hidden entirely).
 
-The resolver itself lives in :mod:`eawf.state.resolve` so other waves
+The resolver itself lives in :mod:`eawf.kernel.state.resolve` so other waves
 (e.g. ``status``, ``store compact``) reuse it without depending on the
 CLI layer. ``resolve`` and ``show`` never mutate state and never acquire
 a lock. ``rpc`` is the only mutating-capable verb here and routes
@@ -42,7 +42,7 @@ from eawf.cli._dispatch import (
 )
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.resolve import resolve_with_reason
 
 logger = logging.getLogger(__name__)
 

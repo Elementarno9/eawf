@@ -11,7 +11,7 @@ import pytest
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
 from eawf.evidence import _io, artifact
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
@@ -79,7 +79,7 @@ def test_add_artifact_rejects_local_uri(tmp_path: Path, uri: str) -> None:
 
 def test_artifact_model_has_no_local_path_field() -> None:
     """Field removed; persisted state shape must not carry local_path."""
-    from eawf.state.models import Artifact
+    from eawf.kernel.state.models import Artifact
 
     assert "local_path" not in Artifact.model_fields
 

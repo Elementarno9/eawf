@@ -15,14 +15,14 @@ import pytest
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
 from eawf.evidence import _io, audit, backlog
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
     BacklogPriority,
     BacklogStatus,
     StoreKind,
 )
-from eawf.state.models import Artifact, State
+from eawf.kernel.state.models import Artifact, State
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

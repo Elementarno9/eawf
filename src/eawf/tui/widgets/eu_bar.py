@@ -12,7 +12,7 @@ A trailing right-aligned percentage label sits after the bar. The widget
 is a leaf :class:`~textual.widgets.Static` so it composes inline inside a
 :class:`~eawf.tui.widgets.roadmap_tree.RoadmapTree` row and stands
 alone in any pane. It is driven by two plain floats — :meth:`set_eu` — so
-it stays decoupled from the :class:`~eawf.state.models.State` schema; the
+it stays decoupled from the :class:`~eawf.kernel.state.models.State` schema; the
 caller maps state onto the consumed / total pair.
 
 The fill maths use the same banker's-rounding-free integer cell count the

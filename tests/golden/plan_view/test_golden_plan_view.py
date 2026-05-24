@@ -17,8 +17,8 @@ from pathlib import Path
 import orjson
 import pytest
 
+from eawf.kernel.state.models import State
 from eawf.render.plan_view import build_view, render_json, render_markdown
-from eawf.state.models import State
 
 _FIXTURE_DIR: Path = Path(__file__).parent
 
@@ -30,7 +30,7 @@ To regenerate after a deliberate renderer change:
     import orjson
     from pathlib import Path
     from eawf.render.plan_view import build_view, render_markdown, render_json
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     for combo in ('core_only', 'core_python', 'core_python_research'):
         d = Path('tests/golden/plan_view') / combo

@@ -92,8 +92,8 @@ def _inprocess_init(
     ``archive`` refuse without a daemon because the lifecycle gate
     + ``git rm`` atomicity sit inside the daemon process.
     """
-    from eawf.spec import cache as spec_cache
-    from eawf.spec import writer as spec_writer
+    from eawf.kernel.spec import cache as spec_cache
+    from eawf.kernel.spec import writer as spec_writer
 
     spec_writer.classify_scope(scope_id)
     spec_urn = spec_writer.build_spec_urn(scope_id, repo_code=repo_code)
@@ -142,8 +142,8 @@ def _inprocess_validate(
     repo_root: Path,
 ) -> dict[str, Any]:
     """Daemonless-path fallback for ``spec validate``."""
-    from eawf.spec import cache as spec_cache
-    from eawf.spec import writer as spec_writer
+    from eawf.kernel.spec import cache as spec_cache
+    from eawf.kernel.spec import writer as spec_writer
 
     spec_writer.classify_scope(scope_id)
     spec_urn = spec_writer.build_spec_urn(scope_id, repo_code=repo_code)
@@ -416,7 +416,7 @@ def _parse_spec_urn(urn: str) -> tuple[str, str]:
     Raises:
         UserError: When *urn* does not parse as a spec URN (``kind="InvalidInput"``).
     """
-    from eawf.state.urn import parse as parse_urn
+    from eawf.kernel.state.urn import parse as parse_urn
 
     try:
         parsed = parse_urn(urn)
@@ -503,7 +503,7 @@ def spec_show_cmd(
        that body.
     4. Anything else: raise :class:`UserError` (``kind="NotFound"``).
     """
-    from eawf.spec import cache as spec_cache
+    from eawf.kernel.spec import cache as spec_cache
 
     flags: GlobalFlags = ctx.obj
     repo_root = (flags.workspace or Path.cwd()).resolve()

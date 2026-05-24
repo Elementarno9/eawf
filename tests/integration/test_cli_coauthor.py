@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.config import layered
+from eawf.kernel.config import layered
 
 runner = CliRunner()
 

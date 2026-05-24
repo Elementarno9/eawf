@@ -32,7 +32,7 @@ import typer
 
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
-from eawf.state.ids import is_project_code, normalize_to_project_code
+from eawf.kernel.state.ids import is_project_code, normalize_to_project_code
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def _derive_project_code(target_dir: Path, project_code: str | None) -> str:
     Precedence:
 
     - Explicit ``--project-code`` always wins (after regex validation).
-    - Otherwise we delegate to :func:`eawf.state.ids.normalize_to_project_code`
+    - Otherwise we delegate to :func:`eawf.kernel.state.ids.normalize_to_project_code`
       which uppercases the basename and collapses space/underscore into
       dash before validating against :data:`RE_PROJECT_CODE`. Single
       source of truth for the coercion rules — the wizard validator and

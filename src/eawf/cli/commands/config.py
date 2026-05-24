@@ -12,7 +12,7 @@ Per ``docs/architecture/cli-surface.md``:
 - ``eawf config profile enable <profile-id>``   → write profile + materialise
                                                     state keys
 
-Layer label conventions match :data:`eawf.config.layered.LAYER_ORDER`:
+Layer label conventions match :data:`eawf.kernel.config.layered.LAYER_ORDER`:
 ``built-in | global | workspace | repo | local | env | cli``. Only file
 layers (global / workspace / repo / local) are writable.
 
@@ -52,7 +52,7 @@ from pydantic import ValidationError as PydValidationError
 from eawf.cli.errors import StateConflict, UserError, ValidationError, emit_error
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.config.registry import (
+from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
     coerce_and_validate,
@@ -132,7 +132,7 @@ class _ConfigSchema(BaseModel):
     state_schema: dict[str, Any]
     # ``daemon`` section pairs with the ``state.mutate`` RPC. Treated as
     # ``dict[str, Any]`` until a later wave hardens the per-key contract
-    # (see :mod:`eawf.config.defaults` for the shipped schema).
+    # (see :mod:`eawf.kernel.config.defaults` for the shipped schema).
     daemon: dict[str, Any]
     # New top-level sections. Each is a loose ``dict[str, Any]`` for
     # now; per-key Pydantic contracts arrive in later waves (CLI
@@ -167,7 +167,7 @@ def _set_dotted_in_yaml(payload: dict[str, Any], dotted: str, value: Any) -> Non
     """In-place set ``payload[a][b][c] = value`` for ``a.b.c``.
 
     Auto-creates intermediate dicts. Replaces non-dict intermediates so the
-    later set wins (consistent with :func:`eawf.config.layered._set_dotted`).
+    later set wins (consistent with :func:`eawf.kernel.config.layered._set_dotted`).
     """
     parts = dotted.split(".")
     cur: dict[str, Any] = payload
@@ -233,7 +233,7 @@ def _layer_label_for_path(target_path: Path) -> str | None:
     ``None`` when the path does not match any of the four canonical
     file-layer paths — callers fall through to the in-process arm.
     """
-    from eawf.config.layered import (
+    from eawf.kernel.config.layered import (
         global_config_path,
         local_config_path,
         repo_config_path,
@@ -342,7 +342,7 @@ def _save_value_to_layer(
                     raise
 
     # In-process fallback arm (V1 carve-out / EAWF_DAEMONLESS=1 / unmapped path).
-    from eawf.config.loader import load_yaml_layer
+    from eawf.kernel.config.loader import load_yaml_layer
 
     with portalock.acquire(target_path):
         existing = load_yaml_layer(target_path)
@@ -363,7 +363,7 @@ def config_get(
     ] = None,
 ) -> None:
     """Print the merged value for ``key`` and the layer it came from."""
-    from eawf.config.layered import LAYER_ORDER, get_dotted, merge_config
+    from eawf.kernel.config.layered import LAYER_ORDER, get_dotted, merge_config
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -410,7 +410,7 @@ def config_set(
     """Write *value* under *key* to the chosen layer file."""
     import yaml
 
-    from eawf.config.layered import WRITABLE_LAYERS, layer_path
+    from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -494,7 +494,7 @@ def config_validate(
     The composed view is deterministic (sorted lists, locked render-block
     order) so repeated invocations produce byte-identical JSON.
     """
-    from eawf.config.layered import LAYER_ORDER, merge_config
+    from eawf.kernel.config.layered import LAYER_ORDER, merge_config
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -569,8 +569,8 @@ def profile_enable(
     """Enable *profile_id* in *scope* and materialise required state keys."""
     import yaml
 
-    from eawf.config.layered import WRITABLE_LAYERS, layer_path
-    from eawf.config.profile import enable_profile
+    from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path
+    from eawf.kernel.config.profile import enable_profile
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -763,7 +763,7 @@ def _menu_get_current_value(merged: dict[str, Any], entry: ConfigKey) -> Any:
     Surface contract: the menu always has something to pre-fill, even on a
     fresh repo with no overlays.
     """
-    from eawf.config.layered import get_dotted
+    from eawf.kernel.config.layered import get_dotted
 
     try:
         return get_dotted(merged, entry.key)
@@ -808,7 +808,7 @@ def config_menu(
     """
     import yaml
 
-    from eawf.config.layered import WRITABLE_LAYERS, layer_path, merge_config
+    from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path, merge_config
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)

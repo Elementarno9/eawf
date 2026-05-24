@@ -45,12 +45,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.daemon.dispatch_runner import DispatchTokens, run_dispatch
 from eawf.daemon.methods import MethodContext, register
 from eawf.evidence._io import load_state
+from eawf.kernel.state.enums import DispatchNote
+from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt
+from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.runtimes.dispatch import resolve_adapter
 from eawf.runtimes.manifest import RuntimeId
 from eawf.runtimes.plugin_manifest import SkillManifest
-from eawf.state.enums import DispatchNote
-from eawf.state.models import DispatchAnnotation, SessionAttempt
-from eawf.store.kinds.events.base import RuntimeTriple
 from eawf.telemetry.models import RuntimeErrorClass
 from eawf.telemetry.pricing import PRICING_VERSION
 
@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 #: Maps a plugin-manifest :data:`~eawf.runtimes.manifest.RuntimeId`
 #: (``"claude-code"`` / ``"codex"`` / ``"opencode"``) to the short
-#: :data:`~eawf.store.kinds.events.base.RuntimeTriple` spelling
+#: :data:`~eawf.kernel.store.kinds.events.base.RuntimeTriple` spelling
 #: (``"claude"`` / ``"codex"`` / ``"opencode"``) the C09 event surface
 #: keys on. Only ``"claude-code"`` differs between the two vocabularies.
 _RUNTIME_TRIPLE: dict[RuntimeId, RuntimeTriple] = {
@@ -133,7 +133,7 @@ class DispatchParams(BaseModel):
         wave_id: Wave to dispatch against; must exist in ``state.json``.
         runtime: Optional runtime adapter override. When omitted, the
             dispatcher picks
-            :class:`~eawf.state.models.Wave.runtime_preference[0]`
+            :class:`~eawf.kernel.state.models.Wave.runtime_preference[0]`
             (a daemon-config default also applies). When *skill_manifest*
             is supplied, this override is validated against the manifest
             ``runtime`` list.
@@ -262,7 +262,7 @@ def _runtime_triple(runtime_id: str) -> RuntimeTriple:
             vocabulary (``"claude-code"`` / ``"codex"`` / ``"opencode"``).
 
     Returns:
-        The short :data:`~eawf.store.kinds.events.base.RuntimeTriple`
+        The short :data:`~eawf.kernel.store.kinds.events.base.RuntimeTriple`
         spelling the C09 event payloads key on.
 
     Raises:
@@ -288,7 +288,7 @@ def _emit_dispatch_events(
 
     Translates the resolved *runtime* (and the outcome's
     :attr:`DispatchOutcome.fallback_runtime`) to the event-surface
-    :data:`~eawf.store.kinds.events.base.RuntimeTriple` spelling, then
+    :data:`~eawf.kernel.store.kinds.events.base.RuntimeTriple` spelling, then
     calls :func:`eawf.daemon.dispatch_runner.run_dispatch`, which emits a
     ``runtime_switched`` event when *outcome* carries a ``primary_error``
     and always emits a ``dispatch_cost`` event through the daemon

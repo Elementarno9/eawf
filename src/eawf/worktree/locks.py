@@ -2,7 +2,7 @@
 
 Why a second lock layer? :func:`eawf.cli._mutation.state_transaction`
 already holds ``portalock(state.json)`` for the duration of every
-:class:`~eawf.state.models.WorktreeRecord` mutation, so the *state-side*
+:class:`~eawf.kernel.state.models.WorktreeRecord` mutation, so the *state-side*
 race is covered. The git-side race is separate: ``git worktree add``
 allocates a new entry under ``.git/worktrees/<name>`` and git's internal
 lock guards the index but does not serialise *name* allocation across
@@ -60,10 +60,10 @@ def worktree_registry_lock(
     """
     lock_target = _registry_lock_path(repo_root)
     lock_target.parent.mkdir(parents=True, exist_ok=True)
-    logger.debug(f"worktree_registry_lock: acquiring {lock_target}")
+    logger.debug(f"worktree_registry_lock acquiring target={lock_target}")
     with portalock.acquire(lock_target, timeout=timeout):
         yield
-    logger.debug(f"worktree_registry_lock: released {lock_target}")
+    logger.debug(f"worktree_registry_lock released target={lock_target}")
 
 
 __all__ = [

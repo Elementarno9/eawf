@@ -6,10 +6,10 @@ Exercises the head transition of
 drives it) against a real ``state.json`` on a tmp filesystem.
 
 The load-bearing assertion is the wave's success criterion: a dispatched
-wave that starts the run in :data:`~eawf.state.enums.WaveStatus.CLAIMED`
-is persisted as :data:`~eawf.state.enums.WaveStatus.IN_PROGRESS` once
+wave that starts the run in :data:`~eawf.kernel.state.enums.WaveStatus.CLAIMED`
+is persisted as :data:`~eawf.kernel.state.enums.WaveStatus.IN_PROGRESS` once
 ``run_dispatch`` drives it. The flip routes through the daemon canonical
-state writer (:func:`eawf.state.writer.atomic_write_json_locked` under the
+state writer (:func:`eawf.kernel.state.writer.atomic_write_json_locked` under the
 ``state.json`` portalock), so the persisted status is indistinguishable
 from one written by the daemon's ``state.mutate`` path.
 """
@@ -29,8 +29,8 @@ from eawf.daemon.dispatch_runner import (
 )
 from eawf.daemon.methods import MethodContext
 from eawf.evidence._io import load_state
-from eawf.state.enums import WaveStatus
-from eawf.state.models import State
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.models import State
 
 pytestmark = pytest.mark.integration
 

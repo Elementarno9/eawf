@@ -31,18 +31,18 @@ from eawf.cli.commands.lifecycle import (
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     IterStatus,
     StoreKind,
     WaveStatus,
 )
-from eawf.state.ids import is_phase_id
-from eawf.state.mutations import MutationKind
+from eawf.kernel.state.ids import is_phase_id
+from eawf.kernel.state.mutations import MutationKind
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -653,9 +653,9 @@ def phase_prepare_close_cmd(
     """
     from pydantic import ValidationError as PydValidationError
 
+    from eawf.kernel.state.models import State
+    from eawf.kernel.store.paths import store_path
     from eawf.lifecycle.transitions import LifecycleError
-    from eawf.state.models import State
-    from eawf.store.paths import store_path
 
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):

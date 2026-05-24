@@ -1,6 +1,6 @@
 # eawf state enums
 
-Auto-generated from `eawf.state.enums`. Every `StrEnum` defined in
+Auto-generated from `eawf.kernel.state.enums`. Every `StrEnum` defined in
 that module is listed with its members.
 
 | Class | Values |

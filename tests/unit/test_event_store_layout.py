@@ -23,8 +23,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eawf.state.enums import StoreKind
-from eawf.store import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store import (
     Envelope,
     append_envelope,
     store_dir,

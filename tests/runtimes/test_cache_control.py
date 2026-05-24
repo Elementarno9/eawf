@@ -29,6 +29,7 @@ from typing import cast
 
 import pytest
 
+from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtimes.cache_control import (
     DEFAULT_MARKER,
     CacheControlMarker,
@@ -42,7 +43,6 @@ from eawf.runtimes.codex.adapter import CodexAdapter
 from eawf.runtimes.opencode.adapter import OpenCodeAdapter
 from eawf.skills.compress import CompressSkill
 from eawf.skills.engine import SkillContext, run_skill
-from eawf.state.models import SessionAttempt, Wave
 
 pytestmark = pytest.mark.unit
 

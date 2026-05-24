@@ -39,8 +39,8 @@ from eawf.tui.widgets.footer import DEFAULT_HINTS, format_hints
 from eawf.tui.widgets.header import DEFAULT_PROJECT_CODE, build_breadcrumb
 
 if TYPE_CHECKING:
+    from eawf.kernel.state.models import State
     from eawf.registry import Registry
-    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _status_counts(state: State | None) -> dict[str, int]:
             "waves_pending": 0,
             "audits": 0,
         }
-    from eawf.state.enums import IterStatus, PhaseStatus, WaveStatus
+    from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 
     phases_open = sum(1 for p in state.phases.values() if p.status is PhaseStatus.ACTIVE)
     iters_open = sum(1 for it in state.iters.values() if it.status is IterStatus.ACTIVE)

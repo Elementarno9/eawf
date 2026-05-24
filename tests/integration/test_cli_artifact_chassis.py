@@ -11,9 +11,9 @@ from typer.testing import CliRunner
 
 from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.cli.app import app
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.paths import store_path
 from tests.integration.test_plan_show_e2e import _VALID_STATE
 
 runner = CliRunner()

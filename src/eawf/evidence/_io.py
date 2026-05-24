@@ -9,7 +9,7 @@ layer never imports them directly. They centralise:
 * Building event envelopes with consistent shape.
 
 The append helper and canonical store-path resolver live in
-``eawf.store.append`` and ``eawf.store.paths`` respectively. This module
+``eawf.kernel.store.append`` and ``eawf.kernel.store.paths`` respectively. This module
 re-exports them so existing callers keep working.
 
 The mutation pattern every CLI handler uses is::
@@ -37,13 +37,13 @@ from typing import Any
 import orjson
 
 from eawf.cli.errors import UserError, ValidationError
-from eawf.state.enums import StoreKind
-from eawf.state.models import State
-from eawf.state.urn import build as build_urn
-from eawf.store.append import append_envelope as append_jsonl
-from eawf.store.envelope import Envelope
-from eawf.store.paths import store_paths
-from eawf.validate.strict import validate_state as validate_payload
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.models import State
+from eawf.kernel.state.urn import build as build_urn
+from eawf.kernel.store.append import append_envelope as append_jsonl
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.paths import store_paths
+from eawf.kernel.validate.strict import validate_state as validate_payload
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def atomic_write_state(state_path: Path, state: State) -> None:
     a :func:`eawf.cli._mutation.state_transaction` (or an equivalent
     explicit ``with portalock.acquire(state_path):`` block).
     """
-    from eawf.state.writer import atomic_write_json_locked
+    from eawf.kernel.state.writer import atomic_write_json_locked
 
     payload = json.loads(state.model_dump_json())
     atomic_write_json_locked(state_path, payload)
@@ -111,7 +111,7 @@ def args_hash(args: dict[str, Any]) -> str:
     """Return a stable SHA-256 hex digest of *args* for event envelopes.
 
     Keys are sorted before hashing so equivalent calls hash identically. The
-    digest goes into :class:`~eawf.store.kinds.event.EventPayload.args_hash`.
+    digest goes into :class:`~eawf.kernel.store.kinds.event.EventPayload.args_hash`.
     """
     raw = json.dumps(args, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()

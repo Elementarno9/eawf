@@ -31,12 +31,12 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable
 
-from eawf.state.enums import BacklogPriority
+from eawf.kernel.state.enums import BacklogPriority
 
 if TYPE_CHECKING:
     from textual.events import Resize
 
-    from eawf.state.models import BacklogItem, State
+    from eawf.kernel.state.models import BacklogItem, State
 
 logger = logging.getLogger(__name__)
 

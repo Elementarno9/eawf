@@ -11,7 +11,7 @@ repo's last-touch age.
 Two render concerns are split:
 
 * The static columns (repo / phase / eu / age) derive from the bound
-  :class:`~eawf.state.models.WorkspaceIndex` and each repo's own
+  :class:`~eawf.kernel.state.models.WorkspaceIndex` and each repo's own
   ``state.json``, computed in pure helpers
   (:func:`completion_pair`, :func:`eu_pair`) so the bar inputs are
   unit-testable without mounting the widget.
@@ -54,7 +54,7 @@ from eawf.tui.widgets.git_pane import gather_git_fields
 if TYPE_CHECKING:
     from textual.app import App
 
-    from eawf.state.models import State, WorkspaceRepoRef
+    from eawf.kernel.state.models import State, WorkspaceRepoRef
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ def active_phase_completion(repo_state: dict[str, Any] | None) -> tuple[str | No
     than a fabricated ratio.
 
     The active phase id resolves from the decoded per-repo state dict
-    (not a typed :class:`~eawf.state.models.State`, since
+    (not a typed :class:`~eawf.kernel.state.models.State`, since
     :func:`~eawf.registry.staleness.read_repo_state` returns a raw
     ``dict``): the ``current.phase_id`` pointer wins when it names an
     existing phase whose ``status`` is ``"active"``; otherwise the single
@@ -263,7 +263,7 @@ def build_repo_rows(state: State | None) -> list[RepoRow]:
     """Build the workspace table's rows from a bound workspace *state*.
 
     One :class:`RepoRow` per repo in the bound
-    :class:`~eawf.state.models.WorkspaceIndex`, ordered by repo code so
+    :class:`~eawf.kernel.state.models.WorkspaceIndex`, ordered by repo code so
     the table is deterministic. Each row's bar inputs come from reading
     the repo's own ``state.json`` (best-effort; a missing / unreadable
     file leaves the bars empty). A ``None`` / non-workspace state yields
@@ -291,7 +291,7 @@ def _repo_row(ref: WorkspaceRepoRef) -> RepoRow:
     and derives the last-touch age from the same file's mtime.
 
     Args:
-        ref: One :class:`~eawf.state.models.WorkspaceRepoRef`.
+        ref: One :class:`~eawf.kernel.state.models.WorkspaceRepoRef`.
 
     Returns:
         The populated :class:`RepoRow`.

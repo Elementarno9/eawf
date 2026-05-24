@@ -9,10 +9,10 @@ The aggregator is the pure, typed seam between the source adapters
   yielded by a per-runtime adapter is stamped with the project it belongs
   to (the adapters leave ``project_id`` empty), producing the row the
   projector upserts.
-* **Incident classification** — an :class:`~eawf.store.envelope.Envelope`
+* **Incident classification** — an :class:`~eawf.kernel.store.envelope.Envelope`
   carrying an incident-bearing payload is folded into a
   :class:`~eawf.telemetry.models.TelemetryIncident`. The incident *cause*
-  is resolved through typed :class:`~eawf.state.enums.IncidentCause`
+  is resolved through typed :class:`~eawf.kernel.state.enums.IncidentCause`
   lookups keyed on the closed event-type / runtime-error-class
   enumerations — **never** by substring-matching free prose. A payload
   that already carries a typed ``cause`` (an ``incident``-kind envelope)
@@ -32,8 +32,8 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 
-from eawf.state.enums import IncidentCause, IncidentSeverity, StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.models import TelemetryIncident, TelemetrySession
 from eawf.telemetry.pricing import lookup_pricing
 
@@ -248,7 +248,7 @@ def incident_from_envelope(envelope: Envelope) -> TelemetryIncident | None:
 def _incident_from_incident_envelope(envelope: Envelope) -> TelemetryIncident | None:
     """Adopt the typed cause / severity of an ``incident``-kind envelope.
 
-    The :class:`~eawf.store.kinds.incident.IncidentPayload` already carries
+    The :class:`~eawf.kernel.store.kinds.incident.IncidentPayload` already carries
     a closed :class:`IncidentCause` + :class:`IncidentSeverity`, so the row
     is built directly off those typed members.
 

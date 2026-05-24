@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.config.registry`.
+"""Unit tests for :mod:`eawf.kernel.config.registry`.
 
 Covers:
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 
 from eawf.cli.errors import UserError
-from eawf.config.registry import (
+from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
     coerce_and_validate,

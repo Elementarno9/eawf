@@ -2,11 +2,11 @@
 incidents, artifacts, backlog.
 
 Each module exposes pure mutator functions that take an in-memory
-:class:`~eawf.state.models.State` plus arguments and return a tuple of
+:class:`~eawf.kernel.state.models.State` plus arguments and return a tuple of
 ``(updated_state, jsonl_record, event_record)`` so the CLI handler layer can
 serialise them under the sibling lock without leaking I/O concerns into the
 business logic. The audit-evidence invariant from
-:mod:`eawf.validate.invariants` (``check_audit_evidence``) is the source of
+:mod:`eawf.kernel.validate.invariants` (``check_audit_evidence``) is the source of
 truth for verdict-bearing rules and is invoked at write time via
 :func:`require_complete_audit`.
 """

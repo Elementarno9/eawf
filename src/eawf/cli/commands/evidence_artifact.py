@@ -23,7 +23,7 @@ from eawf.cli.commands.evidence import (
     _state_path,
     artifact_app,
 )
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 logger = logging.getLogger(__name__)
 

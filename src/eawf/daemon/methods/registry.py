@@ -14,7 +14,7 @@ Algorithm — mirrors the W09 ``state.mutate`` lifecycle:
 4. Apply the named operation (``add`` / ``remove`` / ``rename``);
    re-validate the candidate via Pydantic round-trip.
 5. Atomic-write the new payload (via
-   :func:`eawf.state.writer.atomic_write_json_locked`).
+   :func:`eawf.kernel.state.writer.atomic_write_json_locked`).
 6. Build the canonical ``StoreKind.REGISTRY_UPDATED`` envelope +
    publish on the subscription bus.
 7. Cache the result; return ``{operation, repo_id, envelope}``.
@@ -38,6 +38,9 @@ from typing import Any, Final
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.daemon.methods import MethodContext, register
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.envelope import Envelope
 from eawf.registry import (
     Registry,
     RegistryReadError,
@@ -45,9 +48,6 @@ from eawf.registry import (
     default_registry_path,
     read_registry,
 )
-from eawf.state.enums import StoreKind
-from eawf.state.writer import atomic_write_json_locked
-from eawf.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

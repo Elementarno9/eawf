@@ -29,7 +29,7 @@ from eawf.estimation.metrics import (
     compute_planned_vs_reactive,
     compute_wave_elapsed,
 )
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     ActualStatus,
     AuditKind,
     AuditStatus,
@@ -37,7 +37,7 @@ from eawf.state.enums import (
     Confidence,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     ActualSummary,
     Audit,
     EstimateSummary,

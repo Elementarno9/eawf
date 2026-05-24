@@ -159,7 +159,7 @@
     },
     "IterView": {
       "additionalProperties": false,
-      "description": "Compact projection of :class:`~eawf.state.models.Iter`.",
+      "description": "Compact projection of :class:`~eawf.kernel.state.models.Iter`.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -230,7 +230,7 @@
     },
     "PhaseView": {
       "additionalProperties": false,
-      "description": "Compact projection of :class:`~eawf.state.models.Phase`.",
+      "description": "Compact projection of :class:`~eawf.kernel.state.models.Phase`.",
       "properties": {
         "id": {
           "title": "Id",
@@ -358,7 +358,7 @@
     },
     "WaveView": {
       "additionalProperties": false,
-      "description": "Compact projection of :class:`~eawf.state.models.Wave`.",
+      "description": "Compact projection of :class:`~eawf.kernel.state.models.Wave`.",
       "properties": {
         "agent_role": {
           "anyOf": [

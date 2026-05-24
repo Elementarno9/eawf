@@ -15,12 +15,12 @@ alongside the rows that consume them:
 - :class:`ToolCallErrorKind` — closed taxonomy for tool-call failures,
   retyped from the upstream free-string ``error_kind``.
 - :class:`RuntimeErrorClass` — 5-class runtime-fallback cause enum (C07a
-  §5.5). :class:`~eawf.store.kinds.events.runtime_switched.RuntimeSwitchedPayload`
+  §5.5). :class:`~eawf.kernel.store.kinds.events.runtime_switched.RuntimeSwitchedPayload`
   carries ``cause`` as a typed member of this enum.
 
-:class:`~eawf.state.enums.IncidentSeverity` and
-:class:`~eawf.state.enums.IncidentCause` already live in
-:mod:`eawf.state.enums` (the canonical state-enum module) and are imported
+:class:`~eawf.kernel.state.enums.IncidentSeverity` and
+:class:`~eawf.kernel.state.enums.IncidentCause` already live in
+:mod:`eawf.kernel.state.enums` (the canonical state-enum module) and are imported
 here so the incident row shares one taxonomy with the rest of the state
 subsystem.
 """
@@ -34,7 +34,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.enums import IncidentCause, IncidentSeverity
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 
 __all__ = [
     "EndMarker",

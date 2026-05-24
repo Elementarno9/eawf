@@ -6,7 +6,7 @@ count, open worktrees, and blocked (failed) waves — alongside an EFFORT
 block (consumed/estimate EU, signed variance %, an EU/day velocity
 sparkline, and an ETA) and a GATES block (live ``audit_check_*`` N/M
 progress collapsing to the verdict). Rendered as a live pane that watches
-the reactive :class:`~eawf.state.models.State`.
+the reactive :class:`~eawf.kernel.state.models.State`.
 
 The pane groups its rendered lines into four labelled sections —
 LIFECYCLE / EFFORT / GATES / DISPATCH — each built by a dedicated pure
@@ -43,16 +43,16 @@ from pydantic import BaseModel, ConfigDict
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from eawf.config.defaults import BUILT_IN_DEFAULTS
 from eawf.estimation.buckets import wave_estimate_eu
-from eawf.state.enums import (
+from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
+from eawf.kernel.state.enums import (
     AuditStatus,
     IterStatus,
     PhaseStatus,
     WaveStatus,
     WorktreeStatus,
 )
-from eawf.state.wave_graph import blocked_by
+from eawf.kernel.state.wave_graph import blocked_by
 from eawf.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
@@ -65,7 +65,7 @@ from eawf.tui.widgets.markup import escape_markup, style_labeled_line
 from eawf.tui.widgets.variance_tile import render_variance_plain
 
 if TYPE_CHECKING:
-    from eawf.state.models import Audit, State, Wave
+    from eawf.kernel.state.models import Audit, State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +266,7 @@ def _scoped_scope_ids(state: State) -> set[str]:
 def _effort_eu(state: State | None) -> tuple[float, float]:
     """Return the active **phase**'s ``(consumed_eu, estimate_eu)`` pair.
 
-    The numerator sums :attr:`~eawf.state.models.ActualSummary.elapsed_eu`
+    The numerator sums :attr:`~eawf.kernel.state.models.ActualSummary.elapsed_eu`
     over the actuals whose ``scope_id`` is one of the active phase's waves.
     The denominator is a **live** bucket-aggregate:
     ``Σ wave_estimate_eu(w)`` over every active-phase wave regardless of

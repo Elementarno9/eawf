@@ -28,8 +28,8 @@ from eawf.daemon.bus import EventBus
 from eawf.daemon.methods import MethodContext
 from eawf.daemon.methods.event import list_events, show_event
 from eawf.daemon.server import handle_connection
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 

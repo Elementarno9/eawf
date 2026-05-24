@@ -4,7 +4,7 @@ Public API surface:
 
 - :func:`create_worktree` — materialise a per-wave worktree under
   ``.ea/worktrees/<name>/`` and append a
-  :class:`~eawf.state.models.WorktreeRecord`.
+  :class:`~eawf.kernel.state.models.WorktreeRecord`.
 - :func:`merge_back` — bring worktree commits onto the parent branch
   via ``cherry_pick`` (default per AGENTS.md rule 11) or
   ``rebase_then_ff``, with conflict preservation across ``--continue``
@@ -32,7 +32,7 @@ from pathlib import Path
 
 import eawf.worktree.git as git
 from eawf.cli import errors as cli_errors
-from eawf.state.models import State, WorktreeRecord
+from eawf.kernel.state.models import State, WorktreeRecord
 from eawf.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.worktree.create import create_worktree
 from eawf.worktree.locks import worktree_registry_lock
@@ -83,7 +83,7 @@ def list_worktrees(
         repo_root: Used to query ``git worktree list --porcelain`` for
             the cross-check column.
         include_terminal: When ``False`` (default), skip
-            :class:`~eawf.state.enums.WorktreeStatus` MERGED / ABANDONED.
+            :class:`~eawf.kernel.state.enums.WorktreeStatus` MERGED / ABANDONED.
 
     Yields:
         One :class:`WorktreeListing` per row. Order matches insertion

@@ -14,7 +14,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import ArtifactKind, StoreKind
+from eawf.kernel.state.enums import ArtifactKind, StoreKind
 
 draft_app = typer.Typer(
     name="draft",

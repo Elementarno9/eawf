@@ -18,7 +18,7 @@ Algorithm — the transaction lifecycle:
 6. Build the canonical event envelope (``EventPayload`` body) +
    write the WAL ``.pending.json`` record.
 7. Atomic-write ``state.json`` (existing
-   :func:`eawf.state.writer.atomic_write_json_locked`) — the point of
+   :func:`eawf.kernel.state.writer.atomic_write_json_locked`) — the point of
    no return (state.json is fsynced here).
 8. WAL ``.pending`` → ``.applied`` rename, BEFORE the event append, so
    a crash in the state-write→event-append window leaves an APPLIED
@@ -27,7 +27,7 @@ Algorithm — the transaction lifecycle:
    whereas a PENDING record would be POISONED and the event row lost —
    diverging state from the event log.
 9. Append the envelope to ``event.jsonl`` via
-   :func:`eawf.store.append.append_envelope`, then WAL
+   :func:`eawf.kernel.store.append.append_envelope`, then WAL
    ``.applied`` → ``.fsynced`` (lock-free renames from
    :mod:`eawf.daemon.wal`).
 10. Publish the envelope on the subscription bus
@@ -71,6 +71,15 @@ from eawf.daemon.methods import (
     register,
 )
 from eawf.daemon.wal import WalRecord
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, PhaseStatus, StoreKind
+from eawf.kernel.state.models import State
+from eawf.kernel.state.mutations import Mutation, MutationKind
+from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.paths import store_path
+from eawf.kernel.validate.strict import validate_state
 from eawf.lifecycle.transitions import (
     LifecycleError,
     activate_phase,
@@ -89,15 +98,6 @@ from eawf.lifecycle.transitions import (
     remove_wave_plan,
     set_wave_deps,
 )
-from eawf.state.enums import AgentSessionRole, EffortBucket, PhaseStatus, StoreKind
-from eawf.state.models import State
-from eawf.state.mutations import Mutation, MutationKind
-from eawf.state.writer import atomic_write_json_locked
-from eawf.store.append import append_envelope
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.event import EventPayload
-from eawf.store.paths import store_path
-from eawf.validate.strict import validate_state
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ class ReadResult(BaseModel):
 
     The ``state`` field carries the full validated state payload as a
     JSON-mode dict; callers re-validate against
-    :class:`eawf.state.models.State` if they need a typed object.
+    :class:`eawf.kernel.state.models.State` if they need a typed object.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -259,7 +259,7 @@ def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
 
     Stays a no-op after the first call for the lifetime of the daemon
     process — mirrors the
-    :data:`eawf.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
+    :data:`eawf.kernel.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
     a stale CLI client does not spam the daemon log.
     """
     global _ANCHOR_FALLBACK_WARN_EMITTED
@@ -313,7 +313,7 @@ def _resolve_mutator_paths(
 
     Same precedence as :func:`_resolve_state_path` for *state_path*;
     *event_path* is always derived from the resolved *state_path* via
-    :func:`eawf.store.paths.store_path` so a per-request ``repo_root``
+    :func:`eawf.kernel.store.paths.store_path` so a per-request ``repo_root``
     routes the event-jsonl append to the correct repo too. *wal_dir*
     stays daemon-process-local (one WAL per daemon).
 
@@ -891,7 +891,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 def event_store_path_for(state_path: Path) -> Path:
     """Return the ``event.jsonl`` path that pairs with *state_path*.
 
-    Thin wrapper around :func:`eawf.store.paths.store_path` so callers
+    Thin wrapper around :func:`eawf.kernel.store.paths.store_path` so callers
     in :mod:`eawf.daemon.main` keep a single import surface for the
     canonical pairing.
     """

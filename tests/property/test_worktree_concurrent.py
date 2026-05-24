@@ -265,7 +265,7 @@ def test_seeded_state_validates(tmp_path: Path) -> None:
     state_path = repo / ".ea" / "state.json"
     _seed_state(state_path, 3)
     payload = orjson.loads(state_path.read_bytes())
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     State.model_validate(payload)
 

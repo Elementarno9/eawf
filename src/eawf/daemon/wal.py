@@ -22,7 +22,7 @@ side-steps the non-determinism in ``apply`` (``datetime.now()``, UUID
 gen, ``git rev-parse HEAD``) that an intent-WAL would re-run on every
 recovery and produce diverging event ids.
 
-Atomic-write strategy mirrors :mod:`eawf.state.writer`: tempfile +
+Atomic-write strategy mirrors :mod:`eawf.kernel.state.writer`: tempfile +
 ``os.replace`` + parent-dir fsync. Renames between status suffixes are
 plain ``os.replace`` calls — atomic on POSIX + Windows.
 """
@@ -39,8 +39,8 @@ from pathlib import Path
 import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.state.types import UtcDatetime
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.types import UtcDatetime
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def _poisoned_path(wal_dir: Path, record_id: str) -> Path:
 def _atomic_write_bytes(target: Path, payload: bytes) -> None:
     """Tempfile + ``os.replace`` + parent-dir fsync. Lock-agnostic.
 
-    Mirrors :func:`eawf.state.writer._write_payload` but specialised for
+    Mirrors :func:`eawf.kernel.state.writer._write_payload` but specialised for
     the WAL: no sibling lock (each WAL record is a unique file; no
     concurrent writer competes for the same path).
     """

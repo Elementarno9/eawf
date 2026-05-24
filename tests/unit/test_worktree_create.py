@@ -19,13 +19,13 @@ from pathlib import Path
 import pytest
 
 from eawf.cli import errors as cli_errors
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     PhaseStatus,
     ProjectStatus,
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     CurrentPointers,
     Iter,
     Phase,

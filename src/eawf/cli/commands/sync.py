@@ -60,12 +60,12 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 if TYPE_CHECKING:
+    from eawf.kernel.state.models import State
     from eawf.render.agents_md import RenderResult
     from eawf.render.manifest import Manifest
-    from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def _load_state_or_none(state_path: Path) -> State | None:
     :class:`cli_errors.UserError` (``kind="InvalidInput"``) so the existing
     error envelope still fires.
     """
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     if not state_path.exists():
         return None
@@ -105,7 +105,7 @@ def _seed_state_for_shadow(target: Path, shadow: Path) -> None:
     The memory-view renderer reads both. The shadow tree is sparse — only the
     files we actually consume need to be mirrored.
     """
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.paths import store_path
 
     src_state = target / _STATE_RELPATH
     if src_state.exists():
@@ -127,8 +127,8 @@ def _render_memory_views(*, target_root: Path, write: bool) -> list[Path]:
     when ``write=False``). When the workspace has no ``.ea/state.json`` (e.g.
     the bare-directory init path) the function returns an empty list.
     """
+    from eawf.kernel.store.paths import store_path
     from eawf.memory.markdown_view import render_all_views
-    from eawf.store.paths import store_path
 
     state_path = target_root / _STATE_RELPATH
     state = _load_state_or_none(state_path)
@@ -178,7 +178,7 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
 
     Args:
         target: Workspace root. ``.ea/config.yaml`` is read via
-            :func:`eawf.config.layered.merge_config` so the return value
+            :func:`eawf.kernel.config.layered.merge_config` so the return value
             honours the full layer stack (built-in → global → workspace →
             repo → local → env). For the sync surface we treat *target* as
             the repo anchor.
@@ -193,7 +193,7 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
             strings, or the layered merge raises (malformed YAML in any
             layer).
     """
-    from eawf.config.layered import merge_config
+    from eawf.kernel.config.layered import merge_config
     from eawf.profiles.loader import list_profiles
 
     try:

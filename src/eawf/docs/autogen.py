@@ -9,11 +9,11 @@ never hand-authored, so a doc/source drift cannot survive a build:
 - ``skills.md`` — the Eä skill catalog, read from
   :data:`eawf.render.skills.SKILL_REGISTRY`.
 - ``schema.md`` — the JSON Schema of the canonical Pydantic models
-  (:class:`~eawf.state.models.State`, the event envelope, and the output
+  (:class:`~eawf.kernel.state.models.State`, the event envelope, and the output
   envelope), with each schema also dumped to a sibling ``.schema.json``
   file by :func:`dump_schemas`.
 - ``enums.md`` — the state enum catalog from
-  :mod:`eawf.state.enums`.
+  :mod:`eawf.kernel.state.enums`.
 - ``error-codes.md`` — the cause-level :class:`~eawf.cli.error_codes.ErrorCode`
   vocabulary folded onto its exit bucket.
 - ``exit-codes.md`` — the five-bucket exit-code surface from
@@ -45,11 +45,11 @@ from pydantic import BaseModel
 
 from eawf.cli import error_codes as error_codes_mod
 from eawf.cli import exit_codes as exit_codes_mod
+from eawf.kernel.state import enums as state_enums
+from eawf.kernel.state.models import State
+from eawf.kernel.store.kinds.event import Event
 from eawf.render.envelope import OutputEnvelope
 from eawf.render.plan_view import PlanView
-from eawf.state import enums as state_enums
-from eawf.state.models import State
-from eawf.store.kinds.event import Event
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -357,7 +357,7 @@ def schema_page() -> GeneratedPage:
 
 
 def _enum_classes() -> Iterator[type[Enum]]:
-    """Yield every :class:`Enum` subclass declared in :mod:`eawf.state.enums`."""
+    """Yield every :class:`Enum` subclass declared in :mod:`eawf.kernel.state.enums`."""
     for attr in dir(state_enums):
         obj = getattr(state_enums, attr)
         if (
@@ -370,11 +370,11 @@ def _enum_classes() -> Iterator[type[Enum]]:
 
 
 def enums_page() -> GeneratedPage:
-    """Generate ``enums.md`` from :mod:`eawf.state.enums`."""
+    """Generate ``enums.md`` from :mod:`eawf.kernel.state.enums`."""
     lines: list[str] = [
         "# eawf state enums",
         "",
-        "Auto-generated from `eawf.state.enums`. Every `StrEnum` defined in",
+        "Auto-generated from `eawf.kernel.state.enums`. Every `StrEnum` defined in",
         "that module is listed with its members.",
         "",
         "| Class | Values |",

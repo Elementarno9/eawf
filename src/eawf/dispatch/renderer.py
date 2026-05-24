@@ -1,6 +1,6 @@
 """Subagent prompt renderer (B025) + dispatch envelope (P10 W03).
 
-The renderer takes a validated :class:`~eawf.state.models.State` and a
+The renderer takes a validated :class:`~eawf.kernel.state.models.State` and a
 target wave id and returns a self-contained Markdown prompt suitable
 for handing to an executor subagent. The prompt mirrors the agent-side
 context: the wave's scope, its file_scopes, its blocking deps, any
@@ -21,8 +21,8 @@ optional repo_root and returns a string. The CLI handlers own all
 stdout / file writes (see :mod:`eawf.cli.commands.lifecycle`).
 
 Scope resolution: a wave's effective scope is its phase's ``scope_id``.
-The chain is ``wave.iter_id`` → :class:`~eawf.state.models.Iter` →
-``iter.phase_id`` → :class:`~eawf.state.models.Phase` → ``phase.scope_id``.
+The chain is ``wave.iter_id`` → :class:`~eawf.kernel.state.models.Iter` →
+``iter.phase_id`` → :class:`~eawf.kernel.state.models.Phase` → ``phase.scope_id``.
 A broken link surfaces as a :class:`KeyError` so callers can map the
 missing edge to the canonical NOT_FOUND exit code.
 
@@ -63,8 +63,7 @@ from eawf.agents.specs.models import (
     SpecWorktree,
     SubagentSpec,
 )
-from eawf.sandbox.policy import resolve_denied_tools
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     Audit,
     Decision,
     Hypothesis,
@@ -72,6 +71,7 @@ from eawf.state.models import (
     Wave,
     WorktreeRecord,
 )
+from eawf.sandbox.policy import resolve_denied_tools
 
 logger = logging.getLogger(__name__)
 

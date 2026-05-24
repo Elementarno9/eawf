@@ -1,6 +1,6 @@
 """Ambient state-change toast emitter for the Textual dashboard.
 
-The :class:`ToastEmitter` diffs two consecutive :class:`~eawf.state.models.State`
+The :class:`ToastEmitter` diffs two consecutive :class:`~eawf.kernel.state.models.State`
 snapshots and computes the set of ambient, focus-preserving notifications the
 dashboard surfaces bottom-right. It is the ``toast_rack`` parallel region of the
 tui-richer-views statechart: an ambient region whose events NEVER steal focus or
@@ -11,7 +11,7 @@ Three change classes produce a toast:
 * **wave close** — a wave that transitions ``PENDING`` / ``CLAIMED`` /
   ``IN_PROGRESS`` → ``CLOSED`` across the two snapshots.
 * **audit verdict** — an audit that gains (or changes) a non-``None``
-  :attr:`~eawf.state.models.Audit.verdict`.
+  :attr:`~eawf.kernel.state.models.Audit.verdict`.
 * **needs-user** — the count of open needs_user pauses rose since the previous
   snapshot (sourced from the event-store tail, passed in by the app).
 
@@ -46,12 +46,12 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from eawf.state.enums import AuditVerdict, WaveStatus
+from eawf.kernel.state.enums import AuditVerdict, WaveStatus
 
 if TYPE_CHECKING:
     from textual.app import App
 
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 

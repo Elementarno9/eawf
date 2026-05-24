@@ -39,8 +39,8 @@ from eawf.daemon.session_ttl import (
     plan_evictions,
     sweep_once,
 )
-from eawf.state.enums import StoreKind
-from eawf.state.models import SessionAttempt, Wave
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.models import SessionAttempt, Wave
 
 pytestmark = pytest.mark.unit
 
@@ -269,7 +269,7 @@ def test_build_pruned_envelope_is_event_kind_and_scrubbed() -> None:
     assert env.payload["event_type"] == "session_handle_pruned"
     serialised = env.model_dump_json()
     # No filesystem path should ever appear in the wire payload.
-    assert "/Users/" not in serialised
+    assert "/Users/" not in serialised  # pragma: allowlist secret
     assert "/tmp/" not in serialised
     assert "\\\\" not in serialised  # Windows path separator (escaped)
 

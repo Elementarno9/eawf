@@ -1,6 +1,6 @@
 """``eawf goal define`` mutator.
 
-Creates a :class:`~eawf.state.models.Goal` record under ``state.goals`` and
+Creates a :class:`~eawf.kernel.state.models.Goal` record under ``state.goals`` and
 mutates the typed state in place. The CLI handler runs the mutator inside
 :func:`eawf.cli._mutation.state_transaction`, which holds
 ``portalock(state.json)`` across load + mutate + validate + write.
@@ -14,9 +14,9 @@ from typing import Any
 
 from eawf.cli.errors import UserError
 from eawf.evidence import _io
-from eawf.state.enums import GoalStatus
-from eawf.state.models import Goal, State
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import GoalStatus
+from eawf.kernel.state.models import Goal, State
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

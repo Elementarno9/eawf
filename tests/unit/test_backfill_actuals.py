@@ -1,10 +1,10 @@
 """Retroactive ActualSummary backfill for historical closed waves (P27-I02-W26).
 
-W25 made wave-close auto-record an :class:`~eawf.state.models.ActualSummary`
+W25 made wave-close auto-record an :class:`~eawf.kernel.state.models.ActualSummary`
 going forward; these tests cover the migration that backfills the actuals
 for the waves that closed before that wiring landed.
-:func:`~eawf.migrations.backfill_actuals.backfill_actuals` is a pure,
-idempotent transform over a typed :class:`~eawf.state.models.State`, so the
+:func:`~eawf.kernel.migrations.backfill_actuals.backfill_actuals` is a pure,
+idempotent transform over a typed :class:`~eawf.kernel.state.models.State`, so the
 suite asserts: one actual per eligible closed wave, an idempotent re-run
 (count 0, no duplicate / no mutation), the boundary cases (missing
 timestamps, open wave), and the end-to-end claim that ``metrics variance``
@@ -22,15 +22,15 @@ from eawf.estimation.metrics import (
     compute_estimate_actual_variance,
     compute_eu_variance,
 )
-from eawf.migrations.backfill_actuals import backfill_actuals
-from eawf.state.enums import (
+from eawf.kernel.migrations.backfill_actuals import backfill_actuals
+from eawf.kernel.state.enums import (
     Confidence,
     EffortBucket,
     ProjectStatus,
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     CurrentPointers,
     EstimateSummary,
     Project,

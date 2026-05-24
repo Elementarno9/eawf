@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.store.envelope import Envelope
+from eawf.kernel.store.envelope import Envelope
 from eawf.telemetry.models import TelemetrySession
 from eawf.telemetry.sources import ClaudeSessionSource, EventJsonlSource, SessionSource
 from eawf.telemetry.sources.base import SessionSource as SessionSourceBase

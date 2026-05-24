@@ -36,7 +36,7 @@ _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 def _tmp_global_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect ``global_config_path`` to a tmp file + force in-process writes.
 
-    Patches :func:`eawf.config.layered.global_config_path` (the canonical
+    Patches :func:`eawf.kernel.config.layered.global_config_path` (the canonical
     definition both the ``merge_config`` reader and the writer's
     layer-label matcher resolve at call time) and sets
     ``EAWF_DAEMONLESS=1`` so the writer takes the lock-read-write arm with
@@ -45,7 +45,7 @@ def _tmp_global_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """
     cfg = tmp_path / "config" / "eawf" / "config.yaml"
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    monkeypatch.setattr("eawf.config.layered.global_config_path", lambda: cfg)
+    monkeypatch.setattr("eawf.kernel.config.layered.global_config_path", lambda: cfg)
     return cfg
 
 
@@ -243,7 +243,7 @@ def test_persisted_theme_ignores_unrecognised_persisted_value(
 
 def test_ui_theme_in_config_registry_as_choice_of_four() -> None:
     """The menu-surface row is a ``ui``-tab choice over the four logical names."""
-    from eawf.config.registry import registry_lookup
+    from eawf.kernel.config.registry import registry_lookup
 
     entry = registry_lookup("ui.theme")
     assert entry is not None
@@ -255,7 +255,7 @@ def test_ui_theme_in_config_registry_as_choice_of_four() -> None:
 
 def test_ui_theme_in_leaf_key_registry_like_ui_color() -> None:
     """The leaf-key row mirrors ``ui.color``'s writable layers (global/ws/repo/env)."""
-    from eawf.config.registry import leaf_key_lookup
+    from eawf.kernel.config.registry import leaf_key_lookup
 
     entry = leaf_key_lookup("ui.theme")
     assert entry.domain == "ui"

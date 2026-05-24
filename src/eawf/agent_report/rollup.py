@@ -6,10 +6,10 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from eawf.state.enums import AgentSessionRole
-from eawf.store.envelope import Envelope
-from eawf.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
-from eawf.store.paths import store_path
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
+from eawf.kernel.store.paths import store_path
 
 
 @dataclass(frozen=True)

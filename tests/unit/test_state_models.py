@@ -1,6 +1,6 @@
 """Unit tests for state-model derived accessors (P20-W15 / B026).
 
-Covers :mod:`eawf.state.wave_graph` — the typed Wave DAG edge views
+Covers :mod:`eawf.kernel.state.wave_graph` — the typed Wave DAG edge views
 (``deps``, ``blocks``, ``blocked_by``, ``edges``, ``edges_for_iter``)
 that consumers (the TUI wave-board in W03, the ``eawf wave graph``
 CLI) read off the model in O(1) per wave from a single call site.
@@ -9,7 +9,7 @@ The DAG persistence layer's mutation behaviour (``plan_wave``,
 ``set_wave_deps``, ``remove_wave_plan``) is exercised separately in
 :mod:`tests.unit.test_wave_dag`.
 
-Also covers :class:`~eawf.state.models.Project.weekly_eu_target` field
+Also covers :class:`~eawf.kernel.state.models.Project.weekly_eu_target` field
 contract (P20-I01-W09): None default, valid float accepted, invalid
 type rejected.
 """
@@ -21,6 +21,9 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.state import wave_graph
+from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
+from eawf.kernel.state.models import CurrentPointers, Principal, Project, State
 from eawf.lifecycle.transitions import (
     claim_wave,
     close_wave,
@@ -28,9 +31,6 @@ from eawf.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
-from eawf.state import wave_graph
-from eawf.state.enums import ProjectStatus, ScopeKind, WaveStatus
-from eawf.state.models import CurrentPointers, Principal, Project, State
 
 
 def _empty_state() -> State:

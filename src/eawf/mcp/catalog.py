@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from eawf.state.enums import McpRisk
+from eawf.kernel.state.enums import McpRisk
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class McpCatalogEntry:
         default_args: ``argv[1:]`` for the launcher.
         default_env_refs: Canonical ``${ENV:NAME}`` tokens. Empty for
             servers that need no secrets.
-        risk: One of :class:`eawf.state.enums.McpRisk`.
+        risk: One of :class:`eawf.kernel.state.enums.McpRisk`.
         write_capable: ``True`` if the server can mutate user state
             (filesystem writes, GitHub writes, ...). Drives the
             ask-before-install gate's risk wording.

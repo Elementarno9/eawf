@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.config.profile`.
+"""Unit tests for :mod:`eawf.kernel.config.profile`.
 
 The contracts under test:
 
@@ -30,7 +30,7 @@ import pytest
 import yaml
 
 from eawf.cli.errors import UserError
-from eawf.config.profile import KNOWN_PROFILES, enable_profile
+from eawf.kernel.config.profile import KNOWN_PROFILES, enable_profile
 
 
 def _seed_state(state_path: Path, body: dict[str, object]) -> None:
@@ -248,7 +248,7 @@ def test_materialise_state_keys_serialises_with_concurrent_writer(tmp_path: Path
     """A racing ``state_transaction`` must not drop materialised state keys.
 
     Regression for the TOCTOU window in
-    :func:`eawf.config.profile._materialise_state_keys`: the read of
+    :func:`eawf.kernel.config.profile._materialise_state_keys`: the read of
     ``state.json``, the in-memory mutation, and the atomic write must all
     happen under one ``portalock(state_path)`` acquisition, otherwise a
     competing writer that reads the file *before* the materialisation

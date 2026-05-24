@@ -8,7 +8,7 @@ The load-bearing assertion is the wave's success criterion: a
 ``dispatch_cost`` event increments the target wave's ``tokens_consumed``
 live, and a STATE_REVISION is triggered so live burn gauges advance during
 execution. The accrual routes through the daemon canonical state writer
-(:func:`eawf.state.writer.atomic_write_json_locked` under the ``state.json``
+(:func:`eawf.kernel.state.writer.atomic_write_json_locked` under the ``state.json``
 portalock), so the persisted counter is indistinguishable from one written
 by the daemon's ``state.mutate`` path; the daemon-push STATE_REVISION feed
 is driven by a ``state_mutated`` envelope published on the subscription bus.
@@ -30,7 +30,7 @@ from eawf.daemon.dispatch_runner import (
 )
 from eawf.daemon.methods import MethodContext
 from eawf.evidence._io import load_state
-from eawf.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind
 
 pytestmark = pytest.mark.integration
 
@@ -138,7 +138,7 @@ def _write_state(
     tokens_consumed: int = 0,
 ) -> Path:
     """Serialise a valid :class:`State` whose wave carries the given fields."""
-    from eawf.state.models import State
+    from eawf.kernel.state.models import State
 
     state = State.model_validate(
         _state_payload(wave_status=wave_status, tokens_consumed=tokens_consumed)

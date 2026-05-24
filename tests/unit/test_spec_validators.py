@@ -2,7 +2,7 @@
 
 Coverage matrix (P25-W05 success criteria):
 
-- Heuristics (:mod:`eawf.spec.heuristics`):
+- Heuristics (:mod:`eawf.kernel.spec.heuristics`):
   - :func:`is_ui_scope` — true for UI prefixes, false for non-UI, false
     for empty input.
   - :func:`requires_mockup_reference` — fires only when (UI + no mockup
@@ -10,7 +10,7 @@ Coverage matrix (P25-W05 success criteria):
     or when the wave is non-UI.
   - :func:`missing_test_paths` — returns missing refs only.
 
-- Pydantic model_validator (:class:`~eawf.spec.wave.WaveSpec._mockup_required`):
+- Pydantic model_validator (:class:`~eawf.kernel.spec.wave.WaveSpec._mockup_required`):
   - UI-scope wave without mockup AND without waiver raises
     ``ValidationError`` at ``model_validate`` time (success criterion 2,
     "at schema load").
@@ -18,7 +18,7 @@ Coverage matrix (P25-W05 success criteria):
   - UI-scope wave with waiver passes.
   - Non-UI wave without mockup passes.
 
-- Loader-side (:mod:`eawf.spec.validators`):
+- Loader-side (:mod:`eawf.kernel.spec.validators`):
   - :func:`validate_wave_spec_tests_exist` raises when any test path is
     missing; passes when every path exists (tmp_path fixture).
   - :func:`validate_wave_spec_brief_paths_exist` raises when any brief
@@ -35,21 +35,21 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.spec.common import VerdictCitation
-from eawf.spec.heuristics import (
+from eawf.kernel.spec.common import VerdictCitation
+from eawf.kernel.spec.heuristics import (
     is_ui_scope,
     missing_test_paths,
     requires_mockup_reference,
 )
-from eawf.spec.phase import PhaseKPI, PhaseShipCriterion, PhaseSpec
-from eawf.spec.validators import (
+from eawf.kernel.spec.phase import PhaseKPI, PhaseShipCriterion, PhaseSpec
+from eawf.kernel.spec.validators import (
     SpecValidationError,
     validate_phase_spec_has_kpis,
     validate_wave_spec_brief_paths_exist,
     validate_wave_spec_tests_exist,
 )
-from eawf.spec.wave import WaveBehavior, WaveMockup, WaveSpec
-from eawf.state.enums import AgentSessionRole, EffortBucket
+from eawf.kernel.spec.wave import WaveBehavior, WaveMockup, WaveSpec
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 # ---- Test fixtures ----------------------------------------------------------
 

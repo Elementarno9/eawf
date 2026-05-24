@@ -51,7 +51,7 @@ from eawf.daemon.methods import (
 )
 from eawf.daemon.methods.event import subscribe as run_subscribe
 from eawf.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
-from eawf.store.envelope import Envelope
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

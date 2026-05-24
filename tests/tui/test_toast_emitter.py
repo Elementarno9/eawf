@@ -17,8 +17,8 @@ from typing import Any
 import orjson
 import pytest
 
-from eawf.config.registry import LEAF_KEY_REGISTRY, registry_lookup
-from eawf.state.models import State
+from eawf.kernel.config.registry import LEAF_KEY_REGISTRY, registry_lookup
+from eawf.kernel.state.models import State
 from eawf.tui.app import EaApp
 from eawf.tui.toast_emitter import (
     DEFAULT_VERBOSITY,

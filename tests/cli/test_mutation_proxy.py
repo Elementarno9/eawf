@@ -6,7 +6,7 @@ per-verb bespoke proxies + the dropped ``_mutation.state_mutate``).
 This suite exercises the branching contract:
 
 1. **Proxied end-to-end** — daemon up → the shim marshals one typed
-   :class:`~eawf.state.mutations.Mutation` across ``state.mutate`` and
+   :class:`~eawf.kernel.state.mutations.Mutation` across ``state.mutate`` and
    returns the daemon's result dict; the *fallback* MUST NOT run.
 2. **Method-not-found fallback** — a ``-32601`` (daemon predates the
    kind) routes to the *fallback* callable and returns its value.
@@ -49,7 +49,7 @@ import pytest
 
 from eawf.cli import _dispatch, exit_codes
 from eawf.cli import errors as cli_errors
-from eawf.state.mutations import MutationKind
+from eawf.kernel.state.mutations import MutationKind
 
 pytestmark = pytest.mark.unit
 

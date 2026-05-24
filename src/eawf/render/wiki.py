@@ -16,7 +16,7 @@ Output structure (one section per closed phase, in phase-id order):
     |------|-------|--------|---------|
 
 The top of the document carries a global "Decisions" section listing every
-:class:`~eawf.state.models.Decision` in the project. The wiki is intentionally
+:class:`~eawf.kernel.state.models.Decision` in the project. The wiki is intentionally
 read-only — it ships zero ``state.json`` mutations.
 """
 
@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import logging
 
+from eawf.kernel.state.enums import PhaseStatus
+from eawf.kernel.state.models import State
 from eawf.lifecycle.wave_sha import derive_wave_sha
-from eawf.state.enums import PhaseStatus
-from eawf.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def build_wiki(state: State) -> str:
     """Render the full project wiki as a single Markdown string.
 
     Sections are emitted in phase-id order. Only phases whose status is
-    :class:`~eawf.state.enums.PhaseStatus.CLOSED` are included; open phases
+    :class:`~eawf.kernel.state.enums.PhaseStatus.CLOSED` are included; open phases
     are omitted so the wiki is a stable historical record.
     """
     decisions = state.decisions or {}

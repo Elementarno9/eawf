@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.state.enums import ArtifactKind
-from eawf.state.models import Artifact
+from eawf.kernel.state.enums import ArtifactKind
+from eawf.kernel.state.models import Artifact
 
 
 def _make_artifact(kind: str | ArtifactKind) -> Artifact:

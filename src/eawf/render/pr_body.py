@@ -27,17 +27,17 @@ from pydantic import BaseModel, ConfigDict
 from eawf.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
 from eawf.artifacts.references import Citation
 from eawf.artifacts.validation import validate_text_surface
-from eawf.lifecycle.wave_sha import derive_wave_sha
-from eawf.profiles.models import ComposedProfile
-from eawf.state.enums import AgentSessionRole
-from eawf.state.ids import is_iter_id, is_phase_id, is_wave_id
-from eawf.state.models import State
-from eawf.store.kinds.agent_report import (
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
+from eawf.kernel.state.models import State
+from eawf.kernel.store.kinds.agent_report import (
     AgentReportEvidenceRef,
     ExecutorReportBody,
     ResearcherReportBody,
     ReviewerReportBody,
 )
+from eawf.lifecycle.wave_sha import derive_wave_sha
+from eawf.profiles.models import ComposedProfile
 
 logger = logging.getLogger(__name__)
 

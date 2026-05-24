@@ -4,7 +4,7 @@ Currently exposes a single subcommand:
 
 - ``eawf store compact [--kind <kind>] [--scope <id>] [--budget <bytes>]``
 
-The command thinly wraps :func:`eawf.store.compact.compact_store`. The
+The command thinly wraps :func:`eawf.kernel.store.compact.compact_store`. The
 ``--kind`` argument selects which JSONL file under the canonical
 ``<state_dir>/store/<kind>.jsonl`` path is targeted. The ``--scope`` and
 ``--budget`` flags are accepted for v0.1 surface-stability and surfaced
@@ -24,8 +24,8 @@ import typer
 from eawf.cli import errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
-from eawf.state.enums import StoreKind
-from eawf.state.resolve import resolve_with_reason
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.resolve import resolve_with_reason
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,8 @@ def compact_cmd(
     ] = None,
 ) -> None:
     """Compact the JSONL store for *kind* and emit the dedup report."""
-    from eawf.store.compact import compact_store
-    from eawf.store.paths import store_path as _canonical_store_path
+    from eawf.kernel.store.compact import compact_store
+    from eawf.kernel.store.paths import store_path as _canonical_store_path
 
     flags: GlobalFlags = ctx.obj
     effective_ws = workspace if workspace is not None else flags.workspace

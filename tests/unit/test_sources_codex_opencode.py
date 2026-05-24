@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.state.enums import IncidentCause, IncidentSeverity
+from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 from eawf.telemetry.models import TelemetryIncident, TelemetrySession
 from eawf.telemetry.sources import (
     CodexSessionSource,

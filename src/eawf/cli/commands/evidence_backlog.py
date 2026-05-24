@@ -24,7 +24,7 @@ from eawf.cli.commands.evidence import (
     audit_app,
     backlog_app,
 )
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
     AuditVerdict,

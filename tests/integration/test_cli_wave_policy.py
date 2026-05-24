@@ -120,7 +120,7 @@ def test_blocks_rebuild_emits_typed_edges_view(workspace: Path) -> None:
     """The rebuild payload includes a typed deps/blocks/blocked_by triple.
 
     Confirms the W15 typed-edges surface (``WaveDagEdges`` via
-    :func:`eawf.state.wave_graph.edges`) is primed by the rebuild so
+    :func:`eawf.kernel.state.wave_graph.edges`) is primed by the rebuild so
     the TUI wave-board (W03) can read the runtime DAG view off a
     single call site.
     """

@@ -1,7 +1,7 @@
 """``eawf wave policy set / show`` — sandbox policy CLI surface.
 
 Sandbox-policy entries are state-resident :class:`~eawf.sandbox.policy.SandboxPolicy`
-rows stored on :attr:`~eawf.state.models.State.sandbox_policies`. v0.2 ships
+rows stored on :attr:`~eawf.kernel.state.models.State.sandbox_policies`. v0.2 ships
 the populate + query verbs; enforcement (hard refusal at dispatch time) is
 deferred to a follow-up wave.
 
@@ -158,8 +158,8 @@ def policy_show(
     """Show every sandbox policy whose ``scope_id`` matches *scope_id*."""
     import orjson
 
-    from eawf.state.models import State
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.state.models import State
+    from eawf.kernel.validate.strict import validate_state
 
     flags: GlobalFlags = ctx.obj
     try:

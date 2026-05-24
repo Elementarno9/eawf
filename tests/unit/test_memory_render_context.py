@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eawf.kernel.state.enums import Confidence
+from eawf.kernel.state.models import State
 from eawf.memory.render_context import (
     DEFAULT_BUDGET,
     estimate_tokens,
     render_context,
 )
 from eawf.memory.store import add_memory
-from eawf.state.enums import Confidence
-from eawf.state.models import State
 
 
 def _make_state() -> State:
@@ -166,7 +166,7 @@ def test_render_context_skips_inactive_entries(tmp_path: Path) -> None:
     memory_path = tmp_path / "memory.jsonl"
     rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
     # Manually flip status to STALE in the cache.
-    from eawf.state.enums import MemoryStatus
+    from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None
     state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(
@@ -262,7 +262,7 @@ def test_render_context_excludes_superseded_by_default(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
     rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
-    from eawf.state.enums import MemoryStatus
+    from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None
     state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(
@@ -277,7 +277,7 @@ def test_render_context_include_superseded_admits_them(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
     rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
-    from eawf.state.enums import MemoryStatus
+    from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None
     state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(
@@ -294,7 +294,7 @@ def test_render_context_pruned_never_admitted(tmp_path: Path) -> None:
     state = _make_state()
     memory_path = tmp_path / "memory.jsonl"
     rec = add_memory(state=state, memory_path=memory_path, scope_id="QR", title="t", body="b")
-    from eawf.state.enums import MemoryStatus
+    from eawf.kernel.state.enums import MemoryStatus
 
     assert state.memory_index is not None
     state.memory_index[rec.summary.id] = state.memory_index[rec.summary.id].model_copy(

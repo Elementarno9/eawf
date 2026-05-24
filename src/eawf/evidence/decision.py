@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 
 from eawf.cli.errors import UserError
 from eawf.evidence import _io
-from eawf.state.enums import DecisionStatus, StoreKind
-from eawf.state.models import Decision, State
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import DecisionStatus, StoreKind
+from eawf.kernel.state.models import Decision, State
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

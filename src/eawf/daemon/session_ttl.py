@@ -30,9 +30,9 @@ from typing import Final
 
 from eawf.daemon.session import prune_handles_for_wave as _drop_wave_handles
 from eawf.evidence._io import load_state
-from eawf.state.enums import StoreKind
-from eawf.state.models import State
-from eawf.store.envelope import Envelope
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

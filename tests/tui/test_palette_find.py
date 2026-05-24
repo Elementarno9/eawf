@@ -20,7 +20,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.state.models import State
+from eawf.kernel.state.models import State
 from eawf.tui.palette.verbs import _handle_find, rank_find_hits
 from eawf.tui.screens.overlays.detail import DetailModal
 

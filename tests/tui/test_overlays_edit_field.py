@@ -15,7 +15,7 @@ from typing import Any
 
 from textual.widgets import Input, Static
 
-from eawf.config.registry import registry_lookup
+from eawf.kernel.config.registry import registry_lookup
 from eawf.tui.app import EaApp
 from eawf.tui.screens.overlays.edit_field import EditFieldModal, seed_input_text
 

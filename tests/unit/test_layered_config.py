@@ -18,14 +18,14 @@ from pathlib import Path
 
 import pytest
 
-from eawf.config import layered
-from eawf.config.layered import (
+from eawf.kernel.config import layered
+from eawf.kernel.config.layered import (
     LAYER_ORDER,
     Layer,
     branch_config_path,
     merge_config,
 )
-from eawf.config.registry import (
+from eawf.kernel.config.registry import (
     LEAF_KEY_REGISTRY,
     LeafKey,
     is_known_leaf_key,

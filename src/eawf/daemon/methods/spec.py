@@ -18,7 +18,7 @@ lifecycle:
    / ``archive``) under ``ctx.in_flight_mutations`` so concurrent
    spec.* calls serialise inside the daemon process.
 4. Atomic-write the per-phase cache document via
-   :func:`eawf.state.writer.atomic_write_json_locked`.
+   :func:`eawf.kernel.state.writer.atomic_write_json_locked`.
 5. Build the canonical ``StoreKind.SPEC_UPDATED`` envelope + publish
    on the subscription bus.
 6. Cache the result; return ``{operation, scope_id, spec_urn, ...,
@@ -45,10 +45,10 @@ from typing import Any, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.daemon.methods import MethodContext, register
-from eawf.spec import cache as spec_cache
-from eawf.spec import writer as spec_writer
-from eawf.state.enums import StoreKind
-from eawf.store.envelope import Envelope
+from eawf.kernel.spec import cache as spec_cache
+from eawf.kernel.spec import writer as spec_writer
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
 

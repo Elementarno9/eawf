@@ -47,8 +47,8 @@ from textual.binding import Binding, BindingType
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 
-from eawf.state.enums import ScopeKind
-from eawf.state.models import State
+from eawf.kernel.state.enums import ScopeKind
+from eawf.kernel.state.models import State
 from eawf.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.tui.state_binding import StateBinding, StateBindingCallbacks
 from eawf.tui.theme import (
@@ -70,7 +70,7 @@ from eawf.tui.widgets.header import (
 logger = logging.getLogger(__name__)
 
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
-#: mirror :class:`eawf.state.enums.ScopeKind`; ``user`` is the registry-
+#: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
 #: scoped portfolio view that has no ``state.json`` ``scope_kind`` of its
 #: own (resolved from a populated ``~/.eawf/registry.json``).
 ScopeName = Literal["repo", "workspace", "user"]
@@ -86,7 +86,7 @@ _breadcrumb = build_breadcrumb
 def _persisted_theme() -> str:
     """Read the persisted ``ui.theme`` logical name from layered config.
 
-    Reads through the same :func:`~eawf.config.layered.merge_config` path
+    Reads through the same :func:`~eawf.kernel.config.layered.merge_config` path
     the config window writes through, so a value the operator saved via
     ``/config`` (or ``eawf config set ui.theme ...``) is honoured on the
     next launch. A missing key, an unreadable layer, or a value that is
@@ -97,7 +97,7 @@ def _persisted_theme() -> str:
         The persisted logical theme name, or :data:`DEFAULT_THEME` when
         none is persisted / the persisted value is unrecognised.
     """
-    from eawf.config.layered import get_dotted, merge_config
+    from eawf.kernel.config.layered import get_dotted, merge_config
 
     try:
         merged, _sources = merge_config()
@@ -121,7 +121,7 @@ _GLYPHS_CHOICES = ("auto", "ascii", "unicode")
 def _persisted_glyphs() -> str:
     """Read the persisted ``ui.glyphs`` policy from layered config.
 
-    Reads through the same :func:`~eawf.config.layered.merge_config` path
+    Reads through the same :func:`~eawf.kernel.config.layered.merge_config` path
     the config window writes through, so an operator-set value is honoured
     on launch. A missing key, an unreadable layer, or an unrecognised
     value degrades to ``"auto"`` — glyph selection is cosmetic, never a
@@ -131,7 +131,7 @@ def _persisted_glyphs() -> str:
         One of ``"auto"`` / ``"ascii"`` / ``"unicode"``; ``"auto"`` when
         none is persisted or the persisted value is unrecognised.
     """
-    from eawf.config.layered import get_dotted, merge_config
+    from eawf.kernel.config.layered import get_dotted, merge_config
 
     try:
         merged, _sources = merge_config()

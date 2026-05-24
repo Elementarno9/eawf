@@ -30,7 +30,7 @@ Discipline checklist:
   ``tests/integration/test_mcp_install_existing_user_entry.py``).
 - Grants reference :class:`McpServer` rows by id; a dangling
   ``server_id`` is caught by
-  :func:`eawf.validate.invariants.check_mcp_grant_server_ref` and
+  :func:`eawf.kernel.validate.invariants.check_mcp_grant_server_ref` and
   rolled back as :class:`cli_errors.ValidationError` inside ``grant_cmd``.
 """
 
@@ -49,10 +49,10 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import McpRisk, McpStatus
+from eawf.kernel.state.enums import McpRisk, McpStatus
 
 if TYPE_CHECKING:
-    from eawf.state.models import McpGrant, McpServer
+    from eawf.kernel.state.models import McpGrant, McpServer
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ def add_cmd(
     from pydantic import ValidationError
 
     from eawf.cli._mutation import state_transaction
-    from eawf.state.models import McpServer
+    from eawf.kernel.state.models import McpServer
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -404,7 +404,7 @@ def update_cmd(
     from pydantic import ValidationError
 
     from eawf.cli._mutation import state_transaction
-    from eawf.state.models import McpServer
+    from eawf.kernel.state.models import McpServer
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -720,8 +720,8 @@ def grant_cmd(
     from pydantic import ValidationError
 
     from eawf.cli._mutation import state_transaction
+    from eawf.kernel.state.models import GRANT_SCOPE_KINDS, McpGrant
     from eawf.lifecycle.allocator import allocate_grant_id
-    from eawf.state.models import GRANT_SCOPE_KINDS, McpGrant
 
     flags: GlobalFlags = ctx.obj
     try:

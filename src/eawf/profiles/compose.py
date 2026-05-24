@@ -43,7 +43,7 @@ notes such as render_block id overlap between two non-overriding profiles).
 
 Strictest-wins keys for v0.1 are scoped to the profile-body domain only — the
 config-layer keys like ``security.*`` and ``hooks.fail_closed`` belong to the
-layered-config merge in :mod:`eawf.config.layered`. The only profile-body
+layered-config merge in :mod:`eawf.kernel.config.layered`. The only profile-body
 strictest-wins rule shipped in W02 is ``instrument_requirements[].kind``:
 ``hard`` always overrides ``soft``.
 
@@ -85,7 +85,7 @@ ConflictResolution = Literal["fail", "first-wins"]
 # safety policy keys (``security.*``, ``hooks.fail_closed``,
 # ``vcs.protected_branches``, ``acceptance.required_before_ship``) live on
 # the config layers, not on profile bodies, and are merged by
-# :mod:`eawf.config.layered`.
+# :mod:`eawf.kernel.config.layered`.
 STRICTEST_KEYS: Final[tuple[str, ...]] = ("instrument_requirements[].kind",)
 
 

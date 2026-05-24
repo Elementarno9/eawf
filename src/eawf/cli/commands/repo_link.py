@@ -26,11 +26,11 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.commands.repo import repo_app
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
+from eawf.kernel.state.enums import ProjectStatus
+from eawf.kernel.state.ids import is_project_code
+from eawf.kernel.state.urn import build as build_urn
+from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.lock import portalock
-from eawf.state.enums import ProjectStatus
-from eawf.state.ids import is_project_code
-from eawf.state.urn import build as build_urn
-from eawf.state.writer import atomic_write_json_locked
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ def _attach_repo_to_workspace_payload(
     project_code_on_repo: str,
 ) -> None:
     """Append the new repo ref to *ws_payload*'s workspace section in place."""
-    from eawf.state.models import WorkspaceIndex, WorkspaceRepoRef
+    from eawf.kernel.state.models import WorkspaceIndex, WorkspaceRepoRef
 
     new_ref = WorkspaceRepoRef(
         code=repo_code,
@@ -163,7 +163,7 @@ def _validate_link_payload(payload: dict[str, Any], *, label: str, flags: Global
         typer.Exit: via :func:`emit_error` when the payload fails strict
             validation.
     """
-    from eawf.validate.strict import validate_state
+    from eawf.kernel.validate.strict import validate_state
 
     report = validate_state(payload, strict_optional=False)
     if report.state is None:

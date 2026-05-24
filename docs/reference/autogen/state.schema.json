@@ -195,7 +195,7 @@
     },
     "Artifact": {
       "additionalProperties": false,
-      "description": "Tracked artifact (file/blob/external).\n\n``kind`` is a free-form string in v0.3 but the canonical vocabulary is\npinned by :class:`~eawf.state.enums.ArtifactKind` (P14-W11 / B059).\nCallers that already speak the canonical vocabulary can pass an\n:class:`ArtifactKind` member directly; Pydantic coerces it to the\nunderlying string value on serialisation. The strict-enum tightening\nlands in v0.4 once every internal caller is migrated.",
+      "description": "Tracked artifact (file/blob/external).\n\n``kind`` is a free-form string in v0.3 but the canonical vocabulary is\npinned by :class:`~eawf.kernel.state.enums.ArtifactKind` (P14-W11 / B059).\nCallers that already speak the canonical vocabulary can pass an\n:class:`ArtifactKind` member directly; Pydantic coerces it to the\nunderlying string value on serialisation. The strict-enum tightening\nlands in v0.4 once every internal caller is migrated.",
       "properties": {
         "created_at": {
           "format": "date-time",
@@ -710,7 +710,7 @@
       "type": "object"
     },
     "DispatchNote": {
-      "description": "Reason annotating a dispatch transition on a wave's session table.\n\nAttached to :class:`~eawf.state.models.DispatchAnnotation` rows in\n``Wave.dispatch_history``. The values are stable wire identifiers; the\nfresh-dispatch path emits :attr:`FRESH_DISPATCH`, the V8 ``--continue``\nhappy path emits :attr:`CONTINUE_FROM_SESSION`, V8 fallback emits\n:attr:`CONTINUE_FAILED_FELL_BACK_TO_FRESH`, V5 runtime fallback emits\n:attr:`SWITCH_ON_ERROR`, and operator-driven manual swaps emit\n:attr:`SWITCH_MANUAL`.",
+      "description": "Reason annotating a dispatch transition on a wave's session table.\n\nAttached to :class:`~eawf.kernel.state.models.DispatchAnnotation` rows in\n``Wave.dispatch_history``. The values are stable wire identifiers; the\nfresh-dispatch path emits :attr:`FRESH_DISPATCH`, the V8 ``--continue``\nhappy path emits :attr:`CONTINUE_FROM_SESSION`, V8 fallback emits\n:attr:`CONTINUE_FAILED_FELL_BACK_TO_FRESH`, V5 runtime fallback emits\n:attr:`SWITCH_ON_ERROR`, and operator-driven manual swaps emit\n:attr:`SWITCH_MANUAL`.",
       "enum": [
         "fresh_dispatch",
         "continue_from_session",
@@ -1230,7 +1230,7 @@
     },
     "McpGrant": {
       "additionalProperties": false,
-      "description": "Scope-binding between an MCP server and a wave/profile/global scope.\n\nA grant is the projection key the dispatcher uses to compute\n``allowed_tools`` for a runtime: when the dispatched wave matches\n``scope_kind=\"wave\"`` / ``scope_id=<wave_id>`` (or a broader scope),\nthe grant's ``server_id`` contributes ``mcp__<server_id>__*`` to the\nSDK envelope's allowed-tools list. ``server_id`` MUST reference an\nentry in :attr:`State.mcp_servers`; the referential check lives in\n:func:`eawf.validate.invariants.check_mcp_grant_server_ref` and emits\n``INV.REF.MCP_GRANT_SERVER_MISSING`` when the reference dangles.\n\nThe ``id`` field follows the ``GRANT-<n>`` convention (verified by\n:mod:`tests.unit.test_state_mcp_grant_model`); it is otherwise an\n:data:`IdStr` so the schema-level pattern stays additive and the\nconvention can evolve without a schema break.",
+      "description": "Scope-binding between an MCP server and a wave/profile/global scope.\n\nA grant is the projection key the dispatcher uses to compute\n``allowed_tools`` for a runtime: when the dispatched wave matches\n``scope_kind=\"wave\"`` / ``scope_id=<wave_id>`` (or a broader scope),\nthe grant's ``server_id`` contributes ``mcp__<server_id>__*`` to the\nSDK envelope's allowed-tools list. ``server_id`` MUST reference an\nentry in :attr:`State.mcp_servers`; the referential check lives in\n:func:`eawf.kernel.validate.invariants.check_mcp_grant_server_ref` and emits\n``INV.REF.MCP_GRANT_SERVER_MISSING`` when the reference dangles.\n\nThe ``id`` field follows the ``GRANT-<n>`` convention (verified by\n:mod:`tests.unit.test_state_mcp_grant_model`); it is otherwise an\n:data:`IdStr` so the schema-level pattern stays additive and the\nconvention can evolve without a schema break.",
       "properties": {
         "granted_at": {
           "format": "date-time",
@@ -1367,7 +1367,7 @@
     },
     "MemorySummary": {
       "additionalProperties": false,
-      "description": "Memory entry summary (full text in memory.jsonl).\n\n``promoted_to_artifact_id`` mirrors the corresponding field on\n:class:`~eawf.store.kinds.memory.MemoryPayload`: when an entry is\ncanonised into a durable artifact (a :class:`Decision` in v0.1) the cache\nsurface carries the artifact ID so ``memory list`` / ``memory view`` can\nsurface it without replaying the JSONL.",
+      "description": "Memory entry summary (full text in memory.jsonl).\n\n``promoted_to_artifact_id`` mirrors the corresponding field on\n:class:`~eawf.kernel.store.kinds.memory.MemoryPayload`: when an entry is\ncanonised into a durable artifact (a :class:`Decision` in v0.1) the cache\nsurface carries the artifact ID so ``memory list`` / ``memory view`` can\nsurface it without replaying the JSONL.",
       "properties": {
         "confidence": {
           "$ref": "#/$defs/Confidence"

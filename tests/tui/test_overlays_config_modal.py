@@ -4,8 +4,8 @@ Covers the registry-driven tabbed config overlay after the
 Enter-as-sole-mutator redesign (P26-I02-W01):
 
 * **registry coverage** — the modal renders a tab per
-  :func:`~eawf.config.registry.tabs_sorted` and a field row per
-  :func:`~eawf.config.registry.keys_for_tab`, so a dropped registry key
+  :func:`~eawf.kernel.config.registry.tabs_sorted` and a field row per
+  :func:`~eawf.kernel.config.registry.keys_for_tab`, so a dropped registry key
   fails the coverage test (the modal cannot hardcode a subset).
 * **keymap** — ``↑`` / ``↓`` move the field cursor (clamped to the first /
   last field of the active tab); ``←`` / ``→`` switch tabs; ``Enter`` is
@@ -31,7 +31,7 @@ from typing import Any
 from textual.widgets import Input, Static, TabbedContent
 
 from eawf.cli.errors import UserError
-from eawf.config.registry import (
+from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     LEAF_KEY_REGISTRY,
     ConfigKey,

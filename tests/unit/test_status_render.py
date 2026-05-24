@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from eawf.cli.commands import status as status_mod
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
     AuditKind,
@@ -30,7 +30,7 @@ from eawf.state.enums import (
     ScopeKind,
     WaveStatus,
 )
-from eawf.state.models import (
+from eawf.kernel.state.models import (
     AgentSession,
     Audit,
     CurrentPointers,

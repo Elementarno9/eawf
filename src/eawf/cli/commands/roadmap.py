@@ -46,7 +46,7 @@ from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
-from eawf.state.enums import (
+from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
     IterStatus,
@@ -54,10 +54,10 @@ from eawf.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.state.ids import is_iter_id, is_phase_id, is_wave_id
+from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
 
 if TYPE_CHECKING:
-    from eawf.state.models import Iter, Phase, State
+    from eawf.kernel.state.models import Iter, Phase, State
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +89,10 @@ def _append_roadmap_event(
     :func:`state_transaction` block so the EVENT precedes the
     ``state.json`` write under the same sibling-lock window.
     """
-    from eawf.store.append import append_envelope
-    from eawf.store.envelope import Envelope
-    from eawf.store.kinds.event import EventPayload
-    from eawf.store.paths import store_path
+    from eawf.kernel.store.append import append_envelope
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.event import EventPayload
+    from eawf.kernel.store.paths import store_path
 
     args_blob = orjson.dumps(args, option=orjson.OPT_SORT_KEYS)
     args_hash = hashlib.sha256(args_blob).hexdigest()[:16]

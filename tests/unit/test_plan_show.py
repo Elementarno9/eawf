@@ -16,6 +16,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from eawf.kernel.state.models import State
 from eawf.render.plan_view import (
     PlanSection,
     PlanViewNotFound,
@@ -23,7 +24,6 @@ from eawf.render.plan_view import (
     render_json,
     render_markdown,
 )
-from eawf.state.models import State
 
 _GOLDEN_STATE_PATH = (
     Path(__file__).resolve().parents[1]

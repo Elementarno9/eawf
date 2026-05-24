@@ -13,6 +13,8 @@ from typing import get_args
 
 import pytest
 
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtimes.adapter import (
     ALL_ERROR_CLASSES,
     DispatchEventKind,
@@ -24,8 +26,6 @@ from eawf.runtimes.adapter import (
 from eawf.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtimes.codex.adapter import CodexAdapter
 from eawf.runtimes.opencode.adapter import OpenCodeAdapter
-from eawf.state.enums import WaveStatus
-from eawf.state.models import SessionAttempt, Wave
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -318,7 +318,7 @@ def test_emit_runtime_event_round_trips_through_json() -> None:
     )
     s = ev.model_dump_json()
     # Re-validate through the canonical Event model (D14 / XB07 — single source of truth).
-    from eawf.store.kinds.event import Event
+    from eawf.kernel.store.kinds.event import Event
 
     reloaded = Event.model_validate_json(s)
     assert reloaded == ev

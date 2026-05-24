@@ -10,8 +10,8 @@ The suite has three planes:
 
 1. **Routing** — with ``daemon.proxy_enabled=True`` + a reachable daemon,
    each routed verb marshals one typed
-   :class:`~eawf.state.mutations.Mutation` of the correct
-   :class:`~eawf.state.mutations.MutationKind` across ``state.mutate``;
+   :class:`~eawf.kernel.state.mutations.Mutation` of the correct
+   :class:`~eawf.kernel.state.mutations.MutationKind` across ``state.mutate``;
    the in-process fallback does NOT run.
 2. **Registry** — the verb→kind table the routing test parametrises is
    pinned against the daemon's apply registry so a kind can never be
@@ -35,7 +35,7 @@ from typer.testing import CliRunner
 
 from eawf.cli import _dispatch
 from eawf.cli.app import app
-from eawf.state.mutations import MutationKind
+from eawf.kernel.state.mutations import MutationKind
 
 pytestmark = pytest.mark.unit
 
@@ -310,7 +310,7 @@ def test_injected_crash_leaves_no_phantom_event(
     def _fail_append(*_args: object, **_kwargs: object) -> None:
         raise OSError("simulated event store failure")
 
-    monkeypatch.setattr("eawf.store.append.append_envelope", _fail_append)
+    monkeypatch.setattr("eawf.kernel.store.append.append_envelope", _fail_append)
 
     # Daemonless (bootstrap env still set) → the in-process path runs.
     res = runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S-crash"])
@@ -336,7 +336,7 @@ def test_next_mutation_reissues_applied_event_after_crash(
     exactly once. Before W32 this row was lost — the ``.pending`` record
     it used to leave got poisoned, diverging state from the event log.
     """
-    from eawf.store import append as append_module
+    from eawf.kernel.store import append as append_module
 
     _bootstrap_to_pending_wave(workspace)
 
@@ -349,7 +349,7 @@ def test_next_mutation_reissues_applied_event_after_crash(
             raise OSError("simulated event store failure (first append only)")
         real_append(*args, **kwargs)
 
-    monkeypatch.setattr("eawf.store.append.append_envelope", _flaky_append)
+    monkeypatch.setattr("eawf.kernel.store.append.append_envelope", _flaky_append)
 
     # First claim: state lands, mark_applied runs, event append crashes.
     res1 = runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S-1"])
