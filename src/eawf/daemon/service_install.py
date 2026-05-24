@@ -25,6 +25,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -178,9 +179,45 @@ def _systemd_unit_path() -> Path:
     return base / _SYSTEMD_UNIT_NAME
 
 
+def _invoking_uid() -> int:
+    """Return the uid of the user who invoked the install.
+
+    Resolves to ``SUDO_UID`` when present (the verb was run via
+    ``sudo`` so ``os.getuid()`` would report root's 0) and falls back
+    to the live ``os.getuid()`` otherwise. A user LaunchAgent under
+    ``~/Library/LaunchAgents`` must bootstrap into the invoking user's
+    ``gui/<uid>`` domain, never root's, so a resolved uid of 0 is a
+    hard error.
+
+    Returns:
+        The invoking user's numeric uid.
+
+    Raises:
+        ServiceInstallError: When the resolved uid is 0 (running as
+            root with no ``SUDO_UID`` to recover the real user).
+    """
+    uid = int(os.environ.get("SUDO_UID") or os.getuid())
+    if uid == 0:
+        raise ServiceInstallError(
+            "refusing to install user LaunchAgent as root; run as your normal user"
+        )
+    return uid
+
+
 def _launchd_plist_path() -> Path:
-    """Return the install path for the launchd LaunchAgent plist."""
-    base = Path.home() / "Library" / "LaunchAgents"
+    """Return the install path for the launchd LaunchAgent plist.
+
+    Derives the LaunchAgents base from the invoking user's home so the
+    plist location agrees with the ``gui/<uid>`` domain target even
+    under ``sudo -E`` (where ``HOME`` may be the real user's but the
+    euid is root's).
+
+    Raises:
+        ServiceInstallError: When the invoking uid resolves to root
+            (delegated to :func:`_invoking_uid`).
+    """
+    uid = _invoking_uid()
+    base = Path(pwd.getpwuid(uid).pw_dir) / "Library" / "LaunchAgents"
     return base / f"{_LAUNCHD_LABEL}.plist"
 
 
@@ -319,8 +356,13 @@ def _status_systemd() -> ServiceStatus:
 
 
 def _launchd_uid_target() -> str:
-    """Return the ``gui/<uid>`` domain target for the current user."""
-    return f"gui/{os.getuid()}"
+    """Return the ``gui/<uid>`` domain target for the invoking user.
+
+    Raises:
+        ServiceInstallError: When the invoking uid resolves to root
+            (delegated to :func:`_invoking_uid`).
+    """
+    return f"gui/{_invoking_uid()}"
 
 
 def _enable_launchd() -> ServiceEnvelope:
@@ -332,6 +374,12 @@ def _enable_launchd() -> ServiceEnvelope:
     logger.info(f"_enable_launchd wrote plist={plist_path}")
 
     uid_target = _launchd_uid_target()
+    # Tear down any already-loaded instance first: re-running bootstrap
+    # against a loaded agent fails rc=5 (EIO, "already bootstrapped"),
+    # and the bootout also picks up plist changes (e.g. updated
+    # ProgramArguments) on upgrade. The non-zero "not loaded" exit on a
+    # fresh install is expected and swallowed.
+    _run(["launchctl", "bootout", f"{uid_target}/{_LAUNCHD_LABEL}"], check=False)
     _run(["launchctl", "bootstrap", uid_target, str(plist_path)])
     _run(["launchctl", "enable", f"{uid_target}/{_LAUNCHD_LABEL}"])
     _run(["launchctl", "kickstart", f"{uid_target}/{_LAUNCHD_LABEL}"])

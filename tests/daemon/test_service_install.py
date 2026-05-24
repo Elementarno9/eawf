@@ -203,6 +203,38 @@ def test_enable_service_linux_times_out_when_pid_file_absent(
 # ---------------------------------------------------------------------
 
 
+class _FakePwRecord:
+    """Minimal stand-in for :class:`pwd.struct_passwd`."""
+
+    def __init__(self, pw_dir: str) -> None:
+        self.pw_dir = pw_dir
+
+
+def _stub_invoking_user(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    uid: int,
+    sudo_uid: str | None,
+    home: Path,
+) -> None:
+    """Pin the invoking-uid resolution deterministically.
+
+    Sets ``os.getuid`` → *uid*, manages ``SUDO_UID`` per *sudo_uid*
+    (``None`` deletes it so a stray real env var cannot leak in), and
+    redirects ``pwd.getpwuid`` to a fake record so the LaunchAgents
+    home is derived from *home* and never a real user path.
+    """
+    monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: uid)
+    if sudo_uid is None:
+        monkeypatch.delenv("SUDO_UID", raising=False)
+    else:
+        monkeypatch.setenv("SUDO_UID", sudo_uid)
+    monkeypatch.setattr(
+        "eawf.daemon.service_install.pwd.getpwuid",
+        lambda _uid: _FakePwRecord(str(home)),
+    )
+
+
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launchd path")
 def test_enable_service_macos_renders_plist_and_invokes_launchctl(
     monkeypatch: pytest.MonkeyPatch,
@@ -212,10 +244,15 @@ def test_enable_service_macos_renders_plist_and_invokes_launchctl(
     """``enable_service`` writes the plist + runs the expected commands."""
     recorder = _install_run_recorder(
         monkeypatch,
-        responses=[_StubProcess(), _StubProcess(), _StubProcess()],
+        responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
     )
     _seed_pid_file(stub_runtime_dir, pid=11111)
-    monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    _stub_invoking_user(
+        monkeypatch,
+        uid=501,
+        sudo_uid=None,
+        home=stub_launchd_plist.parent,
+    )
 
     envelope = enable_service()
 
@@ -230,17 +267,101 @@ def test_enable_service_macos_renders_plist_and_invokes_launchctl(
     assert "<key>Label</key>" in body
     assert "<string>dev.eawf.eawfd</string>" in body
 
-    assert recorder.calls[0][:3] == ["launchctl", "bootstrap", "gui/501"]
-    assert recorder.calls[1] == [
+    assert recorder.calls[0] == [
+        "launchctl",
+        "bootout",
+        "gui/501/dev.eawf.eawfd",
+    ]
+    assert recorder.calls[1][:3] == ["launchctl", "bootstrap", "gui/501"]
+    assert recorder.calls[2] == [
         "launchctl",
         "enable",
         "gui/501/dev.eawf.eawfd",
     ]
-    assert recorder.calls[2] == [
+    assert recorder.calls[3] == [
         "launchctl",
         "kickstart",
         "gui/501/dev.eawf.eawfd",
     ]
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launchd path")
+def test_enable_service_macos_uses_sudo_uid_when_run_as_root(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_runtime_dir: Path,
+    tmp_path: Path,
+) -> None:
+    """Under sudo (getuid==0) the invoking SUDO_UID drives domain + home."""
+    fake_home = tmp_path / "fake-home-501"
+    plist_path = fake_home / "Library" / "LaunchAgents" / "dev.eawf.eawfd.plist"
+    # Exercise the real _launchd_plist_path so the home derivation is
+    # what's under test; do not stub it here.
+    recorder = _install_run_recorder(
+        monkeypatch,
+        responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
+    )
+    _seed_pid_file(stub_runtime_dir, pid=22222)
+    _stub_invoking_user(
+        monkeypatch,
+        uid=0,
+        sudo_uid="501",
+        home=fake_home,
+    )
+
+    envelope = enable_service()
+
+    assert envelope.platform == "darwin"
+    assert envelope.pid == 22222
+    assert plist_path.exists()
+    assert recorder.calls[1][:3] == ["launchctl", "bootstrap", "gui/501"]
+    assert recorder.calls[1][3] == str(plist_path)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launchd path")
+def test_enable_service_macos_refuses_root_without_sudo_uid(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_runtime_dir: Path,
+    stub_launchd_plist: Path,
+) -> None:
+    """getuid==0 with no SUDO_UID fails fast before touching launchctl."""
+    _install_run_recorder(monkeypatch)
+    _stub_invoking_user(
+        monkeypatch,
+        uid=0,
+        sudo_uid=None,
+        home=stub_launchd_plist.parent,
+    )
+
+    with pytest.raises(ServiceInstallError, match="root"):
+        service_install._launchd_uid_target()
+
+    with pytest.raises(ServiceInstallError, match="root"):
+        service_install._enable_launchd()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launchd path")
+def test_enable_service_macos_boots_out_before_bootstrap(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_runtime_dir: Path,
+    stub_launchd_plist: Path,
+) -> None:
+    """Idempotent enable issues bootout BEFORE bootstrap in argv order."""
+    recorder = _install_run_recorder(
+        monkeypatch,
+        responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
+    )
+    _seed_pid_file(stub_runtime_dir, pid=33333)
+    _stub_invoking_user(
+        monkeypatch,
+        uid=501,
+        sudo_uid=None,
+        home=stub_launchd_plist.parent,
+    )
+
+    service_install._enable_launchd()
+
+    verbs = [call[1] for call in recorder.calls if call[0] == "launchctl"]
+    assert verbs.index("bootout") < verbs.index("bootstrap")
 
 
 # ---------------------------------------------------------------------
@@ -297,6 +418,7 @@ def test_disable_service_macos_idempotent_when_plist_absent(
         ],
     )
     monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    monkeypatch.delenv("SUDO_UID", raising=False)
     assert not stub_launchd_plist.exists()
 
     envelope = disable_service()
@@ -391,6 +513,7 @@ def test_service_status_macos_running(
     stub_launchd_plist.parent.mkdir(parents=True, exist_ok=True)
     stub_launchd_plist.write_text("<plist/>", encoding="utf-8")
     monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    monkeypatch.delenv("SUDO_UID", raising=False)
     _install_run_recorder(
         monkeypatch,
         responses=[
@@ -410,6 +533,7 @@ def test_service_status_macos_not_installed(
 ) -> None:
     """Missing plist ⇒ ``NOT_INSTALLED``."""
     monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    monkeypatch.delenv("SUDO_UID", raising=False)
     _install_run_recorder(monkeypatch)
     assert service_status() == ServiceStatus.NOT_INSTALLED
 
