@@ -37,7 +37,6 @@ from eawf.tui.widgets.roadmap_tree import (
     PHASE_GLYPHS,
     WAVE_GLYPHS,
     RoadmapTree,
-    _completion_counter_width,
     _pin_bar_right,
     _truncate_body,
     _wave_completion,
@@ -902,21 +901,6 @@ def test_bar_flush_right_long_title() -> None:
     asyncio.run(body())
 
 
-def test_completion_counter_width_widest_across_phase_and_iters() -> None:
-    """The shared counter width is the widest ``closed/total`` over all rows."""
-    state = _state_mixed_digit_counters()
-    # Iter one -> ``5/5`` (3), iter two -> ``12/12`` (5), phase -> ``17/17`` (5).
-    assert _completion_counter_width(state) == len("12/12")
-
-
-def test_completion_counter_width_zero_when_no_counters() -> None:
-    """An iter with no resolvable waves renders EMPTY_STATE — width is zero."""
-    state = _load(_PHASE_ITER_WAVE)
-    state.iters["P01-I01"].wave_ids.clear()
-    state.phases["P01"].iter_ids.clear()
-    assert _completion_counter_width(state) == 0
-
-
 def _bar_glyph_start(label: str) -> int:
     """Return the column index where a completion bar's glyph run begins.
 
@@ -963,17 +947,16 @@ def test_mixed_digit_iter_bars_align_in_column() -> None:
             assert _bar_glyph_start(iter_one) == _bar_glyph_start(iter_two)
             assert len(iter_one) == len(iter_two)
             # The counter field starts in the same column: a fixed gap of
-            # ``_BAR_GAP`` cells follows the constant-width glyph run, so the
-            # counter (right-padded ``  5/5`` vs full ``12/12``) occupies the
-            # identical column span on both rows.
+            # ``_BAR_GAP`` cells follows the constant-width glyph run, so both
+            # counters right-align into the same fixed 7-cell field on each row.
             glyph_end_one = _bar_glyph_start(iter_one) + COMPLETION_BAR_CELLS
             glyph_end_two = _bar_glyph_start(iter_two) + COMPLETION_BAR_CELLS
             assert glyph_end_one == glyph_end_two
             counter_field_one = iter_one[glyph_end_one + _BAR_GAP :]
             counter_field_two = iter_two[glyph_end_two + _BAR_GAP :]
             assert len(counter_field_one) == len(counter_field_two)  # same field width
-            assert counter_field_one == "  5/5"  # right-aligned in the 5-wide field
-            assert counter_field_two == "12/12"  # widest counter fills the field
+            assert counter_field_one == "    5/5"  # right-aligned in the 7-wide field
+            assert counter_field_two == "  12/12"  # right-aligned in the 7-wide field
 
     asyncio.run(body())
 

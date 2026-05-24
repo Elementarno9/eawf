@@ -160,23 +160,23 @@ def test_eu_bar_set_eu_updates_reactives() -> None:
 
 def test_render_completion_bar_zero_done_all_empty() -> None:
     bar = render_completion_bar(0, 6)
-    assert bar == f"{GLYPH_EMPTY * 10}  0/6"
+    assert bar == f"{GLYPH_EMPTY * 10}      0/6"
 
 
 def test_render_completion_bar_full_when_done_equals_total() -> None:
     bar = render_completion_bar(6, 6)
-    assert bar == f"{GLYPH_FULL * 10}  6/6"
+    assert bar == f"{GLYPH_FULL * 10}      6/6"
 
 
 def test_render_completion_bar_clamps_done_over_total() -> None:
     # done > total clamps both the fill and the count suffix to total.
     bar = render_completion_bar(9, 6)
-    assert bar == f"{GLYPH_FULL * 10}  6/6"
+    assert bar == f"{GLYPH_FULL * 10}      6/6"
 
 
 def test_render_completion_bar_clamps_negative_done_to_zero() -> None:
     bar = render_completion_bar(-3, 6)
-    assert bar == f"{GLYPH_EMPTY * 10}  0/6"
+    assert bar == f"{GLYPH_EMPTY * 10}      0/6"
 
 
 def test_render_completion_bar_zero_total_empty_state() -> None:
@@ -189,7 +189,7 @@ def test_render_completion_bar_negative_total_empty_state() -> None:
 
 def test_render_completion_bar_half_ratio_fills_half() -> None:
     bar = render_completion_bar(3, 6)
-    assert bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}  3/6"
+    assert bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}      3/6"
     # 3/6 == 0.5 over a 10-cell bar -> exactly 5 filled cells.
     fraction = 3 / 6
     assert fraction == pytest.approx(0.5)
@@ -197,42 +197,41 @@ def test_render_completion_bar_half_ratio_fills_half() -> None:
 
 def test_render_completion_bar_custom_width() -> None:
     bar = render_completion_bar(1, 4, width=4)
-    assert bar == f"{GLYPH_FULL * 1}{GLYPH_EMPTY * 3}  1/4"
+    assert bar == f"{GLYPH_FULL * 1}{GLYPH_EMPTY * 3}      1/4"
 
 
-def test_render_completion_bar_counter_width_zero_preserves_legacy_format() -> None:
-    # counter_width=0 (the default) keeps the natural-width counter so the
-    # string is byte-for-byte the pre-W11 rendering.
-    explicit = render_completion_bar(3, 6, counter_width=0)
-    assert explicit == render_completion_bar(3, 6)
-    assert explicit == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}  3/6"
+def test_render_completion_bar_counter_right_aligned_fixed_field() -> None:
+    # The whole ``done/total`` counter is right-aligned into a fixed 7-cell
+    # field (``###/###``), so a 3-char counter carries four leading pads.
+    bar = render_completion_bar(6, 6)
+    assert bar == f"{GLYPH_FULL * 10}      6/6"
+    assert bar.endswith("      6/6")
+    counter = bar.removeprefix(GLYPH_FULL * 10).lstrip(" ")
+    assert bar.endswith(counter.rjust(7))
 
 
-def test_render_completion_bar_counter_width_right_aligns_counter() -> None:
-    # A 5-wide counter field right-aligns the 3-char ``6/6`` counter, so two
-    # leading spaces pad it into the fixed field.
-    bar = render_completion_bar(6, 6, counter_width=5)
-    assert bar == f"{GLYPH_FULL * 10}    6/6"  # ``  6/6`` right-aligned in 5
-    assert bar.endswith("  6/6")
-
-
-def test_render_completion_bar_counter_width_constant_length_across_digit_widths() -> None:
-    # Mixed-digit counters (6/6, 17/17, 21/21) all render to the same total
-    # length when the same counter_width is passed — the alignment contract.
-    widest = max(len(f"{n}/{n}") for n in (6, 17, 21))  # ``17/17`` -> 5
-    bars = [render_completion_bar(n, n, counter_width=widest) for n in (6, 17, 21)]
+def test_render_completion_bar_counter_constant_length_across_digit_widths() -> None:
+    # Mixed-digit counters (6/6, 12/12, 17/17) right-align into the same
+    # fixed field, so every bar is the same total length — the alignment
+    # contract that keeps the counters column-aligned.
+    bars = [render_completion_bar(n, n) for n in (6, 12, 17)]
     lengths = {len(b) for b in bars}
     assert len(lengths) == 1  # every bar is the same length
-    # The glyph run width is constant, so the counter starts in the same
-    # column on every row; the widest counter fills its field exactly.
-    assert bars[1].endswith(" 17/17")  # 5-wide field, one leading pad
-    for bar in bars:
-        assert bar.endswith(("6/6", "17/17", "21/21"))
+    assert bars[0].endswith("      6/6")  # 3-char counter, four leading pads
+    assert bars[1].endswith("  12/12")  # 5-char counter, two leading pads
+    assert bars[2].endswith("  17/17")
 
 
-def test_render_completion_bar_counter_width_empty_state_unaffected() -> None:
-    # A non-positive total still yields EMPTY_STATE regardless of the field.
-    assert render_completion_bar(0, 0, counter_width=5) == EMPTY_STATE
+def test_render_completion_bar_counter_overflows_field_gracefully() -> None:
+    # A 4-digit total exceeds the 7-cell field; the width is a minimum so the
+    # counter overflows rather than truncating.
+    bar = render_completion_bar(1000, 1000)
+    assert bar.endswith("1000/1000")
+
+
+def test_render_completion_bar_empty_state_no_counter() -> None:
+    # A non-positive total still yields EMPTY_STATE — no counter field.
+    assert render_completion_bar(0, 0) == EMPTY_STATE
 
 
 # --------------------------------------------------------------------------
@@ -414,10 +413,10 @@ def test_render_eu_bar_plain_honours_mode() -> None:
 
 def test_render_completion_bar_honours_mode() -> None:
     braille = render_completion_bar(3, 6, mode="braille")
-    assert braille.endswith("  3/6")
+    assert braille.endswith("      3/6")
     assert _BRAILLE_FULL in braille
     ascii_bar = render_completion_bar(3, 6, mode="ascii")
-    assert ascii_bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}  3/6"
+    assert ascii_bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}      3/6"
 
 
 def test_render_completion_bar_empty_state_mode_independent() -> None:

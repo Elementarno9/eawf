@@ -283,40 +283,6 @@ def _phase_wave_ids(state: State, phase: Phase) -> list[str]:
     return wave_ids
 
 
-def _completion_counter_width(state: State) -> int:
-    """Return the widest ``closed/total`` counter string across all rows.
-
-    Walks every phase and iter that will render a completion bar and returns
-    the maximum ``len(f"{closed}/{total}")`` over them. The
-    :class:`RoadmapTree` threads this into :func:`render_completion_bar` as
-    ``counter_width`` so every completion bar is the same total width — the
-    glyph runs and counters then land in the same columns regardless of each
-    row's counter digit count. Rows whose total is ``0`` render
-    :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` (no counter) and so do not
-    contribute to the width.
-
-    Args:
-        state: The bound state holding the phase / iter / wave tables.
-
-    Returns:
-        The widest counter string width, or ``0`` when no row renders a
-        counter (an empty workspace, or every row at zero total).
-    """
-    widest = 0
-    for phase in state.phases.values():
-        closed, total = _wave_completion(state, _phase_wave_ids(state, phase))
-        if total > 0:
-            widest = max(widest, len(f"{closed}/{total}"))
-        for iter_id in phase.iter_ids:
-            iter_obj = state.iters.get(iter_id)
-            if iter_obj is None:
-                continue
-            i_closed, i_total = _wave_completion(state, list(iter_obj.wave_ids))
-            if i_total > 0:
-                widest = max(widest, len(f"{i_closed}/{i_total}"))
-    return widest
-
-
 def _truncate_body(body: str, budget: int) -> str:
     """Truncate *body* to *budget* cells, appending an ellipsis when cut.
 
@@ -534,10 +500,9 @@ class RoadmapTree(Tree[str]):
         self.root.remove_children()
         if state is None:
             return
-        counter_width = _completion_counter_width(state)
         for phase_id in sorted(state.phases):
             phase = state.phases[phase_id]
-            self._add_phase(state, phase, counter_width)
+            self._add_phase(state, phase)
         self._scroll_to_active_phase(state)
 
     def _scroll_to_active_phase(self, state: State) -> None:
@@ -562,15 +527,12 @@ class RoadmapTree(Tree[str]):
                 self.move_cursor(node)
                 return
 
-    def _add_phase(self, state: State, phase: Phase, counter_width: int) -> None:
+    def _add_phase(self, state: State, phase: Phase) -> None:
         """Add a phase node and recurse into its iters.
 
         Args:
             state: The bound state.
             phase: The phase to add.
-            counter_width: Fixed field width for the ``closed/total``
-                completion counter, so every completion bar in the tree is
-                the same width and the glyph runs / counters align in column.
         """
         glyph = _glyph_for(phase.status, PHASE_GLYPHS)
         closed, total = _wave_completion(state, _phase_wave_ids(state, phase))
@@ -579,7 +541,6 @@ class RoadmapTree(Tree[str]):
             total,
             width=COMPLETION_BAR_CELLS,
             mode=self._render_mode(),
-            counter_width=counter_width,
         )
         label = _pin_bar_right(
             glyph,
@@ -592,20 +553,15 @@ class RoadmapTree(Tree[str]):
         for iter_id in phase.iter_ids:
             iter_obj = state.iters.get(iter_id)
             if iter_obj is not None:
-                self._add_iter(state, node, iter_obj, counter_width)
+                self._add_iter(state, node, iter_obj)
 
-    def _add_iter(
-        self, state: State, parent: TreeNode[str], iter_obj: Iter, counter_width: int
-    ) -> None:
+    def _add_iter(self, state: State, parent: TreeNode[str], iter_obj: Iter) -> None:
         """Add an iter node (with a right-pinned completion bar) and its waves.
 
         Args:
             state: The bound state.
             parent: The phase node to attach under.
             iter_obj: The iter to add.
-            counter_width: Fixed field width for the ``closed/total``
-                completion counter (shared across the whole tree so bars
-                align in column).
         """
         glyph = _glyph_for(iter_obj.status, ITER_GLYPHS)
         closed, total = _wave_completion(state, list(iter_obj.wave_ids))
@@ -614,7 +570,6 @@ class RoadmapTree(Tree[str]):
             total,
             width=COMPLETION_BAR_CELLS,
             mode=self._render_mode(),
-            counter_width=counter_width,
         )
         label = _pin_bar_right(
             glyph,

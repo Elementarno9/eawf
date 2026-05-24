@@ -104,6 +104,13 @@ _BUCKET_CELLS: dict[str, int] = {
     "XL": 5,
 }
 
+#: Fixed field width for the right-aligned ``done/total`` completion
+#: counter — three digits, a slash, three digits (``###/###``). The whole
+#: counter is right-aligned into this field so every completion bar's
+#: counter lands in the same columns. The width is a minimum: a 4-digit
+#: total overflows the field gracefully rather than truncating.
+_COUNTER_FIELD_WIDTH: int = 7
+
 
 def _fill_cells(fraction: float) -> int:
     """Return the number of filled cells for *fraction* of the bar.
@@ -319,7 +326,6 @@ def render_completion_bar(
     *,
     width: int = 10,
     mode: RenderMode = DEFAULT_RENDER_MODE,
-    counter_width: int = 0,
 ) -> str:
     """Render a ``done / total`` completion ratio bar with a count suffix.
 
@@ -327,12 +333,11 @@ def render_completion_bar(
     child waves that are closed. Plain text only (no Rich markup) so the
     same string drops into a Rich-parsed tree label and into the modal.
 
-    When *counter_width* is positive the ``done/total`` counter is
-    right-aligned into a field of that width, so a set of bars rendered with
-    the same *counter_width* (and *width*) are all the same total length —
-    their glyph runs and counters line up in the same columns regardless of
-    each row's counter digit count. When *counter_width* is ``0`` (the
-    default) the counter is left at its natural width (back-compat).
+    The ``done/total`` counter is right-aligned into a fixed
+    :data:`_COUNTER_FIELD_WIDTH`-cell field (``###/###``), so every bar's
+    counter lands in the same columns regardless of each row's digit count.
+    The width is a minimum: a 4-digit total overflows the field gracefully
+    rather than truncating.
 
     Args:
         done: Completed child count (e.g. closed waves). Negative inputs
@@ -341,15 +346,11 @@ def render_completion_bar(
             entity with no children has no completion to show).
         width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
         mode: Active render mode (``"braille"`` or ``"ascii"``).
-        counter_width: Fixed field width for the right-aligned
-            ``done/total`` counter. ``0`` (the default) keeps the counter's
-            natural width.
 
     Returns:
-        A plain string of the form ``#####-----  3/6`` (50 %, 3 of 6
-        done), or :data:`EMPTY_STATE` when *total* is non-positive. With a
-        positive *counter_width* the counter is right-padded into a fixed
-        field (e.g. ``#####-----   3/6`` when *counter_width* is ``4``).
+        A plain string of the form ``#####-----      3/6`` (50 %, 3 of 6
+        done, counter right-aligned in a 7-cell field), or :data:`EMPTY_STATE`
+        when *total* is non-positive.
     """
     if total <= 0:
         return EMPTY_STATE
@@ -357,7 +358,7 @@ def render_completion_bar(
     fraction = done_clamped / total
     glyphs = _mode_glyphs(fraction, width=width, mode=mode)
     counter = f"{done_clamped}/{total}"
-    return f"{glyphs}  {counter:>{counter_width}}"
+    return f"{glyphs}  {counter:>{_COUNTER_FIELD_WIDTH}}"
 
 
 def render_size_bar(bucket: str, *, width: int = 5, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:

@@ -152,7 +152,7 @@ def test_phase_and_eu_cells_render_bars() -> None:
     )
     phase_cell = _phase_cell(row, mode="braille")
     eu_cell = _eu_cell(row, mode="braille")
-    assert "3/6" in phase_cell
+    assert "      3/6" in phase_cell  # counter right-aligned in a fixed 7-cell field
     # The EU bar is status-tinted markup, not the empty-state sentinel.
     assert "[" in eu_cell and "no data" not in eu_cell
 
