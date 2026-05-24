@@ -5067,6 +5067,18 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Wire real needs_user_pause push subscription when daemon push bus"
+    },
+    "B069": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-24T16:04:28.412680Z",
+      "description": null,
+      "id": "B069",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Recalibrate EU buckets vs actual elapsed_eu (actual ~8x bucket)"
     }
   },
   "current": {
@@ -7158,7 +7170,10 @@
         "P27-I04-W20",
         "P27-I04-W21",
         "P27-I04-W22",
-        "P27-I04-W23"
+        "P27-I04-W23",
+        "P27-I04-W24",
+        "P27-I04-W25",
+        "P27-I04-W26"
       ]
     },
     "P27-I05": {
@@ -7750,7 +7765,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T15:46:56.033417Z",
+  "updated_at": "2026-05-24T16:04:28.412680Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19722,6 +19737,107 @@
         "regression tests cover bundled+repo+missing paths"
       ],
       "title": "Resolve service templates from bundled wheel data dir",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/widgets/workspace_table.py",
+        "tests/tui/test_widgets_workspace_table.py"
+      ],
+      "id": "P27-I04-W24",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T16:04:20.129797Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "phase column renders active-phase id + phase-scoped closed/total",
+        "active phase resolved from repo_state (prefer current.phase_id else lone active; dash when none)",
+        "completion bar reflects phase-scoped fraction in braille and ascii",
+        "unit tests cover pointer/scan/none resolution and both render modes"
+      ],
+      "title": "Workspace phase column shows active phase + phase-scoped progress",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/scopes/user.py",
+        "src/eawf/tui/scopes/workspace.py",
+        "src/eawf/tui/scopes/__init__.py",
+        "tests/tui/test_scope_user.py",
+        "tests/tui/test_scope_workspace.py"
+      ],
+      "id": "P27-I04-W25",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T16:04:27.525738Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "repo-zoom machinery extracted into shared mixin reused by Workspace and User screens with no workspace behavior change",
+        "user-scope Enter and z mount the 2x2 repo quadrant scoped to selected repo state.json; Esc returns",
+        "dead RepoSelected->_open_detail path removed; repo code never routed to resolve_detail",
+        "footer hints updated to Enter zoom / Esc back / z zoom",
+        "Pilot test asserts Enter mounts quadrant and no DetailModal; awaits workers"
+      ],
+      "title": "User-scope Enter zooms into focused repo via shared zoom mixin",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/widgets/status_pane.py",
+        "tests/tui/test_widgets_status_pane.py"
+      ],
+      "id": "P27-I04-W26",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T16:04:27.987488Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "_effort_eu denominator = live sum of BUCKET_EU over all active-phase waves with a bucket (any status)",
+        "EFFORT scope changed iter to phase to match LIFECYCLE; effort velocity and eta phase-scoped",
+        "numerator = sum elapsed_eu over actuals in phase wave scope",
+        "no-bucket waves contribute 0 to denominator (documented)",
+        "unit tests cover bucket aggregation with pending waves and phase-scope across iters and no-bucket and no-active-phase"
+      ],
+      "title": "Phase-scope EFFORT block; live-aggregate estimate from wave buckets",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
