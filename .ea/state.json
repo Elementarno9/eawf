@@ -3419,6 +3419,16 @@
       "scope_id": "P27-I04-W31",
       "status": "done",
       "updated_at": "2026-05-24T18:29:39.437996Z"
+    },
+    "P27-I05-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W01-close-20260524T185258Z",
+      "elapsed_eu": 36.02,
+      "id": "ACT-P27-I05-W01",
+      "scope_id": "P27-I05-W01",
+      "status": "done",
+      "updated_at": "2026-05-24T18:52:58.354422Z"
     }
   },
   "agent_sessions": {
@@ -5187,7 +5197,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P27-I05",
     "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6601,6 +6611,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I04-W31",
       "updated_at": "2026-05-24T18:28:40.963835Z"
+    },
+    "P27-I05-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W01-bucket-20260524T185051Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W01",
+      "updated_at": "2026-05-24T18:50:51.632122Z"
     }
   },
   "goals": {
@@ -7394,7 +7417,7 @@
       "id": "P27-I05",
       "opened_at": "2026-05-24T00:52:30.210157Z",
       "phase_id": "P27",
-      "status": "planned",
+      "status": "active",
       "title": "package hygiene + backlog rollout + layered regroup",
       "wave_ids": [
         "P27-I05-W01",
@@ -7978,7 +8001,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T18:43:58.903540Z",
+  "updated_at": "2026-05-24T18:52:58.354951Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20220,9 +20243,9 @@
     "P27-I05-W01": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T18:52:58.354422Z",
+      "commit": "ddadbbc1bde83bd586836f3238cd223e388001c6",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20234,10 +20257,10 @@
       "id": "P27-I05-W01",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:52:30.722979Z",
-      "outcome": null,
+      "outcome": "source-map doc added; README links it; pre-commit clean; doc-verify autogen/cross_check=0",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "source-map lists every top-level package and entry points; doc-verify passes; README links it"
       ],
