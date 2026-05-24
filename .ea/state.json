@@ -3339,6 +3339,36 @@
       "scope_id": "P27-I04-W23",
       "status": "done",
       "updated_at": "2026-05-24T15:46:56.032908Z"
+    },
+    "P27-I04-W24": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W24-close-20260524T163214Z",
+      "elapsed_eu": 0.93,
+      "id": "ACT-P27-I04-W24",
+      "scope_id": "P27-I04-W24",
+      "status": "done",
+      "updated_at": "2026-05-24T16:32:14.325948Z"
+    },
+    "P27-I04-W25": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W25-close-20260524T163214Z",
+      "elapsed_eu": 0.93,
+      "id": "ACT-P27-I04-W25",
+      "scope_id": "P27-I04-W25",
+      "status": "done",
+      "updated_at": "2026-05-24T16:32:14.870886Z"
+    },
+    "P27-I04-W26": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W26-close-20260524T163215Z",
+      "elapsed_eu": 0.93,
+      "id": "ACT-P27-I04-W26",
+      "scope_id": "P27-I04-W26",
+      "status": "done",
+      "updated_at": "2026-05-24T16:32:15.387315Z"
     }
   },
   "agent_sessions": {
@@ -5085,11 +5115,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I04-W24",
-      "P27-I04-W25",
-      "P27-I04-W26"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -7808,7 +7834,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T16:20:02.636106Z",
+  "updated_at": "2026-05-24T16:32:15.387596Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19788,8 +19814,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p27i04-w24",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T16:32:14.325948Z",
+      "commit": "4992a63752f766162469cf06a0a1358ceb452569",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19801,10 +19827,10 @@
       "id": "P27-I04-W24",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T16:04:20.129797Z",
-      "outcome": null,
+      "outcome": "phase column shows active phase id + that phase's wave progress (active_phase_completion helper)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "phase column renders active-phase id + phase-scoped closed/total",
         "active phase resolved from repo_state (prefer current.phase_id else lone active; dash when none)",
@@ -19820,8 +19846,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p27i04-w25",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T16:32:14.870886Z",
+      "commit": "1eeff372a933d0eb6d7da57d02f986528471d1c5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19836,10 +19862,10 @@
       "id": "P27-I04-W25",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T16:04:27.525738Z",
-      "outcome": null,
+      "outcome": "user-scope Enter/z zooms repo into 2x2 quadrant via shared RepoZoomMixin (no empty DetailModal)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "repo-zoom machinery extracted into shared mixin reused by Workspace and User screens with no workspace behavior change",
         "user-scope Enter and z mount the 2x2 repo quadrant scoped to selected repo state.json; Esc returns",
@@ -19856,8 +19882,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "p27i04-w26",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T16:32:15.387315Z",
+      "commit": "23a6bc99d791f146c14158125823e3b55b691af4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19869,10 +19895,10 @@
       "id": "P27-I04-W26",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T16:04:27.987488Z",
-      "outcome": null,
+      "outcome": "EFFORT scoped to active phase + live bucket-sum denominator (pending waves count)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "_effort_eu denominator = live sum of BUCKET_EU over all active-phase waves with a bucket (any status)",
         "EFFORT scope changed iter to phase to match LIFECYCLE; effort velocity and eta phase-scoped",
