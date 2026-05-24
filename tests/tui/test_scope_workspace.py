@@ -23,6 +23,7 @@ from pathlib import Path
 
 import orjson
 import pytest
+from rich.text import Text
 
 from eawf.state.models import State
 from eawf.tui.app import EaApp
@@ -153,8 +154,35 @@ def test_phase_and_eu_cells_render_bars() -> None:
     phase_cell = _phase_cell(row, mode="braille")
     eu_cell = _eu_cell(row, mode="braille")
     assert "      3/6" in phase_cell  # counter right-aligned in a fixed 7-cell field
-    # The EU bar is status-tinted markup, not the empty-state sentinel.
-    assert "[" in eu_cell and "no data" not in eu_cell
+    # The EU bar is status-tinted with a resolved hex (not a Textual $var):
+    # the cell is Rich-parsed, so the markup must contain a #rrggbb span and
+    # parse without raising MarkupError.
+    assert "no data" not in eu_cell
+    assert "#" in eu_cell and "$" not in eu_cell
+    Text.from_markup(eu_cell)  # regression guard: must not raise
+
+
+def test_eu_cell_markup_is_rich_parseable_across_bands() -> None:
+    """The EU-burn cell parses as Rich markup for every colour band.
+
+    Regression (W22): the cell formerly emitted Textual ``[$ok|$warn|$err]``
+    palette vars, which a Rich-parsed :class:`~textual.widgets.DataTable`
+    ``str`` cell rejects with ``MarkupError`` ("closing tag has nothing to
+    close"). Over-budget burn (the original crash) is covered by the last case.
+    """
+    for consumed, total in ((1.0, 12.0), (10.0, 12.0), (40.0, 12.0)):
+        row = RepoRow(
+            code="ABC",
+            path="/abs/path/abc",
+            phase_done=0,
+            phase_total=1,
+            eu_consumed=consumed,
+            eu_total=total,
+            age="1h",
+        )
+        cell = _eu_cell(row, mode="braille")
+        assert "$" not in cell
+        Text.from_markup(cell)  # must not raise
 
 
 def test_eu_cell_zero_total_is_empty_sentinel() -> None:

@@ -11,6 +11,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 from textual.app import ComposeResult
 
 import eawf.tui.app as eaapp_mod
@@ -21,6 +22,7 @@ from eawf.tui.widgets.eu_bar import (
     BRAILLE_LEFT_COL,
     BRAILLE_RIGHT_COL,
     BRAILLE_SUBCOLS,
+    DEFAULT_BAND_PALETTE,
     EMPTY_STATE,
     GLYPH_EMPTY,
     GLYPH_FULL,
@@ -29,6 +31,7 @@ from eawf.tui.widgets.eu_bar import (
     render_bar_braille,
     render_bar_markup,
     render_bar_plain,
+    render_bar_rich,
     render_completion_bar,
     render_eu_bar_plain,
     render_size_bar,
@@ -397,6 +400,37 @@ def test_ascii_mode_matches_legacy_default() -> None:
     # The ASCII fill is byte-for-byte the pre-braille #/- rendering
     # (50% -> $ok band, 3 filled + 2 empty cells, content-markup span).
     assert render_bar_markup(2.5, 5.0, mode="ascii") == "[$ok]###--[/]  50%"
+
+
+# --------------------------------------------------------------------------
+# render_bar_rich — hex-resolved tint for Rich-parsed contexts (W22)
+# --------------------------------------------------------------------------
+
+
+def test_render_bar_rich_emits_hex_not_palette_var() -> None:
+    # The Rich-context variant bakes the band to a concrete hex (no $var),
+    # so a Rich-parsed DataTable cell renders it without MarkupError.
+    bar = render_bar_rich(2.5, 5.0, mode="ascii")
+    assert bar == f"[{DEFAULT_BAND_PALETTE['ok']}]###--[/]  50%"
+    assert "$" not in bar
+
+
+def test_render_bar_rich_is_rich_parseable_across_bands() -> None:
+    # Regression: [$ok|$warn|$err] vars crash Text.from_markup; resolved hex
+    # must parse for the ok, warn, and over-budget err bands alike.
+    for consumed, total in ((1.0, 5.0), (4.5, 5.0), (12.0, 5.0)):
+        Text.from_markup(render_bar_rich(consumed, total, mode="braille"))
+
+
+def test_render_bar_rich_honours_custom_palette() -> None:
+    bar = render_bar_rich(6.0, 5.0, mode="ascii", palette={"err": "#123456"})
+    assert bar == "[#123456]#####[/]  120%"
+
+
+def test_render_bar_rich_falls_back_on_missing_band_key() -> None:
+    # A palette missing the active band key falls back to the default hex.
+    bar = render_bar_rich(6.0, 5.0, mode="ascii", palette={"ok": "#000000"})
+    assert bar == f"[{DEFAULT_BAND_PALETTE['err']}]#####[/]  120%"
 
 
 def test_render_bar_plain_honours_mode() -> None:

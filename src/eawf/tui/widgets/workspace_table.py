@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -42,15 +42,18 @@ from textual.widgets import DataTable
 
 from eawf.registry.staleness import read_repo_state
 from eawf.tui.widgets.eu_bar import (
+    DEFAULT_BAND_PALETTE,
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
     RenderMode,
-    render_bar_markup,
+    render_bar_rich,
     render_completion_bar,
 )
 from eawf.tui.widgets.git_pane import gather_git_fields
 
 if TYPE_CHECKING:
+    from textual.app import App
+
     from eawf.state.models import State, WorkspaceRepoRef
 
 logger = logging.getLogger(__name__)
@@ -254,24 +257,50 @@ def _phase_cell(row: RepoRow, *, mode: RenderMode) -> str:
     return render_completion_bar(row.phase_done, row.phase_total, width=6, mode=mode)
 
 
-def _eu_cell(row: RepoRow, *, mode: RenderMode) -> str:
+def _band_palette(app: App[object]) -> dict[str, str]:
+    """Resolve the EU-burn band colours from the app's active theme.
+
+    DataTable ``str`` cells are Rich-parsed and cannot resolve the Textual
+    ``$ok`` / ``$warn`` / ``$err`` palette vars, so the tint must be baked to
+    a concrete hex at row-build time. Falls back to
+    :data:`~eawf.tui.widgets.eu_bar.DEFAULT_BAND_PALETTE` when the active
+    theme is unavailable (e.g. an unmounted test harness).
+
+    Args:
+        app: The host app whose active theme carries the palette.
+
+    Returns:
+        A ``{"ok"|"warn"|"err": "#rrggbb"}`` map, theme values where present
+        and the default palette otherwise.
+    """
+    theme = getattr(app, "current_theme", None)
+    variables = getattr(theme, "variables", None) or {}
+    return {key: variables.get(key, default) for key, default in DEFAULT_BAND_PALETTE.items()}
+
+
+def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | None = None) -> str:
     """Render *row*'s EU-burn bar cell, or the empty sentinel.
 
     The EU bar is status-tinted (the consumed-fraction colour band) via
-    :func:`~eawf.tui.widgets.eu_bar.render_bar_markup`; a non-positive
-    total surfaces :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` rather
-    than a fabricated 0 % bar.
+    :func:`~eawf.tui.widgets.eu_bar.render_bar_rich`, which bakes the tint to
+    a Rich-parseable ``#rrggbb`` span — the cell is a Rich-parsed
+    :class:`textual.widgets.DataTable` ``str`` cell, so the Textual ``$``
+    palette vars cannot be used here. A non-positive total surfaces
+    :data:`~eawf.tui.widgets.eu_bar.EMPTY_STATE` rather than a fabricated 0 %
+    bar.
 
     Args:
         row: The repo row to render.
         mode: The active bar render mode.
+        palette: Band-colour map (see :func:`_band_palette`); defaults to the
+            built-in palette when omitted.
 
     Returns:
         The EU bar markup, or the empty-state sentinel.
     """
     if row.eu_total <= 0:
         return EMPTY_STATE
-    return render_bar_markup(row.eu_consumed, row.eu_total, mode=mode)
+    return render_bar_rich(row.eu_consumed, row.eu_total, mode=mode, palette=palette)
 
 
 class WorkspaceTable(DataTable[str]):
@@ -455,12 +484,13 @@ class WorkspaceTable(DataTable[str]):
         self._rebuilding = True
         try:
             self.clear()
+            palette = _band_palette(self.app)
             for row in self.rows_data():
                 git_cell = self._git_cells.get(row.code, GIT_PENDING_CELL)
                 self.add_row(
                     row.code,
                     _phase_cell(row, mode=self.render_mode),
-                    _eu_cell(row, mode=self.render_mode),
+                    _eu_cell(row, mode=self.render_mode, palette=palette),
                     git_cell,
                     row.age,
                     key=row.code,

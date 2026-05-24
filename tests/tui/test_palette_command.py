@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
 from textual.widgets import Input, OptionList
 
 from eawf.tui.app import EaApp
@@ -230,7 +231,13 @@ def test_palette_esc_closes_without_running() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_palette_user_scope_hides_wave_verbs() -> None:
+def test_palette_user_scope_hides_wave_verbs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Isolate the user registry to an empty tmp home so the synthesized
+    # portfolio is deterministic and never reads the real ~/.eawf/registry.json.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
     async def body() -> None:
         app = EaApp(scope="user", state_path=None)
         async with app.run_test(size=(120, 40)) as pilot:

@@ -25,6 +25,7 @@ the runtime theme swap stays a CSS var rebind.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import ClassVar, Literal
 
 from textual.reactive import reactive
@@ -417,6 +418,51 @@ def render_bar_markup(
     return f"[{band}]{glyphs}[/]  {pct}%"
 
 
+#: Fallback EU-burn band colours (Wong dark palette), used when the active
+#: theme cannot be resolved — e.g. an unmounted test harness. The live tint
+#: comes from the active Theme's ``variables`` map at render time.
+DEFAULT_BAND_PALETTE: dict[str, str] = {
+    "ok": "#009e73",
+    "warn": "#e69f00",
+    "err": "#d55e00",
+}
+
+
+def render_bar_rich(
+    consumed_eu: float,
+    total_eu: float,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    palette: Mapping[str, str] | None = None,
+) -> str:
+    """Render the bar + percent as Rich-parseable hex-tinted markup.
+
+    The Rich-context counterpart to :func:`render_bar_markup`: the colour
+    band is resolved to a concrete ``#rrggbb`` from *palette* and emitted as
+    a ``[#rrggbb]…[/]`` span, which Rich's markup parser understands. Use
+    this — not :func:`render_bar_markup` — inside a Rich-parsed cell such as
+    a :class:`textual.widgets.DataTable` ``str`` cell, which renders through
+    :meth:`rich.text.Text.from_markup` and so cannot resolve the Textual
+    ``$ok`` / ``$warn`` / ``$err`` palette vars (they raise ``MarkupError``).
+
+    Args:
+        consumed_eu: Effort units consumed so far (≥ 0).
+        total_eu: Total estimated effort units (≥ 0).
+        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        palette: Maps band keys (``"ok"`` / ``"warn"`` / ``"err"``) to a hex
+            colour. Falls back to :data:`DEFAULT_BAND_PALETTE` when omitted
+            or missing a key.
+
+    Returns:
+        A Rich-markup string of the form ``[#009e73]⣿⣿⣿⣿⣿[/]  120%``.
+    """
+    glyphs, pct, band = _bar_parts(consumed_eu, total_eu, mode=mode)
+    key = band.removeprefix("$")
+    colours = palette or DEFAULT_BAND_PALETTE
+    hex_colour = colours.get(key, DEFAULT_BAND_PALETTE[key])
+    return f"[{hex_colour}]{glyphs}[/]  {pct}%"
+
+
 class EUBar(Static):
     """A 5-cell colour-banded EU progress bar (consumed / total).
 
@@ -478,6 +524,7 @@ __all__ = [
     "BRAILLE_LEFT_COL",
     "BRAILLE_RIGHT_COL",
     "BRAILLE_SUBCOLS",
+    "DEFAULT_BAND_PALETTE",
     "DEFAULT_RENDER_MODE",
     "EMPTY_STATE",
     "GLYPH_EMPTY",
@@ -490,6 +537,7 @@ __all__ = [
     "render_bar_braille",
     "render_bar_markup",
     "render_bar_plain",
+    "render_bar_rich",
     "render_completion_bar",
     "render_eu_bar_plain",
     "render_size_bar",
