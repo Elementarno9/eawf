@@ -178,7 +178,6 @@ max-complexity = 10
 "src/eawf/cli/commands/roadmap.py" = ["C901"]
 "src/eawf/cli/commands/validate.py" = ["C901"]
 "src/eawf/config/layered.py" = ["C901"]
-"src/eawf/config/registry.py" = ["C901"]
 "src/eawf/daemon/methods/state.py" = ["C901"]
 "src/eawf/doctor/checks.py" = ["C901"]
 "src/eawf/lifecycle/wave.py" = ["C901"]
@@ -225,13 +224,10 @@ enabled = ["EAWF001", "EAWF002", "EAWF003", "EAWF010", "EAWF011"]
 # genuine outlier. A module drops off ``exclude`` as soon as a wave
 # touches it (un-grandfather on touch).
 max-loc = 1400
-# At the coarse 1400 budget only ``config/registry.py`` (~1960 lines)
-# remains over the alarm threshold. Every other previously-grandfathered
-# module is now under the coarse cap and has left this list. The remaining
-# row is a split candidate for a dedicated registry-decomposition wave.
-exclude = [
-    "src/eawf/config/registry.py",
-]
+# The last remaining outlier ``config/registry.py`` was split into the
+# ``config/registry/`` package in P27-I05-W08, so every submodule is now
+# under the coarse 1400-line cap and the exclude list is empty.
+exclude = []
 
 [tool.eawf.lint.eawf011]
 # Cognitive-complexity budget for the EAWF011 per-function gate. A
