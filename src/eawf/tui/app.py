@@ -618,6 +618,57 @@ class EaApp(App[None]):
             await self._binding.disconnect()
 
 
+def _swap_root_logging_to_textual() -> list[logging.Handler]:
+    """Detach terminal-bound root handlers, install a :class:`TextualHandler`.
+
+    The CLI installs a :class:`logging.StreamHandler` on the root logger
+    (:func:`eawf.cli.app._configure_logging`) so non-TUI commands get
+    scrubbed stderr logs. That handler keeps writing to the terminal after
+    Textual owns the screen, corrupting the live TUI. This swaps the root
+    logger for the duration of the Textual run: every root handler whose
+    ``stream`` is :data:`sys.stderr` / :data:`sys.stdout` is removed, and a
+    :class:`textual.logging.TextualHandler` (which routes to Textual's
+    devtools console, never the screen) is installed in its place. The
+    :class:`~eawf.logging.scrub.SensitiveScrubber` is not needed on this
+    path because the TextualHandler never reaches a terminal.
+
+    Returns:
+        The root logger's handler list as it was before the swap, so
+        :func:`_restore_root_logging` can reinstate it on app exit.
+    """
+    import sys
+
+    from textual.logging import TextualHandler
+
+    root = logging.getLogger()
+    saved = list(root.handlers)
+    terminal_streams = (sys.stderr, sys.stdout)
+    for handler in saved:
+        if isinstance(handler, logging.StreamHandler) and handler.stream in terminal_streams:
+            root.removeHandler(handler)
+    root.addHandler(TextualHandler())
+    return saved
+
+
+def _restore_root_logging(saved: list[logging.Handler]) -> None:
+    """Restore the root logger handler list captured before the TUI swap.
+
+    Removes every handler currently on the root logger (the
+    :class:`TextualHandler` installed by :func:`_swap_root_logging_to_textual`
+    plus any survivors) and reinstates *saved* so the non-TUI CLI path keeps
+    its scrubbed stderr sink once the Textual app has exited.
+
+    Args:
+        saved: The handler list returned by
+            :func:`_swap_root_logging_to_textual`.
+    """
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    for handler in saved:
+        root.addHandler(handler)
+
+
 def run_app(scope: ScopeName, state_path: Path | None) -> int:
     """Launch the interactive :class:`EaApp` for *scope*.
 
@@ -626,6 +677,12 @@ def run_app(scope: ScopeName, state_path: Path | None) -> int:
     ``--plain`` / ``--no-input`` branch uses the deterministic status
     fallback instead.
 
+    Root logging is swapped to a :class:`TextualHandler` for the duration of
+    the run (:func:`_swap_root_logging_to_textual`) so library log lines no
+    longer bleed onto the live screen, and restored on exit
+    (:func:`_restore_root_logging`) via ``try``/``finally`` so the non-TUI
+    CLI path keeps its scrubbed stderr sink.
+
     Args:
         scope: Resolved scope name.
         state_path: Path to the scope's ``state.json`` (read-only).
@@ -633,7 +690,11 @@ def run_app(scope: ScopeName, state_path: Path | None) -> int:
     Returns:
         Process exit code (``0`` on a clean quit).
     """
-    EaApp(scope=scope, state_path=state_path).run()
+    saved = _swap_root_logging_to_textual()
+    try:
+        EaApp(scope=scope, state_path=state_path).run()
+    finally:
+        _restore_root_logging(saved)
     return 0
 
 
@@ -660,6 +721,8 @@ __all__ = [
     "ScopeName",
     "UserScreen",
     "WorkspaceScreen",
+    "_restore_root_logging",
+    "_swap_root_logging_to_textual",
     "build_breadcrumb",
     "probe_braille_coverage",
     "resolve_render_mode",

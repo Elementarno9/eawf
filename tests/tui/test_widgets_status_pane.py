@@ -11,6 +11,7 @@ GATES audit-progress collapse are all asserted against the pure builders.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -853,6 +854,22 @@ def test_dispatch_slice_none_state_empty() -> None:
     assert slice_.next == ()
     assert slice_.wait == ()
     assert slice_.next_overflow == 0
+
+
+def test_dispatch_slice_emits_no_info_on_repaint(caplog: pytest.LogCaptureFixture) -> None:
+    """The slice builder logs nothing at INFO — it runs ~2 Hz on every pulse.
+
+    An INFO line here bled onto the TUI screen on every pulse tick (the
+    blinking top-left artifact); the slice builder must stay silent.
+    """
+    with caplog.at_level(logging.INFO, logger="eawf.tui.widgets.status_pane"):
+        build_dispatch_slice(_dispatch_scenario_state())
+    info = [
+        r
+        for r in caplog.records
+        if r.name == "eawf.tui.widgets.status_pane" and r.levelno >= logging.INFO
+    ]
+    assert info == []
 
 
 def test_dispatch_slice_respects_blocked_by() -> None:

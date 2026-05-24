@@ -643,10 +643,6 @@ def build_dispatch_slice(
     waiting.sort(
         key=lambda pair: (_wave_index(pair[0]) is None, _wave_index(pair[0]) or 0, pair[0])
     )
-    logger.info(
-        f"build_dispatch_slice now={len(now)} next={len(capped)} "
-        f"wait={len(waiting)} overflow={overflow}"
-    )
     return DispatchSlice(
         now=now,
         next=tuple(w.id for w in capped),
