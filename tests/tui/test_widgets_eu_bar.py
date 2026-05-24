@@ -200,6 +200,41 @@ def test_render_completion_bar_custom_width() -> None:
     assert bar == f"{GLYPH_FULL * 1}{GLYPH_EMPTY * 3}  1/4"
 
 
+def test_render_completion_bar_counter_width_zero_preserves_legacy_format() -> None:
+    # counter_width=0 (the default) keeps the natural-width counter so the
+    # string is byte-for-byte the pre-W11 rendering.
+    explicit = render_completion_bar(3, 6, counter_width=0)
+    assert explicit == render_completion_bar(3, 6)
+    assert explicit == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}  3/6"
+
+
+def test_render_completion_bar_counter_width_right_aligns_counter() -> None:
+    # A 5-wide counter field right-aligns the 3-char ``6/6`` counter, so two
+    # leading spaces pad it into the fixed field.
+    bar = render_completion_bar(6, 6, counter_width=5)
+    assert bar == f"{GLYPH_FULL * 10}    6/6"  # ``  6/6`` right-aligned in 5
+    assert bar.endswith("  6/6")
+
+
+def test_render_completion_bar_counter_width_constant_length_across_digit_widths() -> None:
+    # Mixed-digit counters (6/6, 17/17, 21/21) all render to the same total
+    # length when the same counter_width is passed — the alignment contract.
+    widest = max(len(f"{n}/{n}") for n in (6, 17, 21))  # ``17/17`` -> 5
+    bars = [render_completion_bar(n, n, counter_width=widest) for n in (6, 17, 21)]
+    lengths = {len(b) for b in bars}
+    assert len(lengths) == 1  # every bar is the same length
+    # The glyph run width is constant, so the counter starts in the same
+    # column on every row; the widest counter fills its field exactly.
+    assert bars[1].endswith(" 17/17")  # 5-wide field, one leading pad
+    for bar in bars:
+        assert bar.endswith(("6/6", "17/17", "21/21"))
+
+
+def test_render_completion_bar_counter_width_empty_state_unaffected() -> None:
+    # A non-positive total still yields EMPTY_STATE regardless of the field.
+    assert render_completion_bar(0, 0, counter_width=5) == EMPTY_STATE
+
+
 # --------------------------------------------------------------------------
 # render_size_bar — wave effort-bucket bar (W05)
 # --------------------------------------------------------------------------

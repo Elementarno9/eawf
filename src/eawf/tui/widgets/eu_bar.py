@@ -314,13 +314,25 @@ def render_eu_bar_plain(
 
 
 def render_completion_bar(
-    done: int, total: int, *, width: int = 10, mode: RenderMode = DEFAULT_RENDER_MODE
+    done: int,
+    total: int,
+    *,
+    width: int = 10,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    counter_width: int = 0,
 ) -> str:
     """Render a ``done / total`` completion ratio bar with a count suffix.
 
     The populated progress signal for an iter or a phase: the share of its
     child waves that are closed. Plain text only (no Rich markup) so the
     same string drops into a Rich-parsed tree label and into the modal.
+
+    When *counter_width* is positive the ``done/total`` counter is
+    right-aligned into a field of that width, so a set of bars rendered with
+    the same *counter_width* (and *width*) are all the same total length —
+    their glyph runs and counters line up in the same columns regardless of
+    each row's counter digit count. When *counter_width* is ``0`` (the
+    default) the counter is left at its natural width (back-compat).
 
     Args:
         done: Completed child count (e.g. closed waves). Negative inputs
@@ -329,17 +341,23 @@ def render_completion_bar(
             entity with no children has no completion to show).
         width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
         mode: Active render mode (``"braille"`` or ``"ascii"``).
+        counter_width: Fixed field width for the right-aligned
+            ``done/total`` counter. ``0`` (the default) keeps the counter's
+            natural width.
 
     Returns:
         A plain string of the form ``#####-----  3/6`` (50 %, 3 of 6
-        done), or :data:`EMPTY_STATE` when *total* is non-positive.
+        done), or :data:`EMPTY_STATE` when *total* is non-positive. With a
+        positive *counter_width* the counter is right-padded into a fixed
+        field (e.g. ``#####-----   3/6`` when *counter_width* is ``4``).
     """
     if total <= 0:
         return EMPTY_STATE
     done_clamped = min(max(done, 0), total)
     fraction = done_clamped / total
     glyphs = _mode_glyphs(fraction, width=width, mode=mode)
-    return f"{glyphs}  {done_clamped}/{total}"
+    counter = f"{done_clamped}/{total}"
+    return f"{glyphs}  {counter:>{counter_width}}"
 
 
 def render_size_bar(bucket: str, *, width: int = 5, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:

@@ -31,11 +31,13 @@ from eawf.tui.widgets.roadmap_tree import (
     _ROW_TOGGLE_WIDTH,
     _SCROLLBAR_GUTTER,
     _UNSIZED_BUDGET,
+    COMPLETION_BAR_CELLS,
     ELLIPSIS,
     ITER_GLYPHS,
     PHASE_GLYPHS,
     WAVE_GLYPHS,
     RoadmapTree,
+    _completion_counter_width,
     _pin_bar_right,
     _truncate_body,
     _wave_completion,
@@ -156,6 +158,51 @@ def _state_long_iter_many_waves() -> State:
         wid: _make_wave(wid, "P01-I01", "pending", title=f"wave {n} title")
         for n, wid in enumerate(ids, start=1)
     }
+    return State.model_validate(payload)
+
+
+def _state_mixed_digit_counters() -> State:
+    """Return a phase with two iters whose completion counters differ in width.
+
+    The first iter holds 5 waves (all CLOSED → ``5/5``, single-digit); the
+    second holds 12 waves (all CLOSED → ``12/12``, double-digit). The phase
+    tallies across both → ``17/17``. Mixed digit widths across the phase +
+    iter rows exercise the W11 fixed-width counter alignment.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    iter_a_ids = [f"P01-I01-W{n:02d}" for n in range(1, 6)]  # 5 waves
+    iter_b_ids = [f"P01-I02-W{n:02d}" for n in range(1, 13)]  # 12 waves
+    payload["phases"]["P01"]["iter_ids"] = ["P01-I01", "P01-I02"]
+    payload["iters"] = {
+        "P01-I01": {
+            "audit_id": None,
+            "closed_at": None,
+            "estimate_id": None,
+            "id": "P01-I01",
+            "opened_at": "2026-05-08T00:00:00Z",
+            "phase_id": "P01",
+            "status": "closed",
+            "title": "Iter one",
+            "wave_ids": iter_a_ids,
+        },
+        "P01-I02": {
+            "audit_id": None,
+            "closed_at": None,
+            "estimate_id": None,
+            "id": "P01-I02",
+            "opened_at": "2026-05-08T00:00:00Z",
+            "phase_id": "P01",
+            "status": "active",
+            "title": "Iter two",
+            "wave_ids": iter_b_ids,
+        },
+    }
+    payload["waves"] = {
+        wid: _make_wave(wid, "P01-I01", "closed", title=f"wave {wid}") for wid in iter_a_ids
+    }
+    payload["waves"].update(
+        {wid: _make_wave(wid, "P01-I02", "closed", title=f"wave {wid}") for wid in iter_b_ids}
+    )
     return State.model_validate(payload)
 
 
@@ -851,6 +898,82 @@ def test_bar_flush_right_long_title() -> None:
             # the bar: the run after the last non-bar word starts with spaces.
             after_ellipsis = iter_label[iter_label.index(ELLIPSIS) + len(ELLIPSIS) :]
             assert after_ellipsis.startswith(" " * _BAR_GAP)
+
+    asyncio.run(body())
+
+
+def test_completion_counter_width_widest_across_phase_and_iters() -> None:
+    """The shared counter width is the widest ``closed/total`` over all rows."""
+    state = _state_mixed_digit_counters()
+    # Iter one -> ``5/5`` (3), iter two -> ``12/12`` (5), phase -> ``17/17`` (5).
+    assert _completion_counter_width(state) == len("12/12")
+
+
+def test_completion_counter_width_zero_when_no_counters() -> None:
+    """An iter with no resolvable waves renders EMPTY_STATE — width is zero."""
+    state = _load(_PHASE_ITER_WAVE)
+    state.iters["P01-I01"].wave_ids.clear()
+    state.phases["P01"].iter_ids.clear()
+    assert _completion_counter_width(state) == 0
+
+
+def _bar_glyph_start(label: str) -> int:
+    """Return the column index where a completion bar's glyph run begins.
+
+    The label is ``<glyph><space><body><pad><#/- bar glyphs>  <counter>``.
+    The bar glyph run is the *last* contiguous block of ``#``/``-`` cells in
+    the label (the row body / counter carry no such cells), so the run start
+    is the first cell of that final block.
+    """
+    end = -1
+    for i, ch in enumerate(label):
+        if ch in "#-":
+            end = i
+    if end < 0:
+        raise ValueError(f"no bar glyph run in label: {label!r}")
+    start = end
+    while start > 0 and label[start - 1] in "#-":
+        start -= 1
+    return start
+
+
+def test_mixed_digit_iter_bars_align_in_column() -> None:
+    """Mixed single/double-digit iter counters keep glyph + counter columns.
+
+    Both iter rows render at the same depth (same budget). With the shared
+    fixed-width counter field every completion bar is the same length, so the
+    glyph run and the counter start in the identical column on each row even
+    though ``5/5`` is narrower than ``12/12``.
+    """
+
+    async def body() -> None:
+        app = _Harness()  # bare harness -> ascii fill (#/-)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_mixed_digit_counters()
+            await pilot.pause()
+            iter_one = str(_node_by_data(tree, "P01-I01").label)  # type: ignore[attr-defined]
+            iter_two = str(_node_by_data(tree, "P01-I02").label)  # type: ignore[attr-defined]
+            assert iter_one.rstrip().endswith("5/5")
+            assert iter_two.rstrip().endswith("12/12")
+            # Same-depth rows: the bar's glyph run starts in the same column,
+            # and both labels are the same total length (fixed-width bar) so
+            # their right edges (and thus counter right edges) align too.
+            assert _bar_glyph_start(iter_one) == _bar_glyph_start(iter_two)
+            assert len(iter_one) == len(iter_two)
+            # The counter field starts in the same column: a fixed gap of
+            # ``_BAR_GAP`` cells follows the constant-width glyph run, so the
+            # counter (right-padded ``  5/5`` vs full ``12/12``) occupies the
+            # identical column span on both rows.
+            glyph_end_one = _bar_glyph_start(iter_one) + COMPLETION_BAR_CELLS
+            glyph_end_two = _bar_glyph_start(iter_two) + COMPLETION_BAR_CELLS
+            assert glyph_end_one == glyph_end_two
+            counter_field_one = iter_one[glyph_end_one + _BAR_GAP :]
+            counter_field_two = iter_two[glyph_end_two + _BAR_GAP :]
+            assert len(counter_field_one) == len(counter_field_two)  # same field width
+            assert counter_field_one == "  5/5"  # right-aligned in the 5-wide field
+            assert counter_field_two == "12/12"  # widest counter fills the field
 
     asyncio.run(body())
 
