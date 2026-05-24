@@ -1,6 +1,6 @@
 # Architecture overview
 
-*Naming, repository layout, and project-local `.ea/` skeleton for Eä v0.1.*
+*Naming, repository layout, and project-local `.ea/` skeleton for Eä.*
 
 ## Naming
 
@@ -41,7 +41,7 @@ uv tool install eawf
 ## Framework repository structure
 
 The Eä tool repo is a normal CLI/product repo, separate from installed
-project `.ea/` folders. Concrete v0.1 layout:
+project `.ea/` folders. Top-level layout:
 
 ```text
 eawf/
@@ -52,33 +52,35 @@ eawf/
   AGENTS.md                      # repo agent contract
   CLAUDE.md                      # @AGENTS.md shim
   .github/workflows/             # CI matrix
-  src/eawf/
-    cli/                         # typer dispatch + command handlers
-    state/                       # Pydantic v2 models, schema, IDs, URN, writer
-    store/                       # JSONL store envelope + per-kind models + compaction
-    lock/                        # portalocker wrapper, sibling lockfiles, stale recovery
-    profiles/                    # core/python/research YAML + composer
-    render/                      # managed-region markers, manifest, drift, AGENTS.md, etc.
-    runtimes/claude/             # Claude Code adapter (plugin install/update/doctor, statusline)
-    skills/                      # /research, /prep, /audit, /ship, /review, /polish, /flow, /init, /roadmap, /differentiate
-    install/                     # init wizard, global install, instrument probe
-    memory/                      # memory.jsonl store + render-context + promotion
-    mcp/                         # catalog + Eä-owned installer
-    worktree/                    # create + merge-back + cleanup
-    hooks/                       # `eawf hook run` runner
-    doctor/                      # install/runtime diagnostics
-    validate/                    # strict validation + invariants
-    logging/                     # event.jsonl writer
-    templates/                   # AGENTS.md.j2, CLAUDE.md.j2, hooks, commits, PRs
-    schemas/                     # state.schema.json, config.schema.json, skill-output.schema.json
+  src/eawf/                      # see docs/architecture/source-map.md for the full package index
   tests/
     unit/ integration/ property/ golden/ fixtures/
   docs/                          # this directory
 ```
 
+`src/eawf/` holds ~45 top-level packages. Rather than re-list them here,
+`source-map.md` carries the canonical one-line-per-package index, grouped
+by architectural layer:
+
+- **kernel** — `state`, `store`, `config`, `validate`, `spec`, `migrations`.
+- **workflow** — `lifecycle`, `evidence`, `skills`, `agents`,
+  `agent_report`, `audit_dsl`, `dispatch`, `pr_review`, `estimation`.
+- **runtime** — `daemon`, `runtimes`, `mcp`, `sandbox`, `session`, `lock`,
+  `budget`, `ci_loop`, `worktree`, `hooks`, `vcs`.
+- **surfaces** — `cli`, `tui`, `render`.
+- **observability** — `telemetry`, `logging`, `doctor`, `bench`, `eval`.
+- **platform** — `profiles`, `registry`, `install`, `templates`,
+  `artifacts`, `memory`, `scrub`, `lint`, `backup`, `docs`.
+
 Design rules:
 
-- `src/eawf/state/` owns schema and mutations.
+- The **eawfd daemon** (`src/eawf/daemon/`) is the sole canonical mutator
+  of `state.json`, layered config, the registry, the event/audit stores,
+  and the telemetry DB. The `eawf` state CLI proxies mutations to the
+  daemon over JSON-RPC and falls back to a direct `portalocker` write only
+  when the daemon is unavailable (CI / one-shot / recovery). Read access
+  is free.
+- `src/eawf/state/` owns the schema and the typed mutation models.
 - `src/eawf/render/` is pure/idempotent: same config + state produces
   same output.
 - `src/eawf/runtimes/*` are adapters, not workflow source of truth.
