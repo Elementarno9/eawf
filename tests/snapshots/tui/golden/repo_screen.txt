@@ -1,12 +1,12 @@
  Eä  repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
 ┌──────────────────────────────────────────────────────────┐┌──────────────────────────────────────────────────────────┐
 │ ROADMAP                                                  ││ STATUS                                                   │
-│ ▼ ~ P01  Bootstrap                          ⠀⠀⠀⠀⠀  0/1   ││ LIFECYCLE                                                │
-│ └ ▼ ~ P01-I01  First iter                   ⠀⠀⠀⠀⠀  0/1   ││ project:   QR                                            │
+│ ▼ ~ P01  Bootstrap                      ⠀⠀⠀⠀⠀      0/1   ││ LIFECYCLE                                                │
+│ └ ▼ ~ P01-I01  First iter               ⠀⠀⠀⠀⠀      0/1   ││ project:   QR                                            │
 │   └ ~ P01-I01-W01  Implement validate      — no data     ││ phase:     P01                                           │
 │                                                          ││ iter:      P01-I01                                       │
 │                                                          ││ waves:     1 active · 0 pending                          │
-│                                                          ││ progress:  ----------  0/1                               │
+│                                                          ││ progress:  ----------      0/1                           │
 │                                                          ││ audits:    0 running · 0 total                           │
 │                                                          ││ worktrees: 0 active                                      │
 │                                                          ││                                                          │
