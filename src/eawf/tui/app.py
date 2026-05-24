@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar, Literal
@@ -58,6 +59,7 @@ from eawf.tui.theme import (
     detect_os_appearance,
     resolve_theme_name,
 )
+from eawf.tui.widgets.eu_bar import EUBar, RenderMode
 from eawf.tui.widgets.header import (
     BRAND,
     DEFAULT_PROJECT_CODE,
@@ -107,6 +109,80 @@ def _persisted_theme() -> str:
         return value
     logger.debug(f"_persisted_theme unrecognised value={value!r}")
     return DEFAULT_THEME
+
+
+#: Recognised values for the ``ui.glyphs`` leaf key. ``auto`` resolves
+#: via the Braille coverage probe; ``ascii`` / ``unicode`` are explicit
+#: operator overrides.
+_GLYPHS_DEFAULT = "auto"
+_GLYPHS_CHOICES = ("auto", "ascii", "unicode")
+
+
+def _persisted_glyphs() -> str:
+    """Read the persisted ``ui.glyphs`` policy from layered config.
+
+    Reads through the same :func:`~eawf.config.layered.merge_config` path
+    the config window writes through, so an operator-set value is honoured
+    on launch. A missing key, an unreadable layer, or an unrecognised
+    value degrades to ``"auto"`` — glyph selection is cosmetic, never a
+    launch-blocking read.
+
+    Returns:
+        One of ``"auto"`` / ``"ascii"`` / ``"unicode"``; ``"auto"`` when
+        none is persisted or the persisted value is unrecognised.
+    """
+    from eawf.config.layered import get_dotted, merge_config
+
+    try:
+        merged, _sources = merge_config()
+        value = get_dotted(merged, "ui.glyphs")
+    except (KeyError, OSError, ValueError) as exc:
+        logger.debug(f"_persisted_glyphs fallback exc={exc!r}")
+        return _GLYPHS_DEFAULT
+    if isinstance(value, str) and value in _GLYPHS_CHOICES:
+        return value
+    logger.debug(f"_persisted_glyphs unrecognised value={value!r}")
+    return _GLYPHS_DEFAULT
+
+
+def probe_braille_coverage() -> bool:
+    """Probe whether the active terminal/font covers Braille Patterns.
+
+    There is no portable, side-effect-free way to query a terminal's
+    glyph coverage, so this uses the conventional opt-out signal: the
+    ``FONT_NO_BRAILLE`` environment variable. When it is set (to any
+    non-empty value) the probe reports no coverage and the app falls back
+    to ASCII; otherwise Braille is assumed available (the common case for
+    modern terminals + Nerd Fonts). Operators on a Braille-less font set
+    ``FONT_NO_BRAILLE=1`` (or ``ui.glyphs=ascii`` for a persisted
+    override).
+
+    Returns:
+        ``True`` when Braille Patterns are assumed renderable, ``False``
+        when the ``FONT_NO_BRAILLE`` opt-out is set.
+    """
+    return not os.environ.get("FONT_NO_BRAILLE")
+
+
+def resolve_render_mode(glyphs: str, *, braille_ok: bool) -> RenderMode:
+    """Resolve the bar render mode from the glyph policy + coverage probe.
+
+    Args:
+        glyphs: The ``ui.glyphs`` policy (``"auto"`` / ``"ascii"`` /
+            ``"unicode"``).
+        braille_ok: The :func:`probe_braille_coverage` verdict.
+
+    Returns:
+        ``"ascii"`` when ``glyphs == "ascii"`` or the coverage probe
+        failed; ``"braille"`` when ``glyphs`` resolves to unicode and the
+        probe passed.
+    """
+    if glyphs == "ascii":
+        return "ascii"
+    if glyphs == "unicode":
+        return "braille" if braille_ok else "ascii"
+    # auto: braille when the coverage probe passes, else ascii.
+    return "braille" if braille_ok else "ascii"
 
 
 class EaApp(App[None]):
@@ -168,6 +244,14 @@ class EaApp(App[None]):
     #: banner off this flag.
     degraded: reactive[bool] = reactive(False, init=False)
 
+    #: Active bar fill mode (Braille dot-matrix vs ASCII ``#``/``-``).
+    #: Seeded ``braille`` per the operator pick; flipped to ``ascii`` in
+    #: ``on_mount`` when the Braille coverage probe fails
+    #: (``FONT_NO_BRAILLE``) or ``ui.glyphs=ascii`` is persisted. A flip
+    #: is watched (:meth:`watch_render_mode`) so every mounted bar
+    #: rerenders in the other glyph set in one pass.
+    render_mode: reactive[RenderMode] = reactive[RenderMode]("braille", init=False)
+
     def __init__(
         self,
         scope: ScopeName,
@@ -187,6 +271,11 @@ class EaApp(App[None]):
         self._binding: StateBinding | None = None
         self._help_open = False
         self._needs_user_open = False
+        # The persisted ``ui.glyphs`` policy (auto/ascii/unicode). Read
+        # once here, off the same layered-config path /config writes; the
+        # MOUNT-time coverage probe combines it with FONT_NO_BRAILLE to
+        # resolve the initial render_mode. Cosmetic, never launch-blocking.
+        self._glyphs_policy: str = _persisted_glyphs()
         # Detect the auto theme's terminal background ONCE here, before
         # .run() captures stdin: the OSC 11 query needs the live TTY, and
         # Textual's input parser owns stdin for the whole run — a mid-run
@@ -233,6 +322,14 @@ class EaApp(App[None]):
             ),
         )
         await self._binding.connect()
+        # Probe Braille coverage and resolve the bar fill mode before the
+        # scope screen composes, so the first paint already carries the
+        # right glyph set (no flicker from an after-mount flip). The
+        # ``init=False`` reactive only fires its watcher on a real change,
+        # so seeding ``ascii`` here when the probe fails rerenders cleanly.
+        self.render_mode = resolve_render_mode(
+            self._glyphs_policy, braille_ok=probe_braille_coverage()
+        )
         self.push_screen(self._scope)
         # Follow a live system light/dark flip for /theme auto. The OSC 11
         # background probe can only run before .run() captured stdin, so the
@@ -334,6 +431,22 @@ class EaApp(App[None]):
     async def _on_degraded(self, degraded: bool) -> None:
         """Receive a degraded-mode flip from the binder."""
         self.degraded = degraded
+
+    def watch_render_mode(self, mode: RenderMode) -> None:
+        """Propagate a bar-fill-mode flip to every mounted bar.
+
+        A single flip (Braille ↔ ASCII) rerenders the whole surface: every
+        :class:`~eawf.tui.widgets.eu_bar.EUBar` repaints in the new glyph
+        set. Bars rendered as plain strings inside other widgets (the
+        roadmap tree, status pane, tables) read the mode off this reactive
+        on their own repaint, which the same flip schedules.
+
+        Args:
+            mode: The newly-active render mode.
+        """
+        logger.info(f"watch_render_mode mode={mode!r}")
+        for bar in self.query(EUBar):
+            bar.render_mode = mode
 
     def action_switch_scope(self, scope: str) -> None:
         """Switch the active scope screen (raw ``w`` / ``r`` / ``u``).
@@ -548,6 +661,8 @@ __all__ = [
     "UserScreen",
     "WorkspaceScreen",
     "build_breadcrumb",
+    "probe_braille_coverage",
+    "resolve_render_mode",
     "resolve_scope",
     "run_app",
 ]
