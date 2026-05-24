@@ -3259,6 +3259,16 @@
       "scope_id": "P27-I04-W15",
       "status": "done",
       "updated_at": "2026-05-24T03:00:00.010439Z"
+    },
+    "P27-I04-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W16-close-20260524T031242Z",
+      "elapsed_eu": 0.08,
+      "id": "ACT-P27-I04-W16",
+      "scope_id": "P27-I04-W16",
+      "status": "done",
+      "updated_at": "2026-05-24T03:12:42.990262Z"
     }
   },
   "agent_sessions": {
@@ -6200,6 +6210,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I04-W15",
       "updated_at": "2026-05-24T02:42:44.524419Z"
+    },
+    "P27-I04-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W16-bucket-20260524T031015Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I04-W16",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I04-W16",
+      "updated_at": "2026-05-24T03:10:15.498709Z"
     }
   },
   "goals": {
@@ -6966,7 +6989,8 @@
         "P27-I04-W12",
         "P27-I04-W13",
         "P27-I04-W14",
-        "P27-I04-W15"
+        "P27-I04-W15",
+        "P27-I04-W16"
       ]
     },
     "P27-I05": {
@@ -7558,7 +7582,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T03:00:00.010678Z",
+  "updated_at": "2026-05-24T03:12:42.990545Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19267,6 +19291,35 @@
         "User-scope launch reads ~/.eawf/registry.json via eawf.registry.read_registry and synthesizes a State whose workspace.repos mirror the registry entries so repos added via 'eawf repo add <path>' render as portfolio rows; an empty or missing registry yields a columns-only table with no crash; tests assert N registry entries map to N rows and an empty registry maps to zero rows"
       ],
       "title": "Wire user-scope portfolio to global registry",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "claude-p27i04-fixwaves",
+      "closed_at": "2026-05-24T03:12:42.990262Z",
+      "commit": "1bf83e58214bb94b352a9383d99fde94ca61b23a",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/tui/screens/overlays/config_modal.py",
+        "src/eawf/tui/screens/overlays/multichoice_checklist.py"
+      ],
+      "id": "P27-I04-W16",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T03:10:15.028040Z",
+      "outcome": "Extracted MultichoiceChecklist to its own overlay module; config_modal.py 1542->1391 LOC under the EAWF010 cap; behaviour identical, message-handler names unchanged",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "MultichoiceChecklist moved out of config_modal.py into its own overlay module; config_modal.py drops below the EAWF010 1400-LOC cap; config_modal imports the widget so behaviour and message-handler names are unchanged; test_eawf_loc_cap green; full TUI + snapshot suites green"
+      ],
+      "title": "Extract MultichoiceChecklist widget to own module (LOC cap)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
