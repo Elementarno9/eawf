@@ -3509,6 +3509,16 @@
       "scope_id": "P27-I05-W09",
       "status": "done",
       "updated_at": "2026-05-24T19:52:15.431778Z"
+    },
+    "P27-I05-W10": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W10-close-20260524T195520Z",
+      "elapsed_eu": 38.06,
+      "id": "ACT-P27-I05-W10",
+      "scope_id": "P27-I05-W10",
+      "status": "done",
+      "updated_at": "2026-05-24T19:55:20.738211Z"
     }
   },
   "agent_sessions": {
@@ -6834,6 +6844,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W09",
       "updated_at": "2026-05-24T19:26:09.416283Z"
+    },
+    "P27-I05-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W10-bucket-20260524T195520Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W10",
+      "updated_at": "2026-05-24T19:55:20.223365Z"
     }
   },
   "goals": {
@@ -8211,7 +8234,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T19:52:15.432373Z",
+  "updated_at": "2026-05-24T19:55:20.738527Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20718,9 +20741,9 @@
     "P27-I05-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:55:20.738211Z",
+      "commit": "d1d65d08bfb41a5ed171e4e0efaf9b9b24dfcfcd",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20731,10 +20754,10 @@
       "id": "P27-I05-W10",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:32.994491Z",
-      "outcome": null,
+      "outcome": "tools/dead_modules.py added: AST import-graph advisory, report-only exit 0; static+relative+string-literal edges + ancestor reach + entry-point allowlist; flags 13 candidates incl. wal_admin",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "reports AST inbound-zero modules with allowlist for entry points and resource pkgs; report-only"
       ],
