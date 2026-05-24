@@ -17,7 +17,7 @@ Layout summary:
 
 The corresponding sibling lockfile is at
 ``<state_dir>/store/<kind>.jsonl.lock`` (handled by
-:mod:`eawf.lock.sibling`).
+:mod:`eawf.runtime.lock.sibling`).
 """
 
 from __future__ import annotations

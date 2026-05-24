@@ -194,7 +194,7 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
     """Return stripped git stdout, or ``None`` on any failure.
 
     Mirrors the safe-degrade pattern in
-    :mod:`eawf.runtimes.claude.statusline_modules.git`: any non-zero exit,
+    :mod:`eawf.runtime.runtimes.claude.statusline_modules.git`: any non-zero exit,
     missing binary, or timeout collapses to ``None`` so callers can
     distinguish "not a git repo / git unavailable" from a real value.
     """

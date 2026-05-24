@@ -1,7 +1,7 @@
 """Daemon-internal spec writer helpers.
 
 These functions are invoked from
-:mod:`eawf.daemon.methods.spec` (the JSON-RPC handlers); they own:
+:mod:`eawf.runtime.daemon.methods.spec` (the JSON-RPC handlers); they own:
 
 * repo-relative spec file paths under ``.ea/specs/<phase>/[<iter>/]
   <wave|spec>.md``,

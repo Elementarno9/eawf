@@ -37,7 +37,7 @@ from hypothesis import strategies as st
 
 from eawf.kernel.state.enums import McpRisk, McpStatus
 from eawf.kernel.state.models import McpServer
-from eawf.mcp.installer import install_runtime_entry
+from eawf.runtime.mcp.installer import install_runtime_entry
 
 pytestmark = pytest.mark.property
 

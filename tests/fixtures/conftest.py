@@ -2,7 +2,7 @@
 
 The :func:`dirty_repo` fixture materialises a real, throwaway git
 repository left in a dirty/uncommitted state so error-class paths in
-:mod:`eawf.worktree.git` (and the worktree subsystem at large) can be
+:mod:`eawf.runtime.worktree.git` (and the worktree subsystem at large) can be
 exercised against actual ``git`` invocations rather than mocked
 :func:`subprocess.run` shims.
 

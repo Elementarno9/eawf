@@ -1,6 +1,6 @@
 """Tests for :class:`eawf.cli._daemon_client.DaemonClient`.
 
-The tests spin up a real :func:`eawf.daemon.server.serve_unix` on a
+The tests spin up a real :func:`eawf.runtime.daemon.server.serve_unix` on a
 per-test temp UDS path, then drive the synchronous client against it
 from a background thread (the asyncio loop owns the server; the
 client uses blocking sockets). This exercises the full wire format
@@ -23,10 +23,10 @@ import pytest
 
 from eawf import __version__
 from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.server import serve_unix
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.server import serve_unix
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),

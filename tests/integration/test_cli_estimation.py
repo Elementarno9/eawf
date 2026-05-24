@@ -22,7 +22,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.lock.stale import STALE_HEARTBEAT_SECONDS
+from eawf.runtime.lock.stale import STALE_HEARTBEAT_SECONDS
 
 runner = CliRunner()
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"

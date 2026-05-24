@@ -52,7 +52,7 @@ _EMPTY_REPO_STATE = (
 )
 
 #: Wall-clock budget for the daemon to expose its socket after spawn.
-#: Mirrors :data:`eawf.daemon.spawn.SPAWN_POLL_TIMEOUT_SECONDS` with a
+#: Mirrors :data:`eawf.runtime.daemon.spawn.SPAWN_POLL_TIMEOUT_SECONDS` with a
 #: little extra headroom for a cold interpreter start under ``uv run``.
 _DAEMON_READY_TIMEOUT_S: float = 8.0
 
@@ -84,11 +84,11 @@ def _eawfd_argv() -> list[str]:
     """Return the argv prefix that runs the real ``eawfd`` daemon.
 
     Matches the ``eawfd`` console entry
-    (``[project.scripts] eawfd = "eawf.daemon.main:main"``); ``main()``
+    (``[project.scripts] eawfd = "eawf.runtime.daemon.main:main"``); ``main()``
     defaults to non-foreground, so the child logs to
     ``<runtime_dir>/eawfd.log``.
     """
-    return [sys.executable, "-m", "eawf.daemon.main"]
+    return [sys.executable, "-m", "eawf.runtime.daemon.main"]
 
 
 @dataclass

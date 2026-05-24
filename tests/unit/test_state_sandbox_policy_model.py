@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.sandbox.policy.SandboxPolicy`."""
+"""Unit tests for :class:`eawf.runtime.sandbox.policy.SandboxPolicy`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.sandbox.policy import (
+from eawf.runtime.sandbox.policy import (
     SandboxPolicy,
     allocate_policy_id,
     resolve_denied_tools,

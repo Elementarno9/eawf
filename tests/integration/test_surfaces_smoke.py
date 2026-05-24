@@ -43,9 +43,9 @@ from eawf.cli.app import app
 from eawf.cli.errors import ErrorEnvelope
 from eawf.kernel.config import layered
 from eawf.render.envelope import CANONICAL_SKILL_NAMES
-from eawf.runtimes.cache_control import inject_cache_control
-from eawf.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter
-from eawf.runtimes.plugin_manifest import SkillManifest
+from eawf.runtime.runtimes.cache_control import inject_cache_control
+from eawf.runtime.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter
+from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.workflow.skills import (
     _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
 )
@@ -315,7 +315,7 @@ def test_mutating_verb_rejects_daemonless_flag(
     state_path = _seed_minimal_state(repo_root)
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("mutating verb must reject before any spawn"),
     )
     result = runner.invoke(
@@ -333,7 +333,7 @@ def test_read_verb_still_honours_daemonless_flag(
     state_path = _seed_minimal_state(repo_root)
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("read-only verb must not spawn"),
     )
     result = runner.invoke(app, ["--daemonless", "--json", "roadmap", "show"])

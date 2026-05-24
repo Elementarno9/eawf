@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.hooks.event import HookEvent, HookEventType
+from eawf.runtime.hooks.event import HookEvent, HookEventType
 
 
 def _base_payload(**overrides: object) -> dict[str, object]:

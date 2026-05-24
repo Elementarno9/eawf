@@ -21,7 +21,7 @@ falls back to ``ctx.state_path`` with a one-shot
 in the daemon log without breaking CI.
 
 This module exercises three scenarios end-to-end against a real
-:func:`eawf.daemon.server.serve_unix` listener on a per-test UDS:
+:func:`eawf.runtime.daemon.server.serve_unix` listener on a per-test UDS:
 
 (a) The daemon, booted with ``ctx.state_path = <repoA>/.ea/state.json``,
     receives a ``state.read`` call carrying ``repo_root=<repoB>`` and
@@ -52,13 +52,13 @@ import pytest
 
 from eawf import __version__
 from eawf.cli._daemon_client import DaemonClient
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods import state as state_methods
-from eawf.daemon.server import serve_unix
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import state as state_methods
+from eawf.runtime.daemon.server import serve_unix
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
@@ -256,7 +256,7 @@ def test_state_read_without_repo_root_falls_back_and_warns_once(
     # Reset the module-level one-shot flag for an isolated assertion;
     # other tests in the suite may have flipped it already.
     monkeypatch.setattr(state_methods, "_ANCHOR_FALLBACK_WARN_EMITTED", False)
-    caplog.set_level(logging.WARNING, logger="eawf.daemon.methods.state")
+    caplog.set_level(logging.WARNING, logger="eawf.runtime.daemon.methods.state")
 
     with DaemonClient(runtime_dir=server.runtime_dir) as client:
         # First call → fallback path → warning emitted.

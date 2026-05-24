@@ -15,8 +15,8 @@ KISS-001 contract (P25-W12)
 Pre-W12 the runtime resolver sniffed environment-variable name prefixes
 (``CLAUDE*`` / ``CODEX*``) — implicit detection that operators could not
 opt out of. Per KISS-001 the resolver now accepts exactly two explicit
-inputs: :data:`~eawf.runtimes.coauthor.COAUTHOR_RUNTIME_ENV_VAR` (or
-the legacy alias :data:`~eawf.runtimes.coauthor.COAUTHOR_RUNTIME_LEGACY_ENV_VAR`)
+inputs: :data:`~eawf.runtime.runtimes.coauthor.COAUTHOR_RUNTIME_ENV_VAR` (or
+the legacy alias :data:`~eawf.runtime.runtimes.coauthor.COAUTHOR_RUNTIME_LEGACY_ENV_VAR`)
 and the ``detected_runtime`` field on dispatch payloads. The
 ``test_kiss_001_*`` tests below assert the explicit-opt-in path AND
 the rejection path (no opt-in → no inferred runtime, default applies).
@@ -33,7 +33,7 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.kernel.config import layered
-from eawf.runtimes.coauthor import (
+from eawf.runtime.runtimes.coauthor import (
     COAUTHOR_RUNTIME_ENV_VAR,
     COAUTHOR_RUNTIME_LEGACY_ENV_VAR,
     ImplicitDetectionRejected,

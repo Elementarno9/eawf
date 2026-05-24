@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.worktree.wave_land.wave_land` (B027).
+"""Unit tests for :func:`eawf.runtime.worktree.wave_land.wave_land` (B027).
 
 The tests build a tmp git repo with a parent feature branch and a
 worktree branch carrying one or more commits, then exercise the
@@ -22,8 +22,8 @@ from eawf.kernel.state.models import (
     Iter,
     Wave,
 )
-from eawf.worktree.create import create_worktree
-from eawf.worktree.wave_land import (
+from eawf.runtime.worktree.create import create_worktree
+from eawf.runtime.worktree.wave_land import (
     wave_land,
     wave_land_batch,
 )

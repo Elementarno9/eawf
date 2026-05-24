@@ -52,7 +52,7 @@ def memory_add(
     """Write a new memory entry to ``memory.jsonl`` + ``state.memory_index``."""
     from eawf.cli._mutation import state_transaction
     from eawf.memory.store import add_memory
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -143,7 +143,7 @@ def memory_promote(
     from eawf.cli._mutation import state_transaction
     from eawf.kernel.store.paths import store_path
     from eawf.memory.promotion import PromotionError, promote_record
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     target = to.strip().lower()
@@ -246,7 +246,7 @@ def _memory_promote_to_artifact(
     from eawf.cli._mutation import state_transaction
     from eawf.kernel.store.paths import store_path
     from eawf.memory.promotion import PromotionError, promote_to_artifact
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -338,7 +338,7 @@ def memory_compact(
 ) -> None:
     """Compact ``memory.jsonl`` (dedup by content; idempotent)."""
     from eawf.kernel.store.compact import compact_store
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -456,7 +456,7 @@ def memory_prune(
     """Soft-delete prune. Flips status to PRUNED; preserves the prior record."""
     from eawf.cli._mutation import state_transaction
     from eawf.memory.prune import PruneError, prune_memory
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -584,7 +584,7 @@ def memory_gc(
     """Archive matched memory entries by flipping their ``tier`` to ARCHIVAL."""
     from eawf.cli._mutation import state_transaction
     from eawf.memory.gc import GcError, gc_memory
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -673,7 +673,7 @@ def memory_tier(
     """Set the tier on a single memory entry."""
     from eawf.cli._mutation import state_transaction
     from eawf.kernel.state.enums import MemoryTier
-    from eawf.session.store import append_event
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:

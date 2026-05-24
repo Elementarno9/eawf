@@ -9,7 +9,7 @@ A segment is *stale* when:
 
 1. The actual summary's status is :data:`ActualStatus.ACTIVE`, AND
 2. The advisory lock for the session/scope is no longer held by a live process
-   (per :func:`eawf.lock.stale.is_stale`).
+   (per :func:`eawf.runtime.lock.stale.is_stale`).
 
 The recovery pass is idempotent — running it twice is a no-op when no fresh
 segments became stale in between.
@@ -26,7 +26,7 @@ from pathlib import Path
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.state.models import ActualSummary
 from eawf.kernel.store.kinds.actual import ActualPayload
-from eawf.lock.stale import STALE_HEARTBEAT_SECONDS, is_stale
+from eawf.runtime.lock.stale import STALE_HEARTBEAT_SECONDS, is_stale
 from eawf.workflow.estimation.eu import as_decimal
 from eawf.workflow.estimation.segments import latest_open_segment
 

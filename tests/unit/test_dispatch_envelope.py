@@ -29,7 +29,7 @@ import pytest
 
 from eawf.kernel.state.enums import McpRisk, McpStatus, ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, McpGrant, McpServer, Project, State
-from eawf.sandbox.policy import SandboxPolicy
+from eawf.runtime.sandbox.policy import SandboxPolicy
 from eawf.workflow.dispatch import render_dispatch_envelope, render_wave_prompt
 from eawf.workflow.dispatch.renderer import DispatchEnvelope
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave

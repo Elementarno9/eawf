@@ -125,7 +125,7 @@ def reject_daemonless_on_mutating(verb: str) -> None:
 def ensure_daemon(runtime_dir: Path | None = None) -> int:
     """Ensure a daemon is running for *runtime_dir*; return its PID.
 
-    Thin wrapper over :func:`eawf.daemon.spawn.auto_spawn_daemon` that
+    Thin wrapper over :func:`eawf.runtime.daemon.spawn.auto_spawn_daemon` that
     resolves the default runtime dir when none is supplied. Used by the
     mutating-verb escalation path: when no daemon is up, the first
     mutating call cold-spawns one (the auto-spawn flow). The spawn is
@@ -135,7 +135,7 @@ def ensure_daemon(runtime_dir: Path | None = None) -> int:
     Args:
         runtime_dir: Daemon runtime directory. ``None`` resolves the
             per-user default via
-            :func:`eawf.daemon.runtime_dir.runtime_dir`.
+            :func:`eawf.runtime.daemon.runtime_dir.runtime_dir`.
 
     Returns:
         Integer PID of the live daemon (pre-existing or freshly spawned).
@@ -146,8 +146,8 @@ def ensure_daemon(runtime_dir: Path | None = None) -> int:
             spawn helper's :class:`DaemonSpawnTimeoutError` so the caller
             surfaces exit-code 4.
     """
-    from eawf.daemon.runtime_dir import runtime_dir as default_runtime_dir
-    from eawf.daemon.spawn import DaemonSpawnTimeoutError, auto_spawn_daemon
+    from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
+    from eawf.runtime.daemon.spawn import DaemonSpawnTimeoutError, auto_spawn_daemon
 
     resolved = runtime_dir if runtime_dir is not None else default_runtime_dir()
     try:

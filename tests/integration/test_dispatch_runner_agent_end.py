@@ -1,8 +1,8 @@
 """Integration: dispatch runner emits a valid ``agent_end`` executor report.
 
-Exercises :func:`eawf.daemon.dispatch_runner.emit_agent_end_report` and the
+Exercises :func:`eawf.runtime.daemon.dispatch_runner.emit_agent_end_report` and the
 report-on-completion path of
-:func:`eawf.daemon.dispatch_runner.run_dispatch` end-to-end against a real
+:func:`eawf.runtime.daemon.dispatch_runner.run_dispatch` end-to-end against a real
 ``state.json`` + ``executor_report`` JSONL store on a tmp filesystem.
 
 The load-bearing assertion is the wave's success criterion: the emitted
@@ -22,12 +22,6 @@ from typing import Any
 
 import pytest
 
-from eawf.daemon.dispatch_runner import (
-    DispatchTokens,
-    emit_agent_end_report,
-    run_dispatch,
-)
-from eawf.daemon.methods import MethodContext
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
@@ -38,6 +32,12 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.invariants import check_agent_report_invariants
+from eawf.runtime.daemon.dispatch_runner import (
+    DispatchTokens,
+    emit_agent_end_report,
+    run_dispatch,
+)
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.telemetry.models import RuntimeErrorClass
 
 pytestmark = pytest.mark.integration
@@ -106,7 +106,7 @@ def _state_payload() -> dict[str, Any]:
                 "status": "in_progress",
                 "deps": [],
                 "blocks": [],
-                "file_scopes": ["src/eawf/daemon/dispatch_runner.py"],
+                "file_scopes": ["src/eawf/runtime/daemon/dispatch_runner.py"],
                 "success_criteria": [],
                 "agent_role": "executor",
                 "effort_bucket": "M",
@@ -191,7 +191,7 @@ def test_emit_agent_end_report_passes_invariants(tmp_path: Path) -> None:
         wave_id=_WAVE_ID,
         commit_sha="abcdef1",
         outcome="emitted typed agent_end report on dispatch completion",
-        files_changed=["src/eawf/daemon/dispatch_runner.py"],
+        files_changed=["src/eawf/runtime/daemon/dispatch_runner.py"],
         tests_run=["uv run pytest tests/integration/test_dispatch_runner_agent_end.py -q"],
         runtime="claude",
     )

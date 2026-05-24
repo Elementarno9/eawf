@@ -28,10 +28,10 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.auth import UnauthorizedError, check_peer_uid
-from eawf.daemon.methods import MethodContext, registered_methods
-from eawf.daemon.runtime_dir import (
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.auth import UnauthorizedError, check_peer_uid
+from eawf.runtime.daemon.methods import MethodContext, registered_methods
+from eawf.runtime.daemon.runtime_dir import (
     RUNTIME_DIR_MODE,
     ensure_runtime_dir,
     harden_runtime_dir,
@@ -39,7 +39,7 @@ from eawf.daemon.runtime_dir import (
     runtime_dir,
     socket_path,
 )
-from eawf.daemon.server import (
+from eawf.runtime.daemon.server import (
     INVALID_PARAMS,
     INVALID_REQUEST,
     METHOD_NOT_FOUND,

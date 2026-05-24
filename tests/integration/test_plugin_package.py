@@ -17,8 +17,8 @@ from typer.testing import CliRunner
 from eawf.cli.app import app
 from eawf.cli.exit_codes import INTEGRITY_VIOLATION, INVALID_INPUT
 from eawf.render.skills import SKILL_REGISTRY
-from eawf.runtimes.claude.plugin_install import IntegrityViolation
-from eawf.runtimes.claude.plugin_package import package_plugin
+from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
+from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 
 _SKILL_COUNT = len(SKILL_REGISTRY)
 

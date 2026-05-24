@@ -390,7 +390,7 @@ def start_wave(state: State, *, wave_id: str) -> Wave:
     """Move a claimed wave to ``in_progress`` at implementation start.
 
     The inline counterpart to the dispatch runner's head transition
-    (:func:`eawf.daemon.dispatch_runner.run_dispatch`): a non-dispatched
+    (:func:`eawf.runtime.daemon.dispatch_runner.run_dispatch`): a non-dispatched
     wave whose executor begins work flips from :data:`WaveStatus.CLAIMED`
     to :data:`WaveStatus.IN_PROGRESS` so the wave's status reflects that
     the claim has been picked up and code is being written. The wave stays

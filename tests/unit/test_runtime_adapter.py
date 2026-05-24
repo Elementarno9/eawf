@@ -15,7 +15,7 @@ import pytest
 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
-from eawf.runtimes.adapter import (
+from eawf.runtime.runtimes.adapter import (
     ALL_ERROR_CLASSES,
     DispatchEventKind,
     ErrorClass,
@@ -23,9 +23,9 @@ from eawf.runtimes.adapter import (
     SessionResumeFailedError,
     emit_runtime_event,
 )
-from eawf.runtimes.claude.adapter import ClaudeAdapter
-from eawf.runtimes.codex.adapter import CodexAdapter
-from eawf.runtimes.opencode.adapter import OpenCodeAdapter
+from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
+from eawf.runtime.runtimes.codex.adapter import CodexAdapter
+from eawf.runtime.runtimes.opencode.adapter import OpenCodeAdapter
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -9,7 +9,7 @@ import pytest
 
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
-from eawf.runtimes.codex import package_plugin
+from eawf.runtime.runtimes.codex import package_plugin
 
 
 def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
@@ -61,7 +61,7 @@ def test_plugin_manifest_matches_install_renderer(tmp_path: Path) -> None:
     package_plugin(target)
     pkg_manifest = (target / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").read_bytes()
 
-    from eawf.runtimes.codex.plugin_install import _render_manifest
+    from eawf.runtime.runtimes.codex.plugin_install import _render_manifest
 
     assert pkg_manifest == _render_manifest()
 

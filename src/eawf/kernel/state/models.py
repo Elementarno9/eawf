@@ -57,7 +57,7 @@ from eawf.kernel.state.ids import (
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.urn import URN_KINDS
-from eawf.sandbox.policy import SandboxPolicy
+from eawf.runtime.sandbox.policy import SandboxPolicy
 
 # ---- Reusable annotated types -----------------------------------------------
 
@@ -228,8 +228,8 @@ class SessionAttempt(_StrictModel):
     ``agent.dispatch`` invocation. ``session_log_handle`` is an
     **opaque** handle (blob-URN or daemon-side index key) — never a
     filesystem path. The daemon's in-process map (see
-    :func:`eawf.daemon.session.register_session_log` /
-    :func:`eawf.daemon.session.resolve_session_log`) is the only place
+    :func:`eawf.runtime.daemon.session.register_session_log` /
+    :func:`eawf.runtime.daemon.session.resolve_session_log`) is the only place
     real paths live, satisfying AGENTS rule 16 (secrets / PII hygiene).
 
     Attributes:

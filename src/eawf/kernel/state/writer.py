@@ -24,7 +24,7 @@ from typing import Any
 
 import orjson
 
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 

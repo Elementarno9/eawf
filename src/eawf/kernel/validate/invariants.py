@@ -396,7 +396,7 @@ def check_mcp_grant_server_ref(state: State) -> Iterable[Violation]:
 def check_sandbox_policy_scope_ref(state: State) -> Iterable[Violation]:
     """Every ``sandbox_policies`` row must reference an existing scope.
 
-    A :class:`~eawf.sandbox.policy.SandboxPolicy` with ``scope_kind="wave"``
+    A :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` with ``scope_kind="wave"``
     must reference a wave id present in :attr:`State.waves`; the
     ``"profile"`` and ``"global"`` shapes are free-form strings in v0.2
     (profile composition is config-side; ``"global"`` is the literal scope).

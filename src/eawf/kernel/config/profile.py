@@ -40,8 +40,8 @@ import yaml
 from eawf.cli.errors import UserError
 from eawf.kernel.config.layered import LAYER_ORDER, WRITABLE_LAYERS
 from eawf.kernel.config.loader import load_yaml_layer
-from eawf.lock import portalock
 from eawf.profiles.loader import list_profiles, load_profile
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 

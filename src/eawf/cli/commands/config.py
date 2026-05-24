@@ -60,8 +60,8 @@ from eawf.kernel.config.registry import (
     registry_lookup,
     tabs_sorted,
 )
-from eawf.lock import portalock
-from eawf.vcs.coauthor import VcsConfig
+from eawf.runtime.lock import portalock
+from eawf.runtime.vcs.coauthor import VcsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +292,7 @@ def _save_value_to_layer(
       is ``False`` (V1 carve-out), (b) ``EAWF_DAEMONLESS=1`` is set,
       (c) the daemon is unreachable, or (d) the path does not map
       onto a canonical writable layer. The legacy lock-read-write
-      loop runs under :func:`eawf.lock.portalock.acquire`.
+      loop runs under :func:`eawf.runtime.lock.portalock.acquire`.
 
     Args:
         target_path: Absolute path of the layer's ``config.yaml``.

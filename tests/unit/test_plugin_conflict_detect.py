@@ -1,10 +1,10 @@
-"""Unit tests for :mod:`eawf.runtimes.claude.plugin_conflict`."""
+"""Unit tests for :mod:`eawf.runtime.runtimes.claude.plugin_conflict`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from eawf.runtimes.claude.plugin_conflict import (
+from eawf.runtime.runtimes.claude.plugin_conflict import (
     CCPluginConflict,
     detect_marketplace_install,
 )

@@ -493,7 +493,7 @@ def test_run_chain_routes_write_through_canonical_writer(
     """
     from eawf.kernel.migrations import _base
     from eawf.kernel.state import writer
-    from eawf.lock import portalock
+    from eawf.runtime.lock import portalock
 
     state_path = tmp_path / "state.json"
     _write_full_fixture(state_path)

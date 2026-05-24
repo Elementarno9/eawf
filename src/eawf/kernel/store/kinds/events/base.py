@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict
 RuntimeTriple = Literal["claude", "codex", "opencode"]
 """Closed runtime-name literal used across C09 event payloads.
 
-Distinct from :data:`eawf.runtimes.manifest.RuntimeId` (which uses the
+Distinct from :data:`eawf.runtime.runtimes.manifest.RuntimeId` (which uses the
 ``"claude-code"`` plugin-manifest spelling). The event/telemetry surface
 keys on the short ``"claude"`` form per the C09 spec §5.11 and the
 ``config/registry`` adapter choices.

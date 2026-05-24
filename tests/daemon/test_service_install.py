@@ -24,8 +24,8 @@ from typing import Any
 
 import pytest
 
-from eawf.daemon import service_install
-from eawf.daemon.service_install import (
+from eawf.runtime.daemon import service_install
+from eawf.runtime.daemon.service_install import (
     ServiceEnvelope,
     ServiceInstallError,
     ServiceStatus,
@@ -91,11 +91,11 @@ def stub_runtime_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     target = tmp_path / "eawfd-runtime"
     target.mkdir()
     monkeypatch.setattr(
-        "eawf.daemon.service_install.runtime_dir",
+        "eawf.runtime.daemon.service_install.runtime_dir",
         lambda: target,
     )
     monkeypatch.setattr(
-        "eawf.daemon.service_install.pid_path",
+        "eawf.runtime.daemon.service_install.pid_path",
         lambda: target / "eawfd.pid",
     )
     return target
@@ -106,7 +106,7 @@ def stub_systemd_unit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect the systemd unit install path into the temp tree."""
     unit_path = tmp_path / "unit" / "eawfd.service"
     monkeypatch.setattr(
-        "eawf.daemon.service_install._systemd_unit_path",
+        "eawf.runtime.daemon.service_install._systemd_unit_path",
         lambda: unit_path,
     )
     return unit_path
@@ -117,7 +117,7 @@ def stub_launchd_plist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect the launchd plist install path into the temp tree."""
     plist_path = tmp_path / "agents" / "dev.eawf.eawfd.plist"
     monkeypatch.setattr(
-        "eawf.daemon.service_install._launchd_plist_path",
+        "eawf.runtime.daemon.service_install._launchd_plist_path",
         lambda: plist_path,
     )
     return plist_path
@@ -130,7 +130,7 @@ def _install_run_recorder(
     """Patch :func:`subprocess.run` inside the install module."""
     recorder = _RunRecorder(responses or [])
     monkeypatch.setattr(
-        "eawf.daemon.service_install.subprocess.run",
+        "eawf.runtime.daemon.service_install.subprocess.run",
         recorder,
     )
     return recorder
@@ -186,11 +186,11 @@ def test_enable_service_linux_times_out_when_pid_file_absent(
     )
     # Shorten the timeout so the test runs quickly.
     monkeypatch.setattr(
-        "eawf.daemon.service_install._PID_WAIT_TIMEOUT_SECONDS",
+        "eawf.runtime.daemon.service_install._PID_WAIT_TIMEOUT_SECONDS",
         0.2,
     )
     monkeypatch.setattr(
-        "eawf.daemon.service_install._PID_WAIT_POLL_INTERVAL_SECONDS",
+        "eawf.runtime.daemon.service_install._PID_WAIT_POLL_INTERVAL_SECONDS",
         0.05,
     )
 
@@ -224,13 +224,13 @@ def _stub_invoking_user(
     redirects ``pwd.getpwuid`` to a fake record so the LaunchAgents
     home is derived from *home* and never a real user path.
     """
-    monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: uid)
+    monkeypatch.setattr("eawf.runtime.daemon.service_install.os.getuid", lambda: uid)
     if sudo_uid is None:
         monkeypatch.delenv("SUDO_UID", raising=False)
     else:
         monkeypatch.setenv("SUDO_UID", sudo_uid)
     monkeypatch.setattr(
-        "eawf.daemon.service_install.pwd.getpwuid",
+        "eawf.runtime.daemon.service_install.pwd.getpwuid",
         lambda _uid: _FakePwRecord(str(home)),
     )
 
@@ -417,7 +417,7 @@ def test_disable_service_macos_idempotent_when_plist_absent(
             ),
         ],
     )
-    monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    monkeypatch.setattr("eawf.runtime.daemon.service_install.os.getuid", lambda: 501)
     monkeypatch.delenv("SUDO_UID", raising=False)
     assert not stub_launchd_plist.exists()
 
@@ -512,7 +512,7 @@ def test_service_status_macos_running(
     """``launchctl print`` exit 0 with ``state = running`` ⇒ ``RUNNING``."""
     stub_launchd_plist.parent.mkdir(parents=True, exist_ok=True)
     stub_launchd_plist.write_text("<plist/>", encoding="utf-8")
-    monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    monkeypatch.setattr("eawf.runtime.daemon.service_install.os.getuid", lambda: 501)
     monkeypatch.delenv("SUDO_UID", raising=False)
     _install_run_recorder(
         monkeypatch,
@@ -532,7 +532,7 @@ def test_service_status_macos_not_installed(
     stub_launchd_plist: Path,
 ) -> None:
     """Missing plist ⇒ ``NOT_INSTALLED``."""
-    monkeypatch.setattr("eawf.daemon.service_install.os.getuid", lambda: 501)
+    monkeypatch.setattr("eawf.runtime.daemon.service_install.os.getuid", lambda: 501)
     monkeypatch.delenv("SUDO_UID", raising=False)
     _install_run_recorder(monkeypatch)
     assert service_status() == ServiceStatus.NOT_INSTALLED
@@ -627,7 +627,7 @@ def test_run_raises_service_install_error_on_check_failure(
     def fake_run(*args: Any, **kwargs: Any) -> _StubProcess:
         return _StubProcess(returncode=2, stderr="boom")
 
-    monkeypatch.setattr("eawf.daemon.service_install.subprocess.run", fake_run)
+    monkeypatch.setattr("eawf.runtime.daemon.service_install.subprocess.run", fake_run)
     with pytest.raises(ServiceInstallError, match="rc=2"):
         service_install._run(["false"])
 

@@ -8,7 +8,7 @@ Surface contract:
 - ``eawf skill render <name>`` (Phase 10 W01) prints a registered
   skill's canonical ``SKILL.md`` body (``--format=skill-md``, default)
   or a metadata+body JSON object (``--format=json``). Bytes are
-  byte-equal to the SKILL.md :mod:`eawf.runtimes.claude.plugin_install`
+  byte-equal to the SKILL.md :mod:`eawf.runtime.runtimes.claude.plugin_install`
   writes on disk for the same skill.
 - ``eawf skill run <name>`` (Phase 4 W07) invokes
   :func:`~eawf.workflow.skills.engine.run_skill` headlessly. Optional JSON args
@@ -516,7 +516,7 @@ def render_cmd(
     """Render a registered skill's metadata or SKILL.md body to stdout.
 
     ``--format=skill-md`` (the default) prints bytes byte-equal to the
-    SKILL.md emitted by :mod:`eawf.runtimes.claude.plugin_install` for
+    SKILL.md emitted by :mod:`eawf.runtime.runtimes.claude.plugin_install` for
     the same skill — the two code paths share the
     :func:`~eawf.render.skills.render_skill_md_from_spec` helper.
 

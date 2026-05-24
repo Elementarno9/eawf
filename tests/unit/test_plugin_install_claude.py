@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.runtimes.claude.plugin_install``.
+"""Unit tests for ``eawf.runtime.runtimes.claude.plugin_install``.
 
 Covers:
 
@@ -24,7 +24,7 @@ import pytest
 from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
-from eawf.runtimes.claude.plugin_install import (
+from eawf.runtime.runtimes.claude.plugin_install import (
     InstallResult,
     IntegrityViolation,
     install_plugin,

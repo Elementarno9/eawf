@@ -105,7 +105,7 @@ def _seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path
                 "title": "W1",
                 "status": "claimed",
                 "deps": [],
-                "file_scopes": ["src/eawf/worktree/"],
+                "file_scopes": ["src/eawf/runtime/worktree/"],
                 "claim_session_id": "SES-001",
                 "worktree_id": None,
                 "outcome": None,

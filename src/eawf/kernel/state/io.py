@@ -11,7 +11,7 @@ The functions split into three concerns:
 
 - :func:`write_state_unlocked` — atomic ``state.json`` persist (no lock
   acquisition; the caller holds the transaction-level
-  :func:`eawf.lock.portalock.acquire` lock for the whole read-modify-write).
+  :func:`eawf.runtime.lock.portalock.acquire` lock for the whole read-modify-write).
 - :func:`state_version` / :func:`build_event_envelope` / :func:`append_event`
   — the event-side primitives: a stable payload digest, the canonical
   ``EVENT``-kind envelope, and the routed append.
@@ -19,7 +19,7 @@ The functions split into three concerns:
   carve-out: CI / one-shot / recovery shell). The canonical writer is the
   daemon (rule 4); this path runs only when the daemon is unavailable and
   mirrors the daemon's outcome-WAL ordering so the *same*
-  :func:`eawf.daemon.recovery.replay_wal` reconciles a crash.
+  :func:`eawf.runtime.daemon.recovery.replay_wal` reconciles a crash.
 
 Validation rejections raise :class:`StateValidationError` (a stdlib
 :class:`ValueError` subclass) rather than a CLI-layer error type, keeping
@@ -66,7 +66,7 @@ def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
     """Write *data* to *path* atomically WITHOUT acquiring the sibling lock.
 
     The caller must already hold the lock via
-    :func:`eawf.lock.portalock.acquire`. The locked variant lives in
+    :func:`eawf.runtime.lock.portalock.acquire`. The locked variant lives in
     :mod:`eawf.kernel.state.writer`; this unlocked variant is needed because the
     transaction-level lock is held for the entire handler.
 
@@ -98,7 +98,7 @@ def state_version(payload: dict[str, Any]) -> str:
 
     Used as the ``before_state_version`` / ``after_state_version`` pointer on
     the event row. Mirrors
-    :func:`eawf.daemon.methods.state._state_version` so the digests stay
+    :func:`eawf.runtime.daemon.methods.state._state_version` so the digests stay
     comparable across the in-process and daemon-proxy paths.
 
     Args:
@@ -126,7 +126,7 @@ def build_event_envelope(
     capture the post-apply envelope in the ``.pending`` record before the
     state write, then append the *same* envelope after the state lands. The
     envelope shape mirrors
-    :func:`eawf.daemon.methods.state._build_event_envelope` so the in-process
+    :func:`eawf.runtime.daemon.methods.state._build_event_envelope` so the in-process
     fallback and the daemon-proxy path converge on identical on-disk rows.
 
     Args:
@@ -244,7 +244,7 @@ def commit_mutation(
     recovery shell). The canonical writer is the daemon (rule 4); this path
     runs only when the daemon is unavailable, and it mirrors the daemon's
     outcome-WAL ordering so the *same*
-    :func:`eawf.daemon.recovery.replay_wal` reconciles a crash.
+    :func:`eawf.runtime.daemon.recovery.replay_wal` reconciles a crash.
 
     Order (state-first, WAL-backed):
 
@@ -266,7 +266,7 @@ def commit_mutation(
     event (an event whose state change did not commit). Because
     ``mark_applied`` fires before the event append, a crash in the
     state-write→event-append window leaves an ``.applied`` record, and the
-    next startup's :func:`eawf.daemon.recovery.replay_wal` re-issues the
+    next startup's :func:`eawf.runtime.daemon.recovery.replay_wal` re-issues the
     captured envelope (idempotent on envelope id) so state and the event log
     stay in sync. ``replay_wal`` only re-issues APPLIED records; a PENDING
     record (crash before the state write landed) is POISONED and its mutator
@@ -290,11 +290,11 @@ def commit_mutation(
         StateValidationError: When the post-apply payload fails strict
             invariant validation.
     """
-    from eawf.daemon import wal
-    from eawf.daemon.recovery import replay_wal
-    from eawf.daemon.wal import WalRecord
     from eawf.kernel.store.append import append_envelope
     from eawf.kernel.store.paths import store_path
+    from eawf.runtime.daemon import wal
+    from eawf.runtime.daemon.recovery import replay_wal
+    from eawf.runtime.daemon.wal import WalRecord
 
     payload = candidate.model_dump(mode="json")
     # validate the payload that will actually go to disk

@@ -5,7 +5,7 @@ Per C03 §5.8 the daemon caches a per-phase spec index so
 has been ``git rm``'d in the ARCHIVED transition. The cache is owned
 by the daemon — no other writer touches the file — so every mutation
 flows through :mod:`eawf.kernel.spec.writer` (called from
-:mod:`eawf.daemon.methods.spec`).
+:mod:`eawf.runtime.daemon.methods.spec`).
 
 Layout::
 
@@ -33,8 +33,8 @@ from typing import Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.kernel.state.models import PhaseIdStr
+from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
 
 logger = logging.getLogger(__name__)
 

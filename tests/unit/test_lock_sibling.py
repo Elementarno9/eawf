@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eawf.lock import sibling
+from eawf.runtime.lock import sibling
 
 
 def test_sibling_path_in_same_dir(tmp_path: Path) -> None:

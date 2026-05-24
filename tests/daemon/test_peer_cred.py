@@ -1,6 +1,6 @@
 """Per-OS peer-credential dispatcher coverage (W05).
 
-Tests exercise :func:`eawf.daemon.auth.verify_peer_credential` on every
+Tests exercise :func:`eawf.runtime.daemon.auth.verify_peer_credential` on every
 supported platform via :func:`socket.socketpair` round-trips. Each
 per-OS test is gated with ``sys.platform`` so the suite passes
 end-to-end on any single host — the CI matrix only runs the helper
@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.daemon.auth import (
+from eawf.runtime.daemon.auth import (
     PeerCredential,
     UnauthorizedError,
     _current_platform,
@@ -89,7 +89,7 @@ def test_dispatch_table_covers_every_supported_platform() -> None:
     """Sanity: the dispatcher must route every supported platform — no
     silent fall-through to ``NotImplementedError`` for a tag the model
     accepts."""
-    from eawf.daemon.auth import _POSIX_DISPATCH
+    from eawf.runtime.daemon.auth import _POSIX_DISPATCH
 
     assert set(_POSIX_DISPATCH) == {"linux", "darwin", "freebsd"}
 
@@ -259,7 +259,7 @@ def test_verify_peer_credential_win32_happy_path() -> None:
     import win32file
     import win32pipe
 
-    from eawf.daemon.windows_security import build_user_only_security_attributes
+    from eawf.runtime.daemon.windows_security import build_user_only_security_attributes
 
     pipe_name = rf"\\.\pipe\eawfd-w05-{uuid.uuid4().hex[:8]}"
     sa = build_user_only_security_attributes()

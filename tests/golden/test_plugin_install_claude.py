@@ -12,7 +12,7 @@ To regenerate the fixture (intentional drift):
     uv run python - <<'PY'
     import shutil
     from pathlib import Path
-    from eawf.runtimes.claude.plugin_install import install_plugin
+    from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
     src = Path("/tmp/eawf-plugin-render")
     if src.exists():
@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "plugin_install" / "claude"
 

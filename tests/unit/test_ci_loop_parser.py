@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.ci_loop.parser`.
+"""Unit tests for :mod:`eawf.runtime.ci_loop.parser`.
 
 The parsers must be tolerant: malformed lines silently skipped, every
 matching line surfaced as a dataclass, and the pytest short-summary →
@@ -7,7 +7,7 @@ traceback association resolved by bare test name.
 
 from __future__ import annotations
 
-from eawf.ci_loop.parser import (
+from eawf.runtime.ci_loop.parser import (
     parse_mypy_failures,
     parse_pytest_failures,
     parse_ruff_failures,

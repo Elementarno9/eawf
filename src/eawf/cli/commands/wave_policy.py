@@ -1,6 +1,6 @@
 """``eawf wave policy set / show`` — sandbox policy CLI surface.
 
-Sandbox-policy entries are state-resident :class:`~eawf.sandbox.policy.SandboxPolicy`
+Sandbox-policy entries are state-resident :class:`~eawf.runtime.sandbox.policy.SandboxPolicy`
 rows stored on :attr:`~eawf.kernel.state.models.State.sandbox_policies`. v0.2 ships
 the populate + query verbs; enforcement (hard refusal at dispatch time) is
 deferred to a follow-up wave.
@@ -24,7 +24,7 @@ from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
-    from eawf.sandbox.policy import SandboxPolicy
+    from eawf.runtime.sandbox.policy import SandboxPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def policy_set(
     from pydantic import ValidationError
 
     from eawf.cli._mutation import state_transaction
-    from eawf.sandbox.policy import SANDBOX_SCOPE_KINDS, SandboxPolicy, allocate_policy_id
+    from eawf.runtime.sandbox.policy import SANDBOX_SCOPE_KINDS, SandboxPolicy, allocate_policy_id
 
     flags: GlobalFlags = ctx.obj
     try:

@@ -8,7 +8,7 @@ event. The cost row is part of the canonical event ledger so a later
 projection (after the operator opts in) can re-roll historical cost from
 events that were emitted while telemetry was off.
 
-This test drives :func:`eawf.daemon.dispatch_runner.run_dispatch` against a
+This test drives :func:`eawf.runtime.daemon.dispatch_runner.run_dispatch` against a
 real tmp ``event.jsonl`` while the merged layered config reports
 ``telemetry.enabled=false``, and asserts the ``dispatch_cost`` envelope is
 present on disk. The runner's emit path consults no telemetry flag — this
@@ -21,13 +21,13 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
-from eawf.daemon.dispatch_runner import (
+from eawf.kernel.config.layered import get_dotted, merge_config
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
     run_dispatch,
 )
-from eawf.daemon.methods import MethodContext
-from eawf.kernel.config.layered import get_dotted, merge_config
-from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.telemetry.models import RuntimeErrorClass
 
 

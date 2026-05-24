@@ -17,8 +17,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.hooks.event import HookEvent, HookEventType
-from eawf.hooks.runner import HookResult, HookRunner, _coerce_result
+from eawf.runtime.hooks.event import HookEvent, HookEventType
+from eawf.runtime.hooks.runner import HookResult, HookRunner, _coerce_result
 
 
 def _event(event_type: HookEventType = HookEventType.PRE_COMMIT) -> HookEvent:

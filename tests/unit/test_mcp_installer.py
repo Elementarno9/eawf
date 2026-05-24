@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.mcp.installer`.
+"""Unit tests for :mod:`eawf.runtime.mcp.installer`.
 
 Coverage:
 
@@ -25,8 +25,8 @@ import pytest
 
 from eawf.kernel.state.enums import McpRisk, McpStatus
 from eawf.kernel.state.models import McpServer
-from eawf.mcp import installer
-from eawf.mcp.installer import (
+from eawf.runtime.mcp import installer
+from eawf.runtime.mcp.installer import (
     IntegrityViolation,
     install_runtime_entry,
     list_runtime_entries,

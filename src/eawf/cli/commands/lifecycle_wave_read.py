@@ -37,7 +37,7 @@ from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import is_wave_id
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -509,7 +509,7 @@ def wave_budget_set_cmd(
     tokens: Annotated[int, typer.Argument(help="Non-negative token cap (0 allowed).")],
 ) -> None:
     """Set ``Wave.token_budget`` for *wave_id* (non-negative integer)."""
-    from eawf.budget.service import set_budget as budget_set
+    from eawf.runtime.budget.service import set_budget as budget_set
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -562,8 +562,8 @@ def wave_budget_consume_cmd(
     so the operator can see what was attempted before deciding to raise
     the budget or split the work.
     """
-    from eawf.budget.policy import BLOCK_TAG, WARN_TAG
-    from eawf.budget.service import record_consumption as budget_record
+    from eawf.runtime.budget.policy import BLOCK_TAG, WARN_TAG
+    from eawf.runtime.budget.service import record_consumption as budget_record
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -640,8 +640,8 @@ def wave_budget_show_cmd(
     """Print *wave_id*'s budget, consumption, remainder, and policy verdict."""
     from pydantic import ValidationError as PydValidationError
 
-    from eawf.budget.service import check_budget as budget_check
     from eawf.kernel.state.models import State
+    from eawf.runtime.budget.service import check_budget as budget_check
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):

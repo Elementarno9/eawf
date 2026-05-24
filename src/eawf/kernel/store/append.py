@@ -25,7 +25,7 @@ from pathlib import Path
 
 from eawf.cli.errors import StateConflict
 from eawf.kernel.store.envelope import Envelope
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def append_envelope(path: Path, envelope: Envelope, *, timeout: float = 5.0) -> 
     """Append *envelope* to the JSONL file at *path* under portalock + fsync.
 
     Creates the parent directory if missing. Acquires
-    :func:`eawf.lock.portalock.acquire` on the JSONL file (sibling
+    :func:`eawf.runtime.lock.portalock.acquire` on the JSONL file (sibling
     lockfile), appends one line, calls ``os.fsync`` on the file, releases.
 
     Raises:

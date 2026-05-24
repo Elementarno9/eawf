@@ -23,7 +23,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.render.envelope import EnvelopeStatus as EnvelopeStatusFromEnvelope
-from eawf.runtimes.plugin_manifest import (
+from eawf.runtime.runtimes.plugin_manifest import (
     EnvelopeStatus,
     RuntimeId,
     SkillManifest,
@@ -179,11 +179,11 @@ def test_shipped_skill_manifests_use_canonical_session_policy() -> None:
     """Every shipped skill manifest's ``session_policy`` is on the canonical set.
 
     The dispatcher accepts only
-    :data:`~eawf.daemon.methods.agent.SessionPolicy`
+    :data:`~eawf.runtime.daemon.methods.agent.SessionPolicy`
     (``fresh`` / ``continue`` / ``hybrid``); an off-vocabulary value (e.g. the
     legacy ``reuse``) would never match the dispatch policy.
     """
-    from eawf.daemon.methods.agent import SessionPolicy
+    from eawf.runtime.daemon.methods.agent import SessionPolicy
     from eawf.workflow.skills.coauthor import MANIFEST as COAUTHOR_MANIFEST
     from eawf.workflow.skills.compress import MANIFEST as COMPRESS_MANIFEST
     from eawf.workflow.skills.memory import MANIFEST as MEMORY_MANIFEST

@@ -30,20 +30,20 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import store_kind_for_role
 from eawf.render.agents import AGENT_REGISTRY
-from eawf.runtimes.manifest import RuntimeId
+from eawf.runtime.runtimes.manifest import RuntimeId
 
 logger = logging.getLogger(__name__)
 
 
 #: Runtimes the role library renders to. Pinned to the v0.3-v0.5 kept set
 #: (decision D12) and ordered to match
-#: :data:`eawf.runtimes.capabilities.RUNTIME_IDS`.
+#: :data:`eawf.runtime.runtimes.capabilities.RUNTIME_IDS`.
 KEPT_RUNTIMES: tuple[RuntimeId, ...] = ("claude-code", "codex", "opencode")
 
 
 #: Per-runtime note describing where the runtime materialises a subagent
 #: role definition on disk. Mirrors the placement documented on
-#: :class:`eawf.runtimes.manifest.PluginContributes.agents`.
+#: :class:`eawf.runtime.runtimes.manifest.PluginContributes.agents`.
 _RUNTIME_PLACEMENT: dict[RuntimeId, str] = {
     "claude-code": "Rendered as `.claude/agents/<role>.md`.",
     "codex": "Nested inside the Codex skill bundle (no standalone agent file).",

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.budget.policy`.
+"""Unit tests for :mod:`eawf.runtime.budget.policy`.
 
 Covers the boundary conditions of the warn/block threshold classifier:
 no-budget, well-under, exactly-at-warn, exactly-at-block, over-block.
@@ -6,7 +6,7 @@ no-budget, well-under, exactly-at-warn, exactly-at-block, over-block.
 
 from __future__ import annotations
 
-from eawf.budget.policy import (
+from eawf.runtime.budget.policy import (
     BLOCK_TAG,
     WARN_TAG,
     classify,

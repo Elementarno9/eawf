@@ -3,7 +3,7 @@
 The bounded-read handlers (``event.list``, ``event.show``) are tested
 in-process via the module-level functions. The streaming path
 (``event.subscribe`` / ``state.subscribe``) is exercised end-to-end
-through :func:`eawf.daemon.server.handle_connection` driven by a
+through :func:`eawf.runtime.daemon.server.handle_connection` driven by a
 ``socket.socketpair`` so we hit the real JSON-RPC framing code.
 """
 
@@ -23,13 +23,13 @@ import pytest
 from pydantic import ValidationError
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.event import list_events, show_event
-from eawf.daemon.server import handle_connection
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.event import list_events, show_event
+from eawf.runtime.daemon.server import handle_connection
 
 pytestmark = pytest.mark.unit
 
@@ -354,7 +354,7 @@ def test_state_subscribe_alias_routes_to_streamer(tmp_path: Path) -> None:
 
 def test_subscribe_sentinel_handler_raises_when_dispatched_directly() -> None:
     """The non-streaming dispatch path must not silently accept subscribe."""
-    from eawf.daemon.methods.state_subscribe import (
+    from eawf.runtime.daemon.methods.state_subscribe import (
         event_subscribe,
         state_subscribe,
     )

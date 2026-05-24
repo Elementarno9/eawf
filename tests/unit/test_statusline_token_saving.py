@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eawf.runtimes.claude.statusline_modules import token_saving
+from eawf.runtime.runtimes.claude.statusline_modules import token_saving
 
 
 def test_missing_payload_returns_dash() -> None:

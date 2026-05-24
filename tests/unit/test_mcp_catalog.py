@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.mcp.catalog`.
+"""Unit tests for :mod:`eawf.runtime.mcp.catalog`.
 
 The v0.1 catalog ships empty (plan §9 line 461). These tests pin
 the contract so v0.1.1 can populate ``KNOWN_MCPS`` without surface
@@ -19,7 +19,7 @@ import warnings
 import pytest
 
 from eawf.kernel.state.enums import McpRisk
-from eawf.mcp.catalog import KNOWN_MCPS, McpCatalogEntry
+from eawf.runtime.mcp.catalog import KNOWN_MCPS, McpCatalogEntry
 
 pytestmark = pytest.mark.unit
 
@@ -63,6 +63,6 @@ def test_mcp_catalog_module_import_is_side_effect_free() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         # ``importlib.reload`` re-executes the module body.
-        import eawf.mcp.catalog as catalog_mod
+        import eawf.runtime.mcp.catalog as catalog_mod
 
         importlib.reload(catalog_mod)

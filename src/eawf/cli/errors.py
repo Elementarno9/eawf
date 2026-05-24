@@ -442,7 +442,7 @@ def emit_error(
 # surfacing an RPC failure as a CLI exit.
 
 #: Wire code the daemon emits for a validation_failed rejection (mirrors
-#: ``eawf.daemon.methods.VALIDATION_FAILED``). Single-sourced here so the
+#: ``eawf.runtime.daemon.methods.VALIDATION_FAILED``). Single-sourced here so the
 #: client-side comparison sites do not drift from the code table below.
 RPC_VALIDATION_FAILED: Final[int] = -32002
 

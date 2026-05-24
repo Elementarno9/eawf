@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.worktree.merge_back.merge_back`.
+"""Unit tests for :func:`eawf.runtime.worktree.merge_back.merge_back`.
 
 The tests build a tmp git repo with a parent feature branch and a
 worktree branch carrying one or more commits. They exercise both
@@ -16,8 +16,8 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WorktreeStatus
-from eawf.worktree.create import create_worktree
-from eawf.worktree.merge_back import (
+from eawf.runtime.worktree.create import create_worktree
+from eawf.runtime.worktree.merge_back import (
     STRATEGY_REBASE_THEN_FF,
     merge_back,
 )

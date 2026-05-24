@@ -247,7 +247,7 @@ def test_routed_kinds_are_all_in_daemon_apply_registry() -> None:
     routed kinds against the apply registry stops a verb from routing a
     kind the daemon would reject with ``-32601``.
     """
-    from eawf.daemon.methods.state import _APPLY_REGISTRY
+    from eawf.runtime.daemon.methods.state import _APPLY_REGISTRY
 
     routed_kinds = {kind for _id, _argv, kind, _scope in _ROUTED_VERBS}
     routed_kinds.add(MutationKind.ITER_CLOSE)

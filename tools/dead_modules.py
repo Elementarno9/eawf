@@ -51,7 +51,7 @@ ALLOWLIST: frozenset[str] = frozenset(
         "eawf.__main__",
         "eawf._version",
         "eawf.cli.app",
-        "eawf.daemon.main",
+        "eawf.runtime.daemon.main",
     }
 )
 

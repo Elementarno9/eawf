@@ -12,7 +12,7 @@ import pytest
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.state.models import ActualSummary
 from eawf.kernel.store.kinds.actual import ActualPayload
-from eawf.lock.stale import STALE_HEARTBEAT_SECONDS
+from eawf.runtime.lock.stale import STALE_HEARTBEAT_SECONDS
 from eawf.workflow.estimation import recovery
 from eawf.workflow.estimation.segments import open_segment
 

@@ -43,8 +43,8 @@ from eawf.kernel.state.enums import (
     ScopeKind,
 )
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.lock.portalock import LockTimeout
-from eawf.runtimes.claude.plugin_doctor import (
+from eawf.runtime.lock.portalock import LockTimeout
+from eawf.runtime.runtimes.claude.plugin_doctor import (
     doctor_plugin_strict,
     plugin_sync_lock,
     plugin_sync_lock_path,

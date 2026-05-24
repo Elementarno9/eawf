@@ -14,7 +14,7 @@ project-owned identity when desired.
 ## Configuration surface
 
 The `vcs.coauthor` config block (validated by
-`eawf.vcs.coauthor.CoauthorConfig`) carries four knobs:
+`eawf.runtime.vcs.coauthor.CoauthorConfig`) carries four knobs:
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
@@ -31,7 +31,7 @@ the same alias table so config can use the human-readable spelling.
 
 ## Resolution algorithm
 
-`resolve_coauthor_trailer` (`src/eawf/vcs/coauthor.py`) executes the
+`resolve_coauthor_trailer` (`src/eawf/runtime/vcs/coauthor.py`) executes the
 following ladder:
 
 1. **`mode=disabled`** — return `None`. If `message_text` is supplied

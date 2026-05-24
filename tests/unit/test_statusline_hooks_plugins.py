@@ -6,7 +6,7 @@ from pathlib import Path
 
 import orjson
 
-from eawf.runtimes.claude.statusline_modules import hooks_plugins
+from eawf.runtime.runtimes.claude.statusline_modules import hooks_plugins
 
 
 def _seed_state(tmp_path: Path, payload: dict[str, object]) -> Path:

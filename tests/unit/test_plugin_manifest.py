@@ -17,8 +17,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from eawf.runtimes.claude.plugin_package import render_plugin_manifest
-from eawf.runtimes.manifest import (
+from eawf.runtime.runtimes.claude.plugin_package import render_plugin_manifest
+from eawf.runtime.runtimes.manifest import (
     PluginContributes,
     PluginInfo,
     PluginManaged,

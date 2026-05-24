@@ -21,8 +21,8 @@ from pathlib import Path
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from eawf.hooks.event import HookEvent, HookEventType
-from eawf.hooks.runner import (
+from eawf.runtime.hooks.event import HookEvent, HookEventType
+from eawf.runtime.hooks.runner import (
     HookRunner,
     _event_idempotence_key,
     append_event_idempotent,

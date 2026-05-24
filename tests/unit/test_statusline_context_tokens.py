@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eawf.runtimes.claude.statusline_modules import context_tokens
+from eawf.runtime.runtimes.claude.statusline_modules import context_tokens
 
 
 def test_token_usage_sub_object_renders_in_out() -> None:

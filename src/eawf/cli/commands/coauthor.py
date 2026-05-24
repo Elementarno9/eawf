@@ -44,7 +44,7 @@ def coauthor_resolve(
     from pydantic import ValidationError
 
     from eawf.kernel.config.layered import merge_config
-    from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
+    from eawf.runtime.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)

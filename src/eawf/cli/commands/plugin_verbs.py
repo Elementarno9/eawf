@@ -5,7 +5,7 @@ Split out of :mod:`eawf.cli.commands.plugin` (P27-I05-W09). The
 scope / runtime validators live in the parent module; the JSON / text
 renderers live in :mod:`eawf.cli.commands.plugin_render`. This module
 attaches the five command bodies via ``@plugin_app.command(...)`` and
-keeps every ``eawf.runtimes.*`` import inside the handler bodies so the
+keeps every ``eawf.runtime.runtimes.*`` import inside the handler bodies so the
 command-tree build path stays off the import-budget heavy graph.
 """
 
@@ -57,7 +57,7 @@ from eawf.cli.flags import GlobalFlags
 from eawf.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
-    from eawf.runtimes.claude.plugin_update import UpdateResult
+    from eawf.runtime.runtimes.claude.plugin_update import UpdateResult
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,8 @@ def _install_codex(
     Raises:
         typer.Exit: via :func:`emit_error` on an integrity violation.
     """
-    from eawf.runtimes.codex import install_plugin as codex_install_plugin
-    from eawf.runtimes.codex.plugin_install import (
+    from eawf.runtime.runtimes.codex import install_plugin as codex_install_plugin
+    from eawf.runtime.runtimes.codex.plugin_install import (
         IntegrityViolation as CodexIntegrityViolation,
     )
 
@@ -116,8 +116,8 @@ def _install_opencode(
         typer.Exit: via :func:`emit_error` on an integrity violation or
             invalid input.
     """
-    from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
-    from eawf.runtimes.opencode.plugin_install import (
+    from eawf.runtime.runtimes.opencode import install_plugin as opencode_install_plugin
+    from eawf.runtime.runtimes.opencode.plugin_install import (
         IntegrityViolation as OpencodeIntegrityViolation,
     )
 
@@ -181,7 +181,7 @@ def install_cmd(
     ] = False,
 ) -> None:
     """Render a runtime plugin tree."""
-    from eawf.runtimes.claude.plugin_install import (
+    from eawf.runtime.runtimes.claude.plugin_install import (
         IntegrityViolation,
         install_plugin,
     )
@@ -251,14 +251,14 @@ def update_cmd(
     ] = "project",
 ) -> None:
     """Re-render a runtime plugin tree, aborting on hand-edits."""
-    from eawf.runtimes.claude.plugin_install import IntegrityViolation
-    from eawf.runtimes.claude.plugin_update import update_plugin
-    from eawf.runtimes.codex import install_plugin as codex_install_plugin
-    from eawf.runtimes.codex.plugin_install import (
+    from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
+    from eawf.runtime.runtimes.claude.plugin_update import update_plugin
+    from eawf.runtime.runtimes.codex import install_plugin as codex_install_plugin
+    from eawf.runtime.runtimes.codex.plugin_install import (
         IntegrityViolation as CodexIntegrityViolation,
     )
-    from eawf.runtimes.opencode import install_plugin as opencode_install_plugin
-    from eawf.runtimes.opencode.plugin_install import (
+    from eawf.runtime.runtimes.opencode import install_plugin as opencode_install_plugin
+    from eawf.runtime.runtimes.opencode.plugin_install import (
         IntegrityViolation as OpencodeIntegrityViolation,
     )
 
@@ -324,9 +324,9 @@ def _doctor_single_runtime(*, runtime: str, scope: str, target: Path, flags: Glo
         typer.Exit: ``INTEGRITY_VIOLATION`` when the runtime reports
             drift; or via :func:`emit_error` on invalid runtime / scope.
     """
-    from eawf.runtimes.claude.plugin_doctor import doctor_plugin
-    from eawf.runtimes.codex import doctor_plugin as codex_doctor_plugin
-    from eawf.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
+    from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
+    from eawf.runtime.runtimes.codex import doctor_plugin as codex_doctor_plugin
+    from eawf.runtime.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
 
     try:
         _validate_runtime(runtime)
@@ -396,8 +396,8 @@ def doctor_cmd(
     ] = False,
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
-    from eawf.runtimes.claude.plugin_doctor import doctor_plugin_strict
-    from eawf.runtimes.plugin_doctor import run_doctor
+    from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin_strict
+    from eawf.runtime.runtimes.plugin_doctor import run_doctor
 
     flags: GlobalFlags = ctx.obj
     target = _resolve_target(flags)
@@ -510,9 +510,9 @@ def package_cmd(
     ] = False,
 ) -> None:
     """Emit an installable runtime plugin tree."""
-    from eawf.runtimes.claude.plugin_install import IntegrityViolation
-    from eawf.runtimes.claude.plugin_package import package_plugin
-    from eawf.runtimes.codex import package_plugin as codex_package_plugin
+    from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
+    from eawf.runtime.runtimes.claude.plugin_package import package_plugin
+    from eawf.runtime.runtimes.codex import package_plugin as codex_package_plugin
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -617,7 +617,7 @@ def sync_cmd(
     shared inputs (frozen timestamp, pass-through force / dry_run); the
     result aggregates per-file deltas under a single envelope.
     """
-    from eawf.runtimes.plugin_sync import PluginSyncIntegrityError, sync_plugins
+    from eawf.runtime.runtimes.plugin_sync import PluginSyncIntegrityError, sync_plugins
 
     flags: GlobalFlags = ctx.obj
     if scope not in _VALID_SCOPES:
@@ -640,7 +640,7 @@ def sync_cmd(
         # The Sequence[RuntimeId] cast is structural — canonical is
         # built from the closed alias map above so the strings are
         # already one of the three canonical ids.
-        from eawf.runtimes.manifest import RuntimeId
+        from eawf.runtime.runtimes.manifest import RuntimeId
 
         typed_runtimes = cast(list[RuntimeId], canonical)
         result = sync_plugins(

@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.worktree.create.create_worktree`.
+"""Unit tests for :func:`eawf.runtime.worktree.create.create_worktree`.
 
 The tests stand up a small ``git init``-ed tmp repo, seed a minimal
 :class:`State` with one CLAIMED wave, then exercise the create-time
@@ -33,7 +33,7 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.worktree.create import create_worktree
+from eawf.runtime.worktree.create import create_worktree
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,
@@ -110,7 +110,7 @@ def _claimed_state(*, wave_id: str = "P05-I01-W01") -> State:
                     title="W1",
                     status=WaveStatus.CLAIMED,
                     deps=[],
-                    file_scopes=["src/eawf/worktree/"],
+                    file_scopes=["src/eawf/runtime/worktree/"],
                     claim_session_id="SES-001",
                     opened_at=_DT,
                 ).model_dump(mode="json"),
@@ -264,7 +264,7 @@ def test_list_worktrees_git_present_cross_check_post_relative_path(
     ``repo_root`` before comparing against ``git worktree list --porcelain``
     output (which emits absolute paths). Regression for the
     path-relativization audit fix in P08."""
-    from eawf.worktree import list_worktrees
+    from eawf.runtime.worktree import list_worktrees
 
     repo = _make_repo(tmp_path / "repo")
     state = _claimed_state()

@@ -27,11 +27,11 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.registry import read, update
 from eawf.kernel.state.enums import StoreKind
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.registry import read, update
 
 pytestmark = pytest.mark.unit
 

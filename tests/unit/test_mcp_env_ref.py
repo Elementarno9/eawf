@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.mcp.env_ref`.
+"""Unit tests for :mod:`eawf.runtime.mcp.env_ref`.
 
 Coverage:
 
@@ -20,8 +20,8 @@ import inspect
 
 import pytest
 
-from eawf.mcp import env_ref
-from eawf.mcp.env_ref import (
+from eawf.runtime.mcp import env_ref
+from eawf.runtime.mcp.env_ref import (
     ENV_REF_RE,
     InvalidEnvRef,
     assert_no_expansion,

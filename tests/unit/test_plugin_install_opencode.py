@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtimes.opencode import doctor_plugin, install_plugin
-from eawf.runtimes.opencode.plugin_install import (
+from eawf.runtime.runtimes.opencode import doctor_plugin, install_plugin
+from eawf.runtime.runtimes.opencode.plugin_install import (
     IntegrityViolation,
     expected_plugin_js_bytes,
 )

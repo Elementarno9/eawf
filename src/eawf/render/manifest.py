@@ -44,7 +44,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 

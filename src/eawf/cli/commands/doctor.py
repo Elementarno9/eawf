@@ -56,9 +56,9 @@ from eawf.install.instrument_probe import resolve_cache_path
 if TYPE_CHECKING:
     # Annotation-only; the runtime capability/probe values are imported
     # lazily inside _run_runtime_drift_check so importing this module for
-    # completion does not pull eawf.runtimes.capabilities (and its yaml
+    # completion does not pull eawf.runtime.runtimes.capabilities (and its yaml
     # transitive dep).
-    from eawf.runtimes.capabilities import DriftRow
+    from eawf.runtime.runtimes.capabilities import DriftRow
 
 logger = logging.getLogger(__name__)
 
@@ -271,13 +271,13 @@ def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
         ValidationError: ``runtime_id`` is not one of the three
             canonical v0.3-v0.5 runtimes.
     """
-    from eawf.runtimes.capabilities import (
+    from eawf.runtime.runtimes.capabilities import (
         RUNTIME_IDS,
         ProbeResult,
         detect_drift,
         render_drift_table,
     )
-    from eawf.runtimes.probes.sdk_baseline import probe_all
+    from eawf.runtime.runtimes.probes.sdk_baseline import probe_all
 
     if runtime_id not in RUNTIME_IDS:
         raise ValidationError(

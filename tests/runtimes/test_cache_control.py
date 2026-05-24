@@ -3,7 +3,7 @@
 Covers the three wave success criteria (P26-I01-W14):
 
 * **(a) marker injection at adapter boundary** —
-  :func:`~eawf.runtimes.cache_control.inject_cache_control` appends the
+  :func:`~eawf.runtime.runtimes.cache_control.inject_cache_control` appends the
   Claude ``<cache_control type="ephemeral" />`` breakpoint for
   ``claude-code`` (the only runtime with a caller-side marker per §5.6),
   and the Claude adapter's ``open_session`` routes its ``cache_prefix``
@@ -30,7 +30,7 @@ from typing import cast
 import pytest
 
 from eawf.kernel.state.models import SessionAttempt, Wave
-from eawf.runtimes.cache_control import (
+from eawf.runtime.runtimes.cache_control import (
     DEFAULT_MARKER,
     CacheControlMarker,
     CompressionDirective,
@@ -38,9 +38,9 @@ from eawf.runtimes.cache_control import (
     inject_cache_control,
     runtime_accepts_marker,
 )
-from eawf.runtimes.claude.adapter import ClaudeAdapter
-from eawf.runtimes.codex.adapter import CodexAdapter
-from eawf.runtimes.opencode.adapter import OpenCodeAdapter
+from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
+from eawf.runtime.runtimes.codex.adapter import CodexAdapter
+from eawf.runtime.runtimes.opencode.adapter import OpenCodeAdapter
 from eawf.workflow.skills.compress import CompressSkill
 from eawf.workflow.skills.engine import SkillContext, run_skill
 

@@ -29,26 +29,26 @@ import pytest
 
 
 def test_module_raises_importerror_on_non_windows() -> None:
-    """``import eawf.daemon.windows_pipe`` must fail on POSIX."""
+    """``import eawf.runtime.daemon.windows_pipe`` must fail on POSIX."""
     if sys.platform == "win32":
         pytest.skip("guard only fires on non-Windows")
     with pytest.raises(ImportError, match="win32-only"):
-        import eawf.daemon.windows_pipe  # noqa: F401
+        import eawf.runtime.daemon.windows_pipe  # noqa: F401
 
 
 def test_security_module_raises_importerror_on_non_windows() -> None:
-    """``import eawf.daemon.windows_security`` must fail on POSIX."""
+    """``import eawf.runtime.daemon.windows_security`` must fail on POSIX."""
     if sys.platform == "win32":
         pytest.skip("guard only fires on non-Windows")
     with pytest.raises(ImportError, match="win32-only"):
-        import eawf.daemon.windows_security  # noqa: F401
+        import eawf.runtime.daemon.windows_security  # noqa: F401
 
 
 def test_verify_windows_peer_rejects_non_windows() -> None:
     """``verify_windows_peer`` is win32-only — POSIX raises NotImplementedError."""
     if sys.platform == "win32":
         pytest.skip("entry point routes through windows_security on Windows")
-    from eawf.daemon.auth import verify_windows_peer
+    from eawf.runtime.daemon.auth import verify_windows_peer
 
     with pytest.raises(NotImplementedError, match="win32-only"):
         verify_windows_peer(object(), None)
@@ -59,7 +59,7 @@ def test_build_user_only_security_attributes_returns_sec_attrs() -> None:
     pytest.importorskip("win32security")
     pytest.importorskip("ntsecuritycon")
 
-    from eawf.daemon.windows_security import build_user_only_security_attributes
+    from eawf.runtime.daemon.windows_security import build_user_only_security_attributes
 
     sa = build_user_only_security_attributes()
     # pywin32 ``SECURITY_ATTRIBUTES`` exposes ``SECURITY_DESCRIPTOR`` +
@@ -82,7 +82,7 @@ def test_windows_pipe_server_constructor_wires_queue_and_thread() -> None:
     pytest.importorskip("win32pipe")
     pytest.importorskip("win32file")
 
-    from eawf.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
 
     async def runner() -> None:
         loop = asyncio.get_running_loop()
@@ -115,7 +115,7 @@ def test_windows_pipe_server_default_pipe_name_uses_username() -> None:
 
     import getpass
 
-    from eawf.daemon.windows_pipe import default_pipe_name
+    from eawf.runtime.daemon.windows_pipe import default_pipe_name
 
     name = default_pipe_name()
     assert name.startswith(r"\\.\pipe\eawfd-")
@@ -126,7 +126,7 @@ def test_windows_pipe_server_start_twice_rejected() -> None:
     """A double ``start()`` raises RuntimeError before launching threads."""
     pytest.importorskip("win32pipe")
 
-    from eawf.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
 
     async def runner() -> None:
         loop = asyncio.get_running_loop()

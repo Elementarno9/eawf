@@ -3,12 +3,12 @@
 ``/coauthor`` is a thin skill-surface wrapper over the already-shipped
 co-author policy machinery:
 
-- :class:`eawf.vcs.coauthor.CoauthorConfig` — the validated
+- :class:`eawf.runtime.vcs.coauthor.CoauthorConfig` — the validated
   ``vcs.coauthor`` config block (``mode`` ∈ ``runtime|project|disabled``).
-- :func:`eawf.vcs.coauthor.resolve_coauthor_trailer` — the canonical
+- :func:`eawf.runtime.vcs.coauthor.resolve_coauthor_trailer` — the canonical
   resolver that turns a config + the explicit runtime opt-in into a
   trailer line (or ``None`` when trailers are disabled).
-- :func:`eawf.runtimes.coauthor.resolve_runtime_explicit` — the
+- :func:`eawf.runtime.runtimes.coauthor.resolve_runtime_explicit` — the
   KISS-001 explicit-opt-in runtime resolver consulted by the resolver
   above.
 
@@ -36,8 +36,8 @@ import logging
 from typing import Any, cast
 
 from eawf.render.envelope import SkillName
-from eawf.runtimes.plugin_manifest import SkillManifest
-from eawf.vcs.coauthor import (
+from eawf.runtime.runtimes.plugin_manifest import SkillManifest
+from eawf.runtime.vcs.coauthor import (
     CoauthorConfig,
     CoauthorMode,
     CoauthorPolicyError,

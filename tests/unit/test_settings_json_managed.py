@@ -16,7 +16,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from eawf.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
 _USER_KEYS_FIXTURE: dict[str, object] = {
     "$schema": "https://json.schemastore.org/claude-code-settings.json",

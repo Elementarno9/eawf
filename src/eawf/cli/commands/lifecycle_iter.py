@@ -41,7 +41,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_project_code
 from eawf.kernel.state.mutations import MutationKind
 from eawf.kernel.state.urn import build as build_urn
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Iter, State

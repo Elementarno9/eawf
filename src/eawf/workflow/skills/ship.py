@@ -40,7 +40,7 @@ from eawf.kernel.state.enums import AuditKind, AuditVerdict
 from eawf.kernel.state.ids import is_phase_id, parents_of
 from eawf.kernel.state.models import Audit, State
 from eawf.render.envelope import SkillName
-from eawf.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
+from eawf.runtime.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 from eawf.workflow.skills.bodies.ship import (
     ShipBody,
     ShipCommitGroup,
@@ -283,9 +283,9 @@ def _load_vcs_config(state_path: Path) -> VcsConfig:
 def _resolve_coauthor_trailer_for_ship(vcs_config: VcsConfig) -> str | None:
     """Resolve the ship run's co-author trailer.
 
-    Delegates entirely to :func:`eawf.vcs.coauthor.resolve_coauthor_trailer`;
+    Delegates entirely to :func:`eawf.runtime.vcs.coauthor.resolve_coauthor_trailer`;
     co-author policy is never reimplemented here. A
-    :class:`~eawf.vcs.coauthor.CoauthorPolicyError` (e.g. a runtime with no
+    :class:`~eawf.runtime.vcs.coauthor.CoauthorPolicyError` (e.g. a runtime with no
     configured identity) degrades to ``None`` so trailer resolution never
     aborts a ship — the commit-time pre-commit hooks still enforce the
     trailer at commit time.

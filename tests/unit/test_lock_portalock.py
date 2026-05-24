@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 
 def test_acquire_writes_holder_metadata(tmp_path: Path) -> None:

@@ -269,7 +269,7 @@ def test_accepts_core_touching_secrets_baseline(tmp_path: Path, mod) -> None:
 def test_accepts_wave_commit_with_iter_component(tmp_path: Path, mod) -> None:
     """Iter component is mandatory for I02+ (single-iter phases stay short)."""
     msg = _write_msg(tmp_path, "[P14-I02-W01] feat: native plugin layout\n")
-    code, diag = mod.lint(msg, ["src/eawf/runtimes/codex/plugin_install.py"])
+    code, diag = mod.lint(msg, ["src/eawf/runtime/runtimes/codex/plugin_install.py"])
     assert code == 0, diag
 
 

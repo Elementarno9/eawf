@@ -30,7 +30,7 @@ from typing import Any
 
 from eawf.kernel.state.enums import MemoryTier
 from eawf.render.envelope import SkillName
-from eawf.runtimes.plugin_manifest import SkillManifest
+from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,

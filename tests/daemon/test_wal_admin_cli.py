@@ -3,7 +3,7 @@
 The verb reads the local WAL directory directly; the daemon need not
 be running. Tests redirect ``runtime_dir`` to ``tmp_path`` via the
 ``XDG_RUNTIME_DIR`` env var (Linux) and a ``monkeypatch`` on the
-:mod:`eawf.daemon.runtime_dir` resolver (other platforms).
+:mod:`eawf.runtime.daemon.runtime_dir` resolver (other platforms).
 """
 
 from __future__ import annotations
@@ -18,16 +18,16 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.daemon import wal
-from eawf.daemon.wal import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon import wal
+from eawf.runtime.daemon.wal import (
     WalRecord,
     mark_applied,
     mark_fsynced,
     mark_poisoned,
     write_pending,
 )
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 
@@ -61,7 +61,7 @@ def _redirect_runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     target = tmp_path / "eawfd"
     target.mkdir(parents=True, exist_ok=True)
     # Override the resolver so every platform path resolves identically.
-    monkeypatch.setattr("eawf.daemon.runtime_dir.runtime_dir", lambda: target)
+    monkeypatch.setattr("eawf.runtime.daemon.runtime_dir.runtime_dir", lambda: target)
     monkeypatch.setattr("eawf.cli.commands.daemon.runtime_dir", lambda: target)
     return target
 
@@ -210,9 +210,9 @@ def test_wal_admin_methods_register_when_imported() -> None:
     """
     import importlib
 
-    from eawf.daemon.methods import registered_methods
+    from eawf.runtime.daemon.methods import registered_methods
 
-    importlib.import_module("eawf.daemon.methods.wal_admin")
+    importlib.import_module("eawf.runtime.daemon.methods.wal_admin")
     methods = set(registered_methods())
     expected = {"wal.list_pending", "wal.list_poisoned", "wal.gc", "wal.inspect"}
     assert expected.issubset(methods)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import orjson
 
-from eawf.runtimes.claude.statusline_modules import state as state_module
+from eawf.runtime.runtimes.claude.statusline_modules import state as state_module
 
 
 def _write_state(tmp_path: Path, payload: dict[str, object]) -> Path:

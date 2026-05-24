@@ -83,7 +83,7 @@ import typer
 from eawf.cli import errors as cli_errors
 from eawf.cli.flags import GlobalFlags
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 if TYPE_CHECKING:
     from eawf.registry import Registry

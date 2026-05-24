@@ -1,6 +1,6 @@
 """Integration: dispatch runner emits C09 events via the daemon writer.
 
-Exercises :mod:`eawf.daemon.dispatch_runner` end-to-end against a real
+Exercises :mod:`eawf.runtime.daemon.dispatch_runner` end-to-end against a real
 ``event.jsonl`` on a tmp filesystem. The assertions prove three things
 the C09 §5.11 success criteria require:
 
@@ -26,13 +26,6 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from eawf.daemon.bus import EventBus
-from eawf.daemon.dispatch_runner import (
-    DispatchTokens,
-    emit_dispatch_cost,
-    run_dispatch,
-)
-from eawf.daemon.methods import MethodContext
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events import (
@@ -40,6 +33,13 @@ from eawf.kernel.store.kinds.events import (
     DispatchCostPayload,
     RuntimeSwitchedPayload,
 )
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.dispatch_runner import (
+    DispatchTokens,
+    emit_dispatch_cost,
+    run_dispatch,
+)
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.telemetry.models import RuntimeErrorClass
 
 _UNION_ADAPTER: TypeAdapter[object] = TypeAdapter(C09EventPayloadUnion)

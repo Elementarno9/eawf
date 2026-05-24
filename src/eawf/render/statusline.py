@@ -1,8 +1,8 @@
 """Theme-aware statusline rendering for ``eawf cc statusline`` (Phase 4 W06).
 
-The orchestrator in :mod:`eawf.runtimes.claude.statusline` collects a list of
+The orchestrator in :mod:`eawf.runtime.runtimes.claude.statusline` collects a list of
 :class:`StatuslineSegment` records (one per module — see
-:mod:`eawf.runtimes.claude.statusline_modules`). This module's job is the
+:mod:`eawf.runtime.runtimes.claude.statusline_modules`). This module's job is the
 last mile: take a list of segments and a theme, return a single line of
 text ready for stdout.
 
@@ -159,25 +159,23 @@ def load_themes() -> dict[str, StatuslineTheme]:
     try:
         raw_text = (files(_TEMPLATES_PACKAGE) / _THEMES_FILENAME).read_text(encoding="utf-8")
     except FileNotFoundError:
-        logger.warning(f"statusline: themes file missing in {_TEMPLATES_PACKAGE!r}")
+        logger.warning(f"load_themes themes-file-missing package={_TEMPLATES_PACKAGE!r}")
         return {_DEFAULT_THEME_NAME: StatuslineTheme(name=_DEFAULT_THEME_NAME)}
     parsed: Any
     try:
         parsed = yaml.safe_load(raw_text) or {}
     except yaml.YAMLError as exc:
-        logger.warning(f"statusline: themes.yaml parse error: {exc}")
+        logger.warning(f"load_themes themes-yaml-parse-error error={exc}")
         return {_DEFAULT_THEME_NAME: StatuslineTheme(name=_DEFAULT_THEME_NAME)}
     if not isinstance(parsed, dict):
-        logger.warning(
-            f"statusline: themes.yaml top-level must be a mapping, got {type(parsed).__name__}"
-        )
+        logger.warning(f"load_themes themes-yaml-not-mapping got={type(parsed).__name__}")
         return {_DEFAULT_THEME_NAME: StatuslineTheme(name=_DEFAULT_THEME_NAME)}
     out: dict[str, StatuslineTheme] = {}
     for name, body in parsed.items():
         if not isinstance(name, str):
             continue
         if not isinstance(body, dict):
-            logger.warning(f"statusline: theme {name!r} body must be mapping; skipping")
+            logger.warning(f"load_themes theme-body-not-mapping theme={name!r}; skipping")
             continue
         out[name] = _theme_from_payload(name, body)
     if _DEFAULT_THEME_NAME not in out:

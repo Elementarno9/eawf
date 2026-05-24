@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.daemon.spawn.auto_spawn_daemon`.
+"""Tests for :func:`eawf.runtime.daemon.spawn.auto_spawn_daemon`.
 
 These tests avoid actually fork-execing the daemon process for the
 core idempotency / stale-PID checks by monkeypatching the spawn
@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.daemon import spawn as spawn_mod
-from eawf.daemon.spawn import DaemonSpawnTimeout, auto_spawn_daemon
+from eawf.runtime.daemon import spawn as spawn_mod
+from eawf.runtime.daemon.spawn import DaemonSpawnTimeout, auto_spawn_daemon
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),

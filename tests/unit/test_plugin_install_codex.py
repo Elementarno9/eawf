@@ -17,8 +17,8 @@ import pytest
 
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
-from eawf.runtimes.codex import doctor_plugin, expected_paths, install_plugin
-from eawf.runtimes.codex.plugin_install import IntegrityViolation
+from eawf.runtime.runtimes.codex import doctor_plugin, expected_paths, install_plugin
+from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
 
 
 @pytest.fixture()

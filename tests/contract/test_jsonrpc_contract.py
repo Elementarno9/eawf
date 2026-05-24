@@ -6,8 +6,8 @@ The wire contract has three pinned layers:
   non-empty string ``method``, and an optional object ``params``; every
   response is either ``{jsonrpc, id, result}`` (success) or
   ``{jsonrpc, id, error: {code, message, data?}}`` (error). The
-  :func:`~eawf.daemon.server._parse_frame` validator + the
-  :func:`~eawf.daemon.server._success` / :func:`~eawf.daemon.server._error`
+  :func:`~eawf.runtime.daemon.server._parse_frame` validator + the
+  :func:`~eawf.runtime.daemon.server._success` / :func:`~eawf.runtime.daemon.server._error`
   builders own this shape.
 * **Error-code band** — the JSON-RPC reserved codes (-32700..-32600) plus
   the daemon-specific server-error band (-32000..-32099). The numeric
@@ -34,8 +34,8 @@ import pytest
 from pydantic import ValidationError
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.methods import (
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.methods import (
     VALIDATION_FAILED,
     DaemonValidationError,
     MethodContext,
@@ -43,7 +43,7 @@ from eawf.daemon.methods import (
     dispatch,
     registered_methods,
 )
-from eawf.daemon.methods.daemon import (
+from eawf.runtime.daemon.methods.daemon import (
     PingParams,
     PingResult,
     ShutdownParams,
@@ -51,7 +51,7 @@ from eawf.daemon.methods.daemon import (
     StatusParams,
     StatusResult,
 )
-from eawf.daemon.server import (
+from eawf.runtime.daemon.server import (
     CATCH_UP_TOO_LARGE,
     DAEMON_SHUTTING_DOWN,
     INTERNAL_ERROR,

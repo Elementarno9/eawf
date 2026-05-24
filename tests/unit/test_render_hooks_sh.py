@@ -7,15 +7,15 @@ Covers:
 - The wrapper synthesises a JSON payload with the expected keys
   (``hook_event_name``, ``claude_event_name``, ``args``).
 - The wrapper sets ``--runtime claude`` so the hook router translates
-  the payload via :mod:`eawf.runtimes.claude.hooks_router`.
+  the payload via :mod:`eawf.runtime.runtimes.claude.hooks_router`.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from eawf.hooks.event import HookEventType
 from eawf.render.hooks import HOOK_REGISTRY, render_hook_sh
+from eawf.runtime.hooks.event import HookEventType
 
 
 def test_render_hook_sh_starts_with_shebang() -> None:

@@ -22,7 +22,7 @@ from typing import cast
 
 import pytest
 
-from eawf.runtimes.plugin_manifest import SkillManifest
+from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.workflow.skills import (
     _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
 )

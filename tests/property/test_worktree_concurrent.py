@@ -43,10 +43,10 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from eawf.cli._mutation import state_transaction
-from eawf.lock import portalock
-from eawf.worktree import worktree_registry_lock
-from eawf.worktree.create import create_worktree
-from eawf.worktree.git import worktree_list
+from eawf.runtime.lock import portalock
+from eawf.runtime.worktree import worktree_registry_lock
+from eawf.runtime.worktree.create import create_worktree
+from eawf.runtime.worktree.git import worktree_list
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,

@@ -69,7 +69,7 @@ def statusline_root(
     """
     if ctx.invoked_subcommand is not None:
         return
-    from eawf.runtimes.claude import statusline as statusline_orchestrator
+    from eawf.runtime.runtimes.claude import statusline as statusline_orchestrator
 
     require_piped_stdin("eawf cc statusline")
     flags: GlobalFlags = ctx.obj
@@ -103,7 +103,7 @@ def statusline_prewarm(
     ] = None,
 ) -> None:
     """Render once and write the line to the per-session cache file."""
-    from eawf.runtimes.claude import statusline as statusline_orchestrator
+    from eawf.runtime.runtimes.claude import statusline as statusline_orchestrator
 
     require_piped_stdin("eawf cc statusline prewarm")
     flags: GlobalFlags = ctx.obj

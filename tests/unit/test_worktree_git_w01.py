@@ -1,4 +1,4 @@
-"""Coverage-lift tests for :mod:`eawf.worktree.git` (P27-I01-W01).
+"""Coverage-lift tests for :mod:`eawf.runtime.worktree.git` (P27-I01-W01).
 
 Two complementary strategies:
 
@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from eawf.cli import errors as cli_errors
-from eawf.worktree import git
+from eawf.runtime.worktree import git
 from tests.fixtures.conftest import make_dirty_repo
 
 _FAKE_GIT = "/usr/bin/git"
@@ -37,7 +37,7 @@ def dirty_repo(tmp_path: Path) -> Path:
 
 
 def _patch_git_present(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("eawf.worktree.git.shutil.which", lambda _name: _FAKE_GIT)
+    monkeypatch.setattr("eawf.runtime.worktree.git.shutil.which", lambda _name: _FAKE_GIT)
 
 
 def _patch_run(
@@ -55,14 +55,14 @@ def _patch_run(
             args=["git"], returncode=returncode, stdout=stdout, stderr=stderr
         )
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
 
 
 # --- _ensure_git / _run --------------------------------------------------
 
 
 def test_ensure_git_missing_raises_instrument_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("eawf.worktree.git.shutil.which", lambda _name: None)
+    monkeypatch.setattr("eawf.runtime.worktree.git.shutil.which", lambda _name: None)
     with pytest.raises(cli_errors.UserError, match="git executable not found"):
         git._ensure_git()
 
@@ -75,7 +75,7 @@ def test_run_timeout_maps_to_integrity_violation(
     def _raise_timeout(*_a: Any, **_k: Any) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=["git", "status"], timeout=1.0)
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _raise_timeout)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _raise_timeout)
     with pytest.raises(cli_errors.StateConflict, match="timed out"):
         git._run(["git", "-C", str(tmp_path), "status"])
 
@@ -315,7 +315,7 @@ def test_cherry_pick_now_empty_auto_skips(monkeypatch: pytest.MonkeyPatch, tmp_p
             args=args, returncode=1, stdout="", stderr="The previous cherry-pick is now empty"
         )
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
     assert git.cherry_pick(tmp_path, sha="abc") == (True, "")
     assert any("--skip" in c for c in calls)
 
@@ -335,7 +335,7 @@ def test_cherry_pick_now_empty_skip_fails_raises(
             args=args, returncode=1, stdout="", stderr="previous cherry-pick is now empty"
         )
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
     with pytest.raises(cli_errors.StateConflict):
         git.cherry_pick(tmp_path, sha="abc")
 
@@ -369,7 +369,7 @@ def test_cherry_pick_continue_now_empty_skips(
             return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="now empty")
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
     assert git.cherry_pick_continue(tmp_path) == (True, "")
 
 
@@ -385,7 +385,7 @@ def test_cherry_pick_continue_now_empty_skip_fails_returns_false(
             )
         return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="now empty")
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
     clean, detail = git.cherry_pick_continue(tmp_path)
     assert clean is False
     assert "skip failed" in detail
@@ -499,7 +499,7 @@ def test_merge_ff_only_success_returns_head(
             )
         return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr("eawf.worktree.git.subprocess.run", _fake_run)
+    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
     assert git.merge_ff_only(tmp_path, source="feature") == "cafef00d"
 
 

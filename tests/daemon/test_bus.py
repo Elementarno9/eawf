@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.daemon.bus`.
+"""Unit tests for :mod:`eawf.runtime.daemon.bus`.
 
 The bus is a process-internal in-memory primitive; tests drive it
 directly without an asyncio server, except for the
@@ -16,15 +16,15 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.daemon.bus import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.bus import (
     CATCH_UP_MAX,
     CatchUpTooLargeError,
     EventBus,
     Subscriber,
     catch_up,
 )
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 

@@ -7,11 +7,11 @@ their own modules — W05 owns ``ci_loop`` + this CLI surface; the
 ``wave plan`` command itself lives in lifecycle.py.
 
 Both verbs ingest a CI log file (no live GitHub fetch — that is out of
-scope for this wave) and use :mod:`eawf.ci_loop` to:
+scope for this wave) and use :mod:`eawf.runtime.ci_loop` to:
 
 1. Parse the log into pytest / ruff / mypy failures.
 2. Compute the file-scope union via
-   :func:`eawf.ci_loop.failure_to_file_scope`.
+   :func:`eawf.runtime.ci_loop.failure_to_file_scope`.
 3. Allocate a new wave id under the parent's iter via
    :func:`eawf.workflow.lifecycle.allocator.allocate_wave_id`.
 4. Plan the follow-up wave with ``deps=[parent_wave_id]``,
@@ -42,7 +42,7 @@ from eawf.cli.scope import resolve_state_path
 from eawf.kernel.state.ids import is_wave_id
 
 if TYPE_CHECKING:
-    from eawf.ci_loop.policy import Failure
+    from eawf.runtime.ci_loop.policy import Failure
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ def _read_log(log_path: Path) -> str:
 
 def _parse_all(log_text: str) -> list[Failure]:
     """Parse every supported diagnostic kind in declaration order."""
-    from eawf.ci_loop import (
+    from eawf.runtime.ci_loop import (
         parse_mypy_failures,
         parse_pytest_failures,
         parse_ruff_failures,
@@ -133,7 +133,7 @@ def wave_fix_ci_cmd(
     is allocated under the parent's iter with ``deps=[parent_wave_id]``
     and ``file_scopes`` = the sorted-unique union of failing file paths.
     """
-    from eawf.ci_loop import failure_to_file_scope, summarise_failures
+    from eawf.runtime.ci_loop import failure_to_file_scope, summarise_failures
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(parent_wave_id):
@@ -348,7 +348,7 @@ def wave_fix_ci_loop_cmd(
     loop is written to ``state.json`` beyond the planned wave records
     themselves (each via :func:`plan_wave`).
     """
-    from eawf.ci_loop import failure_to_file_scope, summarise_failures
+    from eawf.runtime.ci_loop import failure_to_file_scope, summarise_failures
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(parent_wave_id):

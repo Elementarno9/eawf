@@ -42,7 +42,7 @@ from hypothesis import strategies as st
 
 from eawf.cli.commands import lifecycle as lc
 from eawf.kernel.state.models import State
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 from eawf.workflow.lifecycle.transitions import LifecycleError, claim_wave
 
 

@@ -34,26 +34,26 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.agent import dispatch
 from eawf.kernel.state.enums import DispatchNote
 from eawf.kernel.state.models import Wave
-from eawf.runtimes.adapter import ALL_ERROR_CLASSES, RuntimeAdapter
-from eawf.runtimes.dispatch import (
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.agent import dispatch
+from eawf.runtime.runtimes.adapter import ALL_ERROR_CLASSES, RuntimeAdapter
+from eawf.runtime.runtimes.dispatch import (
     AdapterManifestMismatchError,
     AdapterResolutionError,
     candidate_runtimes,
     resolve_adapter,
 )
-from eawf.runtimes.fallback import (
+from eawf.runtime.runtimes.fallback import (
     FallbackAction,
     fall_back_to_fresh,
     fallback_action,
     next_runtime_on_error,
     switch_runtime_annotation,
 )
-from eawf.runtimes.plugin_manifest import SkillManifest
+from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 
 pytestmark = pytest.mark.unit
 
@@ -231,7 +231,7 @@ def test_resolve_adapter_walks_ladder_past_unresolvable_runtime(
             raise ValueError(f"unknown runtime: {runtime_id!r}")
         return real_select(runtime_id)
 
-    monkeypatch.setattr("eawf.runtimes.dispatch.select_adapter", fake_select)
+    monkeypatch.setattr("eawf.runtime.runtimes.dispatch.select_adapter", fake_select)
     manifest = _manifest(runtime=["claude-code", "codex"])
     _adapter, handshake = resolve_adapter(
         manifest=manifest,
@@ -250,7 +250,7 @@ def test_resolve_adapter_raises_when_ladder_exhausted(
     def always_fail(runtime_id: str) -> RuntimeAdapter:
         raise ValueError(f"unknown runtime: {runtime_id!r}")
 
-    monkeypatch.setattr("eawf.runtimes.dispatch.select_adapter", always_fail)
+    monkeypatch.setattr("eawf.runtime.runtimes.dispatch.select_adapter", always_fail)
     manifest = _manifest(runtime=["claude-code", "codex"])
     with pytest.raises(AdapterResolutionError, match="no resolvable adapter"):
         resolve_adapter(manifest=manifest, preference=["claude-code", "codex"])
@@ -258,7 +258,7 @@ def test_resolve_adapter_raises_when_ladder_exhausted(
 
 def _real_select_adapter() -> Callable[[str], RuntimeAdapter]:
     """Return the un-patched ``select_adapter`` for ladder tests."""
-    from eawf.runtimes.selector import select_adapter
+    from eawf.runtime.runtimes.selector import select_adapter
 
     return select_adapter
 

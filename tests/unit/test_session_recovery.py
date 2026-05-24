@@ -10,8 +10,8 @@ from eawf.kernel.state.enums import (
     AgentSessionStatus,
 )
 from eawf.kernel.state.models import State
-from eawf.session.recovery import DEFAULT_AGE_MINUTES, recover_sessions
-from eawf.session.store import (
+from eawf.runtime.session.recovery import DEFAULT_AGE_MINUTES, recover_sessions
+from eawf.runtime.session.store import (
     append_event,
     checkpoint,
     close_session,

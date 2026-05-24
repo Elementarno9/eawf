@@ -4,10 +4,10 @@ The daemon's :func:`state.mutate` RPC accepts exactly one :class:`Mutation`
 per call; the discriminator :attr:`MutationKind` names which lifecycle
 transition (or kindred state edit) the daemon should apply. Each kind
 maps onto exactly one apply function inside
-:mod:`eawf.daemon.methods.state` so the dispatch is closed + auditable.
+:mod:`eawf.runtime.daemon.methods.state` so the dispatch is closed + auditable.
 
 Every kind in :class:`MutationKind` resolves to a real apply function in
-:mod:`eawf.daemon.methods.state` — the wave / phase / iter kinds delegate
+:mod:`eawf.runtime.daemon.methods.state` — the wave / phase / iter kinds delegate
 to :mod:`eawf.workflow.lifecycle.transitions`; the roadmap kinds map onto the
 planner transitions (``plan_wave`` / ``remove_wave_plan`` /
 ``set_wave_deps`` / ``edit_wave_plan`` / ``archive_phase``); and

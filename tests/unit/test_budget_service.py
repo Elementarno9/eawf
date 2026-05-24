@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.budget.service`.
+"""Unit tests for :mod:`eawf.runtime.budget.service`.
 
 The service layer mutates a live :class:`State` instance without touching
 disk. These tests build a minimal in-memory state with one wave and
@@ -11,14 +11,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.budget.policy import BLOCK_TAG, WARN_TAG
-from eawf.budget.service import (
+from eawf.kernel.state.enums import ScopeKind, WaveStatus
+from eawf.kernel.state.models import State, Wave
+from eawf.runtime.budget.policy import BLOCK_TAG, WARN_TAG
+from eawf.runtime.budget.service import (
     check_budget,
     record_consumption,
     set_budget,
 )
-from eawf.kernel.state.enums import ScopeKind, WaveStatus
-from eawf.kernel.state.models import State, Wave
 
 
 def _state_with_wave(wave_id: str = "P01-I01-W01") -> State:

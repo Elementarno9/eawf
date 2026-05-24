@@ -53,7 +53,7 @@ from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import is_project_code
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 

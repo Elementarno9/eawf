@@ -1,9 +1,9 @@
 """Unit tests for the opaque-handle registry + TTL sweep (P24-W07).
 
-Covers :mod:`eawf.daemon.session` (register / resolve / prune) and
-:mod:`eawf.daemon.session_ttl` (plan_evictions + sweep_once +
+Covers :mod:`eawf.runtime.daemon.session` (register / resolve / prune) and
+:mod:`eawf.runtime.daemon.session_ttl` (plan_evictions + sweep_once +
 build_pruned_envelope). The registry is process-local in-memory; each
-test resets it via :func:`eawf.daemon.session.reset_registry` so the
+test resets it via :func:`eawf.runtime.daemon.session.reset_registry` so the
 order of execution does not leak.
 
 Per AGENTS rule 16 (secrets / PII hygiene): the handle is the only
@@ -23,8 +23,10 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.daemon import session_ttl
-from eawf.daemon.session import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.runtime.daemon import session_ttl
+from eawf.runtime.daemon.session import (
     HANDLE_PREFIX,
     known_handles,
     prune_handles_for_wave,
@@ -32,15 +34,13 @@ from eawf.daemon.session import (
     reset_registry,
     resolve_session_log,
 )
-from eawf.daemon.session_ttl import (
+from eawf.runtime.daemon.session_ttl import (
     DEFAULT_TTL_SECONDS,
     PrunePlan,
     build_pruned_envelope,
     plan_evictions,
     sweep_once,
 )
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import SessionAttempt, Wave
 
 pytestmark = pytest.mark.unit
 

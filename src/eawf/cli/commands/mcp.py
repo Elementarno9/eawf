@@ -286,7 +286,7 @@ def install_cmd(
 ) -> None:
     """Materialise an Eä-owned MCP entry into the runtime config."""
     from eawf.cli._mutation import state_transaction
-    from eawf.mcp.installer import (
+    from eawf.runtime.mcp.installer import (
         InstallEntryResult,
         IntegrityViolation,
         install_runtime_entry,
@@ -494,7 +494,7 @@ def remove_cmd(
 ) -> None:
     """Delete an Eä-owned MCP entry from state (and optionally runtime configs)."""
     from eawf.cli._mutation import state_transaction
-    from eawf.mcp.installer import (
+    from eawf.runtime.mcp.installer import (
         IntegrityViolation,
         RemoveEntryResult,
         remove_runtime_entry,
@@ -588,7 +588,7 @@ def list_cmd(
     ] = None,
 ) -> None:
     """List MCP entries from state and/or runtime config."""
-    from eawf.mcp.installer import list_runtime_entries
+    from eawf.runtime.mcp.installer import list_runtime_entries
 
     flags: GlobalFlags = ctx.obj
     try:

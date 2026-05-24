@@ -16,7 +16,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds import PAYLOAD_MODELS
 from eawf.kernel.store.kinds.event import validate_event_payload
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 

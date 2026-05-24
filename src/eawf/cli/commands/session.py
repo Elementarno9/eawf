@@ -27,7 +27,7 @@ from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreK
 
 logger = logging.getLogger(__name__)
 
-#: Mirrors :data:`eawf.session.recovery.DEFAULT_AGE_MINUTES`; inlined as a
+#: Mirrors :data:`eawf.runtime.session.recovery.DEFAULT_AGE_MINUTES`; inlined as a
 #: literal so the ``session recover --age`` default does not import the heavy
 #: session/recovery subtree at command-tree build time.
 _DEFAULT_AGE_MINUTES: int = 30
@@ -100,7 +100,7 @@ def session_start_cmd(
 ) -> None:
     """Start a new agent session; rejects (scope, runtime) collisions."""
     from eawf.cli._mutation import state_transaction
-    from eawf.session.store import SessionConflict, start_session
+    from eawf.runtime.session.store import SessionConflict, start_session
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -154,8 +154,8 @@ def session_checkpoint_cmd(
 ) -> None:
     """Append a checkpoint event for an existing session."""
     from eawf.cli._mutation import state_transaction
-    from eawf.session.store import SessionNotFound
-    from eawf.session.store import checkpoint as checkpoint_session
+    from eawf.runtime.session.store import SessionNotFound
+    from eawf.runtime.session.store import checkpoint as checkpoint_session
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -204,7 +204,7 @@ def session_close_cmd(
 ) -> None:
     """Close a session; required to reach the ``closed/stale/failed`` set."""
     from eawf.cli._mutation import state_transaction
-    from eawf.session.store import SessionNotFound, close_session
+    from eawf.runtime.session.store import SessionNotFound, close_session
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -254,8 +254,8 @@ def session_recover_cmd(
 ) -> None:
     """Mark every active/checkpointed session whose heartbeat is older than ``--age`` as stale."""
     from eawf.cli._mutation import state_transaction
-    from eawf.session.recovery import recover_sessions
-    from eawf.session.store import append_event
+    from eawf.runtime.session.recovery import recover_sessions
+    from eawf.runtime.session.store import append_event
 
     flags: GlobalFlags = ctx.obj
     try:

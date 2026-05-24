@@ -122,7 +122,7 @@ def render_skill_md_from_spec(spec: SkillSpec) -> str:
 
     Convenience wrapper that builds the :class:`SkillTemplateContext`
     from *spec* and forwards to :func:`render_skill_md`. Used by both
-    :mod:`eawf.runtimes.claude.plugin_install` (file-on-disk render) and
+    :mod:`eawf.runtime.runtimes.claude.plugin_install` (file-on-disk render) and
     :func:`eawf.cli.commands.skill.render_cmd` (stdout dump) so the two
     code paths emit byte-identical bytes for the same registry entry.
     """

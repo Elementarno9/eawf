@@ -1,8 +1,8 @@
 """Integration: dispatch runner flips the wave to IN_PROGRESS at its head.
 
 Exercises the head transition of
-:func:`eawf.daemon.dispatch_runner.run_dispatch` (and the
-:func:`eawf.daemon.dispatch_runner._mark_wave_in_progress` helper that
+:func:`eawf.runtime.daemon.dispatch_runner.run_dispatch` (and the
+:func:`eawf.runtime.daemon.dispatch_runner._mark_wave_in_progress` helper that
 drives it) against a real ``state.json`` on a tmp filesystem.
 
 The load-bearing assertion is the wave's success criterion: a dispatched
@@ -22,14 +22,14 @@ from typing import Any
 
 import pytest
 
-from eawf.daemon.dispatch_runner import (
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.models import State
+from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
     _mark_wave_in_progress,
     run_dispatch,
 )
-from eawf.daemon.methods import MethodContext
-from eawf.kernel.state.enums import WaveStatus
-from eawf.kernel.state.models import State
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.integration
@@ -97,7 +97,7 @@ def _state_payload(*, wave_status: str) -> dict[str, Any]:
                 "status": wave_status,
                 "deps": [],
                 "blocks": [],
-                "file_scopes": ["src/eawf/daemon/dispatch_runner.py"],
+                "file_scopes": ["src/eawf/runtime/daemon/dispatch_runner.py"],
                 "success_criteria": [],
                 "agent_role": "executor",
                 "effort_bucket": "M",

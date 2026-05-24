@@ -48,7 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # these; the set is deliberately closed and MUST NOT grow (a new status
 # would silently break the runtime-adapter status projections and the
 # byte-stable envelope round-trip). ``partial`` is the fifth and final
-# member; ``eawf.runtimes.plugin_manifest`` re-exports this literal rather
+# member; ``eawf.runtime.runtimes.plugin_manifest`` re-exports this literal rather
 # than redefining it so the freeze stays single-sourced.
 EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 

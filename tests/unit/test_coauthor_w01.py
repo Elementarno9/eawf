@@ -1,4 +1,4 @@
-"""Coverage-lift tests for :mod:`eawf.vcs.coauthor` (P27-I01-W01).
+"""Coverage-lift tests for :mod:`eawf.runtime.vcs.coauthor` (P27-I01-W01).
 
 Targets the validator + resolver branches not exercised by
 ``test_vcs_coauthor.py``: empty/normalised runtime keys, the
@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from eawf.vcs.coauthor import (
+from eawf.runtime.vcs.coauthor import (
     CoauthorConfig,
     CoauthorIdentity,
     CoauthorPolicyError,
@@ -113,7 +113,7 @@ def test_resolve_project_missing_identity_raises_policy_error() -> None:
 def test_resolve_runtime_detects_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Env-var runtime detection routes through the explicit opt-in resolver."""
     monkeypatch.setattr(
-        "eawf.runtimes.coauthor.resolve_runtime_explicit",
+        "eawf.runtime.runtimes.coauthor.resolve_runtime_explicit",
         lambda env: "codex",
     )
     config = CoauthorConfig()
@@ -125,7 +125,7 @@ def test_resolve_runtime_env_none_falls_back_to_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "eawf.runtimes.coauthor.resolve_runtime_explicit",
+        "eawf.runtime.runtimes.coauthor.resolve_runtime_explicit",
         lambda env: None,
     )
     config = CoauthorConfig(default_runtime="claude")

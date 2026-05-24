@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from eawf.vcs.coauthor import (
+from eawf.runtime.vcs.coauthor import (
     CoauthorConfig,
     CoauthorIdentity,
     CoauthorPolicyError,

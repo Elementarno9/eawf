@@ -1,6 +1,6 @@
 """CLI-side JSON-RPC client for the eawfd daemon.
 
-Combines :func:`eawf.daemon.spawn.auto_spawn_daemon` (cold-spawn the
+Combines :func:`eawf.runtime.daemon.spawn.auto_spawn_daemon` (cold-spawn the
 daemon if needed) with a thin newline-delimited JSON-RPC transport
 over the UDS / named pipe surface. Used by W09 to wire ``state.mutate``
 through the daemon and by every later wave that needs typed
@@ -31,9 +31,9 @@ from typing import Any
 
 import orjson
 
-from eawf.daemon.runtime_dir import runtime_dir as default_runtime_dir
-from eawf.daemon.spawn import auto_spawn_daemon
 from eawf.kernel.state.mutations import Mutation
+from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
+from eawf.runtime.daemon.spawn import auto_spawn_daemon
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ class DaemonClient:
 
         Returns:
             Dict matching
-            :class:`eawf.daemon.methods.state.MutateResult` — the event
+            :class:`eawf.runtime.daemon.methods.state.MutateResult` — the event
             envelope plus ``before_version`` / ``after_version`` digests
             and the ``idempotent_replay`` flag.
 
@@ -275,7 +275,7 @@ class DaemonClient:
 
         Returns:
             Dict matching
-            :class:`eawf.daemon.methods.config.SetLayerValueResult`.
+            :class:`eawf.runtime.daemon.methods.config.SetLayerValueResult`.
 
         Raises:
             DaemonRpcError: When the daemon returns a JSON-RPC error
@@ -310,7 +310,7 @@ class DaemonClient:
             idempotency_key: Optional retry key.
 
         Returns:
-            Dict matching :class:`eawf.daemon.methods.registry.UpdateResult`.
+            Dict matching :class:`eawf.runtime.daemon.methods.registry.UpdateResult`.
         """
         params: dict[str, Any] = {
             "operation": operation,

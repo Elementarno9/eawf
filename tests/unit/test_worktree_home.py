@@ -2,15 +2,15 @@
 
 Two invariants live here:
 
-1. **Worktree home default.** :func:`eawf.worktree.create._default_path`
+1. **Worktree home default.** :func:`eawf.runtime.worktree.create._default_path`
    resolves to ``<repo_root>/.ea/worktrees/<branch-suffix>/``. The
    operator (2026-05-18) flipped the default from the legacy
    ``.claude/worktrees/`` to ``.ea/worktrees/`` so the working tree
    stays self-contained alongside ``.ea/locks/`` and ``.ea/local/``
    (both gitignored).
-2. **KISS-007 cycle break.** Sibling modules in ``src/eawf/worktree/``
-   import ``eawf.worktree.git`` *directly* (``import eawf.worktree.git
-   as git``), never via the ``from eawf.worktree import git``
+2. **KISS-007 cycle break.** Sibling modules in ``src/eawf/runtime/worktree/``
+   import ``eawf.runtime.worktree.git`` *directly* (``import eawf.runtime.worktree.git
+   as git``), never via the ``from eawf.runtime.worktree import git``
    trampoline. The latter forms a re-export cycle through
    ``__init__.py`` that future additions can deadlock on. The static
    AST sweep here is the regression guard.
@@ -23,9 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.worktree.create import _default_path, _slugify_wave
+from eawf.runtime.worktree.create import _default_path, _slugify_wave
 
-_SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "eawf" / "worktree"
+_SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "eawf" / "runtime" / "worktree"
 
 
 # ---- Worktree-home default --------------------------------------------------
@@ -65,14 +65,14 @@ def test_default_path_rejects_non_wave_id() -> None:
 
 
 def _collect_worktree_internal_imports(module_path: Path) -> list[str]:
-    """Return every ``eawf.worktree.*`` module name *module_path* imports.
+    """Return every ``eawf.runtime.worktree.*`` module name *module_path* imports.
 
     Two import forms are recognised:
 
-    - ``from eawf.worktree.X import ...``  — direct submodule form.
-    - ``from eawf.worktree import X``       — trampoline form.
-    - ``import eawf.worktree.X as ...``     — direct submodule form.
-    - ``import eawf.worktree.X``            — direct submodule form.
+    - ``from eawf.runtime.worktree.X import ...``  — direct submodule form.
+    - ``from eawf.runtime.worktree import X``       — trampoline form.
+    - ``import eawf.runtime.worktree.X as ...``     — direct submodule form.
+    - ``import eawf.runtime.worktree.X``            — direct submodule form.
 
     Trampoline-form imports are tagged with the ``"TRAMPOLINE:"`` prefix
     so the assertion can distinguish them.
@@ -81,15 +81,15 @@ def _collect_worktree_internal_imports(module_path: Path) -> list[str]:
     hits: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            if node.module == "eawf.worktree":
-                # ``from eawf.worktree import git`` — trampoline.
+            if node.module == "eawf.runtime.worktree":
+                # ``from eawf.runtime.worktree import git`` — trampoline.
                 for alias in node.names:
                     hits.append(f"TRAMPOLINE:{alias.name}")
-            elif node.module and node.module.startswith("eawf.worktree."):
+            elif node.module and node.module.startswith("eawf.runtime.worktree."):
                 hits.append(node.module)
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.startswith("eawf.worktree."):
+                if alias.name.startswith("eawf.runtime.worktree."):
                     hits.append(alias.name)
     return hits
 
@@ -101,8 +101,8 @@ def _collect_worktree_internal_imports(module_path: Path) -> list[str]:
 def test_sibling_modules_avoid_trampoline_import(module_name: str) -> None:
     """No sibling submodule imports ``git`` via the ``__init__`` trampoline.
 
-    KISS-007: ``from eawf.worktree import git`` is the trampoline form.
-    Switching every sibling to ``import eawf.worktree.git as git``
+    KISS-007: ``from eawf.runtime.worktree import git`` is the trampoline form.
+    Switching every sibling to ``import eawf.runtime.worktree.git as git``
     bypasses ``__init__.py`` and removes the cycle source.
     """
     module_path = _SRC_ROOT / module_name
@@ -111,13 +111,13 @@ def test_sibling_modules_avoid_trampoline_import(module_name: str) -> None:
     trampolines = [h for h in hits if h.startswith("TRAMPOLINE:")]
     assert trampolines == [], (
         f"KISS-007 violation in {module_name}: trampoline imports detected "
-        f"({trampolines}); use ``import eawf.worktree.X as X`` or "
-        f"``from eawf.worktree.X import ...`` instead"
+        f"({trampolines}); use ``import eawf.runtime.worktree.X as X`` or "
+        f"``from eawf.runtime.worktree.X import ...`` instead"
     )
 
 
 def test_internal_cycle_detector_finds_no_cycles() -> None:
-    """Static walk of ``src/eawf/worktree/`` reports zero internal cycles.
+    """Static walk of ``src/eawf/runtime/worktree/`` reports zero internal cycles.
 
     Builds the directed graph (module -> imported sibling) from the
     AST and runs Tarjan's SCC. A "cycle" is any SCC of size >= 2 or a
@@ -132,13 +132,13 @@ def test_internal_cycle_detector_finds_no_cycles() -> None:
             # Strip trampolines: the prior test asserts they are absent.
             if imp.startswith("TRAMPOLINE:"):
                 continue
-            # ``eawf.worktree.X`` -> ``X``.
+            # ``eawf.runtime.worktree.X`` -> ``X``.
             target = imp.split(".")[-1]
             if target in modules and target != name:
                 edges[name].add(target)
 
     cycles = _tarjan_cycles(edges)
-    assert cycles == [], f"internal cycles detected in src/eawf/worktree/: {cycles}"
+    assert cycles == [], f"internal cycles detected in src/eawf/runtime/worktree/: {cycles}"
 
 
 def _tarjan_cycles(graph: dict[str, set[str]]) -> list[list[str]]:

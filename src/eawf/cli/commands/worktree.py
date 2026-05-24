@@ -25,7 +25,7 @@ This module also wires the wave-centric automation verbs onto the
 
 Every mutating handler runs inside
 :func:`eawf.cli._mutation.state_transaction` (state-side serialisation)
-*and* :func:`eawf.worktree.locks.worktree_registry_lock` (git-side
+*and* :func:`eawf.runtime.worktree.locks.worktree_registry_lock` (git-side
 registry serialisation). The two locks compose without re-entry: the
 state lock guards ``state.json`` and the registry lock guards
 ``.git/worktrees/<name>``; they target disjoint paths.
@@ -49,9 +49,9 @@ from eawf.kernel.state.ids import is_iter_id, is_wave_id
 logger = logging.getLogger(__name__)
 
 #: Merge-back strategy tokens — mirror
-#: :data:`eawf.worktree.merge_back.STRATEGY_CHERRY_PICK` /
+#: :data:`eawf.runtime.worktree.merge_back.STRATEGY_CHERRY_PICK` /
 #: ``STRATEGY_REBASE_THEN_FF`` by value so the ``worktree merge-back
-#: --strategy`` default + help text do not import the heavy ``eawf.worktree``
+#: --strategy`` default + help text do not import the heavy ``eawf.runtime.worktree``
 #: subtree at command-tree build time. The runtime ``merge_back`` call uses
 #: the deferred import.
 STRATEGY_CHERRY_PICK: str = "cherry_pick"
@@ -83,7 +83,7 @@ def _resolve_repo_root(state_path: Path) -> Path:
     """
     # state.json lives at <repo>/.ea/state.json; walking up two parents
     # gives us a working dir that's inside the git tree.
-    from eawf.worktree.git import repo_root as resolve_repo_root
+    from eawf.runtime.worktree.git import repo_root as resolve_repo_root
 
     start = state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
     return resolve_repo_root(start)
@@ -137,7 +137,7 @@ def worktree_create_cmd(
 ) -> None:
     """Create a per-wave worktree branched from the current feature branch."""
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import create_worktree, worktree_registry_lock
+    from eawf.runtime.worktree import create_worktree, worktree_registry_lock
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
@@ -210,7 +210,7 @@ def worktree_list_cmd(
 ) -> None:
     """Enumerate recorded worktrees with a git-side cross-check column."""
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import list_worktrees
+    from eawf.runtime.worktree import list_worktrees
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -295,7 +295,7 @@ def worktree_merge_back_cmd(
 ) -> None:
     """Replay worktree commits onto the parent branch."""
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import merge_back, worktree_registry_lock
+    from eawf.runtime.worktree import merge_back, worktree_registry_lock
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
@@ -405,7 +405,7 @@ def worktree_path_fix_cmd(
     remaining absolute path that resolves inside ``repo_root``.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import worktree_registry_lock
+    from eawf.runtime.worktree import worktree_registry_lock
 
     flags: GlobalFlags = ctx.obj
     if not apply_all:
@@ -467,7 +467,7 @@ def worktree_cleanup_cmd(
 ) -> None:
     """Tear down the worktree directory + per-wave branch."""
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import cleanup_worktree, worktree_registry_lock
+    from eawf.runtime.worktree import cleanup_worktree, worktree_registry_lock
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave):
@@ -557,7 +557,7 @@ def wave_land_cmd(
     operator can resolve and re-run.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import wave_land, worktree_registry_lock
+    from eawf.runtime.worktree import wave_land, worktree_registry_lock
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -633,7 +633,7 @@ def wave_land_batch_cmd(
 ) -> None:
     """Apply ``wave land`` to every eligible wave in dep order; stop on failure."""
     from eawf.cli._mutation import state_transaction
-    from eawf.worktree import wave_land_batch, worktree_registry_lock
+    from eawf.runtime.worktree import wave_land_batch, worktree_registry_lock
 
     flags: GlobalFlags = ctx.obj
     if iter_flag is not None and not is_iter_id(iter_flag):

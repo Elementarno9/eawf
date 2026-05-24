@@ -52,11 +52,11 @@ if TYPE_CHECKING:
     # Annotation-only result/report types. The runtime values
     # (install/doctor/package/update/sync functions + integrity
     # exceptions) are imported lazily inside each command handler so
-    # importing this module for completion does not pull eawf.runtimes
+    # importing this module for completion does not pull eawf.runtime.runtimes
     # (and its jinja2/yaml transitive deps).
-    from eawf.runtimes.claude.plugin_conflict import CCPluginConflict
-    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
-    from eawf.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
+    from eawf.runtime.runtimes.claude.plugin_conflict import CCPluginConflict
+    from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+    from eawf.runtime.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +66,10 @@ logger = logging.getLogger(__name__)
 # to inject synthetic conflicts, so they must stay module-level
 # attributes; the real implementations are imported lazily inside each
 # wrapper so importing this module for shell completion does not pull
-# ``eawf.runtimes.*`` (and its jinja2 transitive dep).
+# ``eawf.runtime.runtimes.*`` (and its jinja2 transitive dep).
 def detect_marketplace_install() -> CCPluginConflict | None:
     """Detect an existing CC-marketplace eawf install (lazy import)."""
-    from eawf.runtimes.claude.plugin_conflict import (
+    from eawf.runtime.runtimes.claude.plugin_conflict import (
         detect_marketplace_install as _impl,
     )
 
@@ -78,14 +78,14 @@ def detect_marketplace_install() -> CCPluginConflict | None:
 
 def codex_detect_user_install() -> CodexUserPluginConflict | None:
     """Detect a user-scope codex eawf install (lazy import)."""
-    from eawf.runtimes.codex import detect_user_install as _impl
+    from eawf.runtime.runtimes.codex import detect_user_install as _impl
 
     return _impl()
 
 
 def opencode_detect_user_install() -> OpenCodeUserPluginConflict | None:
     """Detect a user-scope opencode eawf install (lazy import)."""
-    from eawf.runtimes.opencode import detect_user_install as _impl
+    from eawf.runtime.runtimes.opencode import detect_user_install as _impl
 
     return _impl()
 

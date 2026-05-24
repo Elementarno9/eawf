@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -317,7 +317,7 @@ class BackupStore:
         ``state.json`` is the daemon's sole canonical mutable surface, so a
         torn or partial write on interrupt — or a clobbering race with a
         concurrent daemon write — would corrupt project state. The restore
-        therefore holds the same sibling :func:`eawf.lock.portalock.acquire`
+        therefore holds the same sibling :func:`eawf.runtime.lock.portalock.acquire`
         the daemon uses and swaps the file via :func:`_atomic_write_bytes`
         (tempfile + ``fsync`` + :func:`os.replace`): the live file is only
         ever the fully-old document or the fully-new one, never an

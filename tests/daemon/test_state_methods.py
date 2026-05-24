@@ -16,7 +16,7 @@ Covers the W09 mutator path end-to-end:
   ``ValueError("validation_failed: ...")`` (mapped to ``-32002``).
 * :func:`state.mutate` WAL replay path: simulate a crash between
   ``.applied`` and ``.fsynced`` → restart →
-  :func:`eawf.daemon.recovery.replay_wal` runs → ``event.jsonl``
+  :func:`eawf.runtime.daemon.recovery.replay_wal` runs → ``event.jsonl``
   carries the envelope (or stays consistent if it was already
   written) without re-executing the mutator.
 
@@ -38,14 +38,14 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION, recovery, wal
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.state import digest, mutate, read
-from eawf.daemon.wal import WalStatus
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon import PROTOCOL_VERSION, recovery, wal
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.state import digest, mutate, read
+from eawf.runtime.daemon.wal import WalStatus
 
 pytestmark = pytest.mark.unit
 
@@ -462,7 +462,7 @@ def test_mutate_missing_required_param_rejected(tmp_path: Path) -> None:
 
 # ---- state.mutate (JSON-RPC wire contract) ---------------------------------
 # The handler-level tests above catch the raw ``DaemonValidationError``;
-# these drive :func:`eawf.daemon.server._process_frame` so the on-the-wire
+# these drive :func:`eawf.runtime.daemon.server._process_frame` so the on-the-wire
 # error CODE is exercised. A lifecycle/post-invariant rejection MUST emit
 # ``-32002`` (so the CLI client maps it to ValidationFailed / exit 2), not
 # the generic ``-32602 invalid_params`` a bare ValueError would yield.
@@ -489,8 +489,8 @@ def test_process_frame_validation_rejection_emits_minus_32002(tmp_path: Path) ->
     returned a different exit code than the in-process fallback for the
     SAME rejection.
     """
-    from eawf.daemon.methods import VALIDATION_FAILED as WIRE_VALIDATION_FAILED
-    from eawf.daemon.server import _process_frame
+    from eawf.runtime.daemon.methods import VALIDATION_FAILED as WIRE_VALIDATION_FAILED
+    from eawf.runtime.daemon.server import _process_frame
 
     ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)
     mutation = Mutation(
@@ -523,7 +523,7 @@ def test_process_frame_nonclosure_lifecycle_rejection_emits_minus_32602(tmp_path
     same rejection. Only the ``*_CLOSE`` kinds surface ``-32002``
     (see ``test_process_frame_validation_rejection_emits_minus_32002``).
     """
-    from eawf.daemon.server import INVALID_PARAMS, _process_frame
+    from eawf.runtime.daemon.server import INVALID_PARAMS, _process_frame
 
     ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)
     mutation = Mutation(
@@ -550,7 +550,7 @@ def test_process_frame_corrupt_state_stays_minus_32602(tmp_path: Path) -> None:
     typed :class:`DaemonValidationError` yields. Guards against the
     refactor over-broadening the typed exception.
     """
-    from eawf.daemon.server import INVALID_PARAMS, _process_frame
+    from eawf.runtime.daemon.server import INVALID_PARAMS, _process_frame
 
     ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path)
     state_path.write_text('{"schema_version": "1.0", "not": "valid"}')
@@ -571,7 +571,7 @@ def test_process_frame_corrupt_state_stays_minus_32602(tmp_path: Path) -> None:
 
 def test_apply_registry_has_no_stub_kinds() -> None:
     """Every MutationKind resolves to a real apply fn (no not-yet-wired stub)."""
-    from eawf.daemon.methods import state as state_methods
+    from eawf.runtime.daemon.methods import state as state_methods
 
     # The not-yet-wired stub was removed once every kind was wired; assert
     # it is gone so a regression that re-introduces it fails loudly.
@@ -1054,7 +1054,7 @@ def test_mutate_crash_after_state_write_leaves_applied_record(
     state from the event log. With ``mark_applied`` moved before the
     append, the crash leaves an ``.applied`` record that replay re-issues.
     """
-    from eawf.daemon.methods import state as state_methods
+    from eawf.runtime.daemon.methods import state as state_methods
 
     ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path)
     before_bytes = state_path.read_bytes()
@@ -1101,7 +1101,7 @@ def test_replay_after_crash_reissues_event_for_applied_record(
     startup ``replay_wal`` re-issues the captured envelope so the event
     log matches the already-committed state.
     """
-    from eawf.daemon.methods import state as state_methods
+    from eawf.runtime.daemon.methods import state as state_methods
 
     ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path)
 

@@ -33,7 +33,7 @@ def test_svc_stop_bridges_into_asyncio_loop_thread_safely() -> None:
     deliver the stop signal via :func:`loop.call_soon_threadsafe` so
     the loop wakes from ``await self._stop_event.wait()`` cleanly.
     """
-    from eawf.daemon.win_service import EawfdService
+    from eawf.runtime.daemon.win_service import EawfdService
 
     service = EawfdService.__new__(EawfdService)
     # Skip super().__init__ — the ServiceFramework constructor needs
@@ -63,7 +63,7 @@ def test_svc_stop_bridges_into_asyncio_loop_thread_safely() -> None:
 
     # Monkey-patch the imported helper inside the module's namespace
     # for the duration of this test.
-    import eawf.daemon.win_service as win_service_mod
+    import eawf.runtime.daemon.win_service as win_service_mod
 
     original = win_service_mod.win32event.SetEvent
     win_service_mod.win32event.SetEvent = _set_scm_event  # type: ignore[assignment]
@@ -110,7 +110,7 @@ def test_svc_stop_bridges_into_asyncio_loop_thread_safely() -> None:
 
 def test_svc_stop_is_safe_when_loop_not_yet_started() -> None:
     """Calling ``SvcStop`` before ``SvcDoRun`` must not raise."""
-    from eawf.daemon.win_service import EawfdService
+    from eawf.runtime.daemon.win_service import EawfdService
 
     service = EawfdService.__new__(EawfdService)
     service._loop = None
@@ -122,7 +122,7 @@ def test_svc_stop_is_safe_when_loop_not_yet_started() -> None:
 
     service._scm_stop_event = _StubEvent()
 
-    import eawf.daemon.win_service as win_service_mod
+    import eawf.runtime.daemon.win_service as win_service_mod
 
     original = win_service_mod.win32event.SetEvent
 
@@ -140,7 +140,7 @@ def test_svc_stop_is_safe_when_loop_not_yet_started() -> None:
 
 def test_service_metadata_matches_spec() -> None:
     """Service registration metadata uses the names C02 §5.10.3 specifies."""
-    from eawf.daemon.win_service import EawfdService
+    from eawf.runtime.daemon.win_service import EawfdService
 
     assert EawfdService._svc_name_ == "eawfd"
     assert EawfdService._svc_display_name_ == "eawf coordinator daemon"

@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.worktree.cleanup.cleanup_worktree`.
+"""Unit tests for :func:`eawf.runtime.worktree.cleanup.cleanup_worktree`.
 
 The tests stand up a real git repo + worktree, then exercise the
 refusal contract (dirty / CONFLICTED) and the success-path
@@ -15,9 +15,9 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WorktreeStatus
-from eawf.worktree.cleanup import cleanup_worktree
-from eawf.worktree.create import create_worktree
-from eawf.worktree.git import worktree_list
+from eawf.runtime.worktree.cleanup import cleanup_worktree
+from eawf.runtime.worktree.create import create_worktree
+from eawf.runtime.worktree.git import worktree_list
 from tests.unit.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(

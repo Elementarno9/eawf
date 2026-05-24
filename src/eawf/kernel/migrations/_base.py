@@ -19,7 +19,7 @@ the offending step rather than after the whole chain.
 **Canonical-writer route (AGENTS rule 4 / D-SUP-01).** The final write
 does NOT call :func:`eawf.kernel.state.writer.atomic_write_json` directly. It
 routes through :func:`write_canonical`, which acquires
-:func:`eawf.lock.portalock.acquire` and then calls
+:func:`eawf.runtime.lock.portalock.acquire` and then calls
 :func:`eawf.kernel.state.writer.atomic_write_json_locked` — the exact lock +
 write primitive the daemon ``state.mutate`` handler and the
 ``state_transaction`` chokepoint use. Routing through the shared lock +
@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Any, Protocol, get_args, runtime_checkable
 
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +170,7 @@ def model_supported_max_version() -> str:
     owned by the model, not this helper.
     """
     # Imported lazily: ``eawf.kernel.state.models`` (and its transitive
-    # ``eawf.sandbox.policy``) are heavy modules the CLI tree-build /
+    # ``eawf.runtime.sandbox.policy``) are heavy modules the CLI tree-build /
     # shell-completion cold path must not load. Resolving the import at
     # call time keeps ``import eawf.cli.app`` (which eagerly registers the
     # ``migrate`` command) off those modules' import graph.
@@ -264,7 +264,7 @@ def backup_path_for(state_path: Path, *, from_version: str, to_version: str) -> 
 def write_canonical(state_path: Path, payload: dict[str, Any], *, timeout: float = 5.0) -> None:
     """Persist *payload* to *state_path* through the canonical writer path.
 
-    Acquires :func:`eawf.lock.portalock.acquire` then calls
+    Acquires :func:`eawf.runtime.lock.portalock.acquire` then calls
     :func:`eawf.kernel.state.writer.atomic_write_json_locked` — the exact lock +
     write primitive the daemon ``state.mutate`` handler and the
     ``state_transaction`` chokepoint use (AGENTS rule 4 / D-SUP-01). The

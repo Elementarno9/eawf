@@ -4,7 +4,7 @@ Pins:
 
 - ``skill render <name> --format=skill-md`` (default) emits bytes
   byte-equal to the SKILL.md
-  :mod:`eawf.runtimes.claude.plugin_install` writes for the same skill.
+  :mod:`eawf.runtime.runtimes.claude.plugin_install` writes for the same skill.
   Both code paths funnel through
   :func:`eawf.render.skills.render_skill_md_from_spec`, so the byte-
   equality is a shared-fixture assertion against the canonical render.
@@ -33,7 +33,7 @@ from eawf.cli.app import app
 from eawf.cli.commands.skill import _list_payload
 from eawf.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.render.skills import SKILL_REGISTRY, render_skill_md_from_spec
-from eawf.runtimes.claude.plugin_install import _render_skill
+from eawf.runtime.runtimes.claude.plugin_install import _render_skill
 
 # ``eawf skill render`` is the operator surface over the execution-backed
 # skills (``CANONICAL_SKILL_NAMES``). The render ``SKILL_REGISTRY`` is a
@@ -53,7 +53,7 @@ def cli_runner() -> CliRunner:
 
 def test_render_cmd_skill_md_matches_plugin_install_bytes(cli_runner: CliRunner) -> None:
     """Default ``--format=skill-md`` output is byte-equal to the bytes
-    :func:`eawf.runtimes.claude.plugin_install._render_skill` emits for
+    :func:`eawf.runtime.runtimes.claude.plugin_install._render_skill` emits for
     the same registry entry. The shared
     :func:`render_skill_md_from_spec` helper guarantees this; the test
     pins it so a future refactor that diverges the two code paths fails

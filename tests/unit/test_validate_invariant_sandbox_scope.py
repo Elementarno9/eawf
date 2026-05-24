@@ -7,7 +7,7 @@ from typing import Any
 
 from eawf.kernel.state.models import State
 from eawf.kernel.validate.invariants import check_sandbox_policy_scope_ref
-from eawf.sandbox.policy import SandboxPolicy
+from eawf.runtime.sandbox.policy import SandboxPolicy
 
 
 def _base_state() -> dict[str, Any]:

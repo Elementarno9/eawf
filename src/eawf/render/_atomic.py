@@ -12,7 +12,7 @@ import os
 import secrets
 from pathlib import Path
 
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def atomic_write_text(target: Path, payload: str) -> None:
 
     Procedure (mirrors :func:`eawf.kernel.state.writer._write_payload`):
 
-    1. Acquire :func:`eawf.lock.portalock.acquire` on *target* with
+    1. Acquire :func:`eawf.runtime.lock.portalock.acquire` on *target* with
        :data:`LOCK_TIMEOUT`.
     2. Encode *payload* as UTF-8 and write to a sibling tempfile
        ``<target>.tmp.<hex4>``.

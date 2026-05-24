@@ -23,7 +23,7 @@ One known gap is asserted with :func:`pytest.xfail`: the matrix marks
 ``skills`` (the OpenCode skill surface) ``supported`` for OpenCode and
 OpenCode's installer does emit per-skill commands, **but** OpenCode emits
 no hook wrappers at all — Claude and Codex both emit one ``.sh`` per
-:class:`~eawf.hooks.event.HookEventType`, OpenCode emits zero. The
+:class:`~eawf.runtime.hooks.event.HookEventType`, OpenCode emits zero. The
 hook-parity contract therefore fails on OpenCode today; the xfail
 documents the gap so closing it (an OpenCode hook surface) flips the
 test to ``XPASS`` and forces a deliberate removal of the marker.
@@ -39,11 +39,11 @@ import pytest
 from eawf.render.agents import AGENT_REGISTRY
 from eawf.render.hooks import HOOK_REGISTRY
 from eawf.render.skills import SKILL_REGISTRY
-from eawf.runtimes.capabilities import RUNTIME_IDS, get_matrix
-from eawf.runtimes.claude import plugin_install as claude_install
-from eawf.runtimes.codex import plugin_install as codex_install
-from eawf.runtimes.opencode import plugin_install as opencode_install
-from eawf.runtimes.selector import runtime_supports, select_adapter
+from eawf.runtime.runtimes.capabilities import RUNTIME_IDS, get_matrix
+from eawf.runtime.runtimes.claude import plugin_install as claude_install
+from eawf.runtime.runtimes.codex import plugin_install as codex_install
+from eawf.runtime.runtimes.opencode import plugin_install as opencode_install
+from eawf.runtime.runtimes.selector import runtime_supports, select_adapter
 
 pytestmark = pytest.mark.unit
 

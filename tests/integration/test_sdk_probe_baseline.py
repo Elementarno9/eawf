@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtimes.probes import sdk_baseline
+from eawf.runtime.runtimes.probes import sdk_baseline
 
 
 def test_probe_all_returns_three_rows() -> None:

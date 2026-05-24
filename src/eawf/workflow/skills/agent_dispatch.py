@@ -31,7 +31,7 @@ import logging
 from typing import Any
 
 from eawf.render.envelope import EnvelopeStatus, SkillName
-from eawf.runtimes.plugin_manifest import SkillManifest
+from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,

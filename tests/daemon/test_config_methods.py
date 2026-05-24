@@ -29,10 +29,11 @@ import pytest
 import yaml
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.config import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.config import (
     clear_wave_overlay,
     get_wave_overlay,
     list_layers,
@@ -40,7 +41,6 @@ from eawf.daemon.methods.config import (
     set_layer_value,
     set_wave_value,
 )
-from eawf.kernel.state.enums import StoreKind
 
 pytestmark = pytest.mark.unit
 

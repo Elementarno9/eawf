@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eawf.runtimes.claude.statusline_modules import model_session_cwd
+from eawf.runtime.runtimes.claude.statusline_modules import model_session_cwd
 
 
 def test_string_model_session_id_and_cwd_basename() -> None:

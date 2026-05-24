@@ -19,7 +19,7 @@ The ``SKILL_REGISTRY`` carries the operator-facing workflow skills (six
 core + four meta + the C04b skill-surfaces) plus a tail of model-only
 code-quality playbooks (``user_invocable=False`` — hidden from the slash
 menu but reachable by the model). It is consumed by
-:mod:`eawf.runtimes.claude.plugin_install` to produce the deterministic
+:mod:`eawf.runtime.runtimes.claude.plugin_install` to produce the deterministic
 plugin tree the golden test pins.
 """
 

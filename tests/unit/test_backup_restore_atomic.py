@@ -28,7 +28,7 @@ import pytest
 
 from eawf.backup.service import restore_backup
 from eawf.backup.store import BackupStore, format_timestamp
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 # A valid, daemon-canonical (orjson-shaped) state document used as the snapshot
 # content so the round-trip is unambiguous JSON.

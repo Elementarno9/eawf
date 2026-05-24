@@ -4,13 +4,13 @@ Pins:
 
 * ``capabilities.yaml`` ships exactly 8 capability rows x 3 runtimes
   (C07a §G9 + W13 success criterion 1).
-* :func:`eawf.runtimes.capabilities.load_matrix` rejects malformed
+* :func:`eawf.runtime.runtimes.capabilities.load_matrix` rejects malformed
   inputs: unknown runtime, wrong row count, unknown cell value, missing
   schema_version.
-* :func:`eawf.runtimes.capabilities.detect_drift` emits the four
+* :func:`eawf.runtime.runtimes.capabilities.detect_drift` emits the four
   drift-status verdicts (``OK`` / ``DRIFT`` / ``MISSING`` / ``UNKNOWN``)
   on the expected probe inputs.
-* :func:`eawf.runtimes.selector.runtime_supports` boolean view aligns
+* :func:`eawf.runtime.runtimes.selector.runtime_supports` boolean view aligns
   with the adapter class attribute values declared by the three
   W10 adapters (no parallel hard-coded table per W13 criterion 3).
 """
@@ -23,7 +23,7 @@ from typing import get_args
 import pytest
 import yaml
 
-from eawf.runtimes.capabilities import (
+from eawf.runtime.runtimes.capabilities import (
     CAPABILITY_CELLS,
     CAPABILITY_NAMES,
     EXPECTED_CAPABILITY_ROWS,
@@ -40,7 +40,7 @@ from eawf.runtimes.capabilities import (
     load_matrix,
     render_drift_table,
 )
-from eawf.runtimes.selector import SUPPORTED_CELLS, runtime_supports, select_adapter
+from eawf.runtime.runtimes.selector import SUPPORTED_CELLS, runtime_supports, select_adapter
 
 # ---------------------------------------------------------------------------
 # Matrix shape — 8 x 3 invariants (W13 success criterion 1)
@@ -262,7 +262,7 @@ def test_runtime_supports_rejects_unknown_capability() -> None:
 
 def test_claude_adapter_capabilities_derive_from_matrix() -> None:
     """ClaudeAdapter bool flags equal the YAML-backed view."""
-    from eawf.runtimes.claude.adapter import ClaudeAdapter
+    from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 
     adapter = ClaudeAdapter()
     assert adapter.accepts_continue is runtime_supports("claude-code", "session_resume")
@@ -271,7 +271,7 @@ def test_claude_adapter_capabilities_derive_from_matrix() -> None:
 
 def test_codex_adapter_capabilities_derive_from_matrix() -> None:
     """CodexAdapter bool flags equal the YAML-backed view."""
-    from eawf.runtimes.codex.adapter import CodexAdapter
+    from eawf.runtime.runtimes.codex.adapter import CodexAdapter
 
     adapter = CodexAdapter()
     assert adapter.accepts_continue is runtime_supports("codex", "session_resume")
@@ -280,7 +280,7 @@ def test_codex_adapter_capabilities_derive_from_matrix() -> None:
 
 def test_opencode_adapter_capabilities_derive_from_matrix() -> None:
     """OpenCodeAdapter bool flags equal the YAML-backed view."""
-    from eawf.runtimes.opencode.adapter import OpenCodeAdapter
+    from eawf.runtime.runtimes.opencode.adapter import OpenCodeAdapter
 
     adapter = OpenCodeAdapter()
     assert adapter.accepts_continue is runtime_supports("opencode", "session_resume")

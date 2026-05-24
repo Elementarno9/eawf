@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.runtimes.claude.plugin_doctor``.
+"""Unit tests for ``eawf.runtime.runtimes.claude.plugin_doctor``.
 
 Covers:
 
@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eawf.runtimes.claude.plugin_doctor import doctor_plugin
-from eawf.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
 
 def test_doctor_clean_after_install(tmp_path: Path) -> None:

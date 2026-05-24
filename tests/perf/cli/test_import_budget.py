@@ -6,7 +6,7 @@ press. Before P26-W30 that import eagerly pulled a long tail of heavy
 modules — Pydantic state models, the strict validator, the layered /
 profile config stack, the daemon runtime, the MCP installer, the
 sandbox policy, the store-kind registry, and (transitively, via
-``eawf.runtimes.*``) ``jinja2`` and ``yaml``. None of those are needed
+``eawf.runtime.runtimes.*``) ``jinja2`` and ``yaml``. None of those are needed
 to render ``--help`` / completion candidates, yet they dominated the
 ~0.5 s cold-completion wall time.
 
@@ -60,9 +60,9 @@ FORBIDDEN_MODULES: tuple[str, ...] = (
     "eawf.kernel.config.profile",
     "eawf.kernel.config.loader",
     "eawf.kernel.config.layered",
-    "eawf.daemon.main",
-    "eawf.mcp.installer",
-    "eawf.sandbox.policy",
+    "eawf.runtime.daemon.main",
+    "eawf.runtime.mcp.installer",
+    "eawf.runtime.sandbox.policy",
     "eawf.kernel.store.kinds",
     "eawf.profiles.compose",
     "eawf.profiles.loader",
@@ -145,7 +145,7 @@ def test_cli_app_import_excludes_forbidden_modules() -> None:
 
     Structural regression guard: re-introducing a module-level heavy
     import in any command module (or a transitive pull such as
-    ``jinja2`` via ``eawf.runtimes.*``) makes this assertion red with a
+    ``jinja2`` via ``eawf.runtime.runtimes.*``) makes this assertion red with a
     precise list of the offenders that leaked back in.
     """
     loaded = _loaded_modules_after_app_import()

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.daemon.wal`.
+"""Unit tests for :mod:`eawf.runtime.daemon.wal`.
 
 The WAL primitive lives below the daemon RPC layer; tests exercise it
 directly on a per-test ``tmp_path / "wal"`` directory. No asyncio loop,
@@ -15,8 +15,10 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.daemon import wal
-from eawf.daemon.wal import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon import wal
+from eawf.runtime.daemon.wal import (
     WalRecord,
     WalStatus,
     gc_done_records,
@@ -28,8 +30,6 @@ from eawf.daemon.wal import (
     read_record,
     write_pending,
 )
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 

@@ -33,7 +33,7 @@ either the ``claude-code`` runtime (single-string prompt) or the
 and ``allowed_tools`` projected from :attr:`State.mcp_grants`). No new
 runtime dependency on the SDK package — render-only. P27-I03-W21 hardens
 the SDK ``allowed_tools`` projection into an enforcement seam: tools the
-dispatched wave's :class:`~eawf.sandbox.policy.SandboxPolicy` deny-list
+dispatched wave's :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list
 names are intersected out, so a wave with a denied tool cannot dispatch
 it.
 
@@ -63,7 +63,7 @@ from eawf.kernel.state.models import (
     Wave,
     WorktreeRecord,
 )
-from eawf.sandbox.policy import resolve_denied_tools
+from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.workflow.agents.specs.models import (
     SpecAudit,
     SpecDecision,
@@ -110,7 +110,7 @@ class DispatchEnvelope:
       :attr:`State.mcp_servers`; ``allowed_tools`` is a list of
       ``mcp__<server_id>__*`` glob strings projected from
       :attr:`State.mcp_grants` (W02), with any tool the wave's
-      :class:`~eawf.sandbox.policy.SandboxPolicy` deny-list names
+      :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list names
       intersected out — empty when ``mcp_grants`` is absent, has no
       grant for the dispatched wave, or every projected tool is denied.
 
@@ -155,7 +155,7 @@ def render_dispatch_envelope(
             ``"claude-code"`` or ``"claude-agent-sdk"``; anything else
             raises :class:`ValueError` with the canonical
             ``unknown runtime ...; expected one of [...]`` format that
-            matches :func:`eawf.mcp.installer._validate_runtime`.
+            matches :func:`eawf.runtime.mcp.installer._validate_runtime`.
         repo_root: Forwarded to :func:`render_wave_prompt` for API
             symmetry; not consumed in v0.1.
 
@@ -219,10 +219,10 @@ def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
     ``None`` or an empty map yield ``[]``.
 
     Sandbox enforcement: any projected tool that the wave's
-    :class:`~eawf.sandbox.policy.SandboxPolicy` deny-list names is
+    :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list names is
     intersected out before returning, so a wave with a denied tool cannot
     dispatch it. The deny set is resolved by
-    :func:`~eawf.sandbox.policy.resolve_denied_tools` from wave-scoped and
+    :func:`~eawf.runtime.sandbox.policy.resolve_denied_tools` from wave-scoped and
     global policies on ``state.sandbox_policies``.
     """
     grants = state.mcp_grants or {}

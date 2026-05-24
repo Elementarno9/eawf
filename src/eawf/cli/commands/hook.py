@@ -4,8 +4,8 @@ Surface contract:
 
 - ``eawf hook run <event_type> [--runtime <claude|opencode|generic>]
   [--scope <ID>] [--command <str>]`` reads a JSON payload from stdin,
-  builds a typed :class:`~eawf.hooks.event.HookEvent`, dispatches it
-  through a fresh :class:`~eawf.hooks.runner.HookRunner`, and emits an
+  builds a typed :class:`~eawf.runtime.hooks.event.HookEvent`, dispatches it
+  through a fresh :class:`~eawf.runtime.hooks.runner.HookRunner`, and emits an
   :class:`~eawf.render.envelope.OutputEnvelope` to stdout.
 - Exit ``0`` when no registered hook returns ``block=True``.
 - Exit ``9`` (``HOOK_BLOCKED``) when at least one hook reports a block.
@@ -40,10 +40,10 @@ from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
-    from eawf.hooks.event import HookEvent, HookEventType, HookRuntime
-    from eawf.hooks.runner import HookResult
     from eawf.kernel.state.models import State
     from eawf.render.envelope import EnvelopeStatus, OutputEnvelope
+    from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
+    from eawf.runtime.hooks.runner import HookResult
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _parse_event_type(raw: str) -> HookEventType:
     :class:`~eawf.cli.errors.UserError` (``kind="InvalidInput"``) so the
     handler can surface exit code 3.
     """
-    from eawf.hooks.event import HookEventType
+    from eawf.runtime.hooks.event import HookEventType
 
     try:
         return HookEventType(raw)
@@ -126,7 +126,7 @@ def _build_event(
     The decoded stdin mapping is folded into ``payloads[<event_type>]``
     so downstream hooks see the original shape under a stable key.
     """
-    from eawf.hooks.event import HookEvent
+    from eawf.runtime.hooks.event import HookEvent
 
     return HookEvent(
         event_type=event_type,
@@ -561,8 +561,8 @@ def run(
     ] = "",
 ) -> None:
     """Dispatch a hook event read from stdin and emit the result envelope."""
-    from eawf.hooks.event import HookEventType
-    from eawf.hooks.runner import HookRunner
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.hooks.runner import HookRunner
     from eawf.workflow.agent_report.store import (
         AgentReportRoleMismatchError,
         AgentReportScrubError,
@@ -802,7 +802,7 @@ def plugin_doctor_drift(
     Otherwise it runs the Claude checksum sweep and exits 1 on drift.
     """
     from eawf.lint._conditional import relevant_for_hook
-    from eawf.runtimes.claude.plugin_doctor import doctor_plugin_strict
+    from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin_strict
 
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()

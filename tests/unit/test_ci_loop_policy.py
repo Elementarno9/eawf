@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.ci_loop.policy`.
+"""Unit tests for :mod:`eawf.runtime.ci_loop.policy`.
 
 The policy helpers turn parsed failures into the inputs needed by the
 follow-up ``plan_wave`` call — a sorted-unique file-scope list and a
@@ -7,8 +7,8 @@ short ``kind:count`` signature.
 
 from __future__ import annotations
 
-from eawf.ci_loop.parser import MypyFailure, PytestFailure, RuffFailure
-from eawf.ci_loop.policy import failure_to_file_scope, summarise_failures
+from eawf.runtime.ci_loop.parser import MypyFailure, PytestFailure, RuffFailure
+from eawf.runtime.ci_loop.policy import failure_to_file_scope, summarise_failures
 
 
 def test_failure_to_file_scope_dedups_and_sorts() -> None:

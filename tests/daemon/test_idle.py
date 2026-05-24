@@ -1,4 +1,4 @@
-"""Tests for :class:`eawf.daemon.idle.IdleTimeoutWatchdog`.
+"""Tests for :class:`eawf.runtime.daemon.idle.IdleTimeoutWatchdog`.
 
 The watchdog runs as an asyncio task; the tests drive it with a tiny
 ``tick_seconds`` so the suite completes in well under a second.
@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from eawf.daemon.idle import IdleTimeoutWatchdog
-from eawf.daemon.methods import MethodContext
+from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
+from eawf.runtime.daemon.methods import MethodContext
 
 
 def _build_ctx() -> MethodContext:

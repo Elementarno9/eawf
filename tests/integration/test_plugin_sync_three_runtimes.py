@@ -4,7 +4,7 @@ Per C07a §5.7-§5.9 + V9 (XB10): plugin sync regenerates per-runtime
 artifacts deterministically from ``SKILL_REGISTRY``. Two replays
 on identical inputs produce byte-identical output. The orchestrator
 delegates to the three per-runtime ``install_plugin`` functions
-under :mod:`eawf.runtimes.{claude,codex,opencode}`.
+under :mod:`eawf.runtime.runtimes.{claude,codex,opencode}`.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.runtimes.plugin_sync import sync_plugins
+from eawf.runtime.runtimes.plugin_sync import sync_plugins
 
 pytestmark = pytest.mark.integration
 

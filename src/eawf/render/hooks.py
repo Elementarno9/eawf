@@ -1,7 +1,7 @@
 """Render Claude Code bash hook wrappers for Eä events.
 
 Per Phase 4 W05, ``eawf plugin install claude`` emits one
-``.claude/hooks/<event>.sh`` per :class:`~eawf.hooks.event.HookEventType`.
+``.claude/hooks/<event>.sh`` per :class:`~eawf.runtime.hooks.event.HookEventType`.
 The output is a small POSIX-bash wrapper that:
 
 1. Reads up to four positional arguments (``$1..$4``) — Claude Code
@@ -32,7 +32,7 @@ from importlib.resources import files
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from eawf.hooks.event import HookEventType
+from eawf.runtime.hooks.event import HookEventType
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def _spec_for(event_type: HookEventType) -> HookSpec:
 
 # ---------------------------------------------------------------------------
 # Frozen v0.1 hook registry. Maps every Eä :class:`HookEventType` to the
-# Claude-side display name. The router (:mod:`eawf.runtimes.claude.
+# Claude-side display name. The router (:mod:`eawf.runtime.runtimes.claude.
 # hooks_router`) uses ``hook_event_name`` to dispatch incoming payloads;
 # the wrappers below set it to the matching Claude Code hook name so a
 # wrapper-fired event survives the round-trip through ``eawf hook run``.

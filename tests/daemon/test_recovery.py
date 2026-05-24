@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.daemon.recovery` — startup WAL replay.
+"""Tests for :mod:`eawf.runtime.daemon.recovery` — startup WAL replay.
 
 The replay loop is pure file-system + log scanning; tests build a
 ``tmp_path / "wal"`` directory by hand and assert the renames, the
@@ -14,16 +14,16 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.daemon.recovery import ReplayReport, replay_wal
-from eawf.daemon.wal import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.recovery import ReplayReport, replay_wal
+from eawf.runtime.daemon.wal import (
     WalRecord,
     list_poisoned,
     list_records,
     mark_applied,
     write_pending,
 )
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.envelope import Envelope
 
 pytestmark = pytest.mark.unit
 
@@ -215,7 +215,7 @@ def test_replay_wal_preserves_fsynced_records(tmp_path: Path) -> None:
     mark_applied(wal_dir, record.record_id)
     # Manually rename to .fsynced.json (skipping the helper since that's
     # what a clean shutdown leaves on disk).
-    from eawf.daemon.wal import mark_fsynced
+    from eawf.runtime.daemon.wal import mark_fsynced
 
     mark_fsynced(wal_dir, record.record_id)
     event_path.write_bytes(record.envelope.model_dump_json().encode("utf-8") + b"\n")
@@ -228,7 +228,7 @@ def test_replay_wal_preserves_fsynced_records(tmp_path: Path) -> None:
 
 def test_record_id_from_path_helper_handles_well_formed_names() -> None:
     """The defensive branch in ``_record_id_from_path`` accepts canonical shapes."""
-    from eawf.daemon.recovery import _record_id_from_path
+    from eawf.runtime.daemon.recovery import _record_id_from_path
 
     assert _record_id_from_path(Path("rec-001.pending.json")) == "rec-001"
     assert _record_id_from_path(Path("rec-001.applied.json")) == "rec-001"

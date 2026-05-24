@@ -71,13 +71,13 @@ from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.ids import RE_PROJECT_CODE
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.lock import portalock
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
 from eawf.render.agents_md import render_agents_md
 from eawf.render.claude_shim import render_claude_md
 from eawf.render.manifest import Manifest
 from eawf.render.manifest import save_atomic as save_manifest_atomic
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 

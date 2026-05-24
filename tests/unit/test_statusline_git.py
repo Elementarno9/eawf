@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from eawf.runtimes.claude.statusline_modules import git as git_module
+from eawf.runtime.runtimes.claude.statusline_modules import git as git_module
 
 
 def test_git_module_clean_branch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

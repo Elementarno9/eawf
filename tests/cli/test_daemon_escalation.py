@@ -168,7 +168,7 @@ def test_escalate_mutation_auto_spawns_when_no_daemon(
         spawned["runtime"] = runtime_dir
         return 4242
 
-    monkeypatch.setattr("eawf.daemon.spawn.auto_spawn_daemon", _fake_spawn)
+    monkeypatch.setattr("eawf.runtime.daemon.spawn.auto_spawn_daemon", _fake_spawn)
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
 
     fake_runtime = Path("/tmp/eawfd-test-runtime")
@@ -186,12 +186,12 @@ def test_ensure_daemon_maps_spawn_timeout_to_daemon_unreachable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A spawn timeout surfaces as DaemonUnreachable (exit-code 4)."""
-    from eawf.daemon.spawn import DaemonSpawnTimeoutError
+    from eawf.runtime.daemon.spawn import DaemonSpawnTimeoutError
 
     def _boom(_runtime_dir: Path) -> int:
         raise DaemonSpawnTimeoutError("socket never opened")
 
-    monkeypatch.setattr("eawf.daemon.spawn.auto_spawn_daemon", _boom)
+    monkeypatch.setattr("eawf.runtime.daemon.spawn.auto_spawn_daemon", _boom)
 
     with pytest.raises(cli_errors.DaemonUnreachable) as excinfo:
         _dispatch.ensure_daemon(Path("/tmp/eawfd-test-runtime"))
@@ -213,7 +213,7 @@ def test_state_show_daemonless_reads_directly_without_spawn(
     def _fail_spawn(_runtime_dir: Path) -> int:
         pytest.fail("read-only verb must not spawn the daemon")
 
-    monkeypatch.setattr("eawf.daemon.spawn.auto_spawn_daemon", _fail_spawn)
+    monkeypatch.setattr("eawf.runtime.daemon.spawn.auto_spawn_daemon", _fail_spawn)
 
     result = runner.invoke(app, ["--daemonless", "--json", "state", "show"])
     assert result.exit_code == 0
@@ -230,7 +230,7 @@ def test_state_show_missing_state_file_user_error(
     missing = tmp_path / ".ea" / "state.json"
     monkeypatch.setenv("EA_STATE", str(missing))
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("must not spawn on a read"),
     )
     result = runner.invoke(app, ["--daemonless", "state", "show"])
@@ -254,7 +254,7 @@ def test_escalate_mutation_rejects_daemonless_flag(
 ) -> None:
     """escalate_mutation refuses --daemonless and never reaches the spawn."""
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("must reject before spawning"),
     )
     with pytest.raises(cli_errors.UserError, match="mutating verb"):
@@ -267,7 +267,7 @@ def test_escalate_mutation_rejects_daemonless_env(
     """EAWF_DAEMONLESS=1 also triggers the mutating-verb rejection."""
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("must reject before spawning"),
     )
     with pytest.raises(cli_errors.UserError):
@@ -358,7 +358,7 @@ def test_cli_mutating_verb_rejects_daemonless_flag(
     _build_state(state_path)
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("mutating verb must reject before any spawn"),
     )
     result = runner.invoke(
@@ -380,7 +380,7 @@ def test_cli_read_verb_honours_daemonless_flag(
     _build_state(state_path)
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("read-only verb must not spawn the daemon"),
     )
     result = runner.invoke(app, ["--daemonless", "--json", "roadmap", "show"])
@@ -396,7 +396,7 @@ def test_state_rpc_hidden_without_dev_mode(
     """Without --debug the raw RPC verb refuses with a UserError (exit 1)."""
     monkeypatch.delenv("EAWF_DEBUG", raising=False)
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("gated verb must not spawn"),
     )
     result = runner.invoke(app, ["state", "rpc", "daemon.ping"])
@@ -414,7 +414,7 @@ def test_state_rpc_dev_mode_read_method_calls_daemon(
         spawned["calls"] += 1
         return 99
 
-    monkeypatch.setattr("eawf.daemon.spawn.auto_spawn_daemon", _fake_spawn)
+    monkeypatch.setattr("eawf.runtime.daemon.spawn.auto_spawn_daemon", _fake_spawn)
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
 
     class _FakeClient:
@@ -448,7 +448,7 @@ def test_state_rpc_dev_mode_mutating_method_rejects_daemonless(
 ) -> None:
     """A mutating raw method + --daemonless is rejected even in dev-mode."""
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("must reject before spawning"),
     )
     result = runner.invoke(
@@ -465,7 +465,7 @@ def test_state_rpc_dev_mode_bad_params_user_error(
 ) -> None:
     """Non-JSON --params surfaces a USER_ERROR before any spawn."""
     monkeypatch.setattr(
-        "eawf.daemon.spawn.auto_spawn_daemon",
+        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
         lambda _r: pytest.fail("must reject before spawning"),
     )
     result = runner.invoke(

@@ -38,8 +38,8 @@ from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 from eawf.kernel.state.enums import ActualStatus, Confidence, StoreKind
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.lock import portalock
-from eawf.lock.stale import is_stale
+from eawf.runtime.lock import portalock
+from eawf.runtime.lock.stale import is_stale
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State

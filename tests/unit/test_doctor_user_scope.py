@@ -24,8 +24,8 @@ from typer.testing import CliRunner
 
 import eawf
 from eawf.cli.app import app
-from eawf.runtimes.claude.plugin_install import install_plugin
-from eawf.runtimes.claude.plugin_update import update_plugin
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.runtimes.claude.plugin_update import update_plugin
 
 
 def _fake_completed(stdout: str = "", stderr: str = "", returncode: int = 0) -> Any:

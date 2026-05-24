@@ -1,6 +1,6 @@
 """Tests for the ``agent.*`` JSON-RPC handlers (P24-W07).
 
-Covers the fresh-dispatch path of :func:`eawf.daemon.methods.agent.dispatch`
+Covers the fresh-dispatch path of :func:`eawf.runtime.daemon.methods.agent.dispatch`
 plus the inspection helpers :func:`agent.session` and the placeholder
 :func:`agent.kill`. W07 ships only the fresh path; the suite asserts that
 ``session_policy="continue"`` is rejected with ``-32602 invalid params``
@@ -25,13 +25,13 @@ import pytest
 from pydantic import ValidationError
 
 from eawf import __version__
-from eawf.daemon import PROTOCOL_VERSION
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.methods.agent import _runtime_triple, dispatch, kill, session
 from eawf.kernel.state.enums import DispatchNote
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.agent import _runtime_triple, dispatch, kill, session
 from eawf.telemetry.pricing import PRICING_VERSION
 
 pytestmark = pytest.mark.unit
@@ -226,7 +226,7 @@ def test_dispatch_manual_runtime_override_emits_switch_manual(tmp_path: Path) ->
     The fresh-dispatch path resolves the new runtime from an operator override
     (or preference) with no error involved, so the annotation note is
     ``SWITCH_MANUAL`` — ``SWITCH_ON_ERROR`` is reserved for the error-driven
-    V5 reactive switch in :mod:`eawf.runtimes.fallback`.
+    V5 reactive switch in :mod:`eawf.runtime.runtimes.fallback`.
     """
     state_path = tmp_path / "state.json"
     prior = SessionAttempt(
@@ -497,7 +497,7 @@ def test_kill_rejects_unknown_signal() -> None:
 
 # --------------------------------------------------------------------------- #
 # Dispatch-runner wiring: agent.dispatch is the production caller for
-# eawf.daemon.dispatch_runner.run_dispatch. When a DispatchOutcome is
+# eawf.runtime.daemon.dispatch_runner.run_dispatch. When a DispatchOutcome is
 # supplied + the context carries an event_path, the C09 ``runtime_switched``
 # (on a V5 fallback) + ``dispatch_cost`` events land in the live event log.
 # --------------------------------------------------------------------------- #

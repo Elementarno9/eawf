@@ -15,8 +15,8 @@ import logging
 
 import pytest
 
-from eawf.hooks.event import HookEvent, HookEventType
-from eawf.runtimes.claude.hooks_router import route_claude_payload
+from eawf.runtime.hooks.event import HookEvent, HookEventType
+from eawf.runtime.runtimes.claude.hooks_router import route_claude_payload
 
 
 def test_router_session_start_maps_to_session_start() -> None:
@@ -69,25 +69,25 @@ def test_router_posttooluse_bash_git_push_maps_to_post_push() -> None:
 def test_router_unknown_hook_event_returns_none_with_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    caplog.set_level(logging.WARNING, logger="eawf.runtimes.claude.hooks_router")
+    caplog.set_level(logging.WARNING, logger="eawf.runtime.runtimes.claude.hooks_router")
     out = route_claude_payload({"hook_event_name": "PromptSubmit", "session_id": "abc"})
     assert out is None
-    assert any("unknown Claude hook_event_name" in r.message for r in caplog.records)
+    assert any("unknown-hook-event" in r.message for r in caplog.records)
 
 
 def test_router_missing_hook_event_name_returns_none_with_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    caplog.set_level(logging.WARNING, logger="eawf.runtimes.claude.hooks_router")
+    caplog.set_level(logging.WARNING, logger="eawf.runtime.runtimes.claude.hooks_router")
     out = route_claude_payload({"session_id": "abc"})
     assert out is None
-    assert any("missing or non-string hook_event_name" in r.message for r in caplog.records)
+    assert any("missing-hook-event-name" in r.message for r in caplog.records)
 
 
 def test_router_pretooluse_non_bash_returns_none_with_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    caplog.set_level(logging.WARNING, logger="eawf.runtimes.claude.hooks_router")
+    caplog.set_level(logging.WARNING, logger="eawf.runtime.runtimes.claude.hooks_router")
     out = route_claude_payload(
         {
             "hook_event_name": "PreToolUse",
@@ -96,13 +96,13 @@ def test_router_pretooluse_non_bash_returns_none_with_warning(
         }
     )
     assert out is None
-    assert any("not mapped" in r.message for r in caplog.records)
+    assert any("tool-use-unmapped" in r.message for r in caplog.records)
 
 
 def test_router_pretooluse_bash_unrelated_command_returns_none(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    caplog.set_level(logging.WARNING, logger="eawf.runtimes.claude.hooks_router")
+    caplog.set_level(logging.WARNING, logger="eawf.runtime.runtimes.claude.hooks_router")
     out = route_claude_payload(
         {
             "hook_event_name": "PreToolUse",
@@ -111,7 +111,7 @@ def test_router_pretooluse_bash_unrelated_command_returns_none(
         }
     )
     assert out is None
-    assert any("not mapped" in r.message for r in caplog.records)
+    assert any("tool-use-unmapped" in r.message for r in caplog.records)
 
 
 def test_router_does_not_raise_on_completely_garbage_payload() -> None:

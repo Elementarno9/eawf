@@ -13,7 +13,7 @@ from eawf.kernel.state.enums import (
     AgentSessionStatus,
 )
 from eawf.kernel.state.models import State
-from eawf.session.store import (
+from eawf.runtime.session.store import (
     SessionConflict,
     SessionNotFound,
     append_event,

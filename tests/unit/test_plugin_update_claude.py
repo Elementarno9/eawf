@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.runtimes.claude.plugin_update``.
+"""Unit tests for ``eawf.runtime.runtimes.claude.plugin_update``.
 
 Covers:
 
@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from eawf.cli.exit_codes import INTEGRITY_VIOLATION
-from eawf.runtimes.claude.plugin_install import IntegrityViolation, install_plugin
-from eawf.runtimes.claude.plugin_update import update_plugin
+from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation, install_plugin
+from eawf.runtime.runtimes.claude.plugin_update import update_plugin
 
 
 def test_update_plugin_succeeds_on_clean_tree(tmp_path: Path) -> None:

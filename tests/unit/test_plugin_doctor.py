@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.runtimes.plugin_doctor` — 4 drift kinds.
+"""Unit tests for :mod:`eawf.runtime.runtimes.plugin_doctor` — 4 drift kinds.
 
 The top-level doctor enumerates four drift kinds per C07a §5.9 / F14:
 
@@ -9,7 +9,7 @@ The top-level doctor enumerates four drift kinds per C07a §5.9 / F14:
 3. ``capability-vs-probe`` — capability matrix declared cells vs live
    probe results (delegates to W13).
 4. ``helper-LOC-overflow`` — KISS-004 budget enforcement on
-   :mod:`eawf.runtimes.helpers`.
+   :mod:`eawf.runtime.runtimes.helpers`.
 
 These tests cover boundary cases (no manifests / clean tree / empty
 helpers / no probes) AND drift detection (broken source files, hand
@@ -24,9 +24,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from eawf.runtimes.capabilities import ProbeResult
-from eawf.runtimes.claude.plugin_install import install_plugin
-from eawf.runtimes.plugin_doctor import (
+from eawf.runtime.runtimes.capabilities import ProbeResult
+from eawf.runtime.runtimes.claude.plugin_install import install_plugin
+from eawf.runtime.runtimes.plugin_doctor import (
     DRIFT_KINDS,
     HELPER_LOC_BUDGET,
     DriftFinding,

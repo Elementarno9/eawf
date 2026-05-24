@@ -1,12 +1,12 @@
-"""Boot-path tests for :mod:`eawf.daemon.main` (P24-I02-W01 / audit F1+F2).
+"""Boot-path tests for :mod:`eawf.runtime.daemon.main` (P24-I02-W01 / audit F1+F2).
 
 Covers two wiring gaps surfaced by the P24 ship-gate audit:
 
-- F1: ``daemon.main.run()`` invokes :func:`eawf.daemon.recovery.replay_wal`
+- F1: ``daemon.main.run()`` invokes :func:`eawf.runtime.daemon.recovery.replay_wal`
   after the WAL directory is created and before the asyncio server
   accepts connections (C02 §5.6 startup-replay invariant).
 - F2: ``daemon.main._schedule_session_ttl_sweep`` schedules
-  :func:`eawf.daemon.session_ttl.run_sweep_loop` against the wired
+  :func:`eawf.runtime.daemon.session_ttl.run_sweep_loop` against the wired
   shutdown event so expired session rows prune on each tick (W07
   background-sweep criterion).
 
@@ -29,16 +29,16 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.daemon import main as daemon_main
-from eawf.daemon.bus import EventBus
-from eawf.daemon.methods import MethodContext
-from eawf.daemon.session import reset_registry
-from eawf.daemon.session_ttl import DEFAULT_TTL_SECONDS
-from eawf.daemon.wal import WalRecord, mark_applied, write_pending
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.logging.scrub import REDACTION, SensitiveScrubber
+from eawf.runtime.daemon import main as daemon_main
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.session import reset_registry
+from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS
+from eawf.runtime.daemon.wal import WalRecord, mark_applied, write_pending
 
 pytestmark = pytest.mark.unit
 

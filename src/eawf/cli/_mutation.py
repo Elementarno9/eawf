@@ -49,7 +49,7 @@ from eawf.cli import errors as cli_errors
 from eawf.kernel.state.models import State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.validate.strict import validate_state
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ def state_transaction(
        verbs are daemon-only. Read-only
        callers (``worktree list``, ``roadmap show``) pass
        ``read_only=True`` to bypass this gate.
-    1. Acquire :func:`eawf.lock.portalock.acquire` on *state_path* with
+    1. Acquire :func:`eawf.runtime.lock.portalock.acquire` on *state_path* with
        *timeout* (default 5 s, matching the rest of the CLI).
     2. Read + decode + schema-validate the on-disk state. Schema errors
        raise :class:`~eawf.cli.errors.ValidationError`.

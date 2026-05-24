@@ -5,7 +5,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from eawf.lock import portalock, stale
+from eawf.runtime.lock import portalock, stale
 
 
 def test_dead_pid_detected_as_stale(tmp_path: Path) -> None:

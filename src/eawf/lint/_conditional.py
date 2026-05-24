@@ -41,7 +41,7 @@ DEFAULT_DIFF_BASE = "origin/main"
 # Per-hook path filters keyed by hook name. A changed file is "relevant"
 # to a hook when its repo-relative path matches the hook's pattern.
 _PYTHON_LIBRARY = re.compile(r"^src/eawf/.*\.py$")
-_PLUGIN_SURFACE = re.compile(r"^(AGENTS\.md|skills/.*|src/eawf/runtimes/.*|build/.*)$")
+_PLUGIN_SURFACE = re.compile(r"^(AGENTS\.md|skills/.*|src/eawf/runtime/runtimes/.*|build/.*)$")
 # The leak gates care about any tracked text blob; an explicit deny-list
 # of binary-ish suffixes keeps the scan from reading non-text payloads.
 _LEAK_SURFACE = re.compile(r".*")

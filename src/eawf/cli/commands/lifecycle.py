@@ -90,7 +90,7 @@ from eawf.kernel.state.io import (
     write_state_unlocked,
 )
 from eawf.kernel.state.urn import build as build_urn
-from eawf.lock import portalock
+from eawf.runtime.lock import portalock
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State

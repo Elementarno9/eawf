@@ -43,8 +43,8 @@ def _unique_pipe_name(stem: str) -> str:
 def _build_ctx() -> Any:
     """Return a :class:`MethodContext` wired with a fresh shutdown event."""
     from eawf import __version__
-    from eawf.daemon import PROTOCOL_VERSION
-    from eawf.daemon.methods import MethodContext
+    from eawf.runtime.daemon import PROTOCOL_VERSION
+    from eawf.runtime.daemon.methods import MethodContext
 
     return MethodContext(
         started_at="2026-05-19T00:00:00+00:00",
@@ -90,8 +90,8 @@ def _client_round_trip(pipe_name: str, payload: bytes) -> bytes:
 
 def test_ping_round_trip_via_named_pipe() -> None:
     """`daemon.ping` client → server → response over the named pipe."""
-    from eawf.daemon.server import process_frame_bytes
-    from eawf.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.server import process_frame_bytes
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
 
     pipe_name = _unique_pipe_name("ping")
     ctx = _build_ctx()
@@ -134,7 +134,7 @@ def test_ping_round_trip_via_named_pipe() -> None:
 
 def test_stop_unblocks_listener_thread() -> None:
     """``stop()`` wakes the listener thread within 2 s."""
-    from eawf.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
 
     pipe_name = _unique_pipe_name("stop")
 
@@ -165,8 +165,8 @@ def test_stop_unblocks_listener_thread() -> None:
 
 def test_malformed_frame_returns_parse_error_envelope() -> None:
     """Garbage bytes produce a ``-32700 parse error`` response frame."""
-    from eawf.daemon.server import process_frame_bytes
-    from eawf.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.server import process_frame_bytes
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
 
     pipe_name = _unique_pipe_name("parse")
     ctx = _build_ctx()
@@ -205,8 +205,8 @@ def test_dacl_post_connect_sid_check_rejects(monkeypatch: pytest.MonkeyPatch) ->
     the running user's SID and is exercised in
     :mod:`test_windows_pipe_design_only`.
     """
-    from eawf.daemon.windows_pipe import WindowsPipeServer
-    from eawf.daemon.windows_security import WindowsAuthError
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.windows_security import WindowsAuthError
 
     pipe_name = _unique_pipe_name("sid")
     result: dict[str, Any] = {}
@@ -215,7 +215,7 @@ def test_dacl_post_connect_sid_check_rejects(monkeypatch: pytest.MonkeyPatch) ->
         raise WindowsAuthError("peer sid mismatch: expected S-1-1, got S-2-2")
 
     monkeypatch.setattr(
-        "eawf.daemon.windows_security.verify_peer_sid",
+        "eawf.runtime.daemon.windows_security.verify_peer_sid",
         _fake_verify,
         raising=True,
     )

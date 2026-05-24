@@ -1,7 +1,7 @@
 """Tests: live token accrual folds dispatch_cost into Wave.tokens_consumed.
 
-Exercises :func:`eawf.daemon.dispatch_runner.accrue_tokens_consumed` (and
-the :func:`eawf.daemon.dispatch_runner.run_dispatch` wiring that drives it)
+Exercises :func:`eawf.runtime.daemon.dispatch_runner.accrue_tokens_consumed` (and
+the :func:`eawf.runtime.daemon.dispatch_runner.run_dispatch` wiring that drives it)
 against a real ``state.json`` on a tmp filesystem.
 
 The load-bearing assertion is the wave's success criterion: a
@@ -22,14 +22,14 @@ from typing import Any
 
 import pytest
 
-from eawf.daemon.bus import EventBus
-from eawf.daemon.dispatch_runner import (
+from eawf.kernel.state.enums import StoreKind
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
     accrue_tokens_consumed,
     run_dispatch,
 )
-from eawf.daemon.methods import MethodContext
-from eawf.kernel.state.enums import StoreKind
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.integration
@@ -97,7 +97,7 @@ def _state_payload(*, wave_status: str = "in_progress", tokens_consumed: int = 0
                 "status": wave_status,
                 "deps": [],
                 "blocks": [],
-                "file_scopes": ["src/eawf/daemon/dispatch_runner.py"],
+                "file_scopes": ["src/eawf/runtime/daemon/dispatch_runner.py"],
                 "success_criteria": [],
                 "agent_role": "executor",
                 "effort_bucket": "M",

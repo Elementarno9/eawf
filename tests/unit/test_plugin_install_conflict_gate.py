@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.runtimes.claude.plugin_conflict import CCPluginConflict
+from eawf.runtime.runtimes.claude.plugin_conflict import CCPluginConflict
 
 runner = CliRunner()
 
@@ -159,13 +159,13 @@ def test_install_codex_user_scope_conflict_gate(
     """Project-scope codex install hits the user-scope clash detector."""
     fake_dir = tmp_path / "fake-user-codex"
     fake_dir.mkdir()
-    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+    from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
 
     monkeypatch.setattr(
         "eawf.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
-    monkeypatch.setattr("eawf.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
+    monkeypatch.setattr("eawf.runtime.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
     res = runner.invoke(
         app,
         [
@@ -188,13 +188,13 @@ def test_install_codex_user_scope_force_bypasses_gate(
 ) -> None:
     fake_dir = tmp_path / "fake-user-codex"
     fake_dir.mkdir()
-    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+    from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
 
     monkeypatch.setattr(
         "eawf.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
-    monkeypatch.setattr("eawf.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
+    monkeypatch.setattr("eawf.runtime.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
     res = runner.invoke(
         app,
         [
@@ -216,7 +216,7 @@ def test_install_opencode_user_scope_conflict_gate(
     """Project-scope opencode install hits the user-scope clash detector."""
     fake_file = tmp_path / "fake-user-opencode-eawf.js"
     fake_file.write_text("// fake\n", encoding="utf-8")
-    from eawf.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
+    from eawf.runtime.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
 
     monkeypatch.setattr(
         "eawf.cli.commands.plugin.opencode_detect_user_install",
@@ -245,13 +245,13 @@ def test_install_codex_user_scope_skips_clash_gate(
     """The codex clash gate fires only on project-scope installs."""
     fake_dir = tmp_path / "fake-user-codex"
     fake_dir.mkdir()
-    from eawf.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+    from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
 
     monkeypatch.setattr(
         "eawf.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
-    monkeypatch.setattr("eawf.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
+    monkeypatch.setattr("eawf.runtime.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
     res = runner.invoke(
         app,
         [

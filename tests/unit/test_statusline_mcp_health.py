@@ -6,7 +6,7 @@ from pathlib import Path
 
 import orjson
 
-from eawf.runtimes.claude.statusline_modules import mcp_health
+from eawf.runtime.runtimes.claude.statusline_modules import mcp_health
 
 
 def _seed_state(tmp_path: Path, payload: dict[str, object]) -> Path:

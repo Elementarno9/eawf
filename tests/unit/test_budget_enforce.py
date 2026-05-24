@@ -2,10 +2,10 @@
 
 Covers two surfaces:
 
-* :mod:`eawf.budget.policy` enforcement classification — the ``soft``
+* :mod:`eawf.runtime.budget.policy` enforcement classification — the ``soft``
   default (warn + continue) vs the ``hard`` opt-in (halt at cap), and the
   ``1.5`` multiplier that scales the base budget into the enforced cap.
-* :func:`eawf.budget.service.terminate_with_grace` — the SIGTERM ->
+* :func:`eawf.runtime.budget.service.terminate_with_grace` — the SIGTERM ->
   grace-window -> SIGKILL ladder, driven by a fake process so SIGKILL
   timing is deterministically asserted (never before the grace window,
   always after it when the process is still alive).
@@ -17,14 +17,14 @@ import signal
 
 import pytest
 
-from eawf.budget.policy import (
+from eawf.runtime.budget.policy import (
     DEFAULT_ENFORCE,
     DEFAULT_MULTIPLIER,
     BudgetAction,
     classify_enforcement,
     effective_cap,
 )
-from eawf.budget.service import (
+from eawf.runtime.budget.service import (
     DEFAULT_GRACE_SECONDS,
     TerminationResult,
     terminate_with_grace,

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtimes.claude.statusline import cache_path_for
+from eawf.runtime.runtimes.claude.statusline import cache_path_for
 
 
 @pytest.fixture(autouse=True)

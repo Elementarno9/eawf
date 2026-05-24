@@ -4,7 +4,7 @@ Split out of :mod:`eawf.cli.commands.plugin` (P27-I05-W09). These are
 pure presentation helpers — each takes a runtime install / doctor /
 package / sync result (or report) and returns either the JSON envelope
 body (``dict``) or the human-readable text summary (``str``). They hold
-no state and call nothing in ``eawf.runtimes`` at runtime; the result
+no state and call nothing in ``eawf.runtime.runtimes`` at runtime; the result
 types are annotation-only imports under ``if TYPE_CHECKING:`` so this
 module stays off the import-budget heavy path.
 """
@@ -14,20 +14,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from eawf.runtimes.claude.plugin_doctor import DoctorReport
-    from eawf.runtimes.claude.plugin_install import InstallResult
-    from eawf.runtimes.claude.plugin_package import PackageResult
-    from eawf.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
-    from eawf.runtimes.codex.plugin_install import (
+    from eawf.runtime.runtimes.claude.plugin_doctor import DoctorReport
+    from eawf.runtime.runtimes.claude.plugin_install import InstallResult
+    from eawf.runtime.runtimes.claude.plugin_package import PackageResult
+    from eawf.runtime.runtimes.codex.plugin_doctor import DoctorReport as CodexDoctorReport
+    from eawf.runtime.runtimes.codex.plugin_install import (
         InstallResult as CodexInstallResult,
     )
-    from eawf.runtimes.codex.plugin_package import PackageResult as CodexPackageResult
-    from eawf.runtimes.opencode.plugin_doctor import DoctorReport as OpencodeDoctorReport
-    from eawf.runtimes.opencode.plugin_install import (
+    from eawf.runtime.runtimes.codex.plugin_package import PackageResult as CodexPackageResult
+    from eawf.runtime.runtimes.opencode.plugin_doctor import DoctorReport as OpencodeDoctorReport
+    from eawf.runtime.runtimes.opencode.plugin_install import (
         InstallResult as OpencodeInstallResult,
     )
-    from eawf.runtimes.plugin_doctor import PluginDoctorReport
-    from eawf.runtimes.plugin_sync import SyncResult
+    from eawf.runtime.runtimes.plugin_doctor import PluginDoctorReport
+    from eawf.runtime.runtimes.plugin_sync import SyncResult
 
 
 def _install_payload(result: InstallResult) -> dict[str, object]:

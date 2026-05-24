@@ -8,7 +8,7 @@ source of truth from W06 — never through an adapter-private envelope.
 The :func:`emit_runtime_event` helper centralises construction; the
 integration assertion is that the resulting :class:`Event` validates,
 round-trips through JSON, and its ``payload.event_kind`` matches the
-closed :data:`~eawf.runtimes.adapter.DispatchEventKind` Literal.
+closed :data:`~eawf.runtime.runtimes.adapter.DispatchEventKind` Literal.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pytest
 
 from eawf.kernel.store import Event as EventReExport
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
-from eawf.runtimes.adapter import (
+from eawf.runtime.runtimes.adapter import (
     DispatchEventKind,
     emit_runtime_event,
 )
