@@ -3519,6 +3519,16 @@
       "scope_id": "P27-I05-W10",
       "status": "done",
       "updated_at": "2026-05-24T19:55:20.738211Z"
+    },
+    "P27-I05-W11": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W11-close-20260524T200231Z",
+      "elapsed_eu": 38.3,
+      "id": "ACT-P27-I05-W11",
+      "scope_id": "P27-I05-W11",
+      "status": "done",
+      "updated_at": "2026-05-24T20:02:31.414075Z"
     }
   },
   "agent_sessions": {
@@ -6857,6 +6867,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W10",
       "updated_at": "2026-05-24T19:55:20.223365Z"
+    },
+    "P27-I05-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W11-bucket-20260524T200225Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W11",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W11",
+      "updated_at": "2026-05-24T20:02:25.537470Z"
     }
   },
   "goals": {
@@ -8234,7 +8257,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T19:55:20.738527Z",
+  "updated_at": "2026-05-24T20:02:31.414504Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20771,9 +20794,9 @@
       "blocks": [
         "P27-I05-W12"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T20:02:31.414075Z",
+      "commit": "675aacdfd2283509f437bf6d1ac670603698d4b1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20785,10 +20808,10 @@
       "id": "P27-I05-W11",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:33.481592Z",
-      "outcome": null,
+      "outcome": "backlog add --description + new backlog edit verb (edit_backlog mutator, model-revalidated bounds); 12 boundary/error tests; inventory test + autogen cli.md updated; full suite green bar 2 dev-only telemetry tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "backlog add --description; backlog edit sets title and description; edit_backlog mutator; boundary and error tests"
       ],
