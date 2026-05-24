@@ -3569,6 +3569,16 @@
       "scope_id": "P27-I05-W15",
       "status": "done",
       "updated_at": "2026-05-24T20:29:43.653347Z"
+    },
+    "P27-I05-W16": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W16-close-20260524T203959Z",
+      "elapsed_eu": 39.55,
+      "id": "ACT-P27-I05-W16",
+      "scope_id": "P27-I05-W16",
+      "status": "done",
+      "updated_at": "2026-05-24T20:39:59.013751Z"
     }
   },
   "agent_sessions": {
@@ -6972,6 +6982,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W15",
       "updated_at": "2026-05-24T20:15:46.946188Z"
+    },
+    "P27-I05-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W16-bucket-20260524T203019Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W16",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W16",
+      "updated_at": "2026-05-24T20:30:19.639981Z"
     }
   },
   "goals": {
@@ -8349,7 +8372,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T20:29:43.654155Z",
+  "updated_at": "2026-05-24T20:39:59.014675Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21042,9 +21065,9 @@
       "blocks": [
         "P27-I05-W17"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T20:39:59.013751Z",
+      "commit": "2559394a0d46dcf9d2d38add071411951d116974",
       "deps": [
         "P27-I05-W15"
       ],
@@ -21065,10 +21088,10 @@
       "id": "P27-I05-W16",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:35.940871Z",
-      "outcome": null,
+      "outcome": "workflow super-package regrouped (lifecycle/evidence/skills/agents/agent_report/audit_dsl/dispatch/pr_review/estimation); 735 refs/203 files codemod'd; pyproject + 2 docstring-rippled schemas regenerated; mypy 492 + full suite green (2 dev-only telemetry)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "workflow members moved under workflow/; shims at old paths; mypy and tests green"
       ],
