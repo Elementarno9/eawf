@@ -2,10 +2,10 @@
 
 Covers the full-screen per-repo :class:`PortfolioTable` (the reused W06
 workspace-table family) — >=1 row even at N=1, the large-N scroll without
-breaking column widths, the Enter → repo-detail overlay (the user scope
-has **no** zoom quadrant), the ``↑↓`` focus movement, the ``z`` no-op, the
-D3 zero-duplication invariant, the scope-specific footer hints, the empty
-registry boundary, and the ``c`` config binding.
+breaking column widths, the Enter / z zoom into a 2x2 quadrant scoped to
+the focused repo (the shared zoom mixin), the Esc return, the ``↑↓``
+focus movement, the D3 zero-duplication invariant, the scope-specific
+footer hints, the empty registry boundary, and the ``c`` config binding.
 
 Determinism: every test that triggers a git probe awaits
 ``app.workers.wait_for_complete()`` (per the project Pilot-worker rule —
@@ -246,12 +246,17 @@ def test_user_portfolio_large_n_scrolls() -> None:
 
 
 # --------------------------------------------------------------------------
-# Enter opens repo detail (no zoom quadrant); ↑↓ focus; z no-op
+# Enter / z zoom → quadrant; Esc returns; ↑↓ focus
 # --------------------------------------------------------------------------
 
 
-def test_user_enter_opens_repo_detail_not_zoom() -> None:
-    """Enter on a repo row opens the detail overlay — no zoom quadrant."""
+def test_user_enter_zooms_focused_repo() -> None:
+    """Enter on a repo row mounts the 2x2 zoom quadrant — no detail overlay.
+
+    The repo refs in the abstract fixtures point at ``/abs/path/...`` with
+    no on-disk ``.ea/state.json``, so the quadrant mounts with empty
+    widget state — the mount is what this asserts, not the seeded content.
+    """
 
     async def body() -> None:
         app = EaApp(scope="user", state_path=_WORKSPACE)
@@ -263,9 +268,11 @@ def test_user_enter_opens_repo_detail_not_zoom() -> None:
             screen.query_one(PortfolioTable).focus()
             await pilot.press("enter")
             await pilot.pause()
-            # The user scope opens a detail overlay, never a quadrant.
-            assert isinstance(app.screen, DetailModal)
-            assert not app.screen.query("#zoom-quadrant")
+            await app.workers.wait_for_complete()
+            # The user scope zooms into a quadrant, never a detail overlay.
+            assert isinstance(app.screen, UserScreen)
+            assert not isinstance(app.screen, DetailModal)
+            assert app.screen.query("#zoom-quadrant")
 
     asyncio.run(body())
 
@@ -290,8 +297,8 @@ def test_user_down_arrow_moves_focus() -> None:
     asyncio.run(body())
 
 
-def test_user_z_is_noop_no_zoom() -> None:
-    """``z`` is inert in the user scope — no overlay, no quadrant."""
+def test_user_z_zooms_focused_repo() -> None:
+    """``z`` zooms the focused repo into the 2x2 quadrant, like Enter."""
 
     async def body() -> None:
         app = EaApp(scope="user", state_path=_WORKSPACE)
@@ -303,7 +310,32 @@ def test_user_z_is_noop_no_zoom() -> None:
             screen.query_one(PortfolioTable).focus()
             await pilot.press("z")
             await pilot.pause()
-            # Still on the UserScreen — no detail overlay, no quadrant.
+            await app.workers.wait_for_complete()
+            # Still on the UserScreen with the quadrant mounted.
+            assert isinstance(app.screen, UserScreen)
+            assert app.screen.query("#zoom-quadrant")
+
+    asyncio.run(body())
+
+
+def test_user_esc_while_zoomed_returns_to_table() -> None:
+    """Esc unmounts the quadrant and returns to the portfolio table."""
+
+    async def body() -> None:
+        app = EaApp(scope="user", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, UserScreen)
+            screen.query_one(PortfolioTable).focus()
+            await pilot.press("z")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.query("#zoom-quadrant")
+            await pilot.press("escape")
+            await pilot.pause()
+            # The quadrant unmounts and we are back on the table.
             assert isinstance(app.screen, UserScreen)
             assert not app.screen.query("#zoom-quadrant")
 

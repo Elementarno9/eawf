@@ -8,17 +8,17 @@ the shared :class:`~eawf.tui.scopes.ScopeScreen` chassis (Header + Footer
 
 It reuses the W06 workspace-table widget family rather than forking a
 second grid — the same status-tinted completion + EU-burn bars, the same
-live git column, the same large-N scroll behaviour. The **only** scope
-difference is the row-activation semantics: the workspace scope zooms the
-focused repo into a 2x2 quadrant, while the user scope has **no zoom
-quadrant** — ``Enter`` opens the focused repo's detail overlay and ``z``
-is a no-op. :class:`PortfolioTable` subclasses the workspace table to
-swap the Enter message (``RepoSelected`` instead of ``RowZoomed``) and
-suppress the ``z`` zoom action; everything else (columns, bars, git
-probe, scroll) is inherited unchanged.
+live git column, the same large-N scroll behaviour. Row activation also
+matches the workspace scope: ``Enter`` / ``z`` zooms the focused repo
+into a 2x2 quadrant (roadmap · status / git · backlog) scoped to that
+repo's own ``state.json``, and ``Esc`` returns. The zoom lifecycle is the
+shared :class:`~eawf.tui.scopes._zoom.RepoZoomMixin`, and
+:class:`PortfolioTable` subclasses the workspace table unchanged — it
+inherits the ``RowZoomed`` Enter message and the ``z`` zoom action, so
+both scopes drive the identical zoom path.
 
-This screen overrides **only** :meth:`compose_body` + its footer hints;
-the entire chassis is inherited from
+This screen overrides **only** :meth:`compose_body` + its scope bindings
++ footer hints; the entire chassis is inherited from
 :class:`~eawf.tui.scopes.ScopeScreen` (zero-duplication).
 """
 
@@ -31,9 +31,8 @@ from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Vertical
-from textual.message import Message
-from textual.widgets import DataTable, Static
+from textual.containers import Container, Vertical
+from textual.widgets import Static
 
 from eawf.registry.models import Registry, RegistryReadError, read_registry
 from eawf.state.enums import ProjectStatus, ScopeKind
@@ -45,6 +44,7 @@ from eawf.state.models import (
 )
 from eawf.state.urn import build as build_urn
 from eawf.tui.scopes import ScopeScreen
+from eawf.tui.scopes._zoom import RepoZoomMixin
 from eawf.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
@@ -125,10 +125,12 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
 
 
 #: Footer hints tuned for the user portfolio screen (arrows primary; the
-#: user scope opens repo detail on Enter and has no zoom affordance).
+#: user scope zooms the focused repo on Enter / z, like the workspace).
 _USER_HINTS: tuple[str, ...] = (
     "↑↓ row",
-    "Enter detail",
+    "Enter zoom",
+    "Esc back",
+    "z zoom",
     "w/r/u scope",
     "c config",
     "F5 refresh",
@@ -139,87 +141,54 @@ _USER_HINTS: tuple[str, ...] = (
 
 
 class PortfolioTable(WorkspaceTable):
-    """User-scope portfolio grid — the workspace table without zoom.
+    """User-scope portfolio grid — the workspace table, reused verbatim.
 
-    Reuses every column, bar, git-probe, and scroll behaviour of
-    :class:`~eawf.tui.widgets.workspace_table.WorkspaceTable`; the only
-    override is the row-activation semantics. The user scope has no zoom
-    quadrant, so an Enter selection posts :class:`RepoSelected` (the host
-    opens the repo's detail overlay) and the ``z`` zoom action is a no-op.
+    Reuses every column, bar, git-probe, scroll, and row-activation
+    behaviour of :class:`~eawf.tui.widgets.workspace_table.WorkspaceTable`
+    with no overrides: an Enter selection posts ``RowZoomed`` and the
+    ``z`` action zooms, so the host
+    :class:`~eawf.tui.scopes._zoom.RepoZoomMixin` mounts the focused
+    repo's 2x2 quadrant exactly as the workspace scope does. The subclass
+    exists only to give the user scope a distinct widget type for
+    ``query_one(PortfolioTable)`` lookups.
     """
 
-    class RepoSelected(Message):
-        """Posted when the operator opens a repo row (Enter).
 
-        The host :class:`UserScreen` opens the focused repo's detail
-        overlay in response — there is no zoom quadrant in the user scope.
-
-        Attributes:
-            repo_code: The selected repo's project code (the row key).
-        """
-
-        def __init__(self, repo_code: str) -> None:
-            self.repo_code = repo_code
-            super().__init__()
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Post :class:`RepoSelected` for the Enter-selected row.
-
-        Overrides the workspace table's zoom message so the user scope
-        opens repo detail instead of mounting a quadrant.
-
-        Args:
-            event: The Textual row-selected event; ``row_key.value`` is the
-                repo code used as the row key.
-        """
-        repo_code = event.row_key.value
-        if repo_code is not None:
-            self.post_message(self.RepoSelected(repo_code))
-
-    def action_zoom_row(self) -> None:
-        """No-op: the user scope has no zoom quadrant (``z`` is inert)."""
-        logger.info("action_zoom_row suppressed scope=user")
-
-
-class UserScreen(ScopeScreen):
-    """User-scope screen: full-screen per-repo portfolio table.
+class UserScreen(ScopeScreen, RepoZoomMixin):
+    """User-scope screen: full-screen per-repo portfolio table with zoom.
 
     Composes a :class:`PortfolioTable` (the reused workspace-table family)
-    spanning the body. ``↑↓`` focus a repo; ``Enter`` opens the focused
-    repo's detail overlay; ``z`` is a no-op (no zoom quadrant in this
-    scope). The git column refreshes on the host's refresh tick.
+    spanning the body plus an (initially empty) zoom mount. ``↑↓`` focus a
+    repo; ``Enter`` / ``z`` zooms the focused repo into a 2x2 quadrant
+    scoped to that repo's own ``state.json`` (the shared
+    :class:`~eawf.tui.scopes._zoom.RepoZoomMixin`); ``Esc`` returns. The
+    git column refreshes on the host's refresh tick.
     """
 
-    #: ``c`` opens the registry-driven config window via the shared
-    #: ``action_open_config`` on the base chassis. Config is scope-agnostic
-    #: — the user scope has no repo anchor, so the modal opens on the
-    #: global layer only (``open_config`` resolves the available writable
-    #: layers per scope).
+    #: The user scope's browse pane is ``#pane-portfolio``; the zoom mixin
+    #: hides / restores it on zoom / exit.
+    ZOOM_BROWSE_PANE: ClassVar[str] = "#pane-portfolio"
+
+    #: ``z`` zooms the focused row (the Enter alias); ``Esc`` returns from
+    #: the zoom quadrant to the table; ``c`` opens the registry-driven
+    #: config window via the shared ``action_open_config`` on the base
+    #: chassis. Config is scope-agnostic — the user scope has no repo
+    #: anchor, so the modal opens on the global layer only.
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("z", "zoom_focused", "zoom", show=False),
+        Binding("escape", "leave_zoom", "back", show=False),
         Binding("c", "open_config", "config", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _USER_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the full-screen portfolio table body."""
-        with Vertical(id="body"), Vertical(classes="pane", id="pane-portfolio"):
-            yield Static("PORTFOLIO", classes="pane-title")
-            yield PortfolioTable(id="portfolio-table")
-
-    def on_portfolio_table_repo_selected(self, message: PortfolioTable.RepoSelected) -> None:
-        """Open the focused repo's detail overlay (the Enter handler).
-
-        Routes the repo code through the shared
-        :meth:`~eawf.tui.scopes.ScopeScreen._open_detail` seam so the
-        drill-in path matches every other row activation — no zoom
-        quadrant is mounted.
-
-        Args:
-            message: The :class:`PortfolioTable.RepoSelected` message
-                carrying the repo code to open detail for.
-        """
-        self._open_detail(message.repo_code)
+        """Yield the portfolio table body + an (initially empty) zoom mount."""
+        with Vertical(id="body"):
+            with Vertical(classes="pane", id="pane-portfolio"):
+                yield Static("PORTFOLIO", classes="pane-title")
+                yield PortfolioTable(id="portfolio-table")
+            yield Container(id="zoom-mount")
 
 
 __all__ = ["PortfolioTable", "UserScreen", "synthesize_user_state"]
