@@ -1,6 +1,6 @@
 """Unit tests for the C06 asciinema cast generator.
 
-Covers :mod:`eawf.tui.snapshot.asciinema`: scripted frame capture
+Covers :mod:`eawf.surfaces.tui.snapshot.asciinema`: scripted frame capture
 (initial frame + one per step), synthesised deterministic timestamps,
 the unknown-action error path, and the asciinema v2 cast file shape
 (header line + one output event per frame, byte-stable).
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.tui.app import EaApp
-from eawf.tui.snapshot.asciinema import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.snapshot.asciinema import (
     CAST_HEIGHT,
     CAST_WIDTH,
     DEFAULT_FRAME_MS,

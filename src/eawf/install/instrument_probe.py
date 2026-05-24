@@ -16,7 +16,7 @@ Probe outcomes per spec are normalised to one of three statuses:
                 NOT abort.
 - ``fail``    — the spec is marked ``kind="hard"`` and the binary was not
                 found; :func:`probe` raises
-                :class:`eawf.cli.errors.UserError`
+                :class:`eawf.surfaces.cli.errors.UserError`
                 (``kind="InstrumentMissing"``, CLI exit 6).
 
 Cache shape (``v=1``)::
@@ -58,7 +58,7 @@ from typing import Literal
 import orjson
 from pydantic import BaseModel, ConfigDict
 
-from eawf.cli.errors import UserError
+from eawf.surfaces.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
 

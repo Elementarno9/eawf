@@ -25,7 +25,7 @@ from eawf.kernel.store.kinds.agent_report import (
     ReviewerReportBody,
     ReviewFinding,
 )
-from eawf.render.agent_report import render_agent_report
+from eawf.surfaces.render.agent_report import render_agent_report
 
 GOLDEN_DIR = Path(__file__).resolve().parent.parent / "golden" / "agent_report"
 
@@ -76,7 +76,7 @@ def _report(role: AgentSessionRole) -> AgentReportPayload:
                 confidence=Confidence.HIGH,
                 summary=f"{role.value} summary",
                 wave_id="P18-I01-W07",
-                files_changed=["src/eawf/render/agent_report.py"],
+                files_changed=["src/eawf/surfaces/render/agent_report.py"],
                 tests_run=["uv run pytest tests/unit/test_render_agent_report.py -q"],
                 commit_sha="commit1",
                 outcome="renderer added",

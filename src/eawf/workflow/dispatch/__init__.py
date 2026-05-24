@@ -19,7 +19,7 @@ Public API:
 
 Both renderers are pure functions — no I/O, no logging side-effects
 beyond the module-level ``logger``. The CLI handlers in
-:mod:`eawf.cli.commands.lifecycle` own all stdout / file writes.
+:mod:`eawf.surfaces.cli.commands.lifecycle` own all stdout / file writes.
 """
 
 from __future__ import annotations

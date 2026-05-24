@@ -9,8 +9,8 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.profiles import discovery
+from eawf.surfaces.cli.app import app
 
 
 @pytest.fixture()

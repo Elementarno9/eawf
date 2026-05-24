@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from eawf.render.statusline import StatuslineSegment
+from eawf.surfaces.render.statusline import StatuslineSegment
 
 logger = logging.getLogger(__name__)
 

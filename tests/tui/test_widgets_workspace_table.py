@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from eawf.tui.widgets.eu_bar import EMPTY_STATE
-from eawf.tui.widgets.workspace_table import (
+from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
+from eawf.surfaces.tui.widgets.workspace_table import (
     RepoRow,
     _phase_cell,
     active_phase_completion,

@@ -1,6 +1,6 @@
 """Tests for the C06 standalone ``Heartbeat`` widget (P26-W21).
 
-The standalone :class:`~eawf.tui.widgets.heartbeat.Heartbeat` (distinct
+The standalone :class:`~eawf.surfaces.tui.widgets.heartbeat.Heartbeat` (distinct
 from the W18 footer-embedded one) — the pulse glyph + visible/hidden
 toggle, the degraded colour-class flip, and the ``r`` force-refresh
 :meth:`ack` lit-frame, driven through the Pilot harness.
@@ -12,7 +12,7 @@ import asyncio
 
 from textual.app import App, ComposeResult
 
-from eawf.tui.widgets.heartbeat import HEARTBEAT_GLYPH, Heartbeat
+from eawf.surfaces.tui.widgets.heartbeat import HEARTBEAT_GLYPH, Heartbeat
 
 
 class _HeartbeatHost(App[None]):

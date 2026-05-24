@@ -16,8 +16,8 @@ from pathlib import Path
 
 from textual.widgets import Static
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.audit_failed import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.audit_failed import (
     AuditFailedModal,
     format_dispatch_line,
     open_audit_failed,

@@ -6,7 +6,7 @@ this install workable?".
 
 - :func:`check_tools_available` — runs the instrument probe and surfaces its
   outcome (``ok``/``warn``/``fail``). On hard-tool failure the underlying
-  :class:`eawf.cli.errors.UserError` (``kind="InstrumentMissing"``) is
+  :class:`eawf.surfaces.cli.errors.UserError` (``kind="InstrumentMissing"``) is
   allowed to propagate so the CLI maps it to exit code ``6``
   (``INSTRUMENT_MISSING``). All other outcomes collapse to a non-fatal
   :class:`CheckResult`.
@@ -17,10 +17,10 @@ this install workable?".
 - :func:`check_manifest_in_sync` — reports whether the on-disk managed-region
   hashes match the manifest at ``.ea/indexes/generated.json`` (W08).
 - :func:`check_render_output_roundtrip` — proves the
-  :mod:`eawf.render.envelope` JSON ⇄ markdown round-trip is byte-stable on a
+  :mod:`eawf.surfaces.render.envelope` JSON ⇄ markdown round-trip is byte-stable on a
   synthetic envelope; if this regresses every skill is broken (W08).
 
-The doctor command (`eawf.cli.commands.doctor`) consumes the list, formats it
+The doctor command (`eawf.surfaces.cli.commands.doctor`) consumes the list, formats it
 via :mod:`eawf.doctor.report`, and selects the highest-severity status to
 drive its exit code.
 """
@@ -37,10 +37,10 @@ from eawf.install.instrument_probe import probe
 from eawf.kernel.config.layered import merge_config
 from eawf.kernel.config.profile import KNOWN_PROFILES
 from eawf.kernel.state.resolve import resolve_with_reason
-from eawf.render.drift import detect_drift
-from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
-from eawf.render.manifest import Manifest
-from eawf.render.manifest import load as load_manifest
+from eawf.surfaces.render.drift import detect_drift
+from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
+from eawf.surfaces.render.manifest import Manifest
+from eawf.surfaces.render.manifest import load as load_manifest
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -92,7 +92,7 @@ def check_tools_available(
     - ``warn`` — at least one soft probe failed (no hard fails).
     - ``fail`` — at least one hard probe failed.
 
-    The function lets :class:`eawf.cli.errors.UserError`
+    The function lets :class:`eawf.surfaces.cli.errors.UserError`
     (``kind="InstrumentMissing"``) escape so the CLI surface can map it to
     exit code ``6``. Callers that only want the
     snapshot view (no abort) should call :func:`eawf.install.instrument_probe.probe`
@@ -198,8 +198,8 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
       compact summary of the offending ``target::id`` entries.
 
     The walk is per-target — for each unique ``target`` field in the manifest,
-    :func:`eawf.render.drift.detect_drift` reads the file once and emits one
-    :class:`~eawf.render.drift.DriftReport` per region.
+    :func:`eawf.surfaces.render.drift.detect_drift` reads the file once and emits one
+    :class:`~eawf.surfaces.render.drift.DriftReport` per region.
     """
     if workspace is None:
         return CheckResult(
@@ -474,7 +474,7 @@ def run_all(
     """Run every doctor check and return the result list.
 
     The instrument probe is the only check whose hard failure aborts the
-    function; it raises :class:`eawf.cli.errors.UserError`
+    function; it raises :class:`eawf.surfaces.cli.errors.UserError`
     (``kind="InstrumentMissing"``) so the CLI can map it to exit code
     ``6``. Every other check returns a
     :class:`CheckResult`. W08 adds the manifest-in-sync and

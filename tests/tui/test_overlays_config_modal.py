@@ -30,7 +30,6 @@ from typing import Any
 
 from textual.widgets import Input, Static, TabbedContent
 
-from eawf.cli.errors import UserError
 from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     LEAF_KEY_REGISTRY,
@@ -40,8 +39,9 @@ from eawf.kernel.config.registry import (
     registry_lookup,
     tabs_sorted,
 )
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.config_modal import (
+from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.config_modal import (
     ConfigModal,
     ConfigModalState,
     current_value,
@@ -54,8 +54,8 @@ from eawf.tui.screens.overlays.config_modal import (
     toggle_multichoice_item,
     writable_layers_for,
 )
-from eawf.tui.screens.overlays.confirm import ConfirmModal
-from eawf.tui.screens.overlays.edit_field import EditFieldModal
+from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.edit_field import EditFieldModal
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -1458,7 +1458,7 @@ def test_c_keypress_opens_config_on_repo_scope() -> None:
 
 def test_config_palette_verb_opens_modal() -> None:
     async def body() -> None:
-        from eawf.tui.palette.verbs import _handle_config
+        from eawf.surfaces.tui.palette.verbs import _handle_config
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
@@ -1471,7 +1471,7 @@ def test_config_palette_verb_opens_modal() -> None:
 
 
 def test_config_verb_registered_in_palette() -> None:
-    from eawf.tui.palette.verbs import VERBS
+    from eawf.surfaces.tui.palette.verbs import VERBS
 
     names = {verb.name for verb in VERBS}
     assert "/config" in names
@@ -1479,7 +1479,7 @@ def test_config_verb_registered_in_palette() -> None:
 
 def test_config_verb_respects_modal_cap() -> None:
     async def body() -> None:
-        from eawf.tui.palette.verbs import _handle_config
+        from eawf.surfaces.tui.palette.verbs import _handle_config
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:

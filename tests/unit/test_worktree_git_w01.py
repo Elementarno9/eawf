@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.runtime.worktree import git
+from eawf.surfaces.cli import errors as cli_errors
 from tests.fixtures.conftest import make_dirty_repo
 
 _FAKE_GIT = "/usr/bin/git"

@@ -72,7 +72,7 @@ def _eawf_argv() -> list[str]:
     """Return the argv prefix that runs the real ``eawf`` CLI.
 
     ``[sys.executable, "-m", "eawf"]`` invokes the same console entry as
-    the ``eawf`` script (``[project.scripts] eawf = "eawf.cli.app:main"``)
+    the ``eawf`` script (``[project.scripts] eawf = "eawf.surfaces.cli.app:main"``)
     while pinning the interpreter to the active (uv-managed) venv, so the
     subprocess resolves the in-tree package rather than a globally
     installed one.

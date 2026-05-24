@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.hooks import HOOK_REGISTRY
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.codex import package_plugin
+from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
 def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:

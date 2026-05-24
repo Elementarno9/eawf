@@ -5,7 +5,7 @@ Since the semantic palette vars (``$accent`` / ``$ok`` / ``$warn`` /
 scope and into each :class:`~textual.theme.Theme`'s ``variables`` map
 (the runtime ``/theme`` swap migration), any host App that mounts a
 ``tui`` widget MUST have an Eä theme active for those ``$var``\\ s to
-resolve at stylesheet-parse time — exactly as :class:`eawf.tui.app.EaApp`
+resolve at stylesheet-parse time — exactly as :class:`eawf.surfaces.tui.app.EaApp`
 does. The widget tests host their widget in a bare ``App`` subclass, so
 this base wires the same theme registration + default-apply they need.
 
@@ -19,13 +19,13 @@ from __future__ import annotations
 
 from textual.app import App
 
-from eawf.tui.theme import EA_THEMES, LOGICAL_THEMES
+from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 
 
 class PaletteHarnessApp(App[None]):
     """Bare host App with the Eä themes registered + the dark one active.
 
-    Mirrors :class:`eawf.tui.app.EaApp`'s theme bootstrap so a widget
+    Mirrors :class:`eawf.surfaces.tui.app.EaApp`'s theme bootstrap so a widget
     mounted in a test harness resolves every semantic ``$var`` its
     ``DEFAULT_CSS`` (and the shared ``theme.tcss``) references.
     """

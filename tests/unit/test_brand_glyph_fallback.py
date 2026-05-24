@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.render.brand`.
+"""Unit tests for :mod:`eawf.surfaces.render.brand`.
 
 These tests pin the four success criteria of P25-I01-W09 that touch the
 brand surface:
@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.render import brand
-from eawf.render.brand import (
+from eawf.surfaces.render import brand
+from eawf.surfaces.render.brand import (
     ASCII_GLYPHS,
     BRAND_LITERAL,
     NERD_FONT_GLYPHS,
@@ -73,10 +73,10 @@ def test_select_glyphs_non_tty_returns_ascii_set() -> None:
 
 def test_select_glyphs_defers_to_is_tty_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     """``tty=None`` delegates to :func:`is_tty` for the live runtime branch."""
-    monkeypatch.setattr("eawf.render.brand.is_tty", lambda: True)
+    monkeypatch.setattr("eawf.surfaces.render.brand.is_tty", lambda: True)
     assert select_glyphs() is NERD_FONT_GLYPHS
 
-    monkeypatch.setattr("eawf.render.brand.is_tty", lambda: False)
+    monkeypatch.setattr("eawf.surfaces.render.brand.is_tty", lambda: False)
     assert select_glyphs() is ASCII_GLYPHS
 
 
@@ -135,7 +135,7 @@ def test_glyph_set_is_frozen_dataclass() -> None:
 
 
 def test_module_re_export_path() -> None:
-    """:mod:`eawf.render.brand` must re-export the public symbols."""
+    """:mod:`eawf.surfaces.render.brand` must re-export the public symbols."""
     assert brand.BRAND_LITERAL == "Eä"
     assert brand.select_glyphs is select_glyphs
     assert brand.is_tty is is_tty

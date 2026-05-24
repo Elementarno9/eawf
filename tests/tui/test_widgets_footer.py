@@ -18,8 +18,8 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.state.models import ActualSummary, State
-from eawf.tui.widgets import eu_bar
-from eawf.tui.widgets.footer import (
+from eawf.surfaces.tui.widgets import eu_bar
+from eawf.surfaces.tui.widgets.footer import (
     DEFAULT_HINTS,
     HEARTBEAT_GLYPH,
     WEEKLY_BURN_EMPTY,
@@ -31,7 +31,7 @@ from eawf.tui.widgets.footer import (
 
 from ._palette_harness import PaletteHarnessApp
 
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 
 #: Fixed clock anchor for the weekly-burn tests. The seeded actual's
 #: ``updated_at`` sits at this instant, so injecting ``now=_T0`` keeps the
@@ -378,7 +378,7 @@ def _hint_cell_width(app: App[None]) -> int:
 
 def test_footer_hints_fit_repo_set_uncliped_at_120() -> None:
     async def body() -> None:
-        from eawf.tui.scopes.repo import _REPO_HINTS
+        from eawf.surfaces.tui.scopes.repo import _REPO_HINTS
 
         app = _Harness()
         # The repo hint set (103 cells) is the longest; on a single-row
@@ -399,7 +399,7 @@ def test_footer_hints_fit_repo_set_uncliped_at_120() -> None:
 
 def test_footer_hints_fit_workspace_set_uncliped_at_120() -> None:
     async def body() -> None:
-        from eawf.tui.scopes.workspace import _WORKSPACE_HINTS
+        from eawf.surfaces.tui.scopes.workspace import _WORKSPACE_HINTS
 
         app = _Harness()
         async with app.run_test(size=(120, 6)) as pilot:

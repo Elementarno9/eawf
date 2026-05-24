@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from eawf.kernel.config import layered
-from eawf.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.bodies.ship import ShipBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.ship import ShipSkill

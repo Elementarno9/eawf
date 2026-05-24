@@ -19,7 +19,7 @@ The mutation pattern every CLI handler uses is::
         append_jsonl(store_paths(state_path)[StoreKind.<kind>], record)
         append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
 
-The :func:`eawf.cli._mutation.state_transaction` context manager owns
+The :func:`eawf.surfaces.cli._mutation.state_transaction` context manager owns
 ``portalock(state.json)`` for the entire load + mutate + validate + write
 cycle; the JSONL appenders acquire sibling locks for their own files.
 State and events are on different files so the locks never compete.
@@ -36,7 +36,6 @@ from typing import Any
 
 import orjson
 
-from eawf.cli.errors import UserError, ValidationError
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.state.urn import build as build_urn
@@ -44,6 +43,7 @@ from eawf.kernel.store.append import append_envelope as append_jsonl
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_paths
 from eawf.kernel.validate.strict import validate_state as validate_payload
+from eawf.surfaces.cli.errors import UserError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def validate_or_raise(state: State) -> None:
     The mutated state has already been built by the caller; this helper
     re-runs the strict validator (no ``strict_optional`` because that is
     user-facing) and surfaces both schema and invariant violations under
-    :class:`eawf.cli.errors.ValidationError`.
+    :class:`eawf.surfaces.cli.errors.ValidationError`.
     """
     payload = json.loads(state.model_dump_json())
     report = validate_payload(payload, strict_optional=False)
@@ -98,7 +98,7 @@ def atomic_write_state(state_path: Path, state: State) -> None:
     """Persist *state* via the LOCKED atomic writer.
 
     Caller MUST already hold ``portalock(state_path)``. Use this only inside
-    a :func:`eawf.cli._mutation.state_transaction` (or an equivalent
+    a :func:`eawf.surfaces.cli._mutation.state_transaction` (or an equivalent
     explicit ``with portalock.acquire(state_path):`` block).
     """
     from eawf.kernel.state.writer import atomic_write_json_locked

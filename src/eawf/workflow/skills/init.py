@@ -37,9 +37,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eawf.cli.errors import UserError
 from eawf.install.wizard import WizardAnswers, run_wizard_no_input
-from eawf.render.envelope import SkillName
+from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,

@@ -1,7 +1,7 @@
-"""Unit tests for ``eawf.render.agents`` (Claude subagent markdown).
+"""Unit tests for ``eawf.surfaces.render.agents`` (Claude subagent markdown).
 
 Distinct from ``tests/unit/test_render_agents_md.py``, which exercises
-the AGENTS.md renderer (``eawf.render.agents_md``). This file targets
+the AGENTS.md renderer (``eawf.surfaces.render.agents_md``). This file targets
 the per-subagent-file renderer added in Phase 4 W05.
 
 Covers:
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.render.agents import (
+from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
     ROLES,
     AgentTemplateContext,

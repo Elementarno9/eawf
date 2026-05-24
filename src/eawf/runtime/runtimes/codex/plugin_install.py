@@ -44,15 +44,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from eawf.render._atomic import atomic_write_text
-from eawf.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
-from eawf.render.skills import (
+from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
+from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
+from eawf.surfaces.render.skills import (
     SKILL_REGISTRY,
     SkillSpec,
     SkillTemplateContext,
     render_skill_md,
 )
-from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 
 logger = logging.getLogger(__name__)
 

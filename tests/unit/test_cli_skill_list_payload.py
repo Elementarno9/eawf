@@ -16,7 +16,7 @@ evolve. The key set, the slashed-name ordering, and the
 
 from __future__ import annotations
 
-from eawf.cli.commands.skill import _list_payload
+from eawf.surfaces.cli.commands.skill import _list_payload
 
 _EXPECTED_SKILL_NAMES: tuple[str, ...] = (
     "/research",

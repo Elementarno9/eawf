@@ -1,7 +1,7 @@
 """Unit tests for the ``--commit`` plumbing on ``eawf wave close``.
 
 Covers the inline helper ``_resolve_commit_sha`` in
-:mod:`eawf.cli.commands.lifecycle`:
+:mod:`eawf.surfaces.cli.commands.lifecycle`:
 
 * Happy path: ``git rev-parse <ref>^{commit}`` returns a 40-char hex SHA.
 * Error path: non-zero exit -> :class:`InvalidInput` with the canonical
@@ -23,13 +23,13 @@ from typing import Any
 
 import pytest
 
-from eawf.cli import errors as cli_errors
-from eawf.cli.commands import lifecycle as lifecycle_cli
+from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli.commands import lifecycle as lifecycle_cli
 
 
 def _patch_run(monkeypatch: pytest.MonkeyPatch, factory: Any) -> None:
     """Replace ``subprocess.run`` *as imported into* the lifecycle module."""
-    monkeypatch.setattr("eawf.cli.commands.lifecycle.subprocess.run", factory)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.lifecycle.subprocess.run", factory)
 
 
 def test_resolve_commit_sha_returns_canonical_form(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,6 +1,6 @@
 """Manual snapshot backup surface — create/list/restore/prune.
 
-CLI dispatch (:mod:`eawf.cli.commands.backup`) delegates all on-disk work to
+CLI dispatch (:mod:`eawf.surfaces.cli.commands.backup`) delegates all on-disk work to
 this package. :mod:`eawf.backup.store` owns the user-scope backup tree
 layout + atomic snapshot reads/writes; :mod:`eawf.backup.service` orchestrates
 the create/list/restore/prune verbs against a repo's ``.ea/`` artifacts.

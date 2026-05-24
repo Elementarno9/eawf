@@ -46,7 +46,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.enums import PhaseStatus, WaveStatus
 from eawf.kernel.state.ids import parents_of
 from eawf.kernel.state.models import Phase, State
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills.bodies.prep import (
     PrepAcceptance,
     PrepBody,

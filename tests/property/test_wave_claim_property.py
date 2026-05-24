@@ -40,9 +40,9 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from eawf.cli.commands import lifecycle as lc
 from eawf.kernel.state.models import State
 from eawf.runtime.lock import portalock
+from eawf.surfaces.cli.commands import lifecycle as lc
 from eawf.workflow.lifecycle.transitions import LifecycleError, claim_wave
 
 

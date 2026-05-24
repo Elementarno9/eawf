@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.render.skills``.
+"""Unit tests for ``eawf.surfaces.render.skills``.
 
 Covers:
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 from jinja2 import UndefinedError
 
-from eawf.render.skills import (
+from eawf.surfaces.render.skills import (
     SKILL_REGISTRY,
     SkillTemplateContext,
     render_skill_md,

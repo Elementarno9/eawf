@@ -8,7 +8,7 @@ planned: id, deps, file-scope union, summary title.
 
 The CLI verbs ``eawf wave fix-ci`` and ``eawf wave fix-ci-loop`` are the
 operator-facing surface that exercises this module; see
-:mod:`eawf.cli.commands.wave_ci`.
+:mod:`eawf.surfaces.cli.commands.wave_ci`.
 
 Public API:
 

@@ -1,7 +1,7 @@
 """Weighted scoring loop for the skill-eval harness (B042).
 
 Layers a semantic score on top of the shape-only guard introduced in
-P12-W05 (B033). Given a live :class:`~eawf.render.envelope.OutputEnvelope`
+P12-W05 (B033). Given a live :class:`~eawf.surfaces.render.envelope.OutputEnvelope`
 and the matching golden-fixture dict, :func:`score_envelope` returns an
 :class:`~eawf.eval.models.EvalScore` with six dimension scores and the
 weighted total.
@@ -31,7 +31,7 @@ import logging
 from typing import Any
 
 from eawf.eval.models import EvalScore
-from eawf.render.envelope import OutputEnvelope
+from eawf.surfaces.render.envelope import OutputEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def score_envelope(env: OutputEnvelope, golden: dict[str, Any]) -> EvalScore:
     ``state_mutation_kinds`` field the matching dimension scores 1.0
     (no signal, no penalty). The same rule applies if a footer field is
     absent from the live envelope (currently impossible because
-    :class:`~eawf.render.envelope.EnvelopeFooter` defaults both to empty
+    :class:`~eawf.surfaces.render.envelope.EnvelopeFooter` defaults both to empty
     lists, but the scorer is forward-compatible with future v0.3+
     footer reshuffles).
 

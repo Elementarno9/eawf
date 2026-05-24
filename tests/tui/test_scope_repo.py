@@ -12,14 +12,14 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.scopes import RepoScreen, ScopeScreen
-from eawf.tui.widgets.backlog_table import BacklogTable
-from eawf.tui.widgets.footer import Footer, Heartbeat
-from eawf.tui.widgets.git_pane import GitPane
-from eawf.tui.widgets.header import BRAND, Header
-from eawf.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.tui.widgets.status_pane import StatusPane
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.scopes import RepoScreen, ScopeScreen
+from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
+from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
+from eawf.surfaces.tui.widgets.git_pane import GitPane
+from eawf.surfaces.tui.widgets.header import BRAND, Header
+from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.surfaces.tui.widgets.status_pane import StatusPane
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

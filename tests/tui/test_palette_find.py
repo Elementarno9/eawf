@@ -3,7 +3,7 @@
 Two layers: the pure :func:`rank_find_hits` ranker (waves + backlog pooled,
 scored by id + title, best first) without mounting Textual, and a
 Pilot-driven check that the verb drills into the top hit's
-:class:`~eawf.tui.screens.overlays.detail.DetailModal` through the App's
+:class:`~eawf.surfaces.tui.screens.overlays.detail.DetailModal` through the App's
 modal-cap-aware push path.
 
 The Pilot fixture writes a tmp ``state.json`` that carries both the
@@ -21,8 +21,8 @@ import orjson
 import pytest
 
 from eawf.kernel.state.models import State
-from eawf.tui.palette.verbs import _handle_find, rank_find_hits
-from eawf.tui.screens.overlays.detail import DetailModal
+from eawf.surfaces.tui.palette.verbs import _handle_find, rank_find_hits
+from eawf.surfaces.tui.screens.overlays.detail import DetailModal
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -157,7 +157,7 @@ def test_handle_find_opens_detail_modal_for_top_backlog_hit(tmp_path: Path) -> N
     )
 
     async def body() -> None:
-        from eawf.tui.app import EaApp
+        from eawf.surfaces.tui.app import EaApp
 
         app = EaApp(scope="repo", state_path=state_file)
         async with app.run_test(size=(120, 40)) as pilot:
@@ -177,7 +177,7 @@ def test_handle_find_opens_detail_modal_for_top_wave_hit(tmp_path: Path) -> None
     )
 
     async def body() -> None:
-        from eawf.tui.app import EaApp
+        from eawf.surfaces.tui.app import EaApp
 
         app = EaApp(scope="repo", state_path=state_file)
         async with app.run_test(size=(120, 40)) as pilot:
@@ -194,7 +194,7 @@ def test_handle_find_empty_query_opens_no_modal(tmp_path: Path) -> None:
     state_file = _state_file_with_backlog(tmp_path, {})
 
     async def body() -> None:
-        from eawf.tui.app import EaApp
+        from eawf.surfaces.tui.app import EaApp
 
         notices: list[tuple[str, str | None]] = []
         app = EaApp(scope="repo", state_path=state_file)
@@ -217,7 +217,7 @@ def test_handle_find_no_match_opens_no_modal(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        from eawf.tui.app import EaApp
+        from eawf.surfaces.tui.app import EaApp
 
         notices: list[tuple[str, str | None]] = []
         app = EaApp(scope="repo", state_path=state_file)
@@ -240,8 +240,8 @@ def test_handle_find_routes_through_modal_cap(tmp_path: Path) -> None:
     )
 
     async def body() -> None:
-        from eawf.tui.app import EaApp
-        from eawf.tui.screens.overlays.metrics import MetricsModal
+        from eawf.surfaces.tui.app import EaApp
+        from eawf.surfaces.tui.screens.overlays.metrics import MetricsModal
 
         app = EaApp(scope="repo", state_path=state_file)
         async with app.run_test(size=(120, 40)) as pilot:
@@ -266,7 +266,7 @@ def test_handle_find_top_hit_card_matches_ranker(tmp_path: Path, query: str) -> 
     expected = rank_find_hits(_state_with_waves_and_backlog(backlog), query)[0]
 
     async def body() -> None:
-        from eawf.tui.app import EaApp
+        from eawf.surfaces.tui.app import EaApp
 
         app = EaApp(scope="repo", state_path=state_file)
         async with app.run_test(size=(120, 40)) as pilot:

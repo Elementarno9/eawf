@@ -38,14 +38,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli import exit_codes
-from eawf.cli.app import app
-from eawf.cli.errors import ErrorEnvelope
 from eawf.kernel.config import layered
-from eawf.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
+from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.errors import ErrorEnvelope
+from eawf.surfaces.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.workflow.skills import (
     _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
 )

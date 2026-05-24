@@ -1,7 +1,7 @@
 """Regression tests for the in-process mutation ordering invariant.
 
 Per rule 4 + D-SUP-01 the daemon is the canonical writer; the in-process
-path in :func:`eawf.cli.commands.lifecycle._commit_mutation` is the V1
+path in :func:`eawf.surfaces.cli.commands.lifecycle._commit_mutation` is the V1
 CI / one-shot / recovery fallback. P27-I02-W18 flipped that fallback from
 the legacy **event-first** ordering to a **state-first, WAL-backed**
 ordering that mirrors the daemon's outcome-WAL algorithm. P27-I02-W32
@@ -43,7 +43,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

@@ -295,7 +295,7 @@ def test_install_emits_agents_per_registry(
     tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
 ) -> None:
     """Each AGENT_REGISTRY entry produces ``<base>/agents/<role>.md``."""
-    from eawf.render.agents import AGENT_REGISTRY
+    from eawf.surfaces.render.agents import AGENT_REGISTRY
 
     result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
     base = tmp_path / ".opencode" if scope == "project" else fake_opencode_config_dir
@@ -315,7 +315,7 @@ def test_install_emits_commands_for_invocable_skills(
 ) -> None:
     """Each ``user_invocable=True`` SKILL_REGISTRY entry produces
     ``<base>/commands/<name>.md``."""
-    from eawf.render.skills import SKILL_REGISTRY
+    from eawf.surfaces.render.skills import SKILL_REGISTRY
 
     result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
     base = tmp_path / ".opencode" if scope == "project" else fake_opencode_config_dir

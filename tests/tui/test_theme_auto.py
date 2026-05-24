@@ -1,7 +1,7 @@
 """Tests for ``/theme auto`` OSC 11 terminal-background detection (P26-I02-W16).
 
-Covers the three detection units added to :mod:`eawf.tui.theme` and the
-``apply_theme("auto")`` wiring in :mod:`eawf.tui.app`:
+Covers the three detection units added to :mod:`eawf.surfaces.tui.theme` and the
+``apply_theme("auto")`` wiring in :mod:`eawf.surfaces.tui.app`:
 
 * :func:`resolve_auto_theme` — the pure luminance classifier (no I/O):
   light vs dark vs ``None`` plus the threshold boundary.
@@ -30,9 +30,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.tui import theme as theme_mod
-from eawf.tui.app import EaApp
-from eawf.tui.theme import (
+from eawf.surfaces.tui import theme as theme_mod
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.theme import (
     EA_DARK,
     EA_LIGHT,
     OSC11_QUERY,
@@ -44,7 +44,7 @@ from eawf.tui.theme import (
     query_terminal_background,
     resolve_auto_theme,
 )
-from eawf.tui.theme import (
+from eawf.surfaces.tui.theme import (
     _parse_osc11 as parse_osc11,
 )
 
@@ -408,12 +408,12 @@ def test_theme_poll_seeds_baseline_then_follows_flip(monkeypatch: pytest.MonkeyP
             await pilot.pause()
             assert app.theme == EA_DARK.name
             # First poll: baseline seeded to dark, theme unchanged.
-            monkeypatch.setattr("eawf.tui.app.detect_os_appearance", lambda: "dark")
+            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "dark")
             await app._poll_os_appearance()
             assert app._os_appearance == "dark"
             assert app.theme == EA_DARK.name
             # System flips to light: auto re-resolves and the light theme applies.
-            monkeypatch.setattr("eawf.tui.app.detect_os_appearance", lambda: "light")
+            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "light")
             await app._poll_os_appearance()
             await pilot.pause()
             assert app._os_appearance == "light"
@@ -439,7 +439,7 @@ def test_theme_poll_corrects_disagreeing_startup(monkeypatch: pytest.MonkeyPatch
             await pilot.pause()
             assert app.theme == EA_DARK.name
             # The OS is actually light — the first poll disagrees and corrects.
-            monkeypatch.setattr("eawf.tui.app.detect_os_appearance", lambda: "light")
+            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "light")
             await app._poll_os_appearance()
             await pilot.pause()
             assert app.theme == EA_LIGHT.name
@@ -456,9 +456,9 @@ def test_theme_poll_ignored_when_theme_not_auto(monkeypatch: pytest.MonkeyPatch)
             await pilot.pause()
             assert app.apply_theme("dark") is True  # explicit, not auto
             await pilot.pause()
-            monkeypatch.setattr("eawf.tui.app.detect_os_appearance", lambda: "dark")
+            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "dark")
             await app._poll_os_appearance()  # seed baseline
-            monkeypatch.setattr("eawf.tui.app.detect_os_appearance", lambda: "light")
+            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "light")
             await app._poll_os_appearance()  # flip — but theme is explicit dark
             await pilot.pause()
             assert app._os_appearance == "light"
@@ -478,7 +478,7 @@ def test_theme_poll_none_appearance_is_noop(monkeypatch: pytest.MonkeyPatch) -> 
             app.apply_theme("auto")
             await pilot.pause()
             before = app.theme
-            monkeypatch.setattr("eawf.tui.app.detect_os_appearance", lambda: None)
+            monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: None)
             await app._poll_os_appearance()
             assert app._os_appearance is None
             assert app.theme == before

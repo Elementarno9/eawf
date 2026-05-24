@@ -1,7 +1,7 @@
 """Performance bench harness for ``eawf bench``.
 
 The library half of the ``eawf bench`` noun-app (CLI dispatch lives at
-:mod:`eawf.cli.commands.bench` per AGENTS rule 1). Two concerns split
+:mod:`eawf.surfaces.cli.commands.bench` per AGENTS rule 1). Two concerns split
 across two modules:
 
 - :mod:`eawf.bench.seed` — deterministic corpus generation. A fixed

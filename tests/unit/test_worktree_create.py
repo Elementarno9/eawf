@@ -18,7 +18,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import (
     PhaseStatus,
     ProjectStatus,
@@ -34,6 +33,7 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.runtime.worktree.create import create_worktree
+from eawf.surfaces.cli import errors as cli_errors
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,

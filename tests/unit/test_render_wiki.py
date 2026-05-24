@@ -1,11 +1,11 @@
-"""Unit tests for :mod:`eawf.render.wiki`."""
+"""Unit tests for :mod:`eawf.surfaces.render.wiki`."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from eawf.kernel.state.models import State
-from eawf.render.wiki import build_wiki
+from eawf.surfaces.render.wiki import build_wiki
 
 
 def _base_state() -> dict[str, Any]:

@@ -17,15 +17,15 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.models import State
-from eawf.tui.app import EaApp
-from eawf.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
-from eawf.tui.widgets.eu_bar import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
+from eawf.surfaces.tui.widgets.eu_bar import (
     BRAILLE_BASE,
     EMPTY_STATE,
     render_bar_plain,
     render_size_bar,
 )
-from eawf.tui.widgets.roadmap_tree import (
+from eawf.surfaces.tui.widgets.roadmap_tree import (
     _BAR_GAP,
     _GLYPH_PREFIX_WIDTH,
     _GUIDE_INDENT_PER_DEPTH,
@@ -47,7 +47,7 @@ from ._palette_harness import PaletteHarnessApp
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 
 
 class _Harness(PaletteHarnessApp):

@@ -13,7 +13,7 @@ For the narrative architecture, read `overview.md`; for the CLI surface,
 
 | Console script | Target | Purpose |
 |---|---|---|
-| `eawf` / `ea` | `eawf.cli.app:main` | Operator CLI (Typer dispatch). |
+| `eawf` / `ea` | `eawf.surfaces.cli.app:main` | Operator CLI (Typer dispatch). |
 | `eawfd` | `eawf.runtime.daemon.main:main` | Background daemon — sole canonical mutator. |
 | `python -m eawf` | `eawf.__main__` | Module entry; re-exports `cli.app:main`. |
 

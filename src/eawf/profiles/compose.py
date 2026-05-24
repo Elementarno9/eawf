@@ -60,7 +60,6 @@ import logging
 from collections.abc import Iterable, Sequence
 from typing import Final, Literal
 
-from eawf.cli.errors import ValidationError
 from eawf.profiles.models import (
     ComposedProfile,
     InstrumentReq,
@@ -68,6 +67,7 @@ from eawf.profiles.models import (
     RenderBlock,
     StateExtensions,
 )
+from eawf.surfaces.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +94,11 @@ class ProfileConflict(ValidationError):  # noqa: N818 — domain conflict name; 
 
     Raised by :func:`compose` when ``conflict_resolution="fail"`` and the
     composition has at least one undeclared conflict edge. Subclasses
-    :class:`eawf.cli.errors.ValidationError` so callers that surface the
+    :class:`eawf.surfaces.cli.errors.ValidationError` so callers that surface the
     error through ``emit_error`` get the canonical
-    :data:`eawf.cli.exit_codes.VALIDATION_FAILED` exit code. Its concrete
+    :data:`eawf.surfaces.cli.exit_codes.VALIDATION_FAILED` exit code. Its concrete
     class name folds into ``ErrorEnvelope.data.kind`` as
-    ``"ProfileConflict"`` via :func:`eawf.cli.errors.build_envelope`.
+    ``"ProfileConflict"`` via :func:`eawf.surfaces.cli.errors.build_envelope`.
     """
 
 

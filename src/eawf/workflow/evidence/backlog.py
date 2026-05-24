@@ -5,7 +5,7 @@
   of a complete audit per the audit-evidence guard.
 
 Mutators take a typed :class:`State` and mutate it in place; the CLI handler
-runs them inside :func:`eawf.cli._mutation.state_transaction`.
+runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
-from eawf.cli.errors import UserError
 from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.models import BacklogItem, State
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 from eawf.workflow.evidence.guards import require_complete_audit
 

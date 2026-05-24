@@ -27,8 +27,8 @@ from typing import Any
 import yaml
 from pydantic import ValidationError as PydValidationError
 
-from eawf.cli.errors import UserError, ValidationError
 from eawf.profiles.models import ProfileBody
+from eawf.surfaces.cli.errors import UserError, ValidationError
 
 logger = logging.getLogger(__name__)
 

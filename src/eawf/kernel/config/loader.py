@@ -2,7 +2,7 @@
 
 Each layer in :mod:`eawf.kernel.config.layered` resolves to a single YAML file path.
 This module reads the file (if present) and returns the parsed mapping. Any
-parse error is surfaced as :class:`eawf.cli.errors.ValidationError` so the
+parse error is surfaced as :class:`eawf.surfaces.cli.errors.ValidationError` so the
 CLI surface maps cleanly onto exit code ``4``.
 
 Public API:
@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 
-from eawf.cli.errors import ValidationError
+from eawf.surfaces.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 

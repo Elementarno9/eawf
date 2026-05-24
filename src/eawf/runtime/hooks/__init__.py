@@ -16,7 +16,7 @@ Phase 4 W04 introduces:
   hook-side exceptions.
 
 This package contains library logic only; the CLI entry-point lives in
-:mod:`eawf.cli.commands.hook`. Phase 4 W05 layers a Claude-runtime
+:mod:`eawf.surfaces.cli.commands.hook`. Phase 4 W05 layers a Claude-runtime
 adapter on top via :mod:`eawf.runtime.runtimes.claude.hooks_router`.
 """
 

@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.cli.scope.resolve_scope_tier` (P25-W08).
+"""Tests for :func:`eawf.surfaces.cli.scope.resolve_scope_tier` (P25-W08).
 
 The scope dispatch ladder per C07b §5.3 is "cwd → workspace > repo >
 user" with first-match-wins semantics. Concretely:
@@ -21,12 +21,12 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.cli.scope import (
+from eawf.registry import Registry, RegistryRepoEntry
+from eawf.surfaces.cli.scope import (
     ScopeResolution,
     ScopeTier,
     resolve_scope_tier,
 )
-from eawf.registry import Registry, RegistryRepoEntry
 
 # ---- Fixtures ---------------------------------------------------------------
 

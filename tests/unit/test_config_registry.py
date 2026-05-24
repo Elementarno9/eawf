@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.cli.errors import UserError
 from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
@@ -29,6 +28,7 @@ from eawf.kernel.config.registry import (
     registry_lookup,
     tabs_sorted,
 )
+from eawf.surfaces.cli.errors import UserError
 
 
 def test_registry_non_empty() -> None:

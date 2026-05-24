@@ -14,11 +14,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.cli.exit_codes import INTEGRITY_VIOLATION, INVALID_INPUT
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 from eawf.runtime.runtimes.claude.plugin_package import package_plugin
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION, INVALID_INPUT
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 _SKILL_COUNT = len(SKILL_REGISTRY)
 

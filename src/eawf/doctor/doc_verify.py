@@ -5,7 +5,7 @@ Consolidates two complementary surfaces:
 1. **Region drift** — for every managed target in ``.ea/indexes/generated.json``,
    recompute the on-disk region body hash and compare against the recorded
    manifest hash. Drift kinds: ``hand-edited``, ``missing``, ``ok``. The
-   underlying check lives in :mod:`eawf.render.drift`; this module just
+   underlying check lives in :mod:`eawf.surfaces.render.drift`; this module just
    batches it across every target referenced by the manifest.
 
 2. **State-vs-doc cross-checks** — facts about ``state.json`` that should be
@@ -27,8 +27,8 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import PhaseStatus
 from eawf.kernel.state.models import State
-from eawf.render.drift import DriftReport, detect_drift
-from eawf.render.manifest import load as load_manifest
+from eawf.surfaces.render.drift import DriftReport, detect_drift
+from eawf.surfaces.render.manifest import load as load_manifest
 
 logger = logging.getLogger(__name__)
 

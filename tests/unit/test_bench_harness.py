@@ -33,7 +33,7 @@ from eawf.bench.harness import (
     threshold_for_os,
 )
 from eawf.bench.seed import FIXTURE_SIZES, seed_corpus, seed_fixture
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

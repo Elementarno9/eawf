@@ -18,7 +18,7 @@ structure rather than an ad-hoc string blob.
 
 The renderer is a pure function: it takes a snapshot of state plus an
 optional repo_root and returns a string. The CLI handlers own all
-stdout / file writes (see :mod:`eawf.cli.commands.lifecycle`).
+stdout / file writes (see :mod:`eawf.surfaces.cli.commands.lifecycle`).
 
 Scope resolution: a wave's effective scope is its phase's ``scope_id``.
 The chain is ``wave.iter_id`` → :class:`~eawf.kernel.state.models.Iter` →

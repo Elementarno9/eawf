@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.render.hooks``.
+"""Unit tests for ``eawf.surfaces.render.hooks``.
 
 Covers:
 
@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.render.hooks import HOOK_REGISTRY, render_hook_sh
 from eawf.runtime.hooks.event import HookEventType
+from eawf.surfaces.render.hooks import HOOK_REGISTRY, render_hook_sh
 
 
 def test_render_hook_sh_starts_with_shebang() -> None:
@@ -76,7 +76,7 @@ def test_render_hook_sh_unknown_event_raises() -> None:
     """``render_hook_sh`` raises :class:`KeyError` for an unmapped event."""
     # Build a fake HookEventType-shaped object that bypasses the enum.
     # Easier: monkeypatch the registry to be empty, then call.
-    from eawf.render import hooks as hooks_module
+    from eawf.surfaces.render import hooks as hooks_module
 
     saved = hooks_module.HOOK_REGISTRY
     hooks_module.HOOK_REGISTRY = ()

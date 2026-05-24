@@ -6,7 +6,7 @@ Public API:
 The function mutates the supplied :class:`State` in place
 (:attr:`State.worktrees` and the wave's ``worktree_id``) and returns the
 freshly-built :class:`WorktreeRecord`. Caller holds
-``portalock(state.json)`` via :func:`eawf.cli._mutation.state_transaction`
+``portalock(state.json)`` via :func:`eawf.surfaces.cli._mutation.state_transaction`
 and the worktree-registry lock via
 :func:`eawf.runtime.worktree.locks.worktree_registry_lock`. The function never
 opens its own locks — re-entry into ``portalock`` would deadlock.
@@ -20,10 +20,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
 from eawf.kernel.state.ids import is_wave_id
 from eawf.kernel.state.models import State, Wave, WorktreeRecord
+from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
 

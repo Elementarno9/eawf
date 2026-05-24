@@ -23,9 +23,9 @@ import pytest
 from typer.testing import CliRunner
 
 import eawf
-from eawf.cli.app import app
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 from eawf.runtime.runtimes.claude.plugin_update import update_plugin
+from eawf.surfaces.cli.app import app
 
 
 def _fake_completed(stdout: str = "", stderr: str = "", returncode: int = 0) -> Any:
@@ -50,7 +50,7 @@ def _set_uv_present(monkeypatch: pytest.MonkeyPatch, stdout: str) -> None:
     the instrument probe's own ``subprocess.run`` call site.
     """
     monkeypatch.setattr(
-        "eawf.cli.commands.doctor._which_uv",
+        "eawf.surfaces.cli.commands.doctor._which_uv",
         lambda: "/fake/uv",
     )
 
@@ -58,7 +58,7 @@ def _set_uv_present(monkeypatch: pytest.MonkeyPatch, stdout: str) -> None:
         return _fake_completed(stdout=stdout, returncode=0)
 
     monkeypatch.setattr(
-        "eawf.cli.commands.doctor._run_uv_tool_list",
+        "eawf.surfaces.cli.commands.doctor._run_uv_tool_list",
         fake_run,
     )
 
@@ -120,7 +120,7 @@ def test_user_scope_not_installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 def test_user_scope_uv_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``uv`` is absent from PATH → ``warn`` and message references PATH."""
     monkeypatch.setattr(
-        "eawf.cli.commands.doctor._which_uv",
+        "eawf.surfaces.cli.commands.doctor._which_uv",
         lambda: None,
     )
 
@@ -129,7 +129,7 @@ def test_user_scope_uv_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     def _explode() -> Any:
         raise AssertionError("_run_uv_tool_list must not be called when uv is missing")
 
-    monkeypatch.setattr("eawf.cli.commands.doctor._run_uv_tool_list", _explode)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.doctor._run_uv_tool_list", _explode)
     monkeypatch.chdir(tmp_path)
 
     runner = CliRunner()
@@ -144,14 +144,14 @@ def test_user_scope_uv_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 def test_user_scope_subprocess_oserror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``OSError`` from ``_run_uv_tool_list`` collapses to ``warn`` — never crashes."""
     monkeypatch.setattr(
-        "eawf.cli.commands.doctor._which_uv",
+        "eawf.surfaces.cli.commands.doctor._which_uv",
         lambda: "/fake/uv",
     )
 
     def _raise() -> Any:
         raise OSError("simulated spawn failure")
 
-    monkeypatch.setattr("eawf.cli.commands.doctor._run_uv_tool_list", _raise)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.doctor._run_uv_tool_list", _raise)
     monkeypatch.chdir(tmp_path)
 
     runner = CliRunner()
@@ -172,7 +172,7 @@ def test_user_scope_flag_absent_omits_probe(
     def _explode() -> str | None:
         raise AssertionError("user-scope probe must not run without --user-scope")
 
-    monkeypatch.setattr("eawf.cli.commands.doctor._which_uv", _explode)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.doctor._which_uv", _explode)
     monkeypatch.chdir(tmp_path)
 
     runner = CliRunner()
@@ -185,7 +185,7 @@ def test_user_scope_flag_absent_omits_probe(
 
 def test_parse_uv_tool_list_ignores_bullets() -> None:
     """The parser keeps only header lines, ignoring bullet entries."""
-    from eawf.cli.commands.doctor import _parse_uv_tool_list
+    from eawf.surfaces.cli.commands.doctor import _parse_uv_tool_list
 
     stdout = "eawf v0.1.0\n- eawf\n- ea\nother v2.3\n- other\n"
     tools = _parse_uv_tool_list(stdout)
@@ -194,7 +194,7 @@ def test_parse_uv_tool_list_ignores_bullets() -> None:
 
 def test_parse_uv_tool_list_empty_stdout() -> None:
     """Empty stdout yields an empty mapping (no crash)."""
-    from eawf.cli.commands.doctor import _parse_uv_tool_list
+    from eawf.surfaces.cli.commands.doctor import _parse_uv_tool_list
 
     assert _parse_uv_tool_list("") == {}
     assert _parse_uv_tool_list("\n\n") == {}

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
 from eawf.kernel.state.models import (
     Iter,
@@ -27,6 +26,7 @@ from eawf.runtime.worktree.wave_land import (
     wave_land,
     wave_land_batch,
 )
+from eawf.surfaces.cli import errors as cli_errors
 from tests.unit.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(

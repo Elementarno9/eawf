@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.cli.output.emit_json_or_text`.
+"""Tests for :func:`eawf.surfaces.cli.output.emit_json_or_text`.
 
 The helper is the single emission gate every CLI handler routes through. JSON
 output must use orjson with ``OPT_INDENT_2 | OPT_SORT_KEYS`` so golden tests
@@ -13,8 +13,8 @@ import json
 import typer
 from typer.testing import CliRunner
 
-from eawf.cli.flags import GlobalFlags
-from eawf.cli.output import emit_json_or_text
+from eawf.surfaces.cli.flags import GlobalFlags
+from eawf.surfaces.cli.output import emit_json_or_text
 
 runner = CliRunner()
 

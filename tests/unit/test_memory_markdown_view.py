@@ -12,7 +12,7 @@ from eawf.memory.markdown_view import (
     render_markdown_view,
 )
 from eawf.memory.store import add_memory
-from eawf.render.regions import find_regions
+from eawf.surfaces.render.regions import find_regions
 
 
 def _make_state() -> State:

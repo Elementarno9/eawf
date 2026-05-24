@@ -8,8 +8,8 @@ leave every generated file byte-stable:
   inner fresh-init payload regenerates it). For idempotence on the
   rendered files (AGENTS.md, CLAUDE.md, manifest), the identical-inputs
   contract holds without resorting to time-mocking.
-- ``AGENTS.md`` — managed regions hash-stable per :mod:`eawf.render.agents_md`.
-- ``.ea/indexes/generated.json`` — :mod:`eawf.render.manifest` writes
+- ``AGENTS.md`` — managed regions hash-stable per :mod:`eawf.surfaces.render.agents_md`.
+- ``.ea/indexes/generated.json`` — :mod:`eawf.surfaces.render.manifest` writes
   deterministically (``sort_keys + indent=2``); only ``generated_at``
   varies.
 - Multi-profile combinations produce a composed AGENTS.md with both
@@ -22,7 +22,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

@@ -1,15 +1,15 @@
 """Unit tests for the typed-Decisions render path on AGENTS.md.
 
-Covers :func:`eawf.render.agents_md.render_decisions_section` (pure body
+Covers :func:`eawf.surfaces.render.agents_md.render_decisions_section` (pure body
 builder) and the opt-in ``state``/``decisions_scope_id`` plumbing on
-:func:`eawf.render.agents_md.render_agents_md` (managed-region injection).
+:func:`eawf.surfaces.render.agents_md.render_agents_md` (managed-region injection).
 
 Round-trip contract:
 
     typed Decision rows  ->  render_decisions_section / render_agents_md
                           ->  Markdown section containing every Decision's
                               id + summary + rationale + alternatives
-                          ->  parseable via eawf.render.regions.find_regions
+                          ->  parseable via eawf.surfaces.render.regions.find_regions
 
 The round-trip test seeds the same 23 ids the P19-I02 plan-absorption
 commit writes to .ea/state.json (D01..D23) so the section emitted by
@@ -36,14 +36,14 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.profiles.models import ComposedProfile, RenderBlock
-from eawf.render import regions
-from eawf.render.agents_md import (
+from eawf.surfaces.render import regions
+from eawf.surfaces.render.agents_md import (
     DECISIONS_REGION_ID,
     DECISIONS_REGION_VERSION,
     render_agents_md,
     render_decisions_section,
 )
-from eawf.render.manifest import Manifest
+from eawf.surfaces.render.manifest import Manifest
 
 # ---- Builders ---------------------------------------------------------------
 

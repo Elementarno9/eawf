@@ -38,7 +38,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,

@@ -16,7 +16,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

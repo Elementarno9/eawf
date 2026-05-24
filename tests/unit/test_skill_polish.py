@@ -17,7 +17,7 @@ from typing import cast
 
 import pytest
 
-from eawf.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.bodies.polish import PolishBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.polish import PolishSkill

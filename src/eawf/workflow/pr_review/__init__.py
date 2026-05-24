@@ -13,7 +13,7 @@ Public API:
 
 The package is pure: no I/O, no logging side-effects beyond the
 module-level loggers. CLI handlers in
-:mod:`eawf.cli.commands.pr_review` own file reads and state mutation.
+:mod:`eawf.surfaces.cli.commands.pr_review` own file reads and state mutation.
 """
 
 from __future__ import annotations

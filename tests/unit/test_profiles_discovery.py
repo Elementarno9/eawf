@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.errors import UserError, ValidationError
 from eawf.profiles import discovery
+from eawf.surfaces.cli.errors import UserError, ValidationError
 
 
 @pytest.fixture(autouse=True)

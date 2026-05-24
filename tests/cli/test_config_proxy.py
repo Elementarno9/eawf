@@ -1,6 +1,6 @@
 """CLI-side tests for the W10 ``_save_value_to_layer`` proxy dispatcher.
 
-The proxy entry point :func:`eawf.cli.commands.config._save_value_to_layer`
+The proxy entry point :func:`eawf.surfaces.cli.commands.config._save_value_to_layer`
 became a daemon-proxy dispatcher in W10. The four scenarios:
 
 1. ``daemon.proxy_enabled=True`` (new default) + daemon up — the call
@@ -25,8 +25,8 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.cli import errors as cli_errors
-from eawf.cli.commands import config as config_cmd
+from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli.commands import config as config_cmd
 
 pytestmark = pytest.mark.unit
 
@@ -85,8 +85,8 @@ def test_save_value_to_layer_proxies_through_daemon_when_enabled(
     config_yaml.parent.mkdir(parents=True)
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     monkeypatch.setattr(config_cmd, "_daemon_proxy_enabled", lambda: True)
-    monkeypatch.setattr("eawf.cli._mutation._daemon_reachable", lambda *a, **k: True)
-    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _FakeConfigClient)
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda *a, **k: True)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeConfigClient)
     monkeypatch.setattr(
         config_cmd, "_layer_label_for_path", lambda _p: "repo"
     )  # short-circuit the reverse lookup
@@ -128,7 +128,7 @@ def test_save_value_to_layer_daemonless_env_uses_in_process(
     def _fail_call(*_a: Any, **_kw: Any) -> Any:
         pytest.fail("daemonless override must skip the daemon entirely")
 
-    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _fail_call)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _fail_call)
 
     config_cmd._save_value_to_layer(
         target_path=config_yaml,
@@ -153,7 +153,7 @@ def test_save_value_to_layer_daemon_down_raises_daemon_required(
     config_yaml.parent.mkdir(parents=True)
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     monkeypatch.setattr(config_cmd, "_daemon_proxy_enabled", lambda: True)
-    monkeypatch.setattr("eawf.cli._mutation._daemon_reachable", lambda *a, **k: False)
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda *a, **k: False)
     monkeypatch.setattr(config_cmd, "_layer_label_for_path", lambda _p: "repo")
 
     with pytest.raises(cli_errors.StateConflict, match="daemon_required"):
@@ -179,7 +179,7 @@ def test_save_value_to_layer_method_not_found_falls_back(
     config_yaml.parent.mkdir(parents=True)
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     monkeypatch.setattr(config_cmd, "_daemon_proxy_enabled", lambda: True)
-    monkeypatch.setattr("eawf.cli._mutation._daemon_reachable", lambda *a, **k: True)
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda *a, **k: True)
     monkeypatch.setattr(config_cmd, "_layer_label_for_path", lambda _p: "repo")
 
     class _PreW10Client:
@@ -193,11 +193,11 @@ def test_save_value_to_layer_method_not_found_falls_back(
             return None
 
         def config_set_layer_value(self, *_a: Any, **_kw: Any) -> dict[str, Any]:
-            from eawf.cli._daemon_client import DaemonRpcError
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
             raise DaemonRpcError(code=-32601, message="method not found", data=None)
 
-    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _PreW10Client)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _PreW10Client)
 
     config_cmd._save_value_to_layer(
         target_path=config_yaml,

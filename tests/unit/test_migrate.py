@@ -781,7 +781,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     """``eawf migrate --to <unsupported>`` exits non-zero and writes nothing."""
     from typer.testing import CliRunner
 
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
@@ -807,7 +807,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_1(
     """
     from typer.testing import CliRunner
 
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
@@ -827,7 +827,7 @@ def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
     """Boundary: ``--to`` equal to the current version is a re-loadable no-op."""
     from typer.testing import CliRunner
 
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)

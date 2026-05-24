@@ -42,14 +42,6 @@ from typing import Any
 
 import orjson
 
-from eawf.cli.scope import resolve_state_path
-from eawf.render.statusline import (
-    StatuslineSegment,
-    StatuslineTheme,
-    load_themes,
-    render_segments,
-    resolve_theme,
-)
 from eawf.runtime.runtimes.claude.statusline_modules import (
     context_tokens,
     git,
@@ -59,6 +51,14 @@ from eawf.runtime.runtimes.claude.statusline_modules import (
     model_session_cwd,
     state,
     token_saving,
+)
+from eawf.surfaces.cli.scope import resolve_state_path
+from eawf.surfaces.render.statusline import (
+    StatuslineSegment,
+    StatuslineTheme,
+    load_themes,
+    render_segments,
+    resolve_theme,
 )
 
 logger = logging.getLogger(__name__)

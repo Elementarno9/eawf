@@ -14,9 +14,9 @@ from pathlib import Path
 from rich.text import Text
 from textual.widgets import Static
 
-from eawf.tui.app import EaApp
-from eawf.tui.palette.verbs import split_verb_args
-from eawf.tui.screens.overlays.metrics import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.palette.verbs import split_verb_args
+from eawf.surfaces.tui.screens.overlays.metrics import (
     DEFAULT_WINDOW,
     METRIC_WINDOWS,
     TILE_SPECS,
@@ -132,7 +132,7 @@ def test_metrics_modal_heading_shows_window() -> None:
 
 def test_metrics_verb_opens_modal_through_cap() -> None:
     async def body() -> None:
-        from eawf.tui.palette.verbs import VERBS
+        from eawf.surfaces.tui.palette.verbs import VERBS
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:

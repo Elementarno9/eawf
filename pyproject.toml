@@ -37,8 +37,8 @@ docs = [
 ]
 
 [project.scripts]
-eawf = "eawf.cli.app:main"
-ea = "eawf.cli.app:main"
+eawf = "eawf.surfaces.cli.app:main"
+ea = "eawf.surfaces.cli.app:main"
 eawfd = "eawf.runtime.daemon.main:main"
 
 [tool.uv]
@@ -164,17 +164,17 @@ max-complexity = 10
 # modules get no entry — they must respect the budget or carry an inline
 # ``# noqa: C901`` waiver.
 "src/eawf/workflow/audit_dsl/kinds/verify_implements.py" = ["C901"]
-"src/eawf/cli/commands/config.py" = ["C901"]
-"src/eawf/cli/commands/estimation.py" = ["C901"]
-"src/eawf/cli/commands/flow.py" = ["C901"]
-"src/eawf/cli/commands/init.py" = ["C901"]
-"src/eawf/cli/commands/lifecycle.py" = ["C901"]
-"src/eawf/cli/commands/lifecycle_iter.py" = ["C901"]
-"src/eawf/cli/commands/lifecycle_wave.py" = ["C901"]
-"src/eawf/cli/commands/mcp.py" = ["C901"]
-"src/eawf/cli/commands/plan.py" = ["C901"]
-"src/eawf/cli/commands/roadmap.py" = ["C901"]
-"src/eawf/cli/commands/validate.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/config.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/estimation.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/flow.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/init.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/lifecycle.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/lifecycle_iter.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/lifecycle_wave.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/mcp.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/plan.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/roadmap.py" = ["C901"]
+"src/eawf/surfaces/cli/commands/validate.py" = ["C901"]
 "src/eawf/kernel/config/layered.py" = ["C901"]
 "src/eawf/runtime/daemon/methods/state.py" = ["C901"]
 "src/eawf/doctor/checks.py" = ["C901"]
@@ -183,10 +183,10 @@ max-complexity = 10
 "src/eawf/memory/prune.py" = ["C901"]
 "src/eawf/memory/store.py" = ["C901"]
 "src/eawf/profiles/compose.py" = ["C901"]
-"src/eawf/render/agent_report.py" = ["C901"]
-"src/eawf/render/plan_view.py" = ["C901"]
-"src/eawf/render/pr_body.py" = ["C901"]
-"src/eawf/render/regions.py" = ["C901"]
+"src/eawf/surfaces/render/agent_report.py" = ["C901"]
+"src/eawf/surfaces/render/plan_view.py" = ["C901"]
+"src/eawf/surfaces/render/pr_body.py" = ["C901"]
+"src/eawf/surfaces/render/regions.py" = ["C901"]
 "src/eawf/runtime/runtimes/claude/plugin_package.py" = ["C901"]
 "src/eawf/runtime/runtimes/codex/plugin_install.py" = ["C901"]
 "src/eawf/runtime/runtimes/opencode/plugin_doctor.py" = ["C901"]
@@ -254,7 +254,7 @@ paths_to_mutate = [
 ]
 # Copy the *whole* ``eawf`` package into mutmut's ``mutants/`` sandbox so
 # the four mutated sub-packages can still import their siblings
-# (``eawf.cli``, ``eawf.render``, the package-root ``__init__``, ...).
+# (``eawf.surfaces.cli``, ``eawf.surfaces.render``, the package-root ``__init__``, ...).
 # mutmut only copies ``paths_to_mutate`` by default, which leaves an
 # incomplete ``mutants/src/eawf`` tree and breaks ``import eawf.<sibling>``
 # during the per-mutant test run. ``also_copy`` runs before mutant
@@ -324,7 +324,7 @@ line = 93
 branch = 81
 
 [tool.eawf.coverage.gates.cli]
-path = "cli/"
+path = "surfaces/cli/"
 line = 75
 branch = 65
 
@@ -332,12 +332,12 @@ branch = 65
 # Line + branch waived: Textual widgets render asynchronously and
 # line-cov misreports. Screen coverage is enforced by the snapshot
 # pairing gate (C09 §5.2), not by this line/branch ratchet.
-path = "tui/"
+path = "surfaces/tui/"
 waive_line = true
 waive_branch = true
 
 [tool.eawf.coverage.gates.render]
-path = "render/"
+path = "surfaces/render/"
 line = 89
 branch = 74
 

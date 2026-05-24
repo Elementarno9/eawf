@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.runtime.worktree import git
+from eawf.surfaces.cli import errors as cli_errors
 
 
 def test_git_worktree_add_missing_git_raises_instrument_missing(

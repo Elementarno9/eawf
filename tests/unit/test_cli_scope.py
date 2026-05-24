@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.cli.scope.resolve_state_path`.
+"""Tests for :func:`eawf.surfaces.cli.scope.resolve_state_path`.
 
 Precedence per ``docs/architecture/cli-surface.md`` (scope precedence):
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.scope import resolve_state_path
+from eawf.surfaces.cli.scope import resolve_state_path
 
 
 @pytest.fixture(autouse=True)

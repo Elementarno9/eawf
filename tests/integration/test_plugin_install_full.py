@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.cli.exit_codes import INTEGRITY_VIOLATION
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION
 
 pytestmark = pytest.mark.integration
 
@@ -33,11 +33,11 @@ def _isolate_user_scope_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     developer machine's real ``~/.codex/plugins/`` /
     ``~/.config/opencode/plugins/`` cannot trip the gate during tests."""
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: None,
     )
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.opencode_detect_user_install",
         lambda: None,
     )
 

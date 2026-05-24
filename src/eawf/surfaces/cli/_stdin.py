@@ -1,0 +1,40 @@
+"""Shared stdin guard for Typer commands that consume a piped JSON envelope.
+
+Three commands today (``eawf cc statusline``, ``eawf cc statusline prewarm``,
+``eawf render-output``) read a JSON document from stdin via blocking
+``sys.stdin.read()``. When invoked at a TTY with no piped data the read
+blocks indefinitely — which looks like the CLI hung. This helper exits
+with a clear hint instead.
+
+The helper lives in :mod:`eawf.surfaces.cli` rather than next to any one command
+because it is shared across two packages (``eawf.surfaces.cli.commands.cc`` and
+``eawf.surfaces.cli.commands.render_output``) and a runtime-side import would
+introduce a cycle.
+"""
+
+from __future__ import annotations
+
+import sys
+
+import typer
+
+
+def require_piped_stdin(name: str) -> None:
+    """Exit ``2`` with a hint when stdin is a TTY (no piped input).
+
+    *name* is the command label surfaced in the hint (e.g.
+    ``"eawf cc statusline"``); it is repeated twice in the message.
+    Callers invoke this immediately before any ``sys.stdin.read()`` so
+    the operator sees the hint instead of a hang.
+    """
+    if sys.stdin.isatty():
+        typer.echo(
+            f"{name} expects a JSON envelope on stdin. "
+            f"Pipe a payload (e.g. `echo '{{}}' | {name}`) "
+            f"or invoke via the Claude Code hook.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+
+__all__ = ["require_piped_stdin"]

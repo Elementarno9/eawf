@@ -25,7 +25,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.flow import FlowCheckpointPayload, FlowPayload
 from eawf.kernel.store.paths import store_path
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 
 logger = logging.getLogger(__name__)
 

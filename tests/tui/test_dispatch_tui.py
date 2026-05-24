@@ -3,11 +3,11 @@
 The prior Rich-based TUI (and its ``EAWF_TUI_LEGACY=1`` escape hatch)
 has been removed — ``tui`` is the only TUI surface. These tests pin
 the dispatch contract at the boundary
-(:func:`eawf.cli.app._dispatch_tui`):
+(:func:`eawf.surfaces.cli.app._dispatch_tui`):
 
-* an interactive TTY launches the Textual :class:`~eawf.tui.app.EaApp`;
+* an interactive TTY launches the Textual :class:`~eawf.surfaces.tui.app.EaApp`;
 * the non-TTY / ``--plain`` / ``--no-input`` path emits the deterministic
-  ``tui`` status frame (:func:`eawf.tui.offline.emit_status`).
+  ``tui`` status frame (:func:`eawf.surfaces.tui.offline.emit_status`).
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-import eawf.cli.app as cli_app
-from eawf.cli.app import app
-from eawf.render.brand import BRAND_LITERAL
+import eawf.surfaces.cli.app as cli_app
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.render.brand import BRAND_LITERAL
 
 if TYPE_CHECKING:
     pass
@@ -42,8 +42,8 @@ def _stub_dispatch(
         calls["status"] += 1
         return 0
 
-    monkeypatch.setattr("eawf.tui.app.run_app", fake_run_app)
-    monkeypatch.setattr("eawf.tui.offline.emit_status", fake_emit_status)
+    monkeypatch.setattr("eawf.surfaces.tui.app.run_app", fake_run_app)
+    monkeypatch.setattr("eawf.surfaces.tui.offline.emit_status", fake_emit_status)
 
     class _Stdout:
         @staticmethod

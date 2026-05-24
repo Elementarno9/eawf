@@ -6,9 +6,9 @@ otherwise-independent surfaces together —
 * the capability matrix (``capabilities.yaml``), which declares which
   runtime exposes ``skills`` / ``sub_agents``;
 * the per-skill / per-agent / per-hook registries
-  (:data:`~eawf.render.skills.SKILL_REGISTRY`,
-  :data:`~eawf.render.agents.AGENT_REGISTRY`,
-  :data:`~eawf.render.hooks.HOOK_REGISTRY`);
+  (:data:`~eawf.surfaces.render.skills.SKILL_REGISTRY`,
+  :data:`~eawf.surfaces.render.agents.AGENT_REGISTRY`,
+  :data:`~eawf.surfaces.render.hooks.HOOK_REGISTRY`);
 * the per-runtime installer output (each runtime's ``expected_paths`` /
   ``install_plugin``), which is what actually lands on disk.
 
@@ -36,14 +36,14 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.agents import AGENT_REGISTRY
-from eawf.render.hooks import HOOK_REGISTRY
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.capabilities import RUNTIME_IDS, get_matrix
 from eawf.runtime.runtimes.claude import plugin_install as claude_install
 from eawf.runtime.runtimes.codex import plugin_install as codex_install
 from eawf.runtime.runtimes.opencode import plugin_install as opencode_install
 from eawf.runtime.runtimes.selector import runtime_supports, select_adapter
+from eawf.surfaces.render.agents import AGENT_REGISTRY
+from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 pytestmark = pytest.mark.unit
 

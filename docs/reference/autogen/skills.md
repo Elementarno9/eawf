@@ -1,6 +1,6 @@
 # eawf skill catalog
 
-Auto-generated from `eawf.render.skills:SKILL_REGISTRY`. Each row is
+Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row is
 an Eä skill the runtime can install as a slash command.
 
 | Skill | User-invocable | Argument hint | Description |

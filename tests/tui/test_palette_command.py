@@ -1,6 +1,6 @@
 """Pilot tests for the C06 ``CommandPalette`` overlay (P26-W19).
 
-Drives the palette through the real :class:`~eawf.tui.app.EaApp` via
+Drives the palette through the real :class:`~eawf.surfaces.tui.app.EaApp` via
 Textual's Pilot harness: ``/`` opens it pre-filled, typing fuzzy-filters
 the option list, ``Tab`` autocompletes, ``Enter`` runs a verb + dismisses,
 and ``Esc`` closes without executing. The pure registry/ranker tests live
@@ -15,13 +15,13 @@ from pathlib import Path
 import pytest
 from textual.widgets import Input, OptionList
 
-from eawf.tui.app import EaApp
-from eawf.tui.palette.command_palette import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.palette.command_palette import (
     PALETTE_PREFIX,
     CommandPalette,
     _option_label,
 )
-from eawf.tui.palette.verbs import VERBS
+from eawf.surfaces.tui.palette.verbs import VERBS
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -145,7 +145,7 @@ def test_palette_enter_help_opens_help_and_closes_palette() -> None:
             await pilot.press("h", "e", "l", "p")
             await pilot.press("enter")
             await pilot.pause()
-            from eawf.tui.screens.help import HelpScreen
+            from eawf.surfaces.tui.screens.help import HelpScreen
 
             # Palette dismissed, help pushed in its place (depth stays 1).
             assert isinstance(app.screen, HelpScreen)

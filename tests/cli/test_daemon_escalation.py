@@ -3,15 +3,15 @@
 Three criteria from the wave spec, plus the dev-mode raw-RPC gate:
 
 * **(a) Mutating verb auto-spawns the daemon** when none is running —
-  :func:`eawf.cli._dispatch.escalate_mutation` calls the spawn helper.
+  :func:`eawf.surfaces.cli._dispatch.escalate_mutation` calls the spawn helper.
 * **(b) Read-only verb works daemonless** — ``eawf state show
   --daemonless`` reads ``state.json`` directly and never spawns the
   daemon.
 * **(c) Mutating verb rejects ``--daemonless``** — both the
-  :func:`eawf.cli._dispatch.escalate_mutation` escalation gate (the
+  :func:`eawf.surfaces.cli._dispatch.escalate_mutation` escalation gate (the
   single entry every daemon-proxy callsite routes through) and the
   ``eawf state rpc`` raw passthrough refuse the carve-out with a
-  :class:`~eawf.cli.errors.UserError` (exit-code 1,
+  :class:`~eawf.surfaces.cli.errors.UserError` (exit-code 1,
   ``data.kind="InvalidInput"``).
 * **Dev-mode gate** — the raw ``state rpc`` verb is hidden /
   unreachable unless ``--debug`` (or ``EAWF_DEBUG=1``) is set; it
@@ -35,10 +35,10 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from eawf.cli import _dispatch, _mutation, exit_codes
-from eawf.cli import errors as cli_errors
-from eawf.cli.app import app
-from eawf.cli.flags import GlobalFlags
+from eawf.surfaces.cli import _dispatch, _mutation, exit_codes
+from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.flags import GlobalFlags
 
 pytestmark = pytest.mark.unit
 
@@ -430,7 +430,7 @@ def test_state_rpc_dev_mode_read_method_calls_daemon(
         def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
             return {"echo_method": method, "echo_params": params}
 
-    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", _FakeClient)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeClient)
 
     result = runner.invoke(
         app,

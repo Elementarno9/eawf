@@ -4,7 +4,7 @@ Sources, highest precedence first:
 
 1. Workspace catalogue — ``<workspace>/.ea/skills/<name>/SKILL.md``.
 2. User catalogue — ``~/.eawf/skills/<name>/SKILL.md``.
-3. Built-in registry — :data:`eawf.render.skills.SKILL_REGISTRY`.
+3. Built-in registry — :data:`eawf.surfaces.render.skills.SKILL_REGISTRY`.
 
 The discovered union is what ``eawf skill list`` exposes through the
 new ``--scope`` filter. Workspace and user SKILL.md files carry YAML
@@ -45,7 +45,7 @@ from typing import Any
 
 import yaml
 
-from eawf.render.skills import SKILL_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 logger = logging.getLogger(__name__)
 

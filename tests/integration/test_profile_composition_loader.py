@@ -26,13 +26,13 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.errors import ValidationError
 from eawf.profiles import (
     ComposedProfile,
     ProfileConflict,
     discovery,  # type: ignore[attr-defined]
     load_composed_profile,
 )
+from eawf.surfaces.cli.errors import ValidationError
 
 
 @pytest.fixture(autouse=True)

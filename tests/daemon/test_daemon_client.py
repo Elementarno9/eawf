@@ -1,4 +1,4 @@
-"""Tests for :class:`eawf.cli._daemon_client.DaemonClient`.
+"""Tests for :class:`eawf.surfaces.cli._daemon_client.DaemonClient`.
 
 The tests spin up a real :func:`eawf.runtime.daemon.server.serve_unix` on a
 per-test temp UDS path, then drive the synchronous client against it
@@ -22,11 +22,11 @@ from pathlib import Path
 import pytest
 
 from eawf import __version__
-from eawf.cli._daemon_client import DaemonClient, DaemonRpcError
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.server import serve_unix
+from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),

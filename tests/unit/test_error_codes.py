@@ -1,11 +1,11 @@
-"""Tests for :mod:`eawf.cli.error_codes` — cause-level ErrorCode enum.
+"""Tests for :mod:`eawf.surfaces.cli.error_codes` — cause-level ErrorCode enum.
 
 :class:`ErrorCode` is a closed cause-level vocabulary layered over the five
-exit buckets (:mod:`eawf.cli.exit_codes`). Each member folds onto exactly
+exit buckets (:mod:`eawf.surfaces.cli.exit_codes`). Each member folds onto exactly
 one bucket via :func:`ErrorCode.exit_code` and has exactly one anchor in
 ``docs/reference/error-codes.md``.
 
-The :class:`~eawf.cli.errors.ErrorEnvelope` gains an optional
+The :class:`~eawf.surfaces.cli.errors.ErrorEnvelope` gains an optional
 ``error_code`` field; when set the text branch renders the C10 error-UX
 order: cause -> next_step -> ``See <code>``. When unset the envelope renders
 exactly as before so the change stays non-breaking.
@@ -20,9 +20,9 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from eawf.cli import errors, exit_codes
-from eawf.cli.error_codes import ErrorCode
-from eawf.cli.flags import GlobalFlags
+from eawf.surfaces.cli import errors, exit_codes
+from eawf.surfaces.cli.error_codes import ErrorCode
+from eawf.surfaces.cli.flags import GlobalFlags
 
 runner = CliRunner()
 

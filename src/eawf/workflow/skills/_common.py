@@ -8,7 +8,7 @@ The W02 skills all follow the same shape::
        envelope to ``store/event.jsonl`` via
        :func:`eawf.kernel.store.append.append_envelope`.
     4. Optionally mutate state via
-       :func:`eawf.cli._mutation.state_transaction`.
+       :func:`eawf.surfaces.cli._mutation.state_transaction`.
     5. Populate the per-skill body model from :mod:`eawf.workflow.skills.bodies`
        and return the corresponding :class:`SkillResult`.
 
@@ -41,7 +41,7 @@ from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
-from eawf.render.envelope import (
+from eawf.surfaces.render.envelope import (
     EnvelopeWarning,
     InstrumentStatus,
 )

@@ -28,8 +28,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.install.wizard import WizardAnswers, run_wizard_no_input
+from eawf.surfaces.cli.app import app
 
 from .conftest import (
     assert_or_regen_json,
@@ -135,7 +135,7 @@ def test_run_wizard_no_input_fresh_repo_byte_stable_agents_md(
     bytes_b = (target_b / "AGENTS.md").read_bytes()
     assert bytes_a == bytes_b, (
         "AGENTS.md drifted between two identical wizard runs — "
-        "non-determinism leaked into eawf.render.agents_md"
+        "non-determinism leaked into eawf.surfaces.render.agents_md"
     )
 
 

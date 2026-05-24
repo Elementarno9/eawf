@@ -29,8 +29,8 @@ import orjson
 import pytest
 import yaml
 
-from eawf.cli.errors import UserError
 from eawf.kernel.config.profile import KNOWN_PROFILES, enable_profile
+from eawf.surfaces.cli.errors import UserError
 
 
 def _seed_state(state_path: Path, body: dict[str, object]) -> None:
@@ -274,7 +274,7 @@ def test_materialise_state_keys_serialises_with_concurrent_writer(tmp_path: Path
     dict (not ``None``).*  Without the lock, the bug case forces an
     inconsistency.
     """
-    from eawf.cli._mutation import state_transaction
+    from eawf.surfaces.cli._mutation import state_transaction
 
     iterations = 5
     for i in range(iterations):

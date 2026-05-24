@@ -22,8 +22,8 @@ from unittest import mock
 
 import pytest
 
-from eawf.cli.errors import UserError
 from eawf.install import instrument_probe
+from eawf.surfaces.cli.errors import UserError
 
 
 def _make_which(present: set[str]) -> Any:

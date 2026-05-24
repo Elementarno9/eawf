@@ -3,7 +3,7 @@
 Renders a native Codex plugin tree under ``.codex/plugins/eawf/`` (project
 scope) or ``~/.codex/plugins/eawf/`` (user scope) with the canonical
 ``.codex-plugin/plugin.json`` manifest. Skill / agent / hook bodies are
-reused from :mod:`eawf.render.*`; the renderer is idempotent and the
+reused from :mod:`eawf.surfaces.render.*`; the renderer is idempotent and the
 install is byte-stable across re-runs.
 
 ``package_plugin`` emits a standalone marketplace tree the operator can

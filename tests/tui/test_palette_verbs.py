@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.tui.palette.verbs import (
+from eawf.surfaces.tui.palette.verbs import (
     SCOPES_ALL,
     VERBS,
     PaletteVerb,

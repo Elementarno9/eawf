@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.render.envelope import OutputEnvelope
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.skills.bodies.research import ResearchBody
 
 

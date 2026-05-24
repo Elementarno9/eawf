@@ -1,7 +1,7 @@
 """Tests for global flag parsing and propagation via Typer's ctx.obj.
 
-The Typer root callback in :mod:`eawf.cli.app` resolves ``--json``, ``--plain``,
-``--no-input``, and ``-w/--workspace`` into a :class:`eawf.cli.flags.GlobalFlags`
+The Typer root callback in :mod:`eawf.surfaces.cli.app` resolves ``--json``, ``--plain``,
+``--no-input``, and ``-w/--workspace`` into a :class:`eawf.surfaces.cli.flags.GlobalFlags`
 dataclass attached to ``ctx.obj``. The hidden ``scope-debug`` subcommand prints
 the resolved flags so we can assert propagation via ``CliRunner`` without
 instantiating each downstream command.
@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

@@ -2,14 +2,14 @@
 
 Covers the P26-I01-W06 deliverables:
 
-* ``eawf.cli.streaming`` — NDJSON line-delimited shape on a mock event
+* ``eawf.surfaces.cli.streaming`` — NDJSON line-delimited shape on a mock event
   stream, the human ``[HH:MM:SS]`` shape, terminal-status → exit-code
   mapping, and the ``--md --stream`` / ``--quiet --verbose`` flag-combination
   rejections.
-* ``eawf.cli.commands.completion`` — ``show`` renders the script to stdout,
+* ``eawf.surfaces.cli.commands.completion`` — ``show`` renders the script to stdout,
   ``install`` writes to the canonical path, and a write failure falls back
   to stdout with a ``UserError`` recovery envelope.
-* ``eawf.cli.commands.help`` — topic listing, topic rendering, unknown-topic
+* ``eawf.surfaces.cli.commands.help`` — topic listing, topic rendering, unknown-topic
   rejection, and the six registered topics all resolving to ≤80-line files.
 """
 
@@ -22,13 +22,13 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli import exit_codes
-from eawf.cli.app import app
-from eawf.cli.commands import completion as completion_cmd
-from eawf.cli.commands import help as help_cmd
-from eawf.cli.commands.completion import Shell
-from eawf.cli.errors import UserError
-from eawf.cli.streaming import (
+from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands import completion as completion_cmd
+from eawf.surfaces.cli.commands import help as help_cmd
+from eawf.surfaces.cli.commands.completion import Shell
+from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.cli.streaming import (
     end_frame,
     event_frame,
     reject_quiet_verbose_collision,

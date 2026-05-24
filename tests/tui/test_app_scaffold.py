@@ -21,7 +21,7 @@ from textual.logging import TextualHandler
 
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
-from eawf.tui.app import (
+from eawf.surfaces.tui.app import (
     BRAND,
     DEFAULT_PROJECT_CODE,
     EaApp,
@@ -34,7 +34,7 @@ from eawf.tui.app import (
     _swap_root_logging_to_textual,
     resolve_scope,
 )
-from eawf.tui.state_binding import StateBinding, StateBindingCallbacks, load_state
+from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks, load_state
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"

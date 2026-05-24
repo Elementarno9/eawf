@@ -172,7 +172,7 @@ def model_supported_max_version() -> str:
     # Imported lazily: ``eawf.kernel.state.models`` (and its transitive
     # ``eawf.runtime.sandbox.policy``) are heavy modules the CLI tree-build /
     # shell-completion cold path must not load. Resolving the import at
-    # call time keeps ``import eawf.cli.app`` (which eagerly registers the
+    # call time keeps ``import eawf.surfaces.cli.app`` (which eagerly registers the
     # ``migrate`` command) off those modules' import graph.
     from eawf.kernel.state.models import State
 

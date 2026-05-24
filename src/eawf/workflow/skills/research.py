@@ -42,7 +42,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research import ResearchPayload
 from eawf.kernel.store.paths import store_path
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills.blitz import BlitzSkill, should_auto_invoke
 from eawf.workflow.skills.bodies.research import (
     ResearchBody,

@@ -29,8 +29,8 @@ from pathlib import Path
 from typing import Any
 
 from eawf.kernel.state.models import McpServer
-from eawf.render._atomic import atomic_write_text
 from eawf.runtime.mcp.env_ref import assert_no_expansion, render_env_block
+from eawf.surfaces.render._atomic import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +63,10 @@ _TRANSPORT_STDIO: str = "stdio"
 _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 
 
-class IntegrityViolation(Exception):  # noqa: N818 — canonical CLI error name (mirrors eawf.cli.errors)
+class IntegrityViolation(Exception):  # noqa: N818 — canonical CLI error name (mirrors eawf.surfaces.cli.errors)
     """Raised when a runtime config write would clobber a user entry.
 
-    The CLI layer maps this to :class:`eawf.cli.errors.StateConflict`
+    The CLI layer maps this to :class:`eawf.surfaces.cli.errors.StateConflict`
     (``kind="IntegrityViolation"``, exit code 8). The library raises a
     plain Python error so it can be reused outside the Typer surface
     (e.g. by ``eawf doctor`` in v0.1.1).

@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.render.claude_shim``.
+"""Unit tests for ``eawf.surfaces.render.claude_shim``.
 
 Covers:
 
@@ -12,8 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from eawf.render.agents_md import RenderResult
-from eawf.render.claude_shim import render_claude_md
+from eawf.surfaces.render.agents_md import RenderResult
+from eawf.surfaces.render.claude_shim import render_claude_md
 
 
 def test_claude_shim_writes_at_agents_md_literal(tmp_path: Path) -> None:
@@ -48,9 +48,9 @@ def test_claude_shim_atomic_write(tmp_path: Path) -> None:
     """The shim writes via a sibling tempfile then ``os.replace``."""
     target = tmp_path / "CLAUDE.md"
     # Patch the shared helper's ``os.replace`` — extraction in
-    # :mod:`eawf.render._atomic` is the actual call site now.
+    # :mod:`eawf.surfaces.render._atomic` is the actual call site now.
     with patch(
-        "eawf.render._atomic.os.replace",
+        "eawf.surfaces.render._atomic.os.replace",
         wraps=__import__("os").replace,
     ) as spy:
         render_claude_md(target)

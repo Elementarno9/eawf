@@ -77,10 +77,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import FlowStatus
 from eawf.kernel.store.kinds.flow import FlowCheckpointPayload
-from eawf.render.envelope import OutputEnvelope, SkillName
+from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.render.envelope import OutputEnvelope, SkillName
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.engine import (

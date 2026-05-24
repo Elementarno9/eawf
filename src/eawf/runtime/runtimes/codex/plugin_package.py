@@ -53,15 +53,15 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eawf.render._atomic import atomic_write_text
-from eawf.render.hooks import HOOK_REGISTRY, render_hook_sh
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 from eawf.runtime.runtimes.codex.plugin_install import (
     IntegrityViolation,
     _render_manifest,
     _render_skill,
 )
+from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.hooks import HOOK_REGISTRY, render_hook_sh
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 logger = logging.getLogger(__name__)
 

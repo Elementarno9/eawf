@@ -24,9 +24,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.tui.app import EaApp, _persisted_theme
-from eawf.tui.palette.verbs import _handle_theme
-from eawf.tui.theme import EA_CB, EA_DARK, EA_LIGHT, resolve_theme_name
+from eawf.surfaces.tui.app import EaApp, _persisted_theme
+from eawf.surfaces.tui.palette.verbs import _handle_theme
+from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT, resolve_theme_name
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -218,7 +218,7 @@ def test_persisted_theme_round_trips_through_save_value_to_layer(
     _tmp_global_config: Path,
 ) -> None:
     """Direct round-trip: ``_save_value_to_layer`` write → ``_persisted_theme`` read."""
-    from eawf.cli.commands.config import _save_value_to_layer
+    from eawf.surfaces.cli.commands.config import _save_value_to_layer
 
     # Default before any persist falls back to the dark baseline.
     assert _persisted_theme() == "dark"
@@ -230,7 +230,7 @@ def test_persisted_theme_ignores_unrecognised_persisted_value(
     _tmp_global_config: Path,
 ) -> None:
     """A garbage persisted value degrades to the dark baseline, not a crash."""
-    from eawf.cli.commands.config import _save_value_to_layer
+    from eawf.surfaces.cli.commands.config import _save_value_to_layer
 
     _save_value_to_layer(target_path=_tmp_global_config, key="ui.theme", value="not-a-theme")
     assert _persisted_theme() == "dark"

@@ -369,7 +369,7 @@ def _set_dotted(payload: dict[str, Any], key_path: list[str], value: Any) -> Non
 def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
     """Atomic YAML write — tempfile + fsync + rename + parent fsync.
 
-    Mirrors :func:`eawf.cli.commands.config._atomic_write_yaml` byte-
+    Mirrors :func:`eawf.surfaces.cli.commands.config._atomic_write_yaml` byte-
     for-byte so a CLI fallback write and a daemon proxy write produce
     identical on-disk bytes for the same input.
     """

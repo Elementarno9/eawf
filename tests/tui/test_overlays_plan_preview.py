@@ -13,8 +13,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.plan_preview import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.plan_preview import (
     PlanIterRow,
     PlanPreviewModal,
     PlanTree,
@@ -171,7 +171,7 @@ def test_plan_preview_empty_plan_enter_does_not_approve() -> None:
 
 def test_plan_preview_routes_through_push_modal_cap() -> None:
     async def body() -> None:
-        from eawf.tui.screens.overlays.plan_preview import open_plan_preview
+        from eawf.surfaces.tui.screens.overlays.plan_preview import open_plan_preview
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:

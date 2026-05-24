@@ -26,10 +26,10 @@ from typer.testing import CliRunner
 
 # Skip the entire module when W01 (lifecycle) or W04 (session) handlers are
 # absent — see module docstring for the cherry-pick rationale.
-pytest.importorskip("eawf.cli.commands.lifecycle")
-pytest.importorskip("eawf.cli.commands.session")
+pytest.importorskip("eawf.surfaces.cli.commands.lifecycle")
+pytest.importorskip("eawf.surfaces.cli.commands.session")
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

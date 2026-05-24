@@ -1,8 +1,8 @@
-"""Tests for ``eawf.render.statusline`` — theme loading + segment rendering."""
+"""Tests for ``eawf.surfaces.render.statusline`` — theme loading + segment rendering."""
 
 from __future__ import annotations
 
-from eawf.render.statusline import (
+from eawf.surfaces.render.statusline import (
     StatuslineSegment,
     StatuslineTheme,
     load_themes,

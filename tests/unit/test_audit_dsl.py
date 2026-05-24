@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from eawf.cli.errors import UserError
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.audit_dsl import (
     CHECK_REGISTRY,
     CheckFile,

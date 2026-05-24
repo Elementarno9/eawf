@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.runtime.runtimes.plugin_sync import sync_plugins
+from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
 
@@ -47,11 +47,11 @@ def _isolate_user_scope_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     against the supplied target".
     """
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: None,
     )
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.opencode_detect_user_install",
         lambda: None,
     )
 

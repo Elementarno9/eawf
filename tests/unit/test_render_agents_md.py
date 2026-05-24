@@ -1,9 +1,9 @@
-"""Unit tests for ``eawf.render.agents_md``.
+"""Unit tests for ``eawf.surfaces.render.agents_md``.
 
 Covers:
 
 - Per-block managed-region emission with hashes parseable by
-  :mod:`eawf.render.regions`.
+  :mod:`eawf.surfaces.render.regions`.
 - Re-render preserves hand-written content byte-stable.
 - Manifest gains entries (target, region_id, version, hash) for each region.
 - Render blocks targeting non-AGENTS.md files are filtered out.
@@ -20,14 +20,14 @@ from unittest.mock import patch
 import pytest
 
 from eawf.profiles.models import ComposedProfile, RenderBlock
-from eawf.render import regions
-from eawf.render.agents_md import (
+from eawf.surfaces.render import regions
+from eawf.surfaces.render.agents_md import (
     ENTITY_TITLE_MAX,
     RenderResult,
     lint_entity_title,
     render_agents_md,
 )
-from eawf.render.manifest import Manifest
+from eawf.surfaces.render.manifest import Manifest
 
 
 def _make_composed(blocks: list[RenderBlock]) -> ComposedProfile:
@@ -162,9 +162,9 @@ def test_render_agents_md_atomic_write(tmp_path: Path) -> None:
     composed = _make_composed([_block("rules", "## Rules")])
 
     # Patch the shared helper's ``os.replace`` — extraction in
-    # :mod:`eawf.render._atomic` is the actual call site now.
+    # :mod:`eawf.surfaces.render._atomic` is the actual call site now.
     with patch(
-        "eawf.render._atomic.os.replace",
+        "eawf.surfaces.render._atomic.os.replace",
         wraps=__import__("os").replace,
     ) as spy:
         render_agents_md(composed, target, Manifest(version=1, generated={}))
@@ -229,7 +229,7 @@ def test_render_agents_md_preserves_other_target_manifest_entries(tmp_path: Path
         version=1,
         generated={
             f"{other_target}::skill-foo": __import__(
-                "eawf.render.manifest", fromlist=["ManifestEntry"]
+                "eawf.surfaces.render.manifest", fromlist=["ManifestEntry"]
             ).ManifestEntry(
                 target=other_target,
                 region_id="skill-foo",

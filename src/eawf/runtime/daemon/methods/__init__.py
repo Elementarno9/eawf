@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 #: source of truth shared by :class:`DaemonValidationError` raisers in
 #: :mod:`eawf.runtime.daemon.methods.state` and the wire-mapping in
 #: :func:`eawf.runtime.daemon.server._process_frame`; the CLI client maps it to
-#: :class:`eawf.cli.errors.ValidationError` (exit code 2).
+#: :class:`eawf.surfaces.cli.errors.ValidationError` (exit code 2).
 VALIDATION_FAILED: Final[int] = -32002
 
 
@@ -43,7 +43,7 @@ class DaemonValidationError(ValueError):
     to ``-32602 invalid_params`` for malformed param shapes) so the
     server can emit :data:`VALIDATION_FAILED` (``-32002``) on the wire
     instead. The CLI client maps that code to
-    :class:`eawf.cli.errors.ValidationError`, matching the in-process
+    :class:`eawf.surfaces.cli.errors.ValidationError`, matching the in-process
     fallback's exit code for the same rejection.
 
     Subclasses :class:`ValueError` so any callsite that already catches

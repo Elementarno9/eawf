@@ -3,7 +3,7 @@
 Covers the TUI side of wiring ``NeedsUserModal`` to the pause store:
 
 - A pending pause for the active scope auto-opens the modal off the
-  :class:`~eawf.tui.state_binding.StateBinding` refresh.
+  :class:`~eawf.surfaces.tui.state_binding.StateBinding` refresh.
 - A pick routes through the shared resume library function (the pause is
   resolved with the chosen label).
 - A resume failure surfaces an ``error``-severity toast.
@@ -19,8 +19,8 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.needs_user import NeedsUserModal
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.needs_user import NeedsUserModal
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import list_open_pauses, record_pause
 

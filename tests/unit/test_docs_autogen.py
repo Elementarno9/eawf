@@ -24,11 +24,11 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from eawf.cli import error_codes as error_codes_mod
-from eawf.cli import exit_codes as exit_codes_mod
-from eawf.cli.app import app
 from eawf.docs import autogen
 from eawf.kernel.state import enums as state_enums
+from eawf.surfaces.cli import error_codes as error_codes_mod
+from eawf.surfaces.cli import exit_codes as exit_codes_mod
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
@@ -126,7 +126,7 @@ def test_cli_page_lists_a_known_command_group() -> None:
 
 def test_skills_page_lists_registry_entries() -> None:
     """Every skill in the registry appears as a slash-command row."""
-    from eawf.render.skills import SKILL_REGISTRY
+    from eawf.surfaces.render.skills import SKILL_REGISTRY
 
     body = autogen.skills_page().body
     for spec in SKILL_REGISTRY:

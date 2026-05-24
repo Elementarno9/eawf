@@ -12,7 +12,7 @@ import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import store_kind_for_role
-from eawf.render.agents import AGENT_REGISTRY
+from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.workflow.agents.specs.roles import (
     KEPT_RUNTIMES,
     ROLE_REGISTRY,

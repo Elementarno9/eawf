@@ -5,7 +5,7 @@ The views live at ``<state_dir>/artifacts/rendered/memory/<scope>.md`` plus
 regenerates them from the cache + JSONL. Hand-edits are NOT preserved between
 syncs because the entire file body lives inside a managed region (the
 canonical ``<!-- BEGIN EAWF:managed ... -->`` markers from
-:mod:`eawf.render.regions`).
+:mod:`eawf.surfaces.render.regions`).
 
 Authority chain:
 
@@ -20,7 +20,7 @@ Authority chain:
 
 Concurrency:
 
-The view writes go through :func:`eawf.render._atomic.atomic_write_text`
+The view writes go through :func:`eawf.surfaces.render._atomic.atomic_write_text`
 which uses tempfile + ``os.fsync`` + ``os.replace`` + parent-dir fsync under
 a sibling portalock. A reader that opens a view mid-sync therefore sees
 either the prior bytes or the fresh bytes — never a torn write.
@@ -42,8 +42,8 @@ from pathlib import Path
 from eawf.kernel.state.enums import MemoryStatus
 from eawf.kernel.state.models import MemorySummary, State
 from eawf.memory.store import read_envelopes
-from eawf.render._atomic import atomic_write_text
-from eawf.render.regions import replace_region
+from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.regions import replace_region
 
 logger = logging.getLogger(__name__)
 

@@ -39,8 +39,8 @@ from eawf.kernel.config.layered import merge_config
 from eawf.kernel.state.enums import AuditKind, AuditVerdict
 from eawf.kernel.state.ids import is_phase_id, parents_of
 from eawf.kernel.state.models import Audit, State
-from eawf.render.envelope import SkillName
 from eawf.runtime.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills.bodies.ship import (
     ShipBody,
     ShipCommitGroup,

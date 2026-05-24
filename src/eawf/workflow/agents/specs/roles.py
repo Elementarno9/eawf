@@ -7,7 +7,7 @@ the *wave-specific* prompt body, a :class:`RoleSpec` carries the
 anti-patterns) shared by every dispatch of that role.
 
 The canonical role contract bodies already live in
-:data:`eawf.render.agents.AGENT_REGISTRY` (they back the static
+:data:`eawf.surfaces.render.agents.AGENT_REGISTRY` (they back the static
 ``.claude/agents/<role>.md`` files). This module reuses those bodies
 verbatim — it does not re-author them — and layers the per-runtime
 placement note plus the typed-report store-kind pointer on top, so the
@@ -29,8 +29,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import store_kind_for_role
-from eawf.render.agents import AGENT_REGISTRY
 from eawf.runtime.runtimes.manifest import RuntimeId
+from eawf.surfaces.render.agents import AGENT_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class RoleSpec(BaseModel):
         role: The canonical :class:`~eawf.kernel.state.enums.AgentSessionRole`.
         summary: One-sentence description (matches the role's
             ``AgentSpec.description`` in
-            :data:`eawf.render.agents.AGENT_REGISTRY`).
+            :data:`eawf.surfaces.render.agents.AGENT_REGISTRY`).
         body: The role contract Markdown (method, output contract,
             anti-patterns), reused verbatim from the same registry.
         report_store_kind: The role's typed-report store kind value
@@ -111,7 +111,7 @@ class RoleSpec(BaseModel):
 def _build_registry() -> dict[AgentSessionRole, RoleSpec]:
     """Project :data:`AGENT_REGISTRY` into a role-keyed :class:`RoleSpec` map.
 
-    Each :class:`eawf.render.agents.AgentSpec` row supplies the summary
+    Each :class:`eawf.surfaces.render.agents.AgentSpec` row supplies the summary
     and body; the role's report store kind is read from
     :func:`eawf.kernel.store.kinds.agent_report.store_kind_for_role`. Building
     once at import time keeps the registry a frozen lookup.

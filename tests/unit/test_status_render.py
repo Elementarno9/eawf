@@ -1,4 +1,4 @@
-"""Tests for the in-memory helpers in :mod:`eawf.cli.commands.status`.
+"""Tests for the in-memory helpers in :mod:`eawf.surfaces.cli.commands.status`.
 
 Exercises the pure projection functions (``_project_summary``, ``_active_waves``,
 ``_active_sessions``, ``_last_audit``, ``_last_closed_waves``, ``_blockers``)
@@ -17,7 +17,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from eawf.cli.commands import status as status_mod
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -40,6 +39,7 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
+from eawf.surfaces.cli.commands import status as status_mod
 
 _DT = datetime(2026, 5, 8, tzinfo=UTC)
 

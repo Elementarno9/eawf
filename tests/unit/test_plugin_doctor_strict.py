@@ -3,7 +3,7 @@
 Three concerns are covered here:
 
 1. ``--strict`` exit-code surface — a seeded checksum drift exits
-   :data:`~eawf.cli.exit_codes.INTEGRITY_VIOLATION` (the canonical
+   :data:`~eawf.surfaces.cli.exit_codes.INTEGRITY_VIOLATION` (the canonical
    integrity-violation constant; numerically ``3`` post-C05 taxonomy
    compression, the value the legacy "exit 8" gate maps onto), while a
    clean tree exits ``0``. Both the library entry point
@@ -34,8 +34,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.cli.exit_codes import INTEGRITY_VIOLATION
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -49,6 +47,8 @@ from eawf.runtime.runtimes.claude.plugin_doctor import (
     plugin_sync_lock,
     plugin_sync_lock_path,
 )
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION
 from eawf.workflow.dispatch import render_wave_prompt
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
@@ -75,11 +75,11 @@ def _isolate_user_scope_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     these tests.
     """
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: None,
     )
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.opencode_detect_user_install",
         lambda: None,
     )
 
@@ -276,7 +276,7 @@ _SURFACES: list[tuple[str, AgentSessionRole, EffortBucket, list[str], list[str]]
         "ship",
         AgentSessionRole.REVIEWER,
         EffortBucket.M,
-        ["src/eawf/cli/"],
+        ["src/eawf/surfaces/cli/"],
         ["PR review pass complete; CI green"],
     ),
     (

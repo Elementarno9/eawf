@@ -16,7 +16,7 @@ from unittest import mock
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
@@ -114,7 +114,7 @@ def test_cli_clone_repo_propagates_branch_flag(tmp_path: Path) -> None:
         return _FakeResult()
 
     with mock.patch(
-        "eawf.cli.commands.clone_repo.subprocess.run",
+        "eawf.surfaces.cli.commands.clone_repo.subprocess.run",
         side_effect=_fake_run,
     ):
         res = runner.invoke(
@@ -166,7 +166,7 @@ def test_cli_clone_repo_translates_git_failure_to_exit_5(tmp_path: Path) -> None
         stderr = "fatal: unable to access 'https://example': Could not resolve host"
 
     with mock.patch(
-        "eawf.cli.commands.clone_repo.subprocess.run",
+        "eawf.surfaces.cli.commands.clone_repo.subprocess.run",
         return_value=_FakeResult(),
     ):
         res = runner.invoke(

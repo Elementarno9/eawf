@@ -22,9 +22,9 @@ import pytest
 from rich.text import Text
 from textual.widgets import Static
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays import pr_list as pr_list_mod
-from eawf.tui.screens.overlays.pr_list import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays import pr_list as pr_list_mod
+from eawf.surfaces.tui.screens.overlays.pr_list import (
     GH_PR_FIELDS,
     GH_TIMEOUT_S,
     PR_CACHE_TTL_S,
@@ -357,7 +357,7 @@ def test_pr_modal_empty_unavailable_shows_gh_hint() -> None:
 
 def test_pr_verb_opens_modal_through_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     async def body() -> None:
-        from eawf.tui.palette.verbs import VERBS
+        from eawf.surfaces.tui.palette.verbs import VERBS
 
         # Mock the gh shell-out so the verb path never invokes real gh.
         monkeypatch.setattr(subprocess, "run", lambda *a, **k: _completed(stdout=_GH_JSON))
@@ -377,7 +377,7 @@ def test_pr_verb_opens_modal_through_cap(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_pr_verb_gh_unavailable_opens_with_hint(monkeypatch: pytest.MonkeyPatch) -> None:
     async def body() -> None:
-        from eawf.tui.palette.verbs import VERBS
+        from eawf.surfaces.tui.palette.verbs import VERBS
 
         def fake_run(*args: Any, **kwargs: Any) -> SimpleNamespace:
             raise FileNotFoundError("gh")

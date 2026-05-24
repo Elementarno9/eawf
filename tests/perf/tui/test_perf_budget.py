@@ -38,8 +38,8 @@ from time import perf_counter
 
 import pytest
 
-from eawf.tui.app import EaApp
-from eawf.tui.snapshot import capture_screen_text
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.snapshot import capture_screen_text
 
 #: Aspirational operator budgets per C06 D16 — recorded for traceability;
 #: the live assertions use the harness-realistic ceilings below.

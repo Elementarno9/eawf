@@ -16,18 +16,18 @@ from textual.widgets import Markdown, Static, TabbedContent
 
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.detail import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.detail import (
     _TAB_LABELS,
     DetailCard,
     DetailModal,
     render_file_tree,
     resolve_detail,
 )
-from eawf.tui.snapshot import capture_screen_text
-from eawf.tui.widgets.backlog_table import BacklogTable
-from eawf.tui.widgets.eu_bar import EMPTY_STATE
-from eawf.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.surfaces.tui.snapshot import capture_screen_text
+from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
+from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
+from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -121,11 +121,13 @@ def test_render_file_tree_groups_shared_prefix_and_collapses_tails() -> None:
     tree = render_file_tree(
         [
             "src/eawf/dispatch/**",
-            "src/eawf/cli/commands/wave_dispatch.py",
+            "src/eawf/surfaces/cli/commands/wave_dispatch.py",
             "tests/dispatch/**",
         ]
     )
-    assert tree == ("src/eawf/\n  cli/commands/wave_dispatch.py\n  dispatch/**\ntests/dispatch/**")
+    assert tree == (
+        "src/eawf/\n  dispatch/**\n  surfaces/cli/commands/wave_dispatch.py\ntests/dispatch/**"
+    )
 
 
 def test_wave_card_files_row_renders_as_tree() -> None:

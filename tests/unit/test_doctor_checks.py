@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from eawf.cli.errors import UserError
 from eawf.doctor import checks
+from eawf.surfaces.cli.errors import UserError
 
 
 def _stub_probe_ok(monkeypatch: pytest.MonkeyPatch, results: list[Any]) -> None:

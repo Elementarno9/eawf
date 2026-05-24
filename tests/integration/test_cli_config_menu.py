@@ -1,7 +1,7 @@
 """Integration tests for ``eawf config menu`` (P20-W10).
 
 The menu drives :mod:`questionary` for tab → field → value selection, then
-flushes the coerced value through :func:`eawf.cli.commands.config._save_value_to_layer`.
+flushes the coerced value through :func:`eawf.surfaces.cli.commands.config._save_value_to_layer`.
 These tests stub the questionary widgets (the project does not exercise
 real TTY interactions in CI) and patch the save helper so the cases are
 small, deterministic, and cover both the happy path and the cancellation /
@@ -29,10 +29,10 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.cli.commands import config as config_cmd
-from eawf.cli.exit_codes import INVALID_INPUT, USER_DECLINED
 from eawf.kernel.config import layered, registry
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands import config as config_cmd
+from eawf.surfaces.cli.exit_codes import INVALID_INPUT, USER_DECLINED
 
 runner = CliRunner()
 

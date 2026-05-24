@@ -24,7 +24,7 @@ from typing import cast
 import orjson
 import pytest
 
-from eawf.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.bodies.research import ResearchBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.research import ResearchSkill

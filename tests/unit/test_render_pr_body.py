@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.render.pr_body`."""
+"""Unit tests for :mod:`eawf.surfaces.render.pr_body`."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.profiles.models import ComposedProfile, RenderBlock
-from eawf.render.pr_body import (
+from eawf.surfaces.render.pr_body import (
     PrBodyInput,
     PrBodyNotFound,
     build_pr_body,
@@ -181,7 +181,7 @@ def test_build_pr_body_phase_with_iters_and_waves(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "eawf.render.pr_body.derive_wave_sha",
+        "eawf.surfaces.render.pr_body.derive_wave_sha",
         lambda _wid: "abcdef0123456",
     )
     payload = _base_state()
@@ -344,9 +344,11 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
             verdict=AgentReportVerdict.PASS,
             confidence=Confidence.HIGH,
             summary="executor summary",
-            evidence_refs=[AgentReportEvidenceRef(kind="repo", ref="src/eawf/render/pr_body.py")],
+            evidence_refs=[
+                AgentReportEvidenceRef(kind="repo", ref="src/eawf/surfaces/render/pr_body.py")
+            ],
             wave_id="P00-I01-W01",
-            files_changed=["src/eawf/render/pr_body.py"],
+            files_changed=["src/eawf/surfaces/render/pr_body.py"],
             tests_run=["uv run pytest tests/unit/test_render_pr_body.py -q"],
             commit_sha="abcdef0123",
             outcome="done",
@@ -368,7 +370,9 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
             ],
             target_id="HEAD",
             findings=[],
-            coverage_refs=[AgentReportEvidenceRef(kind="repo", ref="src/eawf/render/pr_body.py:1")],
+            coverage_refs=[
+                AgentReportEvidenceRef(kind="repo", ref="src/eawf/surfaces/render/pr_body.py:1")
+            ],
         ),
         scope_id="P00-I01",
         base_id="P00-I01",
@@ -381,7 +385,7 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
     assert {item.kind for item in inputs} == {"executor_report", "reviewer_report"}
     assert "## Executor Report" in body
     assert "## Reviewer Report" in body
-    assert "| [1] | repo | `src/eawf/render/pr_body.py` |  |" in body
+    assert "| [1] | repo | `src/eawf/surfaces/render/pr_body.py` |  |" in body
     assert "| [2] | repo | `tests/unit/test_render_pr_body.py` |  |" in body
 
 

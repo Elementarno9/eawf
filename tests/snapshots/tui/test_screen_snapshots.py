@@ -13,7 +13,7 @@ three scope screens (repo / workspace / user) plus two representative
 overlays (help + a destructive confirm) — enough to catch a layout or
 chrome regression on every screen *kind* and the overlay capture path,
 without paying the per-fixture spin-up cost 16 times. The harness
-(:func:`eawf.tui.snapshot.assert_screen_snapshot`) is reusable, so
+(:func:`eawf.surfaces.tui.snapshot.assert_screen_snapshot`) is reusable, so
 expanding the set later is one ``assert`` per added golden.
 
 Determinism note: the repo / workspace screens carry a ``GitPane`` that
@@ -45,13 +45,13 @@ from textual.widgets import TabbedContent
 from eawf.kernel.config.registry import registry_lookup
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.config_modal import ConfigModal
-from eawf.tui.screens.overlays.confirm import ConfirmModal
-from eawf.tui.screens.overlays.detail import DetailModal, resolve_detail
-from eawf.tui.screens.overlays.edit_field import EditFieldModal
-from eawf.tui.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
-from eawf.tui.snapshot import assert_screen_snapshot, settle_screen
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
+from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.detail import DetailModal, resolve_detail
+from eawf.surfaces.tui.screens.overlays.edit_field import EditFieldModal
+from eawf.surfaces.tui.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
+from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +81,7 @@ def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import textual.constants as _tc
 
     monkeypatch.setattr(_tc, "TEXTUAL_ANIMATIONS", "none")
-    monkeypatch.setattr("eawf.tui.widgets.git_pane._git_run", lambda *a, **k: None)
+    monkeypatch.setattr("eawf.surfaces.tui.widgets.git_pane._git_run", lambda *a, **k: None)
     monkeypatch.chdir(tmp_path)
 
 
@@ -144,15 +144,15 @@ def test_repo_git_pane_dashes_from_repo_cwd(monkeypatch: pytest.MonkeyPatch) -> 
     neutralizes the cwd leak.
 
     Targets the repo screen: the workspace screen now surfaces git in a
-    per-repo :class:`~eawf.tui.widgets.workspace_table.WorkspaceTable` column
+    per-repo :class:`~eawf.surfaces.tui.widgets.workspace_table.WorkspaceTable` column
     (no standalone ``GitPane`` in its table-browse mode), so the
     standalone-pane cwd-leak guard rides the repo quadrant's git pane.
 
     The function-scoped ``monkeypatch.chdir`` is unwound at teardown, so the
     test does not itself leak the repo cwd into a sibling worker.
     """
-    from eawf.tui.widgets.git_pane import DASH as GIT_DASH
-    from eawf.tui.widgets.git_pane import GitPane
+    from eawf.surfaces.tui.widgets.git_pane import DASH as GIT_DASH
+    from eawf.surfaces.tui.widgets.git_pane import GitPane
 
     repo_root = Path(__file__).resolve().parents[3]
     assert (repo_root / ".git").exists(), f"expected a git work tree at {repo_root}"

@@ -21,14 +21,14 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.agents import AGENT_REGISTRY
-from eawf.render.hooks import HOOK_REGISTRY
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.claude.plugin_install import (
     InstallResult,
     IntegrityViolation,
     install_plugin,
 )
+from eawf.surfaces.render.agents import AGENT_REGISTRY
+from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
 def _all_skill_paths(target_dir: Path) -> list[Path]:

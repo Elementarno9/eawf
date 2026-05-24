@@ -8,7 +8,7 @@ install, an editable install, and the source tree alike — same pattern used by
 
 This module deliberately exposes no public API: callers should use
 :func:`importlib.resources.files("eawf.templates")` directly. The renderer
-modules (e.g. :mod:`eawf.render.agents_md`) keep that import inline so
+modules (e.g. :mod:`eawf.surfaces.render.agents_md`) keep that import inline so
 ``templates`` stays a pure resource directory.
 """
 

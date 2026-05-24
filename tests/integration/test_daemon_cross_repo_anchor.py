@@ -51,7 +51,6 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.cli._daemon_client import DaemonClient
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
@@ -59,6 +58,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods import state as state_methods
 from eawf.runtime.daemon.server import serve_unix
+from eawf.surfaces.cli._daemon_client import DaemonClient
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),

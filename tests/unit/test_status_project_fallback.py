@@ -17,9 +17,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from eawf.cli.commands import status as status_mod
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import CurrentPointers, State
+from eawf.surfaces.cli.commands import status as status_mod
 
 _DT = datetime(2026, 5, 10, tzinfo=UTC)
 

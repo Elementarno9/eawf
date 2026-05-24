@@ -1,4 +1,4 @@
-"""Golden-output regression tests for ``eawf.render.plan_view``.
+"""Golden-output regression tests for ``eawf.surfaces.render.plan_view``.
 
 For each fixture combo we render both branches (markdown + JSON) from a
 pinned ``state.json`` and assert byte-equality against the committed
@@ -18,7 +18,7 @@ import orjson
 import pytest
 
 from eawf.kernel.state.models import State
-from eawf.render.plan_view import build_view, render_json, render_markdown
+from eawf.surfaces.render.plan_view import build_view, render_json, render_markdown
 
 _FIXTURE_DIR: Path = Path(__file__).parent
 
@@ -29,7 +29,7 @@ To regenerate after a deliberate renderer change:
     uv run python -c "
     import orjson
     from pathlib import Path
-    from eawf.render.plan_view import build_view, render_markdown, render_json
+    from eawf.surfaces.render.plan_view import build_view, render_markdown, render_json
     from eawf.kernel.state.models import State
 
     for combo in ('core_only', 'core_python', 'core_python_research'):

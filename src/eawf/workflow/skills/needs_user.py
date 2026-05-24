@@ -70,7 +70,7 @@ class PauseError(ValueError):
     """Raised when a pause cannot be resolved.
 
     Carries a single human-readable message; callers map it onto their
-    surface-specific error (the CLI onto :class:`~eawf.cli.errors.UserError`
+    surface-specific error (the CLI onto :class:`~eawf.surfaces.cli.errors.UserError`
     with ``kind="NotFound"`` / ``kind="InvalidInput"``, the TUI onto an
     error toast).
     """

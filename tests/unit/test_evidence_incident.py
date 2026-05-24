@@ -9,8 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
@@ -19,6 +17,8 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.models import Artifact, State
+from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli._mutation import state_transaction
 from eawf.workflow.evidence import _io, audit, incident
 
 FIXTURE = (

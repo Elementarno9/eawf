@@ -16,8 +16,8 @@ from typing import Any
 from textual.widgets import Input, Static
 
 from eawf.kernel.config.registry import registry_lookup
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.edit_field import EditFieldModal, seed_input_text
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.edit_field import EditFieldModal, seed_input_text
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

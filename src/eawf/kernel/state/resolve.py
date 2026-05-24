@@ -1,6 +1,6 @@
 """Pure resolver returning the active ``.ea/state.json`` path *and* the reason.
 
-Same precedence as :func:`eawf.cli.scope.resolve_state_path` (``EA_STATE`` >
+Same precedence as :func:`eawf.surfaces.cli.scope.resolve_state_path` (``EA_STATE`` >
 ``-w/--workspace`` > pwd-upward) but, instead of opaquely returning a path,
 also reports *why* the resolver picked that path. The reason string is part of
 the public CLI contract emitted by ``eawf state resolve``.

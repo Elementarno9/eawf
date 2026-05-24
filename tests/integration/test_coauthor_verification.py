@@ -31,7 +31,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.config import layered
 from eawf.runtime.runtimes.coauthor import (
     COAUTHOR_RUNTIME_ENV_VAR,
@@ -39,6 +38,7 @@ from eawf.runtime.runtimes.coauthor import (
     ImplicitDetectionRejected,
     resolve_runtime_explicit,
 )
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

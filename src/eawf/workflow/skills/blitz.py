@@ -28,7 +28,7 @@ import logging
 import os
 from typing import Any, Final
 
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import probe_skill_instruments
 from eawf.workflow.skills.bodies.blitz import BlitzBody
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult

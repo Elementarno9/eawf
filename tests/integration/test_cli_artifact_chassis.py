@@ -10,10 +10,10 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.artifacts.validation import validate_markdown_artifact
-from eawf.cli.app import app
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.cli.app import app
 from tests.integration.test_plan_show_e2e import _VALID_STATE
 
 runner = CliRunner()
@@ -48,7 +48,7 @@ def test_research_show_md_migrates_legacy_sources(
         payload={
             "topic": "artifact chassis",
             "findings": ["Renderer uses typed references [1]."],
-            "sources": ["src/eawf/render/research.py:1"],
+            "sources": ["src/eawf/surfaces/render/research.py:1"],
         },
     )
     store_path(state_path, StoreKind.RESEARCH).write_text(
@@ -58,7 +58,7 @@ def test_research_show_md_migrates_legacy_sources(
     result = runner.invoke(app, ["research", "show", "BR-001", "--md"])
     assert result.exit_code == 0, result.output
     assert "# Research Brief: BR-001" in result.stdout
-    assert "[1] src/eawf/render/research.py:1" in result.stdout
+    assert "[1] src/eawf/surfaces/render/research.py:1" in result.stdout
 
 
 def test_research_show_md_uses_all_references_when_findings_lack_markers(
@@ -76,7 +76,7 @@ def test_research_show_md_uses_all_references_when_findings_lack_markers(
         payload={
             "topic": "artifact chassis",
             "findings": ["Renderer uses typed references."],
-            "sources": ["src/eawf/render/research.py:1"],
+            "sources": ["src/eawf/surfaces/render/research.py:1"],
         },
     )
     store_path(state_path, StoreKind.RESEARCH).write_text(
@@ -104,7 +104,7 @@ def test_research_show_md_rejects_global_json(
         payload={
             "topic": "artifact chassis",
             "findings": ["Renderer uses typed references [1]."],
-            "sources": ["src/eawf/render/research.py:1"],
+            "sources": ["src/eawf/surfaces/render/research.py:1"],
         },
     )
     store_path(state_path, StoreKind.RESEARCH).write_text(

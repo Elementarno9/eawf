@@ -1,6 +1,6 @@
 # eawf exit codes
 
-Auto-generated from `eawf.cli.exit_codes`. The canonical five-bucket
+Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical five-bucket
 surface every CLI handler exits with.
 
 | Code | Name |

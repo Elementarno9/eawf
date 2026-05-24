@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import typer
 
-from eawf.cli.commands.lifecycle import (
+from eawf.surfaces.cli.commands.lifecycle import (
     _compute_iter_bump_hints,
     _load_state_readonly,
     _run_mutation,
@@ -103,8 +103,8 @@ def test_lifecycle_shim_reexports_helpers() -> None:
 def test_full_app_import_keeps_lifecycle_apps() -> None:
     # Importing the full CLI app triggers the external wave registrations.
     # The lifecycle apps must still be the same objects app.py wired in.
-    from eawf.cli import app as app_module
-    from eawf.cli.commands.lifecycle import wave_app as shim_wave_app
+    from eawf.surfaces.cli import app as app_module
+    from eawf.surfaces.cli.commands.lifecycle import wave_app as shim_wave_app
 
     assert app_module.app is not None
     # The external fix-ci / land / review verbs land on the SAME wave_app

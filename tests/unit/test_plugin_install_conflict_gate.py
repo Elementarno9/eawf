@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.runtime.runtimes.claude.plugin_conflict import CCPluginConflict
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
@@ -26,7 +26,7 @@ def fake_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> CCPluginCo
     fake_dir.mkdir()
     conflict = CCPluginConflict(plugin_dir=fake_dir)
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.detect_marketplace_install",
+        "eawf.surfaces.cli.commands.plugin.detect_marketplace_install",
         lambda: conflict,
     )
     return conflict
@@ -35,7 +35,7 @@ def fake_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> CCPluginCo
 @pytest.fixture
 def no_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.detect_marketplace_install",
+        "eawf.surfaces.cli.commands.plugin.detect_marketplace_install",
         lambda: None,
     )
 
@@ -51,11 +51,11 @@ def _isolate_codex_opencode_user_probes(monkeypatch: pytest.MonkeyPatch) -> None
     body.
     """
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: None,
     )
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.opencode_detect_user_install",
         lambda: None,
     )
 
@@ -162,7 +162,7 @@ def test_install_codex_user_scope_conflict_gate(
     from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
 
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
     monkeypatch.setattr("eawf.runtime.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
@@ -191,7 +191,7 @@ def test_install_codex_user_scope_force_bypasses_gate(
     from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
 
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
     monkeypatch.setattr("eawf.runtime.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)
@@ -219,7 +219,7 @@ def test_install_opencode_user_scope_conflict_gate(
     from eawf.runtime.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
 
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.opencode_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.opencode_detect_user_install",
         lambda: OpenCodeUserPluginConflict(plugin_file=fake_file),
     )
     res = runner.invoke(
@@ -248,7 +248,7 @@ def test_install_codex_user_scope_skips_clash_gate(
     from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
 
     monkeypatch.setattr(
-        "eawf.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
         lambda: CodexUserPluginConflict(plugin_dir=fake_dir),
     )
     monkeypatch.setattr("eawf.runtime.runtimes.codex.plugin_install.Path.home", lambda: tmp_path)

@@ -34,7 +34,7 @@ from eawf.kernel.validate.invariants import (
     build_validation_index,
     check_closure_rules,
 )
-from eawf.render.envelope import OutputEnvelope
+from eawf.surfaces.render.envelope import OutputEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ class EnvelopeValidationReport:
 
     ``envelope`` is ``None`` when schema validation failed; in that case
     ``contract_errors`` is always empty because contract checks require a
-    typed :class:`~eawf.render.envelope.OutputEnvelope`.
+    typed :class:`~eawf.surfaces.render.envelope.OutputEnvelope`.
 
     Attributes:
         envelope: Validated envelope or ``None`` on schema failure.

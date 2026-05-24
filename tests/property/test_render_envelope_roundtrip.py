@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from eawf.render.envelope import (
+from eawf.surfaces.render.envelope import (
     EnvelopeFooter,
     EnvelopeHeader,
     EnvelopeStatus,

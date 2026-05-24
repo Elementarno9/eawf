@@ -55,7 +55,7 @@ def test_default_path_lowercases_wave_id() -> None:
 
 def test_default_path_rejects_non_wave_id() -> None:
     """Invalid wave-id form raises :class:`InvalidInput`."""
-    from eawf.cli import errors as cli_errors
+    from eawf.surfaces.cli import errors as cli_errors
 
     with pytest.raises(cli_errors.UserError):
         _slugify_wave("not-a-wave")

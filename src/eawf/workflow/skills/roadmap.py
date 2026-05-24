@@ -50,7 +50,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import Phase, State
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,

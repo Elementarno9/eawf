@@ -8,7 +8,7 @@ meta workflow skills, ``/blitz``, and the six skill-surface bodies
 (``/coauthor``, ``/memory``, ``/agent-dispatch``, ``/compress``,
 ``/wave-spec``, ``/security-review``).
 
-The CLI surface (`eawf.cli.commands.skill`) imports this module so
+The CLI surface (`eawf.surfaces.cli.commands.skill`) imports this module so
 ``eawf skill list`` reports every skill as ``installed``.
 
 A dedicated module avoids two failure modes:

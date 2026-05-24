@@ -37,11 +37,11 @@ from typing import Any
 import orjson
 import yaml
 
-from eawf.cli.errors import UserError
 from eawf.kernel.config.layered import LAYER_ORDER, WRITABLE_LAYERS
 from eawf.kernel.config.loader import load_yaml_layer
 from eawf.profiles.loader import list_profiles, load_profile
 from eawf.runtime.lock import portalock
+from eawf.surfaces.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
 
     The read+mutate+write of ``state.json`` is serialised under
     ``portalock(state_path)`` so a concurrent writer (e.g. an
-    ``eawf.cli._mutation.state_transaction``) cannot drop the freshly-added
+    ``eawf.surfaces.cli._mutation.state_transaction``) cannot drop the freshly-added
     top-level keys via a stale-view dump. Routing through
     ``state_transaction`` itself is unsuitable here because that wrapper
     raises ``UserError`` (``kind="NotFound"``) on missing state, breaking

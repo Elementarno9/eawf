@@ -1,6 +1,6 @@
 """Library-level state-write primitives for the in-process fallback path.
 
-These helpers used to live in :mod:`eawf.cli.commands.lifecycle`, violating
+These helpers used to live in :mod:`eawf.surfaces.cli.commands.lifecycle`, violating
 the "CLI is dispatch; library implements" rule — atomic state writes, event
 envelope construction, and the crash-safe commit sequence are domain logic,
 not argument parsing. They now live here so the CLI layer composes them as a
@@ -23,9 +23,9 @@ The functions split into three concerns:
 
 Validation rejections raise :class:`StateValidationError` (a stdlib
 :class:`ValueError` subclass) rather than a CLI-layer error type, keeping
-this module free of the ``eawf.cli`` import that would otherwise invert the
+this module free of the ``eawf.surfaces.cli`` import that would otherwise invert the
 layering. The CLI maps it onto its canonical
-:class:`eawf.cli.errors.ValidationError` exit code at the boundary.
+:class:`eawf.surfaces.cli.errors.ValidationError` exit code at the boundary.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class StateValidationError(ValueError):
     pass :func:`eawf.kernel.validate.strict.validate_state`. Subclasses
     :class:`ValueError` so callers that have no CLI-error context can still
     catch it; the CLI boundary maps it onto
-    :class:`eawf.cli.errors.ValidationError` (exit code 2).
+    :class:`eawf.surfaces.cli.errors.ValidationError` (exit code 2).
     """
 
 

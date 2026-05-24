@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

@@ -24,8 +24,8 @@ from pathlib import Path
 
 from eawf.profiles import compose, load_profile
 from eawf.profiles.models import ProfileBody
-from eawf.render.agents_md import render_agents_md
-from eawf.render.manifest import Manifest
+from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.manifest import Manifest
 
 _PROFILE_ID = "quality"
 

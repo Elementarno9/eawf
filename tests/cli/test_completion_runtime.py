@@ -15,7 +15,7 @@ These tests drive the real entry point (``eawf`` resolved on ``PATH`` via the
 ``uv``-installed console script) in a subprocess with the completion env vars
 set — exactly what bash/zsh do at tab time — and assert the handshake (a) does
 not crash / exit non-zero and (b) emits a non-empty candidate set for a known
-prefix. The :func:`eawf.cli.commands.completion._zsh_native_script` fix is
+prefix. The :func:`eawf.surfaces.cli.commands.completion._zsh_native_script` fix is
 covered head-on by :func:`test_zsh_script_is_click_native_no_eval` plus the live
 zsh-runtime test below.
 """
@@ -29,7 +29,7 @@ import sys
 
 import pytest
 
-from eawf.cli.commands.completion import _render_script
+from eawf.surfaces.cli.commands.completion import _render_script
 
 pytestmark = pytest.mark.unit
 
@@ -161,7 +161,7 @@ def test_zsh_script_is_click_native_no_eval() -> None:
     ``_describe`` / ``compadd``, no ``eval``; exports the vars click reads) wired
     to typer's ``complete_zsh`` instruction so typer's interceptor routes it.
     """
-    from eawf.cli.commands.completion import Shell
+    from eawf.surfaces.cli.commands.completion import Shell
 
     rendered = _render_script(Shell.ZSH)
     assert "COMP_WORDS=" in rendered
@@ -177,7 +177,7 @@ def test_bash_script_unchanged_still_exports_comp_words() -> None:
 
     Confirms the fix is scoped to zsh — bash's Typer template was never broken.
     """
-    from eawf.cli.commands.completion import Shell
+    from eawf.surfaces.cli.commands.completion import Shell
 
     rendered = _render_script(Shell.BASH)
     assert "COMP_WORDS" in rendered

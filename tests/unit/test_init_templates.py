@@ -20,8 +20,8 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.cli.errors import UserError, ValidationError
 from eawf.profiles.discovery import list_init_templates, load_init_template
+from eawf.surfaces.cli.errors import UserError, ValidationError
 
 SHIPPED_TEMPLATES: tuple[str, ...] = (
     "engineering",

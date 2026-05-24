@@ -13,7 +13,7 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 
-from eawf.tui.widgets.git_pane import (
+from eawf.surfaces.tui.widgets.git_pane import (
     DASH,
     GitFields,
     GitPane,
@@ -23,7 +23,7 @@ from eawf.tui.widgets.git_pane import (
 
 from ._palette_harness import PaletteHarnessApp
 
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 
 
 def _git(args: list[str], *, cwd: Path) -> None:

@@ -3,11 +3,11 @@
 Per ``docs/architecture/envelope.md``, the
 ``/flow`` body wraps the per-step envelopes of the six core skills it
 runs in sequence. Each step is stored as the dict-form of an
-:class:`~eawf.render.envelope.OutputEnvelope`; the runtime can re-validate
+:class:`~eawf.surfaces.render.envelope.OutputEnvelope`; the runtime can re-validate
 each step via :meth:`OutputEnvelope.model_validate`.
 
 Storing the steps as ``dict[str, Any]`` rather than ``OutputEnvelope``
-avoids a circular import between :mod:`eawf.render.envelope` and the
+avoids a circular import between :mod:`eawf.surfaces.render.envelope` and the
 bodies package while preserving the typed shape on the wire.
 
 Phase 5 W02 widens the body with two strictly-additive optional fields:

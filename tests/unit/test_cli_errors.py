@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.cli.errors` — CliError taxonomy + envelope emission.
+"""Tests for :mod:`eawf.surfaces.cli.errors` — CliError taxonomy + envelope emission.
 
 C05 § 5.3 compresses the legacy nine-class taxonomy into five buckets:
 ``UserError``, ``ValidationError``, ``StateConflict``,
@@ -33,8 +33,8 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from eawf.cli import errors, exit_codes
-from eawf.cli.flags import GlobalFlags
+from eawf.surfaces.cli import errors, exit_codes
+from eawf.surfaces.cli.flags import GlobalFlags
 
 runner = CliRunner()
 

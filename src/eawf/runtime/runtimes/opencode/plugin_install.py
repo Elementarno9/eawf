@@ -39,9 +39,9 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any, Literal
 
-from eawf.render._atomic import atomic_write_text
-from eawf.render.agents import AGENT_REGISTRY, AgentSpec
-from eawf.render.skills import SKILL_REGISTRY, SkillSpec
+from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.surfaces.render.skills import SKILL_REGISTRY, SkillSpec
 
 logger = logging.getLogger(__name__)
 

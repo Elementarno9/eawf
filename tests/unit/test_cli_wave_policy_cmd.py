@@ -104,7 +104,7 @@ def state_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_wave_policy_set_then_show(state_workspace: Path) -> None:
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     runner = CliRunner()
     res = runner.invoke(
@@ -129,7 +129,7 @@ def test_wave_policy_set_then_show(state_workspace: Path) -> None:
 
 
 def test_wave_policy_set_rejects_bad_scope_kind(state_workspace: Path) -> None:
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     runner = CliRunner()
     res = runner.invoke(
@@ -141,7 +141,7 @@ def test_wave_policy_set_rejects_bad_scope_kind(state_workspace: Path) -> None:
 
 
 def test_wave_policy_show_missing_scope_returns_no_policies(state_workspace: Path) -> None:
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     runner = CliRunner()
     res = runner.invoke(app, ["wave", "policy", "show", "P99-I99-W99"])

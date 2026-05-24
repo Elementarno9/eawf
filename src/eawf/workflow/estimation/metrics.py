@@ -2,9 +2,9 @@
 
 This module is **pure** — it consumes a typed :class:`~eawf.kernel.state.models.State`
 and returns deterministic :class:`MetricsSummary` records without touching
-disk, locks, or events. The CLI handler in :mod:`eawf.cli.commands.metrics`
+disk, locks, or events. The CLI handler in :mod:`eawf.surfaces.cli.commands.metrics`
 runs this once, then hands the result to the shared renderer in
-:mod:`eawf.render.metrics_view` (which feeds the CLI table, the future TUI
+:mod:`eawf.surfaces.render.metrics_view` (which feeds the CLI table, the future TUI
 overlay, and release-notes inserts).
 
 The four metrics, in order:

@@ -16,12 +16,12 @@ Public API surface:
 - :func:`worktree_registry_lock` — advisory file lock guarding git's
   worktree registry from concurrent ``add``/``remove`` collisions.
 - :class:`WorktreeError` — module-level alias of
-  :class:`eawf.cli.errors.CliError` for callers that want a single
+  :class:`eawf.surfaces.cli.errors.CliError` for callers that want a single
   catch surface.
 
 The module never opens its own ``portalock(state.json)`` — every
 mutator in this package expects to be called inside a
-:func:`eawf.cli._mutation.state_transaction`.
+:func:`eawf.surfaces.cli._mutation.state_transaction`.
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.models import State, WorktreeRecord
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.runtime.worktree.create import create_worktree
@@ -48,6 +47,7 @@ from eawf.runtime.worktree.wave_land import (
     wave_land,
     wave_land_batch,
 )
+from eawf.surfaces.cli import errors as cli_errors
 
 # Module alias so callers can `except WorktreeError` without importing
 # the cli.errors module directly. The taxonomy stays canonical (one

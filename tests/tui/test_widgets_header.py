@@ -17,7 +17,7 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
-from eawf.tui.widgets.header import (
+from eawf.surfaces.tui.widgets.header import (
     BRAND,
     CRUMB_SEP,
     DEFAULT_PROJECT_CODE,
@@ -34,7 +34,7 @@ _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 
 
 class _Harness(PaletteHarnessApp):

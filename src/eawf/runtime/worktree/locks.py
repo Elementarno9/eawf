@@ -1,6 +1,6 @@
 """Worktree-registry advisory lock for concurrent ``git worktree add``.
 
-Why a second lock layer? :func:`eawf.cli._mutation.state_transaction`
+Why a second lock layer? :func:`eawf.surfaces.cli._mutation.state_transaction`
 already holds ``portalock(state.json)`` for the duration of every
 :class:`~eawf.kernel.state.models.WorktreeRecord` mutation, so the *state-side*
 race is covered. The git-side race is separate: ``git worktree add``

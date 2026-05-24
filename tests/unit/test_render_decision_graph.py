@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.render.decision_graph`.
+"""Unit tests for :mod:`eawf.surfaces.render.decision_graph`.
 
 Bypasses the CLI; exercises ``build_decision_graph``, ``render_text``,
 ``render_dot``, and ``render_mermaid`` directly. State instances are
@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from eawf.kernel.state.models import State
-from eawf.render.decision_graph import (
+from eawf.surfaces.render.decision_graph import (
     build_decision_graph,
     render_dot,
     render_mermaid,

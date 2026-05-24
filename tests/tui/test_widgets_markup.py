@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from textual.content import Content
 
-from eawf.tui.widgets.markup import escape_markup, style_labeled_line
+from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
 
 
 def _plain(markup: str) -> str:

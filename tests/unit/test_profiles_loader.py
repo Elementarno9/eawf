@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.cli.errors import UserError
 from eawf.profiles.loader import list_profiles, load_profile
 from eawf.profiles.models import ProfileBody
+from eawf.surfaces.cli.errors import UserError
 
 _EXPECTED_PROFILES: tuple[str, ...] = (
     "agent_driven",

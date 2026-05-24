@@ -1,11 +1,11 @@
 """Tests for the ``/filter`` + ``/sort`` pane verbs (P26-I02-W03).
 
 ``/filter backlog <needle>`` drives
-:meth:`~eawf.tui.widgets.backlog_table.BacklogTable.apply_filter` and
+:meth:`~eawf.surfaces.tui.widgets.backlog_table.BacklogTable.apply_filter` and
 ``/sort backlog`` drives
-:meth:`~eawf.tui.widgets.backlog_table.BacklogTable.cycle_sort` on the
+:meth:`~eawf.surfaces.tui.widgets.backlog_table.BacklogTable.cycle_sort` on the
 mounted backlog pane. The repo scope mounts the ``BacklogTable``, so these
-Pilot tests host the real :class:`~eawf.tui.app.EaApp` and observe the
+Pilot tests host the real :class:`~eawf.surfaces.tui.app.EaApp` and observe the
 widget's reactive state change (the visible effect of the call) plus a
 direct call-spy. Unknown panes and scopes that do not mount the pane
 degrade to a warning toast and mutate nothing.
@@ -16,9 +16,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.palette.verbs import _handle_filter, _handle_sort
-from eawf.tui.widgets.backlog_table import SORT_KEYS, BacklogTable
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.palette.verbs import _handle_filter, _handle_sort
+from eawf.surfaces.tui.widgets.backlog_table import SORT_KEYS, BacklogTable
 
 from ._palette_harness import PaletteHarnessApp
 

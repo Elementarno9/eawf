@@ -1,6 +1,6 @@
 """Tests for the ``tui`` non-interactive text renderers.
 
-Covers the two deterministic surfaces in :mod:`eawf.tui.offline`:
+Covers the two deterministic surfaces in :mod:`eawf.surfaces.tui.offline`:
 
 * :func:`build_status_text` + :func:`emit_status` — the non-TTY status
   frame contract (``Eä`` brand + ``keymap:`` line + lifecycle counts);
@@ -17,8 +17,8 @@ from pathlib import Path
 import orjson
 
 from eawf.kernel.state.models import State
-from eawf.render.brand import BRAND_LITERAL
-from eawf.tui.offline import build_status_text, emit_status, offline_render
+from eawf.surfaces.render.brand import BRAND_LITERAL
+from eawf.surfaces.tui.offline import build_status_text, emit_status, offline_render
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

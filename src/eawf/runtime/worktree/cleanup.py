@@ -36,9 +36,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WorktreeStatus
 from eawf.kernel.state.models import State, WorktreeRecord
+from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
 

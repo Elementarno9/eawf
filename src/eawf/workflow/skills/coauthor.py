@@ -35,7 +35,6 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from eawf.render.envelope import SkillName
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.runtime.vcs.coauthor import (
     CoauthorConfig,
@@ -43,6 +42,7 @@ from eawf.runtime.vcs.coauthor import (
     CoauthorPolicyError,
     resolve_coauthor_trailer,
 )
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,

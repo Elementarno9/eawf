@@ -26,10 +26,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
-from eawf.render.envelope import OutputEnvelope
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.render.envelope import OutputEnvelope
 
 runner = CliRunner()
 

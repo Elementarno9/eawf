@@ -2,15 +2,15 @@
 
 Each helper invokes a single ``git`` subcommand with ``capture_output=True``,
 maps non-zero exit / timeout / missing-binary into the canonical
-:class:`~eawf.cli.errors.CliError` taxonomy, and returns the stripped stdout
+:class:`~eawf.surfaces.cli.errors.CliError` taxonomy, and returns the stripped stdout
 to the caller (or ``None`` when the call is a write).
 
-The structure mirrors :func:`eawf.cli.commands.clone_repo._git_clone`:
+The structure mirrors :func:`eawf.surfaces.cli.commands.clone_repo._git_clone`:
 
 - :func:`shutil.which` check up-front maps to
-  :class:`~eawf.cli.errors.UserError` (``kind="InstrumentMissing"``, exit 6).
+  :class:`~eawf.surfaces.cli.errors.UserError` (``kind="InstrumentMissing"``, exit 6).
 - :class:`subprocess.TimeoutExpired` maps to
-  :class:`~eawf.cli.errors.StateConflict` (``kind="IntegrityViolation"``,
+  :class:`~eawf.surfaces.cli.errors.StateConflict` (``kind="IntegrityViolation"``,
   exit 8). A timeout is a transient hung-git symptom, not a
   sibling-lock-held condition; mapping it to ``kind="LockConflict"`` would
   lie to operators about the failure mode.
@@ -30,7 +30,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from eawf.cli import errors as cli_errors
+from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
 

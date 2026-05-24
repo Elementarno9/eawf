@@ -17,7 +17,6 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon import wal
@@ -28,6 +27,7 @@ from eawf.runtime.daemon.wal import (
     mark_poisoned,
     write_pending,
 )
+from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.unit
 
@@ -62,7 +62,7 @@ def _redirect_runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     target.mkdir(parents=True, exist_ok=True)
     # Override the resolver so every platform path resolves identically.
     monkeypatch.setattr("eawf.runtime.daemon.runtime_dir.runtime_dir", lambda: target)
-    monkeypatch.setattr("eawf.cli.commands.daemon.runtime_dir", lambda: target)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.daemon.runtime_dir", lambda: target)
     return target
 
 
@@ -223,7 +223,7 @@ def test_wal_module_exposes_runtime_dir_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """``_wal_dir()`` resolves to ``<runtime_dir>/wal``."""
-    from eawf.cli.commands.daemon import _wal_dir
+    from eawf.surfaces.cli.commands.daemon import _wal_dir
 
     runtime = _redirect_runtime(monkeypatch, tmp_path)
     assert _wal_dir() == runtime / "wal"

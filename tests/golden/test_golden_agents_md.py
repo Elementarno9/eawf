@@ -1,4 +1,4 @@
-"""Golden-output regression tests for ``eawf.render.agents_md``.
+"""Golden-output regression tests for ``eawf.surfaces.render.agents_md``.
 
 For each fixture combo, render to a temp path and assert byte-equality
 with the committed fixture under ``tests/golden/agents_md/``.
@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from eawf.profiles import compose, load_profile
-from eawf.render.agents_md import render_agents_md
-from eawf.render.manifest import Manifest
+from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.manifest import Manifest
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "agents_md"
 

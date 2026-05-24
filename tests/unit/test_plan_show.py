@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.render.plan_view`.
+"""Unit tests for :mod:`eawf.surfaces.render.plan_view`.
 
 Bypasses the CLI; exercises ``build_view``, ``render_markdown``, and
 ``render_json`` directly. State instances are constructed inline via
@@ -17,7 +17,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from eawf.kernel.state.models import State
-from eawf.render.plan_view import (
+from eawf.surfaces.render.plan_view import (
     PlanSection,
     PlanViewNotFound,
     build_view,

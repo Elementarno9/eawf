@@ -18,12 +18,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.install.instrument_probe import (
     PROBE_VERSION,
     ProbeReport,
     ProbeResult,
 )
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

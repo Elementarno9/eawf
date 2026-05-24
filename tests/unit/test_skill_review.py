@@ -18,7 +18,7 @@ from typing import cast
 
 import pytest
 
-from eawf.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.bodies.review import ReviewBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.review import ReviewSkill

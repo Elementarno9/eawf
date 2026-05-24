@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.help import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.help import (
     HelpScreen,
     config_overlay_rows,
     global_key_rows,

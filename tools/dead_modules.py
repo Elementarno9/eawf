@@ -14,7 +14,7 @@ rate stays low:
   submodule).
 * **String-literal module references** — any string literal matching a
   known ``eawf.*`` dotted module path. This is what catches the
-  declarative CLI registry (``eawf.cli.registry`` resolves each command
+  declarative CLI registry (``eawf.surfaces.cli.registry`` resolves each command
   module via ``importlib.import_module(row.module)`` where ``row.module``
   is data, so there is no static edge) plus any other ``import_module``
   / plugin-discovery indirection.
@@ -50,7 +50,7 @@ ALLOWLIST: frozenset[str] = frozenset(
         "eawf",
         "eawf.__main__",
         "eawf._version",
-        "eawf.cli.app",
+        "eawf.surfaces.cli.app",
         "eawf.runtime.daemon.main",
     }
 )

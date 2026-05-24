@@ -20,7 +20,7 @@ executor summary
 - commit: `commit1`
 
 Files changed:
-- `src/eawf/render/agent_report.py`
+- `src/eawf/surfaces/render/agent_report.py`
 
 Tests run:
 - `uv run pytest tests/unit/test_render_agent_report.py -q`

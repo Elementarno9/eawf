@@ -1,6 +1,6 @@
 """Eä skills package.
 
-Phase 4 W01 freezes the skill output envelope (:mod:`eawf.render.envelope`),
+Phase 4 W01 freezes the skill output envelope (:mod:`eawf.surfaces.render.envelope`),
 the :class:`Skill` ABC and :func:`run_skill` orchestrator
 (:mod:`eawf.workflow.skills.engine`), and the per-skill body schemas under
 :mod:`eawf.workflow.skills.bodies`. Phase 4 W02/W03 fill in the production

@@ -26,16 +26,16 @@ import pytest
 from rich.text import Text
 
 from eawf.kernel.state.models import State
-from eawf.tui.app import EaApp
-from eawf.tui.scopes import ScopeScreen, WorkspaceScreen
-from eawf.tui.screens.overlays.config_modal import ConfigModal
-from eawf.tui.widgets.backlog_table import BacklogTable
-from eawf.tui.widgets.footer import Footer, Heartbeat
-from eawf.tui.widgets.git_pane import DASH, GitFields
-from eawf.tui.widgets.header import BRAND, Header
-from eawf.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.tui.widgets.status_pane import StatusPane
-from eawf.tui.widgets.workspace_table import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.scopes import ScopeScreen, WorkspaceScreen
+from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
+from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
+from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
+from eawf.surfaces.tui.widgets.git_pane import DASH, GitFields
+from eawf.surfaces.tui.widgets.header import BRAND, Header
+from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.surfaces.tui.widgets.status_pane import StatusPane
+from eawf.surfaces.tui.widgets.workspace_table import (
     GIT_UNAVAILABLE_CELL,
     RepoRow,
     WorkspaceTable,
@@ -60,7 +60,7 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
     GIT_UNAVAILABLE path override this with a per-test monkeypatch.
     """
     monkeypatch.setattr(
-        "eawf.tui.widgets.workspace_table.gather_git_fields",
+        "eawf.surfaces.tui.widgets.workspace_table.gather_git_fields",
         lambda _path: GitFields(
             branch="main", dirty="clean", ahead_behind="up-to-date", recent_commits=()
         ),
@@ -368,7 +368,7 @@ def test_zoom_out_mid_probe_is_clean() -> None:
 def test_git_unavailable_dims_column_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed git probe dims the git cell to ``git?`` while other columns render."""
     monkeypatch.setattr(
-        "eawf.tui.widgets.workspace_table.gather_git_fields",
+        "eawf.surfaces.tui.widgets.workspace_table.gather_git_fields",
         lambda _path: GitFields(branch=DASH, dirty=DASH, ahead_behind=DASH, recent_commits=()),
     )
 

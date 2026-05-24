@@ -20,7 +20,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from eawf.render.envelope import EnvelopeStatus
+from eawf.surfaces.render.envelope import EnvelopeStatus
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.engine import (
     ProbeOutcome,

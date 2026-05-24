@@ -24,8 +24,8 @@ from typer.testing import CliRunner
 
 from eawf.backup import BackupError
 from eawf.backup.store import BackupStore, format_timestamp
-from eawf.cli import exit_codes
-from eawf.cli.app import app
+from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

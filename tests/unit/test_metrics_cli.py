@@ -27,7 +27,7 @@ import yaml
 from typer.testing import CliRunner
 
 import eawf.kernel.config.layered as layered
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

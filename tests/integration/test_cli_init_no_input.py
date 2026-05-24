@@ -5,7 +5,7 @@ Covers the v0.1 acceptance set:
 
 - creates ``.ea/state.json`` and ``.ea/config.yaml``;
 - writes ``AGENTS.md`` + ``CLAUDE.md`` with the managed-region markers
-  emitted by :mod:`eawf.render.agents_md`;
+  emitted by :mod:`eawf.surfaces.render.agents_md`;
 - rejects bad ``--profile`` / ``--project-code`` inputs with exit-code 3;
 - refuses to clobber an existing ``.ea/`` without ``--force``.
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
@@ -135,7 +135,7 @@ def test_cli_init_renders_managed_regions_for_each_block(tmp_path: Path) -> None
 
     text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     # Core profile ships several render blocks; non-negotiable-rules is the
-    # first and most stable. Marker shape (per eawf.render.regions):
+    # first and most stable. Marker shape (per eawf.surfaces.render.regions):
     # "<!-- BEGIN EAWF:managed id=<id> ... -->".
     assert "BEGIN EAWF:managed id=non-negotiable-rules" in text
     assert "END EAWF:managed id=non-negotiable-rules" in text

@@ -12,7 +12,7 @@ Two strategies:
   is left mid-flight; ``--continue`` resumes it from the worktree.
   If the parent is not fast-forwardable post-rebase (a concurrent
   commit landed on *target* between the rebase and the merge step),
-  raises :class:`~eawf.cli.errors.StateConflict`
+  raises :class:`~eawf.surfaces.cli.errors.StateConflict`
   (``kind="IntegrityViolation"``) rather than force-updating — operator
   must re-attempt under a fresh lock.
 
@@ -32,9 +32,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WorktreeStatus
 from eawf.kernel.state.models import State, WorktreeRecord
+from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
 

@@ -37,8 +37,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli._daemon_client import DaemonClient
 from eawf.runtime.daemon.spawn import DaemonSpawnTimeout
+from eawf.surfaces.cli._daemon_client import DaemonClient
 
 #: Threshold for the p95 assertion gate. V1 [1:44] documents the
 #: 400 ms warm-cache target; the gate runs at 600 ms to absorb APFS

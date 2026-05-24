@@ -135,7 +135,7 @@ def test_validate_markdown_artifact_accepts_dense_markdown_reference_rows() -> N
     report = validate_markdown_artifact(
         _artifact_body(
             summary="Renderer uses typed rows [1].",
-            references="[1] src/eawf/render/research.py:1",
+            references="[1] src/eawf/surfaces/render/research.py:1",
         )
     )
     assert report.ok
@@ -148,7 +148,7 @@ def test_validate_markdown_artifact_rejects_missing_markdown_reference_rows() ->
 
 def test_validate_markdown_artifact_rejects_unused_markdown_reference_rows() -> None:
     report = validate_markdown_artifact(
-        _artifact_body(references="[1] src/eawf/render/research.py:1")
+        _artifact_body(references="[1] src/eawf/surfaces/render/research.py:1")
     )
     assert "citation rows unused by prose: [1]" in report.errors
 
@@ -157,7 +157,7 @@ def test_validate_markdown_artifact_rejects_non_dense_markdown_reference_rows() 
     report = validate_markdown_artifact(
         _artifact_body(
             summary="Renderer uses typed rows [2].",
-            references="[2] src/eawf/render/research.py:1",
+            references="[2] src/eawf/surfaces/render/research.py:1",
         )
     )
     assert "citation numbers must be dense 1..1; got [2]" in report.errors

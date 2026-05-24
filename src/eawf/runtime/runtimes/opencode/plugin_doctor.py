@@ -16,8 +16,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eawf.render.agents import AGENT_REGISTRY
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.opencode.plugin_install import (
     _DEFAULT_TIMESTAMP,
     Scope,
@@ -32,6 +30,8 @@ from eawf.runtime.runtimes.opencode.plugin_install import (
     expected_command_bodies,
     expected_plugin_js_bytes,
 )
+from eawf.surfaces.render.agents import AGENT_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
 @dataclass(frozen=True)

@@ -24,9 +24,9 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli import exit_codes
-from eawf.cli.app import app
-from eawf.cli.commands.snapshot import (
+from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands.snapshot import (
     SNAPSHOT_SURFACES,
     SnapshotSurface,
     resolve_surface,
@@ -125,7 +125,7 @@ def test_resolve_surface_returns_typed_surface() -> None:
 
 def test_resolve_surface_unknown_raises_user_error() -> None:
     """Unknown kind raises ``UserError`` (USER_ERROR bucket)."""
-    from eawf.cli import errors as cli_errors
+    from eawf.surfaces.cli import errors as cli_errors
 
     with pytest.raises(cli_errors.UserError) as excinfo:
         resolve_surface("bogus")

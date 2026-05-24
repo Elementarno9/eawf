@@ -9,8 +9,8 @@ same pattern as :mod:`eawf.templates`.
 
 This module deliberately exposes no public API; callers should reach
 the templates via :func:`importlib.resources.files("eawf.templates.claude")`
-directly. The renderer modules (``eawf.render.skills``,
-``eawf.render.agents``, ``eawf.render.hooks``) keep that import inline
+directly. The renderer modules (``eawf.surfaces.render.skills``,
+``eawf.surfaces.render.agents``, ``eawf.surfaces.render.hooks``) keep that import inline
 so this package stays a pure resource directory.
 """
 

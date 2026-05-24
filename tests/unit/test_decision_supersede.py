@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import DecisionStatus
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.evidence import _io, decision
 
 FIXTURE = (

@@ -13,7 +13,7 @@ wave-lifecycle counterpart to ``eawf worktree merge-back``:
 - Optionally clean up the worktree directory + branch.
 
 On conflict the function refuses to close the wave and surfaces a
-:class:`~eawf.cli.errors.StateConflict` (``kind="IntegrityViolation"``)
+:class:`~eawf.surfaces.cli.errors.StateConflict` (``kind="IntegrityViolation"``)
 with a repair hint. The on-disk repo state (``.git/CHERRY_PICK_HEAD``) is
 preserved so the operator can resolve and re-run.
 
@@ -29,7 +29,6 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
@@ -38,6 +37,7 @@ from eawf.runtime.worktree.merge_back import (
     MergeBackResult,
     merge_back,
 )
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
 
 logger = logging.getLogger(__name__)

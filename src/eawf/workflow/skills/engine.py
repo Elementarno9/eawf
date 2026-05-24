@@ -37,7 +37,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.render.envelope import (
+from eawf.surfaces.render.envelope import (
     EnvelopeBody,
     EnvelopeFooter,
     EnvelopeHeader,
@@ -132,7 +132,7 @@ class Skill(ABC):
 
     Subclasses fill in three pieces of behaviour:
 
-    - :attr:`name` — frozen :data:`~eawf.render.envelope.SkillName` literal
+    - :attr:`name` — frozen :data:`~eawf.surfaces.render.envelope.SkillName` literal
       identifying the skill (``"/research"``, ``"/audit"``, …).
     - :meth:`probe` — verify every hard instrument is present and return a
       :class:`ProbeOutcome`. Cheap; no state mutation.

@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.render.drift``.
+"""Unit tests for ``eawf.surfaces.render.drift``.
 
 Hand-edit detection vs untouched-region negative + missing-region detection +
 unrelated-target filter.
@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eawf.render import regions
-from eawf.render.drift import detect_drift
-from eawf.render.manifest import Manifest, ManifestEntry
+from eawf.surfaces.render import regions
+from eawf.surfaces.render.drift import detect_drift
+from eawf.surfaces.render.manifest import Manifest, ManifestEntry
 
 
 def _wrap(region_id: str, version: str, body: str) -> str:

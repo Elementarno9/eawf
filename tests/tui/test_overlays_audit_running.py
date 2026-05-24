@@ -14,8 +14,8 @@ from pathlib import Path
 
 from textual.widgets import Static
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.audit_running import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.audit_running import (
     AuditProgress,
     AuditRunningModal,
     CheckRow,

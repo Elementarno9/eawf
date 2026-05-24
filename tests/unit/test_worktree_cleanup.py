@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WorktreeStatus
 from eawf.runtime.worktree.cleanup import cleanup_worktree
 from eawf.runtime.worktree.create import create_worktree
 from eawf.runtime.worktree.git import worktree_list
+from eawf.surfaces.cli import errors as cli_errors
 from tests.unit.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(

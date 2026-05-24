@@ -15,12 +15,12 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.install.instrument_probe import (
     PROBE_VERSION,
     ProbeReport,
     ProbeResult,
 )
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
@@ -91,7 +91,7 @@ def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_doctor_hard_missing_exits_six(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from eawf.cli.errors import UserError
+    from eawf.surfaces.cli.errors import UserError
 
     def angry_probe(*_args: Any, **_kwargs: Any) -> ProbeReport:
         raise UserError("git missing", kind="InstrumentMissing")
@@ -111,7 +111,7 @@ def test_doctor_help_lists_flags() -> None:
     """
     import typer
 
-    from eawf.cli.commands.doctor import doctor_app
+    from eawf.surfaces.cli.commands.doctor import doctor_app
 
     cmd = typer.main.get_command(doctor_app)
     flag_names = {opt for p in cmd.params for opt in p.opts}

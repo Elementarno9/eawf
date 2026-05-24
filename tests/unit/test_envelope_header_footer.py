@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.render.envelope import EnvelopeFooter, EnvelopeHeader, EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeFooter, EnvelopeHeader, EnvelopeWarning
 
 
 def _base_header(**overrides: object) -> dict[str, object]:

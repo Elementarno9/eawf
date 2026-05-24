@@ -21,7 +21,7 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 from eawf.telemetry.models import (
     EndMarker,
     RuntimeErrorClass,

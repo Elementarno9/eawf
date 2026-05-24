@@ -12,7 +12,7 @@
 * ``show`` / ``list`` are read-only.
 
 Mutators take a typed :class:`State` and mutate it in place; the CLI handler
-runs them inside :func:`eawf.cli._mutation.state_transaction`.
+runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.cli.errors import UserError
 from eawf.kernel.state.enums import AuditKind, AuditStatus, AuditVerdict, StoreKind
 from eawf.kernel.state.models import Audit, State
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 
 logger = logging.getLogger(__name__)

@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WorktreeStatus
 from eawf.runtime.worktree.create import create_worktree
 from eawf.runtime.worktree.merge_back import (
     STRATEGY_REBASE_THEN_FF,
     merge_back,
 )
+from eawf.surfaces.cli import errors as cli_errors
 from tests.unit.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(

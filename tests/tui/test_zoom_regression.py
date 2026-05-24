@@ -12,7 +12,7 @@ Two in-session reports against the P27-I04 zoom path:
 * **Cached-screen zoom leak.** Textual reuses named ``SCREENS`` instances,
   so a screen zoomed before a scope switch carried its stale quadrant — and
   a hidden browse pane — back when the operator returned. The fix exits the
-  zoom on :meth:`~eawf.tui.scopes._zoom.RepoZoomMixin.on_screen_suspend`;
+  zoom on :meth:`~eawf.surfaces.tui.scopes._zoom.RepoZoomMixin.on_screen_suspend`;
   :func:`test_zoom_does_not_leak_across_scope_switch` zooms the user scope,
   switches to repo and back, and pins the returned screen un-zoomed.
 
@@ -33,11 +33,11 @@ from pathlib import Path
 import pytest
 from textual.containers import Vertical
 
-from eawf.tui.app import EaApp
-from eawf.tui.scopes import UserScreen, WorkspaceScreen
-from eawf.tui.scopes.user import PortfolioTable
-from eawf.tui.widgets.git_pane import GitFields
-from eawf.tui.widgets.workspace_table import WorkspaceTable
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.scopes import UserScreen, WorkspaceScreen
+from eawf.surfaces.tui.scopes.user import PortfolioTable
+from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
@@ -50,7 +50,7 @@ def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Point registry resolution at an empty ``tmp_path`` home.
 
     The ``u`` scope switch calls
-    :func:`~eawf.tui.scopes.user.synthesize_user_state`, which reads
+    :func:`~eawf.surfaces.tui.scopes.user.synthesize_user_state`, which reads
     ``~/.eawf/registry.json``. Redirecting ``Path.home`` keeps the switch
     deterministic and ensures no test reads the operator's real registry.
     """
@@ -61,7 +61,7 @@ def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub the git probe to a deterministic clean tree."""
     monkeypatch.setattr(
-        "eawf.tui.widgets.workspace_table.gather_git_fields",
+        "eawf.surfaces.tui.widgets.workspace_table.gather_git_fields",
         lambda _path: GitFields(
             branch="main", dirty="clean", ahead_behind="up-to-date", recent_commits=()
         ),

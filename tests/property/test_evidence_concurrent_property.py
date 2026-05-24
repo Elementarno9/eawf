@@ -1,7 +1,7 @@
 """Hypothesis property test: concurrent ``goal define`` preserves invariants.
 
 N threads (2-8) race to define distinct goals against a shared
-``state.json`` through :func:`eawf.cli._mutation.state_transaction`.
+``state.json`` through :func:`eawf.surfaces.cli._mutation.state_transaction`.
 
 Mirroring ``test_wave_claim_property.py``, this test asserts only the
 **data-level** invariants because the macOS portalock-with-unlink
@@ -31,9 +31,9 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from eawf.cli import errors as cli_errors
-from eawf.cli._mutation import state_transaction
 from eawf.kernel.state.enums import StoreKind
+from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli._mutation import state_transaction
 from eawf.workflow.evidence import _io
 from eawf.workflow.evidence import goal as goal_evi
 

@@ -21,8 +21,8 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.runtime.lock.stale import STALE_HEARTBEAT_SECONDS
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"
@@ -445,8 +445,8 @@ def test_actual_start_jsonl_lands_when_commit_state_raises(
     """
     workspace = _seed_state(tmp_path)
 
-    from eawf.cli import errors as cli_errors
-    from eawf.cli.commands import estimation as est_cmd
+    from eawf.surfaces.cli import errors as cli_errors
+    from eawf.surfaces.cli.commands import estimation as est_cmd
 
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise cli_errors.ValidationError("forced for atomicity-ordering test")

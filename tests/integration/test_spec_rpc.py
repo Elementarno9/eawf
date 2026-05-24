@@ -30,12 +30,12 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf import __version__
-from eawf.cli.app import app
 from eawf.kernel.state.enums import StoreKind
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.spec import archive, init, promote, validate
+from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
 

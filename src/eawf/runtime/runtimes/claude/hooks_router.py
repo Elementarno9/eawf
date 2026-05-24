@@ -24,7 +24,7 @@ Behaviour rules per Phase 4 W04 design spec §3.3 / acceptance §2:
   may broaden the mapping later.
 
 The router never reads or writes state. The CLI handler in
-:mod:`eawf.cli.commands.hook` consumes the typed event and dispatches
+:mod:`eawf.surfaces.cli.commands.hook` consumes the typed event and dispatches
 through :class:`~eawf.runtime.hooks.runner.HookRunner`.
 """
 

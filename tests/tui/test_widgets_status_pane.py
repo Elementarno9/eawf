@@ -22,13 +22,13 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
-from eawf.tui.widgets.eu_bar import EMPTY_STATE
-from eawf.tui.widgets.heartbeat import (
+from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
+from eawf.surfaces.tui.widgets.heartbeat import (
     HEARTBEAT_GLYPH,
     HEARTBEAT_GLYPH_ASCII,
     HEARTBEAT_GLYPH_DIM,
 )
-from eawf.tui.widgets.status_pane import (
+from eawf.surfaces.tui.widgets.status_pane import (
     COLUMN_GAP,
     DASH,
     DEFAULT_MAX_PARALLEL_WAVES,
@@ -59,7 +59,7 @@ _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
 _ESTIMATES_ACTUALS = _FIXTURES / "09-estimates-and-actuals.json"
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 
 
 class _Harness(PaletteHarnessApp):
@@ -1099,12 +1099,12 @@ def test_dispatch_slice_emits_no_info_on_repaint(caplog: pytest.LogCaptureFixtur
     An INFO line here bled onto the TUI screen on every pulse tick (the
     blinking top-left artifact); the slice builder must stay silent.
     """
-    with caplog.at_level(logging.INFO, logger="eawf.tui.widgets.status_pane"):
+    with caplog.at_level(logging.INFO, logger="eawf.surfaces.tui.widgets.status_pane"):
         build_dispatch_slice(_dispatch_scenario_state())
     info = [
         r
         for r in caplog.records
-        if r.name == "eawf.tui.widgets.status_pane" and r.levelno >= logging.INFO
+        if r.name == "eawf.surfaces.tui.widgets.status_pane" and r.levelno >= logging.INFO
     ]
     assert info == []
 

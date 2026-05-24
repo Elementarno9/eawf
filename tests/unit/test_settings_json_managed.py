@@ -87,7 +87,7 @@ def test_settings_re_render_byte_stable(tmp_path: Path) -> None:
 def test_settings_managed_skill_listing_matches_registry(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    from eawf.render.skills import SKILL_REGISTRY
+    from eawf.surfaces.render.skills import SKILL_REGISTRY
 
     listed = {s["name"] for s in parsed["__eawf_managed"]["skills"]}
     expected = {s.skill_name for s in SKILL_REGISTRY}
@@ -97,7 +97,7 @@ def test_settings_managed_skill_listing_matches_registry(tmp_path: Path) -> None
 def test_settings_managed_agent_listing_matches_registry(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    from eawf.render.agents import AGENT_REGISTRY
+    from eawf.surfaces.render.agents import AGENT_REGISTRY
 
     listed = {a["name"] for a in parsed["__eawf_managed"]["agents"]}
     expected = {a.role for a in AGENT_REGISTRY}
@@ -107,7 +107,7 @@ def test_settings_managed_agent_listing_matches_registry(tmp_path: Path) -> None
 def test_settings_managed_hook_listing_matches_registry(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    from eawf.render.hooks import HOOK_REGISTRY
+    from eawf.surfaces.render.hooks import HOOK_REGISTRY
 
     listed = {h["event_type"] for h in parsed["__eawf_managed"]["hooks"]}
     expected = {h.event_type.value for h in HOOK_REGISTRY}

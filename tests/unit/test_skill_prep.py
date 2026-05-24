@@ -23,7 +23,7 @@ from typing import Any, cast
 
 import pytest
 
-from eawf.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.bodies.prep import PrepBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from eawf.workflow.skills.prep import PrepSkill

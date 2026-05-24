@@ -9,7 +9,7 @@
 
 ## Scope
 
-src/eawf/cli/
+src/eawf/surfaces/cli/
 
 Scope is anchored on iter P07-I01 under scope ABC. Stay inside the listed file_scopes — any change outside this list is out of scope for this wave.
 

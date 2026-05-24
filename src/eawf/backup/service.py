@@ -3,7 +3,7 @@
 The service layer composes :class:`eawf.backup.store.BackupStore` primitives
 into the four operator verbs — create / list / restore / prune — and raises a
 typed :class:`BackupError` for the conditions the CLI maps onto a ``USER_ERROR``
-exit. CLI dispatch (:mod:`eawf.cli.commands.backup`) catches these and renders
+exit. CLI dispatch (:mod:`eawf.surfaces.cli.commands.backup`) catches these and renders
 the canonical error envelope; the service itself never touches Typer.
 
 Restore is itself reversible: :func:`restore_backup` writes a pre-restore copy

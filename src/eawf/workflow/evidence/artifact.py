@@ -6,7 +6,7 @@ canonical ``urn:eawf:v1:artifact:<scope>/<id>`` identity even when the local
 ``uri`` varies across machines.
 
 Mutators take a typed :class:`State` and mutate it in place; the CLI handler
-runs them inside :func:`eawf.cli._mutation.state_transaction`.
+runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from eawf.cli.errors import UserError
 from eawf.kernel.state.models import Artifact, State
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def update_artifact(
     Designed for the recompute-on-touch case: when a registered file's
     on-disk content drifts (typically because pre-commit hooks rewrite
     EOL or formatting), the registered hash falls out of sync with
-    :func:`eawf.cli.commands.evidence.artifact_verify`. The update verb
+    :func:`eawf.surfaces.cli.commands.evidence.artifact_verify`. The update verb
     is the canonical mechanism for re-pinning the sha256/size_bytes.
 
     Args:

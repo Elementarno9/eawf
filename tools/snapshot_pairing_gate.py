@@ -9,7 +9,7 @@ a wave-form ``test:`` subject so a golden change can never sneak in under
 an unrelated ``feat:`` / ``fix:`` commit.
 
 The watched directories are sourced from the same C09 §5.6 surface
-inventory the CLI drives (:data:`eawf.cli.commands.snapshot.SNAPSHOT_SURFACES`)
+inventory the CLI drives (:data:`eawf.surfaces.cli.commands.snapshot.SNAPSHOT_SURFACES`)
 so the gate and ``eawf snapshot update --kind`` cannot drift. Most
 surfaces live under ``tests/golden/<kind>/`` but the watch set follows
 each surface's declared ``golden_dir`` verbatim, so a surface whose
@@ -58,7 +58,7 @@ import re
 import subprocess
 import sys
 
-from eawf.cli.commands.snapshot import SNAPSHOT_SURFACES
+from eawf.surfaces.cli.commands.snapshot import SNAPSHOT_SURFACES
 
 # Managed golden directories, sourced from the C09 §5.6 surface inventory
 # so the gate's watch set and ``eawf snapshot update --kind`` share one

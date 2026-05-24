@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import FlowStatus
 from eawf.kernel.state.types import UtcDatetime
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 
 # Frozen regex patterns shared across both payload models. Repeated as
 # constants so a future schema bump only edits the literal once and so

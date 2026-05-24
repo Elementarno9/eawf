@@ -13,18 +13,18 @@ verdict-bearing mutation (``outcome set``, ``hypothesis verdict``,
 ``incident close``, ``backlog close``) must provide ``--audit <id>`` of an
 audit that exists in ``state.audits`` and has ``status == complete``.
 
-Failures are surfaced as :class:`eawf.cli.errors.ValidationError` so the
+Failures are surfaced as :class:`eawf.surfaces.cli.errors.ValidationError` so the
 caller exits with code ``4`` (``VALIDATION_FAILED``), matching the canonical
-exit-code table from :mod:`eawf.cli.exit_codes`.
+exit-code table from :mod:`eawf.surfaces.cli.exit_codes`.
 """
 
 from __future__ import annotations
 
 import logging
 
-from eawf.cli.errors import ValidationError
 from eawf.kernel.state.enums import AuditStatus
 from eawf.kernel.state.models import State
+from eawf.surfaces.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 """Decision-area mutators: add / list.
 
 Mutators take a typed :class:`State` and mutate it in place; the CLI handler
-runs them inside :func:`eawf.cli._mutation.state_transaction`.
+runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
 """
 
 from __future__ import annotations
@@ -9,10 +9,10 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from eawf.cli.errors import UserError
 from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.models import Decision, State
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def add_decision(
     :data:`DecisionStatus.SUPERSEDED` with ``superseded_by`` pointing at the
     new decision. Both writes happen in the same caller-supplied state
     transaction (the CLI handler runs them inside
-    :func:`eawf.cli._mutation.state_transaction` so they land atomically).
+    :func:`eawf.surfaces.cli._mutation.state_transaction` so they land atomically).
 
     Raises:
         UserError: when *decision_id* already exists, *rationale* is empty,
@@ -128,7 +128,7 @@ def supersede_decision(
     :func:`add_decision`, both decisions must already exist — this verb links
     an existing replacement to the decision it retires. The mutation runs
     inside the caller-supplied state transaction (the CLI handler wraps it in
-    :func:`eawf.cli._mutation.state_transaction`) so the flip lands atomically.
+    :func:`eawf.surfaces.cli._mutation.state_transaction`) so the flip lands atomically.
 
     Raises:
         UserError: when *old_id* or *new_id* names a decision absent from

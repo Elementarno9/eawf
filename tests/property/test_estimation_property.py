@@ -32,9 +32,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.app import app
 from eawf.workflow.estimation import eu, segments
 from eawf.workflow.estimation.recovery import cap_elapsed
 
@@ -179,7 +179,7 @@ def test_envelope_ids_are_timestamped_and_distinct(tmp_path: Path, n: int) -> No
 
     Format inconsistency between actuals (us+nonce suffix) and estimates (ISO
     suffix) is intentional and documented at envelope-construction sites in
-    ``src/eawf/cli/commands/estimation.py``. We assert each id matches its own
+    ``src/eawf/surfaces/cli/commands/estimation.py``. We assert each id matches its own
     pattern, then assert the full id set has no duplicates. The us+nonce format
     means no inter-call sleeps are required for distinctness — the
     :func:`secrets.token_hex(2)` suffix gives 16 bits of entropy per id.

@@ -1,7 +1,7 @@
 """Tests for canonical Eä exit codes.
 
 The exit-code module defines the integer constants used by every CLI
-handler and the :class:`eawf.cli.errors.CliError` taxonomy. The 0..5
+handler and the :class:`eawf.surfaces.cli.errors.CliError` taxonomy. The 0..5
 surface is the public contract per C05 § 5.3.
 
 Legacy 0..9 names remain importable as deprecation aliases mapped onto
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.cli import exit_codes
+from eawf.surfaces.cli import exit_codes
 
 
 def test_canonical_codes() -> None:

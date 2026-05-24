@@ -11,7 +11,7 @@ The package owns the version-chain machinery for ``state.json``:
 * ``v1_0_to_v1_1`` (and future ``vX_Y_to_vX_Z`` modules) — one concrete
   :class:`Migration` step apiece.
 
-CLI dispatch lives in :mod:`eawf.cli.commands.migrate`; the migration
+CLI dispatch lives in :mod:`eawf.surfaces.cli.commands.migrate`; the migration
 logic itself lives here per AGENTS rule 1 (CLI is dispatch; library
 implements).
 """

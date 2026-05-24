@@ -5,7 +5,7 @@ Public surface
 
 * :func:`load_spec` — read a yaml file, validate it against
   :class:`~eawf.workflow.audit_dsl.models.CheckFile`, return the typed
-  ``checks`` list. Raises :class:`~eawf.cli.errors.UserError`
+  ``checks`` list. Raises :class:`~eawf.surfaces.cli.errors.UserError`
   (``kind="InvalidInput"``) on missing file, bad yaml, or schema-mismatch.
 * :func:`run_checks` — iterate the spec list, dispatch each via
   :data:`~eawf.workflow.audit_dsl.registry.CHECK_REGISTRY`, return the list
@@ -25,7 +25,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from eawf.cli.errors import UserError
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.audit_dsl.models import CheckFile, CheckResult, CheckSpec
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
 

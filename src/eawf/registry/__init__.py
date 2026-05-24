@@ -13,7 +13,7 @@ walk, or import-from-discovery path. This package ships:
   (:func:`is_stale`) plus the mtime / state-load helpers that feed
   it.
 
-The mutator side lives in :mod:`eawf.cli.commands.repo` (which
+The mutator side lives in :mod:`eawf.surfaces.cli.commands.repo` (which
 dispatches to the daemon's ``registry.update`` RPC by default per
 D-SUP-01); nothing under :mod:`eawf.registry` ever writes.
 

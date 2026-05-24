@@ -11,8 +11,8 @@ import json
 
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.cli.exit_codes import VALIDATION_FAILED
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.exit_codes import VALIDATION_FAILED
 
 runner = CliRunner()
 

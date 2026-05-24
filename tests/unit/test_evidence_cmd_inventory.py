@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import typer
 
-from eawf.cli.commands.evidence import (
+from eawf.surfaces.cli.commands.evidence import (
     artifact_app,
     audit_app,
     backlog_app,
@@ -86,8 +86,8 @@ def test_backlog_app_verb_inventory() -> None:
 def test_full_app_import_keeps_evidence_apps() -> None:
     # Importing the full CLI app must keep the evidence apps the shim
     # re-exports (proving app.py wires the same Typer instances).
-    from eawf.cli import app as app_module
-    from eawf.cli.commands.evidence import hypothesis_app as shim_hypothesis_app
+    from eawf.surfaces.cli import app as app_module
+    from eawf.surfaces.cli.commands.evidence import hypothesis_app as shim_hypothesis_app
 
     assert app_module.app is not None
     assert _verb_names(shim_hypothesis_app) == EXPECTED_HYPOTHESIS_VERBS

@@ -1,7 +1,7 @@
 {#- Claude Code hook bash wrapper template. Variables: event_type
    (HookEventType.value, e.g. "pre_commit"), claude_event_name
    (display name written into the synthesised JSON payload, mapped per
-   `eawf.render.hooks.HOOK_REGISTRY`). The wrapper reads up to four
+   `eawf.surfaces.render.hooks.HOOK_REGISTRY`). The wrapper reads up to four
    positional args from Claude, synthesises a JSON payload, and pipes
    it to `uv run eawf hook run <event_type> --runtime claude`. POSIX
    bash 3.2 compatible. -#}

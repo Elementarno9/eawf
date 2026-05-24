@@ -39,8 +39,8 @@ from typing import Any, Final, Literal
 
 import yaml
 
-from eawf.cli.errors import ValidationError
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
+from eawf.surfaces.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
 

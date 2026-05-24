@@ -9,7 +9,7 @@ file the installer claims ownership of:
 - The file matches expectation → :attr:`DoctorReport.ok` grows.
 
 Exit code mapping (the CLI surface in
-:mod:`eawf.cli.commands.plugin`):
+:mod:`eawf.surfaces.cli.commands.plugin`):
 
 - Clean (no drift, no missing) → exit 0.
 - Any drift or missing entry → exit 8 (``INTEGRITY_VIOLATION``).
@@ -43,13 +43,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eawf.render.manifest import Manifest, ManifestEntry
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.claude.plugin_install import (
     _event_type_for,
     _expected_bytes_for,
     expected_paths,
 )
+from eawf.surfaces.render.manifest import Manifest, ManifestEntry
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,9 @@
 """Verb→daemon routing + WAL-backed in-process fallback for lifecycle verbs.
 
 P27-I02-W18 routed the eager-scope mutating lifecycle verbs through the
-generic :func:`eawf.cli._dispatch._mutate_via_daemon` shim (rule 4: the
+generic :func:`eawf.surfaces.cli._dispatch._mutate_via_daemon` shim (rule 4: the
 daemon is the canonical mutator) and flipped the in-process fallback in
-:func:`eawf.cli.commands.lifecycle._commit_mutation` to a **state-first,
+:func:`eawf.surfaces.cli.commands.lifecycle._commit_mutation` to a **state-first,
 WAL-backed** ordering that mirrors the daemon's outcome-WAL algorithm.
 
 The suite has three planes:
@@ -33,9 +33,9 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli import _dispatch
-from eawf.cli.app import app
 from eawf.kernel.state.mutations import MutationKind
+from eawf.surfaces.cli import _dispatch
+from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.unit
 
@@ -149,10 +149,10 @@ def _enable_proxy(monkeypatch: pytest.MonkeyPatch, *, client: type) -> None:
     """Switch from the daemonless bootstrap to a proxy-up scenario."""
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     # The proxy gate in ``_run_mutation`` consults ``_proxy_enabled``.
-    monkeypatch.setattr("eawf.cli._mutation._proxy_enabled", lambda _ws: True)
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._proxy_enabled", lambda _ws: True)
     # ``escalate_mutation`` auto-spawns when no daemon is up; stub the spawn.
     monkeypatch.setattr(_dispatch, "ensure_daemon", lambda _runtime=None: 4242)
-    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", client)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", client)
 
 
 # ---- plane 1: routing -------------------------------------------------------

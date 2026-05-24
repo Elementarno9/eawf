@@ -50,17 +50,22 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 import eawf
-from eawf.render._atomic import atomic_write_text
-from eawf.render.agents import AGENT_REGISTRY, AgentSpec, AgentTemplateContext, render_agent_md
-from eawf.render.hooks import render_hook_sh
-from eawf.render.skills import (
+from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY, render_plugin_hooks_json
+from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
+from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.agents import (
+    AGENT_REGISTRY,
+    AgentSpec,
+    AgentTemplateContext,
+    render_agent_md,
+)
+from eawf.surfaces.render.hooks import render_hook_sh
+from eawf.surfaces.render.skills import (
     SKILL_REGISTRY,
     SkillSpec,
     SkillTemplateContext,
     render_skill_md,
 )
-from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY, render_plugin_hooks_json
-from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +207,7 @@ def _read_pyproject_metadata() -> dict[str, Any]:
 def _load_environment() -> Environment:
     """Load a Jinja2 environment rooted at the bundled claude templates dir.
 
-    Mirrors :func:`eawf.render.skills._load_environment` so loader
+    Mirrors :func:`eawf.surfaces.render.skills._load_environment` so loader
     behaviour is consistent across renderers (StrictUndefined,
     ``keep_trailing_newline=False``, autoescape off).
     """

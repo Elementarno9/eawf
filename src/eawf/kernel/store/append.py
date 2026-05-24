@@ -13,7 +13,7 @@ concurrent appenders across processes serialise. The state.json
 transaction (if any) holds a different sibling lock - there is no
 deadlock risk because the two locks are on distinct files.
 
-``LockTimeout`` is mapped to :class:`eawf.cli.errors.StateConflict`
+``LockTimeout`` is mapped to :class:`eawf.surfaces.cli.errors.StateConflict`
 (``kind="LockConflict"``) so the CLI surfaces the canonical exit code.
 """
 
@@ -23,9 +23,9 @@ import logging
 import os
 from pathlib import Path
 
-from eawf.cli.errors import StateConflict
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.lock import portalock
+from eawf.surfaces.cli.errors import StateConflict
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from eawf.cli.commands.lifecycle import _compute_iter_bump_hints
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
@@ -19,6 +18,7 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
+from eawf.surfaces.cli.commands.lifecycle import _compute_iter_bump_hints
 from eawf.workflow.lifecycle.transitions import (
     close_iter,
     open_iter,

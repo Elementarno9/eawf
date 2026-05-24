@@ -20,7 +20,7 @@ Registry shape on disk::
       }
     }
 
-The mutator side lives in :mod:`eawf.cli.commands.repo` (which dispatches
+The mutator side lives in :mod:`eawf.surfaces.cli.commands.repo` (which dispatches
 to the daemon's ``registry.update`` RPC by default per D-SUP-01); this
 module never writes.
 """
@@ -94,7 +94,7 @@ class Registry(BaseModel):
     The ``version`` field exists so future schema bumps stay
     forward-compatible; today only ``"1"`` is accepted. Callers must
     not mutate the model directly: the canonical write path lives in
-    :mod:`eawf.cli.commands.repo` (daemon-proxied per D-SUP-01) and
+    :mod:`eawf.surfaces.cli.commands.repo` (daemon-proxied per D-SUP-01) and
     the constructor contract here is load + inspect only.
 
     Attributes:

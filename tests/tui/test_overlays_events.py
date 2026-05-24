@@ -16,8 +16,8 @@ import pytest
 from rich.text import Text
 from textual.widgets import Static
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.events import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.events import (
     EVENT_FILTERS,
     EVENT_RING_SIZE,
     EventRow,
@@ -264,7 +264,7 @@ def test_events_modal_empty_shows_note() -> None:
 
 def test_events_verb_opens_modal_through_cap() -> None:
     async def body() -> None:
-        from eawf.tui.palette.verbs import VERBS
+        from eawf.surfaces.tui.palette.verbs import VERBS
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:

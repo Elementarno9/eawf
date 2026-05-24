@@ -23,15 +23,15 @@ import orjson
 import pytest
 
 from eawf.kernel.state.models import State
-from eawf.tui.app import EaApp
-from eawf.tui.scopes import ScopeScreen, UserScreen
-from eawf.tui.scopes.user import PortfolioTable, synthesize_user_state
-from eawf.tui.screens.overlays.config_modal import ConfigModal
-from eawf.tui.screens.overlays.detail import DetailModal
-from eawf.tui.widgets.footer import Footer, Heartbeat
-from eawf.tui.widgets.git_pane import GitFields
-from eawf.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
-from eawf.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.scopes import ScopeScreen, UserScreen
+from eawf.surfaces.tui.scopes.user import PortfolioTable, synthesize_user_state
+from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
+from eawf.surfaces.tui.screens.overlays.detail import DetailModal
+from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
+from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
+from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
@@ -79,7 +79,7 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
     parallel worker.
     """
     monkeypatch.setattr(
-        "eawf.tui.widgets.workspace_table.gather_git_fields",
+        "eawf.surfaces.tui.widgets.workspace_table.gather_git_fields",
         lambda _path: GitFields(
             branch="main", dirty="clean", ahead_behind="up-to-date", recent_commits=()
         ),

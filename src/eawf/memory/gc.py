@@ -17,7 +17,7 @@ Selection model:
 - ``--dry-run`` reports the would-archive ids and writes nothing.
 
 This module never opens locks. The caller wraps it in
-:func:`eawf.cli._mutation.state_transaction` so the lock + atomic write
+:func:`eawf.surfaces.cli._mutation.state_transaction` so the lock + atomic write
 discipline is shared with sibling memory commands.
 """
 

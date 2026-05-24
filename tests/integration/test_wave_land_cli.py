@@ -18,7 +18,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 from tests.integration.test_worktree_cli_create import _seed_repo_with_state
 from tests.integration.test_worktree_cli_merge_back import _create_worktree_and_commit
 

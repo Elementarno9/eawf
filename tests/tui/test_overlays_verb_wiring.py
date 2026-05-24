@@ -14,10 +14,10 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.palette.verbs import _handle_audit, _handle_roadmap
-from eawf.tui.screens.overlays.audit_running import AuditRunningModal
-from eawf.tui.screens.overlays.plan_preview import PlanPreviewModal
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.palette.verbs import _handle_audit, _handle_roadmap
+from eawf.surfaces.tui.screens.overlays.audit_running import AuditRunningModal
+from eawf.surfaces.tui.screens.overlays.plan_preview import PlanPreviewModal
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -65,7 +65,7 @@ def test_audit_verb_titles_with_scope_derived_id() -> None:
             text = str(title.render())
             # The overlay surfaces the scope-derived audit id (from state),
             # not any operator-typed string, plus the resolved scope name.
-            from eawf.tui.palette.verbs import _active_audit_id
+            from eawf.surfaces.tui.palette.verbs import _active_audit_id
 
             assert _active_audit_id(app) in text
             assert "repo" in text
@@ -113,7 +113,7 @@ def test_roadmap_propose_without_phase_does_not_open_modal() -> None:
 
 def test_audit_verb_routes_through_push_modal_cap() -> None:
     async def body() -> None:
-        from eawf.tui.screens.overlays.audit_running import AuditProgress
+        from eawf.surfaces.tui.screens.overlays.audit_running import AuditProgress
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:

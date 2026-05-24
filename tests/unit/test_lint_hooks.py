@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.lint import _conditional
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
@@ -244,7 +244,7 @@ def test_path_leak_lint_still_flags_real_path(tmp_path: Path, real_path: str) ->
 
 
 def test_is_placeholder_path_discriminates_placeholder_from_leak() -> None:
-    from eawf.cli.commands.hook import _is_placeholder_path
+    from eawf.surfaces.cli.commands.hook import _is_placeholder_path
 
     assert _is_placeholder_path("/Users/<name>")
     assert _is_placeholder_path("/Users/<name>/...")
@@ -285,12 +285,12 @@ def test_email_leak_lint_skips_action_version_ref(tmp_path: Path) -> None:
 
 
 def test_is_state_bookkeeping_path_excludes_daemon_files() -> None:
-    from eawf.cli.commands.hook import _is_state_bookkeeping_path
+    from eawf.surfaces.cli.commands.hook import _is_state_bookkeeping_path
 
     assert _is_state_bookkeeping_path(".ea/state.json")
     assert _is_state_bookkeeping_path(".ea/store/event.jsonl")
     assert _is_state_bookkeeping_path(".ea/store/audit.jsonl")
-    assert not _is_state_bookkeeping_path("src/eawf/cli/app.py")
+    assert not _is_state_bookkeeping_path("src/eawf/surfaces/cli/app.py")
     assert not _is_state_bookkeeping_path(".ea/profile.yaml")
 
 

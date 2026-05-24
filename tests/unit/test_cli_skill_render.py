@@ -6,7 +6,7 @@ Pins:
   byte-equal to the SKILL.md
   :mod:`eawf.runtime.runtimes.claude.plugin_install` writes for the same skill.
   Both code paths funnel through
-  :func:`eawf.render.skills.render_skill_md_from_spec`, so the byte-
+  :func:`eawf.surfaces.render.skills.render_skill_md_from_spec`, so the byte-
   equality is a shared-fixture assertion against the canonical render.
 - ``skill render <name> --format=json`` emits a JSON object with the
   same four keys (``name``, ``status``, ``body_schema``,
@@ -29,11 +29,11 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.cli.commands.skill import _list_payload
-from eawf.render.envelope import CANONICAL_SKILL_NAMES
-from eawf.render.skills import SKILL_REGISTRY, render_skill_md_from_spec
 from eawf.runtime.runtimes.claude.plugin_install import _render_skill
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands.skill import _list_payload
+from eawf.surfaces.render.envelope import CANONICAL_SKILL_NAMES
+from eawf.surfaces.render.skills import SKILL_REGISTRY, render_skill_md_from_spec
 
 # ``eawf skill render`` is the operator surface over the execution-backed
 # skills (``CANONICAL_SKILL_NAMES``). The render ``SKILL_REGISTRY`` is a

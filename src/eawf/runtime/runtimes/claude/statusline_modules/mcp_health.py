@@ -20,7 +20,7 @@ from typing import Any
 
 import orjson
 
-from eawf.render.statusline import StatuslineSegment
+from eawf.surfaces.render.statusline import StatuslineSegment
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.render.manifest``.
+"""Unit tests for ``eawf.surfaces.render.manifest``.
 
 Covers ``Manifest`` Pydantic schema, ``load`` / ``save_atomic`` round-trip,
 ``extra="forbid"`` rejection, deterministic byte-stable JSON, and the
@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from eawf.render import manifest as manifest_mod
-from eawf.render.manifest import Manifest, ManifestEntry
+from eawf.surfaces.render import manifest as manifest_mod
+from eawf.surfaces.render.manifest import Manifest, ManifestEntry
 
 
 def _entry(target: str = "AGENTS.md", region_id: str = "rules") -> ManifestEntry:
@@ -75,7 +75,7 @@ def test_manifest_save_atomic_uses_tempfile(tmp_path: Path) -> None:
     target = tmp_path / "generated.json"
     m = Manifest(version=1, generated={"AGENTS.md::rules": _entry()})
 
-    with patch("eawf.render.manifest.os.replace", wraps=__import__("os").replace) as spy:
+    with patch("eawf.surfaces.render.manifest.os.replace", wraps=__import__("os").replace) as spy:
         manifest_mod.save_atomic(target, m)
 
     assert spy.called

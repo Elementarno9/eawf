@@ -406,7 +406,7 @@ def test_configure_logging_file_handler_scrubs_seeded_leak(
 
 def test_cli_main_log_sink_attaches_scrubber(_restore_root_logging: None) -> None:
     """The CLI's root log sink carries the scrubber filter."""
-    from eawf.cli.app import _configure_logging as cli_configure_logging
+    from eawf.surfaces.cli.app import _configure_logging as cli_configure_logging
 
     logging.getLogger().handlers = []
     cli_configure_logging()
@@ -419,7 +419,7 @@ def test_cli_main_log_sink_does_not_clobber_existing_handlers(
     _restore_root_logging: None,
 ) -> None:
     """A pre-configured root logger is left untouched by the CLI sink."""
-    from eawf.cli.app import _configure_logging as cli_configure_logging
+    from eawf.surfaces.cli.app import _configure_logging as cli_configure_logging
 
     sentinel = logging.NullHandler()
     logging.getLogger().handlers = [sentinel]

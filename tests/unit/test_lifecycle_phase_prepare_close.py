@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.cli.commands.lifecycle import _phase_prepare_close_checklist
 from eawf.kernel.state.enums import (
     DecisionStatus,
     IterStatus,
@@ -21,6 +20,7 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
+from eawf.surfaces.cli.commands.lifecycle import _phase_prepare_close_checklist
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     open_iter,

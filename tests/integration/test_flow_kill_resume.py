@@ -23,12 +23,12 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.state.enums import FlowStatus, StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.flow import FlowCheckpointPayload, FlowPayload
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.cli.app import app
 from eawf.workflow.skills import flow as flow_module
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.workflow.skills.flow import (

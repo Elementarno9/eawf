@@ -28,7 +28,7 @@ from typing import cast
 import pytest
 import yaml
 
-from eawf.render.envelope import EnvelopeWarning
+from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill

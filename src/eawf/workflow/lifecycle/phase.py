@@ -255,7 +255,7 @@ def activate_phase(state: State, *, phase_id: str) -> Phase:
     - The phase must already have at least one wave planned under it.
 
     The branch-currency and clean-working-tree gates live in the CLI
-    handler (:func:`eawf.cli.commands.lifecycle.phase_activate_cmd`)
+    handler (:func:`eawf.surfaces.cli.commands.lifecycle.phase_activate_cmd`)
     because they need git access; together with the no-waves gate above
     they form the complete P19-W11 V11 hard gate.
 

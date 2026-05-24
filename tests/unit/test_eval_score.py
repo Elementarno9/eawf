@@ -24,7 +24,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.eval import EvalScore, score_envelope
-from eawf.render.envelope import OutputEnvelope
+from eawf.surfaces.render.envelope import OutputEnvelope
 
 
 def _envelope(

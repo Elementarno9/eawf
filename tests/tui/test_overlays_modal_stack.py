@@ -12,9 +12,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from eawf.tui.app import EaApp
-from eawf.tui.screens.overlays.confirm import ConfirmModal
-from eawf.tui.screens.overlays.detail import DetailCard, DetailModal
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.detail import DetailCard, DetailModal
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

@@ -341,7 +341,7 @@ def _resolve_mutator_paths(
 def _state_version(payload: dict[str, Any]) -> str:
     """Stable 16-hex-char digest of a state payload.
 
-    Mirrors :func:`eawf.cli.commands.lifecycle._state_version` so the
+    Mirrors :func:`eawf.surfaces.cli.commands.lifecycle._state_version` so the
     before/after-version strings stay comparable across the in-process
     and daemon-proxy paths.
     """
@@ -401,7 +401,7 @@ def _apply_wave_close(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.WAVE_CLOSE` — delegate to ``close_wave``.
 
     Optionally pins ``Wave.commit`` when the params carry a resolved
-    SHA; the CLI side (in :mod:`eawf.cli.commands.lifecycle`) resolves
+    SHA; the CLI side (in :mod:`eawf.surfaces.cli.commands.lifecycle`) resolves
     ``--commit <ref>`` BEFORE calling the daemon so the daemon never
     has to invoke git.
     """
@@ -638,7 +638,7 @@ def _build_event_envelope(
 ) -> Envelope:
     """Build the canonical ``StoreKind.EVENT`` envelope for *mutation*.
 
-    The envelope shape mirrors :func:`eawf.cli.commands.lifecycle._append_event`
+    The envelope shape mirrors :func:`eawf.surfaces.cli.commands.lifecycle._append_event`
     so subscribers cannot tell whether the envelope was produced via
     the daemon or the daemonless fallback — both paths converge on
     the same on-disk row.

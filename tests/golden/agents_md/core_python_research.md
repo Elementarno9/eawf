@@ -84,7 +84,7 @@ IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN>``
 (zero-padded, e.g., ``P00``, ``P03``). Wave IDs: ``W<NN>`` likewise.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.3 hash=6d0e4bb5c2b0dfe2 -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.3 hash=80afcb466abe1f57 -->
 ### Naming conventions
 
 To prevent drift across state models, envelopes, parameters, and
@@ -94,7 +94,7 @@ merging, not papered over with adapter shims.
 
 **State scope identifier** — ``scope_id`` (never bare ``scope``).
 Applies to Pydantic field names on ``State`` models
-(e.g. ``PluginInstall``), :class:`~eawf.render.envelope.EnvelopeHeader`,
+(e.g. ``PluginInstall``), :class:`~eawf.surfaces.render.envelope.EnvelopeHeader`,
 function kwargs (e.g. ``add_artifact(scope_id=...)``,
 ``artifact_urn(scope_id, ...)``), JSON keys on the wire, and
 ``state.json`` field names. Bare ``scope`` is reserved for CLI
@@ -140,7 +140,7 @@ daemon-internal subsystem in criterion prose makes audits flag
 false positives.
 
 <!-- END EAWF:managed id=naming-conventions -->
-<!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=7e6a3b368a8b0993 -->
+<!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=a9fd52b122658082 -->
 ### Rationale
 
 **Entity-title naming.** Every lifecycle and research entity
@@ -173,7 +173,7 @@ The model enforces the hard bound: ``title`` is
 ``Annotated[str, Field(min_length=1, max_length=72)]`` on every entity,
 so an over-72 title fails :class:`pydantic.ValidationError` at the
 ingestion boundary. The style backstop is
-:func:`eawf.render.agents_md.lint_entity_title`, which a reviewer (or a
+:func:`eawf.surfaces.render.agents_md.lint_entity_title`, which a reviewer (or a
 future authoring command) runs over a candidate title to flag an
 over-cap or a trailing-period title before it reaches the model — the
 same two failure modes the bound and this rule describe.

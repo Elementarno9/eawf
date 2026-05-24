@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from eawf.kernel.state.models import State
-from eawf.tui.palette.verbs import _active_audit_id
+from eawf.surfaces.tui.palette.verbs import _active_audit_id
 
 
 @dataclass

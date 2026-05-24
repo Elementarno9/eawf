@@ -1,6 +1,6 @@
 """Unit tests for ``eawf repo`` subcommands.
 
-``repo init`` is a thin alias of :func:`eawf.cli.commands.init.init_cmd`,
+``repo init`` is a thin alias of :func:`eawf.surfaces.cli.commands.init.init_cmd`,
 so we exercise it once end-to-end and lean on the existing init tests for
 the deeper validation surface. ``repo link`` is more meaningful — it
 cross-mutates a workspace state and a repo state and the linkage round-trip
@@ -16,7 +16,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 

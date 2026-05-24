@@ -4,20 +4,20 @@ Six reference surfaces are generated entirely from the live source tree,
 never hand-authored, so a doc/source drift cannot survive a build:
 
 - ``cli.md`` — the full ``eawf`` command inventory (top-level commands +
-  every sub-group verb), walked from the root :data:`eawf.cli.app.app`
+  every sub-group verb), walked from the root :data:`eawf.surfaces.cli.app.app`
   Typer instance.
 - ``skills.md`` — the Eä skill catalog, read from
-  :data:`eawf.render.skills.SKILL_REGISTRY`.
+  :data:`eawf.surfaces.render.skills.SKILL_REGISTRY`.
 - ``schema.md`` — the JSON Schema of the canonical Pydantic models
   (:class:`~eawf.kernel.state.models.State`, the event envelope, and the output
   envelope), with each schema also dumped to a sibling ``.schema.json``
   file by :func:`dump_schemas`.
 - ``enums.md`` — the state enum catalog from
   :mod:`eawf.kernel.state.enums`.
-- ``error-codes.md`` — the cause-level :class:`~eawf.cli.error_codes.ErrorCode`
+- ``error-codes.md`` — the cause-level :class:`~eawf.surfaces.cli.error_codes.ErrorCode`
   vocabulary folded onto its exit bucket.
 - ``exit-codes.md`` — the five-bucket exit-code surface from
-  :mod:`eawf.cli.exit_codes`.
+  :mod:`eawf.surfaces.cli.exit_codes`.
 
 The generated pages live under ``docs/reference/autogen/`` so they do not
 collide with the curated prose pages directly under ``docs/reference/``.
@@ -43,13 +43,13 @@ from typing import TYPE_CHECKING, Any
 import orjson
 from pydantic import BaseModel
 
-from eawf.cli import error_codes as error_codes_mod
-from eawf.cli import exit_codes as exit_codes_mod
 from eawf.kernel.state import enums as state_enums
 from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.event import Event
-from eawf.render.envelope import OutputEnvelope
-from eawf.render.plan_view import PlanView
+from eawf.surfaces.cli import error_codes as error_codes_mod
+from eawf.surfaces.cli import exit_codes as exit_codes_mod
+from eawf.surfaces.render.envelope import OutputEnvelope
+from eawf.surfaces.render.plan_view import PlanView
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -231,12 +231,12 @@ def _md_escape(text: str) -> str:
 
 def cli_page() -> GeneratedPage:
     """Generate ``cli.md`` from the live root Typer app."""
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     lines: list[str] = [
         "# eawf CLI reference",
         "",
-        "Auto-generated from `eawf.cli.app:app`. Every top-level command and",
+        "Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and",
         "sub-group verb registered on the root Typer app is listed below; do",
         "not hand-edit — regenerate via `eawf doc verify --strict`.",
         "",
@@ -296,12 +296,12 @@ def cli_page() -> GeneratedPage:
 
 def skills_page() -> GeneratedPage:
     """Generate ``skills.md`` from :data:`SKILL_REGISTRY`."""
-    from eawf.render.skills import SKILL_REGISTRY
+    from eawf.surfaces.render.skills import SKILL_REGISTRY
 
     lines: list[str] = [
         "# eawf skill catalog",
         "",
-        "Auto-generated from `eawf.render.skills:SKILL_REGISTRY`. Each row is",
+        "Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row is",
         "an Eä skill the runtime can install as a slash command.",
         "",
         "| Skill | User-invocable | Argument hint | Description |",
@@ -395,7 +395,7 @@ def error_codes_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf error codes",
         "",
-        "Auto-generated from `eawf.cli.error_codes:ErrorCode`. Each cause-level",
+        "Auto-generated from `eawf.surfaces.cli.error_codes:ErrorCode`. Each cause-level",
         "member folds onto exactly one of the five exit buckets via",
         "`ErrorCode.exit_code`.",
         "",
@@ -418,7 +418,7 @@ def exit_codes_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf exit codes",
         "",
-        "Auto-generated from `eawf.cli.exit_codes`. The canonical five-bucket",
+        "Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical five-bucket",
         "surface every CLI handler exits with.",
         "",
         "| Code | Name |",

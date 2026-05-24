@@ -16,7 +16,7 @@ import pytest
 from textual.app import ComposeResult
 
 from eawf.kernel.state.models import BacklogItem, State
-from eawf.tui.widgets.backlog_table import (
+from eawf.surfaces.tui.widgets.backlog_table import (
     _ELLIPSIS,
     _TITLE_MIN_WIDTH,
     SORT_KEYS,
@@ -33,7 +33,7 @@ from ._palette_harness import PaletteHarnessApp
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _BACKLOG = _FIXTURES / "07-decisions-and-backlog.json"
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 
 
 def _item(item_id: str, priority: str, status: str, title: str) -> BacklogItem:

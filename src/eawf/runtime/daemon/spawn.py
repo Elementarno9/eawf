@@ -12,7 +12,7 @@ the runtime dir. Procedure:
    parent CLI then polls the socket/pipe for up to 5 s for liveness.
 
 The cold-spawn is **silent** — no stdout/stderr noise unless the
-operator opts in with ``EAWF_VERBOSE=1``. The :mod:`eawf.cli`
+operator opts in with ``EAWF_VERBOSE=1``. The :mod:`eawf.surfaces.cli`
 verbose-flag plumbing reads the same env var.
 
 The spawn helper is the only piece that imports

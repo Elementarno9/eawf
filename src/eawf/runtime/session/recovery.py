@@ -68,7 +68,7 @@ def recover_sessions(
     """Mark every active/checkpointed session whose heartbeat is older than the threshold.
 
     Caller MUST hold ``portalock(state_path)`` — typically via
-    :func:`eawf.cli._mutation.state_transaction`. *state* is mutated in
+    :func:`eawf.surfaces.cli._mutation.state_transaction`. *state* is mutated in
     place; recovery events are appended to *events_path* under
     ``events_path``'s own sibling lock (acquired inside this function via
     :func:`eawf.runtime.session.store.append_event`).

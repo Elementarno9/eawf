@@ -1,6 +1,6 @@
 # eawf CLI reference
 
-Auto-generated from `eawf.cli.app:app`. Every top-level command and
+Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and
 sub-group verb registered on the root Typer app is listed below; do
 not hand-edit — regenerate via `eawf doc verify --strict`.
 

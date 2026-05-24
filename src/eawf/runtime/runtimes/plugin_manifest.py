@@ -12,7 +12,7 @@ Design decisions baked in:
 
 * **Frozen envelope status enum.** The closed five-value set
   ``ok | needs_user | blocked | failed | partial`` is owned by
-  :data:`eawf.render.envelope.EnvelopeStatus`. This module re-exports it
+  :data:`eawf.surfaces.render.envelope.EnvelopeStatus`. This module re-exports it
   rather than redefining the literal so the freeze has exactly one source
   of truth; a future drift in either place would surface as a parity test
   failure (``tests/runtimes/test_plugin_manifest.py`` +
@@ -40,7 +40,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from eawf.render.envelope import EnvelopeStatus
+from eawf.surfaces.render.envelope import EnvelopeStatus
 
 # Canonical runtime identifiers — mirrors
 # :data:`eawf.runtime.runtimes.manifest.RuntimeId` and the ``runtime.preference``

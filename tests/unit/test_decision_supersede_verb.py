@@ -14,10 +14,10 @@ from typing import Any
 
 import pytest
 
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import DecisionStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.validate.invariants import Violation, check_decision_supersede_link
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.evidence import _io, decision
 
 FIXTURE = (

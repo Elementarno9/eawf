@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.cli.help_panels`.
+"""Unit tests for :mod:`eawf.surfaces.cli.help_panels`.
 
 Cover the boundary cases of the panel mapping helpers plus the import-time
 guard that ties the panel set back to the metadata registry — a future tab
@@ -11,8 +11,8 @@ import importlib
 
 import pytest
 
-from eawf.cli import help_panels
 from eawf.kernel.config.registry import tabs_sorted
+from eawf.surfaces.cli import help_panels
 
 
 def test_panel_order_matches_registry_tabs_sorted() -> None:

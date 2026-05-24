@@ -14,9 +14,9 @@ import pytest
 from rich.text import Text
 from textual.app import ComposeResult
 
-import eawf.tui.app as eaapp_mod
-from eawf.tui.app import EaApp, probe_braille_coverage, resolve_render_mode
-from eawf.tui.widgets.eu_bar import (
+import eawf.surfaces.tui.app as eaapp_mod
+from eawf.surfaces.tui.app import EaApp, probe_braille_coverage, resolve_render_mode
+from eawf.surfaces.tui.widgets.eu_bar import (
     _BUCKET_FIELD_WIDTH,
     BAR_CELLS,
     BRAILLE_BASE,
@@ -44,7 +44,7 @@ _BRAILLE_FULL = chr(BRAILLE_BASE | BRAILLE_LEFT_COL | BRAILLE_RIGHT_COL)
 _BRAILLE_LEFT = chr(BRAILLE_BASE | BRAILLE_LEFT_COL)
 _BRAILLE_EMPTY = chr(BRAILLE_BASE)
 
-_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "tui" / "theme.tcss"
+_THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _EMPTY_REPO = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
 )

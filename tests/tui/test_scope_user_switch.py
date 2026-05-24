@@ -1,18 +1,18 @@
 """Pilot regression test for the live ``u``-key scope switch (P27-I04-W19).
 
 The user-scope portfolio rendered EMPTY when reached via the live ``u``
-scope switch: :meth:`~eawf.tui.app.EaApp.action_switch_scope` swapped to
+scope switch: :meth:`~eawf.surfaces.tui.app.EaApp.action_switch_scope` swapped to
 the user screen but never re-synthesized the portfolio state, leaving the
 table bound to the stale repo/workspace state (whose ``workspace`` is
-``None``), so :func:`~eawf.tui.widgets.workspace_table.build_repo_rows`
+``None``), so :func:`~eawf.surfaces.tui.widgets.workspace_table.build_repo_rows`
 emitted zero rows. The ``on_mount`` launch path already synthesizes; this
 test pins the live-switch path to the same behaviour.
 
 The app launches into the workspace scope (a seeded repo workspace state),
 then presses ``u`` (and, in a second test, calls
-:meth:`~eawf.tui.app.EaApp.action_switch_scope` directly). After the
+:meth:`~eawf.surfaces.tui.app.EaApp.action_switch_scope` directly). After the
 switch the bound state must be the synthesized portfolio and the
-:class:`~eawf.tui.scopes.user.PortfolioTable` must carry one row per
+:class:`~eawf.surfaces.tui.scopes.user.PortfolioTable` must carry one row per
 seeded registry repo.
 
 Determinism: each test awaits ``app.workers.wait_for_complete()`` after
@@ -33,13 +33,13 @@ import orjson
 import pytest
 
 from eawf.kernel.state.enums import ScopeKind
-from eawf.tui.app import EaApp
-from eawf.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
-from eawf.tui.scopes.user import PortfolioTable
-from eawf.tui.widgets.git_pane import GitFields
-from eawf.tui.widgets.header import build_breadcrumb
-from eawf.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
+from eawf.surfaces.tui.scopes.user import PortfolioTable
+from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.header import build_breadcrumb
+from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
@@ -70,7 +70,7 @@ def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Point registry resolution at a ``tmp_path`` home for every test.
 
     The live ``u`` switch calls
-    :func:`~eawf.tui.scopes.user.synthesize_user_state`, which reads
+    :func:`~eawf.surfaces.tui.scopes.user.synthesize_user_state`, which reads
     ``~/.eawf/registry.json``. Redirecting ``Path.home`` to ``tmp_path``
     keeps the switch deterministic and ensures no test reads (or leaks the
     machine paths from) the operator's real registry.
@@ -88,7 +88,7 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
     parallel worker.
     """
     monkeypatch.setattr(
-        "eawf.tui.widgets.workspace_table.gather_git_fields",
+        "eawf.surfaces.tui.widgets.workspace_table.gather_git_fields",
         lambda _path: GitFields(
             branch="main", dirty="clean", ahead_behind="up-to-date", recent_commits=()
         ),

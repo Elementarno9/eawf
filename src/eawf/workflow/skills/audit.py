@@ -63,7 +63,7 @@ from typing import Any
 import orjson
 
 from eawf.kernel.state.models import State, Wave
-from eawf.render.envelope import EnvelopeStatus, SkillName
+from eawf.surfaces.render.envelope import EnvelopeStatus, SkillName
 from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.skills._common import (

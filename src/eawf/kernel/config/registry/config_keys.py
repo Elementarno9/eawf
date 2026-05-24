@@ -35,7 +35,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 # free-text scalars (paths included — the menu does not validate path
 # existence). ``choice`` and ``multichoice`` require ``choices`` to be set.
 # Adding a new kind requires a matching branch in :func:`coerce_and_validate`
-# and the questionary dispatcher in :mod:`eawf.cli.commands.config`.
+# and the questionary dispatcher in :mod:`eawf.surfaces.cli.commands.config`.
 ConfigKeyType = Literal["bool", "int", "float", "str", "choice", "multichoice"]
 
 
@@ -47,7 +47,7 @@ class ConfigKey(BaseModel):
             sections — ``runtime``, ``vcs``, ``ui``, etc.). Tabs are sorted
             alphabetically when surfaced.
         key: Dotted config key path (e.g. ``"runtime.default"``). Matches
-            the form accepted by :func:`eawf.cli.commands.config.config_get`.
+            the form accepted by :func:`eawf.surfaces.cli.commands.config.config_get`.
         label: Short one-line human-readable label rendered as the prompt
             in the menu and as the field title in the TUI surface.
         type: Value shape — see :data:`ConfigKeyType`. Drives the questionary

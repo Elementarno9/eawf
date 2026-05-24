@@ -30,8 +30,8 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
-from eawf.render.envelope import OutputEnvelope, SkillName
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.render.envelope import OutputEnvelope, SkillName
 from eawf.workflow.skills import registry
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 

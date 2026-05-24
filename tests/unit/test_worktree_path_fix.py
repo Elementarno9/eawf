@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.cli.commands.worktree import _is_path_absolute_any_platform
+from eawf.surfaces.cli.commands.worktree import _is_path_absolute_any_platform
 
 
 @pytest.mark.parametrize(

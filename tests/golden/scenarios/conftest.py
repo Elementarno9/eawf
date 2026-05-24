@@ -49,7 +49,7 @@ from typing import Any
 
 import pytest
 
-from eawf.render.regions import find_regions
+from eawf.surfaces.render.regions import find_regions
 
 # Directory containing the three scenario golden fixtures, alongside this file.
 SCENARIOS_DIR: Path = Path(__file__).parent

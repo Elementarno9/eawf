@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.render.envelope`.
+"""Unit tests for :mod:`eawf.surfaces.render.envelope`.
 
 These tests pin the markdown wire-form: frontmatter fences, the
 ``<!-- eawf:footer ... -->`` HTML comment, body byte-stability, and the
@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from eawf.render.envelope import OutputEnvelope, from_markdown, to_markdown
+from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
 
 
 def _sample_env(**overrides: object) -> OutputEnvelope:
@@ -151,7 +151,7 @@ def test_extra_field_on_header_rejected() -> None:
     """``EnvelopeHeader`` rejects unknown keys (schema-version drift guard)."""
     from pydantic import ValidationError
 
-    from eawf.render.envelope import EnvelopeHeader
+    from eawf.surfaces.render.envelope import EnvelopeHeader
 
     with pytest.raises(ValidationError):
         EnvelopeHeader.model_validate(
@@ -172,7 +172,7 @@ def test_extra_field_on_footer_rejected() -> None:
     """``EnvelopeFooter`` rejects unknown keys (schema-version drift guard)."""
     from pydantic import ValidationError
 
-    from eawf.render.envelope import EnvelopeFooter
+    from eawf.surfaces.render.envelope import EnvelopeFooter
 
     with pytest.raises(ValidationError):
         EnvelopeFooter.model_validate({"unexpected_footer_key": []})
@@ -182,7 +182,7 @@ def test_envelope_status_enum_has_exactly_five_members() -> None:
     """The frozen ``EnvelopeStatus`` Literal carries the five success-criterion values."""
     from typing import get_args
 
-    from eawf.render.envelope import EnvelopeStatus
+    from eawf.surfaces.render.envelope import EnvelopeStatus
 
     members = set(get_args(EnvelopeStatus))
     assert members == {"ok", "needs_user", "blocked", "failed", "partial"}

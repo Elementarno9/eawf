@@ -13,8 +13,8 @@ from typing import Any
 
 from eawf.doctor.doc_verify import verify_docs
 from eawf.kernel.state.models import State
-from eawf.render.manifest import Manifest, ManifestEntry, save_atomic
-from eawf.render.regions import compute_hash
+from eawf.surfaces.render.manifest import Manifest, ManifestEntry, save_atomic
+from eawf.surfaces.render.regions import compute_hash
 
 
 def _make_state(
@@ -171,7 +171,7 @@ def test_doc_verify_cli_strict_exits_4_on_drift(tmp_path: Path) -> None:
     """``eawf doc verify --strict`` exits 4 when drift is present."""
     from typer.testing import CliRunner
 
-    from eawf.cli.app import app
+    from eawf.surfaces.cli.app import app
 
     repo, _state = _build_repo(tmp_path, drift=True)
     state_payload = json.loads(

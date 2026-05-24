@@ -1,11 +1,11 @@
-"""Property tests for ``eawf.render.regions`` round-trip + idempotence."""
+"""Property tests for ``eawf.surfaces.render.regions`` round-trip + idempotence."""
 
 from __future__ import annotations
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from eawf.render import regions
+from eawf.surfaces.render import regions
 
 # ids match the marker regex ``[A-Za-z0-9_.-]+`` and stay short.
 _ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789_-."

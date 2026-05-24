@@ -1,6 +1,6 @@
 """CLI-side tests for the generic daemon-proxy shim.
 
-:func:`eawf.cli._dispatch._mutate_via_daemon` is the single generic
+:func:`eawf.surfaces.cli._dispatch._mutate_via_daemon` is the single generic
 entry every mutating-verb wrapper routes through (superseding the
 per-verb bespoke proxies + the dropped ``_mutation.state_mutate``).
 This suite exercises the branching contract:
@@ -18,16 +18,16 @@ This suite exercises the branching contract:
    back to the in-process path; a POST-SEND drop (``state_mutate``
    raises ``RuntimeError`` / ``TimeoutError`` after the request was on
    the wire) is INDETERMINATE and raises
-   :class:`~eawf.cli.errors.DaemonMutationIndeterminate` WITHOUT
+   :class:`~eawf.surfaces.cli.errors.DaemonMutationIndeterminate` WITHOUT
    re-running the fallback (a blind re-run would double-apply a
    non-idempotent kind).
 5. **Validation rejection** — a ``-32002 validation_failed`` maps to
-   :class:`~eawf.cli.errors.ValidationFailed`; the fallback MUST NOT
+   :class:`~eawf.surfaces.cli.errors.ValidationFailed`; the fallback MUST NOT
    run.
 6. **Typed RPC-error mapping** — every other non-fallback RPC code
    (``-32001`` / ``-32003`` / ``-32005`` / unknown) maps onto its
-   specific :class:`~eawf.cli.errors.CliError` via
-   :func:`~eawf.cli.errors.cli_error_for_rpc` (NOT a bare
+   specific :class:`~eawf.surfaces.cli.errors.CliError` via
+   :func:`~eawf.surfaces.cli.errors.cli_error_for_rpc` (NOT a bare
    ``DaemonRpcError`` that would escape the verb handler's
    ``except CliError``); the threaded kind survives into the envelope.
 7. **Daemonless boundary** — ``--daemonless`` (flag or env) on the
@@ -47,9 +47,9 @@ from typing import Any
 
 import pytest
 
-from eawf.cli import _dispatch, exit_codes
-from eawf.cli import errors as cli_errors
 from eawf.kernel.state.mutations import MutationKind
+from eawf.surfaces.cli import _dispatch, exit_codes
+from eawf.surfaces.cli import errors as cli_errors
 
 pytestmark = pytest.mark.unit
 
@@ -72,7 +72,7 @@ def _no_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _set_client(monkeypatch: pytest.MonkeyPatch, client: type) -> None:
     """Point the daemon-client constructor at *client* for the shim path."""
-    monkeypatch.setattr("eawf.cli._daemon_client.DaemonClient", client)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", client)
 
 
 # ---- Scenario 1: proxied end-to-end ----------------------------------------
@@ -190,7 +190,7 @@ def _refusing_client(code: int, message: str) -> type:
             return None
 
         def state_mutate(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
-            from eawf.cli._daemon_client import DaemonRpcError
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
             raise DaemonRpcError(code=code, message=message, data=None)
 
@@ -446,7 +446,7 @@ def test_mutate_via_daemon_maps_rpc_error_to_typed_cli_error(
     :func:`cli_errors.cli_error_for_rpc` so the operator sees a proper
     error envelope.
     """
-    from eawf.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
     _set_client(monkeypatch, _refusing_client(rpc_code, rpc_message))
 
@@ -477,7 +477,7 @@ def test_mutate_via_daemon_mapped_rpc_error_envelope_carries_kind(
     """The typed error built from an RPC code surfaces its kind in the envelope.
 
     End-to-end of the specificity contract: a ``-32001`` lock conflict
-    maps to :class:`~eawf.cli.errors.StateConflict`, and its threaded
+    maps to :class:`~eawf.surfaces.cli.errors.StateConflict`, and its threaded
     ``LockConflict`` kind lands in ``ErrorEnvelope.data.kind`` so CI
     scripts pivot on the precise cause without the exit-code surface
     having to grow.
@@ -505,7 +505,7 @@ def test_mutate_via_daemon_unknown_rpc_code_maps_to_internal_error(
     _no_spawn: None,
 ) -> None:
     """An unrecognised RPC code maps to ``InternalError`` (no fallback, no leak)."""
-    from eawf.cli._daemon_client import DaemonRpcError
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
     _set_client(monkeypatch, _refusing_client(-32000, "server error: boom"))
 
@@ -532,7 +532,7 @@ def test_mutate_via_daemon_rejects_daemonless_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``--daemonless`` is refused by the escalation gate before any wire traffic."""
-    from eawf.cli.flags import GlobalFlags
+    from eawf.surfaces.cli.flags import GlobalFlags
 
     # The reject must fire before the spawn AND before the client opens.
     monkeypatch.setattr(
@@ -541,7 +541,7 @@ def test_mutate_via_daemon_rejects_daemonless_flag(
         lambda _runtime=None: pytest.fail("must reject before spawning"),
     )
     monkeypatch.setattr(
-        "eawf.cli._daemon_client.DaemonClient",
+        "eawf.surfaces.cli._daemon_client.DaemonClient",
         lambda *a, **k: pytest.fail("must reject before opening a client"),
     )
 
@@ -564,7 +564,7 @@ def test_mutate_via_daemon_rejects_daemonless_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``EAWF_DAEMONLESS=1`` also triggers the mutating-verb rejection."""
-    from eawf.cli.flags import GlobalFlags
+    from eawf.surfaces.cli.flags import GlobalFlags
 
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     monkeypatch.setattr(

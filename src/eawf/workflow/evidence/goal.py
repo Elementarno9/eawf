@@ -2,7 +2,7 @@
 
 Creates a :class:`~eawf.kernel.state.models.Goal` record under ``state.goals`` and
 mutates the typed state in place. The CLI handler runs the mutator inside
-:func:`eawf.cli._mutation.state_transaction`, which holds
+:func:`eawf.surfaces.cli._mutation.state_transaction`, which holds
 ``portalock(state.json)`` across load + mutate + validate + write.
 """
 
@@ -12,10 +12,10 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from eawf.cli.errors import UserError
 from eawf.kernel.state.enums import GoalStatus
 from eawf.kernel.state.models import Goal, State
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 
 logger = logging.getLogger(__name__)

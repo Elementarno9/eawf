@@ -2,7 +2,7 @@
 
 Turns a raw string answer from the interactive menu into the typed value
 matching a :class:`~eawf.kernel.config.registry.config_keys.ConfigKey` entry's
-declared type, raising :class:`~eawf.cli.errors.UserError`
+declared type, raising :class:`~eawf.surfaces.cli.errors.UserError`
 (``kind="InvalidInput"``) on failure.
 
 Public API:
@@ -22,8 +22,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from eawf.cli.errors import UserError
 from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY, ConfigKey, registry_lookup
+from eawf.surfaces.cli.errors import UserError
 
 
 def _coerce_bool(raw: str | bool) -> bool:

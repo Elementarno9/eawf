@@ -19,8 +19,8 @@ import pytest
 
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY, registry_lookup
 from eawf.kernel.state.models import State
-from eawf.tui.app import EaApp
-from eawf.tui.toast_emitter import (
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.toast_emitter import (
     DEFAULT_VERBOSITY,
     FLOOD_THRESHOLD,
     ToastEmitter,

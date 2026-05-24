@@ -29,8 +29,8 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
 from eawf.kernel.state.enums import StoreKind
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"

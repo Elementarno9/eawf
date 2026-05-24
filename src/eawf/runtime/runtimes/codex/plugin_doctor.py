@@ -18,8 +18,6 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eawf.render.hooks import HOOK_REGISTRY
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.codex.plugin_install import (
     _DEFAULT_TIMESTAMP,
     Scope,
@@ -34,6 +32,8 @@ from eawf.runtime.runtimes.codex.plugin_install import (
     _sidecar_target,
     _skill_target,
 )
+from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
 @dataclass(frozen=True)
@@ -149,7 +149,7 @@ def doctor_plugin(
             missing=missing,
         )
     for hook_spec in HOOK_REGISTRY:
-        from eawf.render.hooks import render_hook_sh
+        from eawf.surfaces.render.hooks import render_hook_sh
 
         _classify_entry(
             _hook_target(plugin_root, hook_spec),

@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 
-from eawf.render.envelope import SkillName
+from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills.engine import Skill
 
 logger = logging.getLogger(__name__)

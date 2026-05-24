@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf.render.regions``.
+"""Unit tests for ``eawf.surfaces.render.regions``.
 
 Covers marker parsing, region extraction, replace-as-insert / replace-existing
 semantics, and the boundary-error catalogue (missing END marker, duplicate id,
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.render import regions
+from eawf.surfaces.render import regions
 
 
 def _wrap(region_id: str, version: str, body: str) -> str:

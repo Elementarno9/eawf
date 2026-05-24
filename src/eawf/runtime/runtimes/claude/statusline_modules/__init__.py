@@ -3,7 +3,7 @@
 Each submodule exports a single :func:`build` function that takes a Claude
 JSON payload (already decoded into a ``dict``) and the resolved
 ``.ea/state.json`` path, and returns a
-:class:`~eawf.render.statusline.StatuslineSegment`. Modules MUST never
+:class:`~eawf.surfaces.render.statusline.StatuslineSegment`. Modules MUST never
 raise — the orchestrator tolerates exceptions but a clean degradation
 (``status="missing"`` / ``status="degraded"``) is the documented contract.
 

@@ -29,8 +29,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eawf.render.envelope import EnvelopeStatus, SkillName
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
+from eawf.surfaces.render.envelope import EnvelopeStatus, SkillName
 from eawf.workflow.audit_dsl.runner import load_spec, run_checks
 from eawf.workflow.skills._common import (
     emit_event,

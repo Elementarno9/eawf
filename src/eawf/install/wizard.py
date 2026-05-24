@@ -27,7 +27,7 @@ Public API:
   forbidding extras and validating ``project_code`` plus ``profiles`` membership.
 - :class:`WizardResult` — Pydantic v2 model summarising the artefacts written.
 - :class:`WizardCancelled` — raised when the operator aborts a prompt
-  (Ctrl-C / EOF). Subclass of :class:`~eawf.cli.errors.UserError` (its
+  (Ctrl-C / EOF). Subclass of :class:`~eawf.surfaces.cli.errors.UserError` (its
   concrete name folds into ``data.kind="WizardCancelled"``) so the CLI
   handler maps it to the canonical ``USER_DECLINED`` exit code.
 - :func:`run_wizard_no_input` — pure pipeline.
@@ -58,7 +58,6 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from eawf.cli.errors import UserError
 from eawf.install.steps import (
     STEP_LIFECYCLE_DEPTH,
     STEP_RUNTIME,
@@ -73,11 +72,12 @@ from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.profiles.compose import compose
 from eawf.profiles.loader import list_profiles, load_profile
-from eawf.render.agents_md import render_agents_md
-from eawf.render.claude_shim import render_claude_md
-from eawf.render.manifest import Manifest
-from eawf.render.manifest import save_atomic as save_manifest_atomic
 from eawf.runtime.lock import portalock
+from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.claude_shim import render_claude_md
+from eawf.surfaces.render.manifest import Manifest
+from eawf.surfaces.render.manifest import save_atomic as save_manifest_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +251,7 @@ def _pre_existing_canonical_files(ea_dir: Path) -> list[str]:
 def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, Any]:
     """Build a minimal-but-valid ``state.json`` payload for a fresh init.
 
-    Mirrors the shape used by :func:`eawf.cli.commands.lifecycle.project_init_cmd`
+    Mirrors the shape used by :func:`eawf.surfaces.cli.commands.lifecycle.project_init_cmd`
     so the two entry-points produce identical state files. We deliberately
     do NOT instantiate a :class:`~eawf.kernel.state.models.Project` here — the
     project record requires ``domains`` which the wizard does not collect,
@@ -516,11 +516,11 @@ def run_wizard_no_input(
 class WizardCancelled(UserError):  # noqa: N818 — domain cancel name; kind folds to "WizardCancelled"
     """Operator aborted a wizard prompt (Ctrl-C / EOF / Esc).
 
-    Subclass of :class:`~eawf.cli.errors.UserError` so the CLI handler's
+    Subclass of :class:`~eawf.surfaces.cli.errors.UserError` so the CLI handler's
     existing ``except cli_errors.CliError`` clause catches it and exits with
     the canonical ``USER_ERROR`` code. Its concrete class name folds into
     ``ErrorEnvelope.data.kind`` as ``"WizardCancelled"`` via
-    :func:`eawf.cli.errors.build_envelope`.
+    :func:`eawf.surfaces.cli.errors.build_envelope`.
     """
 
 

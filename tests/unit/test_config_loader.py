@@ -6,7 +6,7 @@ Contracts under test:
   layers transparently.
 - Empty / whitespace-only file → empty dict.
 - Valid YAML mapping → parsed dict.
-- Malformed YAML → :class:`eawf.cli.errors.ValidationFailed`.
+- Malformed YAML → :class:`eawf.surfaces.cli.errors.ValidationFailed`.
 - Top-level non-mapping (list, scalar) → :class:`ValidationFailed`.
 - Non-string top-level keys → :class:`ValidationFailed`.
 """
@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.cli.errors import ValidationError
 from eawf.kernel.config.loader import load_yaml_layer
+from eawf.surfaces.cli.errors import ValidationError
 
 
 def test_missing_file_returns_empty_dict(tmp_path: Path) -> None:

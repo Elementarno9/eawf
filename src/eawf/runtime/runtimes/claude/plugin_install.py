@@ -41,11 +41,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from eawf.render._atomic import atomic_write_text
-from eawf.render.agents import AGENT_REGISTRY, AgentSpec, AgentTemplateContext, render_agent_md
-from eawf.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
-from eawf.render.manifest import Manifest, ManifestEntry, save_atomic
-from eawf.render.skills import (
+from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.agents import (
+    AGENT_REGISTRY,
+    AgentSpec,
+    AgentTemplateContext,
+    render_agent_md,
+)
+from eawf.surfaces.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
+from eawf.surfaces.render.manifest import Manifest, ManifestEntry, save_atomic
+from eawf.surfaces.render.skills import (
     SKILL_REGISTRY,
     SkillSpec,
     SkillTemplateContext,
@@ -322,7 +327,7 @@ def _load_existing_manifest(target_dir: Path) -> Manifest:
 def _check_for_drift(target_dir: Path, manifest: Manifest, *, force: bool) -> None:
     """Raise :class:`IntegrityViolation` if any owned file has been hand-edited.
 
-    The check is identical to :func:`eawf.render.drift.detect_drift` but
+    The check is identical to :func:`eawf.surfaces.render.drift.detect_drift` but
     operates on a per-byte equality basis (the file is rendered, not a
     managed-region body). When *force* is ``True``, drift is overwritten
     silently — the caller takes responsibility for clobbering the

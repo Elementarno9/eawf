@@ -4,8 +4,8 @@ Two heuristic-style helpers feed the C03 three-layer enforcement
 stack:
 
 1. :func:`is_ui_scope` — path-prefix check that returns True when any
-   file scope lives under ``src/eawf/tui/`` or
-   ``src/eawf/render/``. This is the D11 heuristic [§4 D11] frozen for
+   file scope lives under ``src/eawf/surfaces/tui/`` or
+   ``src/eawf/surfaces/render/``. This is the D11 heuristic [§4 D11] frozen for
    v0.3; profile-driven overrides land in C08.
 2. :func:`requires_mockup_reference` — given a WaveSpec, returns True
    when the wave's ``file_scopes`` are UI and the wave does NOT cite
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 # (D11). Bare strings — callers compare with ``str.startswith`` against
 # repo-relative file scopes.
 UI_SCOPE_PREFIXES: tuple[str, ...] = (
-    "src/eawf/tui/",
-    "src/eawf/render/",
+    "src/eawf/surfaces/tui/",
+    "src/eawf/surfaces/render/",
 )
 
 

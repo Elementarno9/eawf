@@ -32,7 +32,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from eawf.cli.app import app
+from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "states"
@@ -185,7 +185,7 @@ def test_metrics_missing_state_exits_not_found(
     workspace = tmp_path / "no-state"
     workspace.mkdir()
     result = runner.invoke(app, ["-w", str(workspace), "metrics"])
-    # Exit code 2 maps to NotFound in :mod:`eawf.cli.exit_codes`.
+    # Exit code 2 maps to NotFound in :mod:`eawf.surfaces.cli.exit_codes`.
     assert result.exit_code == 1
 
 

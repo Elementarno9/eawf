@@ -19,7 +19,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _stub_derive_wave_sha(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(
-        "eawf.render.plan_view.derive_wave_sha",
+        "eawf.surfaces.render.plan_view.derive_wave_sha",
         lambda wave_id, *, repo_root=None: None,
     )
     yield

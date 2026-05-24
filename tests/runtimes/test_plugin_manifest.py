@@ -22,12 +22,12 @@ from typing import get_args
 import pytest
 from pydantic import ValidationError
 
-from eawf.render.envelope import EnvelopeStatus as EnvelopeStatusFromEnvelope
 from eawf.runtime.runtimes.plugin_manifest import (
     EnvelopeStatus,
     RuntimeId,
     SkillManifest,
 )
+from eawf.surfaces.render.envelope import EnvelopeStatus as EnvelopeStatusFromEnvelope
 
 pytestmark = pytest.mark.unit
 

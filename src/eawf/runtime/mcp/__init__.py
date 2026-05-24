@@ -1,14 +1,14 @@
 """MCP server install / update / remove primitives for Eä.
 
 The CLI surface (`eawf mcp ...`) is in
-:mod:`eawf.cli.commands.mcp`; this package houses the runtime-config
+:mod:`eawf.surfaces.cli.commands.mcp`; this package houses the runtime-config
 write logic, the env-ref token parser, and the (currently empty)
 v0.1 known-MCP catalog.
 
 Design contract (Phase 5 W04):
 
 - ``state.mcp_servers`` is the canonical persistence location. The
-  CLI writes there via :func:`eawf.cli._mutation.state_transaction`,
+  CLI writes there via :func:`eawf.surfaces.cli._mutation.state_transaction`,
   not via direct file writes.
 - The runtime config (Claude Code's ``.claude/settings.json``) is
   patched in-place: the Eä-owned region is the union of map keys

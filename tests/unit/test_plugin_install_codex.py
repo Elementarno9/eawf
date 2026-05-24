@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from eawf.render.hooks import HOOK_REGISTRY
-from eawf.render.skills import SKILL_REGISTRY
 from eawf.runtime.runtimes.codex import doctor_plugin, expected_paths, install_plugin
 from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
+from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
 @pytest.fixture()

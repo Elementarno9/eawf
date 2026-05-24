@@ -21,7 +21,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from eawf.cli.errors import ValidationError
 from eawf.kernel.config.migration import (
     ACCEPTED_MARKERS,
     CURRENT_MARKER,
@@ -29,6 +28,7 @@ from eawf.kernel.config.migration import (
     migrate_config_file,
     migrate_config_payload,
 )
+from eawf.surfaces.cli.errors import ValidationError
 
 # --- migrate_config_payload (in-memory) -------------------------------------
 
