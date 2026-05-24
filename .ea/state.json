@@ -3429,6 +3429,26 @@
       "scope_id": "P27-I05-W01",
       "status": "done",
       "updated_at": "2026-05-24T18:52:58.354422Z"
+    },
+    "P27-I05-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W02-close-20260524T185427Z",
+      "elapsed_eu": 36.03,
+      "id": "ACT-P27-I05-W02",
+      "scope_id": "P27-I05-W02",
+      "status": "done",
+      "updated_at": "2026-05-24T18:54:27.912250Z"
+    },
+    "P27-I05-W03": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W03-close-20260524T190152Z",
+      "elapsed_eu": 36.28,
+      "id": "ACT-P27-I05-W03",
+      "scope_id": "P27-I05-W03",
+      "status": "done",
+      "updated_at": "2026-05-24T19:01:52.075074Z"
     }
   },
   "agent_sessions": {
@@ -6624,6 +6644,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W01",
       "updated_at": "2026-05-24T18:50:51.632122Z"
+    },
+    "P27-I05-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W02-bucket-20260524T185322Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W02",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W02",
+      "updated_at": "2026-05-24T18:53:22.717602Z"
+    },
+    "P27-I05-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W03-bucket-20260524T185439Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W03",
+      "updated_at": "2026-05-24T18:54:39.308194Z"
     }
   },
   "goals": {
@@ -8001,7 +8047,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T18:52:58.354951Z",
+  "updated_at": "2026-05-24T19:01:52.075768Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20272,9 +20318,9 @@
     "P27-I05-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T18:54:27.912250Z",
+      "commit": "6a8b332cb7376632da90b9ae8cc6833db5c6aa8b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20286,10 +20332,10 @@
       "id": "P27-I05-W02",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:29.077319Z",
-      "outcome": null,
+      "outcome": "README + overview state daemon-canonical mutator; overview package tree resynced to current src tree via source-map reference; pre-commit clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "README and overview state daemon-canonical mutator; package tree matches current src tree"
       ],
@@ -20301,23 +20347,24 @@
     "P27-I05-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:01:52.075074Z",
+      "commit": "cc98f5d07fd1d9917f26720cc866ea586fc0ff9e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
-        "pyproject.toml"
+        "pyproject.toml",
+        "src/eawf/backup/store.py"
       ],
       "id": "P27-I05-W03",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:29.577992Z",
-      "outcome": null,
+      "outcome": "platformdirs+pydantic-settings removed; jsonschema dev-only; deptry config added and deptry . clean; mypy+pre-commit green; 2 telemetry tests fail only on this dev machine (global XDG config sets telemetry.enabled=true), CI-green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "platformdirs and pydantic-settings removed; jsonschema dev-only; deptry config fixed; deptry clean"
       ],
