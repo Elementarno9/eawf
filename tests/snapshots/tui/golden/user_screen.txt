@@ -36,5 +36,5 @@
 
 
 
- ↑↓ row  ·  Enter zoom  ·  Esc back  ·  z zoom  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·
+ ↑↓ row  ·  Enter zoom  ·  Esc back  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit
  weekly burn: — no data                                                                                               •

@@ -6,13 +6,20 @@ focused row into a 2x2 quadrant (roadmap · status / git · backlog) scoped
 to that repo's own ``state.json``. This mixin holds the lift-and-shift of
 that zoom lifecycle so neither host duplicates it:
 
-* ``Enter`` (the table's ``RowZoomed`` message) and ``z``
-  (``action_zoom_focused``) mount a fresh quadrant scoped to the focused
-  repo; ``Esc`` (``action_leave_zoom``) unmounts it and restores the
-  browse pane (falling through to app-quit when not zoomed).
+* ``Enter`` (the table's ``RowZoomed`` message) mounts a fresh quadrant
+  scoped to the focused repo; ``Esc`` (``action_leave_zoom``) unmounts it
+  and restores the browse pane (falling through to app-quit when not
+  zoomed).
 * The quadrant is **mounted on zoom and unmounted on exit** so a re-zoom
   always reloads against the current focus and a mid-probe Esc discards
-  the stale git result cleanly.
+  the stale git result cleanly. The mount path **awaits** the prior
+  unmount before re-mounting, so a tight Esc-then-Enter (or any re-zoom)
+  never inserts a second ``id="zoom-quadrant"`` before the first is
+  pruned (which would raise ``DuplicateIds``).
+* :meth:`on_screen_suspend` resets the zoom when the screen is suspended
+  on a scope switch, so a cached scope screen (Textual reuses named
+  ``SCREENS`` instances) never carries a stale quadrant back when the
+  operator returns to it.
 
 The host parameterises only its browse-pane selector via
 :attr:`ZOOM_BROWSE_PANE` (workspace ``#pane-repos``; user
@@ -24,6 +31,7 @@ The host parameterises only its browse-pane selector via
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -74,25 +82,17 @@ class RepoZoomMixin(_Base):
         """``True`` while a focused-repo quadrant is mounted."""
         return self._zoomed_code is not None
 
-    def on_workspace_table_row_zoomed(self, message: WorkspaceTable.RowZoomed) -> None:
+    async def on_workspace_table_row_zoomed(self, message: WorkspaceTable.RowZoomed) -> None:
         """Zoom the focused repo into a 2x2 quadrant (Enter handler).
+
+        Async so the mount path can await the prior quadrant's unmount
+        before re-mounting (Textual supports async message handlers).
 
         Args:
             message: The :class:`WorkspaceTable.RowZoomed` message carrying
                 the repo code to scope the quadrant to.
         """
-        self._enter_zoom(message.repo_code)
-
-    def action_zoom_focused(self) -> None:
-        """Zoom the focused row (the ``z`` binding).
-
-        Re-reads the table's current focus so a ``z`` after an ``↑↓`` move
-        zooms the row under the cursor, not a stale target.
-        """
-        table = self.query_one(WorkspaceTable)
-        repo_code = table.focused_repo()
-        if repo_code is not None:
-            self._enter_zoom(repo_code)
+        await self._enter_zoom(message.repo_code)
 
     async def action_leave_zoom(self) -> None:
         """Return to the table from the zoom quadrant (the ``Esc`` binding).
@@ -104,21 +104,34 @@ class RepoZoomMixin(_Base):
         if not self.zoomed:
             await self.app.action_quit()
             return
-        self._exit_zoom()
+        await self._exit_zoom()
 
-    def _enter_zoom(self, repo_code: str) -> None:
+    async def on_screen_suspend(self) -> None:
+        """Reset the zoom when this screen is suspended on a scope switch.
+
+        Textual reuses named ``SCREENS`` instances (a scope switch
+        suspends the current screen rather than destroying it), so without
+        this a screen zoomed before the switch would carry its stale
+        quadrant — and a hidden browse pane — back when the operator
+        returns. Exiting on suspend keeps a cached screen in table-browse.
+        """
+        if self.zoomed:
+            await self._exit_zoom()
+
+    async def _enter_zoom(self, repo_code: str) -> None:
         """Mount a fresh quadrant scoped to *repo_code*.
 
-        Any existing quadrant is unmounted first so a re-zoom always
-        reloads against the current focus rather than reusing a cached
-        mount. The focused repo's own ``state.json`` is loaded read-only
-        and fed into the quadrant widgets; the git pane probes the repo's
-        path directly.
+        Any existing quadrant is unmounted first — and the unmount is
+        **awaited** — so a re-zoom always reloads against the current
+        focus and never races a not-yet-pruned quadrant into a
+        ``DuplicateIds`` on the re-mount. The focused repo's own
+        ``state.json`` is loaded read-only and fed into the quadrant
+        widgets; the git pane probes the repo's path directly.
 
         Args:
             repo_code: The repo code to scope the quadrant to.
         """
-        self._clear_zoom_mount()
+        await self._clear_zoom_mount()
         ref = self._repo_ref(repo_code)
         if ref is None:
             logger.info(f"_enter_zoom unknown repo_code={repo_code!r}")
@@ -163,16 +176,22 @@ class RepoZoomMixin(_Base):
             for widget in self.query(f"#zoom-quadrant {widget_type.__name__}"):
                 widget.state = repo_state  # type: ignore[attr-defined]
 
-    def _exit_zoom(self) -> None:
+    async def _exit_zoom(self) -> None:
         """Unmount the quadrant and restore the table-browse view."""
-        self._clear_zoom_mount()
+        await self._clear_zoom_mount()
         self.query_one(self.ZOOM_BROWSE_PANE, Vertical).display = True
         self._zoomed_code = None
 
-    def _clear_zoom_mount(self) -> None:
-        """Remove any mounted quadrant (discards its in-flight git probe)."""
-        for child in self.query("#zoom-quadrant"):
-            child.remove()
+    async def _clear_zoom_mount(self) -> None:
+        """Remove any mounted quadrant, awaiting the prune to completion.
+
+        Awaiting each ``remove()`` (a Textual ``AwaitComplete``) before the
+        caller re-mounts guarantees the old ``id="zoom-quadrant"`` is gone
+        from the ``#zoom-mount`` ``NodeList`` first, so the re-mount cannot
+        trip ``DuplicateIds``. A no-op (empty gather) when nothing is
+        mounted.
+        """
+        await asyncio.gather(*(child.remove() for child in self.query("#zoom-quadrant")))
 
     def _repo_ref(self, repo_code: str) -> WorkspaceRepoRef | None:
         """Resolve *repo_code* to its workspace repo ref, or ``None``.

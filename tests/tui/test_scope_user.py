@@ -2,7 +2,7 @@
 
 Covers the full-screen per-repo :class:`PortfolioTable` (the reused W06
 workspace-table family) — >=1 row even at N=1, the large-N scroll without
-breaking column widths, the Enter / z zoom into a 2x2 quadrant scoped to
+breaking column widths, the Enter zoom into a 2x2 quadrant scoped to
 the focused repo (the shared zoom mixin), the Esc return, the ``↑↓``
 focus movement, the D3 zero-duplication invariant, the scope-specific
 footer hints, the empty registry boundary, and the ``c`` config binding.
@@ -246,7 +246,7 @@ def test_user_portfolio_large_n_scrolls() -> None:
 
 
 # --------------------------------------------------------------------------
-# Enter / z zoom → quadrant; Esc returns; ↑↓ focus
+# Enter zoom → quadrant; Esc returns; ↑↓ focus
 # --------------------------------------------------------------------------
 
 
@@ -297,8 +297,8 @@ def test_user_down_arrow_moves_focus() -> None:
     asyncio.run(body())
 
 
-def test_user_z_zooms_focused_repo() -> None:
-    """``z`` zooms the focused repo into the 2x2 quadrant, like Enter."""
+def test_user_z_no_longer_zooms() -> None:
+    """The secondary ``z`` zoom binding is dropped — ``z`` does not zoom."""
 
     async def body() -> None:
         app = EaApp(scope="user", state_path=_WORKSPACE)
@@ -311,9 +311,9 @@ def test_user_z_zooms_focused_repo() -> None:
             await pilot.press("z")
             await pilot.pause()
             await app.workers.wait_for_complete()
-            # Still on the UserScreen with the quadrant mounted.
+            # Still on the UserScreen, but no quadrant mounted (z is inert).
             assert isinstance(app.screen, UserScreen)
-            assert app.screen.query("#zoom-quadrant")
+            assert not app.screen.query("#zoom-quadrant")
 
     asyncio.run(body())
 
@@ -329,7 +329,7 @@ def test_user_esc_while_zoomed_returns_to_table() -> None:
             screen = app.screen
             assert isinstance(screen, UserScreen)
             screen.query_one(PortfolioTable).focus()
-            await pilot.press("z")
+            await pilot.press("enter")
             await pilot.pause()
             await app.workers.wait_for_complete()
             assert screen.query("#zoom-quadrant")

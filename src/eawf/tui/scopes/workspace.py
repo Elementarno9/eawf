@@ -11,7 +11,7 @@ Heartbeat reused verbatim):
   dims to ``git?`` on a probe failure.
 * **zoom** — the focused repo's 2x2 quadrant (roadmap · status / git ·
   backlog), reusing the repo-scope widget catalog scoped to the focused
-  repo's own ``state.json``. ``Enter`` / ``z`` zooms; ``Esc`` returns.
+  repo's own ``state.json``. ``Enter`` zooms; ``Esc`` returns.
 
 The zoom lifecycle (mount on zoom, unmount on exit, re-zoom reloads the
 current focus) lives on the shared
@@ -39,11 +39,10 @@ from eawf.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
 
-#: Footer hints for the table-browse mode (arrows primary; z is an alias).
+#: Footer hints for the table-browse mode (arrows primary; Enter zooms).
 _WORKSPACE_HINTS: tuple[str, ...] = (
     "↑↓ row",
     "Enter zoom",
-    "z zoom",
     "w/r/u scope",
     "c config",
     "F5 refresh",
@@ -65,14 +64,13 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
     :class:`~eawf.tui.scopes._zoom.RepoZoomMixin`).
     """
 
-    #: ``z`` zooms the focused row (the Enter alias); ``Esc`` returns from
-    #: the zoom quadrant to the table; ``c`` opens the registry-driven
-    #: config window via the shared ``action_open_config`` on the base
-    #: chassis. The chassis already binds ``Esc`` to quit, so the
-    #: zoom-aware ``escape`` here takes precedence on this screen and only
-    #: quits when not zoomed.
+    #: ``Enter`` zooms the focused row (via the table's ``RowZoomed``
+    #: message); ``Esc`` returns from the zoom quadrant to the table; ``c``
+    #: opens the registry-driven config window via the shared
+    #: ``action_open_config`` on the base chassis. The chassis already
+    #: binds ``Esc`` to quit, so the zoom-aware ``escape`` here takes
+    #: precedence on this screen and only quits when not zoomed.
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("z", "zoom_focused", "zoom", show=False),
         Binding("escape", "leave_zoom", "back", show=False),
         Binding("c", "open_config", "config", show=False),
     ]

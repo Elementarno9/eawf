@@ -9,13 +9,13 @@ the shared :class:`~eawf.tui.scopes.ScopeScreen` chassis (Header + Footer
 It reuses the W06 workspace-table widget family rather than forking a
 second grid — the same status-tinted completion + EU-burn bars, the same
 live git column, the same large-N scroll behaviour. Row activation also
-matches the workspace scope: ``Enter`` / ``z`` zooms the focused repo
+matches the workspace scope: ``Enter`` zooms the focused repo
 into a 2x2 quadrant (roadmap · status / git · backlog) scoped to that
 repo's own ``state.json``, and ``Esc`` returns. The zoom lifecycle is the
 shared :class:`~eawf.tui.scopes._zoom.RepoZoomMixin`, and
 :class:`PortfolioTable` subclasses the workspace table unchanged — it
-inherits the ``RowZoomed`` Enter message and the ``z`` zoom action, so
-both scopes drive the identical zoom path.
+inherits the ``RowZoomed`` Enter message, so both scopes drive the
+identical zoom path.
 
 This screen overrides **only** :meth:`compose_body` + its scope bindings
 + footer hints; the entire chassis is inherited from
@@ -125,12 +125,11 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
 
 
 #: Footer hints tuned for the user portfolio screen (arrows primary; the
-#: user scope zooms the focused repo on Enter / z, like the workspace).
+#: user scope zooms the focused repo on Enter, like the workspace).
 _USER_HINTS: tuple[str, ...] = (
     "↑↓ row",
     "Enter zoom",
     "Esc back",
-    "z zoom",
     "w/r/u scope",
     "c config",
     "F5 refresh",
@@ -145,8 +144,7 @@ class PortfolioTable(WorkspaceTable):
 
     Reuses every column, bar, git-probe, scroll, and row-activation
     behaviour of :class:`~eawf.tui.widgets.workspace_table.WorkspaceTable`
-    with no overrides: an Enter selection posts ``RowZoomed`` and the
-    ``z`` action zooms, so the host
+    with no overrides: an Enter selection posts ``RowZoomed``, so the host
     :class:`~eawf.tui.scopes._zoom.RepoZoomMixin` mounts the focused
     repo's 2x2 quadrant exactly as the workspace scope does. The subclass
     exists only to give the user scope a distinct widget type for
@@ -159,7 +157,7 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
 
     Composes a :class:`PortfolioTable` (the reused workspace-table family)
     spanning the body plus an (initially empty) zoom mount. ``↑↓`` focus a
-    repo; ``Enter`` / ``z`` zooms the focused repo into a 2x2 quadrant
+    repo; ``Enter`` zooms the focused repo into a 2x2 quadrant
     scoped to that repo's own ``state.json`` (the shared
     :class:`~eawf.tui.scopes._zoom.RepoZoomMixin`); ``Esc`` returns. The
     git column refreshes on the host's refresh tick.
@@ -169,13 +167,13 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
     #: hides / restores it on zoom / exit.
     ZOOM_BROWSE_PANE: ClassVar[str] = "#pane-portfolio"
 
-    #: ``z`` zooms the focused row (the Enter alias); ``Esc`` returns from
-    #: the zoom quadrant to the table; ``c`` opens the registry-driven
-    #: config window via the shared ``action_open_config`` on the base
-    #: chassis. Config is scope-agnostic — the user scope has no repo
-    #: anchor, so the modal opens on the global layer only.
+    #: ``Enter`` zooms the focused row (via the table's ``RowZoomed``
+    #: message); ``Esc`` returns from the zoom quadrant to the table; ``c``
+    #: opens the registry-driven config window via the shared
+    #: ``action_open_config`` on the base chassis. Config is scope-agnostic
+    #: — the user scope has no repo anchor, so the modal opens on the
+    #: global layer only.
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("z", "zoom_focused", "zoom", show=False),
         Binding("escape", "leave_zoom", "back", show=False),
         Binding("c", "open_config", "config", show=False),
     ]

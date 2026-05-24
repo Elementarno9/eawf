@@ -2,7 +2,7 @@
 
 Covers the table-browse mode (a per-repo :class:`WorkspaceTable` with
 >=1 row even at N=1, status-tinted completion + EU-burn bars), the
-Enter / z zoom into a 2x2 quadrant scoped to the focused repo, the Esc
+Enter zoom into a 2x2 quadrant scoped to the focused repo, the Esc
 return, the live git column (refresh on tick, dim to ``git?`` on a probe
 failure), the re-zoom-reloads-current-focus invariant, the D3
 zero-duplication invariant, the scope-specific footer hints, and a
@@ -232,7 +232,7 @@ def test_workspace_table_row_focused_so_enter_would_zoom() -> None:
 
 
 # --------------------------------------------------------------------------
-# Enter / z zoom → quadrant; Esc returns
+# Enter zoom → quadrant; Esc returns
 # --------------------------------------------------------------------------
 
 
@@ -263,8 +263,8 @@ def test_enter_zooms_focused_repo() -> None:
     asyncio.run(body())
 
 
-def test_z_zooms_focused_repo() -> None:
-    """The ``z`` alias zooms the focused repo just like Enter."""
+def test_z_no_longer_zooms() -> None:
+    """The secondary ``z`` zoom binding is dropped — ``z`` does not zoom."""
 
     async def body() -> None:
         app = EaApp(scope="workspace", state_path=_WORKSPACE)
@@ -273,11 +273,12 @@ def test_z_zooms_focused_repo() -> None:
             await app.workers.wait_for_complete()
             screen = app.screen
             assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
             await pilot.press("z")
             await pilot.pause()
             await app.workers.wait_for_complete()
-            assert screen.zoomed
-            assert screen.query_one("#zoom-quadrant RoadmapTree", RoadmapTree)
+            assert not screen.zoomed
+            assert not screen.query("#zoom-quadrant")
 
     asyncio.run(body())
 
@@ -345,7 +346,8 @@ def test_zoom_out_mid_probe_is_clean() -> None:
             await app.workers.wait_for_complete()
             screen = app.screen
             assert isinstance(screen, WorkspaceScreen)
-            await pilot.press("z")
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
             await pilot.pause()
             assert screen.zoomed
             await pilot.press("escape")
@@ -475,8 +477,9 @@ def test_workspace_screen_advertises_config_hint() -> None:
 def test_workspace_screen_binds_c_to_open_config() -> None:
     actions = {binding.action for binding in WorkspaceScreen.BINDINGS}
     assert "open_config" in actions
-    assert "zoom_focused" in actions
     assert "leave_zoom" in actions
+    # The secondary ``z`` zoom binding is dropped — Enter is the sole entry.
+    assert "zoom_focused" not in actions
 
 
 def test_workspace_c_keypress_opens_config_modal() -> None:
