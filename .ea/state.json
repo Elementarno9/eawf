@@ -3449,6 +3449,36 @@
       "scope_id": "P27-I05-W03",
       "status": "done",
       "updated_at": "2026-05-24T19:01:52.075074Z"
+    },
+    "P27-I05-W04": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W04-close-20260524T190257Z",
+      "elapsed_eu": 36.32,
+      "id": "ACT-P27-I05-W04",
+      "scope_id": "P27-I05-W04",
+      "status": "done",
+      "updated_at": "2026-05-24T19:02:57.529645Z"
+    },
+    "P27-I05-W05": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W05-close-20260524T190621Z",
+      "elapsed_eu": 36.43,
+      "id": "ACT-P27-I05-W05",
+      "scope_id": "P27-I05-W05",
+      "status": "done",
+      "updated_at": "2026-05-24T19:06:21.955390Z"
+    },
+    "P27-I05-W06": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W06-close-20260524T190709Z",
+      "elapsed_eu": 36.45,
+      "id": "ACT-P27-I05-W06",
+      "scope_id": "P27-I05-W06",
+      "status": "done",
+      "updated_at": "2026-05-24T19:07:09.869332Z"
     }
   },
   "agent_sessions": {
@@ -5210,6 +5240,18 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Recalibrate EU buckets vs actual elapsed_eu (actual ~8x bucket)"
+    },
+    "B70": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-24T19:06:59.044254Z",
+      "description": null,
+      "id": "B70",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Wire wal.* admin handlers into the daemon dispatcher with state.mutate"
     }
   },
   "current": {
@@ -5654,6 +5696,20 @@
       "status": "active",
       "superseded_by": null,
       "title": "Adopt C09 §5.2 nine-layer per-package coverage gates as a measured"
+    },
+    "D25": {
+      "alternatives": [
+        "Keep the helper as a convenience wrapper (rejected: YAGNI; no caller, and it implies a registration pattern app.py does not follow)"
+      ],
+      "consequences": [],
+      "created_at": "2026-05-24T19:02:32.390598Z",
+      "description": null,
+      "id": "D25",
+      "rationale": "register_subcommand has zero call sites in src/ or tests/; cli/app.py mounts all 53 sub-Typers via app.add_typer(...) directly. The helper is superseded dead code; deleting it removes a misleading 'shared registration' indirection that no module uses.",
+      "scope_id": "P27-I05",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Delete dead cli/dispatch.py register_subcommand helper"
     }
   },
   "estimates": {
@@ -6670,6 +6726,45 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W03",
       "updated_at": "2026-05-24T18:54:39.308194Z"
+    },
+    "P27-I05-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W04-bucket-20260524T190207Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W04",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W04",
+      "updated_at": "2026-05-24T19:02:07.419359Z"
+    },
+    "P27-I05-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W05-bucket-20260524T190304Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W05",
+      "updated_at": "2026-05-24T19:03:04.515275Z"
+    },
+    "P27-I05-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W06-bucket-20260524T190627Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W06",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W06",
+      "updated_at": "2026-05-24T19:06:27.821860Z"
     }
   },
   "goals": {
@@ -8047,7 +8142,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T19:01:52.075768Z",
+  "updated_at": "2026-05-24T19:07:09.869965Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20376,9 +20471,9 @@
     "P27-I05-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:02:57.529645Z",
+      "commit": "89b595a8deca1d867d22e534babd3b43be7326cd",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20390,10 +20485,10 @@
       "id": "P27-I05-W04",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:30.088787Z",
-      "outcome": null,
+      "outcome": "cli/dispatch.py deleted; register_subcommand had no call sites; D25 verdict recorded; test_cli_dispatch 6/6 green; mypy clean (476 files)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "register_subcommand removed; no call sites; decision verdict recorded; tests green"
       ],
@@ -20405,9 +20500,9 @@
     "P27-I05-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:06:21.955390Z",
+      "commit": "65be19446604af8d190cbceaffcd05d9f9d272c0",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20420,10 +20515,10 @@
       "id": "P27-I05-W05",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:30.574194Z",
-      "outcome": null,
+      "outcome": "schema generation consolidated into docs/autogen.dump_bundled_schemas; state/schema.py removed; test repointed; bundled schemas byte-identical (22 tests green); mypy clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "single dump_schemas home; state/schema.py removed; test repointed; schema output unchanged"
       ],
@@ -20435,8 +20530,8 @@
     "P27-I05-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T19:07:09.869332Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -20448,10 +20543,10 @@
       "id": "P27-I05-W06",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:31.056122Z",
-      "outcome": null,
+      "outcome": "B70 backlog item added (P2): wire wal.* admin handlers into the daemon dispatcher alongside state.mutate (v0.4); wal_admin.py currently dispatcher-unimported per its own docstring",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "backlog item links wal_admin.py to v0.4 state.mutate wiring"
       ],
