@@ -3539,6 +3539,16 @@
       "scope_id": "P27-I05-W12",
       "status": "done",
       "updated_at": "2026-05-24T20:04:33.733114Z"
+    },
+    "P27-I05-W13": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W13-close-20260524T200836Z",
+      "elapsed_eu": 38.5,
+      "id": "ACT-P27-I05-W13",
+      "scope_id": "P27-I05-W13",
+      "status": "done",
+      "updated_at": "2026-05-24T20:08:36.302187Z"
     }
   },
   "agent_sessions": {
@@ -6903,6 +6913,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I05-W12",
       "updated_at": "2026-05-24T20:04:33.231916Z"
+    },
+    "P27-I05-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W13-bucket-20260524T200827Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W13",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W13",
+      "updated_at": "2026-05-24T20:08:27.511560Z"
     }
   },
   "goals": {
@@ -8280,7 +8303,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T20:04:33.733399Z",
+  "updated_at": "2026-05-24T20:08:36.302486Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20876,9 +20899,9 @@
     "P27-I05-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T20:08:36.302187Z",
+      "commit": "0e8018c98a0ff26b6103c58ec752808942a97b67",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20889,10 +20912,10 @@
       "id": "P27-I05-W13",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:34.463360Z",
-      "outcome": null,
+      "outcome": "detail card renders a description block directly under the title for backlog items with a description; 3 tests incl. a Pilot render assertion; mypy + 891 TUI/snapshot tests green; no golden drift",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "detail card shows description block under title; Pilot test asserts render"
       ],
