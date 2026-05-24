@@ -50,14 +50,17 @@ from typing import TYPE_CHECKING, Any
 from pydantic import TypeAdapter
 
 from eawf.agent_report.store import append_agent_report
+from eawf.budget.service import record_consumption
 from eawf.evidence._io import load_state
 from eawf.lifecycle.wave import start_wave
 from eawf.lock import portalock
 from eawf.state.enums import AgentReportVerdict, Confidence, StoreKind, WaveStatus
+from eawf.state.io import state_version
 from eawf.state.writer import atomic_write_json_locked
 from eawf.store.append import append_envelope
 from eawf.store.envelope import Envelope
 from eawf.store.kinds.agent_report import ExecutorReportBody
+from eawf.store.kinds.event import EventPayload
 from eawf.store.kinds.events import (
     C09EventPayloadUnion,
     DispatchCostPayload,
@@ -92,6 +95,22 @@ class DispatchTokens:
     output_tokens: int
     cache_creation_input_tokens: int
     cache_read_input_tokens: int
+
+    @property
+    def total(self) -> int:
+        """Return the sum of every billed token field for this dispatch.
+
+        The live burn gauge tracks ``Wave.tokens_consumed`` as a single
+        scalar, so the per-invocation accrual folds all four billed
+        tallies (non-cached input, output, cache-creation, cache-read)
+        into one delta.
+        """
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cache_creation_input_tokens
+            + self.cache_read_input_tokens
+        )
 
 
 @dataclass(frozen=True)
@@ -297,6 +316,133 @@ def emit_dispatch_cost(
     return _emit(ctx, payload, scope_id=wave_id, summary=summary)
 
 
+def _publish_state_revision(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    before_version: str,
+    after_version: str,
+    tokens_consumed: int,
+) -> None:
+    """Publish a ``state_mutated`` revision envelope on the subscription bus.
+
+    The accrual writes ``state.json`` directly under the runner's
+    portalock (the daemon-internal canonical-writer path), so the
+    mtime-poll STATE_REVISION feed advances on the next tick. This helper
+    drives the **daemon-push** STATE_REVISION feed: it wakes live
+    subscribers (the TUI burn gauge) immediately with a canonical
+    ``state_mutated`` event envelope carrying the before/after state
+    digests, mirroring the envelope :func:`eawf.daemon.methods.state.mutate`
+    publishes so subscribers cannot tell the two paths apart.
+
+    A bus-less context (stateless unit-test paths) is a no-op.
+
+    Args:
+        ctx: Daemon method context — supplies ``bus``.
+        wave_id: ``W<NN>`` wave whose token burn advanced.
+        before_version: State digest before the accrual write.
+        after_version: State digest after the accrual write.
+        tokens_consumed: The wave's post-accrual cumulative
+            ``tokens_consumed`` value (carried on the envelope summary).
+    """
+    if ctx.bus is None or not hasattr(ctx.bus, "publish"):
+        return
+    now = datetime.now(UTC)
+    summary = f"state_mutated wave={wave_id} tokens_consumed={tokens_consumed}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="state.mutate.wave_accrue_tokens",
+        event_kind="state_mutated",
+        actor="daemon",
+        command="dispatch_runner.accrue_tokens_consumed",
+        args_hash="",
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="ok",
+        message=summary,
+    ).model_dump(mode="json")
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
+
+
+def accrue_tokens_consumed(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    tokens: DispatchTokens,
+) -> bool:
+    """Fold a dispatch's token tally into ``Wave.tokens_consumed``, live.
+
+    Called once per ``dispatch_cost`` event so the live burn gauge on the
+    TUI advances **during** execution rather than only on the manual
+    ``eawf wave budget consume`` CLI. The increment runs under the same
+    defense-in-depth ``portalock(state.json)`` + locked-atomic-write the
+    daemon's ``state.mutate`` path uses (per the daemon-as-sole-mutator
+    rule), and delegates to :func:`eawf.budget.service.record_consumption`
+    so the accrual reuses the canonical consume semantics rather than a
+    raw field edit.
+
+    The atomic state write bumps the ``state.json`` mtime (the mtime-poll
+    STATE_REVISION feed), and :func:`_publish_state_revision` wakes live
+    subscribers on the bus (the daemon-push STATE_REVISION feed) so both
+    revision feeds advance.
+
+    The accrual is opt-in and tolerant: it is skipped (returning
+    ``False``) when ``ctx.state_path`` is unset (stateless unit-test
+    contexts). The total delta is the sum of every billed token field
+    (:attr:`DispatchTokens.total`); a zero delta still rewrites the state
+    (bumping the revision) but leaves the counter unchanged.
+
+    Args:
+        ctx: Daemon method context — supplies ``state_path`` + ``bus``.
+        wave_id: ``W<NN>`` wave the dispatch served.
+        tokens: Per-invocation token tally from the dispatch.
+
+    Returns:
+        ``True`` when the accrual was persisted; ``False`` when it was
+        skipped (no ``state_path``).
+
+    Raises:
+        KeyError: When *wave_id* is absent from ``state.json`` — the
+            dispatch served a wave that no longer exists in state, which
+            is a fail-fast inconsistency the caller must surface.
+    """
+    if ctx.state_path is None:
+        return False
+    delta = tokens.total
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        before_version = state_version(state.model_dump(mode="json"))
+        wave, _tag = record_consumption(state, wave_id, delta)
+        state.updated_at = datetime.now(UTC)
+        new_payload = state.model_dump(mode="json")
+        after_version = state_version(new_payload)
+        atomic_write_json_locked(state_path, new_payload)
+        tokens_consumed = wave.tokens_consumed
+    _publish_state_revision(
+        ctx,
+        wave_id=wave_id,
+        before_version=before_version,
+        after_version=after_version,
+        tokens_consumed=tokens_consumed,
+    )
+    logger.info(f"accrue_tokens_consumed wave={wave_id} delta={delta} consumed={tokens_consumed}")
+    return True
+
+
 def _completion_verdict(*, switched: bool) -> AgentReportVerdict:
     """Derive the executor report verdict from the dispatch outcome.
 
@@ -484,7 +630,10 @@ def run_dispatch(
     is minted for *fallback_runtime*, a ``runtime_switched`` event is
     emitted through the canonical writer, and the fallback runtime serves
     the dispatch. Once the serving attempt completes, a ``dispatch_cost``
-    event is emitted with the token tally + priced cost.
+    event is emitted with the token tally + priced cost, and the tally is
+    folded into ``Wave.tokens_consumed`` via :func:`accrue_tokens_consumed`
+    (triggering a STATE_REVISION) so the live burn gauge advances during
+    execution.
 
     On completion the runner also emits a typed ``agent_end`` executor
     report through :func:`emit_agent_end_report` when *session_id* is
@@ -573,6 +722,13 @@ def run_dispatch(
             trace_request_id=trace_request_id,
         )
     )
+
+    # Fold the dispatch's token tally into Wave.tokens_consumed so the live
+    # burn gauge advances during execution. Routes through the daemon
+    # canonical state writer (portalock + atomic write) and triggers a
+    # STATE_REVISION on both feeds (mtime-poll via the state.json write +
+    # daemon-push via the bus). Skipped on a stateless context.
+    accrue_tokens_consumed(ctx, wave_id=wave_id, tokens=tokens)
 
     report_id: str | None = None
     if session_id is not None and ctx.state_path is not None:
