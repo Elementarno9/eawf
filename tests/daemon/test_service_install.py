@@ -566,6 +566,49 @@ def test_render_launchd_template_substitutes_runtime_dir(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------
+# Template-directory resolution (wheel vs editable checkout)
+# ---------------------------------------------------------------------
+
+
+def test_template_dir_prefers_bundled_when_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bundled wheel copy wins when both candidate dirs exist."""
+    bundled = tmp_path / "bundled"
+    repo = tmp_path / "repo"
+    bundled.mkdir()
+    repo.mkdir()
+    monkeypatch.setattr(service_install, "_BUNDLED_TEMPLATE_DIR", bundled)
+    monkeypatch.setattr(service_install, "_REPO_TEMPLATE_DIR", repo)
+    assert service_install._template_dir() == bundled
+
+
+def test_template_dir_falls_back_to_repo_when_bundled_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Editable checkouts (no bundled ``_data/``) resolve the repo dir."""
+    bundled = tmp_path / "bundled"  # never created
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setattr(service_install, "_BUNDLED_TEMPLATE_DIR", bundled)
+    monkeypatch.setattr(service_install, "_REPO_TEMPLATE_DIR", repo)
+    assert service_install._template_dir() == repo
+
+
+def test_template_dir_raises_when_both_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Neither candidate present ⇒ ``ServiceInstallError``."""
+    monkeypatch.setattr(service_install, "_BUNDLED_TEMPLATE_DIR", tmp_path / "bundled")
+    monkeypatch.setattr(service_install, "_REPO_TEMPLATE_DIR", tmp_path / "repo")
+    with pytest.raises(ServiceInstallError, match="template dir missing"):
+        service_install._template_dir()
+
+
+# ---------------------------------------------------------------------
 # Argument validation
 # ---------------------------------------------------------------------
 

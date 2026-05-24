@@ -42,10 +42,39 @@ from eawf.daemon.runtime_dir import pid_path, runtime_dir
 logger = logging.getLogger(__name__)
 
 
-# Repository-relative template directory. ``__file__`` resolves to
-# ``src/eawf/daemon/service_install.py``; the templates live at the
-# repo-root ``templates/`` directory four parents up.
-_TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "templates"
+# Service-template directories, in resolution order. ``__file__``
+# resolves to ``.../eawf/daemon/service_install.py``, so ``parents[1]``
+# is the installed ``eawf`` package root and ``parents[3]`` is the repo
+# root in an editable checkout.
+#
+# - Wheel / PyPI install: ``tools/bundle_data.py`` copies the templates
+#   into ``eawf/_data/service_templates/`` at build time; that copy is
+#   the only one present when there is no repo checkout.
+# - Editable / source checkout: ``_data/`` is gitignored and absent, so
+#   the daemon reads the version-controlled source at the repo-root
+#   ``templates/`` directory the bundle hook copies from.
+_BUNDLED_TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "_data" / "service_templates"
+_REPO_TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "templates"
+
+
+def _template_dir() -> Path:
+    """Resolve the service-template directory for the active install.
+
+    Returns:
+        The first existing of the bundled wheel copy
+        (:data:`_BUNDLED_TEMPLATE_DIR`) and the repo-root source dir
+        (:data:`_REPO_TEMPLATE_DIR`).
+
+    Raises:
+        ServiceInstallError: When neither candidate directory exists.
+    """
+    for candidate in (_BUNDLED_TEMPLATE_DIR, _REPO_TEMPLATE_DIR):
+        if candidate.is_dir():
+            return candidate
+    raise ServiceInstallError(
+        f"template dir missing: tried {_BUNDLED_TEMPLATE_DIR} and {_REPO_TEMPLATE_DIR}"
+    )
+
 
 _SYSTEMD_TEMPLATE = "eawfd.service.j2"
 _LAUNCHD_TEMPLATE = "dev.eawf.eawfd.plist.j2"
@@ -146,20 +175,20 @@ def _render_template(name: str, *, runtime_dir_value: Path) -> str:
       ``Program`` keys that take a single string.
 
     Args:
-        name: Template filename under :data:`_TEMPLATE_DIR`.
+        name: Template filename under the resolved template directory
+            (see :func:`_template_dir`).
         runtime_dir_value: Resolved runtime directory path.
 
     Returns:
         Rendered template body as text.
 
     Raises:
-        ServiceInstallError: When the template is missing or fails
-            to render (the StrictUndefined catches typo'd variables).
+        ServiceInstallError: When the template directory is missing or
+            the template fails to render (the StrictUndefined catches
+            typo'd variables).
     """
-    if not _TEMPLATE_DIR.exists():
-        raise ServiceInstallError(f"template dir missing: {_TEMPLATE_DIR}")
     env = Environment(
-        loader=FileSystemLoader(str(_TEMPLATE_DIR)),
+        loader=FileSystemLoader(str(_template_dir())),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
         autoescape=False,  # systemd / launchd templates are not HTML
