@@ -8,7 +8,7 @@
       │                                                                                                          │
       │   audit  daemon  estimation  planning  research  runtime  ship  telemetry  ui  vcs  worktrees            │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  runtime.default                            [choice]       claude                                     │
+      │  >  runtime.default          [choice]       claude                                                       │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

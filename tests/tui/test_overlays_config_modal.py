@@ -756,7 +756,8 @@ def test_meta_line_prefixes_three_spaces_for_alignment() -> None:
     """``_meta_line`` leads with three spaces (caret + dirty + separator)."""
     entry = registry_lookup("audit.flaky_retry_count")
     assert entry is not None
-    line = ConfigModal._meta_line(entry)
+    modal = ConfigModal(workspace=None, repo=Path("/tmp/repo"))
+    line = modal._meta_line(entry)
     assert line.startswith("   audit.flaky_retry_count")
     # The key column matches the static row (caret + dirty + space = 3).
     assert line.index("audit.flaky_retry_count") == 3
@@ -788,6 +789,79 @@ def test_config_inline_edit_type_cell_aligns_with_static_row() -> None:
             # so the trailing input lands in the static value column.
             assert static_line.index(entry.key) == meta_line.index(entry.key)
             assert static_line.index(type_cell) == meta_line.index(type_cell)
+
+    asyncio.run(body())
+
+
+def test_config_long_key_tab_columns_stay_aligned() -> None:
+    """On the long-key estimation tab the type + value columns stay aligned.
+
+    Regression for W12: the field-row renderer hardcoded a ``:<42`` key
+    column, so the ``estimation.display.time_quantum_*`` keys (48 chars,
+    over the column) overflowed and pushed the ``[type]`` tag + value cell
+    right on their own rows — ragged columns. The per-tab key width
+    (:meth:`ConfigModal._key_col_width`) sizes the column to the widest key
+    actually rendered, so a short key and the longest key land their
+    ``[type]`` tag (and the value cell) at the identical column index.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_tab(modal, "estimation")
+            await pilot.pause()
+            fields = keys_for_tab("estimation")
+            short_entry = registry_lookup("estimation.enabled")  # 18 chars
+            long_entry = registry_lookup(
+                "estimation.display.time_quantum_under_2h_minutes"  # 48 chars
+            )
+            assert short_entry is not None and long_entry is not None
+            assert short_entry in fields and long_entry in fields
+            short_line = modal._field_line(short_entry)
+            long_line = modal._field_line(long_entry)
+            # The widest key (48) > the legacy floor, so the type tag column
+            # is identical across the short-key and longest-key rows.
+            assert short_line.index("[") == long_line.index("[")
+            # The value cell anchor (right after the padded type cell) also
+            # lines up — measured from the end of the ``[type]`` cell.
+            short_value_col = short_line.index("[bool]") + len(f"{'[bool]':<14}")
+            long_value_col = long_line.index("[int]") + len(f"{'[int]':<14}")
+            assert short_value_col == long_value_col
+
+    asyncio.run(body())
+
+
+def test_config_meta_line_value_column_matches_field_line() -> None:
+    """``_meta_line`` and ``_field_line`` place the value/input column identically.
+
+    The inline editor mounts an :class:`Input` after the ``_meta_line``
+    prefix, so the meta line's trailing column (where the input starts) must
+    equal the static row's value column for the inline editor to stay in
+    column — including on the long-key estimation tab.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_tab(modal, "estimation")
+            await pilot.pause()
+            entry = registry_lookup("estimation.display.time_quantum_under_2h_minutes")
+            assert entry is not None
+            static_line = modal._field_line(entry)
+            meta_line = modal._meta_line(entry)
+            type_cell = f"[{entry.type}]"
+            # Key + type cells share their column; the meta line's full length
+            # (where the inline Input mounts) equals the static value column.
+            assert static_line.index(entry.key) == meta_line.index(entry.key)
+            assert static_line.index(type_cell) == meta_line.index(type_cell)
+            value_col = static_line.index(type_cell) + len(f"{type_cell:<14}") + 1
+            assert len(meta_line) == value_col
 
     asyncio.run(body())
 

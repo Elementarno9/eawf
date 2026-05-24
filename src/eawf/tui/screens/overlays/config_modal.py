@@ -102,6 +102,13 @@ EnterAction = Literal["toggle", "cycle", "inline", "popup", "none"]
 #: popup editor) rather than toggled / cycled in place.
 _SCALAR_TYPES: frozenset[str] = frozenset({"int", "float", "str"})
 
+#: Minimum width (in cells) for the field-row key column. The per-tab key
+#: column widens to the longest key actually rendered in the active tab, but
+#: never narrows below this floor so short-key tabs (e.g. ``runtime``) keep a
+#: stable, uncramped column position rather than collapsing tight against the
+#: ``[type]`` cell.
+_KEY_COL_FLOOR: int = 24
+
 
 def needs_popup_edit(entry: ConfigKey, value: Any, *, row_width: int) -> bool:
     """Return ``True`` when a ``str`` field must use the popup editor.
@@ -596,6 +603,23 @@ class ConfigModal(ModalScreen[None]):
         dirty_note = f"  ·  {dirty_count} unsaved" if dirty_count else ""
         return f"save layer: {self._view.layer}{suffix}{dirty_note}"
 
+    def _key_col_width(self) -> int:
+        """Return the key-column width for the active tab.
+
+        Sized to the longest key actually rendered in the active tab so a
+        long key (e.g. the ``estimation.display.time_quantum_*`` family,
+        well over the legacy 42-cell column) no longer overflows and pushes
+        the ``[type]`` tag + value column right on its own row. Never narrows
+        below :data:`_KEY_COL_FLOOR` so short-key tabs keep a stable column.
+        Both :meth:`_field_line` and :meth:`_meta_line` consume this width so
+        the static row and the inline-edit meta line align identically.
+
+        Returns:
+            The key-column width in cells (at least :data:`_KEY_COL_FLOOR`).
+        """
+        widest = max((len(entry.key) for entry in self._active_fields()), default=0)
+        return max(_KEY_COL_FLOOR, widest)
+
     def _field_line(self, entry: ConfigKey, *, selected: bool = False) -> str:
         """Render one field row: focus caret + dirty marker + key + type + value.
 
@@ -610,7 +634,11 @@ class ConfigModal(ModalScreen[None]):
         caret = ">" if selected else " "
         dirty_mark = "*" if entry.key in self._view.dirty else " "
         type_cell = f"[{entry.type}]"
-        return f"{caret}{dirty_mark} {entry.key:<42} {type_cell:<14} {format_value(entry, value)}"
+        key_width = self._key_col_width()
+        return (
+            f"{caret}{dirty_mark} {entry.key:<{key_width}} "
+            f"{type_cell:<14} {format_value(entry, value)}"
+        )
 
     def _hint_line(self) -> str:
         """Render the footer keymap hint.
@@ -886,24 +914,25 @@ class ConfigModal(ModalScreen[None]):
         except Exception:  # pragma: no cover - edit torn down before refresh
             return
 
-    @staticmethod
-    def _meta_line(entry: ConfigKey) -> str:
+    def _meta_line(self, entry: ConfigKey) -> str:
         """Render the key + type label shown beside the inline input.
 
         Reuses the static :meth:`_field_line` column widths exactly — a
         three-cell prefix (caret + dirty marker + separator), then the key
-        padded to 42 and the type cell padded to 14 — so the trailing inline
-        :class:`Input` lands in the **same column as the static value cell**.
-        Without the shared widths the meta line was shorter than the static
-        row and the whole inline editor bunched against the key (the "row
-        squished after Enter" report). The range hint moves to the footer
-        (:meth:`_range_hint`) so it does not push the input out of column.
+        padded to :meth:`_key_col_width` and the type cell padded to 14 — so
+        the trailing inline :class:`Input` lands in the **same column as the
+        static value cell**. Without the shared widths the meta line was
+        shorter than the static row and the whole inline editor bunched
+        against the key (the "row squished after Enter" report). The range
+        hint moves to the footer (:meth:`_range_hint`) so it does not push
+        the input out of column.
 
         Args:
             entry: The field being edited.
         """
         type_cell = f"[{entry.type}]"
-        return f"   {entry.key:<42} {type_cell:<14} "
+        key_width = self._key_col_width()
+        return f"   {entry.key:<{key_width}} {type_cell:<14} "
 
     @staticmethod
     def _range_hint(entry: ConfigKey) -> str:
