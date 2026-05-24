@@ -31,9 +31,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from rich.text import Text
 from textual.reactive import reactive
 from textual.widgets import Static
+
+from eawf.tui.widgets.markup import escape_markup, style_labeled_line
 
 logger = logging.getLogger(__name__)
 
@@ -225,12 +226,20 @@ class GitPane(Static):
         self._repaint()
 
     def _repaint(self) -> None:
-        """Re-render the pane from the cached fields."""
+        """Re-render the pane from the cached fields.
+
+        Each ``label: value`` line carries the accent label tint
+        (:func:`~eawf.tui.widgets.markup.style_labeled_line`), matching the
+        status pane and the detail modal; the indented recent-commit
+        subjects (which may contain ``[P##-W##]`` brackets) are
+        markup-escaped so Textual renders them literally rather than
+        parsing the bracket run as a style tag.
+        """
         if self._fields is None:
-            self.update(Text(DASH))
+            self.update(escape_markup(DASH))
             return
         lines = format_git_lines(self._fields)
-        self.update(Text("\n".join(lines)))
+        self.update("\n".join(style_labeled_line(line) for line in lines))
 
 
 __all__ = [

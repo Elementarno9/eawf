@@ -61,6 +61,7 @@ from eawf.tui.widgets.eu_bar import (
     render_eu_bar_plain,
 )
 from eawf.tui.widgets.heartbeat import PULSE_INTERVAL_S, pulse_glyph
+from eawf.tui.widgets.markup import escape_markup, style_labeled_line
 from eawf.tui.widgets.variance_tile import render_variance_plain
 
 if TYPE_CHECKING:
@@ -75,6 +76,12 @@ DASH: str = "—"
 #: gets the bold-accent span whether it lands in a single- or two-column
 #: cell.
 _SECTION_HEADERS: frozenset[str] = frozenset({"LIFECYCLE", "EFFORT", "GATES", "DISPATCH"})
+
+#: The DISPATCH band's sub-labels (the leading token of a NOW / NEXT /
+#: WAIT row). Recognised by ``_style_cell`` so the band label gets the
+#: accent tint the ``label:`` metric rows carry, while its wave-id body
+#: stays plain.
+_DISPATCH_BANDS: frozenset[str] = frozenset({"NOW", "NEXT", "WAIT"})
 
 #: Project-code fallback when no project record is loaded.
 DEFAULT_PROJECT_CODE: str = "EAWF"
@@ -406,7 +413,7 @@ def _eta_line(consumed_eu: float, estimate_eu: float, series: list[float]) -> st
     return (date.today() + timedelta(days=days_left)).isoformat()
 
 
-def _lifecycle_lines(state: State | None) -> list[str]:
+def _lifecycle_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     """Build the LIFECYCLE section lines (the lifecycle counter block).
 
     Mirrors the ``eawf status`` summary: project / phase / iter pointers,
@@ -415,6 +422,8 @@ def _lifecycle_lines(state: State | None) -> list[str]:
 
     Args:
         state: The bound state, or ``None``.
+        mode: Active render mode (``"braille"`` or ``"ascii"``); selects
+            the completion bar's glyph set.
 
     Returns:
         The ordered LIFECYCLE lines (no section header).
@@ -428,7 +437,7 @@ def _lifecycle_lines(state: State | None) -> list[str]:
             project = state.project.code
         phase = state.current.phase_id or DASH
         iter_id = state.current.iter_id or DASH
-    progress = render_completion_bar(counts["waves_closed"], counts["waves_total"])
+    progress = render_completion_bar(counts["waves_closed"], counts["waves_total"], mode=mode)
     lines = [
         f"project:   {project}",
         f"phase:     {phase}",
@@ -802,7 +811,7 @@ def build_status_lines(
     Returns:
         The ordered list of plain-text lines, section headers included.
     """
-    lines = ["LIFECYCLE", *_lifecycle_lines(state)]
+    lines = ["LIFECYCLE", *_lifecycle_lines(state, mode=mode)]
     lines += ["", "EFFORT", *_effort_lines(state, mode=mode)]
     lines += ["", "GATES", *_gate_lines(state, mode=mode)]
     lines += [
@@ -860,7 +869,7 @@ def _section_blocks(
         ``(lifecycle, effort, gates, dispatch)`` blocks, each a list of
         plain-text lines headed by its section name.
     """
-    lifecycle = ["LIFECYCLE", *_lifecycle_lines(state)]
+    lifecycle = ["LIFECYCLE", *_lifecycle_lines(state, mode=mode)]
     effort = ["EFFORT", *_effort_lines(state, mode=mode)]
     gates = ["GATES", *_gate_lines(state, mode=mode)]
     dispatch = ["DISPATCH", *_dispatch_lines(state, mode=mode, lit=pulse_lit, paused=pulse_paused)]
@@ -1064,8 +1073,9 @@ class StatusPane(Static):
         quadrant; the live :attr:`content_size` width drives the choice
         (a pre-layout width of ``0`` falls back to one column). Section
         headers carry a bold ``[$accent]…[/]`` span; the blocked line
-        carries the palette error colour; every other cell is escaped
-        against accidental markup and rendered plain. In a two-column row
+        carries the palette error colour; every other ``label: value`` row
+        carries the accent label tint, with all cell text markup-escaped
+        against accidental spans. In a two-column row
         the per-cell styling is applied after re-splitting the row at the
         left-column offset, so a right-column header still highlights. The
         bar/sparkline glyphs honour the app's live :attr:`render_mode`;
@@ -1083,23 +1093,30 @@ class StatusPane(Static):
 
     @staticmethod
     def _style_cell(cell: str) -> str:
-        """Style one cell: header → accent, blocked → err, else escaped plain.
+        """Style one cell by kind, markup-escaping the content throughout.
 
-        Markup-escapes the cell's content regardless so user-derived text
-        never opens a stray markup span.
+        Section headers get the bold accent span; a blocked line gets the
+        palette error colour; a DISPATCH band label (``NOW`` / ``NEXT`` /
+        ``WAIT``) gets the accent tint on its leading token; every other
+        ``label: value`` row gets the accent label tint
+        (:func:`~eawf.tui.widgets.markup.style_labeled_line`), matching the
+        detail modal. The cell text is markup-escaped throughout so
+        user-derived text never opens a stray markup span.
 
         Args:
             cell: The raw (unescaped) cell text.
 
         Returns:
-            The cell wrapped in its palette span, or the escaped plain text.
+            The cell wrapped in its palette span(s), or escaped plain text.
         """
-        safe = cell.replace("[", "[[")
         if cell in _SECTION_HEADERS:
-            return f"[b $accent]{safe}[/]"
+            return f"[b $accent]{escape_markup(cell)}[/]"
         if cell.startswith("blocked:"):
-            return f"[$err]{safe}[/]"
-        return safe
+            return f"[$err]{escape_markup(cell)}[/]"
+        head, gap, rest = cell.partition("  ")
+        if head in _DISPATCH_BANDS:
+            return f"[$accent]{head}[/]{gap}{escape_markup(rest)}"
+        return style_labeled_line(cell)
 
     def _style_row(self, row: str) -> str:
         """Style a row's cells, splitting a two-column row into its two cells.
