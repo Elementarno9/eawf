@@ -5003,7 +5003,13 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I04-W17",
+      "P27-I04-W18",
+      "P27-I04-W19",
+      "P27-I04-W20",
+      "P27-I04-W21"
+    ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -6223,6 +6229,71 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I04-W16",
       "updated_at": "2026-05-24T03:10:15.498709Z"
+    },
+    "P27-I04-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W17-bucket-20260524T142646Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W17",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W17",
+      "updated_at": "2026-05-24T14:26:46.028903Z"
+    },
+    "P27-I04-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W18-bucket-20260524T142646Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W18",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W18",
+      "updated_at": "2026-05-24T14:26:46.497662Z"
+    },
+    "P27-I04-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W19-bucket-20260524T142646Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W19",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W19",
+      "updated_at": "2026-05-24T14:26:46.958227Z"
+    },
+    "P27-I04-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W20-bucket-20260524T142647Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W20",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W20",
+      "updated_at": "2026-05-24T14:26:47.427976Z"
+    },
+    "P27-I04-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W21-bucket-20260524T142647Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W21",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W21",
+      "updated_at": "2026-05-24T14:26:47.895395Z"
     }
   },
   "goals": {
@@ -6990,7 +7061,12 @@
         "P27-I04-W13",
         "P27-I04-W14",
         "P27-I04-W15",
-        "P27-I04-W16"
+        "P27-I04-W16",
+        "P27-I04-W17",
+        "P27-I04-W18",
+        "P27-I04-W19",
+        "P27-I04-W20",
+        "P27-I04-W21"
       ]
     },
     "P27-I05": {
@@ -7582,7 +7658,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T03:12:42.990545Z",
+  "updated_at": "2026-05-24T14:26:47.895644Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19320,6 +19396,173 @@
         "MultichoiceChecklist moved out of config_modal.py into its own overlay module; config_modal.py drops below the EAWF010 1400-LOC cap; config_modal imports the widget so behaviour and message-handler names are unchanged; test_eawf_loc_cap green; full TUI + snapshot suites green"
       ],
       "title": "Extract MultichoiceChecklist widget to own module (LOC cap)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W17": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p27i04-w17",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/screens/overlays/config_modal.py",
+        "src/eawf/tui/screens/overlays/multichoice_checklist.py",
+        "tests/tui/test_overlays_config_modal.py"
+      ],
+      "id": "P27-I04-W17",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T14:25:48.810961Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "checklist scrolls when choices exceed viewport",
+        "all checkboxes reachable",
+        "Pilot test asserts mounted height>1"
+      ],
+      "title": "Fix config multichoice overflow with scrollable checklist",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W18": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p27i04-w18",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/widgets/eu_bar.py",
+        "src/eawf/tui/widgets/roadmap_tree.py",
+        "src/eawf/tui/widgets/workspace_table.py",
+        "tests/tui/test_widgets_eu_bar.py",
+        "tests/tui/test_widgets_roadmap_tree.py",
+        "tests/tui/test_scope_workspace.py"
+      ],
+      "id": "P27-I04-W18",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T14:25:49.302631Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "counter right-aligned in fixed 7-char field",
+        "slashes align across rows",
+        "counter_width plumbing retired",
+        "tests updated"
+      ],
+      "title": "Right-align wave counter in fixed 7-char field",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W19": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p27i04-w19",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/app.py",
+        "tests/tui/test_scope_user_switch.py"
+      ],
+      "id": "P27-I04-W19",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T14:25:49.801498Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "u-switch rebinds synthesize_user_state",
+        "portfolio non-empty when registry populated",
+        "regression test added"
+      ],
+      "title": "Synthesize user portfolio on scope switch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W20": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p27i04-w20",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/daemon/service_install.py",
+        "tests/daemon/test_service_install.py"
+      ],
+      "id": "P27-I04-W20",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T14:25:50.270479Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "enable bootout-before-bootstrap idempotent",
+        "uid via SUDO_UID fallback",
+        "fail-fast on uid 0",
+        "darwin tests added"
+      ],
+      "title": "Make service-enable idempotent and uid-correct",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p27i04-w21",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/lifecycle/iter_.py",
+        "src/eawf/daemon/methods/state.py",
+        "src/eawf/cli/commands/roadmap.py",
+        "tests/lifecycle/test_iter.py",
+        "tests/daemon/test_methods_state.py",
+        "tests/cli/test_roadmap.py"
+      ],
+      "id": "P27-I04-W21",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T14:25:50.731980Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "iter retitle daemon op and CLI surface",
+        "status-agnostic retitle",
+        "all prefixed iter titles normalized",
+        "tests added"
+      ],
+      "title": "Add iter retitle and strip id prefix from titles",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
