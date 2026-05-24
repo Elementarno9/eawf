@@ -5115,7 +5115,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I04-W27",
+      "P27-I04-W28"
+    ],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -6465,6 +6468,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I04-W26",
       "updated_at": "2026-05-24T16:20:02.635827Z"
+    },
+    "P27-I04-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W27-bucket-20260524T165739Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I04-W27",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I04-W27",
+      "updated_at": "2026-05-24T16:57:39.910604Z"
+    },
+    "P27-I04-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W28-bucket-20260524T165740Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W28",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W28",
+      "updated_at": "2026-05-24T16:57:40.384299Z"
     }
   },
   "goals": {
@@ -7837,7 +7866,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T16:56:21.129317Z",
+  "updated_at": "2026-05-24T16:57:40.384529Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19919,7 +19948,7 @@
       "blocks": [
         "P27-I04-W29"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -19937,7 +19966,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "wave with effort_bucket and no token_budget renders size bar; wave with token_budget>0 renders burn bar; wave with neither renders EMPTY_STATE; bars stay flush-right; goldens regenerated"
       ],
@@ -19951,7 +19980,7 @@
       "blocks": [
         "P27-I04-W29"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -19970,7 +19999,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Enter-Esc-Enter raises no DuplicateIds and ends with exactly one zoom-quadrant; zoom then switch scope then return leaves screen not zoomed; footer drops z zoom; Enter still zooms"
       ],
