@@ -70,7 +70,7 @@ from eawf.surfaces.render.skills import (
 logger = logging.getLogger(__name__)
 
 
-_TEMPLATES_PACKAGE: str = "eawf.templates.claude"
+_TEMPLATES_PACKAGE: str = "eawf.platform.templates.claude"
 _PLUGIN_MANIFEST_TEMPLATE: str = "plugin.json.j2"
 _MARKETPLACE_TEMPLATE: str = "marketplace.json.j2"
 _README_TEMPLATE: str = "plugin-readme.md.j2"

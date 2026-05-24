@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from eawf.artifacts.references import Citation, validate_dense_citations
+from eawf.platform.artifacts.references import Citation, validate_dense_citations
 
 
 class ResearchPayload(BaseModel):

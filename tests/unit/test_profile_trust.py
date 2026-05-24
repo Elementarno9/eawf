@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.profiles import trust
+from eawf.platform.profiles import trust
 
 
 def _write_profile(path: Path, name: str = "p") -> None:

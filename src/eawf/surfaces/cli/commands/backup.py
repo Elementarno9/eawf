@@ -1,7 +1,7 @@
 """``eawf backup`` Typer sub-app — manual snapshot create/list/restore/prune.
 
 CLI dispatch only (AGENTS rule 1): the handlers parse args, resolve the repo's
-``.ea/state.json`` path, delegate the on-disk work to :mod:`eawf.backup`, and
+``.ea/state.json`` path, delegate the on-disk work to :mod:`eawf.platform.backup`, and
 route output through :func:`eawf.surfaces.cli.output.emit_json_or_text`. The backup tree
 lives under the user-scope home (``~/.eawf/backups/<repo_sha>/``) keyed by
 ``sha256(repo-absolute-path)[:12]`` so backups never sit inside the committed
@@ -30,7 +30,8 @@ from typing import Annotated
 
 import typer
 
-from eawf.backup import (
+from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.platform.backup import (
     BackupError,
     UnknownSnapshotError,
     create_backup,
@@ -38,7 +39,6 @@ from eawf.backup import (
     prune_backups,
     restore_backup,
 )
-from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text

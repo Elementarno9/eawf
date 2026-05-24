@@ -1,7 +1,7 @@
 """``eawf schema`` Typer sub-app — JSON Schema dump for canonical models.
 
 CLI dispatch only (AGENTS rule 1): the single ``dump`` verb resolves the
-repo root, drives :func:`eawf.docs.autogen.generate_all`, and routes the
+repo root, drives :func:`eawf.platform.docs.autogen.generate_all`, and routes the
 written-path list through :func:`eawf.surfaces.cli.output.emit_json_or_text`.
 
 ``eawf schema dump`` emits the deterministic JSON Schema of the canonical
@@ -87,7 +87,7 @@ def schema_dump(
     # Imported lazily so building the CLI tree (eawf.surfaces.cli.app import) does not
     # pull the heavy autogen dependency graph (state.models / store.kinds /
     # yaml) — see tests/perf/cli/test_import_budget.py.
-    from eawf.docs.autogen import dump_schemas, generate_all
+    from eawf.platform.docs.autogen import dump_schemas, generate_all
 
     written = dump_schemas(repo_root) if schema_only else generate_all(repo_root)
 

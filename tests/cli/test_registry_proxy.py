@@ -20,7 +20,7 @@ from typing import Any, ClassVar
 import orjson
 import pytest
 
-from eawf.registry import Registry, RegistryRepoEntry
+from eawf.platform.registry import Registry, RegistryRepoEntry
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands import repo as repo_cmd
 

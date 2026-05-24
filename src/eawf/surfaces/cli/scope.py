@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from eawf.registry import (
+from eawf.platform.registry import (
     Registry,
     RegistryReadError,
     RegistryRepoEntry,

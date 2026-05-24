@@ -11,13 +11,13 @@ import pytest
 from eawf.kernel.state.enums import Confidence, DecisionStatus, MemoryStatus, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
-from eawf.memory.promotion import (
+from eawf.platform.memory.promotion import (
     PromotionError,
     promote_record,
     promote_to_artifact,
     supersede,
 )
-from eawf.memory.store import add_memory
+from eawf.platform.memory.store import add_memory
 
 
 def _make_state() -> State:

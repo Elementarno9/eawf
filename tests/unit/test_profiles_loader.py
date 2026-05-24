@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.profiles.loader`.
+"""Unit tests for :mod:`eawf.platform.profiles.loader`.
 
 The contracts under test:
 
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.profiles.loader import list_profiles, load_profile
-from eawf.profiles.models import ProfileBody
+from eawf.platform.profiles.loader import list_profiles, load_profile
+from eawf.platform.profiles.models import ProfileBody
 from eawf.surfaces.cli.errors import UserError
 
 _EXPECTED_PROFILES: tuple[str, ...] = (

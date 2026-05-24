@@ -5,15 +5,15 @@ from pathlib import PurePosixPath
 import pytest
 from pydantic import ValidationError
 
-from eawf.artifacts.references import (
+from eawf.platform.artifacts.references import (
     Citation,
     CitationValidationError,
     citation_numbers_in_text,
     validate_dense_citation_refs,
     validate_dense_citations,
 )
-from eawf.artifacts.validation import validate_markdown_artifact
-from eawf.scrub.scan import rewrite_text, scan_text
+from eawf.platform.artifacts.validation import validate_markdown_artifact
+from eawf.platform.scrub.scan import rewrite_text, scan_text
 
 
 def _artifact_body(

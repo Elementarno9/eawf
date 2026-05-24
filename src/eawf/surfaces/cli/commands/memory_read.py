@@ -5,7 +5,7 @@ Split out of :mod:`eawf.surfaces.cli.commands.memory` (P27-I05-W09). The
 resolvers, the read-only state loader, the status parser, the
 inlined default budget) live in the parent module; this module attaches
 the four query command bodies via ``@memory_app.command(...)``. Every
-``eawf.memory.*`` import stays inside the handler bodies so the
+``eawf.platform.memory.*`` import stays inside the handler bodies so the
 command-tree build path stays off the import-budget heavy graph.
 """
 
@@ -108,7 +108,7 @@ def memory_render_context(
     ] = None,
 ) -> None:
     """Produce a token-budgeted Markdown rendering of memory entries."""
-    from eawf.memory.render_context import render_context
+    from eawf.platform.memory.render_context import render_context
 
     flags: GlobalFlags = ctx.obj
     fmt_norm = fmt.strip().lower()
@@ -174,7 +174,7 @@ def memory_view(
     ] = None,
 ) -> None:
     """Show a single memory entry: cache summary + JSONL body."""
-    from eawf.memory.store import find_envelope
+    from eawf.platform.memory.store import find_envelope
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -222,7 +222,7 @@ def memory_stale(
     age: Annotated[int, typer.Option("--age", help="Age threshold in days.")] = 30,
 ) -> None:
     """List memory entries that exceed ``--age`` days and are below high confidence."""
-    from eawf.memory.staleness import find_stale
+    from eawf.platform.memory.staleness import find_stale
 
     flags: GlobalFlags = ctx.obj
     try:

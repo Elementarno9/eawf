@@ -8,7 +8,7 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus
 from eawf.kernel.state.models import State
-from eawf.memory.store import (
+from eawf.platform.memory.store import (
     MemoryRecord,
     add_memory,
     content_hash,

@@ -40,7 +40,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
-from eawf.registry import (
+from eawf.platform.registry import (
     Registry,
     RegistryReadError,
     RegistryRepoEntry,

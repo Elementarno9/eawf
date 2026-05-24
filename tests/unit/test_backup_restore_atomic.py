@@ -26,8 +26,8 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.backup.service import restore_backup
-from eawf.backup.store import BackupStore, format_timestamp
+from eawf.platform.backup.service import restore_backup
+from eawf.platform.backup.store import BackupStore, format_timestamp
 from eawf.runtime.lock import portalock
 
 # A valid, daemon-canonical (orjson-shaped) state document used as the snapshot
@@ -170,7 +170,7 @@ def test_restore_snapshot_respects_held_portalock(
         acquired_targets.append(Path(target))
         return real_acquire(target, timeout=0.2)
 
-    monkeypatch.setattr("eawf.backup.store.portalock.acquire", _short_acquire)
+    monkeypatch.setattr("eawf.platform.backup.store.portalock.acquire", _short_acquire)
 
     with real_acquire(state_path, timeout=2.0), pytest.raises(portalock.LockTimeout):
         store.restore_snapshot(snapshot)

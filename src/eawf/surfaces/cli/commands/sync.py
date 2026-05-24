@@ -128,7 +128,7 @@ def _render_memory_views(*, target_root: Path, write: bool) -> list[Path]:
     the bare-directory init path) the function returns an empty list.
     """
     from eawf.kernel.store.paths import store_path
-    from eawf.memory.markdown_view import render_all_views
+    from eawf.platform.memory.markdown_view import render_all_views
 
     state_path = target_root / _STATE_RELPATH
     state = _load_state_or_none(state_path)
@@ -194,7 +194,7 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
             layer).
     """
     from eawf.kernel.config.layered import merge_config
-    from eawf.profiles.loader import list_profiles
+    from eawf.platform.profiles.loader import list_profiles
 
     try:
         merged, _sources = merge_config(repo=target, workspace=target)
@@ -268,8 +268,8 @@ def _render_into(
         is True the after-manifest is also persisted via
         :func:`eawf.surfaces.render.manifest.save_atomic`.
     """
-    from eawf.profiles.compose import compose
-    from eawf.profiles.loader import load_profile
+    from eawf.platform.profiles.compose import compose
+    from eawf.platform.profiles.loader import load_profile
     from eawf.surfaces.render.agents_md import render_agents_md
     from eawf.surfaces.render.claude_shim import render_claude_md
     from eawf.surfaces.render.manifest import load as load_manifest

@@ -7,12 +7,12 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import Confidence
 from eawf.kernel.state.models import State
-from eawf.memory.render_context import (
+from eawf.platform.memory.render_context import (
     DEFAULT_BUDGET,
     estimate_tokens,
     render_context,
 )
-from eawf.memory.store import add_memory
+from eawf.platform.memory.store import add_memory
 
 
 def _make_state() -> State:

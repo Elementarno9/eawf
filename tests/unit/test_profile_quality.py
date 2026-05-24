@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eawf.profiles import compose, load_profile
-from eawf.profiles.models import ProfileBody
+from eawf.platform.profiles import compose, load_profile
+from eawf.platform.profiles.models import ProfileBody
 from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 

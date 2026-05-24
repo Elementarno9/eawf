@@ -9,10 +9,10 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.artifacts.validation import validate_markdown_artifact
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
+from eawf.platform.artifacts.validation import validate_markdown_artifact
 from eawf.surfaces.cli.app import app
 from tests.integration.test_plan_show_e2e import _VALID_STATE
 

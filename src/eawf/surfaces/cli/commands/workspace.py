@@ -556,7 +556,7 @@ def workspace_registry_list_cmd(
     ``kind="InvalidInput"``) with the Pydantic validation error so the
     operator can repair by hand.
     """
-    from eawf.registry import (
+    from eawf.platform.registry import (
         Registry,
         RegistryReadError,
         is_stale,
@@ -648,7 +648,7 @@ def workspace_registry_status_cmd(
     downstream consumer can ingest either the structured payload or
     the pre-rendered view.
     """
-    from eawf.registry import (
+    from eawf.platform.registry import (
         Registry,
         RegistryReadError,
         is_stale,

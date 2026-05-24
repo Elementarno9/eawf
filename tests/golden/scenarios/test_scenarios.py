@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.install.wizard import WizardAnswers, run_wizard_no_input
+from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.surfaces.cli.app import app
 
 from .conftest import (

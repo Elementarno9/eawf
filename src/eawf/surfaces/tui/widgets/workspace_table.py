@@ -40,7 +40,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable
 
-from eawf.registry.staleness import read_repo_state
+from eawf.platform.registry.staleness import read_repo_state
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_BAND_PALETTE,
     DEFAULT_RENDER_MODE,
@@ -147,7 +147,7 @@ def active_phase_completion(repo_state: dict[str, Any] | None) -> tuple[str | No
 
     The active phase id resolves from the decoded per-repo state dict
     (not a typed :class:`~eawf.kernel.state.models.State`, since
-    :func:`~eawf.registry.staleness.read_repo_state` returns a raw
+    :func:`~eawf.platform.registry.staleness.read_repo_state` returns a raw
     ``dict``): the ``current.phase_id`` pointer wins when it names an
     existing phase whose ``status`` is ``"active"``; otherwise the single
     phase whose ``status`` is ``"active"`` is used; otherwise ``None``.
@@ -325,7 +325,7 @@ def _repo_age(repo_path: Path) -> str:
     Returns:
         A compact age cell, or ``"—"`` when undetermined.
     """
-    from eawf.registry.staleness import repo_state_mtime
+    from eawf.platform.registry.staleness import repo_state_mtime
 
     mtime = repo_state_mtime(repo_path)
     if mtime is None:

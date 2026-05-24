@@ -21,7 +21,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.registry import Registry, RegistryRepoEntry
+from eawf.platform.registry import Registry, RegistryRepoEntry
 from eawf.surfaces.cli.scope import (
     ScopeResolution,
     ScopeTier,

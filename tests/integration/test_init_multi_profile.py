@@ -149,7 +149,7 @@ def test_template_materialises_state_keys(tmp_path: Path) -> None:
 
     payload = json.loads(res.stdout)
     # The research profile body declares ``hypotheses`` + ``audits`` as
-    # required state extensions (see src/eawf/profiles/data/research.yaml).
+    # required state extensions (see src/eawf/platform/profiles/data/research.yaml).
     assert "hypotheses" in payload["materialised_state_keys"]
     assert "audits" in payload["materialised_state_keys"]
 

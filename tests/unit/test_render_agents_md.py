@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from eawf.profiles.models import ComposedProfile, RenderBlock
+from eawf.platform.profiles.models import ComposedProfile, RenderBlock
 from eawf.surfaces.render import regions
 from eawf.surfaces.render.agents_md import (
     ENTITY_TITLE_MAX,

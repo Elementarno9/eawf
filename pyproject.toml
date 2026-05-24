@@ -179,10 +179,10 @@ max-complexity = 10
 "src/eawf/runtime/daemon/methods/state.py" = ["C901"]
 "src/eawf/observability/doctor/checks.py" = ["C901"]
 "src/eawf/workflow/lifecycle/wave.py" = ["C901"]
-"src/eawf/memory/promotion.py" = ["C901"]
-"src/eawf/memory/prune.py" = ["C901"]
-"src/eawf/memory/store.py" = ["C901"]
-"src/eawf/profiles/compose.py" = ["C901"]
+"src/eawf/platform/memory/promotion.py" = ["C901"]
+"src/eawf/platform/memory/prune.py" = ["C901"]
+"src/eawf/platform/memory/store.py" = ["C901"]
+"src/eawf/platform/profiles/compose.py" = ["C901"]
 "src/eawf/surfaces/render/agent_report.py" = ["C901"]
 "src/eawf/surfaces/render/plan_view.py" = ["C901"]
 "src/eawf/surfaces/render/pr_body.py" = ["C901"]
@@ -203,7 +203,7 @@ max-complexity = 10
 
 [tool.eawf.lint]
 # Registration for the project's custom static-analysis rules under
-# ``src/eawf/lint/`` (EAWF001 log-format, EAWF002 log-key naming,
+# ``src/eawf/platform/lint/`` (EAWF001 log-format, EAWF002 log-key naming,
 # EAWF003 logger acquisition, EAWF010 module-length advisory alarm,
 # EAWF011 cognitive-complexity gate). Ruff carries no ``EAWF`` plugin, so
 # these checks read their config from this table rather than

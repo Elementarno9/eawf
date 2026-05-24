@@ -24,8 +24,6 @@ from typing import Literal, cast
 from jinja2 import Environment, StrictUndefined
 from pydantic import BaseModel, ConfigDict
 
-from eawf.artifacts.references import Citation
-from eawf.artifacts.validation import validate_text_surface
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
 from eawf.kernel.state.models import State
@@ -35,7 +33,9 @@ from eawf.kernel.store.kinds.agent_report import (
     ResearcherReportBody,
     ReviewerReportBody,
 )
-from eawf.profiles.models import ComposedProfile
+from eawf.platform.artifacts.references import Citation
+from eawf.platform.artifacts.validation import validate_text_surface
+from eawf.platform.profiles.models import ComposedProfile
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 

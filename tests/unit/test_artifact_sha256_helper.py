@@ -1,4 +1,4 @@
-"""Unit tests for :func:`eawf.artifacts.validation.sha256_file`."""
+"""Unit tests for :func:`eawf.platform.artifacts.validation.sha256_file`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.artifacts.validation import sha256_file
+from eawf.platform.artifacts.validation import sha256_file
 
 
 def test_sha256_file_matches_hashlib_digest(tmp_path: Path) -> None:

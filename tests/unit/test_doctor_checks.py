@@ -16,8 +16,8 @@ from eawf.surfaces.cli.errors import UserError
 
 
 def _stub_probe_ok(monkeypatch: pytest.MonkeyPatch, results: list[Any]) -> None:
-    """Replace :func:`eawf.install.instrument_probe.probe` with a fixed return."""
-    from eawf.install.instrument_probe import ProbeReport
+    """Replace :func:`eawf.platform.install.instrument_probe.probe` with a fixed return."""
+    from eawf.platform.install.instrument_probe import ProbeReport
 
     def fake(profile_ids: list[str], *, cache_path: Path, reprobe: bool = False) -> ProbeReport:
         return ProbeReport(probe_version=1, profile_ids=profile_ids, results=results)
@@ -33,7 +33,7 @@ def _stub_probe_raises(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
 
 
 def test_check_tools_available_all_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from eawf.install.instrument_probe import ProbeResult
+    from eawf.platform.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
         monkeypatch,
@@ -51,7 +51,7 @@ def test_check_tools_available_all_ok(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_check_tools_available_soft_missing_warns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from eawf.install.instrument_probe import ProbeResult
+    from eawf.platform.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
         monkeypatch,
@@ -114,7 +114,7 @@ def test_check_config_resolves_unknown_profile_warns(
 
 def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """W08 extends ``run_all`` with manifest_in_sync + render_output_roundtrip."""
-    from eawf.install.instrument_probe import ProbeResult
+    from eawf.platform.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
         monkeypatch,

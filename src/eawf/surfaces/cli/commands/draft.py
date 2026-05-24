@@ -110,8 +110,8 @@ def _validate_legacy_brief(text: str) -> _LegacyChassisReport:
     Enforces: sentinel present, scrub-status clean (if section present), no
     scrub findings. Skips chassis-heading and dense-citation checks.
     """
-    from eawf.artifacts.validation import _SCRUB_CLEAN_RE, _sections
-    from eawf.scrub.scan import scan_text
+    from eawf.platform.artifacts.validation import _SCRUB_CLEAN_RE, _sections
+    from eawf.platform.scrub.scan import scan_text
 
     errors: list[str] = []
     if not text.lstrip().startswith("<!-- eawf-template:"):
@@ -182,8 +182,8 @@ def draft_validate(
     path: Annotated[Path, typer.Argument(help="Draft markdown path.")],
 ) -> None:
     """Validate a local draft artifact."""
-    from eawf.artifacts.validation import validate_markdown_artifact
-    from eawf.scrub.scan import scan_text
+    from eawf.platform.artifacts.validation import validate_markdown_artifact
+    from eawf.platform.scrub.scan import scan_text
 
     flags = _flags(ctx)
     text = path.read_text(encoding="utf-8")
@@ -215,8 +215,8 @@ def promote_draft(
     before the renderer-owned chassis convention landed. Scrub-status +
     PII-scan + sentinel-presence are still enforced.
     """
-    from eawf.artifacts.validation import validate_markdown_artifact
-    from eawf.scrub.scan import rewrite_text
+    from eawf.platform.artifacts.validation import validate_markdown_artifact
+    from eawf.platform.scrub.scan import rewrite_text
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.evidence import artifact as artifact_evi
     from eawf.workflow.evidence._io import append_jsonl, event_envelope, store_paths

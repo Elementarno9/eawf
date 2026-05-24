@@ -9,8 +9,8 @@ import pytest
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier
 from eawf.kernel.state.models import State
-from eawf.memory.gc import GcError, GcReport, gc_memory
-from eawf.memory.store import add_memory
+from eawf.platform.memory.gc import GcError, GcReport, gc_memory
+from eawf.platform.memory.store import add_memory
 
 
 def _make_state() -> State:

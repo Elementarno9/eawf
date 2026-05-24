@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.install.instrument_probe import (
+from eawf.platform.install.instrument_probe import (
     PROBE_VERSION,
     ProbeReport,
     ProbeResult,

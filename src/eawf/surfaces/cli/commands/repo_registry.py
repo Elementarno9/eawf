@@ -38,7 +38,7 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
-    from eawf.registry import Registry, RegistryRepoEntry
+    from eawf.platform.registry import Registry, RegistryRepoEntry
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +206,7 @@ def _handle_idempotent_readd(
     Writes only when ``--set-active`` flips the active pointer; otherwise
     the call is a pure no-op that still emits the idempotent envelope.
     """
-    from eawf.registry import Registry
+    from eawf.platform.registry import Registry
 
     if set_active and registry.active_code != derived_code:
         updated = Registry(
@@ -241,7 +241,7 @@ def _insert_new_repo_entry(
     flags: GlobalFlags,
 ) -> None:
     """Insert a fresh registry entry, persist, and emit the success envelope."""
-    from eawf.registry import Registry, RegistryRepoEntry
+    from eawf.platform.registry import Registry, RegistryRepoEntry
 
     new_entry = RegistryRepoEntry(
         code=derived_code,
@@ -428,7 +428,7 @@ def repo_remove_cmd(
     - 3 (UserError, ``kind="InvalidInput"``) — invalid code shape,
       registry corrupted.
     """
-    from eawf.registry import Registry, RegistryReadError, read_registry
+    from eawf.platform.registry import Registry, RegistryReadError, read_registry
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
@@ -559,7 +559,7 @@ def repo_prune_cmd(
       invalid schema.
     - 6 (UserError, ``kind="UserDeclined"``) — confirmation gate declined.
     """
-    from eawf.registry import Registry, RegistryReadError, read_registry
+    from eawf.platform.registry import Registry, RegistryReadError, read_registry
 
     flags: GlobalFlags = ctx.obj
     target = _resolve_registry_path(registry_path)

@@ -27,7 +27,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from eawf.profiles.models import (
+from eawf.platform.profiles.models import (
     ComposedProfile,
     InstrumentReq,
     ProfileBody,

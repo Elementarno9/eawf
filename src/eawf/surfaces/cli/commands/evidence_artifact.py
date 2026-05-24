@@ -176,7 +176,7 @@ def artifact_validate(
     path: Annotated[Path, typer.Argument(help="Markdown artifact path.")],
 ) -> None:
     """Validate one markdown artifact body."""
-    from eawf.artifacts.validation import validate_markdown_artifact
+    from eawf.platform.artifacts.validation import validate_markdown_artifact
 
     flags = _flags(ctx)
     text = path.read_text(encoding="utf-8")
@@ -208,7 +208,7 @@ def _verify_one_artifact(
     - ``"skipped_remote"`` — non-``repo:`` uri with ``--refresh`` not set.
     - ``"mismatch"`` — recomputed sha256 did not match the registered value.
     """
-    from eawf.artifacts.validation import sha256_file
+    from eawf.platform.artifacts.validation import sha256_file
 
     uri = artifact.uri
     registered = artifact.sha256

@@ -10,8 +10,8 @@ import pytest
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus
 from eawf.kernel.state.models import State
-from eawf.memory.prune import PruneError, PruneResult, prune_memory
-from eawf.memory.store import add_memory
+from eawf.platform.memory.prune import PruneError, PruneResult, prune_memory
+from eawf.platform.memory.store import add_memory
 
 
 def _make_state() -> State:

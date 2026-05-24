@@ -22,7 +22,7 @@ from eawf.kernel.store.kinds.agent_report import (
     store_kind_for_role,
 )
 from eawf.kernel.store.paths import store_path
-from eawf.scrub.scan import ScrubFinding, scan_text
+from eawf.platform.scrub.scan import ScrubFinding, scan_text
 
 _BODY_ADAPTER: TypeAdapter[AgentReportBody] = TypeAdapter(AgentReportBody)
 

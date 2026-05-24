@@ -6,12 +6,12 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import Confidence, MemoryStatus
 from eawf.kernel.state.models import State
-from eawf.memory.markdown_view import (
+from eawf.platform.memory.markdown_view import (
     SCOPE_ALL,
     render_all_views,
     render_markdown_view,
 )
-from eawf.memory.store import add_memory
+from eawf.platform.memory.store import add_memory
 from eawf.surfaces.render.regions import find_regions
 
 

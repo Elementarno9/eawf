@@ -3,7 +3,7 @@
 This package exercises three byte-stable scenarios against the eawf
 public API:
 
-1. ``fresh_repo`` — :func:`eawf.install.wizard.run_wizard_no_input`
+1. ``fresh_repo`` — :func:`eawf.platform.install.wizard.run_wizard_no_input`
    against an empty target directory.
 2. ``enrich_existing`` — ditto, but with arbitrary pre-existing files
    in the target so we can assert nothing outside ``.ea/`` is touched.

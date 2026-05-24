@@ -53,7 +53,7 @@ from eawf.surfaces.cli import errors as cli_errors
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
-#: Mirrors :data:`eawf.memory.render_context.DEFAULT_BUDGET`; inlined as a
+#: Mirrors :data:`eawf.platform.memory.render_context.DEFAULT_BUDGET`; inlined as a
 #: literal so the ``memory render-context --budget`` default does not import
 #: the heavy ``memory.render_context`` subtree at command-tree build time.
 _DEFAULT_BUDGET: int = 4096

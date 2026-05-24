@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.backup import BackupError
-from eawf.backup.store import BackupStore, format_timestamp
+from eawf.platform.backup import BackupError
+from eawf.platform.backup.store import BackupStore, format_timestamp
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 

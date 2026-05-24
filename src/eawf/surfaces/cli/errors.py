@@ -14,8 +14,8 @@ The eight deprecated subclass aliases (``NotFound``, ``InvalidInput``,
 ``UserDeclined``, ``IntegrityViolation``, ``HookBlocked``) were removed
 in P27-I03-W18 once every callsite migrated to the bucket + ``kind=``
 form. Domain-specific subclasses that remain (e.g.
-:class:`eawf.install.wizard.WizardCancelled`,
-:class:`eawf.profiles.compose.ProfileConflict`) still fold their concrete
+:class:`eawf.platform.install.wizard.WizardCancelled`,
+:class:`eawf.platform.profiles.compose.ProfileConflict`) still fold their concrete
 class name into ``data.kind`` via :func:`build_envelope`.
 
 Envelope shape (JSON branch) per :class:`ErrorEnvelope`:
@@ -266,7 +266,7 @@ def _canonical_error_name(err: CliError) -> str:
     """Return the canonical (five-bucket) class name for *err*.
 
     Walks the MRO until it hits one of the five bucket classes. For a
-    domain subclass like :class:`eawf.profiles.compose.ProfileConflict`,
+    domain subclass like :class:`eawf.platform.profiles.compose.ProfileConflict`,
     this returns ``"ValidationError"``. For a direct ``UserError`` raise,
     this returns ``"UserError"``. The concrete class name is preserved
     separately via ``data.kind``.
@@ -283,7 +283,7 @@ def _concrete_kind(err: CliError) -> str | None:
 
     Returns ``None`` when *err* is one of the five bucket classes itself
     (so the bucket's threaded ``kind=`` tag wins instead). For a domain
-    subclass such as :class:`eawf.install.wizard.WizardCancelled`, this
+    subclass such as :class:`eawf.platform.install.wizard.WizardCancelled`, this
     returns its concrete name, which is what gets folded into ``data.kind``
     so CI scripts retain their fine-grained pivot.
     """

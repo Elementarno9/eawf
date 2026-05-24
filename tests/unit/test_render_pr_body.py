@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.artifacts.references import Citation
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
@@ -25,7 +24,8 @@ from eawf.kernel.store.kinds.agent_report import (
     store_kind_for_role,
 )
 from eawf.kernel.store.paths import store_path
-from eawf.profiles.models import ComposedProfile, RenderBlock
+from eawf.platform.artifacts.references import Citation
+from eawf.platform.profiles.models import ComposedProfile, RenderBlock
 from eawf.surfaces.render.pr_body import (
     PrBodyInput,
     PrBodyNotFound,

@@ -10,6 +10,6 @@ def tmp_repo(tmp_path: Path) -> Path:
     """Skeleton fixture for a throwaway repository directory.
 
     Phase 1+ tests will populate this with the canonical .ea/ skeleton via
-    eawf.install. For now it returns a bare temp directory.
+    eawf.platform.install. For now it returns a bare temp directory.
     """
     return tmp_path

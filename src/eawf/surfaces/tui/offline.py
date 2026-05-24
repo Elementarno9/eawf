@@ -40,7 +40,7 @@ from eawf.surfaces.tui.widgets.header import DEFAULT_PROJECT_CODE, build_breadcr
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
-    from eawf.registry import Registry
+    from eawf.platform.registry import Registry
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +226,7 @@ def offline_render(
 
     Args:
         registry_path: Explicit registry path; ``None`` falls back to
-            :func:`eawf.registry.default_registry_path`.
+            :func:`eawf.platform.registry.default_registry_path`.
         home: Test seam for the default-path branch.
         now: Override for the current timestamp threaded to the staleness
             predicate so freshness comparisons stay deterministic.
@@ -237,7 +237,7 @@ def offline_render(
     Returns:
         The rendered text frame (terminated by a trailing newline).
     """
-    from eawf.registry import (
+    from eawf.platform.registry import (
         RegistryReadError,
         is_stale,
         read_registry,

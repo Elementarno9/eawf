@@ -9,7 +9,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from eawf.profiles import discovery
+from eawf.platform.profiles import discovery
 from eawf.surfaces.cli.app import app
 
 

@@ -2,7 +2,7 @@
 
 Generates random sequences of ``(add | prune | compact)`` events and asserts
 that ``state.memory_index`` and the on-disk ``memory.jsonl`` (read back via
-:func:`eawf.memory.store.read_envelopes`) reach a state that is independent
+:func:`eawf.platform.memory.store.read_envelopes`) reach a state that is independent
 of the operation interleaving — i.e. the final cache + the final compacted
 JSONL are functions of the SET of writes, not their order. (Promote is
 excluded from the property generator: it requires a session row in
@@ -28,8 +28,8 @@ from hypothesis import strategies as st
 from eawf.kernel.state.enums import Confidence, MemoryStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.compact import compact_store
-from eawf.memory.prune import prune_memory
-from eawf.memory.store import add_memory, read_envelopes
+from eawf.platform.memory.prune import prune_memory
+from eawf.platform.memory.store import add_memory, read_envelopes
 
 _OpKind = Literal["add", "prune", "compact"]
 

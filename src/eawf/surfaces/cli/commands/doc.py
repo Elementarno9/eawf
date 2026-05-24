@@ -110,8 +110,8 @@ def doc_verify(
     always runs under ``--strict``; only the mkdocs build is gated on
     availability.
     """
-    from eawf.docs.autogen import diff_against_disk
     from eawf.observability.doctor.doc_verify import verify_docs
+    from eawf.platform.docs.autogen import diff_against_disk
 
     flags: GlobalFlags = ctx.obj
     try:

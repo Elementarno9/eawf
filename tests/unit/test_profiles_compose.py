@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.profiles.compose`.
+"""Unit tests for :mod:`eawf.platform.profiles.compose`.
 
 Coverage targets the W02 acceptance criteria:
 
@@ -15,7 +15,7 @@ Coverage targets the W02 acceptance criteria:
 
 from __future__ import annotations
 
-from eawf.profiles import (
+from eawf.platform.profiles import (
     InstrumentReq,
     ProfileBody,
     RenderBlock,
@@ -272,6 +272,6 @@ def test_compose_description_takes_last_non_empty() -> None:
 
 def test_compose_strictest_keys_constant_documented() -> None:
     """The STRICTEST_KEYS constant lists the v0.1 strictest-wins paths."""
-    from eawf.profiles import STRICTEST_KEYS
+    from eawf.platform.profiles import STRICTEST_KEYS
 
     assert "instrument_requirements[].kind" in STRICTEST_KEYS

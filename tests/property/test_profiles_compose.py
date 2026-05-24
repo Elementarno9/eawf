@@ -1,4 +1,4 @@
-"""Hypothesis property tests for :mod:`eawf.profiles.compose`.
+"""Hypothesis property tests for :mod:`eawf.platform.profiles.compose`.
 
 Three invariants drive the suite:
 
@@ -22,7 +22,7 @@ from typing import cast
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from eawf.profiles import (
+from eawf.platform.profiles import (
     InstrumentReq,
     ProfileBody,
     StateExtensions,

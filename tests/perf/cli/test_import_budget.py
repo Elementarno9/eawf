@@ -64,8 +64,8 @@ FORBIDDEN_MODULES: tuple[str, ...] = (
     "eawf.runtime.mcp.installer",
     "eawf.runtime.sandbox.policy",
     "eawf.kernel.store.kinds",
-    "eawf.profiles.compose",
-    "eawf.profiles.loader",
+    "eawf.platform.profiles.compose",
+    "eawf.platform.profiles.loader",
     "jinja2",
     "yaml",
 )

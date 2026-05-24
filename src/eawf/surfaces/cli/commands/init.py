@@ -9,7 +9,7 @@ Surface contract:
   :class:`prompt_toolkit.input.PipeInput` via
   :func:`prompt_toolkit.application.create_app_session`.
 - ``eawf init --no-input --project-code DEMO --profile core ...`` runs the
-  pure pipeline in :func:`eawf.install.wizard.run_wizard_no_input`.
+  pure pipeline in :func:`eawf.platform.install.wizard.run_wizard_no_input`.
 - ``eawf init --no-input --profiles core,python ...`` is the comma-list
   equivalent of repeated ``--profile`` flags.
 - ``eawf init --no-input --template research ...`` selects a bundled
@@ -28,7 +28,7 @@ Exit codes (mapped via :class:`eawf.surfaces.cli.errors.CliError` subclasses):
 - ``5`` (``LOCK_CONFLICT``) — sibling lock contention on the freshly-written
   state file (rare; concurrent ``eawf init`` against the same target).
 
-The handler delegates almost everything to :mod:`eawf.install.wizard` and
+The handler delegates almost everything to :mod:`eawf.platform.install.wizard` and
 keeps itself confined to argument parsing, error mapping, and JSON-envelope
 emission — see ``AGENTS.md`` rule 1 (CLI is dispatch; library implements).
 """
@@ -49,7 +49,7 @@ from eawf.surfaces.cli.output import emit_json_or_text
 if TYPE_CHECKING:
     from pydantic import ValidationError
 
-    from eawf.install.wizard import WizardAnswers, WizardResult
+    from eawf.platform.install.wizard import WizardAnswers, WizardResult
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ def _resolve_profiles_and_template(
     When ``--template`` is the chosen surface, the template's
     ``profiles.enabled`` becomes the profiles list and the remaining
     keys become ``template_extras`` (deep-merged into ``.ea/config.yaml``
-    by :func:`eawf.install.wizard._build_config_yaml`).
+    by :func:`eawf.platform.install.wizard._build_config_yaml`).
 
     Args:
         profile: Repeatable ``--profile`` values (legacy v0.1 surface).
@@ -132,7 +132,7 @@ def _resolve_profiles_and_template(
         UserError: More than one surface used, or unknown template
             (``kind="InvalidInput"``).
     """
-    from eawf.profiles.discovery import load_init_template
+    from eawf.platform.profiles.discovery import load_init_template
 
     chosen = [
         flag
@@ -207,7 +207,7 @@ def _build_answers(
     forwarded into the wizard so ``_build_config_yaml`` can deep-merge it
     into the canonical ``.ea/config.yaml``.
     """
-    from eawf.install.wizard import WizardAnswers
+    from eawf.platform.install.wizard import WizardAnswers
 
     return WizardAnswers(
         state_path=str(state_path),
@@ -367,8 +367,8 @@ def init_cmd(
     """Initialise a new Eä Workflow workspace at *target*."""
     from pydantic import ValidationError
 
-    from eawf.install.wizard import run_wizard_interactive, run_wizard_no_input
-    from eawf.profiles.discovery import list_init_templates
+    from eawf.platform.install.wizard import run_wizard_interactive, run_wizard_no_input
+    from eawf.platform.profiles.discovery import list_init_templates
 
     flags: GlobalFlags = ctx.obj
     target_dir = (target or Path.cwd()).resolve()

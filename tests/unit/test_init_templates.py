@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.profiles.discovery import list_init_templates, load_init_template
+from eawf.platform.profiles.discovery import list_init_templates, load_init_template
 from eawf.surfaces.cli.errors import UserError, ValidationError
 
 SHIPPED_TEMPLATES: tuple[str, ...] = (
@@ -48,7 +48,7 @@ def test_init_templates_do_not_include_spike_or_hybrid() -> None:
 
 def test_init_template_files_count_matches_three() -> None:
     """Raw filesystem check: directory shows exactly 3 YAMLs."""
-    data = files("eawf.templates.init")
+    data = files("eawf.platform.templates.init")
     yaml_files = sorted(
         entry.name for entry in data.iterdir() if entry.is_file() and entry.name.endswith(".yaml")
     )
@@ -162,7 +162,7 @@ def test_load_init_template_rejects_malformed_yaml(tmp_path: Any, monkeypatch: A
     # monkeypatching ``yaml.safe_load`` to raise a YAMLError. The discovery
     # module's exception handler catches that and raises ValidationFailed
     # with the expected message shape.
-    from eawf.profiles import discovery
+    from eawf.platform.profiles import discovery
 
     def _boom(_raw: str) -> dict[str, Any]:
         raise yaml.YAMLError("synthetic parse failure")
@@ -175,7 +175,7 @@ def test_load_init_template_rejects_malformed_yaml(tmp_path: Any, monkeypatch: A
 
 def test_load_init_template_rejects_non_mapping_top_level(monkeypatch: Any) -> None:
     """A list or scalar at the top level is rejected with ValidationFailed."""
-    from eawf.profiles import discovery
+    from eawf.platform.profiles import discovery
 
     def _return_list(_raw: str) -> list[str]:
         return ["not", "a", "mapping"]

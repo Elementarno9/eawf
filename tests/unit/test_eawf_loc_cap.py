@@ -9,26 +9,26 @@ from pathlib import Path
 
 import pytest
 
-from eawf.lint import (
+from eawf.platform.lint import (
     DEFAULT_MAX_LOC,
     Eawf010Config,
     LintConfig,
     load_lint_config,
 )
-from eawf.lint.eawf002 import (
+from eawf.platform.lint.eawf002 import (
     LogKeyViolation,
     banned_keys,
 )
-from eawf.lint.eawf002 import (
+from eawf.platform.lint.eawf002 import (
     check_source as check_eawf002,
 )
-from eawf.lint.eawf003 import (
+from eawf.platform.lint.eawf003 import (
     LoggerNameViolation,
 )
-from eawf.lint.eawf003 import (
+from eawf.platform.lint.eawf003 import (
     check_source as check_eawf003,
 )
-from eawf.lint.eawf010 import (
+from eawf.platform.lint.eawf010 import (
     RULE_CODE,
     ModuleLengthViolation,
     check_source,

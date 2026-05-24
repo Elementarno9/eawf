@@ -33,10 +33,10 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from eawf.install.instrument_probe import probe
 from eawf.kernel.config.layered import merge_config
 from eawf.kernel.config.profile import KNOWN_PROFILES
 from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.platform.install.instrument_probe import probe
 from eawf.surfaces.render.drift import detect_drift
 from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
 from eawf.surfaces.render.manifest import Manifest
@@ -95,7 +95,7 @@ def check_tools_available(
     The function lets :class:`eawf.surfaces.cli.errors.UserError`
     (``kind="InstrumentMissing"``) escape so the CLI surface can map it to
     exit code ``6``. Callers that only want the
-    snapshot view (no abort) should call :func:`eawf.install.instrument_probe.probe`
+    snapshot view (no abort) should call :func:`eawf.platform.install.instrument_probe.probe`
     directly with a guard.
     """
     if profile_ids is None:

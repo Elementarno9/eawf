@@ -6,7 +6,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from eawf.docs import autogen as schema_mod
+from eawf.platform.docs import autogen as schema_mod
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR = REPO_ROOT / "src" / "eawf" / "schemas"

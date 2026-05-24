@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from eawf.artifacts.references import Citation
+from eawf.platform.artifacts.references import Citation
 
 
 def render_references(references: Iterable[Citation]) -> list[str]:

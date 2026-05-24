@@ -2,7 +2,7 @@
 
 The W02 skills all follow the same shape::
 
-    1. Probe instruments via :func:`eawf.install.instrument_probe.probe`.
+    1. Probe instruments via :func:`eawf.platform.install.instrument_probe.probe`.
     2. Resolve the active state path (env / workspace flag / pwd upward).
     3. Execute the §14 algorithm steps; each step appends one ``EVENT``
        envelope to ``store/event.jsonl`` via
@@ -29,18 +29,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eawf.install.instrument_probe import (
-    INSTRUMENT_REQUIREMENTS,
-    PROBE_VERSION,
-    ProbeReport,
-    ProbeResult,
-)
-from eawf.install.instrument_probe import probe as run_probe
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
+from eawf.platform.install.instrument_probe import (
+    INSTRUMENT_REQUIREMENTS,
+    PROBE_VERSION,
+    ProbeReport,
+    ProbeResult,
+)
+from eawf.platform.install.instrument_probe import probe as run_probe
 from eawf.surfaces.render.envelope import (
     EnvelopeWarning,
     InstrumentStatus,
@@ -72,7 +72,7 @@ def _probe_cache_path(state_path: Path) -> Path:
     """Return the canonical probe-cache path next to ``state.json``.
 
     The probe-cache override env var (``EA_INSTRUMENT_PROBE``) is honoured
-    by :func:`~eawf.install.instrument_probe.probe` itself, so we only
+    by :func:`~eawf.platform.install.instrument_probe.probe` itself, so we only
     need to supply a sensible default here.
     """
     return state_path.parent / "instrument-probe.json"

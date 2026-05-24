@@ -19,7 +19,7 @@ import textwrap
 
 import pytest
 
-from eawf.lint.eawf011 import (
+from eawf.platform.lint.eawf011 import (
     DEFAULT_MAX_COMPLEXITY,
     RULE_CODE,
     CognitiveComplexityViolation,

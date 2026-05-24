@@ -42,7 +42,7 @@ from eawf.kernel.state.models import (
     WorkspaceRepoRef,
 )
 from eawf.kernel.state.urn import build as build_urn
-from eawf.registry.models import Registry, RegistryReadError, read_registry
+from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
@@ -63,7 +63,7 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
     The user scope has no on-disk ``state.json`` (it aggregates across
     repos rather than anchoring on one), so the portfolio table's bound
     state is built from the global registry ``~/.eawf/registry.json``:
-    each :class:`~eawf.registry.models.RegistryRepoEntry` becomes a
+    each :class:`~eawf.platform.registry.models.RegistryRepoEntry` becomes a
     :class:`~eawf.kernel.state.models.WorkspaceRepoRef` under a synthetic
     :class:`~eawf.kernel.state.models.WorkspaceIndex`, so
     :func:`~eawf.surfaces.tui.widgets.workspace_table.build_repo_rows` emits one

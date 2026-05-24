@@ -198,7 +198,7 @@ def test_render_skill_md_strict_undefined_catches_typos() -> None:
 
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-    templates_path = str(files("eawf.templates.claude"))
+    templates_path = str(files("eawf.platform.templates.claude"))
     env = Environment(
         loader=FileSystemLoader(templates_path),
         undefined=StrictUndefined,

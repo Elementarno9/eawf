@@ -2,7 +2,7 @@
 
 Pin the contract that:
 
-- :data:`~eawf.install.steps.WIZARD_STEPS` always contains exactly twelve
+- :data:`~eawf.platform.install.steps.WIZARD_STEPS` always contains exactly twelve
   steps (matches ``docs/architecture/installation.md`` — adding a thirteenth
   or removing one is a spec change that has to land here first).
 - All step ids are unique (so :class:`WizardAnswers` can map id → field
@@ -21,7 +21,7 @@ from typing import get_args
 
 import pytest
 
-from eawf.install.steps import WIZARD_STEPS, WizardKind, WizardStep
+from eawf.platform.install.steps import WIZARD_STEPS, WizardKind, WizardStep
 
 
 def test_wizard_steps_count_is_12() -> None:
@@ -98,7 +98,7 @@ def test_run_wizard_interactive_signature_accepts_force() -> None:
     """
     import inspect
 
-    from eawf.install.wizard import run_wizard_interactive
+    from eawf.platform.install.wizard import run_wizard_interactive
 
     params = inspect.signature(run_wizard_interactive).parameters
     msg = f"run_wizard_interactive must accept 'force' kwarg; got {list(params)}"

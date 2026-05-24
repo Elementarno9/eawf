@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.backup import (
+from eawf.platform.backup import (
     BackupError,
     UnknownSnapshotError,
     create_backup,
@@ -31,7 +31,7 @@ from eawf.backup import (
     prune_backups,
     restore_backup,
 )
-from eawf.backup.store import BackupStore, repo_sha
+from eawf.platform.backup.store import BackupStore, repo_sha
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 

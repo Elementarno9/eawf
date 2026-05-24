@@ -473,14 +473,14 @@ def _resolve_scan_paths(
 
     Explicit ``files`` (passed by a test) win; when none are supplied
     the gate falls back to the conditional **staged** scan via
-    :func:`eawf.lint._conditional.relevant_for_hook` (``staged=True``),
+    :func:`eawf.platform.lint._conditional.relevant_for_hook` (``staged=True``),
     which yields only the staged files relevant to ``hook_name``. The
     staged scope makes a real ``git commit`` scan only its delta and
     ``pre-commit run --all-files`` (nothing staged) a clean no-op
     rather than re-scanning the whole tree. The early-exit signal is an
     empty list.
     """
-    from eawf.lint._conditional import relevant_for_hook
+    from eawf.platform.lint._conditional import relevant_for_hook
 
     if files:
         return files
@@ -750,7 +750,7 @@ def log_format_lint(
     is found, 0 when clean. Files that fail to parse are skipped (an
     authoring bug surfaced by ruff elsewhere).
     """
-    from eawf.lint.eawf001 import check_source
+    from eawf.platform.lint.eawf001 import check_source
 
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
@@ -801,7 +801,7 @@ def plugin_doctor_drift(
     gate exits 0 immediately (the drift surface cannot have moved).
     Otherwise it runs the Claude checksum sweep and exits 1 on drift.
     """
-    from eawf.lint._conditional import relevant_for_hook
+    from eawf.platform.lint._conditional import relevant_for_hook
     from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin_strict
 
     flags: GlobalFlags = ctx.obj

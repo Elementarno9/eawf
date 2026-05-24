@@ -1,7 +1,7 @@
 """``/init`` skill — bootstrap a new Eä Workflow workspace via the install wizard.
 
 Per the design spec §4 W03 the ``/init`` skill is a thin envelope wrapper
-around :func:`eawf.install.wizard.run_wizard_no_input` (Phase 3 W05). The
+around :func:`eawf.platform.install.wizard.run_wizard_no_input` (Phase 3 W05). The
 skill never duplicates wizard logic — its job is to translate a fully
 populated :class:`WizardAnswers` into a typed :class:`InitBody` and let
 the engine emit the canonical envelope.
@@ -37,7 +37,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eawf.install.wizard import WizardAnswers, run_wizard_no_input
+from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.surfaces.cli.errors import UserError
 from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import (
@@ -114,7 +114,7 @@ def _build_user_question(missing: list[str]) -> UserQuestion:
 class InitSkill(Skill):
     """Concrete ``/init`` skill (Phase 4 W03).
 
-    Wraps :func:`eawf.install.wizard.run_wizard_no_input` so the wizard's
+    Wraps :func:`eawf.platform.install.wizard.run_wizard_no_input` so the wizard's
     pure pipeline emits a canonical :class:`OutputEnvelope` instead of a
     plain :class:`WizardResult`. No behavioural change to the wizard
     itself — the skill only adapts the I/O.

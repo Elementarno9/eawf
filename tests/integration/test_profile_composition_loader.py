@@ -13,7 +13,7 @@ Covers the three W15 success criteria:
 3. ``extra="forbid"`` rejects unknown profile keys at load time.
 
 The tests write workspace-overlay YAMLs under a tmp workspace and exercise
-:func:`eawf.profiles.load_composed_profile` end-to-end (discovery → load →
+:func:`eawf.platform.profiles.load_composed_profile` end-to-end (discovery → load →
 compose). This is the "composition loader entry point" surface — the only
 public seam callers should use when they need a deterministic merged view
 keyed by profile id.
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.profiles import (
+from eawf.platform.profiles import (
     ComposedProfile,
     ProfileConflict,
     discovery,  # type: ignore[attr-defined]

@@ -521,8 +521,8 @@ def config_validate(
     text = "config: ok"
 
     if composed:
-        from eawf.profiles.compose import compose
-        from eawf.profiles.loader import list_profiles, load_profile
+        from eawf.platform.profiles.compose import compose
+        from eawf.platform.profiles.loader import list_profiles, load_profile
 
         # Resolve the enabled profile list from the merged config. Unknown
         # ids surface as UserError (kind="InvalidInput") from load_profile

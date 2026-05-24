@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from eawf.install.wizard import WizardAnswers, _build_config_yaml, run_wizard_no_input
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
+from eawf.platform.install.wizard import WizardAnswers, _build_config_yaml, run_wizard_no_input
 
 
 def _answers(runtime: str = "claude-code") -> WizardAnswers:

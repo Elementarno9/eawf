@@ -14,9 +14,9 @@ from typing import Any
 
 import pytest
 
-from eawf.install.instrument_probe import ProbeReport, ProbeResult
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.paths import store_path
+from eawf.platform.install.instrument_probe import ProbeReport, ProbeResult
 from eawf.workflow.skills import _common
 
 # --- _project_status -----------------------------------------------------

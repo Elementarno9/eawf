@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 # Freshness window for PLANNED phases / iters and dormant iters. The
 # renderer is a read-only diagnostic — 14 days mirrors the
-# memory-staleness default in :mod:`eawf.memory.staleness`.
+# memory-staleness default in :mod:`eawf.platform.memory.staleness`.
 _STALE_AGE_DAYS = 14
 
 roadmap_app = typer.Typer(

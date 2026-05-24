@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.profiles import discovery
+from eawf.platform.profiles import discovery
 from eawf.surfaces.cli.errors import UserError, ValidationError
 
 

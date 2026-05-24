@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.install.instrument_probe`.
+"""Unit tests for :mod:`eawf.platform.install.instrument_probe`.
 
 Probe behaviour we exercise here:
 
@@ -22,7 +22,7 @@ from unittest import mock
 
 import pytest
 
-from eawf.install import instrument_probe
+from eawf.platform.install import instrument_probe
 from eawf.surfaces.cli.errors import UserError
 
 
@@ -59,8 +59,8 @@ def test_instrument_probe_caches_per_env(tmp_path: Path) -> None:
     cache_path = tmp_path / "probe.json"
     fake_which = mock.Mock(side_effect=_make_which({"git", "python", "uv"}))
     with (
-        mock.patch("eawf.install.instrument_probe.shutil.which", fake_which),
-        mock.patch("eawf.install.instrument_probe.subprocess.run", _stub_subprocess_run),
+        mock.patch("eawf.platform.install.instrument_probe.shutil.which", fake_which),
+        mock.patch("eawf.platform.install.instrument_probe.subprocess.run", _stub_subprocess_run),
     ):
         first = instrument_probe.probe(["core"], cache_path=cache_path)
         first_which_calls = fake_which.call_count
@@ -79,8 +79,8 @@ def test_probe_reprobe_invalidates_cache(tmp_path: Path) -> None:
     cache_path = tmp_path / "probe.json"
     fake_which = mock.Mock(side_effect=_make_which({"git", "python", "uv"}))
     with (
-        mock.patch("eawf.install.instrument_probe.shutil.which", fake_which),
-        mock.patch("eawf.install.instrument_probe.subprocess.run", _stub_subprocess_run),
+        mock.patch("eawf.platform.install.instrument_probe.shutil.which", fake_which),
+        mock.patch("eawf.platform.install.instrument_probe.subprocess.run", _stub_subprocess_run),
     ):
         instrument_probe.probe(["core"], cache_path=cache_path)
         baseline = fake_which.call_count
@@ -96,8 +96,10 @@ def test_probe_hard_missing_raises(tmp_path: Path) -> None:
     cache_path = tmp_path / "probe.json"
     # ``git`` is hard-required for ``core``; drop it.
     with (
-        mock.patch("eawf.install.instrument_probe.shutil.which", _make_which({"python", "uv"})),
-        mock.patch("eawf.install.instrument_probe.subprocess.run", _stub_subprocess_run),
+        mock.patch(
+            "eawf.platform.install.instrument_probe.shutil.which", _make_which({"python", "uv"})
+        ),
+        mock.patch("eawf.platform.install.instrument_probe.subprocess.run", _stub_subprocess_run),
     ):
         with pytest.raises(UserError) as exc:
             instrument_probe.probe(["core"], cache_path=cache_path)
@@ -127,8 +129,8 @@ def test_probe_soft_missing_warns_not_raises(tmp_path: Path) -> None:
     }
     with (
         mock.patch.object(instrument_probe, "INSTRUMENT_REQUIREMENTS", fake_specs),
-        mock.patch("eawf.install.instrument_probe.shutil.which", _make_which({"git"})),
-        mock.patch("eawf.install.instrument_probe.subprocess.run", _stub_subprocess_run),
+        mock.patch("eawf.platform.install.instrument_probe.shutil.which", _make_which({"git"})),
+        mock.patch("eawf.platform.install.instrument_probe.subprocess.run", _stub_subprocess_run),
     ):
         report = instrument_probe.probe(["core"], cache_path=cache_path)
         soft = next(r for r in report.results if r.name == "optional-tool")
@@ -144,10 +146,10 @@ def test_probe_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(override))
     with (
         mock.patch(
-            "eawf.install.instrument_probe.shutil.which",
+            "eawf.platform.install.instrument_probe.shutil.which",
             _make_which({"git", "python", "uv"}),
         ),
-        mock.patch("eawf.install.instrument_probe.subprocess.run", _stub_subprocess_run),
+        mock.patch("eawf.platform.install.instrument_probe.subprocess.run", _stub_subprocess_run),
     ):
         instrument_probe.probe(["core"], cache_path=explicit)
     assert override.exists()

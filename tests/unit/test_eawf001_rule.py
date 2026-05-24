@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from eawf.lint.eawf001 import (
+from eawf.platform.lint.eawf001 import (
     RULE_CODE,
     LogFormatViolation,
     check_message,

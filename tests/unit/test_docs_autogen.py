@@ -2,7 +2,7 @@
 
 Covers the load-bearing guarantees of P27-W26:
 
-- **Determinism** — :func:`eawf.docs.autogen.all_pages` emits byte-identical
+- **Determinism** — :func:`eawf.platform.docs.autogen.all_pages` emits byte-identical
   output across calls and the committed ``docs/reference/autogen/`` tree
   matches a fresh regeneration (the drift gate behind
   ``eawf doc verify --strict``).
@@ -11,7 +11,7 @@ Covers the load-bearing guarantees of P27-W26:
 - **CLI dispatch** — ``eawf schema dump`` writes the schema + reference
   pages under a ``--workspace`` root, ``--schema-only`` narrows to the
   ``.schema.json`` dumps, and a non-directory workspace exits ``USER_ERROR``.
-- **Drift gate** — :func:`eawf.docs.autogen.diff_against_disk` reports a
+- **Drift gate** — :func:`eawf.platform.docs.autogen.diff_against_disk` reports a
   ``missing`` row for an absent page and a ``changed`` row for a tampered
   one, then no rows once regenerated.
 """
@@ -24,8 +24,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from eawf.docs import autogen
 from eawf.kernel.state import enums as state_enums
+from eawf.platform.docs import autogen
 from eawf.surfaces.cli import error_codes as error_codes_mod
 from eawf.surfaces.cli import exit_codes as exit_codes_mod
 from eawf.surfaces.cli.app import app

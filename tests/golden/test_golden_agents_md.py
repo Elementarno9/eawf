@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.profiles import compose, load_profile
+from eawf.platform.profiles import compose, load_profile
 from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 

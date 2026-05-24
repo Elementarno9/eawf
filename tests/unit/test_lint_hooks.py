@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.lint import _conditional
+from eawf.platform.lint import _conditional
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()

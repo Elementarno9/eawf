@@ -79,8 +79,8 @@ def profile_new_cmd(
     """Scaffold a workspace profile at ``.ea/profiles/<name>.yaml``."""
     import yaml
 
-    from eawf.profiles import discovery as profiles_discovery
-    from eawf.profiles import trust as profiles_trust
+    from eawf.platform.profiles import discovery as profiles_discovery
+    from eawf.platform.profiles import trust as profiles_trust
 
     flags: GlobalFlags = ctx.obj
     workspace = _resolve_workspace(flags)
@@ -149,8 +149,8 @@ def profile_validate_cmd(
     ] = False,
 ) -> None:
     """Validate a profile (or every profile) against the layered loader."""
-    from eawf.profiles import discovery as profiles_discovery
-    from eawf.profiles import trust as profiles_trust
+    from eawf.platform.profiles import discovery as profiles_discovery
+    from eawf.platform.profiles import trust as profiles_trust
 
     flags: GlobalFlags = ctx.obj
     if (name is None) == (not validate_all):

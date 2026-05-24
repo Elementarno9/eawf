@@ -86,7 +86,7 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 
 if TYPE_CHECKING:
-    from eawf.registry import Registry
+    from eawf.platform.registry import Registry
 
 logger = logging.getLogger(__name__)
 
@@ -246,9 +246,9 @@ def _resolve_registry_path(registry_path: Path | None) -> Path:
 
     Tests pass an explicit ``tmp_path``-rooted ``--registry-path``;
     runtime callers leave it unset and pick up
-    :func:`eawf.registry.default_registry_path`.
+    :func:`eawf.platform.registry.default_registry_path`.
     """
-    from eawf.registry import default_registry_path
+    from eawf.platform.registry import default_registry_path
 
     return registry_path if registry_path is not None else default_registry_path()
 
@@ -266,7 +266,7 @@ def _read_registry_for_write(registry_path: Path) -> Registry:
         UserError: When the file exists but cannot be parsed /
             validated (``kind="InvalidInput"``).
     """
-    from eawf.registry import Registry, RegistryReadError, read_registry
+    from eawf.platform.registry import Registry, RegistryReadError, read_registry
 
     try:
         return read_registry(path=registry_path)
@@ -372,7 +372,7 @@ def _persist_registry_via_daemon(validated: Registry, registry_path: Path) -> bo
         UserError: On-disk registry exists but cannot be read
             (``kind="InvalidInput"``).
     """
-    from eawf.registry import Registry, RegistryReadError, read_registry
+    from eawf.platform.registry import Registry, RegistryReadError, read_registry
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
     from eawf.surfaces.cli._mutation import _daemon_reachable
 
@@ -453,7 +453,7 @@ def _persist_registry(registry: Registry, registry_path: Path) -> None:
     """
     from pydantic import ValidationError as PydValidationError
 
-    from eawf.registry import Registry
+    from eawf.platform.registry import Registry
 
     try:
         validated = Registry.model_validate(registry.model_dump(mode="json"))

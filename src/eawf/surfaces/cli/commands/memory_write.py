@@ -50,7 +50,7 @@ def memory_add(
     ] = None,
 ) -> None:
     """Write a new memory entry to ``memory.jsonl`` + ``state.memory_index``."""
-    from eawf.memory.store import add_memory
+    from eawf.platform.memory.store import add_memory
     from eawf.runtime.session.store import append_event
     from eawf.surfaces.cli._mutation import state_transaction
 
@@ -141,7 +141,7 @@ def memory_promote(
 ) -> None:
     """Promote a record. ``--to memory`` (default) or ``--to artifact``."""
     from eawf.kernel.store.paths import store_path
-    from eawf.memory.promotion import PromotionError, promote_record
+    from eawf.platform.memory.promotion import PromotionError, promote_record
     from eawf.runtime.session.store import append_event
     from eawf.surfaces.cli._mutation import state_transaction
 
@@ -235,7 +235,7 @@ def _memory_promote_to_artifact(
 
     Memory entries (``MEM-…`` IDs) are canonised into a durable
     :class:`~eawf.kernel.state.models.Decision` row. The implementation lives in
-    :func:`eawf.memory.promotion.promote_to_artifact`; this CLI shim:
+    :func:`eawf.platform.memory.promotion.promote_to_artifact`; this CLI shim:
 
     1. Validates that ``--source-kind memory`` is set (the inverse direction
        requires the source to be a memory entry, not a store record).
@@ -244,7 +244,7 @@ def _memory_promote_to_artifact(
     3. Emits a ``memory.promote`` event with the artifact ID linked.
     """
     from eawf.kernel.store.paths import store_path
-    from eawf.memory.promotion import PromotionError, promote_to_artifact
+    from eawf.platform.memory.promotion import PromotionError, promote_to_artifact
     from eawf.runtime.session.store import append_event
     from eawf.surfaces.cli._mutation import state_transaction
 
@@ -454,7 +454,7 @@ def memory_prune(
     ] = False,
 ) -> None:
     """Soft-delete prune. Flips status to PRUNED; preserves the prior record."""
-    from eawf.memory.prune import PruneError, prune_memory
+    from eawf.platform.memory.prune import PruneError, prune_memory
     from eawf.runtime.session.store import append_event
     from eawf.surfaces.cli._mutation import state_transaction
 
@@ -582,7 +582,7 @@ def memory_gc(
     ] = False,
 ) -> None:
     """Archive matched memory entries by flipping their ``tier`` to ARCHIVAL."""
-    from eawf.memory.gc import GcError, gc_memory
+    from eawf.platform.memory.gc import GcError, gc_memory
     from eawf.runtime.session.store import append_event
     from eawf.surfaces.cli._mutation import state_transaction
 

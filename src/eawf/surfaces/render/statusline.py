@@ -16,7 +16,7 @@ Public surface:
 - :func:`render_segments` — apply the theme to a list of segments,
   return the joined line.
 
-Theme schema is documented in ``src/eawf/templates/themes.yaml``. The schema
+Theme schema is documented in ``src/eawf/platform/templates/themes.yaml``. The schema
 is intentionally permissive — unknown segment/status/module keys silently
 fall through to "no color" / "no glyph" so themes can omit modules they
 don't want to decorate.
@@ -45,7 +45,7 @@ the renderer can decide whether to skip or render ``<module>:!`` based on
 
 
 _THEMES_FILENAME: str = "themes.yaml"
-_TEMPLATES_PACKAGE: str = "eawf.templates"
+_TEMPLATES_PACKAGE: str = "eawf.platform.templates"
 _DEFAULT_THEME_NAME: str = "default"
 
 
@@ -153,7 +153,7 @@ def load_themes() -> dict[str, StatuslineTheme]:
 
     The bundled file is loaded via :func:`importlib.resources.files` so the
     helper works from a wheel install, an editable install, and the source
-    tree alike (mirrors :mod:`eawf.profiles.loader`).
+    tree alike (mirrors :mod:`eawf.platform.profiles.loader`).
     """
     raw_text: str
     try:

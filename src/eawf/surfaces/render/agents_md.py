@@ -2,7 +2,7 @@
 
 Per ``docs/policy/agents-claude-md.md``:
 
-- Take a :class:`~eawf.profiles.models.ComposedProfile` whose ``render_blocks``
+- Take a :class:`~eawf.platform.profiles.models.ComposedProfile` whose ``render_blocks``
   list declares the regions that should appear on disk.
 - Filter to ``target == "AGENTS.md"`` blocks (other targets — ``.claude/...``
   skill/agent files — are handled by sibling renderers in W05+).
@@ -53,7 +53,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.kernel.state.models import Decision, State
-from eawf.profiles.models import ComposedProfile, RenderBlock
+from eawf.platform.profiles.models import ComposedProfile, RenderBlock
 from eawf.surfaces.render import regions
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.manifest import Manifest, ManifestEntry
@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 _TARGET_FILENAME: str = "AGENTS.md"
 _TEMPLATE_NAME: str = "AGENTS.md.j2"
-_TEMPLATES_PACKAGE: str = "eawf.templates"
+_TEMPLATES_PACKAGE: str = "eawf.platform.templates"
 
 #: Managed-region id under which the typed-Decisions section is rendered.
 #: Stable so re-renders update in place (and so hand-edits outside the BEGIN…END
@@ -119,7 +119,7 @@ def _load_environment() -> Environment:
 
     Uses :func:`importlib.resources.files` so the renderer works equally
     from a wheel install, an editable install, and the source tree (mirrors
-    :mod:`eawf.profiles.loader`).
+    :mod:`eawf.platform.profiles.loader`).
     """
     templates_dir = files(_TEMPLATES_PACKAGE)
     # Materialise to a filesystem path. importlib.resources.files() returns a
@@ -143,7 +143,7 @@ def _render_block_body(env: Environment, block: RenderBlock, composed: ComposedP
     structured blocks (the ``rationale``/``mechanism``/``verification`` triad)
     emit a fixed ``Rationale``/``Mechanism``/``Verification`` sub-heading
     layout. The template branches on :attr:`RenderBlock.is_structured` — see
-    ``src/eawf/templates/AGENTS.md.j2`` for the surface policy.
+    ``src/eawf/platform/templates/AGENTS.md.j2`` for the surface policy.
     """
     template = env.get_template(_TEMPLATE_NAME)
     return template.render(block=block, composed=composed)

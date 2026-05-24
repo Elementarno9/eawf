@@ -9,11 +9,11 @@ treated as a Ctrl-C / cancellation, and space toggles a checkbox entry.
 
 Coverage:
 
-- :func:`~eawf.install.wizard._ask_step` round-trips for each of the five
-  :class:`~eawf.install.steps.WizardKind` variants (``text``, ``bool``,
+- :func:`~eawf.platform.install.wizard._ask_step` round-trips for each of the five
+  :class:`~eawf.platform.install.steps.WizardKind` variants (``text``, ``bool``,
   ``choice``, ``multichoice``, ``path``).
 - Cancellation: a Ctrl-C byte at any prompt raises
-  :class:`~eawf.install.wizard.WizardCancelled`.
+  :class:`~eawf.platform.install.wizard.WizardCancelled`.
 - End-to-end: feeding every step's input through a single pipe lets the
   wizard land a real ``state.json`` + ``AGENTS.md`` + render manifest on
   ``tmp_path`` (proves :func:`run_wizard_interactive` delegates to the
@@ -31,7 +31,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.input.base import PipeInput
 from prompt_toolkit.output import DummyOutput
 
-from eawf.install.steps import (
+from eawf.platform.install.steps import (
     STEP_ACCEPTANCE_LINT,
     STEP_ACCEPTANCE_TESTS,
     STEP_ACCEPTANCE_TYPECHECK,
@@ -45,7 +45,7 @@ from eawf.install.steps import (
     STEP_STATE_PATH,
     STEP_WRITE_CONFIRM,
 )
-from eawf.install.wizard import (
+from eawf.platform.install.wizard import (
     WizardCancelled,
     _ask_step,
     run_wizard_interactive,
@@ -168,7 +168,7 @@ def test_ask_step_choice_ctrl_c_raises_wizard_cancelled(
 def _send_full_wizard_inputs(inp: PipeInput, *, project_code: str) -> None:
     """Push enough keystrokes to drive every WIZARD_STEPS prompt to completion.
 
-    Order matches :data:`~eawf.install.steps.WIZARD_STEPS`:
+    Order matches :data:`~eawf.platform.install.steps.WIZARD_STEPS`:
     state_path → project_code → project_title → lifecycle_depth →
     profiles → runtime → plugins → mcp → acceptance_{tests,lint,typecheck} →
     write_confirm.

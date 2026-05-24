@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 _TEMPLATE_NAME: str = "agent.md.j2"
-_TEMPLATES_PACKAGE: str = "eawf.templates.claude"
+_TEMPLATES_PACKAGE: str = "eawf.platform.templates.claude"
 
 
 # Frozen v0.1 role list. Mirrors the hand-written ``.claude/agents/``

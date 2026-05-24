@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from eawf.registry import (
+from eawf.platform.registry import (
     EXPLICIT_GROWTH_SURFACES,
     FORBIDDEN_GROWTH_PATHS,
     STALE_AFTER,

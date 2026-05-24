@@ -39,7 +39,7 @@ import yaml
 
 from eawf.kernel.config.layered import LAYER_ORDER, WRITABLE_LAYERS
 from eawf.kernel.config.loader import load_yaml_layer
-from eawf.profiles.loader import list_profiles, load_profile
+from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import UserError
 
@@ -51,7 +51,7 @@ def _build_known_profiles() -> dict[str, list[str]]:
 
     Replaces the hand-coded table that lived here through Phase 2: the source
     of truth is now the on-disk profile body. Adding a new profile is one
-    YAML file under :mod:`eawf.profiles.data` plus an entry in any test that
+    YAML file under :mod:`eawf.platform.profiles.data` plus an entry in any test that
     enumerates the v0.1 profile set.
 
     The shape is preserved verbatim (``dict[str, list[str]]``) so callers
@@ -64,7 +64,7 @@ def _build_known_profiles() -> dict[str, list[str]]:
 
 # Profile registry. The mapping id → required state-field names mirrors the
 # ``state_extensions.fields_required`` block of each v0.1 profile body under
-# :mod:`eawf.profiles.data`. Phase 3 W02 replaced the hand-coded table with
+# :mod:`eawf.platform.profiles.data`. Phase 3 W02 replaced the hand-coded table with
 # a derived value; the public shape is unchanged.
 KNOWN_PROFILES: dict[str, list[str]] = _build_known_profiles()
 

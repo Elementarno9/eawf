@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 _TEMPLATE_NAME: str = "SKILL.md.j2"
-_TEMPLATES_PACKAGE: str = "eawf.templates.claude"
+_TEMPLATES_PACKAGE: str = "eawf.platform.templates.claude"
 
 
 @dataclass(frozen=True)

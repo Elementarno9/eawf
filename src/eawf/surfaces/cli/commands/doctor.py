@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 import typer
 
 import eawf
-from eawf.install.instrument_probe import resolve_cache_path
+from eawf.platform.install.instrument_probe import resolve_cache_path
 from eawf.surfaces.cli.errors import UserError, ValidationError, emit_error
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text

@@ -69,10 +69,10 @@ def pr_render(
     ] = None,
 ) -> None:
     """Render the PR body for a phase or iter as Markdown (or JSON envelope)."""
-    from eawf.artifacts.validation import validate_markdown_artifact
     from eawf.kernel.config.layered import merge_config
-    from eawf.profiles.compose import compose
-    from eawf.profiles.loader import load_profile
+    from eawf.platform.artifacts.validation import validate_markdown_artifact
+    from eawf.platform.profiles.compose import compose
+    from eawf.platform.profiles.loader import load_profile
     from eawf.surfaces.render.pr_body import (
         PrBodyNotFound,
         PrBodyValidationError,
