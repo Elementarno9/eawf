@@ -3389,6 +3389,16 @@
       "scope_id": "P27-I04-W28",
       "status": "done",
       "updated_at": "2026-05-24T17:07:56.773411Z"
+    },
+    "P27-I04-W29": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W29-close-20260524T171309Z",
+      "elapsed_eu": 0.56,
+      "id": "ACT-P27-I04-W29",
+      "scope_id": "P27-I04-W29",
+      "status": "done",
+      "updated_at": "2026-05-24T17:13:09.098383Z"
     }
   },
   "agent_sessions": {
@@ -5135,9 +5145,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I04-W29"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I04",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -7898,7 +7906,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T17:07:57.238693Z",
+  "updated_at": "2026-05-24T17:13:09.098839Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20044,8 +20052,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-24T17:13:09.098383Z",
+      "commit": "431624a578a6ab4d263ec6b1420732b683ea7a1f",
       "deps": [
         "P27-I04-W27",
         "P27-I04-W28"
@@ -20062,10 +20070,10 @@
       "id": "P27-I04-W29",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-24T16:56:21.128982Z",
-      "outcome": null,
+      "outcome": "scope-switch state rebind for repo/workspace + breadcrumb driven by active screen scope",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "u then r rebinds repo launch state with phases>0 and scope_kind=repo; repo RoadmapTree repopulates; user breadcrumb reads user; existing user-switch test passes; goldens regenerated"
       ],
