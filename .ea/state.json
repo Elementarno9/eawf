@@ -7242,7 +7242,10 @@
         "P27-I04-W23",
         "P27-I04-W24",
         "P27-I04-W25",
-        "P27-I04-W26"
+        "P27-I04-W26",
+        "P27-I04-W27",
+        "P27-I04-W28",
+        "P27-I04-W29"
       ]
     },
     "P27-I05": {
@@ -7834,7 +7837,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T16:32:15.387596Z",
+  "updated_at": "2026-05-24T16:56:21.129317Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19907,6 +19910,105 @@
         "unit tests cover bucket aggregation with pending waves and phase-scope across iters and no-bucket and no-active-phase"
       ],
       "title": "Phase-scope EFFORT block; live-aggregate estimate from wave buckets",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W27": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W29"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/tui/widgets/roadmap_tree.py",
+        "tests/tui/test_widgets_roadmap_tree.py",
+        "tests/snapshots/tui/golden/*.txt"
+      ],
+      "id": "P27-I04-W27",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T16:56:12.947943Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "wave with effort_bucket and no token_budget renders size bar; wave with token_budget>0 renders burn bar; wave with neither renders EMPTY_STATE; bars stay flush-right; goldens regenerated"
+      ],
+      "title": "Wave-row hybrid metric: size bar + token-burn",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W28": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I04-W29"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/scopes/_zoom.py",
+        "src/eawf/tui/scopes/workspace.py",
+        "src/eawf/tui/scopes/user.py",
+        "tests/tui/*"
+      ],
+      "id": "P27-I04-W28",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T16:56:16.827544Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Enter-Esc-Enter raises no DuplicateIds and ends with exactly one zoom-quadrant; zoom then switch scope then return leaves screen not zoomed; footer drops z zoom; Enter still zooms"
+      ],
+      "title": "Zoom remount race + cached-screen leak fix; drop z zoom",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I04-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I04-W27",
+        "P27-I04-W28"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/tui/app.py",
+        "src/eawf/tui/widgets/header.py",
+        "tests/tui/test_scope_user_switch.py",
+        "tests/snapshots/tui/golden/*.txt"
+      ],
+      "id": "P27-I04-W29",
+      "iter_id": "P27-I04",
+      "opened_at": "2026-05-24T16:56:21.128982Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "u then r rebinds repo launch state with phases>0 and scope_kind=repo; repo RoadmapTree repopulates; user breadcrumb reads user; existing user-switch test passes; goldens regenerated"
+      ],
+      "title": "Scope-switch state rebind + breadcrumb by screen scope",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
