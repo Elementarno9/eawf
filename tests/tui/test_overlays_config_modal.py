@@ -1091,6 +1091,39 @@ def test_config_enter_expands_multichoice_checklist() -> None:
     asyncio.run(body())
 
 
+def test_config_multichoice_checklist_not_clamped_to_one_row() -> None:
+    """The expanded checklist lays out its full choice list, not one clipped row.
+
+    Regression guard for the ``config-edit-row`` ``height: 1`` clamp: the
+    checklist mounted without that class so its own ``height: auto`` (capped
+    at ``max-height: 12`` with ``overflow-y: auto``) governs layout. With
+    ``ui.dashboard_panes``' seven choices the rendered region must be taller
+    than the single-cell clamp.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_dashboard_panes(modal)
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.key == "ui.dashboard_panes"
+            choice_count = len(entry.choices or ())
+            assert choice_count > 1  # the regression only bites with >1 row
+            await pilot.press("enter")  # expand the checklist
+            await pilot.pause()
+            checklist = modal.query_one("#config-multichoice", Static)
+            # The clamp pinned the region to a single cell; layout now grows
+            # to fit every choice line (capped by the widget's max-height).
+            assert checklist.outer_size.height > 1
+            assert checklist.region.height > 1
+
+    asyncio.run(body())
+
+
 def test_config_multichoice_space_toggle_then_enter_commits() -> None:
     """Space toggles an item, the second Enter commits the staged list.
 

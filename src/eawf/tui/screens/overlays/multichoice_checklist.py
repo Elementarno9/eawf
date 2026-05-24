@@ -46,6 +46,7 @@ class MultichoiceChecklist(Static):
     MultichoiceChecklist {
         height: auto;
         max-height: 12;
+        overflow-y: auto;
         background: $surface;
         color: $text;
     }

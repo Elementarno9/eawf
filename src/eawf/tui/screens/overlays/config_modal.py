@@ -1144,7 +1144,6 @@ class ConfigModal(ModalScreen[None]):
             selected=selected,
             prefix=self._meta_line(entry),
             id="config-multichoice",
-            classes="config-edit-row",
         )
         error_row = Static("", classes="config-edit-error", id="config-edit-error", markup=False)
         row.display = False
