@@ -5408,7 +5408,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P27-I05-W22",
+      "P27-I05-W28"
+    ],
     "iter_id": "P27-I05",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -7110,6 +7113,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I05-W21",
       "updated_at": "2026-05-24T23:18:15.058439Z"
+    },
+    "P27-I05-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W22-bucket-20260524T233357Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W22",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W22",
+      "updated_at": "2026-05-24T23:33:57.239296Z"
+    },
+    "P27-I05-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W28-bucket-20260524T234653Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W28",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W28",
+      "updated_at": "2026-05-24T23:46:53.247959Z"
     }
   },
   "goals": {
@@ -7932,7 +7961,8 @@
         "P27-I05-W24",
         "P27-I05-W25",
         "P27-I05-W26",
-        "P27-I05-W27"
+        "P27-I05-W27",
+        "P27-I05-W28"
       ]
     }
   },
@@ -8487,7 +8517,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T23:30:51.900171Z",
+  "updated_at": "2026-05-24T23:47:04.950538Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21373,7 +21403,8 @@
       "blocks": [
         "P27-I05-W22",
         "P27-I05-W25",
-        "P27-I05-W26"
+        "P27-I05-W26",
+        "P27-I05-W28"
       ],
       "claim_session_id": "op-p27-i05",
       "closed_at": "2026-05-24T23:30:51.899187Z",
@@ -21408,7 +21439,7 @@
       "blocks": [
         "P27-I05-W23"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p27-i05",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -21427,7 +21458,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
       ],
@@ -21448,7 +21479,8 @@
         "P27-I05-W22",
         "P27-I05-W25",
         "P27-I05-W26",
-        "P27-I05-W27"
+        "P27-I05-W27",
+        "P27-I05-W28"
       ],
       "description": null,
       "dispatch_history": [],
@@ -21600,6 +21632,41 @@
         "verify each delivered (B003 B015 B021 B026 B028 B044 B056 B064 B010 B048 B065); backlog close each with audit evidence; stale target-phase refs retired"
       ],
       "title": "Close 11 already-delivered backlog items with evidence",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W28": {
+      "agent_role": "executor",
+      "blocks": [
+        "P27-I05-W23"
+      ],
+      "claim_session_id": "op-p27-i05",
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P27-I05-W21"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/estimation/buckets.py",
+        "src/eawf/surfaces/cli/commands/metrics.py",
+        "tests"
+      ],
+      "id": "P27-I05-W28",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-24T23:46:35.413303Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "close_wave stops auto-recording wall-clock actuals; the 363 wall-clock actuals purged via canonical writer; backfill-actuals wall-clock transform retired; TUI+metrics show honest empty-state for consumed EU; tests updated; mypy+suite green"
+      ],
+      "title": "Replace wall-clock EU actuals with honest empty-state",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
