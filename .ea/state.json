@@ -3579,6 +3579,16 @@
       "scope_id": "P27-I05-W16",
       "status": "done",
       "updated_at": "2026-05-24T20:39:59.013751Z"
+    },
+    "P27-I05-W17": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I05-W17-close-20260524T214643Z",
+      "elapsed_eu": 41.77,
+      "id": "ACT-P27-I05-W17",
+      "scope_id": "P27-I05-W17",
+      "status": "done",
+      "updated_at": "2026-05-24T21:46:43.925611Z"
     }
   },
   "agent_sessions": {
@@ -6995,6 +7005,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P27-I05-W16",
       "updated_at": "2026-05-24T20:30:19.639981Z"
+    },
+    "P27-I05-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W17-bucket-20260524T204021Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I05-W17",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I05-W17",
+      "updated_at": "2026-05-24T20:40:21.228373Z"
     }
   },
   "goals": {
@@ -8372,7 +8395,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T20:39:59.014675Z",
+  "updated_at": "2026-05-24T21:46:43.925873Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21105,9 +21128,9 @@
       "blocks": [
         "P27-I05-W18"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-24T21:46:43.925611Z",
+      "commit": "aa815e7218f8573a1c8b7833a19476f6a0a4c7ae",
       "deps": [
         "P27-I05-W16"
       ],
@@ -21130,10 +21153,10 @@
       "id": "P27-I05-W17",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T00:53:36.424611Z",
-      "outcome": null,
+      "outcome": "regrouped 11 runtime members under runtime/ via codemod-all-refs (no shims); pyproject daemon gates + 31 EAWF001 log lines + codemod-missed refs (_SRC_ROOT, _PLUGIN_SURFACE, fixtures, docs) fixed; mypy + full suite green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "runtime members moved under runtime/; shims at old paths; mypy and tests green"
       ],
