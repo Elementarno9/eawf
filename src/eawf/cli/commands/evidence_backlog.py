@@ -377,6 +377,10 @@ def backlog_add(
             help="Owning scope (defaults to project code).",
         ),
     ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Long-form purpose (<=500 chars)."),
+    ] = None,
 ) -> None:
     """Add a new backlog item."""
     from eawf.cli._mutation import state_transaction
@@ -401,6 +405,7 @@ def backlog_add(
                 title=title,
                 priority=priority,
                 scope_id=resolved_scope,
+                description=description,
             )
             append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
     except cli_errors.CliError as err:
@@ -414,8 +419,54 @@ def backlog_add(
             "priority": priority.value,
             "scope_id": resolved_scope,
             "status": "open",
+            "has_description": description is not None,
         },
         f"backlog {item_id} added priority={priority.value}",
+        flags,
+    )
+
+
+@backlog_app.command("edit")
+def backlog_edit(
+    ctx: typer.Context,
+    item_id: Annotated[str, typer.Argument(help="Backlog item id")],
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="New short title (<=72 chars)."),
+    ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="New long-form purpose (<=500 chars)."),
+    ] = None,
+) -> None:
+    """Edit an open backlog item's title and/or description."""
+    from eawf.cli._mutation import state_transaction
+    from eawf.evidence import backlog as backlog_evi
+    from eawf.evidence._io import append_jsonl, store_paths
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        with state_transaction(state_path) as state:
+            event = backlog_evi.edit_backlog(
+                state,
+                item_id=item_id,
+                title=title,
+                description=description,
+            )
+            append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    fields = sorted(f for f, v in (("title", title), ("description", description)) if v is not None)
+    _emit(
+        {
+            "item_id": item_id,
+            "fields": fields,
+        },
+        f"backlog {item_id} edited fields={','.join(fields)}",
         flags,
     )
 

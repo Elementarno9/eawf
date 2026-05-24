@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from pydantic import ValidationError
+
 from eawf.cli.errors import UserError
 from eawf.evidence import _io
 from eawf.evidence.guards import require_complete_audit
@@ -30,24 +32,42 @@ def add_backlog(
     title: str,
     priority: BacklogPriority,
     scope_id: str,
+    description: str | None = None,
 ) -> Envelope:
-    """Register a new backlog item in place."""
+    """Register a new backlog item in place.
+
+    Args:
+        description: Optional long-form purpose for the item. Bounded at
+            500 characters by :class:`BacklogItem`; ``None`` leaves the
+            item title-only.
+
+    Raises:
+        UserError: when ``item_id`` already exists (``kind="InvalidInput"``),
+            or when ``title`` / ``description`` violate the
+            :class:`BacklogItem` bounds (``kind="InvalidInput"``).
+    """
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id in backlog:
         raise UserError(f"backlog item {item_id!r} already exists", kind="InvalidInput")
 
     now = datetime.now(UTC)
-    item = BacklogItem(
-        id=item_id,
-        scope_id=scope_id,
-        title=title,
-        priority=priority,
-        status=BacklogStatus.OPEN,
-        created_at=now,
-        closed_at=None,
-        resolution=None,
-        commit=None,
-    )
+    try:
+        item = BacklogItem(
+            id=item_id,
+            scope_id=scope_id,
+            title=title,
+            description=description,
+            priority=priority,
+            status=BacklogStatus.OPEN,
+            created_at=now,
+            closed_at=None,
+            resolution=None,
+            commit=None,
+        )
+    except ValidationError as exc:
+        raise UserError(
+            f"invalid backlog item {item_id!r}: {exc.errors()[0]['msg']}", kind="InvalidInput"
+        ) from exc
     backlog[item_id] = item
     state.backlog = backlog
     state.updated_at = now
@@ -62,8 +82,73 @@ def add_backlog(
             "item_id": item_id,
             "title": title,
             "priority": priority.value,
+            "has_description": description is not None,
         },
         summary=f"backlog {item_id} added priority={priority.value}",
+    )
+
+
+def edit_backlog(
+    state: State,
+    *,
+    item_id: str,
+    title: str | None = None,
+    description: str | None = None,
+) -> Envelope:
+    """Edit an open backlog item's title and/or description in place.
+
+    At least one of ``title`` / ``description`` must be given. The new
+    values are re-validated through :class:`BacklogItem`, so the title
+    (1-72 chars) and description (<=500 chars) bounds are enforced without
+    duplicating the literals here.
+
+    Raises:
+        UserError: when ``item_id`` is absent (``kind="NotFound"``); when
+            neither field is supplied, when the item is
+            :attr:`BacklogStatus.CLOSED` (closed items are frozen), or when
+            a new value violates the :class:`BacklogItem` bounds
+            (``kind="InvalidInput"``).
+    """
+    if title is None and description is None:
+        raise UserError("no fields to edit: pass --title and/or --description", kind="InvalidInput")
+
+    backlog: dict[str, BacklogItem] = dict(state.backlog or {})
+    if item_id not in backlog:
+        raise UserError(f"backlog item {item_id!r} not found", kind="NotFound")
+
+    prior = backlog[item_id]
+    if prior.status == BacklogStatus.CLOSED:
+        raise UserError(f"backlog item {item_id!r} is closed; cannot edit", kind="InvalidInput")
+
+    changes: dict[str, str] = {}
+    if title is not None:
+        changes["title"] = title
+    if description is not None:
+        changes["description"] = description
+
+    now = datetime.now(UTC)
+    try:
+        updated = BacklogItem.model_validate({**prior.model_dump(), **changes})
+    except ValidationError as exc:
+        raise UserError(
+            f"invalid backlog edit for {item_id!r}: {exc.errors()[0]['msg']}",
+            kind="InvalidInput",
+        ) from exc
+    backlog[item_id] = updated
+    state.backlog = backlog
+    state.updated_at = now
+
+    return _io.event_envelope(
+        event_id=f"EVT-backlog-edit-{item_id}-{int(now.timestamp() * 1000)}",
+        scope_id=updated.scope_id,
+        event_type="backlog.edit",
+        actor="cli",
+        command="backlog edit",
+        args={
+            "item_id": item_id,
+            "fields": sorted(changes),
+        },
+        summary=f"backlog {item_id} edited fields={','.join(sorted(changes))}",
     )
 
 

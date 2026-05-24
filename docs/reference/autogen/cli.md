@@ -75,6 +75,7 @@ Manage backlog items (add / close).
 |---|---|
 | `add` | Add a new backlog item. |
 | `close` | Close a backlog item; requires --audit of a complete audit. |
+| `edit` | Edit an open backlog item's title and/or description. |
 | `set-priority` | Update the priority of an open backlog item. |
 
 ### `eawf backup`
