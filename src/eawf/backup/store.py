@@ -20,8 +20,8 @@ name sorts lexicographically in chronological order, which the list/prune
 verbs rely on.
 
 The user-scope home resolves via the ``EAWF_HOME`` env override first (the
-test + CI seam), then ``platformdirs``-anchored :func:`pathlib.Path.home`, so
-no machine-specific path is ever hardcoded.
+test + CI seam), then :func:`pathlib.Path.home`, so no machine-specific path
+is ever hardcoded.
 """
 
 from __future__ import annotations

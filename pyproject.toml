@@ -10,12 +10,9 @@ authors = [
 ]
 dependencies = [
     "jinja2>=3.1.0",
-    "jsonschema>=4.26.0",
     "orjson>=3.11.9",
-    "platformdirs>=4.9.6",
     "portalocker>=3.2.0",
     "pydantic>=2.13.4",
-    "pydantic-settings>=2.14.1",
     "pyyaml>=6.0.3",
     "questionary>=2.1.1",
     "rich>=15.0.0",
@@ -47,6 +44,49 @@ eawfd = "eawf.daemon.main:main"
 [tool.uv]
 package = true
 
+[tool.deptry]
+# Dependency-hygiene gate. ``eawf`` is the first-party package; ``benches/``
+# holds dev-only micro-benchmark scripts (they import pytest + eawf) and is
+# not product code, so it is excluded from the production import scan.
+known_first_party = ["eawf"]
+# ``benches/`` (micro-benchmark scripts) and ``tools/`` (build hooks +
+# commit-lint helpers with local sibling imports) are dev tooling, not
+# product code; exclude them from the production import scan.
+extend_exclude = ["benches", "tools"]
+
+[tool.deptry.package_module_name_map]
+# Distribution names whose import module differs from the package name.
+# ``pywin32`` ships the Windows-only ``win32*`` / ``pywintypes`` /
+# ``servicemanager`` / ``ntsecuritycon`` modules imported (import-guarded)
+# by the daemon named-pipe transport + service wiring.
+pyyaml = "yaml"
+pywin32 = [
+    "ntsecuritycon",
+    "pywintypes",
+    "servicemanager",
+    "win32api",
+    "win32con",
+    "win32event",
+    "win32file",
+    "win32pipe",
+    "win32security",
+    "win32service",
+    "win32serviceutil",
+]
+
+[tool.deptry.per_rule_ignores]
+# DEP001 (missing): ``duckdb`` is an optional, import-guarded telemetry
+# backend (graceful fallback to sqlite when absent) — installed separately,
+# never a hard dep. ``pydantic_core`` is pydantic's own compiled core,
+# always co-installed with pydantic.
+DEP001 = ["duckdb", "pydantic_core"]
+# DEP002 (declared-but-unused): mkdocs + mkdocs-material are the ``[docs]``
+# extra's CLI doc-build tools — invoked as commands, never imported in src/.
+DEP002 = ["mkdocs", "mkdocs-material"]
+# DEP003 (transitive): ``click`` is typer's own hard dependency and a stable
+# re-export surface; the few direct ``click`` imports ride that coupling.
+DEP003 = ["click"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -54,10 +94,12 @@ dev = [
     "pytest-cov>=5.0",
     "pytest-xdist>=3.6",
     "hypothesis>=6.112",
+    "jsonschema>=4.26.0",
     "ruff>=0.6.9",
     "mypy>=1.13",
     "pre-commit>=3.8",
     "detect-secrets>=1.5",
+    "deptry>=0.20",
     "types-PyYAML>=6.0.12.20240917",
 ]
 
