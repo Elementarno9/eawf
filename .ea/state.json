@@ -3109,6 +3109,36 @@
       "scope_id": "P27-I03-W28",
       "status": "done",
       "updated_at": "2026-05-23T23:40:46.373239Z"
+    },
+    "P27-I04-W01": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W01-close-20260524T012442Z",
+      "elapsed_eu": 19.44,
+      "id": "ACT-P27-I04-W01",
+      "scope_id": "P27-I04-W01",
+      "status": "done",
+      "updated_at": "2026-05-24T01:24:42.943023Z"
+    },
+    "P27-I04-W02": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W02-close-20260524T012443Z",
+      "elapsed_eu": 19.44,
+      "id": "ACT-P27-I04-W02",
+      "scope_id": "P27-I04-W02",
+      "status": "done",
+      "updated_at": "2026-05-24T01:24:43.511891Z"
+    },
+    "P27-I04-W08": {
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "ACT-P27-I04-W08-close-20260524T012444Z",
+      "elapsed_eu": 19.44,
+      "id": "ACT-P27-I04-W08",
+      "scope_id": "P27-I04-W08",
+      "status": "done",
+      "updated_at": "2026-05-24T01:24:44.068440Z"
     }
   },
   "agent_sessions": {
@@ -5855,6 +5885,45 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I03-W28",
       "updated_at": "2026-05-23T23:26:17.356902Z"
+    },
+    "P27-I04-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W01-bucket-20260524T012430Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W01",
+      "updated_at": "2026-05-24T01:24:30.583889Z"
+    },
+    "P27-I04-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W02-bucket-20260524T012431Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P27-I04-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P27-I04-W02",
+      "updated_at": "2026-05-24T01:24:31.157249Z"
+    },
+    "P27-I04-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I04-W08-bucket-20260524T012431Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I04-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I04-W08",
+      "updated_at": "2026-05-24T01:24:31.724827Z"
     }
   },
   "goals": {
@@ -7207,7 +7276,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-24T01:08:42.676786Z",
+  "updated_at": "2026-05-24T01:24:44.068735Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18445,9 +18514,9 @@
         "P27-I04-W03",
         "P27-I04-W05"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-24T01:24:42.943023Z",
+      "commit": "b01ce0027c69297493a58fc7fa7904302d1c9cf1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18460,10 +18529,10 @@
       "id": "P27-I04-W01",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-23T15:41:27.795278Z",
-      "outcome": null,
+      "outcome": "daemon accrues dispatch_cost token tally into Wave.tokens_consumed via record_consumption under the canonical writer + triggers STATE_REVISION (mtime + bus publish); tests/daemon/test_dispatch_cost_accrual.py green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "daemon increments Wave.tokens_consumed on each dispatch_cost C09 event and triggers a STATE_REVISION so live burn gauges advance during execution; new test tests/daemon/test_dispatch_cost_accrual.py asserts tokens_consumed increments live"
       ],
@@ -18479,9 +18548,9 @@
         "P27-I04-W04",
         "P27-I04-W06"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-24T01:24:43.511891Z",
+      "commit": "07eadd6c7b41b767d475784de636915292b9d445",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18494,10 +18563,10 @@
       "id": "P27-I04-W02",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-23T15:41:28.247814Z",
-      "outcome": null,
+      "outcome": "render_bar_braille (U+2800-U+28FF, 2x sub-resolution, status-tinted) + EaApp.render_mode braille<->ascii flip on FONT_NO_BRAILLE/ui.glyphs honoured by every bar renderer; eu_bar + snapshot goldens green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eu_bar.render_bar_braille fills via U+2800-U+28FF at 2x horizontal sub-resolution and is status-tinted; EaApp.render_mode flips braille<->ascii on FONT_NO_BRAILLE or ui.glyphs and every bar renderer honours the flip"
       ],
@@ -18674,9 +18743,9 @@
       "blocks": [
         "P27-I04-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "closed_at": "2026-05-24T01:24:44.068440Z",
+      "commit": "234141d30c76686430241346f60186b86d107454",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18689,10 +18758,10 @@
       "id": "P27-I04-W08",
       "iter_id": "P27-I04",
       "opened_at": "2026-05-23T15:41:30.941111Z",
-      "outcome": null,
+      "outcome": "ToastEmitter diffs consecutive State snapshots into ambient focus-preserving toasts (wave close / audit verdict / needs-user) with first-load + daemon-reconnect flood guards; ui.toasts off/important/all CONFIG_REGISTRY key gates verbosity",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ToastEmitter diffs consecutive State snapshots and emits ambient focus-preserving toasts (wave close / audit verdict / needs-user); first-load and daemon-reconnect flood guards hold; ui.toasts off/important/all gates verbosity"
       ],
