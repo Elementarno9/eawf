@@ -11,9 +11,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.tui.app import EaApp
 from eawf.tui.screens.overlays.needs_user import NeedsUserModal, open_needs_user
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

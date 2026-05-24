@@ -1,4 +1,4 @@
-"""Unit tests for the :mod:`eawf.skills.needs_user` pause store (P26-I02-W07).
+"""Unit tests for the :mod:`eawf.workflow.skills.needs_user` pause store (P26-I02-W07).
 
 Covers record/list/resolve over the event-store-backed pause records:
 the round trip, scope filtering, the open-vs-resolved pairing, label
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.skills.needs_user import (
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.needs_user import (
     OpenPause,
     PauseError,
     build_pause_urn,

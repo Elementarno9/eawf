@@ -13,7 +13,7 @@ scope for this wave) and use :mod:`eawf.ci_loop` to:
 2. Compute the file-scope union via
    :func:`eawf.ci_loop.failure_to_file_scope`.
 3. Allocate a new wave id under the parent's iter via
-   :func:`eawf.lifecycle.allocator.allocate_wave_id`.
+   :func:`eawf.workflow.lifecycle.allocator.allocate_wave_id`.
 4. Plan the follow-up wave with ``deps=[parent_wave_id]``,
    ``file_scopes=<union>``, and a synthesised title.
 
@@ -270,8 +270,8 @@ def _plan_follow_up(
     from pydantic import ValidationError as PydValidationError
 
     from eawf.cli._mutation import state_transaction
-    from eawf.lifecycle.allocator import allocate_wave_id
-    from eawf.lifecycle.transitions import LifecycleError, plan_wave
+    from eawf.workflow.lifecycle.allocator import allocate_wave_id
+    from eawf.workflow.lifecycle.transitions import LifecycleError, plan_wave
 
     try:
         state_path = _resolve_state_path(flags)

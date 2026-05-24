@@ -7,7 +7,7 @@ Eä commands and skills exchange a structured envelope with three parts:
   ``instrument_probe``. Frozen at Phase 4 W01.
 - ``body`` — free-form payload. The payload is either a markdown string
   (legacy/raw passthrough) or a typed Pydantic body model (one of the 17
-  per-skill bodies under :mod:`eawf.skills.bodies`). The wire-form keeps
+  per-skill bodies under :mod:`eawf.workflow.skills.bodies`). The wire-form keeps
   the JSON serialisation byte-stable across either shape.
 - ``footer`` — typed :class:`EnvelopeFooter` with ``persisted_artifacts``,
   ``persisted_store_records``, ``state_mutations``, ``evidence_refs``,
@@ -166,7 +166,7 @@ class EnvelopeFooter(BaseModel):
 
 
 # Body shape: either a free-form markdown string (Phase 0-3 raw bodies) or
-# any of the typed body models from :mod:`eawf.skills.bodies`. We use
+# any of the typed body models from :mod:`eawf.workflow.skills.bodies`. We use
 # ``dict[str, Any]`` (rather than a discriminated union) for the typed
 # branch because skills can attach arbitrary skill-specific bodies; the
 # CLI adapter validates the dict against the named body model when
@@ -179,7 +179,7 @@ class OutputEnvelope(BaseModel):
 
     Attributes:
         header: Typed :class:`EnvelopeHeader`.
-        body: Markdown string or typed body dict per :mod:`eawf.skills.bodies`.
+        body: Markdown string or typed body dict per :mod:`eawf.workflow.skills.bodies`.
         footer: Typed :class:`EnvelopeFooter`.
     """
 

@@ -134,7 +134,7 @@ def score_envelope(env: OutputEnvelope, golden: dict[str, Any]) -> EvalScore:
 
     Args:
         env: Live envelope produced by
-            :func:`~eawf.skills.engine.run_skill`.
+            :func:`~eawf.workflow.skills.engine.run_skill`.
         golden: Parsed golden-fixture dict — typically the JSON-decoded
             contents of ``tests/eval/golden/<slug>.json``.
 
@@ -158,7 +158,7 @@ def score_envelope(env: OutputEnvelope, golden: dict[str, Any]) -> EvalScore:
     if total > 1.0:
         total = 1.0
     threshold = float(golden.get("eval_score_threshold", 0.85))
-    logger.debug(f"score_envelope: total={total:.4f} per_dim={per_dim}")
+    logger.debug(f"score_envelope total={total:.4f} per_dim={per_dim}")
     return EvalScore(total=total, per_dim=per_dim, pass_threshold=threshold)
 
 

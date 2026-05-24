@@ -668,7 +668,7 @@ scope_id, spec_path, checks_run, and the per-check findings.
 
 # ---------------------------------------------------------------------------
 # Model-only code-quality skills. These carry no executable skill body in
-# `eawf.skills.registry`; they are prompt-only playbooks the model invokes
+# `eawf.workflow.skills.registry`; they are prompt-only playbooks the model invokes
 # while editing source. Each renders with `user-invocable: false` so it is
 # hidden from the slash menu, and `disable-model-invocation: false` so the
 # model may still reach for it. Bodies document the canonical refactoring

@@ -39,8 +39,8 @@ from eawf.kernel.state.ids import is_wave_id
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave
-    from eawf.pr_review import Finding
-    from eawf.pr_review.policy import ReviewVerdict
+    from eawf.workflow.pr_review import Finding
+    from eawf.workflow.pr_review.policy import ReviewVerdict
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ def _emit_review_request(
     rendered prompt to the agent.
     """
     from eawf.cli.commands.lifecycle import _load_state_readonly
-    from eawf.dispatch import render_wave_prompt
+    from eawf.workflow.dispatch import render_wave_prompt
 
     loaded = _load_state_readonly(ctx)
     if loaded is None:
@@ -233,10 +233,10 @@ def _attach_findings(
 ) -> None:
     """Parse *findings_path*, attach the audit, emit the envelope."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import artifact as artifact_evi
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import append_jsonl, store_paths
-    from eawf.pr_review import parse_findings, summary_line, verdict_for
+    from eawf.workflow.evidence import artifact as artifact_evi
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.pr_review import parse_findings, summary_line, verdict_for
 
     if not findings_path.exists():
         cli_errors.emit_error(

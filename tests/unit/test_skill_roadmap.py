@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.roadmap.RoadmapSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.roadmap.RoadmapSkill`.
 
 Pin the Phase 4 W03 acceptance contract for ``/roadmap``:
 
@@ -21,9 +21,9 @@ from typing import Any, cast
 
 import pytest
 
-from eawf.skills.bodies.roadmap import RoadmapBody
-from eawf.skills.engine import SkillContext, run_skill
-from eawf.skills.roadmap import RoadmapSkill
+from eawf.workflow.skills.bodies.roadmap import RoadmapBody
+from eawf.workflow.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.roadmap import RoadmapSkill
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def _ctx(args: dict[str, object] | None = None) -> SkillContext:
 
 
 def test_roadmap_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/roadmap")
     assert cls is RoadmapSkill

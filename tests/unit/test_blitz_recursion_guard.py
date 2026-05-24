@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from eawf.skills.blitz import (
+from eawf.workflow.skills.blitz import (
     BlitzRecursionExhaustedError,
     BlitzSkill,
     bump_depth,
@@ -16,8 +16,8 @@ from eawf.skills.blitz import (
     reset_depth,
     should_auto_invoke,
 )
-from eawf.skills.bodies.blitz import BlitzBody
-from eawf.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.bodies.blitz import BlitzBody
+from eawf.workflow.skills.engine import SkillContext, run_skill
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +70,7 @@ def test_should_auto_invoke_only_when_more_than_one_unknown() -> None:
 
 
 def test_blitz_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/blitz")
     assert cls is BlitzSkill

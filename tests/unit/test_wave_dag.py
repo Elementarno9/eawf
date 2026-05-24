@@ -14,7 +14,7 @@ import pytest
 
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.lifecycle.transitions import (
+from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     claim_wave,
     close_wave,

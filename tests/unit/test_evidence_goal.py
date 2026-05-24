@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.evidence.goal`.
+"""Unit tests for :mod:`eawf.workflow.evidence.goal`.
 
 Covers the in-place mutator (``define_goal``) and the
 ``state_transaction``-driven CLI persistence path. Errors: duplicate
@@ -15,8 +15,8 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io, goal
 from eawf.kernel.state.enums import GoalStatus, StoreKind
+from eawf.workflow.evidence import _io, goal
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

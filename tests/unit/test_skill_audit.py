@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.audit.AuditSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.audit.AuditSkill`.
 
 Pin the Phase 4 W02 + P27-I02-W14 contract for ``/audit``:
 
@@ -29,9 +29,9 @@ import pytest
 import yaml
 
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.audit import AuditSkill
-from eawf.skills.bodies.audit import AuditBody
-from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill
+from eawf.workflow.skills.audit import AuditSkill
+from eawf.workflow.skills.bodies.audit import AuditBody
+from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 
 
 @pytest.fixture
@@ -163,7 +163,7 @@ def test_audit_emits_one_event_per_step(state_dir: Path) -> None:
 def test_audit_probe_blocked_short_circuits(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from eawf.skills import audit as audit_module
+    from eawf.workflow.skills import audit as audit_module
 
     def _blocked(self: object, ctx: SkillContext) -> ProbeOutcome:
         return ProbeOutcome(
@@ -180,7 +180,7 @@ def test_audit_probe_blocked_short_circuits(
 
 
 def test_audit_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/audit")
     assert cls is AuditSkill
@@ -203,7 +203,7 @@ def _seed_state_with_wave(
 
     from eawf.kernel.state.enums import ProjectStatus, ScopeKind
     from eawf.kernel.state.models import CurrentPointers, Project, State
-    from eawf.lifecycle.transitions import open_iter, open_phase, plan_wave
+    from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
     state = State.model_validate(
         {

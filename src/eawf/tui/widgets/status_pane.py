@@ -43,7 +43,6 @@ from pydantic import BaseModel, ConfigDict
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from eawf.estimation.buckets import wave_estimate_eu
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.state.enums import (
     AuditStatus,
@@ -63,6 +62,7 @@ from eawf.tui.widgets.eu_bar import (
 from eawf.tui.widgets.heartbeat import PULSE_INTERVAL_S, pulse_glyph
 from eawf.tui.widgets.markup import escape_markup, style_labeled_line
 from eawf.tui.widgets.variance_tile import render_variance_plain
+from eawf.workflow.estimation.buckets import wave_estimate_eu
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Audit, State, Wave
@@ -273,7 +273,7 @@ def _effort_eu(state: State | None) -> tuple[float, float]:
     status, so PENDING / PLANNED waves count and the estimate grows the
     moment a wave is added — it does not wait for the claim-time estimate
     bucket to be seeded. A wave with no ``effort_bucket`` contributes ``0``
-    (:func:`~eawf.estimation.buckets.wave_estimate_eu` returns ``0`` when
+    (:func:`~eawf.workflow.estimation.buckets.wave_estimate_eu` returns ``0`` when
     the bucket is unset), so an all-unbucketed phase yields a ``0.0``
     estimate; the caller treats a non-positive estimate as the empty state.
 
@@ -603,7 +603,7 @@ class DispatchSlice(BaseModel):
 def _wave_index(wave_id: str) -> int | None:
     """Return a wave id's trailing ``W##`` integer, or ``None``.
 
-    Mirrors the suffix parse :func:`eawf.lifecycle.wave._lower_w_sibling_pending`
+    Mirrors the suffix parse :func:`eawf.workflow.lifecycle.wave._lower_w_sibling_pending`
     uses for the monotonic claim gate, re-derived here so the band stays a
     pure read with no dependency on a private lifecycle internal. The index
     is the NEXT batch's monotonic sort key: the ready frontier is ordered

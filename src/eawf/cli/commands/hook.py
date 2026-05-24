@@ -561,14 +561,14 @@ def run(
     ] = "",
 ) -> None:
     """Dispatch a hook event read from stdin and emit the result envelope."""
-    from eawf.agent_report.store import (
+    from eawf.hooks.event import HookEventType
+    from eawf.hooks.runner import HookRunner
+    from eawf.workflow.agent_report.store import (
         AgentReportRoleMismatchError,
         AgentReportScrubError,
         append_agent_report,
         parse_agent_report_body,
     )
-    from eawf.hooks.event import HookEventType
-    from eawf.hooks.runner import HookRunner
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)

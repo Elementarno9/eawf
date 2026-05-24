@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.lifecycle.transitions`.
+"""Unit tests for :mod:`eawf.workflow.lifecycle.transitions`.
 
 Each test starts from a small typed :class:`State` constructed via
 :func:`_empty_state` and exercises one transition. The test file is the
@@ -26,7 +26,7 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
-from eawf.lifecycle.transitions import (
+from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_iter,
     activate_phase,

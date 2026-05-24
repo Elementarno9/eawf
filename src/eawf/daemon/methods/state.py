@@ -41,7 +41,7 @@ variant into a Pydantic subclass per MutationKind.
 
 Every :class:`MutationKind` now resolves to a real apply function — the
 wave / phase / iter lifecycle kinds delegate to
-:mod:`eawf.lifecycle.transitions`; ``ROADMAP_REVISE`` dispatches one of
+:mod:`eawf.workflow.lifecycle.transitions`; ``ROADMAP_REVISE`` dispatches one of
 the ``plan_wave`` / ``remove_wave_plan`` / ``set_wave_deps`` /
 ``edit_wave_plan`` transitions on its ``params['op']`` discriminator;
 ``ROADMAP_APPLY`` is a readiness check; ``ROADMAP_DROP`` archives the
@@ -80,7 +80,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
-from eawf.lifecycle.transitions import (
+from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_phase,
     archive_phase,
@@ -505,10 +505,10 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     under a PLANNED or ACTIVE phase. Exactly one operation per mutation,
     keyed by ``params['op']`` (one of ``add_wave`` / ``remove_wave`` /
     ``set_deps`` / ``retitle``), delegating to the matching
-    :mod:`eawf.lifecycle.wave` transition. The CLI side resolves bare
+    :mod:`eawf.workflow.lifecycle.wave` transition. The CLI side resolves bare
     ``W##`` ids to full ``P##-I##-W##`` ids before calling the daemon, so
     the apply works with already-canonical ids. The ``retitle`` op routes
-    to :func:`eawf.lifecycle.iter_.edit_iter_plan` when ``params`` carries
+    to :func:`eawf.workflow.lifecycle.iter_.edit_iter_plan` when ``params`` carries
     an ``iter_id``; otherwise it retitles the wave named by ``wave_id``.
 
     Raises:

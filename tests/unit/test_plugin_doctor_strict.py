@@ -36,7 +36,6 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.cli.exit_codes import INTEGRITY_VIOLATION
-from eawf.dispatch import render_wave_prompt
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -44,13 +43,14 @@ from eawf.kernel.state.enums import (
     ScopeKind,
 )
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.lifecycle.transitions import open_iter, open_phase, plan_wave
 from eawf.lock.portalock import LockTimeout
 from eawf.runtimes.claude.plugin_doctor import (
     doctor_plugin_strict,
     plugin_sync_lock,
     plugin_sync_lock_path,
 )
+from eawf.workflow.dispatch import render_wave_prompt
+from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
 runner = CliRunner()
 

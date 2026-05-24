@@ -54,8 +54,8 @@ def incident_open(
 ) -> None:
     """Open a new incident."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import incident as incident_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import incident as incident_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -117,8 +117,8 @@ def incident_close(
 ) -> None:
     """Close an incident; requires --audit of a complete audit."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import incident as incident_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import incident as incident_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -159,8 +159,8 @@ def incident_view(
     incident_id: Annotated[str, typer.Argument(help="Incident id")],
 ) -> None:
     """View incident metadata + linked artifact ids."""
-    from eawf.evidence import incident as incident_evi
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence import incident as incident_evi
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -202,8 +202,8 @@ def decision_add(
 ) -> None:
     """Record a durable decision."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import decision as decision_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import decision as decision_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -249,8 +249,8 @@ def decision_supersede(
 ) -> None:
     """Supersede an existing decision by another existing decision."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import decision as decision_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import decision as decision_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -286,8 +286,8 @@ def decision_list(
     scope_id: Annotated[str | None, typer.Option("--scope-id", help="Filter by scope")] = None,
 ) -> None:
     """List decisions filtered by scope."""
-    from eawf.evidence import decision as decision_evi
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence import decision as decision_evi
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -329,13 +329,13 @@ def decision_graph(
     ] = _DecisionGraphFormat.TEXT,
 ) -> None:
     """Render the decision graph (text, Graphviz DOT, or Mermaid)."""
-    from eawf.evidence._io import load_state
     from eawf.render.decision_graph import (
         build_decision_graph,
         render_dot,
         render_mermaid,
         render_text,
     )
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)

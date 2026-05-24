@@ -19,10 +19,10 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.skills.needs_user import list_open_pauses, record_pause
 from eawf.tui.app import EaApp
 from eawf.tui.screens.overlays.needs_user import NeedsUserModal
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.needs_user import list_open_pauses, record_pause
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -104,7 +104,7 @@ def test_resume_failure_shows_error_toast(tmp_path: Path) -> None:
                 (message, kw.get("severity"))
             )
             # Resolve the pause out-of-band so the in-app pick fails.
-            from eawf.skills.needs_user import resolve_pause
+            from eawf.workflow.skills.needs_user import resolve_pause
 
             resolve_pause(state_path, pause_urn=pause_urn, choice="apply")
             await pilot.press("enter")

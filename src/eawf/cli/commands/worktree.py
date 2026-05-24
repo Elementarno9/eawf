@@ -383,7 +383,7 @@ def _is_path_absolute_any_platform(path_str: str) -> bool:
     a drive-letter string like ``C:\\foo`` parses as a relative
     ``PosixPath`` on macOS / Linux. Worktree state.json files are
     portable, so the path-fix sweep must recognise either dialect.
-    Same pattern as :func:`eawf.evidence.artifact._validate_artifact_location`.
+    Same pattern as :func:`eawf.workflow.evidence.artifact._validate_artifact_location`.
     """
     return PurePosixPath(path_str).is_absolute() or PureWindowsPath(path_str).is_absolute()
 

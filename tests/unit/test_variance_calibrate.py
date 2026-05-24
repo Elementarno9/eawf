@@ -2,9 +2,9 @@
 
 Covers three deliverables:
 
-1. :func:`eawf.estimation.metrics.compute_estimate_actual_variance` — the
+1. :func:`eawf.workflow.estimation.metrics.compute_estimate_actual_variance` — the
    C09 §5.9.6 M26 ``eawf_estimate_actual_variance_pct`` gauge.
-2. :func:`eawf.estimation.buckets.calibrate_buckets` — the XS..XL re-fit from
+2. :func:`eawf.workflow.estimation.buckets.calibrate_buckets` — the XS..XL re-fit from
    90-day actuals, including the >25 % drift nudge and its boundary.
 3. :class:`eawf.tui.widgets.variance_tile.VarianceTile` — the colour-
    banded M26 tile render.
@@ -25,15 +25,6 @@ from typer.testing import CliRunner
 
 import eawf.kernel.config.layered as layered
 from eawf.cli.app import app
-from eawf.estimation.buckets import (
-    BUCKET_EU,
-    DRIFT_THRESHOLD,
-    calibrate_buckets,
-)
-from eawf.estimation.metrics import (
-    EstimateActualVarianceMetric,
-    compute_estimate_actual_variance,
-)
 from eawf.kernel.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
 from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 from eawf.tui.widgets.variance_tile import (
@@ -42,6 +33,15 @@ from eawf.tui.widgets.variance_tile import (
     band_var,
     render_variance_markup,
     render_variance_plain,
+)
+from eawf.workflow.estimation.buckets import (
+    BUCKET_EU,
+    DRIFT_THRESHOLD,
+    calibrate_buckets,
+)
+from eawf.workflow.estimation.metrics import (
+    EstimateActualVarianceMetric,
+    compute_estimate_actual_variance,
 )
 
 runner = CliRunner()

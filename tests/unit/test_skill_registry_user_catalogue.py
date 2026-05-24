@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.skills.discovery import (
+from eawf.workflow.skills.discovery import (
     DiscoveredSkill,
     SkillFrontmatterError,
     discover_skills,
@@ -107,7 +107,7 @@ content
     _write_skill(user_skills_dir(), "bad", body=bad)
     discovered = discover_skills()
     assert all(d.name != "/bad" for d in discovered)
-    assert any("skill discovery skip user" in rec.message for rec in caplog.records)
+    assert any("discover_skills source=user" in rec.message for rec in caplog.records)
 
 
 def test_parse_user_skill_missing_name_raises(tmp_path: Path) -> None:

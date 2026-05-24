@@ -10,7 +10,7 @@ how far the work drifted from the estimate:
 * ``err``  when the work ran more than 50 % over / under.
 
 The widget is driven by one nullable float — :meth:`set_variance` — so it
-stays decoupled from the :class:`~eawf.estimation.metrics.MetricsSummary`
+stays decoupled from the :class:`~eawf.workflow.estimation.metrics.MetricsSummary`
 schema; the caller maps the M26 metric onto the percentage. A ``None``
 percentage (no closed waves with both an estimate and an actual) renders the
 :data:`EMPTY_STATE` sentinel rather than a fabricated ``0%`` — mirroring the

@@ -44,7 +44,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.daemon.dispatch_runner import DispatchTokens, run_dispatch
 from eawf.daemon.methods import MethodContext, register
-from eawf.evidence._io import load_state
 from eawf.kernel.state.enums import DispatchNote
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
@@ -53,6 +52,7 @@ from eawf.runtimes.manifest import RuntimeId
 from eawf.runtimes.plugin_manifest import SkillManifest
 from eawf.telemetry.models import RuntimeErrorClass
 from eawf.telemetry.pricing import PRICING_VERSION
+from eawf.workflow.evidence._io import load_state
 
 logger = logging.getLogger(__name__)
 

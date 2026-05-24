@@ -26,7 +26,7 @@ import io
 from rich.console import Console
 from rich.table import Table
 
-from eawf.estimation.metrics import MetricsSummary
+from eawf.workflow.estimation.metrics import MetricsSummary
 
 # Header strings are module-level so tests can grep for them without
 # re-deriving the literal. Order matches the four-row CLI table.

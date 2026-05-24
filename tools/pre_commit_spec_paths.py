@@ -16,7 +16,7 @@ is the second of the three-layer enforcement stack:
    existed at WaveSpec authoring time but was renamed / deleted between
    authoring and ``git commit`` (Pydantic re-runs only when a fresh
    load happens; staged spec markdown is not auto-revalidated).
-3. **Audit DSL** — :mod:`eawf.audit_dsl` ``verify-implements`` kind
+3. **Audit DSL** — :mod:`eawf.workflow.audit_dsl` ``verify-implements`` kind
    (lands separately under W02) walks closed-wave specs at ship time.
 
 Each layer catches the RC-1 stale-paths failure class on its own

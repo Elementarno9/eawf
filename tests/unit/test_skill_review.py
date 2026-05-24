@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.review.ReviewSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.review.ReviewSkill`.
 
 Pin the Phase 4 W02 acceptance contract for ``/review``:
 
@@ -19,9 +19,9 @@ from typing import cast
 import pytest
 
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.bodies.review import ReviewBody
-from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill
-from eawf.skills.review import ReviewSkill
+from eawf.workflow.skills.bodies.review import ReviewBody
+from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
+from eawf.workflow.skills.review import ReviewSkill
 
 
 @pytest.fixture
@@ -124,7 +124,7 @@ def test_review_post_event_added_when_posting(state_dir: Path) -> None:
 def test_review_probe_blocked_short_circuits(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from eawf.skills import review as review_module
+    from eawf.workflow.skills import review as review_module
 
     def _blocked(self: object, ctx: SkillContext) -> ProbeOutcome:
         return ProbeOutcome(
@@ -141,7 +141,7 @@ def test_review_probe_blocked_short_circuits(
 
 
 def test_review_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/review")
     assert cls is ReviewSkill

@@ -1,4 +1,4 @@
-"""Tests for the pure EU calculator (``eawf.estimation.eu``).
+"""Tests for the pure EU calculator (``eawf.workflow.estimation.eu``).
 
 Covers happy path + boundary cases (zero raw_minutes, very large, very small,
 quantization rounding, banker's rounding tie-breaks) + error paths
@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from eawf.estimation import eu
+from eawf.workflow.estimation import eu
 
 
 def test_expected_eu_matches_formula() -> None:

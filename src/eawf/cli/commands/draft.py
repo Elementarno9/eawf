@@ -217,9 +217,9 @@ def promote_draft(
     """
     from eawf.artifacts.validation import validate_markdown_artifact
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import artifact as artifact_evi
-    from eawf.evidence._io import append_jsonl, event_envelope, store_paths
     from eawf.scrub.scan import rewrite_text
+    from eawf.workflow.evidence import artifact as artifact_evi
+    from eawf.workflow.evidence._io import append_jsonl, event_envelope, store_paths
 
     flags = _flags(ctx)
     try:

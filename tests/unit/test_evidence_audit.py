@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.evidence.audit`.
+"""Unit tests for :mod:`eawf.workflow.evidence.audit`.
 
 Covers add (with/without report), run (fixture and stub paths), integrity,
 show, and list. The audit-evidence guard is exercised in
@@ -17,9 +17,9 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io, audit
 from eawf.kernel.state.enums import AuditKind, AuditStatus, AuditVerdict, StoreKind
 from eawf.kernel.state.models import Artifact, State
+from eawf.workflow.evidence import _io, audit
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

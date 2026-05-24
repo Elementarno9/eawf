@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from eawf.kernel.state import wave_graph
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Principal, Project, State
-from eawf.lifecycle.transitions import (
+from eawf.workflow.lifecycle.transitions import (
     claim_wave,
     close_wave,
     open_iter,
@@ -237,7 +237,7 @@ def test_blocked_by_excludes_failed_dep_only_if_closed_check() -> None:
     The next-ready surface excludes children of FAILED deps; blocked_by
     surfaces the raw runtime view (anything not CLOSED still blocks).
     """
-    from eawf.lifecycle.transitions import fail_wave
+    from eawf.workflow.lifecycle.transitions import fail_wave
 
     state = _seed_chain()
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")

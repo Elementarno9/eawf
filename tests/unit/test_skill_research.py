@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.research.ResearchSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.research.ResearchSkill`.
 
 Pin the Phase 4 W02 acceptance contract for ``/research``:
 
@@ -25,9 +25,9 @@ import orjson
 import pytest
 
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.bodies.research import ResearchBody
-from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill
-from eawf.skills.research import ResearchSkill
+from eawf.workflow.skills.bodies.research import ResearchBody
+from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
+from eawf.workflow.skills.research import ResearchSkill
 
 
 @pytest.fixture
@@ -118,7 +118,7 @@ def test_research_probe_blocked_when_hard_tool_missing(
 ) -> None:
     """Force the probe to report a blocked outcome and verify the engine
     short-circuits to ``status=blocked`` with non-empty repair commands."""
-    from eawf.skills import research as research_module
+    from eawf.workflow.skills import research as research_module
 
     def _blocked_probe(self: object, ctx: SkillContext) -> ProbeOutcome:
         return ProbeOutcome(
@@ -192,7 +192,7 @@ def test_research_propagates_blitz_depth_exhaustion(
 
 
 def test_research_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/research")
     assert cls is ResearchSkill

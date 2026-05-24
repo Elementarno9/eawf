@@ -41,8 +41,8 @@ from eawf.runtimes.cache_control import (
 from eawf.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtimes.codex.adapter import CodexAdapter
 from eawf.runtimes.opencode.adapter import OpenCodeAdapter
-from eawf.skills.compress import CompressSkill
-from eawf.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.compress import CompressSkill
+from eawf.workflow.skills.engine import SkillContext, run_skill
 
 pytestmark = pytest.mark.unit
 

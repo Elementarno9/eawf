@@ -23,7 +23,7 @@ class IterAuditCadence(_StrictModel):
     """When audit-DSL kinds fire for this iter.
 
     Each list holds registered ``audit_kind`` names from
-    :mod:`eawf.audit_dsl.registry`; the audit runner consults the spec
+    :mod:`eawf.workflow.audit_dsl.registry`; the audit runner consults the spec
     at iter-close and phase-close events and dispatches the named
     kinds.
     """

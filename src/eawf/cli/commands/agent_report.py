@@ -94,7 +94,7 @@ def add_report(
     """Append a typed agent report."""
     from pydantic import ValidationError
 
-    from eawf.agent_report.store import (
+    from eawf.workflow.agent_report.store import (
         AgentReportRoleMismatchError,
         AgentReportScrubError,
         append_agent_report,
@@ -150,7 +150,7 @@ def list_reports(
     scope_id: Annotated[str | None, typer.Option("--scope-id", help="Scope id filter.")] = None,
 ) -> None:
     """List typed agent reports."""
-    from eawf.agent_report.rollup import iter_agent_reports
+    from eawf.workflow.agent_report.rollup import iter_agent_reports
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -172,7 +172,7 @@ def show_report(
     role: Annotated[str | None, typer.Option("--role", help="Role alias hint.")] = None,
 ) -> None:
     """Show a typed agent report."""
-    from eawf.agent_report.rollup import find_agent_report
+    from eawf.workflow.agent_report.rollup import find_agent_report
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -197,7 +197,7 @@ def rollup(
     phase_id: Annotated[str, typer.Argument(help="Phase id to roll up, e.g. P18.")],
 ) -> None:
     """Render a read-only operator rollup for *phase_id*."""
-    from eawf.agent_report.rollup import operator_rollup
+    from eawf.workflow.agent_report.rollup import operator_rollup
 
     flags: GlobalFlags = ctx.obj
     try:

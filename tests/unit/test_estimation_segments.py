@@ -1,4 +1,4 @@
-"""Tests for ``eawf.estimation.segments``.
+"""Tests for ``eawf.workflow.estimation.segments``.
 
 Covers:
 
@@ -16,8 +16,8 @@ from decimal import Decimal
 
 import pytest
 
-from eawf.estimation import segments
 from eawf.kernel.state.enums import ActualStatus
+from eawf.workflow.estimation import segments
 
 
 def test_open_segment_starts_active_with_zero_duration() -> None:

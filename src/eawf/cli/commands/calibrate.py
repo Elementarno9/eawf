@@ -2,7 +2,7 @@
 
 CLI dispatch only (AGENTS rule 1): the handler resolves the state path,
 reads the typed :class:`~eawf.kernel.state.models.State`, and routes the re-fit
-into :mod:`eawf.estimation.buckets`. The handler is read-only — it surfaces
+into :mod:`eawf.workflow.estimation.buckets`. The handler is read-only — it surfaces
 a calibration verdict + nudges; it never mutates the configured centroids
 or ``state.json`` (applying a nudge is an explicit follow-up operator
 action, not a side effect of the report).
@@ -28,7 +28,7 @@ from eawf.cli.output import emit_json_or_text
 from eawf.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
-    from eawf.estimation.buckets import CalibrationReport
+    from eawf.workflow.estimation.buckets import CalibrationReport
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,8 @@ def calibrate_buckets_cmd(ctx: typer.Context) -> None:
     - :class:`~eawf.cli.errors.ValidationError` (``exit=2``) when the
       on-disk payload fails strict schema validation.
     """
-    from eawf.estimation.buckets import calibrate_buckets
-    from eawf.evidence._io import load_state
+    from eawf.workflow.estimation.buckets import calibrate_buckets
+    from eawf.workflow.evidence._io import load_state
 
     flags: GlobalFlags = ctx.obj
     try:

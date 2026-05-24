@@ -46,12 +46,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.estimation.buckets import (
-    critical_path_eu,
-    sum_wave_eu,
-    timestamp_actual_eu,
-    wave_estimate_eu,
-)
 from eawf.kernel.state.enums import (
     BacklogPriority,
     BacklogStatus,
@@ -70,7 +64,13 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.lifecycle.wave_sha import derive_wave_sha
+from eawf.workflow.estimation.buckets import (
+    critical_path_eu,
+    sum_wave_eu,
+    timestamp_actual_eu,
+    wave_estimate_eu,
+)
+from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
 logger = logging.getLogger(__name__)
 

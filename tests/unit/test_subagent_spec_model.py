@@ -1,9 +1,9 @@
 """Unit tests for the typed subagent-spec model (P27-I03-W14).
 
-Exercises :class:`eawf.agents.specs.models.SubagentSpec` and its nested
+Exercises :class:`eawf.workflow.agents.specs.models.SubagentSpec` and its nested
 section models directly — the model layer is pure data + formatting, so
 each test builds a spec in memory and inspects the rendered Markdown.
-The :func:`eawf.dispatch.renderer.build_subagent_spec` projection from
+The :func:`eawf.workflow.dispatch.renderer.build_subagent_spec` projection from
 ``State`` is covered by ``test_dispatch_renderer.py`` (byte-identity
 against the legacy output).
 """
@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from eawf.agents.specs.models import (
+from eawf.workflow.agents.specs.models import (
     SpecAudit,
     SpecDecision,
     SpecDependency,

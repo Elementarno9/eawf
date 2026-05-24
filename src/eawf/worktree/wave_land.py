@@ -8,7 +8,7 @@ wave-lifecycle counterpart to ``eawf worktree merge-back``:
 - Replay the worktree commits onto the parent branch via
   *cherry-pick only* (AGENTS.md rule 11 names cherry-pick as the
   discipline; ``rebase_then_ff`` is intentionally not exposed here).
-- Drive the :func:`eawf.lifecycle.transitions.close_wave` transition with
+- Drive the :func:`eawf.workflow.lifecycle.transitions.close_wave` transition with
   the resulting commit SHA as evidence.
 - Optionally clean up the worktree directory + branch.
 
@@ -32,7 +32,7 @@ from pathlib import Path
 from eawf.cli import errors as cli_errors
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
-from eawf.lifecycle.transitions import LifecycleError, close_wave
+from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
 from eawf.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.worktree.merge_back import (
     STRATEGY_CHERRY_PICK,

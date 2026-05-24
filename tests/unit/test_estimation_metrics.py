@@ -1,4 +1,4 @@
-"""Unit tests for the pure metrics computations under ``eawf.estimation.metrics``.
+"""Unit tests for the pure metrics computations under ``eawf.workflow.estimation.metrics``.
 
 Covers the four wave-level metrics — EU variance, audit pass rate, wave
 elapsed minutes, and the planned-vs-reactive split — at the function
@@ -16,19 +16,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from eawf.estimation.metrics import (
-    METRICS_SCHEMA_VERSION,
-    AuditPassRateMetric,
-    EuVarianceMetric,
-    MetricsSummary,
-    PlannedVsReactiveMetric,
-    WaveElapsedMetric,
-    compute_audit_pass_rate,
-    compute_eu_variance,
-    compute_metrics,
-    compute_planned_vs_reactive,
-    compute_wave_elapsed,
-)
 from eawf.kernel.state.enums import (
     ActualStatus,
     AuditKind,
@@ -43,6 +30,19 @@ from eawf.kernel.state.models import (
     EstimateSummary,
     State,
     Wave,
+)
+from eawf.workflow.estimation.metrics import (
+    METRICS_SCHEMA_VERSION,
+    AuditPassRateMetric,
+    EuVarianceMetric,
+    MetricsSummary,
+    PlannedVsReactiveMetric,
+    WaveElapsedMetric,
+    compute_audit_pass_rate,
+    compute_eu_variance,
+    compute_metrics,
+    compute_planned_vs_reactive,
+    compute_wave_elapsed,
 )
 
 _T0 = datetime(2026, 5, 1, tzinfo=UTC)

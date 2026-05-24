@@ -78,7 +78,7 @@ def project_init_cmd(
 
     from eawf.kernel.state.models import Project
     from eawf.kernel.store.paths import store_path
-    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.workflow.lifecycle.transitions import LifecycleError
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
@@ -173,7 +173,7 @@ def subproject_add_cmd(
     ] = None,
 ) -> None:
     """Add a subproject under the active project."""
-    from eawf.lifecycle.transitions import add_subproject
+    from eawf.workflow.lifecycle.transitions import add_subproject
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
@@ -208,7 +208,7 @@ def subproject_switch_cmd(
     code: Annotated[str, typer.Argument(help="Subproject code to activate.")],
 ) -> None:
     """Set the active subproject pointer."""
-    from eawf.lifecycle.transitions import switch_subproject
+    from eawf.workflow.lifecycle.transitions import switch_subproject
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
@@ -237,7 +237,7 @@ def iter_activate_cmd(
     iter_id: Annotated[str, typer.Argument(help="PLANNED iter id to activate.")],
 ) -> None:
     """Flip a PLANNED iter to ACTIVE."""
-    from eawf.lifecycle.transitions import activate_iter
+    from eawf.workflow.lifecycle.transitions import activate_iter
 
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
@@ -270,7 +270,7 @@ def iter_plan_cmd(
     already-active phase while the current iter keeps running; ``iter activate``
     later flips the staged iter to ACTIVE.
     """
-    from eawf.lifecycle.transitions import plan_iter
+    from eawf.workflow.lifecycle.transitions import plan_iter
 
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
@@ -368,8 +368,8 @@ def iter_open_cmd(
     title: Annotated[str | None, typer.Option("--title", help="Iter title.")] = None,
 ) -> None:
     """Open an iter. Pass an iter ID or a phase id (auto-allocates iter)."""
-    from eawf.lifecycle.allocator import allocate_iter_id
-    from eawf.lifecycle.transitions import open_iter
+    from eawf.workflow.lifecycle.allocator import allocate_iter_id
+    from eawf.workflow.lifecycle.transitions import open_iter
 
     flags: GlobalFlags = ctx.obj
     if title is None:
@@ -471,7 +471,7 @@ def iter_close_cmd(
     audit: Annotated[str, typer.Option("--audit", help="Audit ID providing closure evidence.")],
 ) -> None:
     """Close an active iter. Rejects when child waves are still open."""
-    from eawf.lifecycle.transitions import close_iter
+    from eawf.workflow.lifecycle.transitions import close_iter
 
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):

@@ -721,7 +721,7 @@ def grant_cmd(
 
     from eawf.cli._mutation import state_transaction
     from eawf.kernel.state.models import GRANT_SCOPE_KINDS, McpGrant
-    from eawf.lifecycle.allocator import allocate_grant_id
+    from eawf.workflow.lifecycle.allocator import allocate_grant_id
 
     flags: GlobalFlags = ctx.obj
     try:

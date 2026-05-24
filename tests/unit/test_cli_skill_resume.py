@@ -9,7 +9,7 @@ Pins the needs_user resume verb:
   non-zero (validation-style) exit.
 
 The pause itself is seeded through the shared
-:mod:`eawf.skills.needs_user` library so the test exercises the same
+:mod:`eawf.workflow.skills.needs_user` library so the test exercises the same
 record shape the CLI + TUI both consume.
 """
 
@@ -22,8 +22,8 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.skills.needs_user import (
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.needs_user import (
     RESUME_EVENT_TYPE,
     list_open_pauses,
     record_pause,

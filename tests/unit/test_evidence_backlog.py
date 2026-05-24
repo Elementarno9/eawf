@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.evidence.backlog`.
+"""Unit tests for :mod:`eawf.workflow.evidence.backlog`.
 
 Covers add (happy + duplicate) and close (audit-evidence guard plus happy path).
 """
@@ -14,7 +14,6 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io, audit, backlog
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
@@ -23,6 +22,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.models import Artifact, State
+from eawf.workflow.evidence import _io, audit, backlog
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

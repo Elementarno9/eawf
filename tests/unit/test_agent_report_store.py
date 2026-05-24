@@ -8,16 +8,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from eawf.agent_report.store import (
-    AgentReportRoleMismatchError,
-    AgentReportScrubError,
-    append_agent_report,
-)
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ExecutorReportBody
 from eawf.kernel.store.paths import store_path
+from eawf.workflow.agent_report.store import (
+    AgentReportRoleMismatchError,
+    AgentReportScrubError,
+    append_agent_report,
+)
 
 
 def _state() -> State:

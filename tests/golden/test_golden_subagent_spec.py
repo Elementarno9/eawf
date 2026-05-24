@@ -20,7 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from eawf.agents.specs.models import (
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.workflow.agents.specs.models import (
     SpecAudit,
     SpecDecision,
     SpecDependency,
@@ -28,8 +29,7 @@ from eawf.agents.specs.models import (
     SpecWorktree,
     SubagentSpec,
 )
-from eawf.agents.specs.roles import KEPT_RUNTIMES, render_role_contract
-from eawf.kernel.state.enums import AgentSessionRole
+from eawf.workflow.agents.specs.roles import KEPT_RUNTIMES, render_role_contract
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "subagent_spec"
 

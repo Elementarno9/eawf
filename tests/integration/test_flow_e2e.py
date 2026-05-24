@@ -21,7 +21,7 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.render.envelope import OutputEnvelope
-from eawf.skills.bodies.flow import FlowBody
+from eawf.workflow.skills.bodies.flow import FlowBody
 
 
 @pytest.fixture

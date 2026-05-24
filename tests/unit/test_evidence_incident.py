@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.evidence.incident`."""
+"""Unit tests for :mod:`eawf.workflow.evidence.incident`."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io, audit, incident
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
@@ -20,6 +19,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.models import Artifact, State
+from eawf.workflow.evidence import _io, audit, incident
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

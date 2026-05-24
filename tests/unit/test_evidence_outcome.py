@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.evidence.outcome`.
+"""Unit tests for :mod:`eawf.workflow.evidence.outcome`.
 
 Covers ``define_outcome`` happy/duplicate paths and the write-time
 audit-evidence guard inside ``set_outcome``: missing audit, unknown audit, and
@@ -16,7 +16,6 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io, audit, outcome
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
@@ -26,6 +25,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.models import Artifact, Audit, State
+from eawf.workflow.evidence import _io, audit, outcome
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

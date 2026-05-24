@@ -5,7 +5,7 @@ The CLI mutates the PLANNED queue inside :data:`state.phases` via
 the lifecycle transitions introduced in P19-W01:
 
 - ``roadmap propose --phase PXX --title TEXT`` calls
-  :func:`eawf.lifecycle.transitions.plan_phase` and an immediate
+  :func:`eawf.workflow.lifecycle.transitions.plan_phase` and an immediate
   :func:`plan_iter` so subsequent ``revise --add-wave`` calls have
   somewhere to attach. The envelope status is ``needs_user`` so the
   active runtime (Claude plan-mode, Codex text-prompt) gets a chance
@@ -273,7 +273,7 @@ def roadmap_propose_cmd(
 ) -> None:
     """Propose a new PLANNED phase + I01 iter; emits needs_user envelope."""
     from eawf.cli._mutation import state_transaction
-    from eawf.lifecycle.transitions import LifecycleError, plan_iter, plan_phase
+    from eawf.workflow.lifecycle.transitions import LifecycleError, plan_iter, plan_phase
 
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
@@ -450,7 +450,7 @@ def roadmap_revise_cmd(
     at CLOSED/CLAIMED/IN_PROGRESS waves.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.lifecycle.transitions import (
+    from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
         edit_iter_plan,
         edit_wave_plan,
@@ -694,7 +694,7 @@ def roadmap_drop_cmd(
     """Archive a PLANNED phase (PLANNED → ARCHIVED). Irreversible via the
     state CLI; recover with ``git restore`` if needed."""
     from eawf.cli._mutation import state_transaction
-    from eawf.lifecycle.transitions import LifecycleError, archive_phase
+    from eawf.workflow.lifecycle.transitions import LifecycleError, archive_phase
 
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):

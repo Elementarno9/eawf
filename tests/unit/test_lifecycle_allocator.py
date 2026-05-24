@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.lifecycle.allocator`.
+"""Unit tests for :mod:`eawf.workflow.lifecycle.allocator`.
 
 Covers the smallest-free-suffix invariant for phase/iter/wave id allocation,
 boundary cases (empty state, single existing entry), and the saturation /
@@ -26,7 +26,7 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.lifecycle.allocator import (
+from eawf.workflow.lifecycle.allocator import (
     allocate_iter_id,
     allocate_phase_id,
     allocate_wave_id,

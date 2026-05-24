@@ -181,7 +181,7 @@ def _envelope_contract_errors(envelope: OutputEnvelope) -> list[str]:
     - ``status=needs_user`` requires ``body.user_question``. We accept
       any payload that has a non-null ``user_question`` field; the
       caller is free to use any of the typed body models from
-      :mod:`eawf.skills.bodies` (each carries a ``user_question: UserQuestion |
+      :mod:`eawf.workflow.skills.bodies` (each carries a ``user_question: UserQuestion |
       None`` slot) or a raw dict body with the same key.
     - ``status in {blocked, failed}`` requires
       ``footer.repair_commands`` to be a non-empty list of strings.

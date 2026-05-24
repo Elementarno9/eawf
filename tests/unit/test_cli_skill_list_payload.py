@@ -89,4 +89,4 @@ def test_list_payload_body_schema_is_a_dotted_class_path() -> None:
         body_schema = row["body_schema"]
         assert isinstance(body_schema, str)
         assert "." in body_schema, f"body_schema {body_schema!r} lacks a module qualifier"
-        assert body_schema.startswith("eawf.skills.bodies."), body_schema
+        assert body_schema.startswith("eawf.workflow.skills.bodies."), body_schema

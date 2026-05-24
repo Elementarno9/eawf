@@ -80,7 +80,7 @@ def wave_plan_cmd(
     ] = None,
 ) -> None:
     """Plan a new pending wave under an open iter."""
-    from eawf.lifecycle.transitions import plan_wave
+    from eawf.workflow.lifecycle.transitions import plan_wave
 
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
@@ -184,7 +184,7 @@ def wave_claim_cmd(
     ] = False,
 ) -> None:
     """Claim a pending wave for *session*. Exactly-once across concurrent calls."""
-    from eawf.lifecycle.transitions import claim_wave
+    from eawf.workflow.lifecycle.transitions import claim_wave
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -274,7 +274,7 @@ def wave_close_cmd(
     ``git rev-parse <ref>^{commit}`` to a canonical 40-char hex SHA and
     persisted on the wave. ``eawf wave show --commit <wave-id>``
     prefers this stored value; absent it falls back to
-    :func:`~eawf.lifecycle.wave_sha.derive_wave_sha` walking
+    :func:`~eawf.workflow.lifecycle.wave_sha.derive_wave_sha` walking
     ``git log --grep "[P##-W##]"``.
 
     P24-W09 canary: when ``daemon.proxy_enabled=true`` the close
@@ -284,8 +284,8 @@ def wave_close_cmd(
     Both paths converge on the same ``state.json`` + ``event.jsonl``
     on-disk shape.
     """
-    from eawf.lifecycle.criterion_drift import check_wave_criteria_drift
-    from eawf.lifecycle.transitions import close_wave
+    from eawf.workflow.lifecycle.criterion_drift import check_wave_criteria_drift
+    from eawf.workflow.lifecycle.transitions import close_wave
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -377,7 +377,7 @@ def wave_show_cmd(
     ] = False,
 ) -> None:
     """Inspect a wave. ``--commit`` prints the pinned-or-derived SHA."""
-    from eawf.lifecycle.wave_sha import derive_wave_sha
+    from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -418,7 +418,7 @@ def wave_fail_cmd(
     ] = None,
 ) -> None:
     """Mark a claimed/in-progress wave as failed with *reason*."""
-    from eawf.lifecycle.transitions import fail_wave
+    from eawf.workflow.lifecycle.transitions import fail_wave
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):

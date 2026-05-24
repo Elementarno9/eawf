@@ -1,6 +1,6 @@
 """Unit tests for the subagent prompt renderer (B025).
 
-Exercises :func:`eawf.dispatch.renderer.render_wave_prompt` against
+Exercises :func:`eawf.workflow.dispatch.renderer.render_wave_prompt` against
 hand-built :class:`State` instances. The renderer is pure — no I/O —
 so each test composes a state in memory and inspects the returned
 string.
@@ -13,8 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from eawf.agents.specs.models import SubagentSpec
-from eawf.dispatch import build_subagent_spec, render_wave_prompt
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
@@ -36,7 +34,9 @@ from eawf.kernel.state.models import (
     State,
     WorktreeRecord,
 )
-from eawf.lifecycle.transitions import (
+from eawf.workflow.agents.specs.models import SubagentSpec
+from eawf.workflow.dispatch import build_subagent_spec, render_wave_prompt
+from eawf.workflow.lifecycle.transitions import (
     open_iter,
     open_phase,
     plan_wave,

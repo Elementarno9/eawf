@@ -1,4 +1,4 @@
-"""Tests for ``eawf.estimation.recovery`` — stale-segment promotion."""
+"""Tests for ``eawf.workflow.estimation.recovery`` — stale-segment promotion."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from eawf.estimation import recovery
-from eawf.estimation.segments import open_segment
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.state.models import ActualSummary
 from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.lock.stale import STALE_HEARTBEAT_SECONDS
+from eawf.workflow.estimation import recovery
+from eawf.workflow.estimation.segments import open_segment
 
 
 def _summary(scope: str, status: ActualStatus = ActualStatus.ACTIVE) -> ActualSummary:
@@ -127,7 +127,7 @@ def test_cap_elapsed_negative_now_clamped_to_zero(
     """If wall clock somehow went backwards, return zero elapsed and warn."""
     started = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     earlier = started - timedelta(seconds=5)
-    with caplog.at_level("WARNING", logger="eawf.estimation.recovery"):
+    with caplog.at_level("WARNING", logger="eawf.workflow.estimation.recovery"):
         capped_ended_at, elapsed_eu = recovery.cap_elapsed(
             started, now=earlier, eu_minutes=Decimal("30")
         )

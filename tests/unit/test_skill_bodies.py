@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from eawf.skills.bodies import (
+from eawf.workflow.skills.bodies import (
     AgentDispatchBody,
     AuditBody,
     BlitzBody,

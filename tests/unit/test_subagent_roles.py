@@ -1,6 +1,6 @@
 """Unit tests for the subagent role registry (P27-I03-W14).
 
-Exercises :mod:`eawf.agents.specs.roles`: the :data:`ROLE_REGISTRY`
+Exercises :mod:`eawf.workflow.agents.specs.roles`: the :data:`ROLE_REGISTRY`
 coverage of every :class:`~eawf.kernel.state.enums.AgentSessionRole`, the
 per-runtime contract rendering across all kept runtimes, and the error
 paths (unknown runtime / missing role).
@@ -10,16 +10,16 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.agents.specs.roles import (
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.store.kinds.agent_report import store_kind_for_role
+from eawf.render.agents import AGENT_REGISTRY
+from eawf.workflow.agents.specs.roles import (
     KEPT_RUNTIMES,
     ROLE_REGISTRY,
     RoleSpec,
     get_role_spec,
     render_role_contract,
 )
-from eawf.kernel.state.enums import AgentSessionRole
-from eawf.kernel.store.kinds.agent_report import store_kind_for_role
-from eawf.render.agents import AGENT_REGISTRY
 
 
 def test_registry_covers_every_role() -> None:

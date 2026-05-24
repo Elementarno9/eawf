@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from eawf.kernel.state.enums import SpecStatus
-from eawf.lifecycle.spec import (
+from eawf.workflow.lifecycle.spec import (
     SPEC_TRANSITIONS,
     SpecTransitionError,
     is_terminal_spec_status,

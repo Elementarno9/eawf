@@ -26,15 +26,15 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.render.envelope import OutputEnvelope, SkillName
-from eawf.skills import registry
-from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
+from eawf.workflow.skills import registry
+from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 
 
 @pytest.fixture
 def integration_research_skill() -> Iterator[type[Skill]]:
     """Register a faithful-enough stand-in for the W02 ``/research`` skill.
 
-    The body matches :class:`~eawf.skills.bodies.research.ResearchBody`
+    The body matches :class:`~eawf.workflow.skills.bodies.research.ResearchBody`
     so the envelope round-trips through Pydantic without ``extra``
     rejection. The probe reports both an ``ok`` and a ``missing``
     instrument so the header carries a non-trivial map.

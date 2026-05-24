@@ -29,8 +29,8 @@ from eawf.daemon.dispatch_runner import (
     run_dispatch,
 )
 from eawf.daemon.methods import MethodContext
-from eawf.evidence._io import load_state
 from eawf.kernel.state.enums import StoreKind
+from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.integration
 

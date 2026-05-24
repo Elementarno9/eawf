@@ -184,10 +184,10 @@ def test_shipped_skill_manifests_use_canonical_session_policy() -> None:
     legacy ``reuse``) would never match the dispatch policy.
     """
     from eawf.daemon.methods.agent import SessionPolicy
-    from eawf.skills.coauthor import MANIFEST as COAUTHOR_MANIFEST
-    from eawf.skills.compress import MANIFEST as COMPRESS_MANIFEST
-    from eawf.skills.memory import MANIFEST as MEMORY_MANIFEST
-    from eawf.skills.wave_spec import MANIFEST as WAVE_SPEC_MANIFEST
+    from eawf.workflow.skills.coauthor import MANIFEST as COAUTHOR_MANIFEST
+    from eawf.workflow.skills.compress import MANIFEST as COMPRESS_MANIFEST
+    from eawf.workflow.skills.memory import MANIFEST as MEMORY_MANIFEST
+    from eawf.workflow.skills.wave_spec import MANIFEST as WAVE_SPEC_MANIFEST
 
     canonical = set(get_args(SessionPolicy))
     for manifest in (

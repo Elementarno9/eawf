@@ -24,7 +24,6 @@ from typing import Literal, cast
 from jinja2 import Environment, StrictUndefined
 from pydantic import BaseModel, ConfigDict
 
-from eawf.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
 from eawf.artifacts.references import Citation
 from eawf.artifacts.validation import validate_text_surface
 from eawf.kernel.state.enums import AgentSessionRole
@@ -36,8 +35,9 @@ from eawf.kernel.store.kinds.agent_report import (
     ResearcherReportBody,
     ReviewerReportBody,
 )
-from eawf.lifecycle.wave_sha import derive_wave_sha
 from eawf.profiles.models import ComposedProfile
+from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
+from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
 logger = logging.getLogger(__name__)
 

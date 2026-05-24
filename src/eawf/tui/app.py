@@ -373,7 +373,7 @@ class EaApp(App[None]):
         """
         if self._needs_user_open or self._state_path is None:
             return
-        from eawf.skills.needs_user import list_open_pauses
+        from eawf.workflow.skills.needs_user import list_open_pauses
 
         try:
             pauses = list_open_pauses(self._state_path, scope_id=state.urn)
@@ -397,7 +397,7 @@ class EaApp(App[None]):
 
         Args:
             pause_urn: The pause the modal answers.
-            question: The :class:`~eawf.skills.bodies.user_question.UserQuestion`
+            question: The :class:`~eawf.workflow.skills.bodies.user_question.UserQuestion`
                 to render (typed loosely to avoid an import cycle).
         """
         from eawf.tui.screens.overlays.needs_user import NeedsUserModal
@@ -428,7 +428,7 @@ class EaApp(App[None]):
         self._needs_user_open = False
         if label is None or self._state_path is None:
             return
-        from eawf.skills.needs_user import PauseError, resolve_pause
+        from eawf.workflow.skills.needs_user import PauseError, resolve_pause
 
         try:
             resolve_pause(self._state_path, pause_urn=pause_urn, choice=label)

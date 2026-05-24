@@ -35,9 +35,9 @@ from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from eawf.estimation.metrics import compute_weekly_burn
 from eawf.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.tui.widgets.heartbeat import HEARTBEAT_GLYPH, HEARTBEAT_INTERVAL_S, Heartbeat
+from eawf.workflow.estimation.metrics import compute_weekly_burn
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -90,7 +90,7 @@ def build_weekly_burn_line(state: State | None, *, now: datetime | None = None) 
     """Build the footer weekly-burn line from *state*.
 
     Pure render source — unit-testable without mounting the widget. The
-    rollup comes from :func:`~eawf.estimation.metrics.compute_weekly_burn`
+    rollup comes from :func:`~eawf.workflow.estimation.metrics.compute_weekly_burn`
     (trailing-7-day actual-EU consumption versus
     ``Project.weekly_eu_target``). The graceful :data:`WEEKLY_BURN_EMPTY`
     placeholder is rendered — never a ``0 / 0`` figure — whenever the line
@@ -101,7 +101,7 @@ def build_weekly_burn_line(state: State | None, *, now: datetime | None = None) 
     Args:
         state: The bound state, or ``None`` before first load.
         now: Optional clock injection threaded to
-            :func:`~eawf.estimation.metrics.compute_weekly_burn` so the
+            :func:`~eawf.workflow.estimation.metrics.compute_weekly_burn` so the
             trailing-7-day window is deterministic in tests. Production
             callers leave this ``None`` to anchor on wall-clock.
 

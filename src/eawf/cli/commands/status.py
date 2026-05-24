@@ -162,7 +162,7 @@ def _active_waves(state: State) -> list[dict[str, Any]]:
     ``state.current.active_wave_ids`` but missing from ``state.waves`` are
     skipped silently — the validator will surface them.
     """
-    from eawf.lifecycle.wave_sha import derive_wave_sha
+    from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
     out: list[dict[str, Any]] = []
     for wave_id in state.current.active_wave_ids:

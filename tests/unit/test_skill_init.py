@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.init.InitSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.init.InitSkill`.
 
 Pin the Phase 4 W03 acceptance contract for ``/init``:
 
@@ -19,9 +19,9 @@ from typing import cast
 
 import pytest
 
-from eawf.skills.bodies.init import InitBody
-from eawf.skills.engine import SkillContext, run_skill
-from eawf.skills.init import InitSkill
+from eawf.workflow.skills.bodies.init import InitBody
+from eawf.workflow.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.init import InitSkill
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def _full_answers(target_dir: Path) -> dict[str, object]:
 
 
 def test_init_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/init")
     assert cls is InitSkill

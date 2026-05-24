@@ -205,7 +205,7 @@ def _write_state(path: Path, payload: dict[str, object]) -> None:
 
 def test_plan_evictions_skips_running_attempts() -> None:
     """Attempts without ended_at stay regardless of TTL."""
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence._io import load_state
 
     payload = _build_state_with_wave_session(
         wave_id="P24-I01-W01",
@@ -223,7 +223,7 @@ def test_plan_evictions_skips_running_attempts() -> None:
 
 
 def test_plan_evictions_picks_expired_attempts(tmp_path: Path) -> None:
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence._io import load_state
 
     ended = _now() - timedelta(seconds=DEFAULT_TTL_SECONDS + 1)
     payload = _build_state_with_wave_session(
@@ -241,7 +241,7 @@ def test_plan_evictions_picks_expired_attempts(tmp_path: Path) -> None:
 
 
 def test_plan_evictions_leaves_recent_attempts_alone(tmp_path: Path) -> None:
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence._io import load_state
 
     ended_just_now = _now() - timedelta(seconds=10)
     payload = _build_state_with_wave_session(

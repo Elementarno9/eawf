@@ -4,7 +4,7 @@ These tests close the estimation learning loop: claiming a wave seeds a
 default :class:`~eawf.kernel.state.models.EstimateSummary` from its effort bucket,
 and closing a wave records an :class:`~eawf.kernel.state.models.ActualSummary` from
 the open->close wall-clock span. Together they give
-:func:`~eawf.estimation.metrics.compute_estimate_actual_variance` a sample to
+:func:`~eawf.workflow.estimation.metrics.compute_estimate_actual_variance` a sample to
 report instead of "no data".
 
 The close path is exercised by the live orchestrator (``eawf wave
@@ -19,11 +19,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from eawf.estimation.buckets import (
-    actual_summary_from_timestamps,
-    default_estimate_summary,
-)
-from eawf.estimation.metrics import compute_estimate_actual_variance
 from eawf.kernel.state.enums import (
     ActualStatus,
     Confidence,
@@ -33,7 +28,12 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.lifecycle.transitions import (
+from eawf.workflow.estimation.buckets import (
+    actual_summary_from_timestamps,
+    default_estimate_summary,
+)
+from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
+from eawf.workflow.lifecycle.transitions import (
     claim_wave,
     close_wave,
     open_iter,

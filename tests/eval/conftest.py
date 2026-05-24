@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.skills.engine import SkillContext
+from eawf.workflow.skills.engine import SkillContext
 
 
 @pytest.fixture

@@ -25,7 +25,7 @@ projection time (the §5.11 discriminator-emit invariant).
 
 On dispatch completion the runner also emits a typed ``agent_end``
 executor report through the canonical agent-report writer
-:func:`eawf.agent_report.store.append_agent_report` (the same writer the
+:func:`eawf.workflow.agent_report.store.append_agent_report` (the same writer the
 operator-facing ``eawf hook event`` AGENT_END path uses). The report
 uses the dispatched wave's executor :class:`~eawf.kernel.state.models.AgentSession`
 as authority — role, scope, attempt, and store kind are derived from the
@@ -49,9 +49,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
 
-from eawf.agent_report.store import append_agent_report
 from eawf.budget.service import record_consumption
-from eawf.evidence._io import load_state
 from eawf.kernel.state.enums import AgentReportVerdict, Confidence, StoreKind, WaveStatus
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.writer import atomic_write_json_locked
@@ -65,9 +63,11 @@ from eawf.kernel.store.kinds.events import (
     RuntimeSwitchedPayload,
 )
 from eawf.kernel.store.kinds.events.base import RuntimeTriple, TracedEventPayload
-from eawf.lifecycle.wave import start_wave
 from eawf.lock import portalock
 from eawf.telemetry.models import RuntimeErrorClass
+from eawf.workflow.agent_report.store import append_agent_report
+from eawf.workflow.evidence._io import load_state
+from eawf.workflow.lifecycle.wave import start_wave
 
 if TYPE_CHECKING:
     from eawf.daemon.methods import MethodContext
@@ -481,7 +481,7 @@ def emit_agent_end_report(
 
     Builds an :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
     and persists it through the canonical agent-report writer
-    :func:`eawf.agent_report.store.append_agent_report`, using the
+    :func:`eawf.workflow.agent_report.store.append_agent_report`, using the
     executor :class:`~eawf.kernel.state.models.AgentSession` named by
     *session_id* as authority. The writer derives the report's role,
     scope, attempt number, and store kind from the session, so the
@@ -518,9 +518,9 @@ def emit_agent_end_report(
         RuntimeError: When ``ctx.state_path`` is not configured (the
             writer needs state to resolve the session authority).
         KeyError: When *session_id* is absent from ``state.json``.
-        eawf.agent_report.store.AgentReportRoleMismatchError: When the
+        eawf.workflow.agent_report.store.AgentReportRoleMismatchError: When the
             session role is not ``executor``.
-        eawf.agent_report.store.AgentReportScrubError: When the report
+        eawf.workflow.agent_report.store.AgentReportScrubError: When the report
             body text contains local or sensitive tokens.
     """
     if ctx.state_path is None:
@@ -561,7 +561,7 @@ def _mark_wave_in_progress(ctx: MethodContext, *, wave_id: str) -> bool:
     implementation has begun. The mutation runs under the same defense-in-
     depth ``portalock(state.json)`` + locked-atomic-write the daemon's
     ``state.mutate`` path uses (per the daemon-as-sole-mutator rule), and
-    applies the pure-functional :func:`eawf.lifecycle.wave.start_wave`
+    applies the pure-functional :func:`eawf.workflow.lifecycle.wave.start_wave`
     transition so the inline-start and dispatched-start paths converge on
     one transition.
 

@@ -26,7 +26,7 @@ import logging
 
 from eawf.kernel.state.enums import PhaseStatus
 from eawf.kernel.state.models import State
-from eawf.lifecycle.wave_sha import derive_wave_sha
+from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
 logger = logging.getLogger(__name__)
 

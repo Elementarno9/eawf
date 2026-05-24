@@ -29,10 +29,10 @@ from pathlib import Path
 from typing import Final
 
 from eawf.daemon.session import prune_handles_for_wave as _drop_wave_handles
-from eawf.evidence._io import load_state
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
+from eawf.workflow.evidence._io import load_state
 
 logger = logging.getLogger(__name__)
 

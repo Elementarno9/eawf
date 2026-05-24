@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.audit_dsl` — DSL loader + registry + runner.
+"""Unit tests for :mod:`eawf.workflow.audit_dsl` — DSL loader + registry + runner.
 
 Coverage matrix (one boundary + error pair per check kind, plus
 loader paths):
@@ -24,7 +24,8 @@ from typing import Any
 
 import pytest
 
-from eawf.audit_dsl import (
+from eawf.cli.errors import UserError
+from eawf.workflow.audit_dsl import (
     CHECK_REGISTRY,
     CheckFile,
     CheckResult,
@@ -32,7 +33,6 @@ from eawf.audit_dsl import (
     load_spec,
     run_checks,
 )
-from eawf.cli.errors import UserError
 
 # ---- helpers ---------------------------------------------------------------
 
@@ -545,6 +545,6 @@ def test_check_registry_keys_match_kind_literal() -> None:
     """The registry exactly covers the CheckKind literal — no drift."""
     from typing import get_args
 
-    from eawf.audit_dsl.models import CheckKind
+    from eawf.workflow.audit_dsl.models import CheckKind
 
     assert set(CHECK_REGISTRY.keys()) == set(get_args(CheckKind))

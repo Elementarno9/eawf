@@ -40,8 +40,8 @@ from eawf.kernel.state.ids import is_wave_id
 from eawf.lock import portalock
 
 if TYPE_CHECKING:
-    from eawf.dispatch import DispatchEnvelope
     from eawf.kernel.state.models import State
+    from eawf.workflow.dispatch import DispatchEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +350,7 @@ def wave_dispatch_cmd(
     runtime dependency on the SDK package is added; the adapter is
     render-only.
     """
-    from eawf.dispatch import DISPATCH_RUNTIMES, render_dispatch_envelope
+    from eawf.workflow.dispatch import DISPATCH_RUNTIMES, render_dispatch_envelope
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -469,7 +469,7 @@ def wave_dispatch_batch_cmd(
     :func:`wave_next_ready_cmd` would surface (deps all closed, no
     failed-dep blockers) are rendered.
     """
-    from eawf.dispatch import render_wave_prompt
+    from eawf.workflow.dispatch import render_wave_prompt
 
     loaded = _load_state_readonly(ctx)
     if loaded is None:

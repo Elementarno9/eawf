@@ -9,7 +9,7 @@ The load-bearing assertion is the wave's success criterion: the emitted
 ``agent_end`` row carries a valid verdict AND
 :func:`eawf.kernel.validate.invariants.check_agent_report_invariants` returns no
 violations for it. The runner emits through the canonical agent-report
-writer (:func:`eawf.agent_report.store.append_agent_report`) so the
+writer (:func:`eawf.workflow.agent_report.store.append_agent_report`) so the
 persisted envelope is indistinguishable from one written by the
 operator-facing ``eawf hook event`` AGENT_END path.
 """

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.audit_dsl.kinds.verify_implements`.
+"""Unit tests for :mod:`eawf.workflow.audit_dsl.kinds.verify_implements`.
 
 Coverage:
 
@@ -31,16 +31,16 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.audit_dsl import CHECK_REGISTRY, CheckSpec
-from eawf.audit_dsl.kinds.verify_implements import (
+from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES, AuditSpec
+from eawf.kernel.state.enums import AuditKind
+from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckSpec
+from eawf.workflow.audit_dsl.kinds.verify_implements import (
     VERDICT_MARKER_RE,
     _cadence_matches,
     _parse_frontmatter,
     check_verify_implements,
 )
-from eawf.audit_dsl.models import CheckKind
-from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES, AuditSpec
-from eawf.kernel.state.enums import AuditKind
+from eawf.workflow.audit_dsl.models import CheckKind
 
 # ---- AuditSpec schema -------------------------------------------------------
 
@@ -307,7 +307,7 @@ def test_cadence_short_circuit_returns_pass(
         raise AssertionError("git diff must not run when cadence skips")
 
     monkeypatch.setattr(
-        "eawf.audit_dsl.kinds.verify_implements._git_diff_files",
+        "eawf.workflow.audit_dsl.kinds.verify_implements._git_diff_files",
         fail_if_called,
     )
     spec = _build_spec(
@@ -360,7 +360,7 @@ def test_phase_dir_with_no_wavespec_fails(tmp_path: Path) -> None:
 
 def test_no_files_in_diff_fails(fake_phase_tree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "eawf.audit_dsl.kinds.verify_implements._git_diff_files",
+        "eawf.workflow.audit_dsl.kinds.verify_implements._git_diff_files",
         lambda cwd, diff_base: set(),
     )
     spec = _build_spec(
@@ -385,7 +385,7 @@ def test_marker_missing_in_changed_file_fails(
     target = fake_phase_tree / "src" / "eawf" / "spec" / "common.py"
     target.write_text("# unrelated comment\nvalue = 1\n", encoding="utf-8")
     monkeypatch.setattr(
-        "eawf.audit_dsl.kinds.verify_implements._git_diff_files",
+        "eawf.workflow.audit_dsl.kinds.verify_implements._git_diff_files",
         lambda cwd, diff_base: {"src/eawf/spec/common.py"},
     )
     spec = _build_spec(
@@ -407,7 +407,7 @@ def test_marker_present_passes(fake_phase_tree: Path, monkeypatch: pytest.Monkey
     target = fake_phase_tree / "src" / "eawf" / "spec" / "common.py"
     target.write_text("# IMPLEMENTS: V12\nvalue = 1\n", encoding="utf-8")
     monkeypatch.setattr(
-        "eawf.audit_dsl.kinds.verify_implements._git_diff_files",
+        "eawf.workflow.audit_dsl.kinds.verify_implements._git_diff_files",
         lambda cwd, diff_base: {"src/eawf/spec/common.py"},
     )
     spec = _build_spec(
@@ -437,7 +437,7 @@ def test_marker_in_unrelated_file_does_not_satisfy(
         "# unrelated\n", encoding="utf-8"
     )
     monkeypatch.setattr(
-        "eawf.audit_dsl.kinds.verify_implements._git_diff_files",
+        "eawf.workflow.audit_dsl.kinds.verify_implements._git_diff_files",
         lambda cwd, diff_base: {
             "src/eawf/foo.py",
             "src/eawf/spec/common.py",
@@ -493,7 +493,7 @@ def test_multiple_waves_partial_failure(tmp_path: Path, monkeypatch: pytest.Monk
         "# no marker here\n", encoding="utf-8"
     )
     monkeypatch.setattr(
-        "eawf.audit_dsl.kinds.verify_implements._git_diff_files",
+        "eawf.workflow.audit_dsl.kinds.verify_implements._git_diff_files",
         lambda cwd, diff_base: {
             "src/eawf/spec/common.py",
             "src/eawf/audit_dsl/kinds/verify_implements.py",

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.skills.engine`.
+"""Unit tests for :mod:`eawf.workflow.skills.engine`.
 
 Pin the engine's three contracts:
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.engine import (
+from eawf.workflow.skills.engine import (
     ProbeOutcome,
     Skill,
     SkillContext,

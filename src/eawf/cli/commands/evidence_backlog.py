@@ -58,8 +58,8 @@ def audit_add(
 ) -> None:
     """Register an audit; report-bearing audits land status=complete."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -123,8 +123,8 @@ def audit_run(
     legacy JSON escape hatch. Pass at most one of the two.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -137,7 +137,7 @@ def audit_run(
 
         check_results_payload: list[dict[str, Any]] | None = None
         if checks is not None:
-            from eawf.audit_dsl.runner import load_spec, run_checks
+            from eawf.workflow.audit_dsl.runner import load_spec, run_checks
 
             specs = load_spec(checks)
             results = run_checks(specs, cwd=state_path.parent.parent)
@@ -194,8 +194,8 @@ def audit_integrity(
 ) -> None:
     """Append an integrity-check result to an existing audit."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -252,8 +252,8 @@ def audit_set_verdict(
     in place but rejects a differing ``--report``.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -291,9 +291,9 @@ def audit_show(
     md: Annotated[bool, typer.Option("--md", help="Render markdown artifact body.")] = False,
 ) -> None:
     """Show metadata for one audit."""
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import load_state
     from eawf.render.audit_report import render_audit_markdown
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -328,8 +328,8 @@ def audit_list(
     status: Annotated[AuditStatus | None, typer.Option("--status", help="Filter by status")] = None,
 ) -> None:
     """List audits with optional filters."""
-    from eawf.evidence import audit as audit_evi
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence import audit as audit_evi
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -384,8 +384,8 @@ def backlog_add(
 ) -> None:
     """Add a new backlog item."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import backlog as backlog_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import backlog as backlog_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -441,8 +441,8 @@ def backlog_edit(
 ) -> None:
     """Edit an open backlog item's title and/or description."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import backlog as backlog_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import backlog as backlog_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -482,8 +482,8 @@ def backlog_set_priority(
 ) -> None:
     """Update the priority of an open backlog item."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import backlog as backlog_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import backlog as backlog_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -526,8 +526,8 @@ def backlog_close(
 ) -> None:
     """Close a backlog item; requires --audit of a complete audit."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import backlog as backlog_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import backlog as backlog_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)

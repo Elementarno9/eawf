@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.flow.FlowSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.flow.FlowSkill`.
 
 Pin the Phase 4 W03 acceptance contract for ``/flow``:
 
@@ -21,15 +21,15 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from eawf.render.envelope import EnvelopeStatus
-from eawf.skills.bodies.flow import FlowBody
-from eawf.skills.engine import (
+from eawf.workflow.skills.bodies.flow import FlowBody
+from eawf.workflow.skills.engine import (
     ProbeOutcome,
     Skill,
     SkillContext,
     SkillResult,
     run_skill,
 )
-from eawf.skills.flow import (
+from eawf.workflow.skills.flow import (
     FlowSkill,
     short_circuit_terminal_status,
 )
@@ -56,7 +56,7 @@ def _ctx(args: dict[str, object] | None = None) -> SkillContext:
 
 
 def test_flow_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/flow")
     assert cls is FlowSkill
@@ -110,7 +110,7 @@ def test_flow_short_circuits_on_first_non_ok(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When a step returns non-ok, the flow stops + propagates repair."""
-    from eawf.skills import flow as flow_module
+    from eawf.workflow.skills import flow as flow_module
 
     # Replace AuditSkill in the flow's order with the blocked stub.
     patched_order = tuple(
@@ -185,7 +185,7 @@ def test_flow_emits_at_least_step_start_end_per_skill(state_dir: Path) -> None:
 
 def test_flow_args_per_step_are_forwarded(state_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``args_per_step`` overrides the per-step args."""
-    from eawf.skills.research import ResearchSkill
+    from eawf.workflow.skills.research import ResearchSkill
 
     captured: dict[str, object] = {}
 

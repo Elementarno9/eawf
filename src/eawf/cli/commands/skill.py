@@ -11,7 +11,7 @@ Surface contract:
   byte-equal to the SKILL.md :mod:`eawf.runtimes.claude.plugin_install`
   writes on disk for the same skill.
 - ``eawf skill run <name>`` (Phase 4 W07) invokes
-  :func:`~eawf.skills.engine.run_skill` headlessly. Optional JSON args
+  :func:`~eawf.workflow.skills.engine.run_skill` headlessly. Optional JSON args
   may be piped on stdin and are folded into :attr:`SkillContext.args`.
   The default output is the markdown envelope produced by
   :func:`~eawf.render.envelope.to_markdown`; the global ``--json``
@@ -32,7 +32,7 @@ Exit-code mapping (per design spec §4 W07 acceptance #2):
 
 The list table includes a synthetic body-schema "fingerprint" — the
 fully-qualified class name of the body model — so an operator can
-verify `installed` rows against `eawf.skills.bodies` without re-reading
+verify `installed` rows against `eawf.workflow.skills.bodies` without re-reading
 the spec.
 """
 
@@ -59,7 +59,7 @@ from eawf.cli.scope import resolve_state_path
 if TYPE_CHECKING:
     from eawf.render.envelope import EnvelopeStatus, OutputEnvelope, SkillName
     from eawf.render.skills import SkillSpec
-    from eawf.skills.engine import Skill, SkillContext
+    from eawf.workflow.skills.engine import Skill, SkillContext
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the
 # fully-qualified class name of this model — stable enough to spot a
 # drift between the canonical body schema and an installed skill at a
-# glance. Built lazily (deferred import of ``eawf.skills.bodies``, which
+# glance. Built lazily (deferred import of ``eawf.workflow.skills.bodies``, which
 # pulls the pydantic body models) so importing this module to register the
 # command tree stays light.
 _SKILL_BODY_MODELS_CACHE: dict[SkillName, type[Any]] | None = None
@@ -109,7 +109,7 @@ def _skill_body_models() -> dict[SkillName, type[Any]]:
     """Return the canonical skill-name → body-model map (cached)."""
     global _SKILL_BODY_MODELS_CACHE
     if _SKILL_BODY_MODELS_CACHE is None:
-        from eawf.skills.bodies import (
+        from eawf.workflow.skills.bodies import (
             AgentDispatchBody,
             AuditBody,
             BlitzBody,
@@ -293,7 +293,7 @@ def _build_list_table(*, plain: bool) -> str:
     Rich branch builds a :class:`Table` into a string buffer with a
     fixed width (100) so the output is deterministic for golden tests.
     """
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     rows: list[tuple[SkillName, str, str, str]] = []
     for name in _all_skill_names():
@@ -331,7 +331,7 @@ def _build_list_table(*, plain: bool) -> str:
 
 def _list_payload() -> dict[str, Any]:
     """Build the JSON shape for ``skill list --json``."""
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     skills: list[dict[str, Any]] = []
     for name in _all_skill_names():
@@ -357,7 +357,7 @@ def _skill_payload(name: SkillName) -> dict[str, Any]:
     expected to splice an additional ``body`` field carrying the
     canonical SKILL.md text.
     """
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     registered = registry.lookup(name)
     body_cls = _skill_body_models()[name]
@@ -410,8 +410,8 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
     ``runtimes`` (per-runtime visibility hint; empty == visible to all),
     ``path``, and ``version``.
     """
-    from eawf.skills import registry
-    from eawf.skills.discovery import discover_skills
+    from eawf.workflow.skills import registry
+    from eawf.workflow.skills.discovery import discover_skills
 
     rows = discover_skills(workspace=workspace)
     if scope != "all":
@@ -455,7 +455,9 @@ def list_cmd(
     ] = "all",
 ) -> None:
     """List every skill resolvable across builtin / user / workspace layers."""
-    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
+    from eawf.workflow.skills import (
+        _bootstrap as _skills_bootstrap,  # noqa: F401 — registers skills
+    )
 
     flags: GlobalFlags = ctx.obj
     if scope not in _SCOPE_CHOICES:
@@ -531,7 +533,9 @@ def render_cmd(
     listed in the rejection message.
     """
     from eawf.render.skills import render_skill_md_from_spec
-    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
+    from eawf.workflow.skills import (
+        _bootstrap as _skills_bootstrap,  # noqa: F401 — registers skills
+    )
 
     flags: GlobalFlags = ctx.obj
 
@@ -602,7 +606,7 @@ def resume_cmd(
             the question's option labels (``kind="InvalidInput"``) — exit
             non-zero.
     """
-    from eawf.skills.needs_user import PauseError, find_open_pause, resolve_pause
+    from eawf.workflow.skills.needs_user import PauseError, find_open_pause, resolve_pause
 
     flags: GlobalFlags = ctx.obj
     effective_ws = workspace if workspace is not None else flags.workspace
@@ -676,9 +680,11 @@ def run_cmd(
     canonical envelope is emitted on stdout in markdown by default and
     in JSON when ``--json`` is set on the root.
     """
-    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
-    from eawf.skills import registry
-    from eawf.skills.engine import SkillContext, run_skill
+    from eawf.workflow.skills import (
+        _bootstrap as _skills_bootstrap,  # noqa: F401 — registers skills
+    )
+    from eawf.workflow.skills import registry
+    from eawf.workflow.skills.engine import SkillContext, run_skill
 
     flags: GlobalFlags = ctx.obj
 
@@ -691,7 +697,7 @@ def run_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
 
-    from eawf.skills.discovery import discover_skills
+    from eawf.workflow.skills.discovery import discover_skills
 
     overlay = next(
         (

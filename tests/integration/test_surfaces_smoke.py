@@ -46,8 +46,10 @@ from eawf.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.runtimes.cache_control import inject_cache_control
 from eawf.runtimes.dispatch import AdapterManifestMismatchError, resolve_adapter
 from eawf.runtimes.plugin_manifest import SkillManifest
-from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers all skills
-from eawf.skills import registry
+from eawf.workflow.skills import (
+    _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
+)
+from eawf.workflow.skills import registry
 
 runner = CliRunner()
 

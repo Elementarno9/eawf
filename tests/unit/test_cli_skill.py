@@ -32,8 +32,8 @@ from typer.testing import CliRunner
 
 from eawf.cli.app import app
 from eawf.render.envelope import OutputEnvelope, SkillName
-from eawf.skills import registry
-from eawf.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
+from eawf.workflow.skills import registry
+from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 
 
 @pytest.fixture
@@ -207,14 +207,14 @@ def test_skill_list_json_payload_carries_status_and_schema(
     by_name = {cast(str, s["name"]): s for s in skills}
     research = by_name["/research"]
     assert research["status"] == "installed"
-    assert research["body_schema"] == "eawf.skills.bodies.research.ResearchBody"
+    assert research["body_schema"] == "eawf.workflow.skills.bodies.research.ResearchBody"
     # /audit is registered by W02 import-side effects.
     assert by_name["/audit"]["status"] == "installed"
     # Meta skills (W03) are also registered post-W03.
     assert by_name["/flow"]["status"] == "installed"
-    assert by_name["/flow"]["body_schema"] == "eawf.skills.bodies.flow.FlowBody"
+    assert by_name["/flow"]["body_schema"] == "eawf.workflow.skills.bodies.flow.FlowBody"
     assert by_name["/blitz"]["status"] == "installed"
-    assert by_name["/blitz"]["body_schema"] == "eawf.skills.bodies.blitz.BlitzBody"
+    assert by_name["/blitz"]["body_schema"] == "eawf.workflow.skills.bodies.blitz.BlitzBody"
 
 
 def test_skill_run_unknown_skill_returns_invalid_input(cli_runner: CliRunner) -> None:

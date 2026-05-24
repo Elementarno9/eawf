@@ -33,9 +33,9 @@ from hypothesis import strategies as st
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io
-from eawf.evidence import goal as goal_evi
 from eawf.kernel.state.enums import StoreKind
+from eawf.workflow.evidence import _io
+from eawf.workflow.evidence import goal as goal_evi
 
 
 def _seed_state(state_path: Path) -> None:

@@ -1,9 +1,9 @@
-"""Unit tests for :func:`eawf.dispatch.renderer.render_dispatch_envelope` (P10 W03).
+"""Unit tests for :func:`eawf.workflow.dispatch.renderer.render_dispatch_envelope` (P10 W03).
 
 Exercises the pure dispatch adapter against hand-built
 :class:`~eawf.kernel.state.models.State` instances. The adapter is pure — no
 I/O — so each test composes a state in memory and inspects the typed
-:class:`~eawf.dispatch.renderer.DispatchEnvelope` it returns.
+:class:`~eawf.workflow.dispatch.renderer.DispatchEnvelope` it returns.
 
 Coverage:
 
@@ -27,12 +27,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.dispatch import render_dispatch_envelope, render_wave_prompt
-from eawf.dispatch.renderer import DispatchEnvelope
 from eawf.kernel.state.enums import McpRisk, McpStatus, ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, McpGrant, McpServer, Project, State
-from eawf.lifecycle.transitions import open_iter, open_phase, plan_wave
 from eawf.sandbox.policy import SandboxPolicy
+from eawf.workflow.dispatch import render_dispatch_envelope, render_wave_prompt
+from eawf.workflow.dispatch.renderer import DispatchEnvelope
+from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
 # ---- Builders ---------------------------------------------------------------
 

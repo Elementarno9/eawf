@@ -76,7 +76,7 @@ class FlowCheckpointPayload(BaseModel):
     """Per-step checkpoint emitted after a step boundary.
 
     The runner appends one of these after every step. ``last_safe=True``
-    iff the safe predicate (see :mod:`eawf.skills.flow`) holds for the
+    iff the safe predicate (see :mod:`eawf.workflow.skills.flow`) holds for the
     boundary. ``--resume`` finds the latest ``last_safe=True`` record
     for the active flow and replays the canonical step order from
     ``step_index + 1``.

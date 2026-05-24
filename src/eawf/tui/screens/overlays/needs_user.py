@@ -3,7 +3,7 @@
 The modal AUQ surface: auto-opened when the TUI receives a
 ``needs_user_pause`` envelope for the active scope/session, it renders
 the envelope's
-:class:`~eawf.skills.bodies.user_question.UserQuestion` — the prompt plus
+:class:`~eawf.workflow.skills.bodies.user_question.UserQuestion` — the prompt plus
 its 2-4 enumerated options — and lets the operator pick one with ``↑`` /
 ``↓`` + ``Enter``. The chosen option's label routes back to the paused
 skill via ``eawf skill resume <pause-urn> --choice <label>``. ``Esc``
@@ -36,7 +36,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 if TYPE_CHECKING:
-    from eawf.skills.bodies.user_question import UserQuestion
+    from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ class NeedsUserModal(ModalScreen[str]):
         Args:
             question: The ``body.user_question`` payload from the
                 ``needs_user_pause`` envelope (2-4 options, validated by
-                the :class:`~eawf.skills.bodies.user_question.UserQuestion`
+                the :class:`~eawf.workflow.skills.bodies.user_question.UserQuestion`
                 model).
         """
         super().__init__()

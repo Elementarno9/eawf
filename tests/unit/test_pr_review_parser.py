@@ -1,10 +1,10 @@
-"""Unit tests for :mod:`eawf.pr_review.parser` (B041)."""
+"""Unit tests for :mod:`eawf.workflow.pr_review.parser` (B041)."""
 
 from __future__ import annotations
 
 import pytest
 
-from eawf.pr_review.parser import Finding, parse_findings
+from eawf.workflow.pr_review.parser import Finding, parse_findings
 
 
 def test_parse_findings_single_blocker_line() -> None:

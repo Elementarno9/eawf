@@ -1,6 +1,6 @@
 """AuditSpec — typed declarative audit document.
 
-AuditSpec extends :class:`~eawf.audit_dsl.models.CheckFile` with the
+AuditSpec extends :class:`~eawf.workflow.audit_dsl.models.CheckFile` with the
 cadence binding, scope linkage, and verdict citations the audit-DSL
 runner needs at phase / iter / wave close. Per the C03 D10 lock the
 ``cadence`` field configures *when* the audit fires; the audit-DSL
@@ -19,12 +19,12 @@ from typing import Literal
 
 from pydantic import Field
 
-from eawf.audit_dsl.models import CheckSpec
 from eawf.kernel.spec.common import VerdictCitation, _StrictModel
 from eawf.kernel.state.enums import AuditKind
+from eawf.workflow.audit_dsl.models import CheckSpec
 
 # The four cadence enum values the AuditSpec.cadence field accepts.
-# Mirrors :data:`eawf.audit_dsl.kinds.verify_implements._VALID_CADENCES`
+# Mirrors :data:`eawf.workflow.audit_dsl.kinds.verify_implements._VALID_CADENCES`
 # — the spec model owns the contract, the audit-DSL kind applies it.
 AuditCadence = Literal["every-wave", "every-iter", "every-phase", "manual"]
 
@@ -46,7 +46,7 @@ class AuditSpec(_StrictModel):
     The audit-DSL runner reads ``cadence`` at the close event firing
     the audit and short-circuits the dispatched check kinds when the
     cadence does not match the trigger (see
-    :func:`~eawf.audit_dsl.kinds.verify_implements.check_verify_implements`).
+    :func:`~eawf.workflow.audit_dsl.kinds.verify_implements.check_verify_implements`).
     """
 
     schema_version: Literal["1.0"] = "1.0"

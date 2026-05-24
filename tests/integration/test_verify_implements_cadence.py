@@ -23,8 +23,8 @@ from typing import Any
 
 import pytest
 
-from eawf.audit_dsl import CheckSpec
-from eawf.audit_dsl.kinds.verify_implements import check_verify_implements
+from eawf.workflow.audit_dsl import CheckSpec
+from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 
 
 def _run(cmd: list[str], cwd: Path) -> None:
@@ -33,7 +33,7 @@ def _run(cmd: list[str], cwd: Path) -> None:
 
 def _init_git_repo(repo: Path) -> None:
     _run(["git", "init", "-q", "-b", "main"], repo)
-    _run(["git", "config", "user.email", "test@example.local"], repo)
+    _run(["git", "config", "user.email", "test@example.local"], repo)  # pragma: allowlist secret
     _run(["git", "config", "user.name", "test"], repo)
     # Disable global hooks (project pre-commit) for the tmp repo.
     _run(["git", "config", "core.hooksPath", "/dev/null"], repo)

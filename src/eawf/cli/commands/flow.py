@@ -111,7 +111,7 @@ def _resolve_target_flow_id(
        than one → ambiguous, raises :class:`UserError`
        (``kind="InvalidInput"``) asking for ``--flow-id``.
     """
-    from eawf.skills.flow import in_progress_flow_ids
+    from eawf.workflow.skills.flow import in_progress_flow_ids
 
     if flow_id_flag is not None:
         if not flow_id_flag.startswith("FL-"):
@@ -193,10 +193,12 @@ def run_cmd(
     multiple in-progress flows without ``--flow-id`` raise
     ``INVALID_INPUT`` (3).
     """
-    from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers skills
-    from eawf.skills._common import resolve_active_state_path
-    from eawf.skills.engine import SkillContext, run_skill
-    from eawf.skills.flow import FlowSkill, load_latest_safe_checkpoint
+    from eawf.workflow.skills import (
+        _bootstrap as _skills_bootstrap,  # noqa: F401 — registers skills
+    )
+    from eawf.workflow.skills._common import resolve_active_state_path
+    from eawf.workflow.skills.engine import SkillContext, run_skill
+    from eawf.workflow.skills.flow import FlowSkill, load_latest_safe_checkpoint
 
     flags: GlobalFlags = ctx.obj
 
@@ -255,7 +257,7 @@ def run_cmd(
             ckpt_id, ckpt = ckpt_lookup
 
         # Compute drift against the live workspace.
-        from eawf.skills.flow import compute_drift
+        from eawf.workflow.skills.flow import compute_drift
 
         drift = compute_drift(
             ckpt,
@@ -312,7 +314,7 @@ def _latest_checkpoint_for(
 ) -> tuple[str, FlowCheckpointPayload] | None:
     """Return the most recent checkpoint (safe or not) for *flow_id*."""
     from eawf.kernel.store.kinds.flow import FlowCheckpointPayload
-    from eawf.skills.flow import load_flow_records
+    from eawf.workflow.skills.flow import load_flow_records
 
     last: tuple[str, FlowCheckpointPayload] | None = None
     for envelope_id, payload in load_flow_records(state_path):
@@ -353,8 +355,8 @@ def status_cmd(
     ] = None,
 ) -> None:
     """Print structured status for a flow run (read-only)."""
-    from eawf.skills._common import resolve_active_state_path
-    from eawf.skills.flow import (
+    from eawf.workflow.skills._common import resolve_active_state_path
+    from eawf.workflow.skills.flow import (
         latest_active_flow_id,
         load_latest_records_per_flow,
         load_latest_safe_checkpoint,
@@ -479,8 +481,8 @@ def abort_cmd(
     ``OK`` and the JSON output reports
     ``previous_status="abandoned" new_status="abandoned"``.
     """
-    from eawf.skills._common import resolve_active_state_path
-    from eawf.skills.flow import abort_flow_record, load_latest_records_per_flow
+    from eawf.workflow.skills._common import resolve_active_state_path
+    from eawf.workflow.skills.flow import abort_flow_record, load_latest_records_per_flow
 
     flags: GlobalFlags = ctx.obj
     try:

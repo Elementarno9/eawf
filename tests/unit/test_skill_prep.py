@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.prep.PrepSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.prep.PrepSkill`.
 
 Pin the Phase 4 W02 acceptance contract for ``/prep`` plus the P26-W08
 lifecycle gaps:
@@ -24,9 +24,9 @@ from typing import Any, cast
 import pytest
 
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.bodies.prep import PrepBody
-from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill
-from eawf.skills.prep import PrepSkill
+from eawf.workflow.skills.bodies.prep import PrepBody
+from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
+from eawf.workflow.skills.prep import PrepSkill
 
 
 @pytest.fixture
@@ -256,7 +256,7 @@ def test_prep_emits_one_event_per_step(state_dir: Path) -> None:
 def test_prep_probe_blocked_short_circuits(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from eawf.skills import prep as prep_module
+    from eawf.workflow.skills import prep as prep_module
 
     def _blocked(self: object, ctx: SkillContext) -> ProbeOutcome:
         return ProbeOutcome(
@@ -285,7 +285,7 @@ def test_prep_explicit_iter_id_honoured(state_dir: Path) -> None:
 
 
 def test_prep_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/prep")
     assert cls is PrepSkill

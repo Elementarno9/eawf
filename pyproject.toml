@@ -163,7 +163,7 @@ max-complexity = 10
 # drops off this list as its functions are split below the budget. New
 # modules get no entry — they must respect the budget or carry an inline
 # ``# noqa: C901`` waiver.
-"src/eawf/audit_dsl/kinds/verify_implements.py" = ["C901"]
+"src/eawf/workflow/audit_dsl/kinds/verify_implements.py" = ["C901"]
 "src/eawf/cli/commands/config.py" = ["C901"]
 "src/eawf/cli/commands/estimation.py" = ["C901"]
 "src/eawf/cli/commands/flow.py" = ["C901"]
@@ -178,7 +178,7 @@ max-complexity = 10
 "src/eawf/kernel/config/layered.py" = ["C901"]
 "src/eawf/daemon/methods/state.py" = ["C901"]
 "src/eawf/doctor/checks.py" = ["C901"]
-"src/eawf/lifecycle/wave.py" = ["C901"]
+"src/eawf/workflow/lifecycle/wave.py" = ["C901"]
 "src/eawf/memory/promotion.py" = ["C901"]
 "src/eawf/memory/prune.py" = ["C901"]
 "src/eawf/memory/store.py" = ["C901"]
@@ -192,7 +192,7 @@ max-complexity = 10
 "src/eawf/runtimes/opencode/plugin_doctor.py" = ["C901"]
 "src/eawf/runtimes/opencode/plugin_install.py" = ["C901"]
 "src/eawf/runtimes/plugin_doctor.py" = ["C901"]
-"src/eawf/skills/_common.py" = ["C901"]
+"src/eawf/workflow/skills/_common.py" = ["C901"]
 "src/eawf/telemetry/sources/claude_session.py" = ["C901"]
 "src/eawf/kernel/validate/invariants.py" = ["C901"]
 "src/eawf/worktree/create.py" = ["C901"]
@@ -248,7 +248,7 @@ max-complexity = 15
 # and sandbox caveats) and how the score is read.
 paths_to_mutate = [
     "src/eawf/kernel/state/",
-    "src/eawf/lifecycle/",
+    "src/eawf/workflow/lifecycle/",
     "src/eawf/daemon/",
     "src/eawf/kernel/validate/",
 ]
@@ -319,7 +319,7 @@ line = 93
 branch = 86
 
 [tool.eawf.coverage.gates.skills]
-path = "skills/"
+path = "workflow/skills/"
 line = 93
 branch = 81
 

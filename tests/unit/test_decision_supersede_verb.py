@@ -1,6 +1,6 @@
 """Unit tests for the ``decision supersede`` verb + the supersede-link invariant.
 
-Covers the standalone :func:`eawf.evidence.decision.supersede_decision`
+Covers the standalone :func:`eawf.workflow.evidence.decision.supersede_decision`
 mutator (both ends of the link flip) and
 :func:`eawf.kernel.validate.invariants.check_decision_supersede_link` (both
 directions of the status/link agreement rule).
@@ -15,10 +15,10 @@ from typing import Any
 import pytest
 
 from eawf.cli import errors as cli_errors
-from eawf.evidence import _io, decision
 from eawf.kernel.state.enums import DecisionStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.validate.invariants import Violation, check_decision_supersede_link
+from eawf.workflow.evidence import _io, decision
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

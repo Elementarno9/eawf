@@ -49,8 +49,8 @@ def artifact_add(
 ) -> None:
     """Register a durable artifact."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import artifact as artifact_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import artifact as artifact_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -117,8 +117,8 @@ def artifact_update(
     ``created_at``) stay fixed.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import artifact as artifact_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import artifact as artifact_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -155,8 +155,8 @@ def artifact_show(
     artifact_id: Annotated[str, typer.Argument(help="Artifact id")],
 ) -> None:
     """Show artifact metadata."""
-    from eawf.evidence import artifact as artifact_evi
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence import artifact as artifact_evi
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -275,7 +275,7 @@ def artifact_verify(
     - ``2`` (``NOT_FOUND``) — single-id mode with unknown artifact id.
     - ``8`` (``INTEGRITY_VIOLATION``) — at least one artifact mismatched.
     """
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     if (artifact_id is None) == (not verify_all):

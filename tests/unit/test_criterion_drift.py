@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.lifecycle.criterion_drift` (P23-I02-W01).
+"""Unit tests for :mod:`eawf.workflow.lifecycle.criterion_drift` (P23-I02-W01).
 
 Coverage:
 
@@ -23,7 +23,7 @@ import pytest
 
 from eawf.kernel.state.enums import EffortBucket, WaveStatus
 from eawf.kernel.state.models import Wave
-from eawf.lifecycle.criterion_drift import (
+from eawf.workflow.lifecycle.criterion_drift import (
     check_wave_criteria_drift,
     extract_path_globs,
     unresolved_globs,

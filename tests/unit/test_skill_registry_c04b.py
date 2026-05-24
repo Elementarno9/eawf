@@ -23,15 +23,17 @@ from typing import cast
 import pytest
 
 from eawf.runtimes.plugin_manifest import SkillManifest
-from eawf.skills import _bootstrap as _skills_bootstrap  # noqa: F401 — registers all skills
-from eawf.skills import registry
-from eawf.skills.agent_dispatch import AgentDispatchSkill
-from eawf.skills.coauthor import CoauthorSkill
-from eawf.skills.compress import CompressSkill
-from eawf.skills.engine import Skill, SkillContext, run_skill
-from eawf.skills.memory import MemorySkill
-from eawf.skills.security_review import SecurityReviewSkill
-from eawf.skills.wave_spec import WaveSpecSkill
+from eawf.workflow.skills import (
+    _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
+)
+from eawf.workflow.skills import registry
+from eawf.workflow.skills.agent_dispatch import AgentDispatchSkill
+from eawf.workflow.skills.coauthor import CoauthorSkill
+from eawf.workflow.skills.compress import CompressSkill
+from eawf.workflow.skills.engine import Skill, SkillContext, run_skill
+from eawf.workflow.skills.memory import MemorySkill
+from eawf.workflow.skills.security_review import SecurityReviewSkill
+from eawf.workflow.skills.wave_spec import WaveSpecSkill
 
 # The six C04b skills landed by P26-W11, keyed by canonical name.
 _C04B_SKILLS: dict[str, type[Skill]] = {

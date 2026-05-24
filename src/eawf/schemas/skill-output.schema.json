@@ -149,7 +149,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Three-part envelope for skill/agent output.\n\nAttributes:\n    header: Typed :class:`EnvelopeHeader`.\n    body: Markdown string or typed body dict per :mod:`eawf.skills.bodies`.\n    footer: Typed :class:`EnvelopeFooter`.",
+  "description": "Three-part envelope for skill/agent output.\n\nAttributes:\n    header: Typed :class:`EnvelopeHeader`.\n    body: Markdown string or typed body dict per :mod:`eawf.workflow.skills.bodies`.\n    footer: Typed :class:`EnvelopeFooter`.",
   "properties": {
     "body": {
       "anyOf": [

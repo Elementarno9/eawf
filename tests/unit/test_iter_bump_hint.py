@@ -19,7 +19,7 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
-from eawf.lifecycle.transitions import (
+from eawf.workflow.lifecycle.transitions import (
     close_iter,
     open_iter,
     open_phase,

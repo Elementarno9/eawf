@@ -1,4 +1,4 @@
-"""Coverage-lift tests for :mod:`eawf.skills._common` (P27-I01-W01).
+"""Coverage-lift tests for :mod:`eawf.workflow.skills._common` (P27-I01-W01).
 
 Covers the helper surface: ``_project_status`` mapping, the probe
 fallback/raised paths in ``probe_skill_instruments``, ``emit_event``
@@ -17,7 +17,7 @@ import pytest
 from eawf.install.instrument_probe import ProbeReport, ProbeResult
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.paths import store_path
-from eawf.skills import _common
+from eawf.workflow.skills import _common
 
 # --- _project_status -----------------------------------------------------
 
@@ -74,7 +74,7 @@ def test_probe_skill_instruments_probe_raises_returns_blocked(
     def _boom(*_a: Any, **_k: Any) -> ProbeReport:
         raise RuntimeError("probe exploded")
 
-    monkeypatch.setattr("eawf.skills._common.run_probe", _boom)
+    monkeypatch.setattr("eawf.workflow.skills._common.run_probe", _boom)
     outcome = _common.probe_skill_instruments(profile_ids=["core"], state_path=state)
     assert outcome.ok is False
     assert outcome.repair_commands == ["eawf doctor --reprobe"]
@@ -95,7 +95,7 @@ def test_probe_skill_instruments_warn_result_keeps_ok(
         profile_ids=["core"],
         results=[ProbeResult(name="ripgrep", kind="soft", status="warn", detail="missing rg")],
     )
-    monkeypatch.setattr("eawf.skills._common.run_probe", lambda *_a, **_k: report)
+    monkeypatch.setattr("eawf.workflow.skills._common.run_probe", lambda *_a, **_k: report)
     outcome = _common.probe_skill_instruments(profile_ids=["core"], state_path=state)
     assert outcome.ok is True
     assert outcome.instrument_probe == {"ripgrep": "degraded"}
@@ -115,7 +115,7 @@ def test_probe_skill_instruments_hard_fail_blocks(
         profile_ids=["core"],
         results=[ProbeResult(name="git", kind="hard", status="fail", detail="git absent")],
     )
-    monkeypatch.setattr("eawf.skills._common.run_probe", lambda *_a, **_k: report)
+    monkeypatch.setattr("eawf.workflow.skills._common.run_probe", lambda *_a, **_k: report)
     outcome = _common.probe_skill_instruments(profile_ids=["core"], state_path=state)
     assert outcome.ok is False
     assert outcome.instrument_probe == {"git": "missing"}
@@ -131,7 +131,7 @@ def test_probe_skill_instruments_resolves_state_path_when_none(
     state = tmp_path / ".ea" / "state.json"
     state.parent.mkdir(parents=True)
     monkeypatch.setattr(
-        "eawf.skills._common.resolve_with_reason",
+        "eawf.workflow.skills._common.resolve_with_reason",
         lambda workspace: (state, "pwd_upward"),
     )
     report = ProbeReport(
@@ -139,7 +139,7 @@ def test_probe_skill_instruments_resolves_state_path_when_none(
         profile_ids=["core"],
         results=[ProbeResult(name="git", kind="hard", status="ok")],
     )
-    monkeypatch.setattr("eawf.skills._common.run_probe", lambda *_a, **_k: report)
+    monkeypatch.setattr("eawf.workflow.skills._common.run_probe", lambda *_a, **_k: report)
     outcome = _common.probe_skill_instruments()
     assert outcome.ok is True
     assert outcome.instrument_probe == {"git": "ok"}
@@ -175,7 +175,7 @@ def test_emit_event_append_failure_reraises(
     def _boom(*_a: Any, **_k: Any) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("eawf.skills._common.append_envelope", _boom)
+    monkeypatch.setattr("eawf.workflow.skills._common.append_envelope", _boom)
     with pytest.raises(OSError, match="disk full"):
         _common.emit_event(
             state_path=state,
@@ -193,7 +193,7 @@ def test_resolve_active_state_path_returns_path(
 ) -> None:
     state = tmp_path / ".ea" / "state.json"
     monkeypatch.setattr(
-        "eawf.skills._common.resolve_with_reason",
+        "eawf.workflow.skills._common.resolve_with_reason",
         lambda workspace: (state, "workspace_flag"),
     )
     assert _common.resolve_active_state_path(workspace=tmp_path) == state

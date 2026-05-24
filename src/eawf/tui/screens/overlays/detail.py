@@ -44,11 +44,11 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
-from eawf.dispatch.renderer import render_wave_prompt
 from eawf.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
 )
+from eawf.workflow.dispatch.renderer import render_wave_prompt
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave

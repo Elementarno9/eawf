@@ -1,9 +1,9 @@
-"""Unit tests for :mod:`eawf.pr_review.policy` (B041)."""
+"""Unit tests for :mod:`eawf.workflow.pr_review.policy` (B041)."""
 
 from __future__ import annotations
 
-from eawf.pr_review.parser import Finding
-from eawf.pr_review.policy import summary_line, verdict_for
+from eawf.workflow.pr_review.parser import Finding
+from eawf.workflow.pr_review.policy import summary_line, verdict_for
 
 
 def _f(severity: str) -> Finding:

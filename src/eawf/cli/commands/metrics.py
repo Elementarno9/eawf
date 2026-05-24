@@ -151,9 +151,9 @@ def _workflow_metrics(flags: GlobalFlags) -> None:
     - :class:`~eawf.cli.errors.ValidationError` (``exit=2``) when the
       on-disk payload fails strict schema validation.
     """
-    from eawf.estimation.metrics import compute_metrics
-    from eawf.evidence._io import load_state
     from eawf.render.metrics_view import render_metrics_plain, render_metrics_table
+    from eawf.workflow.estimation.metrics import compute_metrics
+    from eawf.workflow.evidence._io import load_state
 
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -182,8 +182,8 @@ def _estimate_actual_variance(flags: GlobalFlags) -> None:
     UserError (``kind="NotFound"``, ``exit=1``) when no ``state.json``
     resolves, ValidationError (``exit=2``) on a schema mismatch.
     """
-    from eawf.estimation.metrics import compute_estimate_actual_variance
-    from eawf.evidence._io import load_state
+    from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
+    from eawf.workflow.evidence._io import load_state
 
     state_path = _resolve_state_or_emit(flags)
     if state_path is None:
@@ -221,8 +221,8 @@ def _backfill_actuals(flags: GlobalFlags, *, dry_run: bool) -> None:
     ValidationError (``exit=2``) on a schema mismatch.
     """
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence._io import load_state
     from eawf.kernel.migrations.backfill_actuals import backfill_actuals
+    from eawf.workflow.evidence._io import load_state
 
     state_path = _resolve_state_or_emit(flags)
     if state_path is None:

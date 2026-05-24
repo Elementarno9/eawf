@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.differentiate.DifferentiateSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.differentiate.DifferentiateSkill`.
 
 Pin the Phase 4 W03 acceptance contract for ``/differentiate``:
 
@@ -18,9 +18,9 @@ from typing import cast
 
 import pytest
 
-from eawf.skills.bodies.differentiate import DifferentiateBody
-from eawf.skills.differentiate import DifferentiateSkill
-from eawf.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.bodies.differentiate import DifferentiateBody
+from eawf.workflow.skills.differentiate import DifferentiateSkill
+from eawf.workflow.skills.engine import SkillContext, run_skill
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def _ctx(args: dict[str, object] | None = None) -> SkillContext:
 
 
 def test_differentiate_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/differentiate")
     assert cls is DifferentiateSkill

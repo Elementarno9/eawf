@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.evidence.hypothesis`.
+"""Unit tests for :mod:`eawf.workflow.evidence.hypothesis`.
 
 Covers define / set_verdict happy + boundary + audit-evidence guard paths plus
 the read-only ``list_hypotheses`` filter behaviour.
@@ -15,7 +15,6 @@ import pytest
 
 from eawf.cli import errors as cli_errors
 from eawf.cli._mutation import state_transaction
-from eawf.evidence import _io, audit, hypothesis
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
@@ -24,6 +23,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.models import Artifact, State
+from eawf.workflow.evidence import _io, audit, hypothesis
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

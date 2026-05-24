@@ -1,11 +1,11 @@
 """Retroactive ``ActualSummary`` backfill for historical CLOSED waves.
 
-W25 wired :func:`eawf.lifecycle.wave.close_wave` to auto-record an
+W25 wired :func:`eawf.workflow.lifecycle.wave.close_wave` to auto-record an
 :class:`~eawf.kernel.state.models.ActualSummary` from the open->close wall-clock
 span going forward. The waves that closed *before* that wiring landed carry
 ``opened_at``/``closed_at`` but no actual, so
-:func:`~eawf.estimation.metrics.compute_estimate_actual_variance` and
-:func:`~eawf.estimation.buckets.calibrate_buckets` have no historical
+:func:`~eawf.workflow.estimation.metrics.compute_estimate_actual_variance` and
+:func:`~eawf.workflow.estimation.buckets.calibrate_buckets` have no historical
 samples to fit against — they report "no data" despite hundreds of closed
 waves on disk.
 
@@ -16,7 +16,7 @@ canonical writer path (AGENTS rule 4 / D-SUP-01) rather than letting this
 module touch ``state.json`` directly.
 
 The derivation reuses the W25 helper
-:func:`~eawf.estimation.buckets.actual_summary_from_timestamps`, anchoring
+:func:`~eawf.workflow.estimation.buckets.actual_summary_from_timestamps`, anchoring
 each actual's ``updated_at`` to the wave's own ``closed_at`` so a wave that
 finished months ago lands outside the 90-day calibration / 7-day burn
 windows exactly as it would have under the live close path. The transform
@@ -28,9 +28,9 @@ from __future__ import annotations
 
 import logging
 
-from eawf.estimation.buckets import actual_summary_from_timestamps
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
+from eawf.workflow.estimation.buckets import actual_summary_from_timestamps
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def backfill_actuals(state: State) -> tuple[State, int]:
     Iterates every CLOSED wave and derives an
     :class:`~eawf.kernel.state.models.ActualSummary` from its
     ``opened_at``/``closed_at`` span via
-    :func:`~eawf.estimation.buckets.actual_summary_from_timestamps`,
+    :func:`~eawf.workflow.estimation.buckets.actual_summary_from_timestamps`,
     anchoring the actual's ``updated_at`` to the wave's ``closed_at`` so the
     historical close lands in the same calibration / burn windows the live
     close path would have placed it. A wave contributes a new actual when:

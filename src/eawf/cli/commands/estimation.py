@@ -259,14 +259,14 @@ def _do_estimate(
     update: bool,
 ) -> None:
     """Shared implementation for ``estimate`` and ``estimate update``."""
-    from eawf.estimation.eu import expected_eu as calc_expected_eu
-    from eawf.estimation.eu import pessimistic_eu as calc_pessimistic_eu
-    from eawf.estimation.eu import quantize, render_display
     from eawf.kernel.state.models import EstimateSummary
     from eawf.kernel.store.append import append_envelope as _append_jsonl
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.kinds.estimate import EstimatePayload
     from eawf.kernel.store.paths import store_path
+    from eawf.workflow.estimation.eu import expected_eu as calc_expected_eu
+    from eawf.workflow.estimation.eu import pessimistic_eu as calc_pessimistic_eu
+    from eawf.workflow.estimation.eu import quantize, render_display
 
     try:
         confidence = _coerce_confidence(confidence_raw)
@@ -406,12 +406,12 @@ def actual_start(
     open for the same ``(scope, session)`` pair — this matches the
     *audit-evidence-style* invariant guarding actuals integrity.
     """
-    from eawf.estimation.segments import is_open_for, open_segment
     from eawf.kernel.state.models import ActualSummary
     from eawf.kernel.store.append import append_envelope as _append_jsonl
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.kinds.actual import ActualPayload
     from eawf.kernel.store.paths import store_path
+    from eawf.workflow.estimation.segments import is_open_for, open_segment
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -535,11 +535,11 @@ def actual_stop(
     ] = "closed",
 ) -> None:
     """Close the latest open segment for *scope* and write the elapsed EU."""
-    from eawf.estimation.segments import close_segment, latest_open_segment
     from eawf.kernel.state.models import ActualSummary
     from eawf.kernel.store.append import append_envelope as _append_jsonl
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.paths import store_path
+    from eawf.workflow.estimation.segments import close_segment, latest_open_segment
 
     flags: GlobalFlags = ctx.obj
 
@@ -674,12 +674,12 @@ def actual_recover(
     The cap on ``elapsed_eu`` is :data:`STALE_HEARTBEAT_SECONDS` so a crashed
     overnight session does not record an inflated wall-clock interval.
     """
-    from eawf.estimation.recovery import cap_elapsed
-    from eawf.estimation.segments import latest_open_segment
     from eawf.kernel.state.models import ActualSummary
     from eawf.kernel.store.append import append_envelope as _append_jsonl
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.paths import store_path
+    from eawf.workflow.estimation.recovery import cap_elapsed
+    from eawf.workflow.estimation.segments import latest_open_segment
 
     flags: GlobalFlags = ctx.obj
     recovered: list[dict[str, Any]] = []

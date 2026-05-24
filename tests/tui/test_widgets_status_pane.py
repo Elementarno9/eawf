@@ -20,7 +20,6 @@ import orjson
 import pytest
 from textual.app import ComposeResult
 
-from eawf.estimation.buckets import BUCKET_EU
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
 from eawf.tui.widgets.eu_bar import EMPTY_STATE
@@ -52,6 +51,7 @@ from eawf.tui.widgets.status_pane import (
     build_velocity_eu_per_day,
     summary_counts,
 )
+from eawf.workflow.estimation.buckets import BUCKET_EU
 
 from ._palette_harness import PaletteHarnessApp
 

@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from eawf.cli import errors as cli_errors
-from eawf.evidence import _io, decision
 from eawf.kernel.state.enums import DecisionStatus
+from eawf.workflow.evidence import _io, decision
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

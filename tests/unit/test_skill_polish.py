@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.polish.PolishSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.polish.PolishSkill`.
 
 Pin the Phase 4 W02 acceptance contract for ``/polish``:
 
@@ -18,9 +18,9 @@ from typing import cast
 import pytest
 
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.bodies.polish import PolishBody
-from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill
-from eawf.skills.polish import PolishSkill
+from eawf.workflow.skills.bodies.polish import PolishBody
+from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
+from eawf.workflow.skills.polish import PolishSkill
 
 
 @pytest.fixture
@@ -110,7 +110,7 @@ def test_polish_string_truthy_y_flag(state_dir: Path) -> None:
 def test_polish_probe_blocked_short_circuits(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from eawf.skills import polish as polish_module
+    from eawf.workflow.skills import polish as polish_module
 
     def _blocked(self: object, ctx: SkillContext) -> ProbeOutcome:
         return ProbeOutcome(
@@ -127,7 +127,7 @@ def test_polish_probe_blocked_short_circuits(
 
 
 def test_polish_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/polish")
     assert cls is PolishSkill

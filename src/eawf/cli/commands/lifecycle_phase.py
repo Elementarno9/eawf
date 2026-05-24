@@ -72,8 +72,8 @@ def phase_open_cmd(
     ] = None,
 ) -> None:
     """Open a new phase. Provide an explicit ID or use ``--auto``."""
-    from eawf.lifecycle.allocator import allocate_phase_id
-    from eawf.lifecycle.transitions import open_phase
+    from eawf.workflow.lifecycle.allocator import allocate_phase_id
+    from eawf.workflow.lifecycle.transitions import open_phase
 
     flags: GlobalFlags = ctx.obj
     if title is None:
@@ -126,7 +126,7 @@ def phase_close_cmd(
     ] = None,
 ) -> None:
     """Close an active phase. Rejects when child iters are still open."""
-    from eawf.lifecycle.transitions import LifecycleError, close_phase
+    from eawf.workflow.lifecycle.transitions import LifecycleError, close_phase
 
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
@@ -491,7 +491,7 @@ def phase_activate_cmd(
             return
     else:
         logger.info(f"phase_activate_cmd skip_git_gates=no_default_branch state_path={state_path}")
-    from eawf.lifecycle.transitions import activate_phase
+    from eawf.workflow.lifecycle.transitions import activate_phase
 
     _run_mutation(
         ctx,
@@ -512,7 +512,7 @@ def phase_reopen_cmd(
     phase_id: Annotated[str, typer.Argument(help="Phase ID to reopen.")],
 ) -> None:
     """Reopen a closed phase. Used for follow-up iters after a phase close."""
-    from eawf.lifecycle.transitions import reopen_phase
+    from eawf.workflow.lifecycle.transitions import reopen_phase
 
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):
@@ -568,11 +568,11 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     The handler renders ``ok=True`` only when every blocking item resolves to
     empty.
     """
-    from eawf.lifecycle.transitions import (
+    from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
         has_scope_collapse_decision,
     )
-    from eawf.lifecycle.wave_sha import derive_wave_sha
+    from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
     phase = state.phases.get(phase_id)
     if phase is None:
@@ -655,7 +655,7 @@ def phase_prepare_close_cmd(
 
     from eawf.kernel.state.models import State
     from eawf.kernel.store.paths import store_path
-    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.workflow.lifecycle.transitions import LifecycleError
 
     flags: GlobalFlags = ctx.obj
     if not is_phase_id(phase_id):

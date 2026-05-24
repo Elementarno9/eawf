@@ -30,7 +30,7 @@ Each handler follows the canonical mutation pattern:
    for the entire transaction so concurrent claimers see exactly-once
    semantics.
 3. Load + parse + Pydantic-validate the current state.
-4. Apply the transition / allocator from :mod:`eawf.lifecycle`.
+4. Apply the transition / allocator from :mod:`eawf.workflow.lifecycle`.
 5. Run :func:`validate_state` over the candidate state — schema and
    cross-entity invariants must pass before we persist.
 6. Append a single ``EVENT``-kind record to
@@ -532,7 +532,7 @@ def _run_mutation(
     from pydantic import ValidationError as PydValidationError
 
     from eawf.kernel.state.models import State
-    from eawf.lifecycle.transitions import LifecycleError
+    from eawf.workflow.lifecycle.transitions import LifecycleError
 
     if (scope_id is None) == (scope_id_factory is None):
         raise ValueError("exactly one of scope_id or scope_id_factory must be provided")

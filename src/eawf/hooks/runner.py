@@ -11,7 +11,7 @@ Design rules per Phase 4 W04 design spec §3.3 / acceptance §3:
 - The runner MUST NOT propagate exceptions raised by hook callables.
   Exceptions are captured into a :class:`HookResult` with
   ``block=False`` and the ``repr(exc)`` text in ``output``. This mirrors
-  :func:`eawf.skills.engine.run_skill`'s never-crash contract.
+  :func:`eawf.workflow.skills.engine.run_skill`'s never-crash contract.
 - The runner MUST dispatch hooks in registration order (stable list,
   not a set) so the order surfaced by ``eawf hook run`` matches the
   declared order in the user's config.

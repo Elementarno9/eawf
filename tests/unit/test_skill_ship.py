@@ -1,4 +1,4 @@
-"""Unit tests for :class:`eawf.skills.ship.ShipSkill`.
+"""Unit tests for :class:`eawf.workflow.skills.ship.ShipSkill`.
 
 Pin the Phase 4 W02 acceptance contract for ``/ship``:
 
@@ -30,12 +30,12 @@ import pytest
 
 from eawf.kernel.config import layered
 from eawf.render.envelope import EnvelopeWarning
-from eawf.skills.bodies.ship import ShipBody
-from eawf.skills.engine import ProbeOutcome, SkillContext, run_skill
-from eawf.skills.ship import ShipSkill
+from eawf.workflow.skills.bodies.ship import ShipBody
+from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
+from eawf.workflow.skills.ship import ShipSkill
 
 if TYPE_CHECKING:
-    from eawf.skills.ship import _GateResult
+    from eawf.workflow.skills.ship import _GateResult
 
 
 @pytest.fixture
@@ -241,7 +241,7 @@ def test_ship_emits_one_event_per_step(state_dir: Path) -> None:
 def test_ship_probe_blocked_short_circuits(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     def _blocked(self: object, ctx: SkillContext) -> ProbeOutcome:
         return ProbeOutcome(
@@ -258,7 +258,7 @@ def test_ship_probe_blocked_short_circuits(
 
 
 def test_ship_skill_registered_with_canonical_name() -> None:
-    from eawf.skills import registry
+    from eawf.workflow.skills import registry
 
     cls = registry.lookup("/ship")
     assert cls is ShipSkill
@@ -395,7 +395,7 @@ def _stub_gate_runner(
     accumulates the gate names in execution order so tests can assert which
     gates ran and in what order.
     """
-    from eawf.skills.ship import _GateResult
+    from eawf.workflow.skills.ship import _GateResult
 
     failing = fail or set()
     calls: list[str] = []
@@ -418,7 +418,7 @@ def test_run_gauntlet_runs_no_gate_by_default(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Default ``required_before_ship`` (``["state"]``) runs no external gate."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     calls, runner = _stub_gate_runner()
     monkeypatch.setattr(ship_module, "_run_gate_command", runner)
@@ -432,7 +432,7 @@ def test_action_gauntlet_all_green_proceeds(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """All gates green → ship proceeds past the gauntlet (status=ok)."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -450,7 +450,7 @@ def test_action_gauntlet_aborts_on_red_pytest(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An injected red ``tests`` gate aborts ship and is reported."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -469,7 +469,7 @@ def test_action_gauntlet_each_gate_independently_reported(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Each gate failing independently is independently surfaced."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     for gate, command in (
         ("pre-commit", "uv run pre-commit run --all-files"),
@@ -494,7 +494,7 @@ def test_action_gauntlet_red_gate_emits_gate_failure_payload(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A red gate emits a ``ship.gauntlet_gate`` event with the gate shape."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -522,7 +522,7 @@ def test_action_gauntlet_uses_configured_command_override(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A configured ``acceptance.commands.tests`` override is the run command."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -534,7 +534,7 @@ def test_action_gauntlet_uses_configured_command_override(
     seen: list[str] = []
 
     def _runner(name: str, command: str, cwd: Path) -> object:
-        from eawf.skills.ship import _GateResult
+        from eawf.workflow.skills.ship import _GateResult
 
         seen.append(command)
         return _GateResult(name=name, command=command, passed=True, returncode=0, output="")
@@ -556,7 +556,7 @@ def test_run_gauntlet_runs_configured_build_gate(
     ``build`` is not a key in ``_DEFAULT_GATE_COMMANDS`` but is a real config
     leaf; once required + resolvable it must be executed, not silently dropped.
     """
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -576,7 +576,7 @@ def test_run_gauntlet_build_gate_uses_configured_command(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The resolved ``build`` command is the one passed to the runner."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -588,7 +588,7 @@ def test_run_gauntlet_build_gate_uses_configured_command(
     seen: list[str] = []
 
     def _runner(name: str, command: str, cwd: Path) -> object:
-        from eawf.skills.ship import _GateResult
+        from eawf.workflow.skills.ship import _GateResult
 
         seen.append(command)
         return _GateResult(name=name, command=command, passed=True, returncode=0, output="")
@@ -603,7 +603,7 @@ def test_action_gauntlet_aborts_on_red_build_gate(
     state_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A failing ``build`` gate aborts the ship and surfaces its command."""
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -630,7 +630,7 @@ def test_run_gauntlet_unconfigured_build_gate_is_dropped(
     ``acceptance.commands.build`` override it resolves to ``None`` and is
     skipped (mirrors how ``state`` is skipped) rather than crashing the ship.
     """
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -651,7 +651,7 @@ def test_run_gauntlet_defaults_lead_then_build(
     Even when ``build`` is listed first, the canonical default gates lead and
     the extra configured gate follows, so the run order is deterministic.
     """
-    from eawf.skills import ship as ship_module
+    from eawf.workflow.skills import ship as ship_module
 
     _write_acceptance_config(
         state_dir,
@@ -669,7 +669,7 @@ def test_run_gauntlet_defaults_lead_then_build(
 
 def test_run_gate_command_missing_binary_is_red(tmp_path: Path) -> None:
     """A non-existent binary collapses to a failed gate, not an exception."""
-    from eawf.skills.ship import _run_gate_command
+    from eawf.workflow.skills.ship import _run_gate_command
 
     result = _run_gate_command("tests", "this-binary-does-not-exist-eawf --x", tmp_path)
     assert result.passed is False
@@ -679,7 +679,7 @@ def test_run_gate_command_missing_binary_is_red(tmp_path: Path) -> None:
 
 def test_run_gate_command_nonzero_exit_is_red(tmp_path: Path) -> None:
     """A real subprocess exiting non-zero is reported as a red gate."""
-    from eawf.skills.ship import _run_gate_command
+    from eawf.workflow.skills.ship import _run_gate_command
 
     # ``python -c 'raise SystemExit(3)'`` is a portable non-zero exit.
     result = _run_gate_command("tests", 'uv run python -c "raise SystemExit(3)"', tmp_path)
@@ -689,7 +689,7 @@ def test_run_gate_command_nonzero_exit_is_red(tmp_path: Path) -> None:
 
 def test_run_gate_command_zero_exit_is_green(tmp_path: Path) -> None:
     """A real subprocess exiting zero is reported as a green gate."""
-    from eawf.skills.ship import _run_gate_command
+    from eawf.workflow.skills.ship import _run_gate_command
 
     result = _run_gate_command("tests", 'uv run python -c "pass"', tmp_path)
     assert result.passed is True

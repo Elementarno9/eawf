@@ -56,8 +56,8 @@ def goal_define(
 ) -> None:
     """Define a new goal under the current scope."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import goal as goal_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import goal as goal_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -107,8 +107,8 @@ def outcome_define(
 ) -> None:
     """Define a new pending outcome."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import outcome as outcome_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import outcome as outcome_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -158,8 +158,8 @@ def outcome_set(
 ) -> None:
     """Record an outcome measurement; requires --audit of a complete audit."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import outcome as outcome_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import outcome as outcome_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -209,8 +209,8 @@ def hypothesis_define(
 ) -> None:
     """Register a new pending hypothesis."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import hypothesis as hypothesis_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import hypothesis as hypothesis_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -262,8 +262,8 @@ def hypothesis_verdict(
 ) -> None:
     """Record a hypothesis verdict; requires --audit of a complete audit."""
     from eawf.cli._mutation import state_transaction
-    from eawf.evidence import hypothesis as hypothesis_evi
-    from eawf.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence import hypothesis as hypothesis_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -302,8 +302,8 @@ def hypothesis_list(
     ] = None,
 ) -> None:
     """List hypotheses (read-only)."""
-    from eawf.evidence import hypothesis as hypothesis_evi
-    from eawf.evidence._io import load_state
+    from eawf.workflow.evidence import hypothesis as hypothesis_evi
+    from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)

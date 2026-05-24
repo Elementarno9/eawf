@@ -14,7 +14,7 @@ Covers four invariants:
    suffix; estimate ids retain ``EST-<scope>-<ISO>``) and no two envelopes
    share an id even under tight-loop back-to-back mutations.
 4. **Property L — clock-skew emits a WARNING**: calling
-   :func:`eawf.estimation.recovery.cap_elapsed` with ``started_at > now``
+   :func:`eawf.workflow.estimation.recovery.cap_elapsed` with ``started_at > now``
    logs a single ``WARNING`` mentioning the skew so calibration data is not
    silently corrupted.
 """
@@ -33,10 +33,10 @@ from hypothesis import strategies as st
 from typer.testing import CliRunner
 
 from eawf.cli.app import app
-from eawf.estimation import eu, segments
-from eawf.estimation.recovery import cap_elapsed
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.store.envelope import Envelope
+from eawf.workflow.estimation import eu, segments
+from eawf.workflow.estimation.recovery import cap_elapsed
 
 # Conservative ranges: keep multipliers/durations sensible and bounded so the
 # tests run quickly and stay in the regime we actually exercise at runtime.
@@ -284,7 +284,7 @@ def test_cap_elapsed_logs_warning_when_started_at_in_future(
     now = datetime(2026, 5, 8, 12, 0, 0, tzinfo=UTC)
     started_in_future = now + timedelta(seconds=120)
 
-    with caplog.at_level("WARNING", logger="eawf.estimation.recovery"):
+    with caplog.at_level("WARNING", logger="eawf.workflow.estimation.recovery"):
         capped_ended_at, elapsed_eu = cap_elapsed(
             started_in_future, now=now, eu_minutes=Decimal("30")
         )

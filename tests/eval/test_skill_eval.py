@@ -24,13 +24,13 @@ from typing import cast
 import pytest
 
 from eawf.eval import score_envelope
-from eawf.skills.audit import AuditSkill
-from eawf.skills.engine import Skill, SkillContext, run_skill
-from eawf.skills.polish import PolishSkill
-from eawf.skills.prep import PrepSkill
-from eawf.skills.research import ResearchSkill
-from eawf.skills.review import ReviewSkill
-from eawf.skills.ship import ShipSkill
+from eawf.workflow.skills.audit import AuditSkill
+from eawf.workflow.skills.engine import Skill, SkillContext, run_skill
+from eawf.workflow.skills.polish import PolishSkill
+from eawf.workflow.skills.prep import PrepSkill
+from eawf.workflow.skills.research import ResearchSkill
+from eawf.workflow.skills.review import ReviewSkill
+from eawf.workflow.skills.ship import ShipSkill
 
 _GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 

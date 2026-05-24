@@ -30,8 +30,8 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.flow import FlowCheckpointPayload, FlowPayload
 from eawf.kernel.store.paths import store_path
-from eawf.skills import flow as flow_module
-from eawf.skills.flow import (
+from eawf.workflow.skills import flow as flow_module
+from eawf.workflow.skills.flow import (
     _CORE_FLOW_ORDER,
     _canonical_args_per_step_hash,
     _current_profile_ids,
