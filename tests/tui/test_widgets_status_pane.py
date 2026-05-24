@@ -20,6 +20,8 @@ import orjson
 import pytest
 from textual.app import ComposeResult
 
+from eawf.estimation.buckets import BUCKET_EU
+from eawf.state.enums import EffortBucket
 from eawf.state.models import State
 from eawf.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.tui.widgets.heartbeat import (
@@ -43,6 +45,7 @@ from eawf.tui.widgets.status_pane import (
     StatusPane,
     _active_phase_id,
     _dispatch_lines,
+    _effort_eu,
     build_dispatch_slice,
     build_status_columns,
     build_status_lines,
@@ -176,6 +179,91 @@ def _add_actual(
         "current_store_record_id": f"{actual_id}-REC",
         "updated_at": updated_at,
     }
+
+
+def _state_estimates_with_bucket(bucket: str = "XL") -> State:
+    """Return fixture-09 with an ``effort_bucket`` spliced onto its wave.
+
+    Fixture 09 carries a 1.2-EU actual on ``P01-I01-W01`` but no
+    ``effort_bucket``. The EFFORT denominator is now the live bucket
+    aggregate (not the legacy ``EstimateSummary``), so the wave needs a
+    bucket for the block to render a measurable estimate. Default ``XL``
+    (3.5 EU) keeps the consumed/estimate pair (1.2/3.5) well clear of the
+    empty state.
+    """
+    payload = orjson.loads(_ESTIMATES_ACTUALS.read_bytes())
+    payload["waves"]["P01-I01-W01"]["effort_bucket"] = bucket
+    return State.model_validate(payload)
+
+
+def _state_phase_two_iters_bucketed() -> State:
+    """Return fixture-03 with a second iter so the phase spans two iters.
+
+    The active P01 phase keeps its ``M``-bucketed in_progress wave under
+    ``P01-I01`` and gains a planned ``P01-I02`` iter holding an ``S``-
+    bucketed pending wave. A phase-scoped denominator sums both iters'
+    waves (1.0 + 0.5 == 1.5); an iter-scoped one would see only 1.0.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["waves"]["P01-I01-W01"]["effort_bucket"] = "M"
+    payload["phases"]["P01"]["iter_ids"] = ["P01-I01", "P01-I02"]
+    payload["iters"]["P01-I02"] = {
+        "id": "P01-I02",
+        "phase_id": "P01",
+        "title": "second iter",
+        "status": "planned",
+        "wave_ids": ["P01-I02-W01"],
+        "estimate_id": None,
+        "audit_id": None,
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    payload["waves"]["P01-I02-W01"] = {
+        "id": "P01-I02-W01",
+        "iter_id": "P01-I02",
+        "title": "second iter wave",
+        "status": "pending",
+        "effort_bucket": "S",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    return State.model_validate(payload)
+
+
+def _state_phase_closed_plus_pending_bucketed() -> State:
+    """Return fixture-03 with a closed ``M`` wave + a pending ``S`` wave.
+
+    Both waves live under the active P01-I01 iter. The live denominator
+    sums every active-phase wave regardless of status, so it counts the
+    pending wave too (1.0 + 0.5 == 1.5) — proving PENDING waves now grow
+    the EFFORT estimate, which the old claim-time-estimate denominator
+    could not.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    opened = payload["phases"]["P01"]["opened_at"]
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = opened
+    payload["waves"]["P01-I01-W01"]["effort_bucket"] = "M"
+    payload["iters"]["P01-I01"]["wave_ids"] = ["P01-I01-W01", "P01-I01-W02"]
+    payload["waves"]["P01-I01-W02"] = {
+        "id": "P01-I01-W02",
+        "iter_id": "P01-I01",
+        "title": "pending",
+        "status": "pending",
+        "effort_bucket": "S",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "success_criteria": [],
+        "opened_at": opened,
+        "closed_at": None,
+    }
+    return State.model_validate(payload)
 
 
 def _state_with_audit(
@@ -659,20 +747,20 @@ def test_build_status_columns_wide_none_state() -> None:
 
 
 def test_build_status_lines_effort_shows_consumed_estimate_eu() -> None:
-    """EFFORT surfaces the active iter's consumed/estimate EU + a fill bar."""
-    lines = build_status_lines(_load(_ESTIMATES_ACTUALS))
+    """EFFORT surfaces the active phase's consumed / bucket-estimate EU + a bar."""
+    lines = build_status_lines(_state_estimates_with_bucket())
     effort = next(line for line in lines if line.startswith("effort:"))
-    # Fixture 09: actual elapsed 1.2 EU vs estimate 4.5 EU on P01-I01-W01.
-    assert "1.2/4.5" in effort
-    assert "#" in effort  # filled cells (~27% consumed)
+    # Fixture 09: actual 1.2 EU vs the live bucket aggregate XL (3.5 EU).
+    assert "1.2/3.5" in effort
+    assert "#" in effort  # filled cells (~34% consumed)
 
 
 def test_build_status_lines_effort_shows_signed_variance_pct() -> None:
     """EFFORT surfaces the signed M26 variance % (under-run is negative)."""
-    lines = build_status_lines(_load(_ESTIMATES_ACTUALS))
+    lines = build_status_lines(_state_estimates_with_bucket())
     variance = next(line for line in lines if line.startswith("variance:"))
-    # (1.2 - 4.5) / 4.5 * 100 = -73.3 % (a hard under-run so far).
-    assert "-73.3%" in variance
+    # (1.2 - 3.5) / 3.5 * 100 = -65.7 % (a hard under-run so far).
+    assert "-65.7%" in variance
 
 
 def test_build_status_lines_effort_shows_velocity_sparkline() -> None:
@@ -686,9 +774,9 @@ def test_build_status_lines_effort_shows_velocity_sparkline() -> None:
 
 def test_build_status_lines_effort_shows_eta_date() -> None:
     """EFFORT surfaces an ISO ETA date projected from the current burn."""
-    lines = build_status_lines(_load(_ESTIMATES_ACTUALS))
+    lines = build_status_lines(_state_estimates_with_bucket())
     eta = next(line for line in lines if line.startswith("eta:"))
-    # remaining 3.3 EU at ~1.2 EU/day projects a real finish date.
+    # remaining 2.3 EU at ~1.2 EU/day projects a real finish date.
     body = eta.split("eta:")[1].strip()
     assert body != DASH
     datetime.strptime(body, "%Y-%m-%d")  # parses as an ISO date
@@ -710,12 +798,78 @@ def test_build_status_lines_effort_no_data_empty_state() -> None:
 
 def test_build_status_lines_effort_ascii_mode() -> None:
     """ASCII mode renders the EU bar with ``#``/``-`` and ASCII spark glyphs."""
-    lines = build_status_lines(_load(_ESTIMATES_ACTUALS), mode="ascii")
+    lines = build_status_lines(_state_estimates_with_bucket(), mode="ascii")
     effort = next(line for line in lines if line.startswith("effort:"))
     velocity = next(line for line in lines if line.startswith("velocity:"))
     assert "#" in effort
     assert "▁" not in velocity and "█" not in velocity  # no Braille block glyphs
     assert any(g in velocity for g in (".", "@", "#"))
+
+
+# --------------------------------------------------------------------------
+# _effort_eu — live bucket-sum denominator, phase scope (P27-I04-W26)
+# --------------------------------------------------------------------------
+
+
+def test_effort_eu_denominator_counts_pending_wave() -> None:
+    """The bucket-sum denominator includes a PENDING wave (not just claimed).
+
+    A phase with a closed ``M`` wave (1.0 EU) + a pending ``S`` wave (0.5
+    EU) sums to 1.5 EU — proving PENDING waves now grow the estimate, which
+    the legacy claim-time-estimate denominator could not.
+    """
+    _consumed, estimate = _effort_eu(_state_phase_closed_plus_pending_bucketed())
+    assert estimate == pytest.approx(1.5)
+
+
+def test_effort_eu_denominator_spans_multiple_iters() -> None:
+    """The denominator sums bucketed waves across every iter of the phase.
+
+    Phase scope (not iter scope): an ``M`` wave under P01-I01 (1.0 EU) plus
+    an ``S`` wave under a second iter P01-I02 (0.5 EU) sum to 1.5 EU. An
+    iter-scoped denominator would see only the active iter's 1.0 EU.
+    """
+    _consumed, estimate = _effort_eu(_state_phase_two_iters_bucketed())
+    assert estimate == pytest.approx(1.5)
+
+
+def test_effort_eu_no_bucket_waves_zero_denominator() -> None:
+    """Waves with ``effort_bucket=None`` contribute 0 → empty-state EFFORT.
+
+    Fixture 03's lone wave carries no bucket, so the live aggregate is 0.0
+    and the EFFORT block renders its empty-state sentinel rather than a
+    fabricated bar.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    _consumed, estimate = _effort_eu(state)
+    assert estimate == pytest.approx(0.0)
+    lines = build_status_lines(state)
+    effort = next(line for line in lines if line.startswith("effort:"))
+    assert EMPTY_STATE in effort
+
+
+def test_effort_eu_no_active_phase_returns_zero_pair() -> None:
+    """A state with no active phase yields ``(0.0, 0.0)`` (the empty pair)."""
+    state = _load(_EMPTY_REPO)
+    assert _active_phase_id(state) is None
+    assert _effort_eu(state) == pytest.approx((0.0, 0.0))
+
+
+def test_effort_eu_consumed_from_actuals() -> None:
+    """The numerator sums the active phase's wave-scoped actual elapsed EU."""
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["effort_bucket"] = "M"
+    _add_actual(
+        payload,
+        actual_id="ACT-A",
+        scope_id="P01-I01-W01",
+        elapsed_eu=0.7,
+        updated_at="2026-05-08T09:00:00Z",
+    )
+    consumed, estimate = _effort_eu(State.model_validate(payload))
+    assert consumed == pytest.approx(0.7)
+    # Denominator is the live bucket aggregate (M == 1.0 EU).
+    assert estimate == pytest.approx(BUCKET_EU[EffortBucket.M])
 
 
 # --------------------------------------------------------------------------
@@ -1202,12 +1356,12 @@ def test_status_pane_paints_effort_block_under_palette() -> None:
         app = _Harness()
         async with app.run_test(size=(60, 20)) as pilot:
             await pilot.pause()
-            app.query_one("#sp", StatusPane).state = _load(_ESTIMATES_ACTUALS)
+            app.query_one("#sp", StatusPane).state = _state_estimates_with_bucket()
             await pilot.pause()
             await app.workers.wait_for_complete()
             rendered = app.export_screenshot()
             assert "effort:" in rendered
-            assert "1.2/4.5" in rendered
+            assert "1.2/3.5" in rendered
             assert "variance:" in rendered
 
     asyncio.run(body())

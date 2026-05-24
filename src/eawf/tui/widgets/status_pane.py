@@ -44,6 +44,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from eawf.config.defaults import BUILT_IN_DEFAULTS
+from eawf.estimation.buckets import wave_estimate_eu
 from eawf.state.enums import (
     AuditStatus,
     IterStatus,
@@ -215,29 +216,59 @@ def summary_counts(state: State | None) -> dict[str, int]:
     }
 
 
-def _scoped_scope_ids(state: State) -> set[str]:
-    """Return the scope ids (active iter + its waves) effort attaches to.
+def _active_phase_waves(state: State) -> list[Wave]:
+    """Return the waves under the active phase's iters (any status).
 
-    EU estimates / actuals are keyed by ``scope_id`` — either the iter id
-    or one of its wave ids. The set lets :func:`_effort_eu` and
-    :func:`build_velocity_eu_per_day` pick only the rows belonging to the
-    active iter's subtree, never a sibling iter's leftovers.
+    Resolves the active phase (:func:`_active_phase_id`), the iter ids that
+    belong to it, and every wave whose ``iter_id`` lands in that set. The
+    list is the live denominator population for the EFFORT block: it counts
+    PENDING / PLANNED waves too, so adding a wave grows the bucket-aggregate
+    estimate even before the wave is claimed.
+
+    Args:
+        state: The bound state.
+
+    Returns:
+        The active phase's waves, or an empty list when no phase is active.
     """
-    iter_id = _active_iter_id(state)
-    if iter_id is None:
+    phase_id = _active_phase_id(state)
+    if phase_id is None:
+        return []
+    iter_ids = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    return [w for w in state.waves.values() if w.iter_id in iter_ids]
+
+
+def _scoped_scope_ids(state: State) -> set[str]:
+    """Return the scope ids (active phase's iters + their waves) effort attaches to.
+
+    EU actuals are keyed by ``scope_id`` — either an iter id or one of its
+    wave ids. The set lets :func:`_effort_eu` and
+    :func:`build_velocity_eu_per_day` pick only the rows belonging to the
+    active phase's subtree, never a sibling phase's leftovers. Scoping to
+    the phase (not a single iter) matches the LIFECYCLE block so the EFFORT,
+    velocity, and ETA signals span every iter of the live phase.
+    """
+    phase_id = _active_phase_id(state)
+    if phase_id is None:
         return set()
-    wave_ids = {wid for wid, w in state.waves.items() if w.iter_id == iter_id}
-    return {iter_id, *wave_ids}
+    iter_ids = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    wave_ids = {wid for wid, w in state.waves.items() if w.iter_id in iter_ids}
+    return iter_ids | wave_ids
 
 
 def _effort_eu(state: State | None) -> tuple[float, float]:
-    """Return the active iter's ``(consumed_eu, estimate_eu)`` pair.
+    """Return the active **phase**'s ``(consumed_eu, estimate_eu)`` pair.
 
-    Sums :attr:`~eawf.state.models.ActualSummary.elapsed_eu` over the
-    actuals whose ``scope_id`` is the active iter or one of its waves, and
-    likewise sums :attr:`~eawf.state.models.EstimateSummary.expected_eu`
-    over the matching estimates. Either total is ``0.0`` when no row is in
-    scope; the caller treats a non-positive estimate as the empty state.
+    The numerator sums :attr:`~eawf.state.models.ActualSummary.elapsed_eu`
+    over the actuals whose ``scope_id`` is one of the active phase's waves.
+    The denominator is a **live** bucket-aggregate:
+    ``Σ wave_estimate_eu(w)`` over every active-phase wave regardless of
+    status, so PENDING / PLANNED waves count and the estimate grows the
+    moment a wave is added — it does not wait for the claim-time estimate
+    bucket to be seeded. A wave with no ``effort_bucket`` contributes ``0``
+    (:func:`~eawf.estimation.buckets.wave_estimate_eu` returns ``0`` when
+    the bucket is unset), so an all-unbucketed phase yields a ``0.0``
+    estimate; the caller treats a non-positive estimate as the empty state.
 
     Args:
         state: The bound state, or ``None``.
@@ -247,13 +278,14 @@ def _effort_eu(state: State | None) -> tuple[float, float]:
     """
     if state is None:
         return 0.0, 0.0
-    scope_ids = _scoped_scope_ids(state)
-    if not scope_ids:
+    phase_waves = _active_phase_waves(state)
+    if not phase_waves:
         return 0.0, 0.0
-    consumed = sum(a.elapsed_eu for a in (state.actuals or {}).values() if a.scope_id in scope_ids)
-    estimate = sum(
-        e.expected_eu for e in (state.estimates or {}).values() if e.scope_id in scope_ids
+    phase_wave_ids = {w.id for w in phase_waves}
+    consumed = sum(
+        a.elapsed_eu for a in (state.actuals or {}).values() if a.scope_id in phase_wave_ids
     )
+    estimate = sum(wave_estimate_eu(w) for w in phase_waves)
     return consumed, estimate
 
 
@@ -280,7 +312,7 @@ def build_velocity_eu_per_day(
 ) -> list[float]:
     """Return the per-day EU burn over the trailing *days*-day window.
 
-    Buckets the active iter's actuals by their ``updated_at`` calendar day
+    Buckets the active phase's actuals by their ``updated_at`` calendar day
     and returns one EU sum per day, oldest-first, for exactly *days*
     entries ending today (UTC). A day with no actual contributes ``0.0``.
     The window anchor is the most recent ``updated_at`` among the in-scope
