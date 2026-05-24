@@ -302,6 +302,33 @@ def test_roadmap_revise_planned_phase_still_allows_pending_wave(workspace: Path)
     assert state["phases"]["P21"]["status"] == "planned"
 
 
+def test_roadmap_revise_retitle_iter_routes_to_iter(workspace: Path) -> None:
+    """--retitle P##-I## routes to the iter title, not a wave."""
+    _propose_with_wave(workspace)
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21-I01=TUI richer views"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I01"]["title"] == "TUI richer views"
+    # the wave title is untouched — the retitle hit the iter, not the wave
+    assert state["waves"]["P21-I01-W01"]["title"] == "feat: foo"
+
+
+def test_roadmap_revise_retitle_iter_status_agnostic_on_active(workspace: Path) -> None:
+    """--retitle on an iter works under an ACTIVE phase (cosmetic, no gate)."""
+    _propose_with_wave(workspace)
+    _set_phase_status(workspace, "P21", "active")
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21-I01=Normalised iter title"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I01"]["title"] == "Normalised iter title"
+
+
 def test_roadmap_revise_active_phase_allows_pending_wave(workspace: Path) -> None:
     """P19-W12: ACTIVE parent + PENDING wave is the new escape hatch."""
     _propose_with_wave(workspace)

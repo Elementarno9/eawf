@@ -782,6 +782,25 @@ def test_mutate_roadmap_revise_retitle_rewrites_title(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_mutate_roadmap_revise_retitle_iter_routes_to_iter(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=retitle with an iter_id rewrites the iter title."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={"op": "retitle", "iter_id": "P50-I01", "title": "TUI richer views"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert new_state["iters"]["P50-I01"]["title"] == "TUI richer views"
+
+    _run(body)
+
+
 def test_mutate_roadmap_revise_unknown_op_rejected(tmp_path: Path) -> None:
     """ROADMAP_REVISE with an unknown op raises validation_failed; state intact."""
     payload = _build_planned_phase_payload()

@@ -79,6 +79,7 @@ from eawf.lifecycle.transitions import (
     close_iter,
     close_phase,
     close_wave,
+    edit_iter_plan,
     edit_wave_plan,
     fail_wave,
     open_iter,
@@ -506,7 +507,9 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     ``set_deps`` / ``retitle``), delegating to the matching
     :mod:`eawf.lifecycle.wave` transition. The CLI side resolves bare
     ``W##`` ids to full ``P##-I##-W##`` ids before calling the daemon, so
-    the apply works with already-canonical ids.
+    the apply works with already-canonical ids. The ``retitle`` op routes
+    to :func:`eawf.lifecycle.iter_.edit_iter_plan` when ``params`` carries
+    an ``iter_id``; otherwise it retitles the wave named by ``wave_id``.
 
     Raises:
         LifecycleError: when ``op`` is missing or unknown, or the
@@ -537,7 +540,10 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     elif op == "set_deps":
         set_wave_deps(state, wave_id=str(params["wave_id"]), deps=list(params["deps"]))
     elif op == "retitle":
-        edit_wave_plan(state, wave_id=str(params["wave_id"]), title=str(params["title"]))
+        if params.get("iter_id") is not None:
+            edit_iter_plan(state, iter_id=str(params["iter_id"]), title=str(params["title"]))
+        else:
+            edit_wave_plan(state, wave_id=str(params["wave_id"]), title=str(params["title"]))
     else:
         raise LifecycleError(f"unknown roadmap revise op: {op!r}")
 

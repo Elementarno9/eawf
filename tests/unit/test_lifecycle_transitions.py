@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.lifecycle.transitions import (
     LifecycleError,
@@ -21,6 +22,7 @@ from eawf.lifecycle.transitions import (
     close_iter,
     close_phase,
     close_wave,
+    edit_iter_plan,
     edit_wave_plan,
     fail_wave,
     open_iter,
@@ -294,6 +296,41 @@ def test_close_iter_happy() -> None:
     it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
     assert it.status == IterStatus.CLOSED
     assert state.current.iter_id is None
+
+
+def test_edit_iter_plan_planned() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="orig")
+    it = edit_iter_plan(state, iter_id="P01-I01", title="renamed")
+    assert it.title == "renamed"
+    assert state.iters["P01-I01"].title == "renamed"
+    assert state.iters["P01-I01"].status == IterStatus.PLANNED
+
+
+def test_edit_iter_plan_closed_iter_status_agnostic() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="orig")
+    close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    it = edit_iter_plan(state, iter_id="P01-I01", title="normalised")
+    assert it.title == "normalised"
+    assert state.iters["P01-I01"].status == IterStatus.CLOSED
+
+
+def test_edit_iter_plan_unknown_raises() -> None:
+    state = _empty_state()
+    with pytest.raises(LifecycleError, match="unknown iter"):
+        edit_iter_plan(state, iter_id="P01-I01", title="x")
+
+
+def test_edit_iter_plan_over_cap_title_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="orig")
+    with pytest.raises(ValidationError):
+        edit_iter_plan(state, iter_id="P01-I01", title="z" * 73)
+    assert state.iters["P01-I01"].title == "orig"
 
 
 # ---- Wave -------------------------------------------------------------------

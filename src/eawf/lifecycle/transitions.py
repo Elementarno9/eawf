@@ -33,6 +33,7 @@ from eawf.lifecycle._errors import LifecycleError
 from eawf.lifecycle.iter_ import (
     activate_iter,
     close_iter,
+    edit_iter_plan,
     open_iter,
     plan_iter,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "close_iter",
     "close_phase",
     "close_wave",
+    "edit_iter_plan",
     "edit_wave_plan",
     "fail_wave",
     "has_scope_collapse_decision",

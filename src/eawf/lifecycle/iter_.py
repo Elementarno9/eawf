@@ -132,6 +132,28 @@ def plan_iter(
     return it
 
 
+def edit_iter_plan(state: State, *, iter_id: str, title: str) -> Iter:
+    """Rewrite an iter's ``title`` in place. Status-agnostic.
+
+    Retitle is purely cosmetic metadata: the iter id is preserved and no
+    lifecycle transition fires, so this helper deliberately does NOT gate
+    on iter status — PLANNED, ACTIVE, and CLOSED iters can all be
+    renormalised. The title is routed through the model's assignment
+    validator so the 1-72 character bound is re-checked; an over-cap
+    title raises :class:`pydantic.ValidationError`.
+
+    Raises:
+        LifecycleError: when *iter_id* is unknown.
+        pydantic.ValidationError: when *title* violates the 1-72 bound.
+    """
+    it = state.iters.get(iter_id)
+    if it is None:
+        raise LifecycleError(f"unknown iter: {iter_id!r}")
+    it.__pydantic_validator__.validate_assignment(it, "title", title)
+    logger.info(f"edit_iter_plan id={iter_id} title={title!r}")
+    return it
+
+
 def activate_iter(state: State, *, iter_id: str) -> Iter:
     """Flip a planned iter to active.
 

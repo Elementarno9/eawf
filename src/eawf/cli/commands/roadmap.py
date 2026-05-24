@@ -54,7 +54,7 @@ from eawf.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.state.ids import is_phase_id, is_wave_id
+from eawf.state.ids import is_iter_id, is_phase_id, is_wave_id
 
 if TYPE_CHECKING:
     from eawf.state.models import Iter, Phase, State
@@ -452,6 +452,7 @@ def roadmap_revise_cmd(
     from eawf.cli._mutation import state_transaction
     from eawf.lifecycle.transitions import (
         LifecycleError,
+        edit_iter_plan,
         edit_wave_plan,
         plan_wave,
         remove_wave_plan,
@@ -522,9 +523,14 @@ def roadmap_revise_cmd(
                     action_summary = f"set deps on {full_wave_id}: {new_deps}"
                 elif retitle:
                     target, _, new_title = retitle.partition("=")
-                    full_wave_id = _coerce_full_wave_id(state, phase_id, target.strip())
-                    edit_wave_plan(state, wave_id=full_wave_id, title=new_title.strip())
-                    action_summary = f"retitled {full_wave_id}: {new_title.strip()!r}"
+                    target = target.strip()
+                    if is_iter_id(target):
+                        edit_iter_plan(state, iter_id=target, title=new_title.strip())
+                        action_summary = f"retitled iter {target}: {new_title.strip()!r}"
+                    else:
+                        full_wave_id = _coerce_full_wave_id(state, phase_id, target)
+                        edit_wave_plan(state, wave_id=full_wave_id, title=new_title.strip())
+                        action_summary = f"retitled {full_wave_id}: {new_title.strip()!r}"
             except LifecycleError as exc:
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
