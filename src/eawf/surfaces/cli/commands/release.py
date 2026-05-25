@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 release_app = typer.Typer(
     name="release",
-    help="Render release notes and changelog mining reports.",
+    help="Tag releases and render release notes / changelog reports.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -36,6 +36,112 @@ def _load_state(state_path: Path) -> State:
             f"state schema invalid: {'; '.join(report.schema_errors[:3])}"
         )
     return report.state
+
+
+@release_app.command("tag")
+def release_tag(
+    ctx: typer.Context,
+    version: Annotated[
+        str | None,
+        typer.Argument(help="Version to tag (default: the current package version)."),
+    ] = None,
+    push: Annotated[
+        bool,
+        typer.Option("--push", help="Push the tag to the remote, triggering the release pipeline."),
+    ] = False,
+    remote: Annotated[
+        str,
+        typer.Option("--remote", help="Remote to push the tag to."),
+    ] = "origin",
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Allow a dirty tree and overwrite an existing tag."),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Print the tag/push plan without running git."),
+    ] = False,
+) -> None:
+    """Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline.
+
+    The release workflow (``.github/workflows/release.yaml``) fires on a
+    ``v0.*`` tag push: it builds the wheel + sdist, runs the wheel-size
+    gate and ``twine check``, then publishes to PyPI behind the tag-push
+    condition. ``eawf release tag --push`` is the operator entry point
+    that starts that chain. Without ``--push`` the tag is created locally
+    and the push command is echoed so the operator triggers it manually.
+    """
+    import subprocess
+
+    from eawf import __version__
+
+    flags: GlobalFlags = ctx.obj
+    resolved = version or __version__
+    tag = f"v{resolved}"
+    try:
+        if not force and not dry_run:
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if status.stdout.strip():
+                raise cli_errors.UserError(
+                    "working tree is dirty; commit or stash before tagging a release "
+                    "(or pass --force)",
+                    kind="InvalidInput",
+                )
+        listing = subprocess.run(
+            ["git", "tag", "--list", tag],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        tag_exists = bool(listing.stdout.strip())
+        plan = {
+            "tag": tag,
+            "version": resolved,
+            "push": push,
+            "remote": remote,
+            "tag_exists": tag_exists,
+            "dry_run": dry_run,
+        }
+        if dry_run:
+            suffix = f" and push to {remote} (triggers pipeline)" if push else ""
+            emit_json_or_text(plan, f"dry-run: would create tag {tag}{suffix}", flags=flags)
+            return
+        if tag_exists and not force:
+            raise cli_errors.UserError(
+                f"tag {tag!r} already exists; pass --force to overwrite", kind="InvalidInput"
+            )
+        tag_cmd = ["git", "tag", "-a", tag, "-m", f"Release {tag}"]
+        if force:
+            tag_cmd.insert(2, "-f")
+        subprocess.run(tag_cmd, check=True)
+        pushed = False
+        if push:
+            push_cmd = ["git", "push"]
+            if force:
+                push_cmd.append("--force")
+            push_cmd.extend([remote, tag])
+            subprocess.run(push_cmd, check=True)
+            pushed = True
+        plan["pushed"] = pushed
+        text = (
+            f"tagged {tag}; pushed to {remote} (pipeline triggered)"
+            if pushed
+            else f"tagged {tag}; run `git push {remote} {tag}` to trigger the pipeline"
+        )
+        emit_json_or_text(plan, text, flags=flags)
+    except subprocess.CalledProcessError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"git command failed: {exc}", kind="InvalidInput"), flags=flags
+        )
+        return
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
 
 
 @release_app.command("changelog")

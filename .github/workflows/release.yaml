@@ -1,10 +1,12 @@
 name: Release
 
-# Dormant release pipeline. The build + wheel-size gate run on tag push
-# and manual dispatch (dry-run only); the PyPI publish job exists but is
-# gated OFF (``if: false``) — the first public release ships in a later
-# phase. Flipping the gate on is a one-line change plus configuring the
-# ``pypi-publish`` trusted-publisher environment in the repo settings.
+# Release pipeline. The build + wheel-size gate + ``twine check`` run on
+# tag push and manual dispatch (dry-run); the PyPI publish job is live,
+# gated behind an explicit tag-push condition so ``workflow_dispatch``
+# dry-runs never publish. Publishing uses the ``pypi-publish``
+# trusted-publisher environment (OIDC, no API token) — the environment
+# and its PyPI trusted-publisher binding must exist in the repo settings
+# for the publish job to authenticate.
 
 on:
   push:
@@ -50,6 +52,14 @@ jobs:
         # the release build so a packaging regression reds the pipeline.
         run: uv run pytest -q tests/unit/test_packaging.py
 
+      - name: Validate dist (twine check)
+        # Gate the artifacts on ``twine check`` before they can be
+        # published: catches malformed METADATA / unrenderable long
+        # descriptions that PyPI would otherwise reject at upload. Runs
+        # in build-wheel, which is a ``needs:`` of publish-pypi, so it
+        # always runs before publish.
+        run: uvx twine check dist/*
+
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
@@ -57,13 +67,13 @@ jobs:
           path: dist/
 
   publish-pypi:
-    name: Publish to PyPI (DORMANT)
+    name: Publish to PyPI
     needs: build-wheel
-    # DORMANT: the first public release is a later phase. This job is
-    # gated OFF so the pipeline never publishes; flip ``if`` to a real
-    # condition (and configure the ``pypi-publish`` trusted-publisher
-    # environment) when the release phase opens.
-    if: false
+    # Live publish, gated behind an explicit condition: only a real
+    # ``v0.*`` tag push publishes. ``workflow_dispatch`` dry-runs build +
+    # validate but never reach this job. Requires the ``pypi-publish``
+    # trusted-publisher environment to be configured in the repo settings.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     environment: pypi-publish
     permissions:
