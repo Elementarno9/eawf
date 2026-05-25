@@ -4,7 +4,7 @@
 
 ## Summary
 - waves: 4 (2 pending, 1 claimed, 1 closed)
-- effort: sum_wave_eu=0, critical_path_eu=0, actual_elapsed_eu=2
+- effort: sum_wave_eu=0, critical_path_eu=0, actual_elapsed_eu=0
 - checks: 2/3 passed
 - risks: 0 open
 - blocked: P05-I01-W03

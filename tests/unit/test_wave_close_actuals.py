@@ -1,16 +1,14 @@
-"""Auto-recorded actuals on wave close + default estimate on claim (P27-I02-W25).
+"""Default estimate on claim + no auto-actual on close (P27-I05-W28).
 
-These tests close the estimation learning loop: claiming a wave seeds a
-default :class:`~eawf.kernel.state.models.EstimateSummary` from its effort bucket,
-and closing a wave records an :class:`~eawf.kernel.state.models.ActualSummary` from
-the open->close wall-clock span. Together they give
-:func:`~eawf.workflow.estimation.metrics.compute_estimate_actual_variance` a sample to
-report instead of "no data".
+Claiming a wave seeds a default :class:`~eawf.kernel.state.models.EstimateSummary`
+from its effort bucket (the estimate side of the learning loop, unchanged).
 
-The close path is exercised by the live orchestrator (``eawf wave
-close``/``land``), so the crash-safety contract — a close on a wave with
-missing timestamps derives nothing rather than raising — is asserted
-explicitly.
+Closing a wave records NO actual: the open->close wall-clock span is not
+agent effort (it counts overnight / cross-session / other-wave idle), so
+the W28 EU-actual fix retired the auto-record. Real actuals come from
+measured sources only (the manual ``eawf actual start/stop`` segments now,
+per-wave token accounting in v0.4), so ``compute_estimate_actual_variance``
+reads the honest empty state until a measured actual exists.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from eawf.kernel.state.enums import (
-    ActualStatus,
     Confidence,
     EffortBucket,
     ProjectStatus,
@@ -28,10 +25,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.workflow.estimation.buckets import (
-    actual_summary_from_timestamps,
-    default_estimate_summary,
-)
+from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
 from eawf.workflow.lifecycle.transitions import (
     claim_wave,
@@ -122,49 +116,6 @@ def test_default_estimate_summary_no_bucket_returns_none() -> None:
     assert default_estimate_summary(wave, now=datetime.now(UTC)) is None
 
 
-# ---- actual_summary_from_timestamps (pure helper) ---------------------------
-
-
-def test_actual_summary_from_timestamps_positive_span() -> None:
-    state = _empty_state()
-    _seed_wave(state)
-    wave = state.waves["P01-I01-W01"]
-    wave.opened_at = datetime(2026, 5, 22, 12, 0, 0, tzinfo=UTC)
-    wave.closed_at = wave.opened_at + timedelta(minutes=90)
-    now = wave.closed_at
-
-    act = actual_summary_from_timestamps(wave, now=now)
-
-    assert act is not None
-    assert act.scope_id == "P01-I01-W01"
-    assert act.id == "ACT-P01-I01-W01"
-    assert act.status == ActualStatus.DONE
-    # 90 minutes / 30 minutes-per-EU = 3.0 EU.
-    assert act.elapsed_eu == pytest.approx(3.0)
-    assert act.updated_at == now
-
-
-def test_actual_summary_from_timestamps_missing_opened_returns_none() -> None:
-    state = _empty_state()
-    _seed_wave(state)
-    wave = state.waves["P01-I01-W01"]
-    wave.opened_at = None
-    wave.closed_at = datetime.now(UTC)
-
-    assert actual_summary_from_timestamps(wave, now=datetime.now(UTC)) is None
-
-
-def test_actual_summary_from_timestamps_non_positive_span_returns_none() -> None:
-    state = _empty_state()
-    _seed_wave(state)
-    wave = state.waves["P01-I01-W01"]
-    wave.opened_at = datetime(2026, 5, 22, 12, 0, 0, tzinfo=UTC)
-    # closed before opened -> non-positive span -> no actual.
-    wave.closed_at = wave.opened_at - timedelta(minutes=5)
-
-    assert actual_summary_from_timestamps(wave, now=datetime.now(UTC)) is None
-
-
 # ---- claim_wave seeds a default estimate ------------------------------------
 
 
@@ -191,31 +142,27 @@ def test_claim_wave_no_bucket_writes_no_estimate() -> None:
     assert not (state.estimates or {})
 
 
-# ---- close_wave records an actual -------------------------------------------
+# ---- close_wave records NO actual (W28: wall-clock auto-record retired) ------
 
 
-def test_close_wave_records_actual_from_timestamps() -> None:
+def test_close_wave_records_no_actual() -> None:
     state = _empty_state()
     _seed_wave(state)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    # Pin opened_at into the past so the open->close span is positive.
+    # A positive open->close span used to fabricate a wall-clock actual.
     state.waves["P01-I01-W01"].opened_at = datetime.now(UTC) - timedelta(minutes=60)
 
-    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    wave = close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
-    assert state.actuals is not None
-    act = state.actuals["P01-I01-W01"]
-    assert act.status == ActualStatus.DONE
-    assert act.elapsed_eu > 0.0
-    assert act.scope_id == "P01-I01-W01"
+    assert wave.status == WaveStatus.CLOSED
+    # No actual is auto-recorded from the wall-clock span.
+    assert not (state.actuals or {})
 
 
 def test_close_wave_missing_opened_at_does_not_crash() -> None:
     state = _empty_state()
     _seed_wave(state)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    # Simulate a wave with no opened_at — the close must not crash and must
-    # derive no actual (skips gracefully).
     state.waves["P01-I01-W01"].opened_at = None
 
     wave = close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -231,18 +178,15 @@ def test_close_wave_idempotent_double_close_is_safe() -> None:
     state.waves["P01-I01-W01"].opened_at = datetime.now(UTC) - timedelta(minutes=30)
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
-    # A second close on an already-CLOSED wave is rejected by the status
-    # guard rather than corrupting the recorded actual.
+    # A second close on an already-CLOSED wave is rejected by the status guard.
     with pytest.raises(Exception, match="not claimed"):
         close_wave(state, wave_id="P01-I01-W01", outcome="ok")
-    assert state.actuals is not None
-    assert "P01-I01-W01" in state.actuals
 
 
-# ---- end-to-end: variance metric returns a non-empty sample -----------------
+# ---- variance metric reads the honest empty state without a measured actual --
 
 
-def test_metrics_variance_non_empty_after_close() -> None:
+def test_metrics_variance_empty_without_measured_actual() -> None:
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
@@ -251,7 +195,6 @@ def test_metrics_variance_non_empty_after_close() -> None:
 
     metric = compute_estimate_actual_variance(state)
 
-    assert metric.sample_count == 1
-    assert metric.planned_eu == pytest.approx(1.0)
-    assert metric.actual_eu > 0.0
-    assert metric.variance_pct is not None
+    # Close records no actual, so the variance metric has no sample to report.
+    assert metric.sample_count == 0
+    assert metric.variance_pct is None

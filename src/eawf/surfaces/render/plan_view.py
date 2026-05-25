@@ -67,7 +67,6 @@ from eawf.kernel.state.models import (
 from eawf.workflow.estimation.buckets import (
     critical_path_eu,
     sum_wave_eu,
-    timestamp_actual_eu,
     wave_estimate_eu,
 )
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
@@ -614,7 +613,9 @@ def build_view(state: State, iter_id: str) -> PlanView:
         blocked_waves=blocked,
         sum_wave_eu=sum_wave_eu(waves),
         critical_path_eu=critical_path_eu(waves),
-        actual_elapsed_eu=timestamp_actual_eu(waves),
+        actual_elapsed_eu=sum(
+            a.elapsed_eu for wid, a in (state.actuals or {}).items() if wid in wave_id_set
+        ),
     )
 
     return PlanView(

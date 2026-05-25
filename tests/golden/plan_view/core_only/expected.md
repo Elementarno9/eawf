@@ -4,7 +4,7 @@
 
 ## Summary
 - waves: 2 (1 in_progress, 1 closed)
-- effort: sum_wave_eu=0, critical_path_eu=0, actual_elapsed_eu=2
+- effort: sum_wave_eu=0, critical_path_eu=0, actual_elapsed_eu=0
 - checks: 1/1 passed
 - risks: 0 open
 - blocked: none

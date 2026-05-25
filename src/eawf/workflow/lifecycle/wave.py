@@ -15,10 +15,7 @@ from datetime import UTC, datetime
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
 from eawf.kernel.state.models import State, Wave
-from eawf.workflow.estimation.buckets import (
-    actual_summary_from_timestamps,
-    default_estimate_summary,
-)
+from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import LifecycleError
 
 logger = logging.getLogger(__name__)
@@ -457,16 +454,11 @@ def close_wave(
     wave.closed_at = datetime.now(UTC)
     if wave_id in state.current.active_wave_ids:
         state.current.active_wave_ids.remove(wave_id)
-    # Auto-record an actual from the open->close wall-clock span so the
-    # learning loop (variance / calibration / weekly burn) has a sample.
-    # Derivation is crash-safe: a wave with missing/None timestamps yields
-    # no actual rather than raising, so a close never faults on bad data.
-    actual = actual_summary_from_timestamps(wave, now=wave.closed_at)
-    if actual is not None:
-        if state.actuals is None:
-            state.actuals = {}
-        state.actuals[wave_id] = actual
-        logger.info(f"close_wave recorded actual wave={wave_id} eu={actual.elapsed_eu}")
+    # No actual is auto-recorded here. The open->close wall-clock span is
+    # not agent effort: it counts overnight, cross-session, and other-wave
+    # idle time, inflating consumed EU by ~10x (P27-I05 EU research). Real
+    # actuals come from measured sources only -- the manual ``eawf actual
+    # start/stop`` segments now, and per-wave token accounting in v0.4.
     logger.info(f"close_wave id={wave_id} outcome={outcome!r}")
     return wave
 

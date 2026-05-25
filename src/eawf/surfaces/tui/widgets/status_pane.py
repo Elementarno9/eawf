@@ -453,6 +453,23 @@ def _lifecycle_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     return lines
 
 
+def _has_effort_actuals(state: State | None) -> bool:
+    """Return ``True`` when at least one in-scope measured actual exists.
+
+    Scoped to the active phase's waves (the same population
+    :func:`_effort_eu` sums). Drives the EFFORT block's honest empty-state:
+    with no measured actual the consumed numerator + variance + ETA render
+    their ``—`` sentinels rather than a fabricated ``0``.
+    """
+    if state is None:
+        return False
+    phase_waves = _active_phase_waves(state)
+    if not phase_waves:
+        return False
+    phase_wave_ids = {w.id for w in phase_waves}
+    return any(a.scope_id in phase_wave_ids for a in (state.actuals or {}).values())
+
+
 def _effort_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     """Build the EFFORT section lines (EU burn, variance, velocity, ETA).
 
@@ -469,13 +486,20 @@ def _effort_lines(state: State | None, *, mode: RenderMode) -> list[str]:
         The ordered EFFORT lines (no section header).
     """
     consumed, estimate = _effort_eu(state)
+    # Consumed EU is honest-empty until a *measured* actual exists. With no
+    # in-scope actual the numerator is "unknown" (DASH), not 0 -- a fabricated
+    # 0 would render a misleading -100 % variance against the estimate. Real
+    # actuals come from measured sources only (the wall-clock auto-record was
+    # retired in P27-I05-W28).
+    has_actuals = _has_effort_actuals(state)
     effort = render_eu_bar_plain(consumed, estimate, mode=mode)
     if estimate > 0:
-        effort = f"{consumed:.1f}/{estimate:.1f}  {effort}"
-    variance = render_variance_plain(_variance_pct(consumed, estimate))
+        consumed_txt = f"{consumed:.1f}" if has_actuals else DASH
+        effort = f"{consumed_txt}/{estimate:.1f}  {effort}"
+    variance = render_variance_plain(_variance_pct(consumed, estimate) if has_actuals else None)
     series = build_velocity_eu_per_day(state)
     velocity = _render_sparkline(series, mode=mode)
-    eta = _eta_line(consumed, estimate, series)
+    eta = _eta_line(consumed, estimate, series) if has_actuals else DASH
     return [
         f"effort:    {effort}",
         f"variance:  {variance}",

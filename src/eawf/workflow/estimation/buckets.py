@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.enums import ActualStatus, Confidence, EffortBucket, WaveStatus
-from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
+from eawf.kernel.state.enums import Confidence, EffortBucket, WaveStatus
+from eawf.kernel.state.models import EstimateSummary, State, Wave
 
 BUCKET_EU: dict[EffortBucket, float] = {
     EffortBucket.XS: 0.25,
@@ -198,23 +198,6 @@ def calibrate_buckets(state: State, *, now: datetime | None = None) -> Calibrati
     )
 
 
-def timestamp_actual_eu(waves: list[Wave]) -> float:
-    """Estimate actual EU from closed wave timestamps."""
-    total_minutes = 0.0
-    for wave in waves:
-        if wave.opened_at is None or wave.closed_at is None:
-            continue
-        opened = wave.opened_at
-        closed = wave.closed_at
-        if not isinstance(opened, datetime) or not isinstance(closed, datetime):
-            continue
-        delta = closed - opened
-        if delta.total_seconds() <= 0:
-            continue
-        total_minutes += delta.total_seconds() / 60.0
-    return round(total_minutes / EU_MINUTES, 2)
-
-
 def default_estimate_summary(wave: Wave, *, now: datetime) -> EstimateSummary | None:
     """Derive a default :class:`EstimateSummary` from ``wave.effort_bucket``.
 
@@ -257,46 +240,5 @@ def default_estimate_summary(wave: Wave, *, now: datetime) -> EstimateSummary | 
         reference_class=f"bucket:{wave.effort_bucket.value}",
         confidence=Confidence.LOW,
         current_store_record_id=f"{estimate_id}-bucket-{stamp}",
-        updated_at=now,
-    )
-
-
-def actual_summary_from_timestamps(wave: Wave, *, now: datetime) -> ActualSummary | None:
-    """Derive an :class:`ActualSummary` from ``opened_at``/``closed_at``.
-
-    Reuses :func:`timestamp_actual_eu` (single-wave list) for the elapsed-EU
-    derivation. Returns ``None`` — derives nothing — when either timestamp is
-    missing or the elapsed span is non-positive, so a close on a wave with no
-    usable timestamps never raises. This is the close-path crash-safety
-    contract: a missing actual is a skipped sample, not a fault.
-
-    The ``current_store_record_id`` is synthetic for the same reason as
-    :func:`default_estimate_summary`: lifecycle mutators do not append store
-    records.
-
-    Args:
-        wave: The wave being closed (``opened_at``/``closed_at`` must be set
-            for an actual to be derived).
-        now: Close timestamp (UTC) used for ``updated_at`` and the id stamp.
-
-    Returns:
-        The timestamp-derived actual, or ``None`` when no usable elapsed span
-        exists.
-    """
-    if wave.opened_at is None or wave.closed_at is None:
-        return None
-    elapsed_eu = timestamp_actual_eu([wave])
-    if elapsed_eu <= 0:
-        return None
-    actual_id = f"ACT-{wave.id}"
-    stamp = now.strftime("%Y%m%dT%H%M%SZ")
-    return ActualSummary(
-        id=actual_id,
-        scope_id=wave.id,
-        status=ActualStatus.DONE,
-        elapsed_eu=elapsed_eu,
-        attention_eu=None,
-        agent_runtime_eu=None,
-        current_store_record_id=f"{actual_id}-close-{stamp}",
         updated_at=now,
     )
