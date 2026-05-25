@@ -3644,6 +3644,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W30",
       "updated_at": "2026-05-25T02:28:29.394471Z"
+    },
+    "P27-I05-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W31-bucket-20260525T023539Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W31",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W31",
+      "updated_at": "2026-05-25T02:35:39.138273Z"
     }
   },
   "goals": {
@@ -4469,7 +4482,8 @@
         "P27-I05-W27",
         "P27-I05-W28",
         "P27-I05-W29",
-        "P27-I05-W30"
+        "P27-I05-W30",
+        "P27-I05-W31"
       ]
     }
   },
@@ -5024,7 +5038,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:29:42.886169Z",
+  "updated_at": "2026-05-25T02:35:53.809368Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18230,6 +18244,35 @@
         "docs/reference/autogen/cli.md matches eawf schema dump regeneration; test_docs_autogen drift gate green"
       ],
       "title": "Regen autogen cli.md for release tag verb surface",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W31": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "flow-p27-i05-w31",
+      "closed_at": "2026-05-25T02:35:53.804510Z",
+      "commit": "2a5c2f1483946c5169aeafde7706c46a67f28164",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/mcp/installer.py"
+      ],
+      "id": "P27-I05-W31",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T02:35:38.637108Z",
+      "outcome": "Corrected the stale codex-sentinel comment in _settings_path to describe the live W25 TOML-splice emit; mypy + ruff clean.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "_settings_path codex comment describes the live W25 TOML-splice emit",
+        "not the lifted v0.4 sentinel deferral; mypy + ruff clean"
+      ],
+      "title": "Polish: correct stale codex-sentinel comment in installer",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
