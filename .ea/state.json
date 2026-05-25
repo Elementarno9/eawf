@@ -1834,9 +1834,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_wave_ids": [
+      "P27-I06-W41"
+    ],
+    "iter_id": "P27-I06",
+    "phase_id": "P27",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -3798,6 +3800,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W40",
       "updated_at": "2026-05-25T19:25:45.809181Z"
+    },
+    "P27-I06-W41": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I06-W41-bucket-20260525T224023Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I06-W41",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I06-W41",
+      "updated_at": "2026-05-25T22:40:23.653363Z"
     }
   },
   "goals": {
@@ -4635,6 +4650,20 @@
         "P27-I05-W39",
         "P27-I05-W40"
       ]
+    },
+    "P27-I06": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P27-I06",
+      "opened_at": "2026-05-25T22:40:19.279080Z",
+      "phase_id": "P27",
+      "status": "active",
+      "title": "Post-v0.3 cleanup",
+      "wave_ids": [
+        "P27-I06-W41"
+      ]
     }
   },
   "mcp_grants": null,
@@ -5129,7 +5158,7 @@
     },
     "P27": {
       "audit_id": "A39-P27-i05-backlog",
-      "closed_at": "2026-05-25T21:22:20.599276Z",
+      "closed_at": null,
       "depends_on": [
         "P26"
       ],
@@ -5140,7 +5169,8 @@
         "P27-I02",
         "P27-I03",
         "P27-I04",
-        "P27-I05"
+        "P27-I05",
+        "P27-I06"
       ],
       "opened_at": "2026-05-18T19:45:11.534597Z",
       "outcome_ids": [],
@@ -5150,7 +5180,7 @@
         "ART-research-long-term-2026-05-17-c10-operations",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "closed",
+      "status": "active",
       "subproject_id": null,
       "title": "C09+C10 observability + operations: quality DSL + telemetry +"
     }
@@ -5188,7 +5218,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T21:22:20.599430Z",
+  "updated_at": "2026-05-25T22:40:23.653593Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18686,6 +18716,34 @@
         "the two export_screenshot DetailModal tests settle the frame (drain workers + stabilise) before asserting; no bare pilot.pause before export_screenshot; tests pass"
       ],
       "title": "De-flake DetailModal screenshot tests with settle_screen",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I06-W41": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-post-v0.3-cleanup",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/specs/**"
+      ],
+      "id": "P27-I06-W41",
+      "iter_id": "P27-I06",
+      "opened_at": "2026-05-25T22:40:23.173007Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "142 committed per-wave specs P08-P25 removed; Decision D27 records the verdict; git ls-files .ea/specs == 0"
+      ],
+      "title": "Deprecate committed per-wave specs",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
