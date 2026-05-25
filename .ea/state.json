@@ -3542,6 +3542,19 @@
       "scope_id": "P27-I05-W23",
       "updated_at": "2026-05-25T02:11:39.905318Z"
     },
+    "P27-I05-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W24-bucket-20260525T021818Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W24",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W24",
+      "updated_at": "2026-05-25T02:18:18.799262Z"
+    },
     "P27-I05-W25": {
       "confidence": "low",
       "current_store_record_id": "EST-P27-I05-W25-bucket-20260525T015831Z",
@@ -4971,7 +4984,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:14:00.348305Z",
+  "updated_at": "2026-05-25T02:18:27.735695Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -17960,9 +17973,9 @@
     "P27-I05-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p27-i05-w24",
+      "closed_at": "2026-05-25T02:18:27.735243Z",
+      "commit": "77d8503695c524e6388d166ee857a27fea056b95",
       "deps": [
         "P27-I05-W23"
       ],
@@ -17976,10 +17989,10 @@
       "id": "P27-I05-W24",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T01:07:58.258491Z",
-      "outcome": null,
+      "outcome": "eawf release tag verb (creates v<version> tag, --push triggers pipeline); release.yaml un-gated behind explicit tag-push condition + twine check gate before publish; B005 PyPI publish delivered (trusted-publisher env still needs repo-settings setup).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf release tags and triggers the pipeline; publish is un-gated behind an explicit condition; twine check dist/* runs before publish; the pipeline builds and validates"
       ],
