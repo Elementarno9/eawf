@@ -3670,6 +3670,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W32",
       "updated_at": "2026-05-25T18:28:39.944410Z"
+    },
+    "P27-I05-W33": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W33-bucket-20260525T182925Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W33",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W33",
+      "updated_at": "2026-05-25T18:29:25.518681Z"
     }
   },
   "goals": {
@@ -5055,7 +5068,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T18:29:12.346695Z",
+  "updated_at": "2026-05-25T18:30:31.848103Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18325,9 +18338,9 @@
     "P27-I05-W33": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T18:30:31.847677Z",
+      "commit": "dd2b4e919f801df10ee479108de43a38938c0db6",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18338,10 +18351,10 @@
       "id": "P27-I05-W33",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-25T18:28:26.703947Z",
-      "outcome": null,
+      "outcome": "global overlay + env layer isolated in-test; both dispatch-cost tests pass regardless of dev telemetry opt-in",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the two telemetry-disabled dispatch-cost tests pass regardless of user-global telemetry.enabled; config layer isolated in-test"
       ],
