@@ -3772,6 +3772,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W38",
       "updated_at": "2026-05-25T18:59:35.750177Z"
+    },
+    "P27-I05-W39": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W39-bucket-20260525T191622Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W39",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W39",
+      "updated_at": "2026-05-25T19:16:22.548985Z"
     }
   },
   "goals": {
@@ -4605,7 +4618,8 @@
         "P27-I05-W35",
         "P27-I05-W36",
         "P27-I05-W37",
-        "P27-I05-W38"
+        "P27-I05-W38",
+        "P27-I05-W39"
       ]
     }
   },
@@ -5160,7 +5174,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T19:01:33.036803Z",
+  "updated_at": "2026-05-25T19:16:40.057001Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18602,6 +18616,34 @@
         "still hard-fails single-iter ranges; snapshot tests pin golden freshness; boundary tests added; CI snapshot gate green"
       ],
       "title": "Make snapshot-pairing gate phase-PR-aware (multi-iter range)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T19:16:40.056629Z",
+      "commit": "d485ac9b17c6952ea10433dd3684b3a974a5a6e9",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".github/workflows/ci.yaml"
+      ],
+      "id": "P27-I05-W39",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T19:16:22.085692Z",
+      "outcome": "coverage-gate step runs under uv run python (3.14); tomllib resolves on ubuntu-22.04; CI green all OSes",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "coverage-gate CI step uses uv run python so tomllib resolves on all matrix OSes incl ubuntu-22.04 (system py3.10); CI green on every OS"
+      ],
+      "title": "Run coverage-gate step under uv run python (tomllib on 3.14)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
