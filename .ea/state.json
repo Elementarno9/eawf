@@ -3785,6 +3785,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W39",
       "updated_at": "2026-05-25T19:16:22.548985Z"
+    },
+    "P27-I05-W40": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W40-bucket-20260525T192545Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W40",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W40",
+      "updated_at": "2026-05-25T19:25:45.809181Z"
     }
   },
   "goals": {
@@ -4619,7 +4632,8 @@
         "P27-I05-W36",
         "P27-I05-W37",
         "P27-I05-W38",
-        "P27-I05-W39"
+        "P27-I05-W39",
+        "P27-I05-W40"
       ]
     }
   },
@@ -5174,7 +5188,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T19:16:40.057001Z",
+  "updated_at": "2026-05-25T19:26:30.473374Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18644,6 +18658,34 @@
         "coverage-gate CI step uses uv run python so tomllib resolves on all matrix OSes incl ubuntu-22.04 (system py3.10); CI green on every OS"
       ],
       "title": "Run coverage-gate step under uv run python (tomllib on 3.14)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W40": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T19:26:30.473039Z",
+      "commit": "09264c0c22e12ccaf9448e4ffe248413ab74abf1",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/tui/test_overlays_detail.py"
+      ],
+      "id": "P27-I05-W40",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T19:25:45.331207Z",
+      "outcome": "both export_screenshot DetailModal tests settle frame before assert; 3x local stable; ruff clean",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "the two export_screenshot DetailModal tests settle the frame (drain workers + stabilise) before asserting; no bare pilot.pause before export_screenshot; tests pass"
+      ],
+      "title": "De-flake DetailModal screenshot tests with settle_screen",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
