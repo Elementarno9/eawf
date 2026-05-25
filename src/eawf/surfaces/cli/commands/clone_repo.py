@@ -86,8 +86,9 @@ def _derive_project_code(target_dir: Path, project_code: str | None) -> str:
       source of truth for the coercion rules — the wizard validator and
       the clone-repo derivation now agree byte-for-byte.
 
-    Raises :class:`UserError` (``kind="InvalidInput"``) when neither path
-    produces a valid code.
+    Raises:
+        UserError: with ``kind="InvalidInput"`` when neither path produces
+            a valid code.
     """
     if project_code is not None:
         if not is_project_code(project_code):

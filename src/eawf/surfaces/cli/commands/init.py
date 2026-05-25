@@ -107,10 +107,8 @@ def _resolve_profiles_and_template(
     """Resolve the three init-surface flags into ``(profiles, template_extras)``.
 
     The three surfaces (`--profile`, `--profiles`, `--template`) are
-    mutually exclusive: at most one may be passed.
-    Passing none falls through to the wizard default (``["core"]``).
-    Passing more than one raises :class:`UserError` (``kind="InvalidInput"``)
-    so the operator picks the form they want.
+    mutually exclusive: at most one may be passed. Passing none falls
+    through to the wizard default (``["core"]``).
 
     When ``--template`` is the chosen surface, the template's
     ``profiles.enabled`` becomes the profiles list and the remaining

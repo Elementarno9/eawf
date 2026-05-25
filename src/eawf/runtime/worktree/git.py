@@ -80,8 +80,9 @@ def _run(
 def repo_root(start: Path) -> Path:
     """Return the repository root that *start* lies inside.
 
-    Raises :class:`UserError` (``kind="NotFound"``) if *start* is not in a
-    git working tree.
+    Raises:
+        UserError: with ``kind="NotFound"`` when *start* is not in a git
+            working tree.
     """
     res = _run(["git", "-C", str(start), "rev-parse", "--show-toplevel"])
     if res.returncode != 0:
@@ -95,8 +96,9 @@ def repo_root(start: Path) -> Path:
 def current_branch(repo: Path) -> str:
     """Return the current HEAD branch of *repo*.
 
-    Raises :class:`UserError` (``kind="InvalidInput"``) when HEAD is
-    detached (no symbolic ref).
+    Raises:
+        UserError: with ``kind="InvalidInput"`` when HEAD is detached
+            (no symbolic ref).
     """
     res = _run(["git", "-C", str(repo), "symbolic-ref", "--short", "HEAD"])
     if res.returncode != 0:

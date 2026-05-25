@@ -232,9 +232,10 @@ def _continue_resume(
     - ``CHERRY_PICK_HEAD`` present in *repo_root*'s ``.git`` -> cherry-pick.
     - rebase-merge / rebase-apply present in the worktree's ``.git`` -> rebase.
 
-    Raises :class:`StateConflict` (``kind="IntegrityViolation"``) when the
-    record is CONFLICTED but neither evidence is present (operator likely
-    aborted manually).
+    Raises:
+        StateConflict: with ``kind="IntegrityViolation"`` when the record
+            is CONFLICTED but neither evidence is present (operator likely
+            aborted manually).
     """
     if git.cherry_pick_in_progress(repo_root):
         clean, _detail = git.cherry_pick_continue(repo_root)

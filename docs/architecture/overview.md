@@ -74,7 +74,7 @@ by architectural layer:
 
 Design rules:
 
-- The **eawfd daemon** (`src/eawf/daemon/`) is the sole canonical mutator
+- The **eawfd daemon** (`src/eawf/runtime/daemon/`) is the sole canonical mutator
   of `state.json`, layered config, the registry, the event/audit stores,
   and the telemetry DB. The `eawf` state CLI proxies mutations to the
   daemon over JSON-RPC and falls back to a direct `portalocker` write only

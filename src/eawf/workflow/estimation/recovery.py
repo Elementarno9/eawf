@@ -61,7 +61,7 @@ def find_stale_actuals(
     actuals: dict[str, ActualSummary],
     *,
     lock_dir: Path,
-    scope: str | None = None,
+    scope_id: str | None = None,
 ) -> list[ActualSummary]:
     """Return active actuals whose lockfile is stale.
 
@@ -69,16 +69,16 @@ def find_stale_actuals(
         actuals: Snapshot of ``state.actuals`` (scope_id -> summary).
         lock_dir: Directory holding the per-scope advisory lockfiles. The
             lockfile filename convention is ``actual-<scope_id>.lock``.
-        scope: Optional scope filter — when set, only the matching scope is
-            checked. ``None`` walks every active actual.
+        scope_id: Optional scope filter — when set, only the matching scope
+            is checked. ``None`` walks every active actual.
     """
     stale: list[ActualSummary] = []
-    for scope_id, summary in actuals.items():
+    for actual_scope_id, summary in actuals.items():
         if summary.status != ActualStatus.ACTIVE:
             continue
-        if scope is not None and scope_id != scope:
+        if scope_id is not None and actual_scope_id != scope_id:
             continue
-        lock_path = lock_dir / f"actual-{scope_id}.lock"
+        lock_path = lock_dir / f"actual-{actual_scope_id}.lock"
         if is_stale(lock_path):
             stale.append(summary)
     return stale

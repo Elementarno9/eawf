@@ -92,7 +92,7 @@ def test_find_stale_actuals_filters_by_scope(tmp_path: Path) -> None:
     }
     _write_dead_lock(tmp_path / "actual-P01-I01-W01.lock")
     _write_dead_lock(tmp_path / "actual-P01-I01-W02.lock")
-    stale = recovery.find_stale_actuals(actuals, lock_dir=tmp_path, scope="P01-I01-W02")
+    stale = recovery.find_stale_actuals(actuals, lock_dir=tmp_path, scope_id="P01-I01-W02")
     assert [s.scope_id for s in stale] == ["P01-I01-W02"]
 
 

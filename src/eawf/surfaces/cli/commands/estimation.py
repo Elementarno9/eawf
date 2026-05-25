@@ -82,8 +82,11 @@ def _coerce_confidence(raw: str | None, *, default: Confidence = Confidence.MEDI
     """Convert ``--confidence h|m|l`` to a :class:`Confidence` value.
 
     Accepts the long form (``high``/``medium``/``low``) too. ``None`` returns
-    *default*. Anything else raises :class:`errors.UserError`
-    (``kind="InvalidInput"``).
+    *default*.
+
+    Raises:
+        errors.UserError: with ``kind="InvalidInput"`` when *raw* is neither
+            a recognised short/long form nor ``None``.
     """
     if raw is None:
         return default
