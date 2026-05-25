@@ -179,9 +179,9 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
         return target_dir / "opencode.json"
     if runtime == "codex":
         # Codex MCP entries live in the same TOML config file as the plugin
-        # install renders. The TOML emit happens through the codex adapter
-        # in v0.4; for v0.3 we sentinel the path so the doctor + install
-        # surfaces stay coherent without yet writing TOML bytes.
+        # install renders. ``_install_codex_entry`` / ``_remove_codex_entry``
+        # splice an ``[mcp_servers.<id>]`` table into a marker-wrapped region
+        # of this file, preserving the plugin block and user TOML verbatim.
         return target_dir / ".codex" / "config.toml"
     return target_dir / ".claude" / "settings.json"
 
