@@ -3721,6 +3721,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W35",
       "updated_at": "2026-05-25T18:33:28.570906Z"
+    },
+    "P27-I05-W36": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W36-bucket-20260525T184009Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W36",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W36",
+      "updated_at": "2026-05-25T18:40:09.074302Z"
     }
   },
   "goals": {
@@ -4551,7 +4564,8 @@
         "P27-I05-W32",
         "P27-I05-W33",
         "P27-I05-W34",
-        "P27-I05-W35"
+        "P27-I05-W35",
+        "P27-I05-W36"
       ]
     }
   },
@@ -5106,7 +5120,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T18:34:10.673168Z",
+  "updated_at": "2026-05-25T18:40:32.366541Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18462,6 +18476,34 @@
         "MetricsSnapshot.scope_id field + scope_id JSON wire key in export document; golden fixture regenerated; mypy+metrics tests green"
       ],
       "title": "Rename MetricsSnapshot scope to canonical scope_id wire key",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T18:40:32.366071Z",
+      "commit": "18bc69c4e5a83a8518616915227161582f675a4e",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/unit/test_metrics_dispatch_cost.py"
+      ],
+      "id": "P27-I05-W36",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:40:08.599295Z",
+      "outcome": "B71 tracking-id dropped from dispatch-cost test comments; rule-25 clean; tests + ruff green",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "no bare B-id (rule 25) in dispatch-cost test comments; WHY prose retained; ruff clean"
+      ],
+      "title": "Drop bare backlog-id provenance from dispatch-cost test comments",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
