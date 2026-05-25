@@ -3493,6 +3493,19 @@
       "scope_id": "P27-I05-W22",
       "updated_at": "2026-05-24T23:33:57.239296Z"
     },
+    "P27-I05-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W26-bucket-20260525T005212Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W26",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W26",
+      "updated_at": "2026-05-25T00:52:12.399179Z"
+    },
     "P27-I05-W28": {
       "confidence": "low",
       "current_store_record_id": "EST-P27-I05-W28-bucket-20260524T234653Z",
@@ -4883,7 +4896,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T00:51:53.018378Z",
+  "updated_at": "2026-05-25T00:57:39.263579Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -17939,9 +17952,9 @@
       "blocks": [
         "P27-I05-W23"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p27-i05",
+      "closed_at": "2026-05-25T00:57:39.263378Z",
+      "commit": "f9ea04611e27db1873f77d956597fd8845f44453",
       "deps": [
         "P27-I05-W21"
       ],
@@ -17958,10 +17971,10 @@
       "id": "P27-I05-W26",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T18:43:50.217596Z",
-      "outcome": null,
+      "outcome": "codified B063 md no-manual-wrap rule in AGENTS.md (core-profile block + rule 28, re-rendered via sync, goldens regen); B045 short/full SHA normalization already implemented, added explicit short-SHA test; ruff + targeted suites green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "AGENTS.md codifies no-manual-line-wrap for rendered markdown + skill output contracts (B063); wave close --commit accepts + normalises full/short SHA to 40-char hex (B045); tests cover both"
       ],
