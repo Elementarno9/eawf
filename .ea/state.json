@@ -3529,6 +3529,19 @@
       "scope_id": "P27-I05-W22",
       "updated_at": "2026-05-24T23:33:57.239296Z"
     },
+    "P27-I05-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W23-bucket-20260525T021139Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W23",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W23",
+      "updated_at": "2026-05-25T02:11:39.905318Z"
+    },
     "P27-I05-W25": {
       "confidence": "low",
       "current_store_record_id": "EST-P27-I05-W25-bucket-20260525T015831Z",
@@ -4958,7 +4971,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:11:01.320459Z",
+  "updated_at": "2026-05-25T02:14:00.348305Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -17913,9 +17926,9 @@
       "blocks": [
         "P27-I05-W24"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p27-i05-w23",
+      "closed_at": "2026-05-25T02:14:00.348132Z",
+      "commit": "c3afe3b57836840a95c00c978f9e089c7c087d66",
       "deps": [
         "P27-I05-W22",
         "P27-I05-W25",
@@ -17932,10 +17945,10 @@
       "id": "P27-I05-W23",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T01:07:55.344902Z",
-      "outcome": null,
+      "outcome": "Version bumped 0.2.0 -> 0.3.0 (single-source _version.py via version_bump.py --minor); eawf --version + wheel METADATA both 0.3.0; version-assertion tests updated.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf --version and the wheel METADATA report 0.3.0; the bump rides P27 phase close after every I02 / I03 / I04 / I05 functional wave is CLOSED (enforced by phase-close timing not explicit deps)"
       ],
