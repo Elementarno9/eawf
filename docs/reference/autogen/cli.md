@@ -386,12 +386,13 @@ Project-level lifecycle (init).
 
 ### `eawf release`
 
-Render release notes and changelog mining reports.
+Tag releases and render release notes / changelog reports.
 
 | Verb | Summary |
 |---|---|
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `notes` | Render a scrubbed release-notes draft. |
+| `tag` | Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline. |
 
 ### `eawf repo`
 
