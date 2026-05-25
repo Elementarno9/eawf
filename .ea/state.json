@@ -3708,6 +3708,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W34",
       "updated_at": "2026-05-25T18:30:41.837466Z"
+    },
+    "P27-I05-W35": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W35-bucket-20260525T183328Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W35",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W35",
+      "updated_at": "2026-05-25T18:33:28.570906Z"
     }
   },
   "goals": {
@@ -5093,7 +5106,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T18:33:13.844435Z",
+  "updated_at": "2026-05-25T18:34:10.673168Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18426,8 +18439,8 @@
     "P27-I05-W35": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T18:34:10.672695Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -18441,10 +18454,10 @@
       "id": "P27-I05-W35",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-25T18:28:27.648482Z",
-      "outcome": null,
+      "outcome": "no change: MetricsSnapshot.scope holds a metrics-aggregation label (repo/eawf, C09 5.9.5), not a state scope_id URN; the scope_id canonical-name rule governs state identifiers only. Bare scope is correct and consistent with the Prometheus sample labels. Polisher finding refuted after golden review.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "MetricsSnapshot.scope_id field + scope_id JSON wire key in export document; golden fixture regenerated; mypy+metrics tests green"
       ],
