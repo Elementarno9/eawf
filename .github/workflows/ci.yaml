@@ -51,7 +51,7 @@ jobs:
         # (both pytest runs, --cov-append) and asserts each gated package
         # clears its line/branch ratchet from ``[tool.eawf.coverage]``.
         run: |
-          python <<'PY'
+          uv run python <<'PY'
           import fnmatch
           import re
           import sys
