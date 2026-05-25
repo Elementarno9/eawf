@@ -3606,6 +3606,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I05-W28",
       "updated_at": "2026-05-24T23:46:53.247959Z"
+    },
+    "P27-I05-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W29-bucket-20260525T021921Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W29",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W29",
+      "updated_at": "2026-05-25T02:19:21.314211Z"
     }
   },
   "goals": {
@@ -4429,7 +4442,8 @@
         "P27-I05-W25",
         "P27-I05-W26",
         "P27-I05-W27",
-        "P27-I05-W28"
+        "P27-I05-W28",
+        "P27-I05-W29"
       ]
     }
   },
@@ -4984,7 +4998,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:18:27.735695Z",
+  "updated_at": "2026-05-25T02:19:40.828950Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18134,6 +18148,34 @@
         "close_wave stops auto-recording wall-clock actuals; the 363 wall-clock actuals purged via canonical writer; backfill-actuals wall-clock transform retired; TUI+metrics show honest empty-state for consumed EU; tests updated; mypy+suite green"
       ],
       "title": "Replace wall-clock EU actuals with honest empty-state",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W29": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "flow-p27-i05-w29",
+      "closed_at": "2026-05-25T02:19:40.828600Z",
+      "commit": "b3f985e287b6c6b73087a98eac1c76a5c55b3a1f",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/golden/scenarios/fresh_repo/agents.golden.json"
+      ],
+      "id": "P27-I05-W29",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T02:19:20.804138Z",
+      "outcome": "Regenerated fresh_repo agents.golden.json (byte-length-only drift from W26 markdown-no-manual-wrap rule); golden_scenarios suite green.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "fresh_repo agents.golden.json byte-lengths match AGENTS.md after W26 markdown-no-manual-wrap rule; golden_scenarios suite green"
+      ],
+      "title": "Regen stale fresh_repo AGENTS golden after W26 rule",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
