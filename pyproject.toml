@@ -305,27 +305,28 @@ fail_under = 60
 # ``docs/reference/coverage-gates.md`` for measured headroom + rationale.
 #
 # Each row maps a gate key to ``[line_threshold, branch_threshold]``.
-# ``path`` is the filename prefix (relative to ``src/eawf``) the checker
-# aggregates; ``glob`` rows match by suffix instead. ``waive_line`` /
+# ``path`` is the filename prefix the checker aggregates, matched against
+# the ``src/eawf/...`` filenames coverage.xml records (source = repo root);
+# ``glob`` rows match by ``fnmatch`` instead. ``waive_line`` /
 # ``waive_branch`` opt a layer out of that dimension.
 
 [tool.eawf.coverage.gates.daemon]
-path = "runtime/daemon/"
+path = "src/eawf/runtime/daemon/"
 line = 77
 branch = 64
 
 [tool.eawf.coverage.gates.telemetry]
-path = "observability/telemetry/"
+path = "src/eawf/observability/telemetry/"
 line = 93
 branch = 86
 
 [tool.eawf.coverage.gates.skills]
-path = "workflow/skills/"
+path = "src/eawf/workflow/skills/"
 line = 93
 branch = 81
 
 [tool.eawf.coverage.gates.cli]
-path = "surfaces/cli/"
+path = "src/eawf/surfaces/cli/"
 line = 75
 branch = 65
 
@@ -333,33 +334,33 @@ branch = 65
 # Line + branch waived: Textual widgets render asynchronously and
 # line-cov misreports. Screen coverage is enforced by the snapshot
 # pairing gate (C09 §5.2), not by this line/branch ratchet.
-path = "surfaces/tui/"
+path = "src/eawf/surfaces/tui/"
 waive_line = true
 waive_branch = true
 
 [tool.eawf.coverage.gates.render]
-path = "surfaces/render/"
+path = "src/eawf/surfaces/render/"
 line = 89
 branch = 74
 
 [tool.eawf.coverage.gates.store]
-path = "kernel/store/"
+path = "src/eawf/kernel/store/"
 line = 97
 branch = 84
 
 [tool.eawf.coverage.gates.state]
-path = "kernel/state/"
+path = "src/eawf/kernel/state/"
 line = 98
 branch = 95
 
 [tool.eawf.coverage.gates.lock]
-path = "runtime/lock/"
+path = "src/eawf/runtime/lock/"
 line = 86
 branch = 80
 
 [tool.eawf.coverage.gates.plugin_install]
 # Crash-relevant install surface across all three runtimes.
-glob = "runtime/runtimes/*/plugin_install.py"
+glob = "src/eawf/runtime/runtimes/*/plugin_install.py"
 line = 95
 branch = 88
 
