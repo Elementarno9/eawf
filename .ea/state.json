@@ -3734,6 +3734,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W36",
       "updated_at": "2026-05-25T18:40:09.074302Z"
+    },
+    "P27-I05-W37": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W37-bucket-20260525T185418Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W37",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W37",
+      "updated_at": "2026-05-25T18:54:18.247080Z"
     }
   },
   "goals": {
@@ -4565,7 +4578,8 @@
         "P27-I05-W33",
         "P27-I05-W34",
         "P27-I05-W35",
-        "P27-I05-W36"
+        "P27-I05-W36",
+        "P27-I05-W37"
       ]
     }
   },
@@ -5120,7 +5134,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T18:40:32.366541Z",
+  "updated_at": "2026-05-25T18:55:00.786783Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18504,6 +18518,34 @@
         "no bare B-id (rule 25) in dispatch-cost test comments; WHY prose retained; ruff clean"
       ],
       "title": "Drop bare backlog-id provenance from dispatch-cost test comments",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W37": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T18:55:00.786475Z",
+      "commit": "53b51e3207209361fe36692bee3a7ac43faff34b",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "pyproject.toml"
+      ],
+      "id": "P27-I05-W37",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:54:17.771329Z",
+      "outcome": "coverage gate paths prefixed src/eawf/; all 10 gates match + pass thresholds on real coverage.xml",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "all 10 per-package coverage gates match files (coverage.xml filenames carry src/eawf/ prefix) and pass thresholds; CI coverage gate green"
+      ],
+      "title": "Fix per-package coverage gate paths for layered tree + src prefix",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
