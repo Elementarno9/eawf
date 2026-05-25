@@ -76,6 +76,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-25-p27-i05-backlog-closeout.md",
       "urn": "urn:eawf:v1:artifact:P27-I05/A39-P27-i05-backlog-report"
     },
+    "A40-P27-i06-cleanup-report": {
+      "created_at": "2026-05-25T22:57:23.962221Z",
+      "id": "A40-P27-i06-cleanup-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "497c9dbadd6d914b338b7e61912cf7c7c17336da8f612e70512cf9934b5dceb0",
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-26-p27-i06-cleanup-closeout.md",
+      "urn": "urn:eawf:v1:artifact:P27-I06/A40-P27-i06-cleanup-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -986,6 +996,17 @@
       "scope_id": "P27-I05",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A40-P27-i06-cleanup": {
+      "check_results": [],
+      "created_at": "2026-05-25T22:57:24.394848Z",
+      "id": "A40-P27-i06-cleanup",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A40-P27-i06-cleanup-report",
+      "scope_id": "P27-I06",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -1835,8 +1856,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P27-I06",
-    "phase_id": "P27",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -4665,14 +4686,14 @@
       ]
     },
     "P27-I06": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A40-P27-i06-cleanup",
+      "closed_at": "2026-05-25T22:57:29.196764Z",
       "description": null,
       "estimate_id": null,
       "id": "P27-I06",
       "opened_at": "2026-05-25T22:40:19.279080Z",
       "phase_id": "P27",
-      "status": "active",
+      "status": "closed",
       "title": "Post-v0.3 cleanup",
       "wave_ids": [
         "P27-I06-W41"
@@ -5170,8 +5191,8 @@
       "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime +"
     },
     "P27": {
-      "audit_id": "A39-P27-i05-backlog",
-      "closed_at": null,
+      "audit_id": "A40-P27-i06-cleanup",
+      "closed_at": "2026-05-25T22:57:34.525564Z",
       "depends_on": [
         "P26"
       ],
@@ -5193,7 +5214,7 @@
         "ART-research-long-term-2026-05-17-c10-operations",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "C09+C10 observability + operations: quality DSL + telemetry +"
     }
@@ -5231,7 +5252,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T22:42:01.353177Z",
+  "updated_at": "2026-05-25T22:57:34.525884Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
