@@ -77,15 +77,16 @@ pywin32 = [
 [tool.deptry.per_rule_ignores]
 # DEP001 (missing): ``duckdb`` is an optional, import-guarded telemetry
 # backend (graceful fallback to sqlite when absent) — installed separately,
-# never a hard dep. ``pydantic_core`` is pydantic's own compiled core,
-# always co-installed with pydantic.
-DEP001 = ["duckdb", "pydantic_core"]
+# never a hard dep.
+DEP001 = ["duckdb"]
 # DEP002 (declared-but-unused): mkdocs + mkdocs-material are the ``[docs]``
 # extra's CLI doc-build tools — invoked as commands, never imported in src/.
 DEP002 = ["mkdocs", "mkdocs-material"]
 # DEP003 (transitive): ``click`` is typer's own hard dependency and a stable
 # re-export surface; the few direct ``click`` imports ride that coupling.
-DEP003 = ["click"]
+# ``pydantic_core`` is pydantic's own compiled core, pulled in transitively
+# with pydantic; the direct ``ErrorDetails`` import rides that coupling.
+DEP003 = ["click", "pydantic_core"]
 
 [dependency-groups]
 dev = [
