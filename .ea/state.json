@@ -2303,6 +2303,21 @@
       "status": "active",
       "superseded_by": null,
       "title": "Emit+verify Codex TOML MCP tables; keep no-own-server stance"
+    },
+    "D27": {
+      "alternatives": [
+        "Keep specs (preserves verify_implements re-audit on closed phases)",
+        "Prune stub subset only"
+      ],
+      "consequences": [],
+      "created_at": "2026-05-25T22:40:51.344451Z",
+      "description": null,
+      "id": "D27",
+      "rationale": "Per-wave spec-commit practice abandoned at P26 (no committed specs since); verify_implements re-audit of closed phases P08-P25 deliberately given up; specs recoverable via git history",
+      "scope_id": "P27",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Deprecate committed per-wave specs (.ea/specs P08-P25)"
     }
   },
   "estimates": {
@@ -5218,7 +5233,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T22:40:23.653593Z",
+  "updated_at": "2026-05-25T22:40:51.344451Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
