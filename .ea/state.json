@@ -2167,8 +2167,8 @@
       "id": "D21",
       "rationale": "Operator priority is harness coverage, not new server runtime; hardens existing emit path (Claude .mcp.json + Codex TOML + OpenCode opencode.json mcp block); plugin doctor verifies drift; own MCP server deferred to v0.4.",
       "scope_id": "EAWF",
-      "status": "active",
-      "superseded_by": null,
+      "status": "superseded",
+      "superseded_by": "D26",
       "title": "MCP at v0.3: Eä emits MCP configs into harness trees (no own MCP server)"
     },
     "D22": {
@@ -2229,6 +2229,21 @@
       "status": "active",
       "superseded_by": null,
       "title": "Delete dead cli/dispatch.py register_subcommand helper"
+    },
+    "D26": {
+      "alternatives": [
+        "Hardening-only: claude read-back verify + content-drift + recognise codex path without writing TOML (honours D21 sentinel)",
+        "Defer codex TOML emit to v0.4 alongside the codex adapter"
+      ],
+      "consequences": [],
+      "created_at": "2026-05-25T01:58:47.809954Z",
+      "description": null,
+      "id": "D26",
+      "rationale": "W25/B062 hardening lifts the D21 codex config.toml sentinel: the per-server installer now writes real [mcp_servers.<id>] tables via a byte-preserving marker splice, reads the file back to verify the written command/args/env grant matches intent (VerifyFailure on mismatch), enables --runtime codex on the mcp CLI, and the doctor mcp-drift check now detects content-drift across Claude + Codex. Eä still ships no own MCP server (deferred v0.4) so that part of D21 carries forward. Operator-ratified scope choice 2026-05-25.",
+      "scope_id": "P27-I05",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Emit+verify Codex TOML MCP tables; keep no-own-server stance"
     }
   },
   "estimates": {
@@ -3492,6 +3507,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P27-I05-W22",
       "updated_at": "2026-05-24T23:33:57.239296Z"
+    },
+    "P27-I05-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W25-bucket-20260525T015831Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P27-I05-W25",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P27-I05-W25",
+      "updated_at": "2026-05-25T01:58:31.097975Z"
     },
     "P27-I05-W26": {
       "confidence": "low",
@@ -4896,7 +4924,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T00:57:39.263579Z",
+  "updated_at": "2026-05-25T02:04:49.396280Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -17918,9 +17946,9 @@
       "blocks": [
         "P27-I05-W23"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p27-i05-w25",
+      "closed_at": "2026-05-25T02:04:49.394050Z",
+      "commit": "c6b53173590940dd35557ed7a8a75903f9460155",
       "deps": [
         "P27-I05-W21"
       ],
@@ -17935,10 +17963,10 @@
       "id": "P27-I05-W25",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T18:43:38.692830Z",
-      "outcome": null,
+      "outcome": "MCP emit-and-verify hardened: codex TOML mcp_servers emit+verify, claude read-back verify, doctor content-drift across claude/codex, idempotence goldens. D26 supersedes D21 (codex sentinel lifted; no-own-server carried forward).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "MCP config writers verify written config matches intended grants; plugin doctor detects MCP drift; idempotent re-install goldens; covers Claude .mcp.json + Codex TOML"
       ],
