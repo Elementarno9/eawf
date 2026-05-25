@@ -21,6 +21,9 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
+from eawf.kernel.config import layered
 from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.store.envelope import Envelope
 from eawf.observability.telemetry.models import RuntimeErrorClass
@@ -58,15 +61,21 @@ def _read_event_types(event_path: Path) -> list[str]:
     return types
 
 
-def test_dispatch_cost_recorded_when_telemetry_disabled(tmp_path: Path) -> None:
+def test_dispatch_cost_recorded_when_telemetry_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``dispatch_cost`` lands in event.jsonl even with telemetry disabled.
 
     The merged config defaults ``telemetry.enabled`` to ``False`` (strict-
     local opt-in). The runner emits the cost event unconditionally, so the
     on-disk ledger carries a ``dispatch_cost`` row regardless.
     """
-    # Confirm the precondition: telemetry is off by default in the merged config.
-    merged, _sources = merge_config(repo=tmp_path)
+    # Confirm the precondition against the built-in default: isolate the
+    # global overlay (~/.config/eawf/config.yaml) and the env layer so a
+    # developer who opted telemetry on locally cannot flip this assertion
+    # (B71 -- the test must be hermetic across machines and CI alike).
+    monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
+    merged, _sources = merge_config(repo=tmp_path, env={})
     assert get_dotted(merged, "telemetry.enabled") is False
 
     event_path = tmp_path / "store" / "event.jsonl"
@@ -94,14 +103,19 @@ def test_dispatch_cost_recorded_when_telemetry_disabled(tmp_path: Path) -> None:
     assert "dispatch_cost" in types, types
 
 
-def test_dispatch_cost_recorded_on_runtime_fallback_when_disabled(tmp_path: Path) -> None:
+def test_dispatch_cost_recorded_on_runtime_fallback_when_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A V5 fallback still records both events with telemetry disabled.
 
     With ``primary_error`` set the runner switches runtimes: it must emit a
     ``runtime_switched`` event AND the post-dispatch ``dispatch_cost`` —
     neither gated by ``telemetry.enabled``.
     """
-    merged, _sources = merge_config(repo=tmp_path)
+    # Isolate the global overlay + env layer so the precondition reflects the
+    # built-in strict-local default rather than a developer's local opt-in (B71).
+    monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
+    merged, _sources = merge_config(repo=tmp_path, env={})
     assert get_dotted(merged, "telemetry.enabled") is False
 
     event_path = tmp_path / "store" / "event.jsonl"
