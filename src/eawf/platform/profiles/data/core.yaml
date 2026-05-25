@@ -20,7 +20,7 @@ instrument_requirements:
 render_blocks:
   - id: non-negotiable-rules
     target: AGENTS.md
-    version: "1.7"
+    version: "1.8"
     body_template: |
       ## Non-negotiable rules (core)
 
@@ -81,6 +81,8 @@ render_blocks:
           ``prep-plan-mode``.
       27. **Iter and phase close timing.** See
           ``iter-phase-close-timing``.
+      28. **Rendered markdown is not manually line-wrapped.** See
+          ``markdown-no-manual-wrap``.
 
   - id: architecture-cli-dispatch
     target: AGENTS.md
@@ -612,6 +614,25 @@ render_blocks:
       valid per the ``commit-prefix`` block). Merging that commit
       ends the phase; pre-merge close keeps ``state.json`` in sync
       with what reviewers approved.
+
+  - id: markdown-no-manual-wrap
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ### Rendered markdown is not manually line-wrapped
+
+      Rendered and authored markdown — PR bodies, issue/review comments,
+      audit / research / decision artifacts, READMEs, mkdocs pages, and
+      skill output envelopes — is written one line per paragraph. Do NOT
+      hard-wrap prose at ~72 (or any) columns; let the renderer / viewer
+      soft-wrap. Manual wrapping fights diffs (a one-word edit reflows a
+      whole block), breaks tables and list continuations, and corrupts
+      copy-paste.
+
+      The ~72-column wrap convention is reserved for **commit messages**
+      (subject + body), where tooling and ``git log`` assume it. Fenced
+      code blocks keep their own formatting. Skill output contracts inherit
+      this rule: a skill that emits markdown emits unwrapped paragraphs.
 
   - id: agent-report-contract
     target: AGENTS.md

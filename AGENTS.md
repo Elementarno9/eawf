@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.7 hash=681f4b031e00bda5 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.8 hash=e45337c787a792be -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -58,6 +58,8 @@ non-trivial body has an expansion block immediately following.
     ``prep-plan-mode``.
 27. **Iter and phase close timing.** See
     ``iter-phase-close-timing``.
+28. **Rendered markdown is not manually line-wrapped.** See
+    ``markdown-no-manual-wrap``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -84,7 +86,7 @@ IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN>``
 (zero-padded, e.g., ``P00``, ``P03``). Wave IDs: ``W<NN>`` likewise.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.3 hash=6d0e4bb5c2b0dfe2 -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.3 hash=80afcb466abe1f57 -->
 ### Naming conventions
 
 To prevent drift across state models, envelopes, parameters, and
@@ -94,7 +96,7 @@ merging, not papered over with adapter shims.
 
 **State scope identifier** — ``scope_id`` (never bare ``scope``).
 Applies to Pydantic field names on ``State`` models
-(e.g. ``PluginInstall``), :class:`~eawf.render.envelope.EnvelopeHeader`,
+(e.g. ``PluginInstall``), :class:`~eawf.surfaces.render.envelope.EnvelopeHeader`,
 function kwargs (e.g. ``add_artifact(scope_id=...)``,
 ``artifact_urn(scope_id, ...)``), JSON keys on the wire, and
 ``state.json`` field names. Bare ``scope`` is reserved for CLI
@@ -598,7 +600,7 @@ ends the phase; pre-merge close keeps ``state.json`` in sync
 with what reviewers approved.
 
 <!-- END EAWF:managed id=iter-phase-close-timing -->
-<!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=7e6a3b368a8b0993 -->
+<!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=a9fd52b122658082 -->
 ### Rationale
 
 **Entity-title naming.** Every lifecycle and research entity
@@ -631,7 +633,7 @@ The model enforces the hard bound: ``title`` is
 ``Annotated[str, Field(min_length=1, max_length=72)]`` on every entity,
 so an over-72 title fails :class:`pydantic.ValidationError` at the
 ingestion boundary. The style backstop is
-:func:`eawf.render.agents_md.lint_entity_title`, which a reviewer (or a
+:func:`eawf.surfaces.render.agents_md.lint_entity_title`, which a reviewer (or a
 future authoring command) runs over a candidate title to flag an
 over-cap or a trailing-period title before it reaches the model — the
 same two failure modes the bound and this rule describe.
@@ -695,3 +697,20 @@ the happy path is reworked; ``uv run mypy src/`` backs the explicit-return
 contract via full type hints.
 
 <!-- END EAWF:managed id=engineering-practice -->
+<!-- BEGIN EAWF:managed id=markdown-no-manual-wrap version=1.0 hash=f2e90c93b197633d -->
+### Rendered markdown is not manually line-wrapped
+
+Rendered and authored markdown — PR bodies, issue/review comments,
+audit / research / decision artifacts, READMEs, mkdocs pages, and
+skill output envelopes — is written one line per paragraph. Do NOT
+hard-wrap prose at ~72 (or any) columns; let the renderer / viewer
+soft-wrap. Manual wrapping fights diffs (a one-word edit reflows a
+whole block), breaks tables and list continuations, and corrupts
+copy-paste.
+
+The ~72-column wrap convention is reserved for **commit messages**
+(subject + body), where tooling and ``git log`` assume it. Fenced
+code blocks keep their own formatting. Skill output contracts inherit
+this rule: a skill that emits markdown emits unwrapped paragraphs.
+
+<!-- END EAWF:managed id=markdown-no-manual-wrap -->

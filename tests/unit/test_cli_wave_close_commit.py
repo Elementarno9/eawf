@@ -65,6 +65,22 @@ def test_resolve_commit_sha_passes_ref_with_commit_suffix(
     assert captured["cmd"] == ["git", "rev-parse", "feature/foo^{commit}"]
 
 
+def test_resolve_commit_sha_normalises_short_sha_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A short-SHA ref is passed to rev-parse and normalised to 40-char hex (B045)."""
+    full = "abc1234def5678abc1234def5678abc1234def56"  # pragma: allowlist secret
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        captured["cmd"] = list(cmd)
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=f"{full}\n", stderr="")
+
+    _patch_run(monkeypatch, fake_run)
+    resolved = lifecycle_cli._resolve_commit_sha("abc1234")
+    assert captured["cmd"] == ["git", "rev-parse", "abc1234^{commit}"]
+    assert resolved == full
+    assert len(resolved) == 40
+
+
 def test_resolve_commit_sha_rejects_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-zero ``rev-parse`` exit raises ``InvalidInput`` with the ref."""
 

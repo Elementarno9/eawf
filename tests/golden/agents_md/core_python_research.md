@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.7 hash=681f4b031e00bda5 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.8 hash=e45337c787a792be -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -58,6 +58,8 @@ non-trivial body has an expansion block immediately following.
     ``prep-plan-mode``.
 27. **Iter and phase close timing.** See
     ``iter-phase-close-timing``.
+28. **Rendered markdown is not manually line-wrapped.** See
+    ``markdown-no-manual-wrap``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -573,6 +575,23 @@ ends the phase; pre-merge close keeps ``state.json`` in sync
 with what reviewers approved.
 
 <!-- END EAWF:managed id=iter-phase-close-timing -->
+<!-- BEGIN EAWF:managed id=markdown-no-manual-wrap version=1.0 hash=f2e90c93b197633d -->
+### Rendered markdown is not manually line-wrapped
+
+Rendered and authored markdown — PR bodies, issue/review comments,
+audit / research / decision artifacts, READMEs, mkdocs pages, and
+skill output envelopes — is written one line per paragraph. Do NOT
+hard-wrap prose at ~72 (or any) columns; let the renderer / viewer
+soft-wrap. Manual wrapping fights diffs (a one-word edit reflows a
+whole block), breaks tables and list continuations, and corrupts
+copy-paste.
+
+The ~72-column wrap convention is reserved for **commit messages**
+(subject + body), where tooling and ``git log`` assume it. Fenced
+code blocks keep their own formatting. Skill output contracts inherit
+this rule: a skill that emits markdown emits unwrapped paragraphs.
+
+<!-- END EAWF:managed id=markdown-no-manual-wrap -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=4af66a5ed7687989 -->
 ### Agent report contract
 
