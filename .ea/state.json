@@ -3657,6 +3657,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P27-I05-W31",
       "updated_at": "2026-05-25T02:35:39.138273Z"
+    },
+    "P27-I05-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W32-bucket-20260525T182839Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P27-I05-W32",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P27-I05-W32",
+      "updated_at": "2026-05-25T18:28:39.944410Z"
     }
   },
   "goals": {
@@ -4483,7 +4496,11 @@
         "P27-I05-W28",
         "P27-I05-W29",
         "P27-I05-W30",
-        "P27-I05-W31"
+        "P27-I05-W31",
+        "P27-I05-W32",
+        "P27-I05-W33",
+        "P27-I05-W34",
+        "P27-I05-W35"
       ]
     }
   },
@@ -5038,7 +5055,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:35:53.809368Z",
+  "updated_at": "2026-05-25T18:29:12.346695Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18273,6 +18290,127 @@
         "not the lifted v0.4 sentinel deferral; mypy + ruff clean"
       ],
       "title": "Polish: correct stale codex-sentinel comment in installer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W32": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T18:29:12.346524Z",
+      "commit": "346e453cb83af23092254896bea6152349feddfc",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "pyproject.toml"
+      ],
+      "id": "P27-I05-W32",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:28:26.239970Z",
+      "outcome": "pydantic_core reclassified DEP001->DEP003; deptry src exits 0",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "deptry src exits 0; pydantic_core moved DEP001->DEP003 with accurate comment"
+      ],
+      "title": "Reclassify pydantic_core deptry ignore to DEP003",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W33": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/test_metrics_dispatch_cost.py"
+      ],
+      "id": "P27-I05-W33",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:28:26.703947Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the two telemetry-disabled dispatch-cost tests pass regardless of user-global telemetry.enabled; config layer isolated in-test"
+      ],
+      "title": "Make metrics dispatch-cost tests hermetic to global config",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W34": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/worktree/git.py",
+        "src/eawf/runtime/worktree/merge_back.py",
+        "src/eawf/surfaces/cli/commands/estimation.py",
+        "src/eawf/surfaces/cli/commands/clone_repo.py",
+        "src/eawf/surfaces/cli/commands/init.py",
+        "src/eawf/workflow/estimation/recovery.py",
+        "docs/architecture/overview.md",
+        "tests/unit/test_estimation_recovery.py"
+      ],
+      "id": "P27-I05-W34",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:28:27.178726Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "6 inline-Raises docstrings converted to Google-style Raises: block; overview.md daemon path = src/eawf/runtime/daemon; find_stale_actuals scope kwarg renamed scope_id; mypy+ruff+targeted tests green"
+      ],
+      "title": "Post-regroup consistency: Raises blocks + stale doc path + scope_id",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/exporter.py",
+        "tests/golden/metrics_export/fixture.json",
+        "tests/unit/test_metrics_exporter.py"
+      ],
+      "id": "P27-I05-W35",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:28:27.648482Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "MetricsSnapshot.scope_id field + scope_id JSON wire key in export document; golden fixture regenerated; mypy+metrics tests green"
+      ],
+      "title": "Rename MetricsSnapshot scope to canonical scope_id wire key",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
