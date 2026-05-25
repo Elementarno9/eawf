@@ -25,6 +25,7 @@ from eawf.surfaces.tui.screens.overlays.detail import (
     resolve_detail,
 )
 from eawf.surfaces.tui.snapshot import capture_screen_text
+from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
@@ -307,7 +308,7 @@ def test_backlog_row_activated_opens_detail_modal() -> None:
             item_id = next(iter(app.state.backlog))  # type: ignore[union-attr]
             table = app.screen.query_one(BacklogTable)
             table.post_message(BacklogTable.RowActivated(item_id))
-            await pilot.pause()
+            await settle_screen(pilot)
             assert isinstance(app.screen, DetailModal)
             assert item_id in app.export_screenshot()
 
@@ -322,7 +323,7 @@ def test_roadmap_wave_selected_opens_detail_modal() -> None:
             wave_id = next(iter(app.state.waves))  # type: ignore[union-attr]
             tree = app.screen.query_one(RoadmapTree)
             tree.post_message(RoadmapTree.WaveSelected(wave_id))
-            await pilot.pause()
+            await settle_screen(pilot)
             assert isinstance(app.screen, DetailModal)
             assert wave_id in app.export_screenshot()
 
