@@ -1816,6 +1816,18 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Refresh tui.md References after the P27-I04 TUI rebuild"
+    },
+    "B73": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-25T19:01:19.514805Z",
+      "description": "The snapshot-pairing gate currently infers phase-PR vs small-CL from whether the range spans multiple iters. Key it off the repo PR-model profile instead (agent-driven phase-PR -> rely on snapshot tests for golden freshness; managed small-CL -> per-commit test: pairing). Consider replacing per-commit subject enforcement with a direct 'goldens are fresh' check (snapshot regen produces no diff) which is mode-agnostic.",
+      "id": "B73",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Profile-drive the snapshot-pairing gate (agent-driven vs managed)"
     }
   },
   "current": {
@@ -3747,6 +3759,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W37",
       "updated_at": "2026-05-25T18:54:18.247080Z"
+    },
+    "P27-I05-W38": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W38-bucket-20260525T185935Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W38",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W38",
+      "updated_at": "2026-05-25T18:59:35.750177Z"
     }
   },
   "goals": {
@@ -4579,7 +4604,8 @@
         "P27-I05-W34",
         "P27-I05-W35",
         "P27-I05-W36",
-        "P27-I05-W37"
+        "P27-I05-W37",
+        "P27-I05-W38"
       ]
     }
   },
@@ -5134,7 +5160,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T18:55:00.786783Z",
+  "updated_at": "2026-05-25T19:01:33.036803Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18546,6 +18572,36 @@
         "all 10 per-package coverage gates match files (coverage.xml filenames carry src/eawf/ prefix) and pass thresholds; CI coverage gate green"
       ],
       "title": "Fix per-package coverage gate paths for layered tree + src prefix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P27-I05-W38": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T19:01:33.035984Z",
+      "commit": "29b675dc7cf96384eacb82d61ab63e6114e7bba3",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/snapshot_pairing_gate.py",
+        "tests/unit/test_snapshot_update.py"
+      ],
+      "id": "P27-I05-W38",
+      "iter_id": "P27-I05",
+      "opened_at": "2026-05-25T18:59:35.265271Z",
+      "outcome": "gate defers per-commit pairing for multi-iter phase-PR ranges (snapshot tests pin freshness); single-iter still hard-fails; +4 tests; B73 tracks profile-driven redesign",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "gate defers per-commit pairing to wholesale review for multi-iter (phase-PR) ranges",
+        "still hard-fails single-iter ranges; snapshot tests pin golden freshness; boundary tests added; CI snapshot gate green"
+      ],
+      "title": "Make snapshot-pairing gate phase-PR-aware (multi-iter range)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
