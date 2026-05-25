@@ -1835,8 +1835,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P27-I05",
-    "phase_id": "P27",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -4584,14 +4584,14 @@
       ]
     },
     "P27-I05": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A39-P27-i05-backlog",
+      "closed_at": "2026-05-25T21:22:12.807215Z",
       "description": null,
       "estimate_id": null,
       "id": "P27-I05",
       "opened_at": "2026-05-24T00:52:30.210157Z",
       "phase_id": "P27",
-      "status": "active",
+      "status": "closed",
       "title": "package hygiene + backlog rollout + layered regroup",
       "wave_ids": [
         "P27-I05-W01",
@@ -5128,8 +5128,8 @@
       "title": "C05+C04a/b/c/d+C06 surfaces: CLI + workflow/skills/agent/runtime +"
     },
     "P27": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A39-P27-i05-backlog",
+      "closed_at": "2026-05-25T21:22:20.599276Z",
       "depends_on": [
         "P26"
       ],
@@ -5150,7 +5150,7 @@
         "ART-research-long-term-2026-05-17-c10-operations",
         "ART-research-long-term-2026-05-18-c12-implementation-rollup"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "C09+C10 observability + operations: quality DSL + telemetry +"
     }
@@ -5188,7 +5188,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T19:26:30.473374Z",
+  "updated_at": "2026-05-25T21:22:20.599430Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
