@@ -1005,6 +1005,10 @@
       "additionalProperties": false,
       "description": "Incident record (full timeline in incidents.jsonl).",
       "properties": {
+        "cause": {
+          "$ref": "#/$defs/IncidentCause",
+          "default": "unknown"
+        },
         "closed_at": {
           "anyOf": [
             {
@@ -1100,6 +1104,41 @@
       ],
       "title": "Incident",
       "type": "object"
+    },
+    "IncidentCause": {
+      "description": "Closed taxonomy for ``IncidentPayload.cause``.\n\nReplaces the free-string ``root_cause`` so the observability projection\ncan ``GROUP BY cause`` without string normalisation. Grouped by the\nsurface the incident originates from. :attr:`LEGACY_FREE_TEXT` is a\ndocumented sentinel for hypothetical downstream forks with pre-taxonomy\nrows that carried prose; the canonical repo never defaults to it.\n:attr:`UNKNOWN` is the not-yet-classified catchall for new emissions.",
+      "enum": [
+        "runtime_rate_limit",
+        "runtime_server_error",
+        "runtime_timeout",
+        "runtime_api_error",
+        "runtime_auth_error",
+        "runtime_unavailable",
+        "runtime_oauth_cache_stripped",
+        "daemon_wal_recovery",
+        "daemon_socket_bind",
+        "daemon_version_skew",
+        "daemon_subprocess_oom",
+        "daemon_subscription_dropped",
+        "daemon_lock_timeout",
+        "cache_mislayer",
+        "cost_budget_breached",
+        "session_handle_pruned",
+        "session_failover",
+        "worktree_cherry_pick_conflict",
+        "worktree_branch_stale",
+        "git_push_rejected",
+        "plugin_drift",
+        "spec_validation_failed",
+        "state_validation_failed",
+        "audit_failed",
+        "operator_interrupt",
+        "external_api_failure",
+        "legacy_free_text",
+        "unknown"
+      ],
+      "title": "IncidentCause",
+      "type": "string"
     },
     "IncidentSeverity": {
       "enum": [

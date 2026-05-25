@@ -30,6 +30,7 @@ from eawf.kernel.state.enums import (
     Health,
     HypothesisStatus,
     HypothesisVerdict,
+    IncidentCause,
     IncidentSeverity,
     IncidentStatus,
     IterStatus,
@@ -554,6 +555,10 @@ class Incident(_StrictModel):
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
     root_cause: str | None = None
+    #: Typed cause taxonomy (V7). ``UNKNOWN`` until classified at close via
+    #: ``eawf incident close --cause``; the free-text ``root_cause`` carries
+    #: the operator prose, ``cause`` carries the ``GROUP BY``-able category.
+    cause: IncidentCause = IncidentCause.UNKNOWN
     corrective_action_ids: list[str] = Field(default_factory=list)
     report_artifact_id: str | None = None
 

@@ -401,11 +401,12 @@ service_templates = [
     "dev.eawf.eawfd.plist.j2",
 ]
 # Wheel-size ceiling enforced by the packaging gate (bytes). The C10
-# design targeted 1 MB against a ~350 KB source-only wheel; the source
-# tree grew through P22-P27 to ~1.3 MB before any ``_data`` bundling,
-# so the literal 1 MB target is stale. This ceiling sits above the
-# current measured size with headroom and still catches a large
-# regression (e.g. accidentally bundling all three plugin trees or the
-# rendered docs subset). Recalibrate down once the source tree is
-# trimmed or the plugin trees move behind install extras.
-wheel_max_bytes = 2097152
+# design targeted 1 MB against a ~350 KB source-only wheel; the tree grew
+# through P22-P27 so the literal 1 MB target is unreachable. After the
+# P27-I05 layered regroup + dead-code trim the bundled wheel measures
+# ~1.47 MB, so the ceiling is recalibrated from 2 MB down to 1.6 MiB --
+# toward 1 MB while keeping ~14 % headroom over the measured size and
+# still catching a large regression (e.g. accidentally bundling all
+# three plugin trees or the rendered docs subset). Recalibrate down again
+# once the plugin trees move behind install extras.
+wheel_max_bytes = 1677721

@@ -12,6 +12,7 @@ import pytest
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
+    IncidentCause,
     IncidentSeverity,
     IncidentStatus,
     StoreKind,
@@ -154,6 +155,38 @@ def test_close_incident_happy_with_complete_audit(tmp_path: Path) -> None:
     assert "root_cause" not in record.payload
     assert record.payload["timeline"][0]["entry"] == "closed: config bug"
     assert event.payload["event_type"] == "incident.close"
+
+
+def test_close_incident_records_typed_cause(tmp_path: Path) -> None:
+    """A close with an explicit ``cause`` stamps the typed taxonomy."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    incident.open_incident(
+        state,
+        incident_id="INC-002",
+        scope_id="QR",
+        severity=IncidentSeverity.HIGH,
+        title="t",
+    )
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-002",
+        scope_id="QR",
+        kind=AuditKind.INCIDENT,
+        report_artifact_id="ART-001",
+        verdict=AuditVerdict.PASS,
+    )
+    record, _event = incident.close_incident(
+        state,
+        incident_id="INC-002",
+        root_cause="hit provider 429s",
+        corrective_action_ids=[],
+        audit_id="AUD-002",
+        cause=IncidentCause.RUNTIME_RATE_LIMIT,
+    )
+    assert state.incidents["INC-002"].cause is IncidentCause.RUNTIME_RATE_LIMIT
+    assert record.payload["cause"] == "runtime_rate_limit"
 
 
 def test_view_incident_unknown_raises(tmp_path: Path) -> None:

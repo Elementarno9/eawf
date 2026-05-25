@@ -48,6 +48,7 @@ def open_incident(
         opened_at=now,
         closed_at=None,
         root_cause=None,
+        cause=IncidentCause.UNKNOWN,
         corrective_action_ids=[],
         report_artifact_id=None,
     )
@@ -92,8 +93,15 @@ def close_incident(
     root_cause: str,
     corrective_action_ids: list[str],
     audit_id: str,
+    cause: IncidentCause = IncidentCause.UNKNOWN,
 ) -> tuple[Envelope, Envelope]:
-    """Close an incident in place; requires complete audit."""
+    """Close an incident in place; requires complete audit.
+
+    Args:
+        cause: Typed cause taxonomy recorded on the incident + close
+            payload. Defaults to ``UNKNOWN`` so a close without an
+            explicit ``--cause`` stays uncategorised rather than guessing.
+    """
     incidents: dict[str, Incident] = dict(state.incidents or {})
     if incident_id not in incidents:
         raise UserError(f"incident {incident_id!r} not found", kind="NotFound")
@@ -108,6 +116,7 @@ def close_incident(
         update={
             "status": IncidentStatus.RESOLVED,
             "root_cause": root_cause,
+            "cause": cause,
             "corrective_action_ids": list(corrective_action_ids),
             "closed_at": now,
         }
@@ -127,9 +136,9 @@ def close_incident(
                 {"at": now.isoformat(), "entry": f"closed: {root_cause}"},
             ],
             # The operator-supplied prose stays on Incident.root_cause and in
-            # the timeline entry above; the typed payload cause is left
-            # unclassified until a --cause CLI surface lands.
-            "cause": IncidentCause.UNKNOWN.value,
+            # the timeline entry above; the typed ``cause`` carries the
+            # GROUP BY-able taxonomy, set via ``eawf incident close --cause``.
+            "cause": cause.value,
             "corrective_action_ids": list(corrective_action_ids),
         },
     )

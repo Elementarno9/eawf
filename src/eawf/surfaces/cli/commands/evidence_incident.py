@@ -16,6 +16,7 @@ from typing import Annotated
 import typer
 
 from eawf.kernel.state.enums import (
+    IncidentCause,
     IncidentSeverity,
     StoreKind,
 )
@@ -114,6 +115,13 @@ def incident_close(
             help="Corrective-action id (repeatable)",
         ),
     ] = None,
+    cause: Annotated[
+        IncidentCause,
+        typer.Option(
+            "--cause",
+            help="Typed cause taxonomy (GROUP BY-able); defaults to 'unknown'.",
+        ),
+    ] = IncidentCause.UNKNOWN,
 ) -> None:
     """Close an incident; requires --audit of a complete audit."""
     from eawf.surfaces.cli._mutation import state_transaction
@@ -132,6 +140,7 @@ def incident_close(
                 root_cause=root_cause,
                 corrective_action_ids=actions,
                 audit_id=audit,
+                cause=cause,
             )
             paths = store_paths(state_path)
             append_jsonl(paths[StoreKind.INCIDENT], record)
@@ -144,6 +153,7 @@ def incident_close(
         {
             "incident_id": incident_id,
             "root_cause": root_cause,
+            "cause": cause.value,
             "corrective_action_ids": actions,
             "audit_id": audit,
             "status": "resolved",
