@@ -73,7 +73,7 @@ def test_dispatch_cost_recorded_when_telemetry_disabled(
     # Confirm the precondition against the built-in default: isolate the
     # global overlay (~/.config/eawf/config.yaml) and the env layer so a
     # developer who opted telemetry on locally cannot flip this assertion
-    # (B71 -- the test must be hermetic across machines and CI alike).
+    # (the test must be hermetic across machines and CI alike).
     monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
     merged, _sources = merge_config(repo=tmp_path, env={})
     assert get_dotted(merged, "telemetry.enabled") is False
@@ -113,7 +113,7 @@ def test_dispatch_cost_recorded_on_runtime_fallback_when_disabled(
     neither gated by ``telemetry.enabled``.
     """
     # Isolate the global overlay + env layer so the precondition reflects the
-    # built-in strict-local default rather than a developer's local opt-in (B71).
+    # built-in strict-local default rather than a developer's local opt-in.
     monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
     merged, _sources = merge_config(repo=tmp_path, env={})
     assert get_dotted(merged, "telemetry.enabled") is False
