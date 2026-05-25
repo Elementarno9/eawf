@@ -66,6 +66,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-24-p27-i04-closure.md",
       "urn": "urn:eawf:v1:artifact:P27-I04/A38-P27-i04-report"
     },
+    "A39-P27-i05-backlog-report": {
+      "created_at": "2026-05-25T02:10:07.697400Z",
+      "id": "A39-P27-i05-backlog-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "f70b5fb276e750596a0e9ce008f522980424e223ab0c7f706b3ffe4263ea785c",
+      "size_bytes": 5794,
+      "uri": "repo:.ea/artifacts/audits/2026-05-25-p27-i05-backlog-closeout.md",
+      "urn": "urn:eawf:v1:artifact:P27-I05/A39-P27-i05-backlog-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -965,6 +975,17 @@
       "scope_id": "P27-I04",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A39-P27-i05-backlog": {
+      "check_results": [],
+      "created_at": "2026-05-25T02:10:08.213567Z",
+      "id": "A39-P27-i05-backlog",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A39-P27-i05-backlog-report",
+      "scope_id": "P27-I05",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -993,15 +1014,15 @@
       "title": "Windows v0.1.1 support"
     },
     "B003": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:25.448173Z",
+      "commit": "2188c5a",
       "created_at": "2026-05-10T12:50:35.385269Z",
       "description": "Ship an OpenCode harness adapter (plugin install/doctor plus a managed opencode.json block) so eawf drives OpenCode alongside Claude Code and Codex.",
       "id": "B003",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "OpenCodeAdapter implements RuntimeAdapter (real session/error-class impl) at runtime/runtimes/opencode/adapter.py",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "OpenCode runtime adapter"
     },
     "B004": {
@@ -1077,15 +1098,15 @@
       "title": "Golden scenarios (fresh_repo, enrich_existing, flow_full)"
     },
     "B010": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:29.005495Z",
+      "commit": "c076b01",
       "created_at": "2026-05-10T12:50:37.904560Z",
       "description": "Tag v0.1.0 and publish GitHub release notes as the first public milestone marker (now folded into the v0.3 release track).",
       "id": "B010",
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Superseded: release-notes renderer (render/release_notes.py, eawf release notes) replaces manual v0.1.0-tag concern; v0.3 tag/notes ride W23/W24",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "v0.1.0 release tag + GitHub release notes"
     },
     "B011": {
@@ -1137,15 +1158,15 @@
       "title": "Roadmap dashboard + bare-eawf interactive TUI: read-only 'eawf roadmap"
     },
     "B015": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:25.868901Z",
+      "commit": "deec936",
       "created_at": "2026-05-10T14:47:38.354765Z",
       "description": "Map eawf custom hook events onto the standard Claude Code hook event vocabulary so the rendered plugin reacts to native CC lifecycle events, not only eawf-internal ones.",
       "id": "B015",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "Session-level plugin-mode hooks map Ea events to CC hook events: claude/hook_map.py + hooks_router.py + render/hooks.py",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Plugin-mode hooks: map eawf custom events to standard CC hook events"
     },
     "B016": {
@@ -1209,15 +1230,15 @@
       "title": "Hypothesis lifecycle CLI: 'hypothesis open' permissive, 'hypothesis"
     },
     "B021": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:26.327501Z",
+      "commit": "32c31ba",
       "created_at": "2026-05-10T19:49:40.903684Z",
       "description": "Artifact registry: sha256 mandatory for local files, optional for URL artifacts; 'eawf artifact verify' recomputes on demand — locks D04; target P09",
       "id": "B021",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "eawf artifact verify recomputes sha256 (artifact_verify/_verify_one_artifact); target-P09 ref stale",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Artifact registry: sha256 mandatory for local files, optional for URL"
     },
     "B022": {
@@ -1269,15 +1290,15 @@
       "title": "Subagent prompt renderer ('wave dispatch'): render wave-spec block +"
     },
     "B026": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:26.764373Z",
+      "commit": "473ab21",
       "created_at": "2026-05-10T19:49:56.478547Z",
       "description": "Wave DAG persistence in state.waves: edges (blocks, blocked_by), per-wave status, attached worktree branch — target P08 orchestration",
       "id": "B026",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "Wave DAG persistence: Wave.deps/blocks edges + status enum + graph/next-ready verbs; target-P08 ref stale",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Wave DAG persistence in state.waves: edges (blocks, blocked_by),"
     },
     "B027": {
@@ -1293,15 +1314,15 @@
       "title": "Cherry-pick automation ('wave land'): cherry-pick worktree commits"
     },
     "B028": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:27.202754Z",
+      "commit": "f778cb3",
       "created_at": "2026-05-10T19:49:57.303775Z",
       "description": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08 observability",
       "id": "B028",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Wave.token_budget per-wave cap field + estimation.budget.enforce default; enforcement tracked as B066->v0.4",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Per-wave token-budget cap (warn at 75%, block at 100%) — target P08"
     },
     "B029": {
@@ -1485,15 +1506,15 @@
       "title": "User-skill registry: per-user skill catalogue independent of project's"
     },
     "B044": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:27.653412Z",
+      "commit": "005b93f",
       "created_at": "2026-05-10T21:27:57.937474Z",
       "description": "Add a render path that folds ratified Decision rows into AGENTS.md so the agent contract stays in sync with state.json decisions without hand-editing.",
       "id": "B044",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "AGENTS.md sync-from-decisions render path: render/agents_md.py decisions section + cli sync managed-region rebuild",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "AGENTS.md sync-from-decisions render path"
     },
     "B045": {
@@ -1533,15 +1554,15 @@
       "title": "scrub /Users/... ellipsis from pre-existing P08 worktree path-fix"
     },
     "B048": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:29.435110Z",
+      "commit": "877bf87",
       "created_at": "2026-05-11T14:52:28.239930Z",
       "description": "Add a state-CLI verb to set the project version target so the release flow reads the intended next version from state.json rather than a hand-edited literal.",
       "id": "B048",
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Superseded: tools/version_bump.py + current_target_version() satisfy version-target setter intent; W23 drives 0.2.0->0.3.0",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "State CLI: project version-target setter (v0.3 prep)"
     },
     "B049": {
@@ -1593,15 +1614,15 @@
       "title": "Pre-commit hygiene: secrets-baseline content-hash + commit-prefix"
     },
     "B056": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:28.095663Z",
+      "commit": "7aee720",
       "created_at": "2026-05-11T20:47:25.292989Z",
       "description": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind deprecated alias)",
       "id": "B056",
       "priority": "P1",
-      "resolution": null,
+      "resolution": "Profile runtime.adapters list + runtime.kind deprecated alias via _normalise_runtime_adapters (explicit list wins)",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind"
     },
     "B057": {
@@ -1689,27 +1710,27 @@
       "title": "AGENTS.md markdown-style rule: no manual line-wrap in"
     },
     "B064": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:28.560194Z",
+      "commit": "b92f854",
       "created_at": "2026-05-15T14:42:24.153590Z",
       "description": "Commit-msg hook normalize-coauthor.py: dedupe Co-Authored-By by email + collapse 'Claude <model variant> <email>' → 'Claude <email>' (and Codex symmetrically); idempotent; ships under ~/.claude/git-hooks/ via global hooks bundle. Defense-in-depth alongside operator's .claude/settings.json includeCoAuthoredBy=false change.",
       "id": "B064",
       "priority": "P2",
-      "resolution": null,
+      "resolution": "normalize-coauthor commit-msg hook shipped: tools/normalize_coauthor.py (+coauthor_policy/insert_coauthor)",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Commit-msg hook normalize-coauthor.py: dedupe Co-Authored-By by email"
     },
     "B065": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T02:10:29.860440Z",
+      "commit": "ed387d6",
       "created_at": "2026-05-15T14:42:24.687836Z",
       "description": "Backlog defer:publication tag marker — applied to B001/B002/B004/B005/B010/B016/B017/B048 indicating publication-deferred per D34. Tag is documentation only; backlog rows stay open and explicitly do not block any release until operator un-defers.",
       "id": "B065",
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Obsolete doc-only defer:publication tag; premise collapsed when D09 un-deferred B005 to v0.3; publication items tracked individually",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Backlog defer:publication tag marker — applied to"
     },
     "B066": {
@@ -3534,6 +3555,19 @@
       "scope_id": "P27-I05-W26",
       "updated_at": "2026-05-25T00:52:12.399179Z"
     },
+    "P27-I05-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W27-bucket-20260525T020726Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W27",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W27",
+      "updated_at": "2026-05-25T02:07:26.197241Z"
+    },
     "P27-I05-W28": {
       "confidence": "low",
       "current_store_record_id": "EST-P27-I05-W28-bucket-20260524T234653Z",
@@ -4924,7 +4958,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:04:49.396280Z",
+  "updated_at": "2026-05-25T02:11:01.320459Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18016,9 +18050,9 @@
       "blocks": [
         "P27-I05-W23"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p27-i05-w27",
+      "closed_at": "2026-05-25T02:11:01.319796Z",
+      "commit": "977f7a77a8e722a9504fb6cb79073bfd084d3deb",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18031,10 +18065,10 @@
       "id": "P27-I05-W27",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T18:43:50.694390Z",
-      "outcome": null,
+      "outcome": "Closed 11 delivered/stale backlog items (B003 B015 B021 B026 B028 B044 B056 B064 B010 B048 B065) with per-item resolving SHA + audit A39-P27-i05-backlog (verdict pass); closure report artifact A39-P27-i05-backlog-report.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "verify each delivered (B003 B015 B021 B026 B028 B044 B056 B064 B010 B048 B065); backlog close each with audit evidence; stale target-phase refs retired"
       ],
