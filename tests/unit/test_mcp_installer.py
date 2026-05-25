@@ -19,6 +19,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from eawf.kernel.state.models import McpServer
 from eawf.runtime.mcp import installer
 from eawf.runtime.mcp.installer import (
     IntegrityViolation,
+    VerifyFailure,
     install_runtime_entry,
     list_runtime_entries,
     remove_runtime_entry,
@@ -326,6 +328,171 @@ def test_install_runtime_entry_malformed_settings_json_raises(tmp_path: Path) ->
         install_runtime_entry(
             server=_make_server(),
             runtime="claude",
+            target_dir=tmp_path,
+            force=False,
+        )
+
+
+def _read_toml(path: Path) -> dict[str, object]:
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def test_install_codex_entry_creates_toml_when_absent(tmp_path: Path) -> None:
+    server = _make_server(args=["--flag"], env_refs=["${ENV:DEMO_KEY}"])
+    result = install_runtime_entry(
+        server=server,
+        runtime="codex",
+        target_dir=tmp_path,
+        force=False,
+    )
+    assert result.action == "created"
+    assert result.target_path == tmp_path / ".codex" / "config.toml"
+    parsed = _read_toml(result.target_path)
+    table = parsed["mcp_servers"]["demo"]  # type: ignore[index]
+    assert table["command"] == "/usr/local/bin/demo"
+    assert table["args"] == ["--flag"]
+    assert table["env"] == {"DEMO_KEY": "${ENV:DEMO_KEY}"}
+    assert table["__eawf_owner"] == "eawf"
+
+
+def test_install_codex_preserves_user_table_and_plugin_block(tmp_path: Path) -> None:
+    """A user ``mcp_servers`` table and the plugin marker block survive."""
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        "# user header\n"
+        '[mcp_servers."user-keep"]\n'
+        'command = "/usr/bin/keep"\n\n'
+        "# ---- __eawf_managed begin ----\n"
+        "[plugins.eawf]\n"
+        "enabled = true\n"
+        "# ---- __eawf_managed end ----\n",
+        encoding="utf-8",
+    )
+    result = install_runtime_entry(
+        server=_make_server(server_id="ours", command="/ours"),
+        runtime="codex",
+        target_dir=tmp_path,
+        force=False,
+    )
+    assert result.user_entries_preserved == ["user-keep"]
+    parsed = _read_toml(config)
+    assert parsed["mcp_servers"]["user-keep"] == {"command": "/usr/bin/keep"}  # type: ignore[index]
+    assert parsed["plugins"] == {"eawf": {"enabled": True}}  # type: ignore[index]
+    assert parsed["mcp_servers"]["ours"]["__eawf_owner"] == "eawf"  # type: ignore[index]
+
+
+def test_install_codex_refuses_user_owned_collision_without_force(tmp_path: Path) -> None:
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text('[mcp_servers."dup"]\ncommand = "/manual"\n', encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        install_runtime_entry(
+            server=_make_server(server_id="dup"),
+            runtime="codex",
+            target_dir=tmp_path,
+            force=False,
+        )
+
+
+def test_install_codex_force_over_user_owned_raises_valueerror(tmp_path: Path) -> None:
+    """Force cannot splice out a user table; the installer fails loudly."""
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text('[mcp_servers."dup"]\ncommand = "/manual"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="manually"):
+        install_runtime_entry(
+            server=_make_server(server_id="dup"),
+            runtime="codex",
+            target_dir=tmp_path,
+            force=True,
+        )
+
+
+def test_remove_codex_entry_deletes_only_eawf_owned(tmp_path: Path) -> None:
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text('[mcp_servers."manual"]\ncommand = "/manual"\n', encoding="utf-8")
+    install_runtime_entry(
+        server=_make_server(server_id="ours", command="/ours"),
+        runtime="codex",
+        target_dir=tmp_path,
+        force=False,
+    )
+    result = remove_runtime_entry(
+        server_id="ours",
+        runtime="codex",
+        target_dir=tmp_path,
+        force=False,
+    )
+    assert result.action == "removed"
+    parsed = _read_toml(config)
+    assert "ours" not in parsed["mcp_servers"]  # type: ignore[operator]
+    assert parsed["mcp_servers"]["manual"] == {"command": "/manual"}  # type: ignore[index]
+
+
+def test_remove_codex_entry_refuses_user_owned(tmp_path: Path) -> None:
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text('[mcp_servers."manual"]\ncommand = "/manual"\n', encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        remove_runtime_entry(
+            server_id="manual",
+            runtime="codex",
+            target_dir=tmp_path,
+            force=False,
+        )
+
+
+def test_remove_codex_entry_absent_id_is_no_op(tmp_path: Path) -> None:
+    result = remove_runtime_entry(
+        server_id="missing",
+        runtime="codex",
+        target_dir=tmp_path,
+        force=False,
+    )
+    assert result.action == "absent"
+
+
+def test_list_runtime_entries_codex_owner_annotation(tmp_path: Path) -> None:
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text('[mcp_servers."manual"]\ncommand = "/manual"\n', encoding="utf-8")
+    install_runtime_entry(
+        server=_make_server(server_id="ours", command="/ours"),
+        runtime="codex",
+        target_dir=tmp_path,
+        force=False,
+    )
+    rows = list_runtime_entries(runtime="codex", target_dir=tmp_path)
+    by_id = {r.id: r for r in rows}
+    assert by_id["manual"].owner == "user"
+    assert by_id["ours"].owner == "eawf"
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_install_raises_verify_failure_on_corrupt_writeback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: str
+) -> None:
+    """A write that lands the wrong bytes is caught by the read-back verify."""
+
+    def _corrupt(path: Path, _text: str) -> None:
+        # Materialise a syntactically valid but grant-wrong config so the
+        # parse step in the verifier succeeds and the *content* check fails.
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if runtime == "codex":
+            path.write_text('[mcp_servers."demo"]\ncommand = "/WRONG"\n', encoding="utf-8")
+        else:
+            path.write_text(
+                json.dumps({"mcpServers": {"demo": {"command": "/WRONG"}}}),
+                encoding="utf-8",
+            )
+
+    monkeypatch.setattr(installer, "atomic_write_text", _corrupt)
+    with pytest.raises(VerifyFailure):
+        install_runtime_entry(
+            server=_make_server(command="/right"),
+            runtime=runtime,
             target_dir=tmp_path,
             force=False,
         )

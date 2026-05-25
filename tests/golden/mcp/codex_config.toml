@@ -1,0 +1,8 @@
+# ---- __eawf_mcp begin ----
+[mcp_servers."demo"]
+command = "/usr/local/bin/demo"
+args = ["--port", "8080"]
+env = { DEMO_KEY = "${ENV:DEMO_KEY}" }
+__eawf_owner = "eawf"
+__eawf_managed_at = "1970-01-01T00:00:00+00:00"
+# ---- __eawf_mcp end ----

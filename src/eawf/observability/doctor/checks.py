@@ -287,53 +287,86 @@ def _load_mcp_drift_state(workspace: Path) -> tuple[State, Path] | CheckResult:
         return CheckResult(name=name, status="ok", detail="state.json unparseable")
 
 
-def _scan_runtime_mcp_block(
-    path: Path, *, block_key: str, runtime: str, eawf_owned: Mapping[str, object]
-) -> tuple[set[str], list[str]] | CheckResult:
-    """Scan one runtime config file for eawf-owned MCP ids.
+def _grant_triple_from_state(server: object) -> tuple[str, list[str], dict[str, str]]:
+    """Return the (command, args, env-block) grant triple from a state row.
 
-    Returns the ``(ids, orphans)`` found, or a ``warn`` :class:`CheckResult`
-    when the file is present but unreadable. A missing file yields empties.
+    The env block renders ``env_refs`` to ``{NAME: "${ENV:NAME}"}`` — the
+    same literal-token shape the installer writes to disk — so the
+    comparison is apples-to-apples.
+    """
+    from eawf.runtime.mcp.env_ref import render_env_block
+
+    command: str = getattr(server, "command", "")
+    args: list[str] = [str(a) for a in getattr(server, "args", [])]
+    env: dict[str, str] = render_env_block(getattr(server, "env_refs", []))
+    return command, args, env
+
+
+def _grant_triple_from_disk(body: Mapping[str, object]) -> tuple[str, list[str], dict[str, str]]:
+    """Return the (command, args, env-block) grant triple from a disk entry."""
+    raw_args = body.get("args") or []
+    raw_env = body.get("env") or {}
+    args = [str(a) for a in raw_args] if isinstance(raw_args, (list, tuple)) else []
+    env = {str(k): str(v) for k, v in raw_env.items()} if isinstance(raw_env, dict) else {}
+    return str(body.get("command", "")), args, env
+
+
+def _extract_eawf_entries(
+    path: Path, *, fmt: str, block_key: str
+) -> dict[str, dict[str, object]] | CheckResult:
+    """Return the eawf-owned MCP entries in one runtime config file.
+
+    *fmt* is ``"json"`` (Claude settings.json / OpenCode opencode.json) or
+    ``"toml"`` (Codex config.toml). Returns ``{id: body}`` for every
+    ``__eawf_owner == "eawf"`` entry, an empty dict for a missing file, or
+    a ``warn`` :class:`CheckResult` when the file is present but unreadable.
     """
     import json as _json
+    import tomllib as _tomllib
 
     if not path.is_file():
-        return set(), []
+        return {}
     try:
-        body = _json.loads(path.read_text(encoding="utf-8") or "{}")
-    except _json.JSONDecodeError:
+        text = path.read_text(encoding="utf-8")
+        if fmt == "toml":
+            parsed: object = _tomllib.loads(text)
+        else:
+            parsed = _json.loads(text or "{}")
+    except _json.JSONDecodeError, _tomllib.TOMLDecodeError, UnicodeDecodeError:
         return CheckResult(name="mcp_drift", status="warn", detail=f"unreadable {path}")
-    found: set[str] = set()
-    orphans: list[str] = []
-    for sid, entry in (body.get(block_key) or {}).items():
-        if isinstance(entry, dict) and entry.get("__eawf_owner") == "eawf":
-            found.add(sid)
-            if sid not in eawf_owned:
-                orphans.append(f"{runtime}:{sid}")
-    return found, orphans
+    block = parsed.get(block_key) or {} if isinstance(parsed, dict) else {}
+    out: dict[str, dict[str, object]] = {}
+    if isinstance(block, dict):
+        for sid, entry in block.items():
+            if isinstance(entry, dict) and entry.get("__eawf_owner") == "eawf":
+                out[sid] = entry
+    return out
 
 
 def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
-    """Compare ``state.mcp_servers`` against runtime-config-emitted entries (D21 / B062).
+    """Compare ``state.mcp_servers`` against runtime-config-emitted entries.
 
     For every Eä-owned :class:`McpServer` in state, verify the same id is
-    present on disk under whichever runtime adapters have already
-    materialised an MCP block:
+    present on disk — with a matching command / args / env grant — under
+    whichever runtime adapters have materialised an MCP block:
 
     - Claude: ``<workspace>/.claude/settings.json:mcpServers[<id>]``
     - OpenCode: ``<workspace>/opencode.json:mcp[<id>]``
-    - Codex: ``<workspace>/.codex/config.toml`` — the v0.3 plugin
-      installer does not yet emit a per-server TOML block, so the
-      runtime is recognised but its absence is not a drift signal.
+    - Codex: ``<workspace>/.codex/config.toml:mcp_servers[<id>]``.
 
     The check is **warn**-level when:
 
-    - State has an eawf-owned server but no runtime has emitted it.
+    - State has an eawf-owned server but no runtime has emitted it
+      (``missing-from-runtime``).
+    - A runtime entry's grant (command / args / env) diverges from the
+      state row that owns it (``content-drift`` — an install that never
+      re-ran after an ``eawf mcp update``).
     - A runtime file contains an eawf-owned entry whose id is not in
-      state (orphaned managed entry).
+      state (``orphans`` — a managed entry left behind by a removal that
+      skipped the runtime config).
 
     The check is **ok** when state is empty or when every state id is
-    materialised in at least one runtime file.
+    materialised, grant-matched, in at least one runtime file.
     """
     name = "mcp_drift"
     if workspace is None:
@@ -349,27 +382,32 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
     repo_root = state_path.parent.parent
     materialised: set[str] = set()
     orphans: list[str] = []
+    drifted: list[str] = []
     runtime_files = (
-        (repo_root / ".claude" / "settings.json", "mcpServers", "claude"),
-        (repo_root / "opencode.json", "mcp", "opencode"),
+        (repo_root / ".claude" / "settings.json", "mcpServers", "claude", "json"),
+        (repo_root / "opencode.json", "mcp", "opencode", "json"),
+        (repo_root / ".codex" / "config.toml", "mcp_servers", "codex", "toml"),
     )
-    for path, block_key, runtime in runtime_files:
-        scanned = _scan_runtime_mcp_block(
-            path, block_key=block_key, runtime=runtime, eawf_owned=eawf_owned
-        )
-        if isinstance(scanned, CheckResult):
-            return scanned
-        found, file_orphans = scanned
-        materialised |= found
-        orphans.extend(file_orphans)
+    for path, block_key, runtime, fmt in runtime_files:
+        entries = _extract_eawf_entries(path, fmt=fmt, block_key=block_key)
+        if isinstance(entries, CheckResult):
+            return entries
+        for sid, body in entries.items():
+            materialised.add(sid)
+            if sid not in eawf_owned:
+                orphans.append(f"{runtime}:{sid}")
+            elif _grant_triple_from_disk(body) != _grant_triple_from_state(eawf_owned[sid]):
+                drifted.append(f"{runtime}:{sid}")
 
     missing = sorted(set(eawf_owned) - materialised)
-    if missing or orphans:
+    if missing or drifted or orphans:
         parts: list[str] = []
         if missing:
             parts.append(f"missing-from-runtime: {','.join(missing[:5])}")
+        if drifted:
+            parts.append(f"content-drift: {','.join(sorted(drifted)[:5])}")
         if orphans:
-            parts.append(f"orphans: {','.join(orphans[:5])}")
+            parts.append(f"orphans: {','.join(sorted(orphans)[:5])}")
         return CheckResult(name=name, status="warn", detail="; ".join(parts))
     return CheckResult(
         name=name,

@@ -160,3 +160,57 @@ def test_check_warns_on_unreadable_settings(tmp_path: Path) -> None:
     settings_path.write_text("not json")
     result = check_mcp_drift(workspace=tmp_path)
     assert result.status == "warn"
+
+
+def test_check_warns_on_content_drift(tmp_path: Path) -> None:
+    """An eawf entry whose command diverges from state is content-drift."""
+    _seed_state(tmp_path, servers={"mcp-a": _server("mcp-a")})
+    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        json.dumps({"mcpServers": {"mcp-a": {"command": "STALE-COMMAND", "__eawf_owner": "eawf"}}})
+    )
+    result = check_mcp_drift(workspace=tmp_path)
+    assert result.status == "warn"
+    assert "content-drift" in (result.detail or "")
+
+
+def test_check_ok_when_codex_toml_matches(tmp_path: Path) -> None:
+    """A grant-matched eawf table in .codex/config.toml satisfies the check."""
+    _seed_state(tmp_path, servers={"mcp-a": _server("mcp-a")})
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir()
+    config.write_text(
+        '[mcp_servers."mcp-a"]\n'
+        'command = "mcp-server"\n'
+        "args = []\n"
+        "env = {}\n"
+        '__eawf_owner = "eawf"\n'
+    )
+    result = check_mcp_drift(workspace=tmp_path)
+    assert result.status == "ok"
+
+
+def test_check_warns_on_codex_orphan(tmp_path: Path) -> None:
+    """An eawf table in codex config with no state row is an orphan."""
+    _seed_state(tmp_path, servers={"mcp-a": _server("mcp-a")})
+    claude = tmp_path / ".claude" / "settings.json"
+    claude.parent.mkdir()
+    claude.write_text(
+        json.dumps({"mcpServers": {"mcp-a": {"command": "mcp-server", "__eawf_owner": "eawf"}}})
+    )
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir()
+    config.write_text('[mcp_servers."ghost"]\ncommand = "x"\n__eawf_owner = "eawf"\n')
+    result = check_mcp_drift(workspace=tmp_path)
+    assert result.status == "warn"
+    assert "codex:ghost" in (result.detail or "")
+
+
+def test_check_warns_on_unreadable_codex_toml(tmp_path: Path) -> None:
+    _seed_state(tmp_path, servers={"mcp-a": _server("mcp-a")})
+    config = tmp_path / ".codex" / "config.toml"
+    config.parent.mkdir()
+    config.write_text("this is = = not toml")
+    result = check_mcp_drift(workspace=tmp_path)
+    assert result.status == "warn"

@@ -64,7 +64,7 @@ mcp_app = typer.Typer(
 )
 
 
-_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude",)
+_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex")
 _OWNER_FILTERS: tuple[str, ...] = ("eawf", "user", "all")
 
 
@@ -270,7 +270,7 @@ def install_cmd(
     server_id: Annotated[str, typer.Argument(help="MCP id to install.", metavar="ID")],
     runtime: Annotated[
         str,
-        typer.Option("--runtime", help="Target runtime; only `claude` in v0.1."),
+        typer.Option("--runtime", help="Target runtime: claude | codex."),
     ] = "claude",
     target_dir: Annotated[
         Path | None,
@@ -288,7 +288,9 @@ def install_cmd(
     from eawf.runtime.mcp.installer import (
         InstallEntryResult,
         IntegrityViolation,
+        VerifyFailure,
         install_runtime_entry,
+        runtime_config_path,
     )
     from eawf.surfaces.cli._mutation import state_transaction
 
@@ -313,7 +315,7 @@ def install_cmd(
                     "install only manages owner=eawf entries",
                     kind="InvalidInput",
                 )
-            settings_path = (target / ".claude" / "settings.json").resolve()
+            settings_path = runtime_config_path(runtime, target).resolve()
             _confirm_install(
                 server=server,
                 runtime=runtime,
@@ -330,6 +332,8 @@ def install_cmd(
                 )
             except IntegrityViolation as exc:
                 raise cli_errors.StateConflict(str(exc), kind="IntegrityViolation") from exc
+            except VerifyFailure as exc:
+                raise cli_errors.StateConflict(str(exc), kind="VerifyFailure") from exc
             except ValueError as exc:
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
 
@@ -579,7 +583,7 @@ def list_cmd(
         str,
         typer.Option(
             "--runtime",
-            help="Runtime to inspect for user entries; only `claude` in v0.1.",
+            help="Runtime to inspect for user entries: claude | codex.",
         ),
     ] = "claude",
     target_dir: Annotated[
@@ -588,7 +592,7 @@ def list_cmd(
     ] = None,
 ) -> None:
     """List MCP entries from state and/or runtime config."""
-    from eawf.runtime.mcp.installer import list_runtime_entries
+    from eawf.runtime.mcp.installer import list_runtime_entries, runtime_config_path
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -632,7 +636,7 @@ def list_cmd(
                 runtime_rows = list_runtime_entries(runtime=runtime, target_dir=target)
             except ValueError as exc:
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            settings_path = target / ".claude" / "settings.json"
+            settings_path = runtime_config_path(runtime, target)
             if not settings_path.exists():
                 notes.append(f"runtime config absent at {settings_path}")
             for row in runtime_rows:
