@@ -1777,9 +1777,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I05-W22"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I05",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -4885,7 +4883,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T00:20:20.110839Z",
+  "updated_at": "2026-05-25T00:51:53.018378Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -17808,8 +17806,8 @@
         "P27-I05-W23"
       ],
       "claim_session_id": "op-p27-i05",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T00:51:53.016997Z",
+      "commit": "309de42b8ff2587cf8ff5832b0baf6587019dc71",
       "deps": [
         "P27-I05-W21"
       ],
@@ -17823,10 +17821,10 @@
       "id": "P27-I05-W22",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-24T01:07:52.372624Z",
-      "outcome": null,
+      "outcome": "incident close accepts typed --cause (Incident.cause + close threading + CLI + schemas); wheel ceiling recalibrated 2MB->1.6MiB toward 1MB; criterion (a) stale-prose resync deferred (planner shorthand unresolvable); mypy + full suite green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "stale criterion prose is resynced (W20 exit code; W22 canonical-writer wording; wheel ceiling; W16 metrics sub-verb); incident close accepts a typed --cause; the wheel ceiling is recalibrated toward 1 MB after trimming"
       ],
