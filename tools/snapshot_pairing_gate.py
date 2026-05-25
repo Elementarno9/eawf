@@ -38,6 +38,14 @@ file, the subject must match one of:
 commit mutating golden fixtures with any other subject (wrong type,
 missing wave suffix) fails the gate.
 
+Per-commit pairing is the right contract for managed small-CL PRs. Under
+the one-PR-per-phase model the whole phase ships as a single reviewed unit
+and the snapshot test suite already asserts every committed golden matches
+current-code output, so per-commit ``test:`` pairing is redundant. When the
+PR range spans more than one iter (the phase-PR signal) the gate therefore
+lists the bundled golden-touching commits for reviewer visibility and exits
+``0`` instead of failing. Single-iter ranges keep the hard per-commit gate.
+
 Invocation (GitHub Actions):
 
     python3 tools/snapshot_pairing_gate.py <base-sha> <head-sha>
@@ -74,6 +82,11 @@ _WATCHED_DIRS: tuple[str, ...] = tuple(
 # the ``-W##`` planned-wave suffix and the legacy ``-CORE`` bookkeeping
 # alias satisfy the pairing contract.
 _PAIRED_SUBJECT_RE = re.compile(r"^\[P\d{2}(-I(?!00)\d{2})?(-W(?!00)\d{2}|-CORE)\]\s+test:\s+\S.*$")
+
+# Phase/iter scope key at the head of a commit subject, e.g. ``[P27-I04-W04]``
+# -> ``P27-I04`` and the bare pre-I02 form ``[P27-W19]`` -> ``P27``. Used to
+# tell a multi-iter phase-PR range apart from a single-iter small-CL range.
+_ITER_KEY_RE = re.compile(r"^\[(P\d{2}(?:-I\d{2})?)")
 
 
 def _run_git(args: list[str]) -> str:
@@ -139,6 +152,30 @@ def is_paired(subject: str) -> bool:
     return bool(_PAIRED_SUBJECT_RE.match(subject))
 
 
+def iter_key(subject: str) -> str | None:
+    """Return the phase-or-iter scope key (``P27-I04`` or ``P27``) from *subject*.
+
+    Pre-I02 commits carry a bare ``[P##-W##]`` tag with no iter segment;
+    those map onto the bare phase key ``P##``. Returns ``None`` when the
+    subject has no recognisable scope tag.
+    """
+    match = _ITER_KEY_RE.match(subject)
+    return match.group(1) if match else None
+
+
+def range_spans_multiple_iters(shas: list[str]) -> bool:
+    """Return whether *shas* reference more than one distinct phase/iter scope.
+
+    A phase PR (the one-PR-per-phase model) bundles commits from every iter
+    of the phase, so its range yields multiple distinct iter keys; a managed
+    small-CL PR stays within a single iter. The per-commit pairing contract
+    is enforced only for the latter — phase PRs defer to wholesale diff review
+    plus the snapshot test suite, which already pins golden freshness.
+    """
+    keys = {key for sha in shas if (key := iter_key(commit_subject(sha)))}
+    return len(keys) > 1
+
+
 def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
     """Return ``(sha, subject)`` for every unpaired golden-mutating commit.
 
@@ -180,6 +217,23 @@ def main(argv: list[str]) -> int:
     offenders = find_unpaired(base, head)
     if not offenders:
         print("snapshot pairing gate: ok (all golden changes paired)")
+        return 0
+
+    if range_spans_multiple_iters(commits_in_range(base, head)):
+        # Phase-PR model (one PR per phase): the range bundles commits from
+        # multiple iters and ships as a single reviewed unit, and the snapshot
+        # test suite already asserts every committed golden matches current-
+        # code output. Per-commit ``test:``-subject pairing is a small-CL
+        # review proxy that adds nothing here, so surface the bundled golden
+        # commits for reviewer visibility without blocking the merge.
+        print(
+            "snapshot pairing gate: phase PR detected (range spans multiple iters); "
+            "golden changes are reviewed wholesale and pinned by the snapshot test "
+            "suite, so per-commit pairing is not enforced. Bundled golden-touching "
+            "commits:"
+        )
+        for short_sha, subject in offenders:
+            print(f"  {short_sha} {subject!r}")
         return 0
 
     print(

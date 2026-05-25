@@ -463,6 +463,57 @@ def test_gate_main_no_base_is_noop(gate: Any) -> None:
     assert gate.main(["prog", "", ""]) == 0
 
 
+def test_iter_key_extracts_phase_and_iter_scope(gate: Any) -> None:
+    """iter_key maps a subject to its phase/iter scope key (boundary forms)."""
+    assert gate.iter_key("[P27-I04-W04] feat: x") == "P27-I04"
+    assert gate.iter_key("[P27-W19] test: x") == "P27"
+    assert gate.iter_key("[P27-CORE] state: x") == "P27"
+    assert gate.iter_key("no tag here") is None
+
+
+def test_gate_main_phase_pr_does_not_block(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A multi-iter (phase-PR) range surfaces unpaired golden commits, not blocks.
+
+    The whole phase ships as one reviewed unit and the snapshot tests pin
+    golden freshness, so per-commit ``test:`` pairing is deferred: the gate
+    lists the bundled golden commit and exits 0.
+    """
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/golden/envelope/ok.json", '{"v": 1}\n')
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-I02-W01] test: seed envelope golden")
+    base = _head(repo)
+    _write_golden(repo, "tests/golden/envelope/ok.json", '{"v": 2}\n')
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-I04-W04] feat: bundle golden drift")
+    _git(repo, "commit", "--allow-empty", "-q", "-m", "[P27-I05-W01] chore: second iter")
+    monkeypatch.chdir(repo)
+    assert gate.main(["prog", base, _head(repo)]) == 0
+    out = capsys.readouterr().out
+    assert "phase PR detected" in out
+    assert "bundle golden drift" in out
+
+
+def test_gate_main_single_iter_blocks(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A single-iter (small-CL) range still hard-fails an unpaired golden mutation."""
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/golden/envelope/ok.json", '{"v": 1}\n')
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-I05-W01] test: seed envelope golden")
+    base = _head(repo)
+    _write_golden(repo, "tests/golden/envelope/ok.json", '{"v": 2}\n')
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-I05-W02] feat: sneak golden drift")
+    monkeypatch.chdir(repo)
+    assert gate.main(["prog", base, _head(repo)]) == 1
+    err = capsys.readouterr().err
+    assert "unpaired golden-surface mutation" in err
+
+
 def test_gate_main_usage_error(gate: Any) -> None:
     """Missing args → usage error exit 1."""
     assert gate.main(["prog"]) == 1
