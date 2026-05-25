@@ -4,4 +4,4 @@ import eawf
 
 
 def test_import_and_version() -> None:
-    assert eawf.__version__ == "0.2.0"
+    assert eawf.__version__ == "0.3.0"

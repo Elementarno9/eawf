@@ -24,7 +24,7 @@ runner = CliRunner()
 def test_json_flag_recognised() -> None:
     result = runner.invoke(app, ["--json", "version"])
     assert result.exit_code == 0
-    assert "0.2.0" in result.stdout
+    assert "0.3.0" in result.stdout
 
 
 def test_plain_flag_disables_color() -> None:
