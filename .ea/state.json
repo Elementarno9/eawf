@@ -1792,6 +1792,18 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Wire wal.* admin handlers into the daemon dispatcher with state.mutate"
+    },
+    "B71": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-25T02:29:42.886169Z",
+      "description": "tests/unit/test_metrics_dispatch_cost.py asserts merge_config(repo=tmp_path) reports telemetry.enabled=False, but merge_config reads the developer's global ~/.config/eawf/config.yaml layer (HOME-based, not XDG), so the two tests fail locally when the dev has telemetry enabled. They pass in CI (clean HOME). Fix: monkeypatch Path.home() / the _global_config_path in these tests so the user-config layer is isolated and the assertion is hermetic.",
+      "id": "B71",
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P27-I05",
+      "status": "open",
+      "title": "Make metrics dispatch-cost tests hermetic (isolate global config)"
     }
   },
   "current": {
@@ -5012,7 +5024,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T02:28:43.926037Z",
+  "updated_at": "2026-05-25T02:29:42.886169Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
