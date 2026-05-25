@@ -1834,9 +1834,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P27-I06-W41"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P27-I06",
     "phase_id": "P27",
     "project_code": "EAWF",
@@ -5233,7 +5231,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T22:40:51.344451Z",
+  "updated_at": "2026-05-25T22:42:01.353177Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18739,8 +18737,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-post-v0.3-cleanup",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-25T22:42:01.352821Z",
+      "commit": "a7f69209611b8bce57bcb5dc15fa4e8da069d69b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18751,10 +18749,10 @@
       "id": "P27-I06-W41",
       "iter_id": "P27-I06",
       "opened_at": "2026-05-25T22:40:23.173007Z",
-      "outcome": null,
+      "outcome": "Removed 142 committed per-wave specs (P08-P25, 16 phase dirs); Decision D27 records the deprecation verdict; git ls-files .ea/specs == 0",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "142 committed per-wave specs P08-P25 removed; Decision D27 records the verdict; git ls-files .ea/specs == 0"
       ],
