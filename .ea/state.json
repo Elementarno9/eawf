@@ -1804,6 +1804,18 @@
       "scope_id": "P27-I05",
       "status": "open",
       "title": "Make metrics dispatch-cost tests hermetic (isolate global config)"
+    },
+    "B72": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-25T18:33:07.710456Z",
+      "description": "docs/architecture/tui.md References [1]-[15] cite pre-rebuild source files (layout.py, wave_board.py, overlays.py, portfolio.py, audit_overlay.py) that no longer exist and flat pre-regroup paths (src/eawf/tui, src/eawf/cli, src/eawf/state, src/eawf/estimation). Re-derive each citation against the rebuilt surfaces/tui/screens structure and the layered package tree; not a mechanical path swap.",
+      "id": "B72",
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Refresh tui.md References after the P27-I04 TUI rebuild"
     }
   },
   "current": {
@@ -3683,6 +3695,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P27-I05-W33",
       "updated_at": "2026-05-25T18:29:25.518681Z"
+    },
+    "P27-I05-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P27-I05-W34-bucket-20260525T183041Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P27-I05-W34",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P27-I05-W34",
+      "updated_at": "2026-05-25T18:30:41.837466Z"
     }
   },
   "goals": {
@@ -5068,7 +5093,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T18:30:31.848103Z",
+  "updated_at": "2026-05-25T18:33:13.844435Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18366,9 +18391,9 @@
     "P27-I05-W34": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow",
+      "closed_at": "2026-05-25T18:33:13.843751Z",
+      "commit": "9ea38d86be5a1880638b5ac567957ebfaa6b5954",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18386,10 +18411,10 @@
       "id": "P27-I05-W34",
       "iter_id": "P27-I05",
       "opened_at": "2026-05-25T18:28:27.178726Z",
-      "outcome": null,
+      "outcome": "6 Raises blocks Google-style; find_stale_actuals scope->scope_id; overview.md daemon path fixed; deeper tui.md staleness filed B72",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "6 inline-Raises docstrings converted to Google-style Raises: block; overview.md daemon path = src/eawf/runtime/daemon; find_stale_actuals scope kwarg renamed scope_id; mypy+ruff+targeted tests green"
       ],
