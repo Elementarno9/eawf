@@ -190,6 +190,7 @@ These were in the old roadmap or surface in feeder briefs (`long-term-valuable-f
 | spike + hybrid bootstrap profiles | Q24 | v0.4+ | C08-IMPL W03 ships 3 profiles only |
 | `flow.jsonl` schema v2 (8-step) migration | CROSS.F39 | v0.4 hygiene wave | Bump after C04a-IMPL ratifies the 8-step pipeline |
 | `Wave.commit` field drop + git-log-walk backfill | Q11 / BOT-07 | v0.4 hygiene wave | Tracked in C01 Provenance |
+| State-history 5-tier archival model | state-history-cache-design feeder | v0.6+ | Gitignored `.ea/indexes/state-history/` derivation cache; 5-tier decision tree (T0 inline closed records → T1 render-fold → T2 stub-in-state + `git_ref` → T2.5 gitignored derivation cache w/ LRU blob eviction → T3 SQLite-WAL hot-state swap when state.json > 1 MB). Cache is purely a read-side accelerator; every byte re-verifiable against git pack-files. First hard consumer = daemon memory-size/time-elapsed triggers |
 
 ## 4. Recommended post-v0.5 phase sequencing
 
@@ -233,14 +234,43 @@ Each IDEA above requires a spec brief before `/roadmap propose` claims its phase
 - **IDEA-07** → extend C02 R-version (light)
 - **IDEA-08** → extend c04a R-version OR `c16-auq-bridge.md`
 
+## Methodology positioning (manifesto)
+
+**Positioning.** Eä is a *governed-ADD profile* — an opinionated profile of Agent-Driven Development whose non-negotiables are state-resident specs, append-only audit, and process-as-trust. **Eä is the methodology; `eawf` is one reference implementation** — the methodology is the part a team adopts, the CLI is the part it can swap. Vendor-neutral: no required model or IDE.
+
+**Three load-bearing invariants.** (1) Specification is the source of truth, not chat history. (2) State is structured and dispatched, not free-form. (3) Trust is produced by process, not granted by inspection.
+
+**The seven rules.**
+
+1. **Specs are source of truth** — intent lives in a versioned, machine-readable spec; code is the derived artifact. When spec and code disagree, the code is the drift.
+2. **Agents draft; humans decide** — the agent proposes (implementations, tests, deletions, plan revisions); the human directs, scopes, approves. Merge authority never transfers.
+3. **Process produces trust** — delegation is earned by installing guardrails that make bad output expensive (tests, type-checking, lint, hooks, golden fixtures, audit logs, review gates), not by inspecting more output.
+4. **One repo-resident contract** — a single source-controlled `AGENTS.md` captures conventions, command surface, naming, deletion policy, anti-patterns; tool-specific configs include it rather than fork it.
+5. **Plan before execute** — no execute-mode run without a written, reviewable plan (scope, decomposition, success criteria, rollback). Execution that diverges halts and revises the plan first.
+6. **State is structured; mutations are dispatched** — a typed, schema-validated store; mutations go through a single dispatcher with file locking and audit emission. No agent edits state directly.
+7. **Verify before claiming** — behavioural claims cite the implementation (file path, line, log excerpt, snapshot). Design docs are intent; the source tree is truth.
+
+**Rule 8 (extension — multi-workstream scale).** Phase-bundled delivery: work ships as phases, one PR per phase; waves are independent worktree-isolated units that cherry-pick (never merge) into the long-running phase branch.
+
+**What Eä is not.** The discriminators are not stylistic — vibe coding has no recovery story, assistant coding has no scope story, bare spec-driven development has no audit story; Eä addresses all three.
+
+| | Vibe coding | AI-assisted | Spec-driven (alone) | Eä ADD |
+|---|---|---|---|---|
+| Source of truth | chat thread | IDE buffer | the spec | spec + state store |
+| Agent role | autocomplete++ | line-by-line helper | code generator | full-SDLC contributor |
+| Human role | reviewer of vibes | typist with hints | spec author + merger | architect + gatekeeper |
+| Trust mechanism | gut feel | inspection | spec adherence | guardrails + audit |
+| Recovery model | start over | undo | regenerate from spec | replay from audit |
+| Audit trail | none | git blame | spec version | state mutations + reports |
+
 ## 6. References
 
 [1] `.ea/local/research/2026-05-15-v0.3-v0.4-roadmap-proposal.md` — original v0.3-v0.4 roadmap proposal (this brief supersedes its P22..P29 phase plan + D38..D48 decisions where v0.3-v0.5 spec series ratified)
 [2] `.ea/local/research/long-term/2026-05-17-spec-series-combined-audit.md` — Stage-0 audit + operator decisions Q1..Q26
 [3] `.ea/local/research/long-term/2026-05-18-c12-implementation-rollup.md` — current v0.3-v0.5 implementation EU envelope
-[4] `.ea/local/research/long-term/2026-05-15-long-term-features-deep.md` (extract-only feeder) — bio-memory §2 + Axis B/D source for IDEA-04 + IDEA-02
-[5] `.ea/local/research/long-term/long-term-valuable-features-2026-05-15.md` (extract-only feeder) — outcome eval lake + MCP firewall + agent router source
-[6] `.ea/local/research/long-term/2026-05-15-language-and-pyo3-fit.md` (extract-only feeder) — IDEA-06 PyO3 perf gate
+[4] Bio-memory + Axis B/D feeder (IDEA-04 + IDEA-02 source) — nuggets folded into §2 above; source feeder deleted in the post-v0.3 local purge.
+[5] Outcome-eval-lake + MCP-firewall + agent-router feeder — nuggets folded into §3 above; source feeder deleted in the post-v0.3 local purge.
+[6] PyO3 perf-gate feeder (IDEA-06 source) — nugget folded into §2 above; source feeder deleted in the post-v0.3 local purge.
 
 ## 7. Provenance
 
