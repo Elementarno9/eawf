@@ -4698,6 +4698,117 @@
       "wave_ids": [
         "P27-I06-W41"
       ]
+    },
+    "P28-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P28-I01",
+      "opened_at": "2026-05-26T18:04:28.702029Z",
+      "phase_id": "P28",
+      "status": "planned",
+      "title": "verify spine + foundations",
+      "wave_ids": [
+        "P28-I01-W01",
+        "P28-I01-W02",
+        "P28-I01-W03",
+        "P28-I01-W04",
+        "P28-I01-W05",
+        "P28-I01-W06",
+        "P28-I01-W07",
+        "P28-I01-W08",
+        "P28-I01-W09",
+        "P28-I01-W10",
+        "P28-I01-W11",
+        "P28-I01-W12",
+        "P28-I01-W13"
+      ]
+    },
+    "P28-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P28-I02",
+      "opened_at": "2026-05-26T18:07:39.063122Z",
+      "phase_id": "P28",
+      "status": "planned",
+      "title": "lifecycle / EU / memory / IDs / observability",
+      "wave_ids": [
+        "P28-I02-W01",
+        "P28-I02-W02",
+        "P28-I02-W03",
+        "P28-I02-W04",
+        "P28-I02-W05",
+        "P28-I02-W06",
+        "P28-I02-W07",
+        "P28-I02-W08",
+        "P28-I02-W09",
+        "P28-I02-W10",
+        "P28-I02-W11",
+        "P28-I02-W12",
+        "P28-I02-W13",
+        "P28-I02-W14",
+        "P28-I02-W15",
+        "P28-I02-W16",
+        "P28-I02-W17",
+        "P28-I02-W18",
+        "P28-I02-W19",
+        "P28-I02-W20",
+        "P28-I02-W21",
+        "P28-I02-W22"
+      ]
+    },
+    "P28-I03": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P28-I03",
+      "opened_at": "2026-05-26T18:07:39.541874Z",
+      "phase_id": "P28",
+      "status": "planned",
+      "title": "clarity / TUI / plugins / trust / eval / docs / release",
+      "wave_ids": [
+        "P28-I03-W01",
+        "P28-I03-W02",
+        "P28-I03-W03",
+        "P28-I03-W04",
+        "P28-I03-W05",
+        "P28-I03-W06",
+        "P28-I03-W07",
+        "P28-I03-W08",
+        "P28-I03-W09",
+        "P28-I03-W10",
+        "P28-I03-W11",
+        "P28-I03-W12",
+        "P28-I03-W13",
+        "P28-I03-W14",
+        "P28-I03-W15",
+        "P28-I03-W16",
+        "P28-I03-W17",
+        "P28-I03-W18",
+        "P28-I03-W19",
+        "P28-I03-W20",
+        "P28-I03-W21",
+        "P28-I03-W22",
+        "P28-I03-W23",
+        "P28-I03-W24",
+        "P28-I03-W25",
+        "P28-I03-W26",
+        "P28-I03-W28",
+        "P28-I03-W29",
+        "P28-I03-W30",
+        "P28-I03-W31",
+        "P28-I03-W32",
+        "P28-I03-W33",
+        "P28-I03-W34",
+        "P28-I03-W35",
+        "P28-I03-W36",
+        "P28-I03-W37",
+        "P28-I03-W27"
+      ]
     }
   },
   "mcp_grants": null,
@@ -5217,6 +5328,27 @@
       "status": "closed",
       "subproject_id": null,
       "title": "C09+C10 observability + operations: quality DSL + telemetry +"
+    },
+    "P28": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [],
+      "description": null,
+      "id": "P28",
+      "iter_ids": [
+        "P28-I01",
+        "P28-I02",
+        "P28-I03"
+      ],
+      "opened_at": "2026-05-26T18:04:28.701855Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "2026-05-26-v04-roadmap.md"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "Build v0.4 verify spine + lifecycle + clarity + plugins + trust + eval"
     }
   },
   "plugins": {},
@@ -5252,7 +5384,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-25T22:57:34.525884Z",
+  "updated_at": "2026-05-26T18:15:00.235853Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18778,6 +18910,2612 @@
         "142 committed per-wave specs P08-P25 removed; Decision D27 records the verdict; git ls-files .ea/specs == 0"
       ],
       "title": "Deprecate committed per-wave specs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W03",
+        "P28-I01-W04",
+        "P28-I01-W11",
+        "P28-I02-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "src/eawf/kernel/store/kinds/agent_report.py",
+        "tests/kernel/spec/test_common.py"
+      ],
+      "id": "P28-I01-W01",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:09.774568Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EvidenceRef.kind accepts decision",
+        "two vocabularies reconciled"
+      ],
+      "title": "feat: add decision kind to EvidenceRef",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W11",
+        "P28-I03-W01"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/transitions.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/runtime/daemon/methods/state.py"
+      ],
+      "id": "P28-I01-W02",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:10.217578Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "--description flows phase/iter/wave",
+        "round-trips through daemon"
+      ],
+      "title": "feat: wire --description through plan and edit transitions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W06",
+        "P28-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/criteria.py",
+        "src/eawf/kernel/spec/gates.py",
+        "src/eawf/kernel/spec/common.py",
+        "tests/kernel/spec/"
+      ],
+      "id": "P28-I01-W03",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:10.651210Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "models extend _StrictModel",
+        "evidence_kind enum lands",
+        "Wave.success_criteria unchanged"
+      ],
+      "title": "feat: add CriterionSpec and GateSpec strict models",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W06",
+        "P28-I01-W09",
+        "P28-I01-W11",
+        "P28-I03-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/store/kinds/evidence.py",
+        "src/eawf/kernel/store/__init__.py",
+        "src/eawf/kernel/store/payload_models.py",
+        "src/eawf/runtime/daemon/methods/evidence.py",
+        "src/eawf/surfaces/cli/commands/evidence.py",
+        "tests/kernel/store/",
+        "tests/runtime/daemon/methods/"
+      ],
+      "id": "P28-I01-W04",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:11.103337Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "StoreKind.EVIDENCE writes via daemon JSON-RPC",
+        "direct JSONL writes rejected outside CI/recovery",
+        "no MutationKind added",
+        "replay-safe"
+      ],
+      "title": "feat: add EvidenceRecord store (daemon-owned append)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W07",
+        "P28-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/argv_policy.py",
+        "src/eawf/workflow/skills/ship.py",
+        "src/eawf/runtime/worktree/create.py",
+        "tests/runtime/sandbox/"
+      ],
+      "id": "P28-I01-W05",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:11.579814Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "validate_gate_argv rejects shell-deny",
+        "git sub-allowlist",
+        "_run_gate_command wrapped",
+        "B-mint replaces B044"
+      ],
+      "title": "feat: L0 argv-policy + cwd-guard + ship gauntlet wrap",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W08",
+        "P28-I01-W11",
+        "P28-I02-W06",
+        "P28-I03-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W03",
+        "P28-I01-W04"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/readiness.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/worktree/wave_land.py"
+      ],
+      "id": "P28-I01-W06",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:12.023166Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CloseReadiness pure read-only",
+        "warns not blocks on legacy",
+        "3 seams covered"
+      ],
+      "title": "feat: readiness compute at three close seams advisory",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W05"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "src/eawf/platform/lint/_conditional.py",
+        "src/eawf/workflow/lifecycle/wave_sha.py"
+      ],
+      "id": "P28-I01-W07",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:12.485503Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "TimeoutExpired to blocked GateResult",
+        "scope resolves",
+        "timeout class maps to seconds"
+      ],
+      "title": "feat: gate runner timeouts + scope + diff-base",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W10",
+        "P28-I02-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W03",
+        "P28-I01-W06",
+        "P28-I01-W07"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/gates/compile.py",
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "src/eawf/kernel/readiness.py"
+      ],
+      "id": "P28-I01-W08",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:12.963989Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "compile_gate emits CheckSpec",
+        "jury attested return None v0.4.0",
+        "floor runs at readiness"
+      ],
+      "title": "feat: compile-gate + deterministic floor wired to readiness",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W04",
+        "P28-I01-W05"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/spec.py",
+        "src/eawf/workflow/gates/persistence.py",
+        "tests/runtime/daemon/methods/test_spec.py"
+      ],
+      "id": "P28-I01-W09",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:13.463823Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "GateSpec persistence rejects bad argv at READY"
+      ],
+      "title": "feat: EvidenceRecord validator at spec-promote READY",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W06",
+        "P28-I03-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W08"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/profiles/models.py",
+        "src/eawf/platform/profiles/data",
+        "src/eawf/kernel/spec/profile.py",
+        "tests/platform/profiles/"
+      ],
+      "id": "P28-I01-W10",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:14.000839Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ProfileBody.verify schema lands",
+        "3 profiles compile distinct packs same CloseReadiness shape"
+      ],
+      "title": "feat: verify floor packs on python apps + HIL profile",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W01",
+        "P28-I01-W04",
+        "P28-I01-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/waiver.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py"
+      ],
+      "id": "P28-I01-W11",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:14.477419Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "--waive --reason --decision per gate",
+        "C-mode requires ref",
+        "A no ref"
+      ],
+      "title": "feat: waiver semantics per-gate with mode-gated link",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I01-W13",
+        "P28-I02-W05",
+        "P28-I03-W07",
+        "P28-I03-W08",
+        "P28-I03-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/roles.py",
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/workflow/dispatch/renderer.py",
+        "src/eawf/surfaces/render/agents.py"
+      ],
+      "id": "P28-I01-W12",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:14.937165Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "render_role_contract feeds SubagentSpec",
+        "per-role prompt no longer hardcoded executor"
+      ],
+      "title": "feat: RoleContract integrated into SubagentSpec render",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I01-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "src/eawf/kernel/store/kinds/agent_report.py"
+      ],
+      "id": "P28-I01-W13",
+      "iter_id": "P28-I01",
+      "opened_at": "2026-05-26T18:06:15.401497Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ExecutorReportBody generalized via store_kind_for_role",
+        "spawn-seam carries SubagentSpec"
+      ],
+      "title": "feat: wire prompt to open-session seam + generalize report body",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W02"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/doctor.py",
+        "src/eawf/surfaces/cli/commands/status.py",
+        "src/eawf/workflow/lifecycle/wave_sha.py",
+        "src/eawf/surfaces/render/manifest.py",
+        "src/eawf/runtime/runtimes/codex/plugin_install.py",
+        "src/eawf/runtime/runtimes/opencode/plugin_install.py",
+        "src/eawf/surfaces/cli/commands/plugin.py"
+      ],
+      "id": "P28-I02-W01",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:04.048125Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "doctor reports git/state drift + plugin cross-scope duplication",
+        "ManifestEntry gains scope",
+        "codex/opencode persist manifest",
+        "git_state_drift_detected publishes"
+      ],
+      "title": "feat: drift reconciler in doctor+status (git/state+plugin scope)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/worktree/wave_land.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py"
+      ],
+      "id": "P28-I02-W02",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:04.551182Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "land auto-closes wave when readiness ready",
+        "plan rejects wave without bucket"
+      ],
+      "title": "feat: auto-close-on-land default + effort-bucket plan gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W13",
+        "P28-I02-W14",
+        "P28-I02-W15",
+        "P28-I03-W13",
+        "P28-I03-W30",
+        "P28-I03-W27"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/estimation/metrics.py",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/kernel/store/kinds/event.py"
+      ],
+      "id": "P28-I02-W03",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:05.070451Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ActualSummary gains actual_tokens+actual_cost_usd",
+        "populated at close from telemetry",
+        "wave_closed EventKind publishes from _apply_wave_close"
+      ],
+      "title": "feat: auto-actual + actual_tokens/cost_usd + wave_closed publisher",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/state/mutations.py",
+        "src/eawf/platform/memory/staleness.py",
+        "src/eawf/platform/memory/gc.py",
+        "tests/kernel/state/test_mutations.py"
+      ],
+      "id": "P28-I02-W04",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:05.607195Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "MEMORY_ADD/UPDATE/SUPERSEDE/PRUNE/REVIEW apply via MutationKind (NO MEMORY_RECALL)",
+        "replay round-trips"
+      ],
+      "title": "feat: five MEMORY MutationKinds + apply functions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W04",
+        "P28-I01-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/renderer.py",
+        "src/eawf/platform/memory/render_context.py",
+        "src/eawf/workflow/lifecycle/iter_.py"
+      ],
+      "id": "P28-I02-W05",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:06.114390Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "## Memory section rendered",
+        "iter close writes real entries not stub",
+        "recall is pure read"
+      ],
+      "title": "feat: memory recall at dispatch + iter-close write",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W17",
+        "P28-I03-W34"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W06",
+        "P28-I01-W08",
+        "P28-I01-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/readiness.py",
+        "src/eawf/platform/profiles/models.py",
+        "src/eawf/workflow/lifecycle/wave.py"
+      ],
+      "id": "P28-I02-W06",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:06.614811Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "profile.verify.enforce=true blocks close on failed required gate",
+        "default false"
+      ],
+      "title": "feat: flip readiness from advisory to gating via profile flag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/artifacts/references.py",
+        "src/eawf/workflow/evidence/researcher.py",
+        "src/eawf/workflow/audit_dsl/registry.py"
+      ],
+      "id": "P28-I02-W07",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:07.173623Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "citation_resolves check kind",
+        "researcher pass requires non-empty evidence_refs"
+      ],
+      "title": "feat: citation-resolves floor + researcher evidence-refs invariant",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/ids.py",
+        "src/eawf/platform/lint/tools/commit_prefix_lint.py",
+        "src/eawf/platform/lint/tools/snapshot_pairing_gate.py",
+        "src/eawf/workflow/estimation/metrics.py",
+        "src/eawf/surfaces/tui/widgets/"
+      ],
+      "id": "P28-I02-W08",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:07.700857Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "natural_key at 25 sites",
+        "grammar accepts P100 B100",
+        "TUI display-pad cosmetic"
+      ],
+      "title": "feat: natural-key sort + grammar widen + display-pad",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W01",
+        "P28-I03-W21"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/enums.py",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/state/mutations.py",
+        "src/eawf/surfaces/render/decision_graph.py",
+        "src/eawf/surfaces/tui/widgets/backlog_table.py"
+      ],
+      "id": "P28-I02-W09",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:08.219965Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ScopeTier added",
+        "OBSOLETE+obsoleted_at",
+        "default-filter graph",
+        "backlog_table compound sort + show_closed toggle"
+      ],
+      "title": "feat: ScopeTier + DecisionStatus OBSOLETE + backlog compound sort",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W13",
+        "P28-I03-W13",
+        "P28-I03-W27"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/store/kinds/agent_report.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py"
+      ],
+      "id": "P28-I02-W10",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:08.737572Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Principal gains optional runtime",
+        "AgentSession.agent_principal_id added",
+        "threaded into report header",
+        "backfilled migration"
+      ],
+      "title": "feat: AgentSession.agent_principal_id via Principal-linked identity",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W12",
+        "P28-I02-W19",
+        "P28-I03-W37"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/intent.py",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/workflow/lifecycle/transitions.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/surfaces/render/agents_md.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py"
+      ],
+      "id": "P28-I02-W11",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:09.351778Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "IntentBrief strict model lands",
+        "intent nullable attached on 4 entities",
+        "EDIT_* MutationKinds learn nullable field",
+        "additive replay-safe"
+      ],
+      "title": "feat: add IntentBrief on Wave/Iter/Phase/BacklogItem",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W32"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W11"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/install/wizard.py",
+        "src/eawf/platform/install/steps.py",
+        "src/eawf/surfaces/cli/commands/repo.py",
+        "src/eawf/surfaces/cli/commands/repo_link.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_iter.py"
+      ],
+      "id": "P28-I02-W12",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:09.891973Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "wizard fills state.project",
+        "project init --upgrade",
+        "repo register + repo link-workspace verbs",
+        "doctor project_record_present check",
+        "IntentBrief+workspace-link+bucket-EU seeds"
+      ],
+      "title": "feat: unify repo bootstrap + Project record + IntentBrief seed at init",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W14",
+        "P28-I03-W26"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W03",
+        "P28-I02-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/estimation/trust_scorecard.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/kernel/store/kinds/event.py"
+      ],
+      "id": "P28-I02-W13",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:10.440324Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EuCalibrationMetric.bucket_drift populated",
+        "bucket_drift_detected event publishes",
+        "T2 scorecard drift badge"
+      ],
+      "title": "feat: wire calibrate_buckets into scorecard + bucket_drift event",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W17"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W03",
+        "P28-I02-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/estimation/buckets.py",
+        "src/eawf/kernel/config/schema.py",
+        "tests/workflow/estimation/test_buckets.py"
+      ],
+      "id": "P28-I02-W14",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:10.980592Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "default_estimate_summary reads config-override > fitted_eu (n_min=5) > BUCKET_EU",
+        "EstimateSummary.confidence MEDIUM at n_min HIGH at n>=30",
+        "fitted_pessimistic_eu populated"
+      ],
+      "title": "feat: wire bucket centroid into estimate writer + config override",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W20"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/kernel/store/kinds/event.py",
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py"
+      ],
+      "id": "P28-I02-W15",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:11.517139Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "wave_elapsed_update publishes per minute",
+        "roadmap_tree renders dual braille bars",
+        "warn 80% err 100%",
+        "tile-elapsed binds compute_wave_elapsed"
+      ],
+      "title": "feat: per-wave time-burn live event + dual burn bar",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "tests/workflow/lifecycle/test_wave_claim.py"
+      ],
+      "id": "P28-I02-W16",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:12.040478Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "claim_wave raises LifecycleError when effort_bucket is None",
+        "error guides operator to roadmap revise --set-bucket",
+        "existing PENDING waves valid"
+      ],
+      "title": "chore: gate effort_bucket required at claim_wave",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W19"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W14"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/workflow/dispatch/renderer.py",
+        "tests/golden/subagent_spec/roles/",
+        "tests/workflow/dispatch/test_renderer.py"
+      ],
+      "id": "P28-I02-W17",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:12.542783Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "SubagentSpec.render emits ## Estimate after ## Out of scope",
+        "section shows bucket+expected_eu+expected_minutes+token_budget+parallel_siblings",
+        "4-runtime goldens updated"
+      ],
+      "title": "feat: SubagentSpec renders Estimate section with budget hints",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W18": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/skills/prep.py",
+        "src/eawf/workflow/skills/bodies/prep.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
+        "src/eawf/surfaces/render/plan_view.py"
+      ],
+      "id": "P28-I02-W18",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:13.061877Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "one plan_view renderer feeds /prep + roadmap show + TUI",
+        "PrepDagTask extends with agent_role+effort_bucket+estimate_eu",
+        "_render_show_md becomes thin wrapper",
+        "3 golden updates"
+      ],
+      "title": "feat: unify plan-mode render across /prep + roadmap show + TUI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I02-W20"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W11",
+        "P28-I02-W17"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/kernel/store/kinds/event.py"
+      ],
+      "id": "P28-I02-W19",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:13.570958Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "SubagentSpec workflow inserts wave close instruction",
+        "close_wave accepts tokens_consumed param",
+        "wave_claimed+wave_closed publish from daemon mutators with typed payloads",
+        "no orphan EventKinds"
+      ],
+      "title": "feat: plugin-dispatch state-mutation parity + event producers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W20": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W15",
+        "P28-I02-W19"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/stale_wave.py",
+        "src/eawf/kernel/store/kinds/event.py"
+      ],
+      "id": "P28-I02-W20",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:14.080427Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "background task detects 15-min stale window",
+        "stale_wave_detected EventKind added",
+        "raises needs_user ask via T17 overlay",
+        "operator authority preserved"
+      ],
+      "title": "feat: stale-wave detector + auto-AUQ via needs_user overlay",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/server.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/methods/__init__.py",
+        "src/eawf/surfaces/cli/exit_codes.py",
+        "tests/runtime/daemon/",
+        "tests/surfaces/cli/"
+      ],
+      "id": "P28-I02-W21",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:14.581731Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "24+ callsites migrated",
+        "exit_codes alias block deleted",
+        "all tests green"
+      ],
+      "title": "chore: migrate legacy 0..9 exit-code callers + drop aliases",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave_sha.py",
+        "src/eawf/platform/profiles/data/core.yaml",
+        "AGENTS.md",
+        "src/eawf/platform/install/wizard.py"
+      ],
+      "id": "P28-I02-W22",
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-26T18:14:15.097012Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "stale Wave.commit refs scrubbed",
+        "verify-before-claim block updated",
+        "/tmp doc refs dropped"
+      ],
+      "title": "chore: scrub stale Wave.commit removal claims",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W02",
+        "P28-I03-W17",
+        "P28-I03-W21",
+        "P28-I03-W33"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W02",
+        "P28-I02-W09"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/render/narrative.py",
+        "src/eawf/surfaces/render/pr_body.py",
+        "src/eawf/surfaces/render/release_notes.py",
+        "tests/surfaces/render/"
+      ],
+      "id": "P28-I03-W01",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:21.855831Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "build_narrative emits What/Why/Validation/Risks",
+        "PR body laconic",
+        "changelog generated"
+      ],
+      "title": "feat: NarrativeBundle producer + pr_body + release_notes consumers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W31",
+        "P28-I03-W33"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/config/defaults.py",
+        "src/eawf/kernel/config/schema.py",
+        "src/eawf/platform/lint/tools/commit_prefix_lint.py",
+        "src/eawf/workflow/lifecycle/wave_sha.py"
+      ],
+      "id": "P28-I03-W02",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:22.385868Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "subject_style=bracket default",
+        "trailer mode emits Eawf-Wave",
+        "SHA-recovery unchanged across ~6 sites"
+      ],
+      "title": "feat: vcs.conventions config + two-layer commit subject_style",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/render_block.py",
+        "src/eawf/surfaces/render/agents_md.py",
+        "src/eawf/platform/lint/tools/agents_md_budget.py",
+        "docs/conventions.md"
+      ],
+      "id": "P28-I03-W03",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:22.882620Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tier always reference lint",
+        "conventions.md generated",
+        "AGENTS.md tier0 token cap gate"
+      ],
+      "title": "feat: RenderBlock.tier + conventions.md + budget ratchet",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W11",
+        "P28-I03-W36"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/lint/tools/eawf012_design_provenance.py",
+        "src/eawf/platform/lint/tools/eawf013_bracket_position.py",
+        "src/eawf/platform/lint/tools/eawf014_no_manual_wrap.py",
+        "src/eawf/platform/lint/tools/eawf015_ears_advisory.py",
+        ".pre-commit-config.yaml"
+      ],
+      "id": "P28-I03-W04",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:23.390615Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "4 lints fire under pre-commit",
+        "EARS advisory warn-not-block"
+      ],
+      "title": "feat: three clarity lints eawf012/013/014 + EARS advisory eawf015",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W18"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/state_binding.py",
+        "src/eawf/surfaces/tui/widgets/toast.py",
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/runtime/daemon/methods/needs_user.py",
+        "src/eawf/workflow/skills/needs_user.py",
+        "src/eawf/surfaces/tui/screens/overlays/needs_user.py"
+      ],
+      "id": "P28-I03-W05",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:23.924437Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "StateBinding subscribes via DaemonClient",
+        "ToastEmitter+degraded banner live",
+        "daemon needs_user.raise/resolve/park wrap record_pause/resolve_pause/list_open_pauses",
+        "wire payload uses scope_id",
+        "old pauses readable"
+      ],
+      "title": "feat: TUI live-layer push subscriber + needs_user daemon wrappers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/palette/verbs.py",
+        "src/eawf/surfaces/cli/app.py",
+        "src/eawf/surfaces/tui/screens/"
+      ],
+      "id": "P28-I03-W06",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:24.513892Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "~20 placeholder verbs removed",
+        "wave_board scope tokens gone"
+      ],
+      "title": "chore: TUI prune dead verbs + wave_board scope tokens",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/runtimes/codex/plugin_install.py",
+        "src/eawf/platform/install/runtimes/codex/skills.py",
+        "tests/platform/install/runtimes/codex/"
+      ],
+      "id": "P28-I03-W07",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:25.089813Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        ".codex/agents toml emitted",
+        "skills under .codex/plugins/eawf/skills/ only",
+        "subagent fixtures golden"
+      ],
+      "title": "feat: Codex subagents plugin-scope skills + TOML emit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/runtimes/opencode/plugin_install.py",
+        "tests/platform/install/runtimes/opencode/"
+      ],
+      "id": "P28-I03-W08",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:25.761886Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "permission+tools ACLs emitted",
+        "permission.task gates spawn",
+        "round-trip golden"
+      ],
+      "title": "feat: OpenCode per-agent ACLs + permission.task wiring",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/runtimes/claude/plugin_install.py",
+        "src/eawf/platform/install/mcp_server.py",
+        "tests/platform/install/runtimes/claude/",
+        "tests/golden/subagent_spec/"
+      ],
+      "id": "P28-I03-W09",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:26.294472Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        ".mcp.json shipped",
+        "SubagentStop+PreCompact handlers",
+        "eawf-mcp uniform across 3 harnesses",
+        "cross-surface byte-equivalence golden (one RoleSpec to 4 surfaces)"
+      ],
+      "title": "feat: Claude .mcp.json + richer hooks + uniform eawf-mcp + parity golden",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W32"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/platform/install/wizard.py",
+        "src/eawf/platform/install/steps.py",
+        "src/eawf/platform/install/gitignore_writer.py",
+        "src/eawf/platform/profiles/data"
+      ],
+      "id": "P28-I03-W10",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:26.826139Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "init --quick lands",
+        "lang auto-detect feeds profile",
+        "8 profile gate-packs populated",
+        "gitignore writer ships 12 patterns",
+        "STEP_AUTO_INSTALL_PLUGINS",
+        "SubagentSpec preview in WizardResult"
+      ],
+      "title": "feat: init --quick + 8 packs + gitignore + plugin install + preview",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W12",
+        "P28-I03-W16",
+        "P28-I03-W17"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W04",
+        "P28-I02-W08"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/observability/eval/score.py",
+        "src/eawf/observability/eval/rule_adherence.py",
+        "tests/eval/waves/recorded/"
+      ],
+      "id": "P28-I03-W11",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:27.361762Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "6 deterministic checkers wired",
+        "corpus harvested verify count",
+        "advisory-first",
+        "baseline.json from Exp-1"
+      ],
+      "title": "feat: eval-harness rule-adherence scorers + corpus harvest",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W11"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/observability/eval/experiments/",
+        "tests/eval/experiments/"
+      ],
+      "id": "P28-I03-W12",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:27.875266Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Exp 1-3 run on corpus",
+        "per-rule adherence baselines",
+        "A/B 2pp threshold encoded"
+      ],
+      "title": "feat: violation-mining + tiered A/B + mechanism bake-off",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W14",
+        "P28-I03-W28",
+        "P28-I03-W29",
+        "P28-I03-W35",
+        "P28-I03-W27"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I01-W04",
+        "P28-I01-W06",
+        "P28-I02-W03",
+        "P28-I02-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/estimation/trust_scorecard.py",
+        "src/eawf/surfaces/cli/commands/why.py",
+        "tests/workflow/estimation/test_trust_scorecard.py"
+      ],
+      "id": "P28-I03-W13",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:28.420045Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "compute_trust_scorecard projects over append-only stores",
+        "window all|30d|N-waves",
+        "eawf why assembles 5 URN kinds",
+        "output labels tiers verified|attested|deferred_outcome|unavailable",
+        "verifier_reliability or deferred_v0.4.1"
+      ],
+      "title": "feat: trust scorecard reader + eawf-why CLI surface",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/ceremony.py",
+        "src/eawf/workflow/dispatch/renderer.py"
+      ],
+      "id": "P28-I03-W14",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:28.920962Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "compute_ceremony recommends A/B/C",
+        "counter computed on demand",
+        "operator-confirmed"
+      ],
+      "title": "feat: earned-autonomy ceremony-mode recommender",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/otel.py",
+        "src/eawf/observability/telemetry/pricing.py"
+      ],
+      "id": "P28-I03-W15",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:29.420630Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "stable client-span subset emitted",
+        "OTLP export opt-in best-effort",
+        "experimental agent-spans not a compat surface"
+      ],
+      "title": "feat: OTel client-spans subset on telemetry ledger",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W11"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/lint/tools/astgrep_floor.py",
+        ".github/workflows/reviewdog.yml",
+        "tests/platform/lint/"
+      ],
+      "id": "P28-I03-W16",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:29.927114Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ast-grep rules scoped to floor",
+        "reviewdog on PR",
+        "floor-only A-mode aware"
+      ],
+      "title": "feat: ast-grep polyglot floor + reviewdog visible-floor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W17": {
+      "agent_role": "auditor",
+      "blocks": [
+        "P28-I03-W34"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W06",
+        "P28-I03-W01",
+        "P28-I03-W11"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/skills/audit.py",
+        "src/eawf/workflow/skills/polish.py",
+        "src/eawf/workflow/skills/ship.py",
+        "src/eawf/workflow/lifecycle/phase.py"
+      ],
+      "id": "P28-I03-W17",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:30.415156Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "phase-close calls readiness across CLI+daemon+wave_land",
+        "ship gauntlet wrapped",
+        "audit pass becomes close evidence"
+      ],
+      "title": "feat: audit + polish + ship phase-close readiness end-to-end",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W28",
+        "P28-I03-W29"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W05"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/metrics_projection.py",
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "tests/observability/telemetry/"
+      ],
+      "id": "P28-I03-W18",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:30.906954Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "compute_metrics_projection emits MetricsProjection Pydantic",
+        "binds 6 tiles",
+        "variance_by_bucket drill-down"
+      ],
+      "title": "feat: /metrics projection aggregator + 6-tile binding",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W19": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/scopes/_zoom.py",
+        "tests/surfaces/tui/"
+      ],
+      "id": "P28-I03-W19",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:31.403394Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "_active_repo_path reactive on zoom enter",
+        "switch_scope prefers it over PWD",
+        "zoom publishes repo_path on enter/clear on exit"
+      ],
+      "title": "feat: r-key + zoom rebind active-repo state-path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W20": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/skills/research.py",
+        "tests/workflow/skills/test_research.py"
+      ],
+      "id": "P28-I03-W20",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:31.905048Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/research --depth deep emits typed ## ResearchPlan block with N fan-out envelopes",
+        "replaces needs_user stub"
+      ],
+      "title": "feat: research depth-deep emits typed dispatch plan",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W09",
+        "P28-I03-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/surfaces/cli/commands/wave.py",
+        "src/eawf/workflow/dispatch/renderer.py",
+        "tests/surfaces/tui/screens/overlays/test_detail.py",
+        "tests/surfaces/cli/commands/test_wave.py"
+      ],
+      "id": "P28-I03-W21",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:32.380002Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "dp tab dropped",
+        "d-tab renders NarrativeBundle",
+        "wave show --dispatch-prompt flag added",
+        "OBSOLETE/SUPERSEDED filtered"
+      ],
+      "title": "feat: replace wave modal dispatch tab with NarrativeBundle preview",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "docs/tutorial/quickstart.md",
+        "docs/concepts.md",
+        "mkdocs.yml"
+      ],
+      "id": "P28-I03-W22",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:32.860463Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "quickstart page lands",
+        "concepts glossary lands",
+        "mkdocs nav updated"
+      ],
+      "title": "docs: quickstart + concepts glossary",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W23": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/tutorial/profile-picker.md",
+        "docs/tutorial/tui-tour.md",
+        "docs/_static/"
+      ],
+      "id": "P28-I03-W23",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:33.359017Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "profile picker walkthrough",
+        "TUI tour with annotated screenshots",
+        "cross-link to init wizard"
+      ],
+      "title": "docs: profile picker + TUI tour",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "docs/tutorial/troubleshooting.md",
+        "docs/reference/doctor.md"
+      ],
+      "id": "P28-I03-W24",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:33.864323Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "troubleshooting page cross-links drift reconciler + verb prune"
+      ],
+      "title": "docs: troubleshooting + doctor primer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "pyproject.toml",
+        "CONTRIBUTING.md",
+        "README.md"
+      ],
+      "id": "P28-I03-W25",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:34.359479Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "[project.urls] populated",
+        "CONTRIBUTING split from README"
+      ],
+      "title": "docs: pyproject urls + contributing split",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/config/schema.py",
+        "src/eawf/surfaces/cli/commands/calibrate.py",
+        "tests/surfaces/cli/"
+      ],
+      "id": "P28-I03-W26",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:34.873006Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tool.eawf.estimation.bucket_eu_overrides added",
+        "calibrate apply subcommand",
+        "operator AUQ confirms before write"
+      ],
+      "title": "feat: eawf calibrate apply --bucket centroid CLI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W27": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W03",
+        "P28-I02-W10",
+        "P28-I03-W13",
+        "P28-I03-W30"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/workflow/agent_report/rollup.py"
+      ],
+      "id": "P28-I03-W27",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:15:00.234934Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "detail-pane d tab shows per-attempt timeline 8 cols",
+        "per_wave_attempt_rollup helper added",
+        "error_kind breakdown"
+      ],
+      "title": "feat: per-wave drill-down panel attempts/retries/blocked/tokens",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W13",
+        "P28-I03-W18"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/render/plan_view.py",
+        "src/eawf/workflow/estimation/metrics.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py"
+      ],
+      "id": "P28-I03-W28",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:35.839350Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "roadmap show --md emits 4 EU/hour rows",
+        "compute_realistic_wall_clock uses critical-path+queue+inside_pessimistic_share",
+        "tui.eu_view.density+fields config consumed"
+      ],
+      "title": "feat: phase-rollup view work-sum + critical-path + realistic + CI",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W13",
+        "P28-I03-W18"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "src/eawf/surfaces/tui/widgets/calibration_table.py",
+        "src/eawf/observability/telemetry/metrics_projection.py"
+      ],
+      "id": "P28-I03-W29",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:36.327683Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "6th tile per-role fit grid",
+        "Enter opens drill modal",
+        "reuses CalibrationReport",
+        "per_role_calibration extension"
+      ],
+      "title": "feat: per-role calibration tile + drill modal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W30": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W27"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/observability/telemetry/join.py",
+        "src/eawf/kernel/state/models.py"
+      ],
+      "id": "P28-I03-W30",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:36.824878Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ActualSummary auto-written at close",
+        "attention_eu from telemetry duration_ms",
+        "WaveSessionRollup join helper added",
+        "actual_written_auto event",
+        "operator override preserved"
+      ],
+      "title": "feat: auto-derive ActualSummary + per-attempt rollup at wave close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W31": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W37"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/lint/tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "AGENTS.md"
+      ],
+      "id": "P28-I03-W31",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:37.328865Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "bare type+subject accepted when state.current_phase is None",
+        "rejected when ACTIVE phase exists",
+        "AGENTS rule 14 expansion clarifies non-final-iter close",
+        "pre-flight chore subject legal commit 1"
+      ],
+      "title": "feat: drop bracket + bare conventional-commits for out-of-phase",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W32": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W10",
+        "P28-I02-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/init_wizard.py",
+        "src/eawf/surfaces/tui/scopes/user.py",
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/palette/command_palette.py",
+        "src/eawf/surfaces/tui/palette/verbs.py"
+      ],
+      "id": "P28-I03-W32",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:37.846266Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "init wizard overlay lands",
+        "init-needed flag on user scope",
+        "auto-open path",
+        "/init palette verb",
+        "workspace-link path"
+      ],
+      "title": "feat: TUI init wizard modal + /init palette verb",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W33": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W34"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W01",
+        "P28-I03-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/render/changelog.py",
+        "src/eawf/platform/lint/tools/eawf016_laconic_bullet.py",
+        "src/eawf/kernel/config/defaults.py"
+      ],
+      "id": "P28-I03-W33",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:38.355246Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "changelog.py rewrites [Unreleased] from NarrativeBundle",
+        "eawf016 rejects generic bullets",
+        "vcs.conventions.release block lands",
+        "default cadence=manual",
+        "agent_driven=per-phase"
+      ],
+      "title": "feat: vcs.conventions.release + laconic changelog + eawf016 lint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W34": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W33",
+        "P28-I02-W06",
+        "P28-I03-W17"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/phase.py",
+        "src/eawf/platform/lint/tools/commit_prefix_lint.py",
+        ".github/workflows/phase-release.yaml",
+        ".github/workflows/ci.yaml"
+      ],
+      "id": "P28-I03-W34",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:38.881901Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "_validate_phase_closable extended",
+        "commit lint accepts (release=v...) annotation",
+        "phase-release.yaml ships",
+        "ci.yaml release-readiness matrix job"
+      ],
+      "title": "feat: phase-close release pre-flight gate + post-merge auto-tag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/render/link_wrap.py",
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/screens/overlays/",
+        "src/eawf/surfaces/tui/palette/command_palette.py",
+        "src/eawf/surfaces/tui/palette/verbs.py"
+      ],
+      "id": "P28-I03-W35",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:39.384396Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "link_wrap module ships 14 per-type regex",
+        "14 action handlers",
+        "per-type modals",
+        "/goto palette verb",
+        "back-forward nav stack",
+        "hover-tooltip preview"
+      ],
+      "title": "feat: clickable refs in TUI + 14-type catalog + nav + /goto palette",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W04"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/**/*.py"
+      ],
+      "id": "P28-I03-W36",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:39.889310Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "~50-100 modules swept",
+        "pre-daemon state-CLI refs/drifted file:line/deprecated API examples/design-provenance leaks removed",
+        "eawf012 lint catches future leaks"
+      ],
+      "title": "docs: scrub stale docstrings + Raises blocks for v0.4",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W37": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W11",
+        "P28-I03-W31"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/workflow/lifecycle/transitions.py",
+        "src/eawf/kernel/spec/roadmap_plan.py",
+        "tests/surfaces/cli/test_roadmap_propose.py",
+        "tests/workflow/lifecycle/test_transitions.py"
+      ],
+      "id": "P28-I03-W37",
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-26T18:14:40.376171Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "RoadmapPlan strict pydantic model lands",
+        "--from-plan accepts YAML/JSON manifest",
+        "single-transaction stages phase+iters+waves",
+        "all-or-nothing on validation fail",
+        "existing propose semantics preserved"
+      ],
+      "title": "feat: roadmap propose --from-plan stages iters+waves atomically",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
