@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.8 hash=e45337c787a792be -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.9 hash=2fd32d7a78c0da7f -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -53,13 +53,14 @@ non-trivial body has an expansion block immediately following.
     files. Decision provenance lives in the commit body and the typed
     Decision URN in ``state.json``; source comments are reserved for
     WHY-the-code-does-X explanations that aid future readers
-    irrespective of provenance.
+    irrespective of provenance. Enforced by the ``eawf012`` lint.
 26. **/prep always renders the DAG in plan mode.** See
     ``prep-plan-mode``.
 27. **Iter and phase close timing.** See
     ``iter-phase-close-timing``.
 28. **Rendered markdown is not manually line-wrapped.** See
     ``markdown-no-manual-wrap``.
+29. **Release process.** See ``release-process``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -78,21 +79,47 @@ control — they are the source of truth for project state.
 ``.ea/locks/`` and ``.ea/local/`` are gitignored.
 
 <!-- END EAWF:managed id=ea-directory-commit-policy -->
-<!-- BEGIN EAWF:managed id=symbol-conventions version=1.0 hash=6e661ec30d84006b -->
+<!-- BEGIN EAWF:managed id=symbol-conventions version=1.1 hash=a62363475be308e6 -->
 ### Symbol conventions
 
 Project codes / phase IDs follow ``^[A-Z][A-Z0-9_-]{1,15}$``. Hypothesis
-IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN>``
-(zero-padded, e.g., ``P00``, ``P03``). Wave IDs: ``W<NN>`` likewise.
+IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN+>``
+(zero-padded, two-or-more digits, e.g., ``P00``, ``P03``, ``P100``).
+Iter IDs: ``I<NN+>`` and wave IDs: ``W<NN+>`` likewise. The
+``\d{2,}`` width matches ``tools/commit_prefix_lint.py`` so 3-digit
+ids land cleanly once the queue grows past ``P99`` / ``I99`` / ``W99``.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.3 hash=80afcb466abe1f57 -->
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.4 hash=1086841463971093 -->
 ### Naming conventions
 
 To prevent drift across state models, envelopes, parameters, and
 log keys, every cross-cutting concept has exactly one canonical
 name. Outliers MUST be renamed to match the dominant form before
 merging, not papered over with adapter shims.
+
+**Agent role identifier** — ``agent_role`` (never ``role`` alone
+on a Wave / SubagentSpec field). Applies to
+:class:`~eawf.kernel.state.models.Wave.agent_role`,
+``RoleSpec.role`` (the inner enum keeps the bare name because
+``RoleSpec`` already namespaces it), CLI flags
+(``--agent-role``), and dispatch envelopes. The bare ``role``
+remains valid inside ``RoleSpec`` because the surrounding type
+disambiguates.
+
+**Effort bucket parameter** — ``effort_bucket`` (never ``size``
+or ``effort_size``). Applies to
+:class:`~eawf.kernel.state.models.Wave.effort_bucket`, CLI flags
+(``--effort-bucket``), planner output, and EU-projection tables.
+Allowed values are the closed StrEnum ``XS|S|M|L|XL``.
+
+**Evidence kind identifier** — ``evidence_kind`` (never
+``kind`` alone on an EvidenceRecord field, and never
+``evidence_type``). Applies to
+:class:`~eawf.kernel.state.models.EvidenceRecord.evidence_kind`,
+JSON keys, CLI flags (``--evidence-kind``), and gate-pack
+lookups. Bare ``kind`` remains valid on store envelopes where
+``StoreKind`` already disambiguates.
 
 **State scope identifier** — ``scope_id`` (never bare ``scope``).
 Applies to Pydantic field names on ``State`` models
@@ -229,14 +256,14 @@ the reason in the plan or handoff before dispatching worktrees or
 starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.3 hash=f9f7015dfda2b8b2 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.4 hash=2bf0f6710c9e5801 -->
 ### Commit prefix
 
 ``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types:
 ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``,
 ``build``, ``perf``, ``ci``, ``revert``, ``state``.
 
-Subject grammar (post-P26-W23):
+Subject grammar (post-P26-W23 + P28-W66 bare-conventional form):
 
 - **Planned wave deliverable** — ``[P<NN>-W<NN>] <type>:`` (or
   ``[P<NN>-I<NN>-W<NN>] <type>:`` when iter ≥ I02). The
@@ -257,6 +284,13 @@ Subject grammar (post-P26-W23):
   wave owns (closure audits, promoted research / decision /
   incident briefs). Restricted to ``.ea/artifacts/**``;
   wave-produced docs use the ``[P<NN>-W<NN>] docs:`` form.
+- **Bare conventional-commits (out-of-phase)** — ``<type>:
+  <summary>`` with NO bracket prefix. Accepted ONLY when
+  ``state.current.phase_id`` is ``None`` (no ACTIVE phase) —
+  e.g. the pre-flight chore commit between phase close and the
+  next ``/roadmap propose``. Rejected when a phase is ACTIVE so
+  lifecycle bookkeeping stays attributable. Enforced by
+  ``tools/commit_prefix_lint.py``.
 
 The path whitelist for state-bookkeeping commits triggers on
 ``type == 'state'`` (the canonical semantic signal). The
@@ -267,6 +301,14 @@ Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any
 state-bookkeeping path) and ``type == 'docs'`` (restricted to
 ``.ea/artifacts/**``); for every other type the ``-W<NN>`` or
 ``-CORE`` suffix remains mandatory.
+
+**Operational coupling: ship + PR-review ride the
+phase-co-closing iter.** The final iter of a phase is where the
+PR-review pass + ship CI happen; review-feedback waves append to
+that iter (``eawf roadmap revise --add-wave``) rather than
+opening a fresh iter. This keeps the phase-close mutation
+attributable to one iter close + the same commit (see
+``iter-phase-close-timing``).
 
 Body: 3-6 bullets on what changed and why. Trailer: a recognized
 Claude or Codex ``Co-Authored-By`` trailer.
@@ -304,7 +346,7 @@ Scrub locally before ``git add``; let ``pre-commit``
 (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.0 hash=a5a6f9421f5f5d23 -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.1 hash=732d3a01c75393d2 -->
 ### Artifact chassis and citations
 
 Durable research, plan, audit, decision, hypothesis, and incident
@@ -317,6 +359,16 @@ Citations use dense ``[N]`` markers backed by typed ``Citation`` rows.
 References stay repo-relative, external URL, or Eawf URN. Absolute
 local paths, host-local URLs, and PII must fail validation before
 promotion or PR text ships.
+
+**IntentBrief + NarrativeBundle (v0.4).** ``/research`` outputs
+a typed :class:`~eawf.kernel.spec.research.IntentBrief` whose
+claims carry ``evidence_refs``; a brief is promotable iff every
+claim has at least one resolving + entailing reference (the
+``evidence_refs`` invariant). The promoted artifact wraps the
+brief in a :class:`~eawf.kernel.spec.research.NarrativeBundle`
+that fixes provenance to the originating session and the
+``IntentBrief`` URN — researcher prose and the typed claim graph
+stay in lockstep through promotion.
 
 <!-- END EAWF:managed id=artifact-chassis -->
 <!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.0 hash=e1e63ab1ed813a44 -->
@@ -491,15 +543,16 @@ deferred to a follow-up phase; P19 ships phase-at-a-time only.
 proposes to swap order.
 
 <!-- END EAWF:managed id=roadmap-procedure -->
-<!-- BEGIN EAWF:managed id=spike-workflow version=1.1 hash=2e32fb783dd93583 -->
+<!-- BEGIN EAWF:managed id=spike-workflow version=1.2 hash=eab1c75ff47f0e6b -->
 ### Spike workflow
 
 A *spike* is a short, time-boxed, read-only investigation run
 before claiming a real wave — used when the next move is unclear
 and the operator needs a brief or experimental verdict to write
-the wave's success criteria. Spikes are convention-only in v0.3
-(no dedicated CLI verb); they ride the existing ``/research``
-surface and produce a brief artifact, not a state mutation.
+the wave's success criteria. The dedicated ``/spike`` skill
+(v0.4) wraps the existing ``/research`` surface with the
+brief-naming + dispatch-prompt conventions below; legacy use of
+``/research`` for spikes stays valid and renders identically.
 
 **When to spike.** Reach for a spike when (a) the wave's success
 criteria cannot yet be written without first reading code or
@@ -714,3 +767,35 @@ code blocks keep their own formatting. Skill output contracts inherit
 this rule: a skill that emits markdown emits unwrapped paragraphs.
 
 <!-- END EAWF:managed id=markdown-no-manual-wrap -->
+<!-- BEGIN EAWF:managed id=release-process version=1.0 hash=6d93d6ca14dbe6c9 -->
+### Release process
+
+Releases are opt-in per repo via
+``vcs.conventions.release.cadence``. The two supported cadences:
+
+- ``per_phase`` — agent-driven profile default; each phase PR
+  closes with a release-readiness pre-flight gate and a
+  post-merge auto-tag. Phase close = at least one minor version
+  bump.
+- ``manual`` — managed-repo default; releases ride a separate
+  operator-driven tag flow.
+
+Per-phase release pre-flight (gates
+``eawf phase close``) requires:
+
+- ``CHANGELOG.md`` has a new section for the release version
+  with at least one bullet.
+- ``__version__`` (``src/<pkg>/_version.py`` or the configured
+  ``version_source``) advanced from the prior release.
+- A migration note exists when ``state.json`` ``schema_version``
+  changed since the last release.
+- The phase-close commit subject carries the optional
+  ``(release=v<X.Y.Z>)`` annotation accepted by
+  ``tools/commit_prefix_lint.py``.
+
+Post-merge, ``.github/workflows/phase-release.yaml`` reads the
+annotation, tags the merge commit, and publishes release notes
+synthesized from the phase PR body. Repos that opt out via
+``cadence: manual`` skip the gate and the workflow.
+
+<!-- END EAWF:managed id=release-process -->

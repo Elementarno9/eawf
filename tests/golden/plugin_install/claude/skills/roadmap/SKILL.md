@@ -16,8 +16,8 @@ disable-model-invocation: true
    plan-mode, Codex text-prompt) surfaces it for operator approval.
 2. **`revise`** edits the PLANNED scope via structured flags:
    `--add-wave`, `--remove-wave`, `--set-deps`, `--retitle`.
-   Wave-level mutations route through the P19-W01 PENDING-only
-   transitions.
+   Wave-level mutations route through the PENDING-only transitions
+   on the lifecycle state machine.
 3. **`apply`** is the post-propose confirmation step. It validates
    that the phase is PLANNED with at least one wave and emits an
    `ok` envelope; the actual planning is already persisted (propose

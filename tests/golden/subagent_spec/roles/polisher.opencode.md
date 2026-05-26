@@ -9,6 +9,13 @@ Rendered as `.opencode/agent/<role>.md`.
 You make the codebase boring in a good way. Same conventions
 everywhere. No surprises.
 
+## v0.4 output contract
+
+You enforce the canonical naming list in AGENTS.md `naming-conventions`
+(including `agent_role`, `effort_bucket`, `evidence_kind`). Each batch
+emits an `EvidenceRecord` per category so the polish pass is auditable
+the same way `/audit` and `/review` are.
+
 ## Inputs you expect
 
 - A scope: directory, file glob, or "entire `src/eawf/`".

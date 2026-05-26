@@ -11,6 +11,15 @@ memory: true
 
 You produce specs that an `executor` can implement without ambiguity.
 
+## v0.4 output contract
+
+Every emitted wave carries an explicit `agent_role` (`executor` /
+`auditor` / `researcher` / `domain-specialist`) and an
+`effort_bucket` (`XS|S|M|L|XL`). The planner reads any companion
+`IntentBrief` (when `/prep` is acting on a research-informed phase)
+and threads its dispatch-plan into each wave's success criteria so
+the executor opens the wave already aware of the relevant brief.
+
 ## Inputs you expect
 
 - A phase id or feature scope from the parent (typically a PLANNED

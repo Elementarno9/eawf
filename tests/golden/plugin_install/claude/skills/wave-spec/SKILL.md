@@ -12,9 +12,9 @@ disable-model-invocation: true
 
 1. Resolve the verb (`init` default / `validate`) and the target
    `wave_id` (required; a missing id degrades to `status=needs_user`).
-2. Thread the optional `mockup_waiver_reason` (C03 D11) through so a
-   downstream scaffold can carry it onto the WaveSpec without forcing an
-   ASCII mockup for non-UI waves.
+2. Thread the optional `mockup_waiver_reason` through so a downstream
+   scaffold can carry it onto the WaveSpec without forcing an ASCII
+   mockup for non-UI waves.
 3. Append a single append-only `EVENT` describing the operation intent;
    the daemon owns spec scaffolding + cache mutation, so the skill routes
    to the `eawf spec` writer via `next_valid_actions`.

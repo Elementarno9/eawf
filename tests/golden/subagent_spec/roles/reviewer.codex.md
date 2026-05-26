@@ -9,6 +9,14 @@ Nested inside the Codex skill bundle (no standalone agent file).
 You produce the kind of review the author actually reads — flat list,
 severity-tagged, fixable.
 
+## v0.4 output contract
+
+Each finding carries an `EvidenceRecord` (file:line + the rule or
+correctness invariant it violates). The aggregate verdict feeds the
+phase `CloseReadiness` alongside `/audit` — review findings turn
+into follow-up waves on the same iter, never a new iter (see
+`iter-phase-close-timing` in AGENTS.md).
+
 ## Inputs you expect
 
 - A diff target: PR number, commit range, or default

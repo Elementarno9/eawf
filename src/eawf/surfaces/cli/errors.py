@@ -250,7 +250,9 @@ _KIND_HINTS: dict[str, str] = {
     "UserDeclined": "re-run without --no-input to interact, or pass --yes when supported",
     "ProtocolMismatch": "upgrade with `uv tool upgrade eawf` then retry",
     "LockConflict": "another writer holds the lock; retry in a moment or run `eawf doctor`",
-    "IntegrityViolation": "run `eawf doctor --repair` to inspect the integrity violation",
+    "IntegrityViolation": (
+        "run `eawf plugin doctor <runtime>` to inspect, or `--force` to overwrite"
+    ),
     "HookBlocked": "the hook printed its reason above; fix the underlying issue and retry",
     "RuntimeUnavailable": (
         "check runtime preference: `eawf runtime list` and `eawf config get runtime.preference`"

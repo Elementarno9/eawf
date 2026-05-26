@@ -8,6 +8,15 @@ disable-model-invocation: true
 
 # /init
 
+## v0.4 cross-links
+
+Init persists a typed `Project` row (id, profile composition, default
+`RoleSpec` set, vcs cadence) — downstream skills resolve role and
+release-cadence config off the `Project` rather than re-reading the
+profile yaml. The init wizard emits a `MEMORY` seed entry
+(`MutationKind=create`) recording the project bootstrap so the
+calibrated-trust scorecard has a base date.
+
 ## Canonical algorithm
 
 1. Discover existing `.ea/` (if any) and load profile composition.

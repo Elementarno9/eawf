@@ -1,7 +1,7 @@
 """Frozen :data:`SKILL_REGISTRY` data for the Eä skill surface.
 
-Per Phase 4 W05 acceptance §1/§5, ``eawf plugin install claude`` emits
-one ``.claude/skills/<name>/SKILL.md`` per skill. The output mirrors the
+``eawf plugin install claude`` emits one
+``.claude/skills/<name>/SKILL.md`` per skill. The output mirrors the
 hand-written placeholders that already live under ``.claude/skills/``:
 YAML frontmatter (``name``/``description``/``argument-hint``/
 ``user-invocable``/``disable-model-invocation``) terminated by ``---``
@@ -15,12 +15,11 @@ sibling :mod:`eawf.surfaces.render.skills.render`; the package ``__init__``
 re-exports both halves so every historical
 ``from eawf.surfaces.render.skills import ...`` keeps resolving unchanged.
 
-The ``SKILL_REGISTRY`` carries the operator-facing workflow skills (six
-core + four meta + the C04b skill-surfaces) plus a tail of model-only
-code-quality playbooks (``user_invocable=False`` — hidden from the slash
-menu but reachable by the model). It is consumed by
-:mod:`eawf.runtime.runtimes.claude.plugin_install` to produce the deterministic
-plugin tree the golden test pins.
+The ``SKILL_REGISTRY`` carries the operator-facing workflow skills plus
+a tail of model-only code-quality playbooks (``user_invocable=False`` —
+hidden from the slash menu but reachable by the model). It is consumed
+by :mod:`eawf.runtime.runtimes.claude.plugin_install` to produce the
+deterministic plugin tree the golden test pins.
 """
 
 from __future__ import annotations
@@ -33,10 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Frozen v0.1 skill registry. Mirrors :data:`SkillName` literal — six core
-# (research/prep/audit/ship/review/polish) + four meta (init/roadmap/
-# differentiate/flow). Bodies are intentionally short pointers; full
-# canonical algorithms live in docs/architecture/workflow.md.
+# Frozen skill registry. Mirrors :data:`SkillName` literal — core workflow
+# skills (research / prep / audit / ship / review / polish), meta skills
+# (init / roadmap / differentiate / flow), and model-only refactor
+# playbooks. Bodies are intentionally short pointers; full canonical
+# algorithms live in docs/architecture/workflow.md.
 # ---------------------------------------------------------------------------
 
 _RESEARCH_BODY = """# /research
@@ -50,6 +50,22 @@ _RESEARCH_BODY = """# /research
    discriminating experiment.
 5. If `--final`: persist a research brief with `references` and render
    it through `eawf research show --md`.
+
+## v0.4 output contract: `IntentBrief` + dispatch-plan
+
+The brief body conforms to `kernel/spec/research.IntentBrief` — typed
+claims with `evidence_refs` (a brief is promotable iff every claim
+has at least one resolving + entailing reference). The session also
+emits an optional dispatch-plan when the verdict names a follow-up
+wave the brief informs, so `/prep` and `/roadmap propose` can wire
+the brief into the next wave's References block automatically.
+
+## `--depth` flag
+
+`--depth shallow|medium|deep|exhaustive` controls survey budget
+(file reads, external fetches, cross-wave grep sweeps). Default is
+`medium`; pin via `research.default_depth` in the layered config
+(reuses `StageProfile`, no new key).
 
 ## Spike convention
 
@@ -92,8 +108,8 @@ _PREP_BODY = """# /prep
 
 ## Canonical algorithm
 
-P19-W07 turns `/prep` into an activator. The flow now branches on the
-phase's PLANNED-queue state:
+`/prep` activates a PLANNED phase. The flow branches on the phase's
+PLANNED-queue state:
 
 1. Resolve `<phase-id>` against `state.phases`.
 2. Branch on phase status + wave plan:
@@ -179,6 +195,16 @@ _AUDIT_BODY = """# /audit
 4. Parse the verdict; convert refutations into TODOs or new waves.
 5. Render audit evidence through `eawf audit show --md`.
 
+## v0.4 cross-links
+
+The auditor emits one `EvidenceRecord` per criterion (`evidence_kind`
+= `gate` | `claim` | `decision`). The aggregate verdict folds into the
+target wave / iter `CloseReadiness` projection — `/ship` reads the
+same projection so audit and ship share one source of truth on
+"is this iter actually closable?". Roles are pinned via `RoleSpec`
+(`role="auditor"`); fresh-context isolation stays a `RoleSpec`
+invariant, not an ad-hoc dispatch flag.
+
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.
@@ -202,6 +228,16 @@ status (`pass | pass-with-followups | fail`).
 """
 
 _SHIP_BODY = """# /ship
+
+## v0.4 cross-links
+
+`/ship` reads the phase `CloseReadiness` projection (gate-pack
+aggregate + `EvidenceRecord` summary + outstanding follow-ups) to
+decide what gates still need clearing. The phase-close commit only
+lands once `CloseReadiness.status == "ready"`. The phase-PR body is
+synthesized from the same projection so reviewer and tool see the
+same shape. `MEMORY` mutations driven by ship (e.g. release-notes
+entries) carry an explicit `MutationKind` for downstream audit.
 
 ## Canonical algorithm
 
@@ -316,6 +352,15 @@ items list for changes needing user OK.
 
 _INIT_BODY = """# /init
 
+## v0.4 cross-links
+
+Init persists a typed `Project` row (id, profile composition, default
+`RoleSpec` set, vcs cadence) — downstream skills resolve role and
+release-cadence config off the `Project` rather than re-reading the
+profile yaml. The init wizard emits a `MEMORY` seed entry
+(`MutationKind=create`) recording the project bootstrap so the
+calibrated-trust scorecard has a base date.
+
 ## Canonical algorithm
 
 1. Discover existing `.ea/` (if any) and load profile composition.
@@ -349,8 +394,8 @@ _ROADMAP_BODY = """# /roadmap
    plan-mode, Codex text-prompt) surfaces it for operator approval.
 2. **`revise`** edits the PLANNED scope via structured flags:
    `--add-wave`, `--remove-wave`, `--set-deps`, `--retitle`.
-   Wave-level mutations route through the P19-W01 PENDING-only
-   transitions.
+   Wave-level mutations route through the PENDING-only transitions
+   on the lifecycle state machine.
 3. **`apply`** is the post-propose confirmation step. It validates
    that the phase is PLANNED with at least one wave and emits an
    `ok` envelope; the actual planning is already persisted (propose
@@ -505,6 +550,17 @@ runtime, and the resolved trailer (or a reason on the needs_user path).
 
 _MEMORY_BODY = """# /memory
 
+## v0.4 cross-links
+
+Each memory mutation carries a typed `MutationKind` —
+`create | update | refresh | demote | archive` — so the audit trail
+distinguishes a freshly captured fact from a content-preserving
+re-touch. `find_stale` is recommender-only (it surfaces candidates
+ranked by age and use-count) and never flips `status=STALE`
+unilaterally; the explicit `demote` mutation does that. Promoted
+memories carry a `Project` row reference so cross-repo recall stays
+scoped.
+
 ## Canonical algorithm
 
 1. Resolve the verb (`save` default / `list` / `forget`) and the target
@@ -534,6 +590,17 @@ and tier (or a reason on the needs_user path).
 """
 
 _AGENT_DISPATCH_BODY = """# /agent-dispatch
+
+## v0.4 cross-links
+
+Dispatch resolves the wave's `RoleSpec` (`role`, `model`, `tools`,
+`isolation`) and renders the subagent's prompt from the wave's
+`agent_role` + the role's canonical contract. The dispatched session
+emits one `agent_end` report carrying an `EvidenceRecord` summary; the
+recorded evidence feeds the wave's `CloseReadiness`. When the operator
+pins a runtime preference, the choice persists via a
+`MEMORY` mutation (`MutationKind=update`) on the `Project` row so the
+next dispatch starts from the operator's pinned ladder.
 
 ## Canonical algorithm
 
@@ -608,9 +675,9 @@ _WAVE_SPEC_BODY = """# /wave-spec
 
 1. Resolve the verb (`init` default / `validate`) and the target
    `wave_id` (required; a missing id degrades to `status=needs_user`).
-2. Thread the optional `mockup_waiver_reason` (C03 D11) through so a
-   downstream scaffold can carry it onto the WaveSpec without forcing an
-   ASCII mockup for non-UI waves.
+2. Thread the optional `mockup_waiver_reason` through so a downstream
+   scaffold can carry it onto the WaveSpec without forcing an ASCII
+   mockup for non-UI waves.
 3. Append a single append-only `EVENT` describing the operation intent;
    the daemon owns spec scaffolding + cache mutation, so the skill routes
    to the `eawf spec` writer via `next_valid_actions`.
@@ -646,8 +713,8 @@ _SECURITY_REVIEW_BODY = """# /security-review
    when every check passes and `failed` when any check fails (failing
    check names surface as repair commands).
 
-When the active profile is `security` (a C08 contribution), this skill is
-a required gate for `phase close`.
+When the active profile is `security`, this skill is a required gate
+for `phase close`.
 
 ## Pre-flight checklist
 

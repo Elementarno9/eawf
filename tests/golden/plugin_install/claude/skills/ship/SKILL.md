@@ -8,6 +8,16 @@ disable-model-invocation: true
 
 # /ship
 
+## v0.4 cross-links
+
+`/ship` reads the phase `CloseReadiness` projection (gate-pack
+aggregate + `EvidenceRecord` summary + outstanding follow-ups) to
+decide what gates still need clearing. The phase-close commit only
+lands once `CloseReadiness.status == "ready"`. The phase-PR body is
+synthesized from the same projection so reviewer and tool see the
+same shape. `MEMORY` mutations driven by ship (e.g. release-notes
+entries) carry an explicit `MutationKind` for downstream audit.
+
 ## Canonical algorithm
 
 1. Resolve `<phase-id>`; verify all waves under it are complete.

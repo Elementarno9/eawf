@@ -10,8 +10,8 @@ disable-model-invocation: true
 
 ## Canonical algorithm
 
-P19-W07 turns `/prep` into an activator. The flow now branches on the
-phase's PLANNED-queue state:
+`/prep` activates a PLANNED phase. The flow branches on the phase's
+PLANNED-queue state:
 
 1. Resolve `<phase-id>` against `state.phases`.
 2. Branch on phase status + wave plan:

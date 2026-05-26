@@ -8,6 +8,17 @@ disable-model-invocation: true
 
 # /agent-dispatch
 
+## v0.4 cross-links
+
+Dispatch resolves the wave's `RoleSpec` (`role`, `model`, `tools`,
+`isolation`) and renders the subagent's prompt from the wave's
+`agent_role` + the role's canonical contract. The dispatched session
+emits one `agent_end` report carrying an `EvidenceRecord` summary; the
+recorded evidence feeds the wave's `CloseReadiness`. When the operator
+pins a runtime preference, the choice persists via a
+`MEMORY` mutation (`MutationKind=update`) on the `Project` row so the
+next dispatch starts from the operator's pinned ladder.
+
 ## Canonical algorithm
 
 1. Resolve the target `wave_id` (required; a missing id degrades to

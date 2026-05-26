@@ -2,11 +2,11 @@
 
 Enforces:
 
-1. Subject line must match one of two prefix grammars:
+1. Subject line must match one of three prefix grammars:
 
    - **Wave/CORE form** (planned wave deliverable or legacy phase-
      bookkeeping alias):
-     ``^\\[P\\d{2}(-I\\d{2})?(-W\\d{2}|-CORE)\\]\\s+<type>:\\s+\\S.*$``
+     ``^\\[P\\d{2,}(-I\\d{2,})?(-W\\d{2,}|-CORE)\\]\\s+<type>:\\s+\\S.*$``
      where ``<type>`` is one of ``feat|fix|chore|docs|refactor|test|
      build|perf|ci|revert|state``. The ``-W##`` or ``-CORE`` suffix
      declares whether the commit advances a planned wave or carries
@@ -14,7 +14,7 @@ Enforces:
 
    - **Bare phase/iter form** (post-P26-W23): a bare
      ``[P##(-I##)?]`` prefix with ``type`` ∈ {``state``, ``docs``}:
-     ``^\\[P\\d{2}(-I\\d{2})?\\]\\s+(state|docs):\\s+\\S.*$``
+     ``^\\[P\\d{2,}(-I\\d{2,})?\\]\\s+(state|docs):\\s+\\S.*$``
      ``state`` is the canonical signal for phase/iter-scope
      bookkeeping; ``docs`` carries phase/iter-scoped documentation
      artifacts that no single wave owns (closure audits, promoted
@@ -23,9 +23,19 @@ Enforces:
      still validate, but new bookkeeping commits MAY drop the suffix —
      the conventional-commit ``type`` IS the semantic signal.
 
-   ``W00`` and ``I00`` are rejected in both forms: wave / iter indices
-   are 1-based by convention, and reactive waves get the next
-   available ``W##`` per the feedback-commit-prefix-taxonomy memory.
+   - **Bare conventional-commits form** (out-of-phase): a bare
+     ``<type>: <subject>`` with no bracket prefix:
+     ``^<type>:\\s+\\S.*$``. Accepted ONLY when ``state.current.phase_id``
+     is ``None`` (no ACTIVE phase). Rejected when an ACTIVE phase
+     exists — those commits MUST carry the bracketed wave/iter/phase
+     prefix so the lifecycle bookkeeping stays attributable.
+
+   ``W00`` and ``I00`` are rejected in the bracketed forms: wave /
+   iter indices are 1-based by convention, and reactive waves get the
+   next available ``W##`` per the feedback-commit-prefix-taxonomy
+   memory. Phase / iter / wave id width widened to ``\\d{2,}`` so
+   3-digit ids (P100, I100, W100) are accepted once the queue grows
+   that far.
 
 2. State-bookkeeping path whitelist applies to:
 
@@ -67,6 +77,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -83,29 +94,36 @@ from coauthor_policy import (
 
 _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 
-# Subject grammar — two accepted forms:
+# Subject grammar — three accepted forms:
 #
 # 1. Wave/CORE form: ``[P##(-I##)?(-W##|-CORE)] <type>: ...`` — the
 #    pre-P26-W23 grammar; the ``-W##`` or ``-CORE`` suffix is
 #    mandatory.
-# 2. State-bookkeeping form: ``[P##(-I##)?] state: ...`` — post-
-#    P26-W23 grammar; valid only when the conventional-commit type is
-#    ``state``. The bare ``[P##]`` prefix is accepted because
-#    ``type == 'state'`` is the canonical bookkeeping signal.
+# 2. State-bookkeeping form: ``[P##(-I##)?] <state|docs>: ...`` —
+#    post-P26-W23 grammar; valid only when the conventional-commit
+#    type is ``state`` (any path on the state whitelist) or ``docs``
+#    (restricted to ``.ea/artifacts/**``).
+# 3. Bare conventional-commits form: ``<type>: <subject>`` with no
+#    bracket prefix — accepted ONLY when ``state.current.phase_id`` is
+#    ``None`` (no ACTIVE phase). Rejected when a phase is ACTIVE so
+#    lifecycle bookkeeping stays attributable.
 #
 # The negative lookaheads ``(?!00)`` on both the iter and wave digit
 # pairs reject ``I00`` / ``W00``: wave and iter indices are 1-based
 # throughout the eawf state model, and reactive waves append the next
 # available ``W##`` per the feedback-commit-prefix-taxonomy memory.
+# The digit-width is ``\d{2,}`` (not ``\d{2}``) so 3+ digit ids are
+# accepted once the queue grows past P/I/W 99.
 _SUBJECT_WAVE_OR_CORE_RE = re.compile(
-    r"^\[P\d{2}(-I(?!00)\d{2})?(-W(?!00)\d{2}|-CORE)\]\s+"
+    r"^\[P\d{2,}(-I(?!00)\d{2,})?(-W(?!00)\d{2,}|-CORE)\]\s+"
     rf"(?P<type>{_TYPES}):\s+\S.*$"
 )
 _SUBJECT_BARE_RE = re.compile(
-    r"^\[P\d{2}(-I(?!00)\d{2})?\]\s+"
+    r"^\[P\d{2,}(-I(?!00)\d{2,})?\]\s+"
     r"(?P<type>state|docs):\s+\S.*$"
 )
-_CORE_TAG_RE = re.compile(r"^\[P\d{2}(-I(?!00)\d{2})?-CORE\]\s+")
+_SUBJECT_BARE_CONVENTIONAL_RE = re.compile(rf"^(?P<type>{_TYPES}):\s+\S.*$")
+_CORE_TAG_RE = re.compile(r"^\[P\d{2,}(-I(?!00)\d{2,})?-CORE\]\s+")
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
     ".ea/store/event.jsonl",
@@ -127,6 +145,35 @@ _STATE_ONLY_PREFIXES = (".ea/specs/",)
 # the promoted-artifact tree; wave-produced docs use the
 # ``[P##-W##] docs:`` wave form, which accepts any path.
 _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
+
+
+def _current_phase_active(state_path: Path | None = None) -> bool:
+    """Return True when ``state.current.phase_id`` is non-null.
+
+    Walks upward from cwd to find ``.ea/state.json`` when *state_path*
+    is omitted. Missing file, unreadable JSON, or null ``phase_id``
+    all read as "no ACTIVE phase" (returns ``False``), which is the
+    safe default — it lets the pre-flight chore commit subject parse
+    in fresh checkouts and in environments where the lint runs
+    outside a state-resident project.
+    """
+    if state_path is None:
+        cwd = Path.cwd()
+        for parent in [cwd, *cwd.parents]:
+            candidate = parent / ".ea" / "state.json"
+            if candidate.is_file():
+                state_path = candidate
+                break
+    if state_path is None or not state_path.is_file():
+        return False
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except OSError, json.JSONDecodeError:
+        return False
+    current = data.get("current")
+    if not isinstance(current, dict):
+        return False
+    return current.get("phase_id") is not None
 
 
 def _staged_paths() -> list[str]:
@@ -192,51 +239,67 @@ def _check_scoped_paths(
     return None
 
 
-def lint(
-    message_path: Path,
-    staged: list[str],
-    env: Mapping[str, str] | None = None,
-) -> tuple[int, str]:
-    """Run both checks against *message_path* + *staged* paths.
-
-    Returns ``(exit_code, diagnostic)``.
-    """
-    text = message_path.read_text(encoding="utf-8")
-    lines = text.splitlines()
-    subject = ""
-    for line in lines:
+def _extract_subject(text: str) -> str:
+    """Return the first non-blank, non-comment line in *text*."""
+    for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        subject = stripped
-        break
-    if not subject:
-        return 1, "empty commit subject"
+        if stripped and not stripped.startswith("#"):
+            return stripped
+    return ""
+
+
+def _match_subject(subject: str, state_path: Path | None) -> tuple[re.Match[str] | None, bool, str]:
+    """Return (match, is_bare_state_or_docs, error_diag).
+
+    Tries the three accepted forms in order. The bare conventional-commits
+    form is rejected when an ACTIVE phase exists; in that case the returned
+    match is ``None`` and *error_diag* carries the rejection text. The
+    ``is_bare_state_or_docs`` flag tells callers whether the matched form
+    is the bracketed bare ``[P##(-I##)?] state|docs:`` form (which still
+    needs path-whitelist enforcement).
+    """
     wave_match = _SUBJECT_WAVE_OR_CORE_RE.match(subject)
     bare_match = _SUBJECT_BARE_RE.match(subject)
-    match = wave_match or bare_match
-    if not match:
-        return 1, (
+    bracketed = wave_match or bare_match
+    if bracketed is not None:
+        return bracketed, bare_match is not None, ""
+    bare_conventional = _SUBJECT_BARE_CONVENTIONAL_RE.match(subject)
+    if bare_conventional is not None:
+        if _current_phase_active(state_path):
+            return (
+                None,
+                False,
+                (
+                    f"bare conventional-commits subject rejected: {subject!r}\n"
+                    "an ACTIVE phase exists (state.current.phase_id is set); "
+                    "commits MUST carry a bracketed [P##-W##] / [P##-I##-W##] / "
+                    "[P##] / [P##-I##] prefix so lifecycle bookkeeping stays "
+                    "attributable. Bare '<type>: <subject>' is reserved for "
+                    "out-of-phase commits (state.current.phase_id is None)."
+                ),
+            )
+        return bare_conventional, False, ""
+    return (
+        None,
+        False,
+        (
             f"commit subject rejected: {subject!r}\n"
             "expected '[P##-W##] <type>: <summary>', "
             "'[P##-CORE] <type>: <summary>' (legacy bookkeeping alias), "
             "'[P##] state: <summary>' (canonical bookkeeping form), "
-            "or '[P##] docs: <summary>' (phase/iter-scoped artifact docs) "
+            "'[P##] docs: <summary>' (phase/iter-scoped artifact docs), "
+            "or '<type>: <summary>' (bare conventional-commits, only when "
+            "no ACTIVE phase is set in state.json) "
             "(W00 and I00 rejected — wave/iter indices are 1-based; "
             "type ∈ feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state; "
             "bare [P##] accepted only for type=state or type=docs)"
-        )
-    commit_type = match.group("type")
-    scoped = _check_scoped_paths(
-        commit_type=commit_type,
-        subject=subject,
-        staged=staged,
-        is_bare=bare_match is not None,
+        ),
     )
-    if scoped is not None:
-        return scoped
-    env_map = {} if env is None else env
-    if coauthor_disabled(env_map):
+
+
+def _check_coauthor(text: str, env: Mapping[str, str]) -> tuple[int, str]:
+    """Return ``(0, "")`` when the co-author trailer policy is satisfied."""
+    if coauthor_disabled(env):
         if has_any_coauthor_trailer(text):
             return 1, "co-author trailers are disabled by vcs.coauthor policy"
         return 0, ""
@@ -247,6 +310,41 @@ def lint(
             "harness is detected; otherwise paste a recognized trailer manually"
         )
     return 0, ""
+
+
+def lint(
+    message_path: Path,
+    staged: list[str],
+    env: Mapping[str, str] | None = None,
+    state_path: Path | None = None,
+) -> tuple[int, str]:
+    """Run both checks against *message_path* + *staged* paths.
+
+    Returns ``(exit_code, diagnostic)``. *state_path* lets tests
+    inject a fixture ``state.json``; production callers leave it
+    unset and the helper walks upward from cwd to find ``.ea/state.json``.
+    """
+    text = message_path.read_text(encoding="utf-8")
+    subject = _extract_subject(text)
+    if not subject:
+        return 1, "empty commit subject"
+    match, is_bare_bracketed, err = _match_subject(subject, state_path)
+    if match is None:
+        return 1, err
+    # Bare conventional-commits (no bracket prefix) has no path whitelist;
+    # bracketed forms (wave/CORE + bare state/docs) route through the
+    # scoped-path check, which internally gates on commit_type / CORE tag
+    # / is_bare to apply the right whitelist.
+    if subject.startswith("["):
+        scoped = _check_scoped_paths(
+            commit_type=match.group("type"),
+            subject=subject,
+            staged=staged,
+            is_bare=is_bare_bracketed,
+        )
+        if scoped is not None:
+            return scoped
+    return _check_coauthor(text, {} if env is None else env)
 
 
 def main(argv: list[str]) -> int:

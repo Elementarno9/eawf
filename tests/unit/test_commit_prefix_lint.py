@@ -173,10 +173,16 @@ def test_accepts_wave_docs_touching_artifact_and_src(tmp_path: Path, mod) -> Non
 
 
 def test_rejects_missing_prefix(tmp_path: Path, mod) -> None:
+    """Bare conventional-commits subject IS legal when no ACTIVE phase
+    (per the W66 lint extension landed in the pre-flight v0.4 chore
+    commit); inject an ACTIVE-phase state.json so this case stays
+    rejected.
+    """
     msg = _write_msg(tmp_path, "feat: drive-by change\n")
-    code, diag = mod.lint(msg, [])
+    state = _write_state(tmp_path, phase_id="P28")
+    code, diag = mod.lint(msg, [], state_path=state)
     assert code == 1
-    assert "commit subject rejected" in diag
+    assert "bare conventional-commits subject rejected" in diag
 
 
 def test_rejects_wrong_wave_id_shape(tmp_path: Path, mod) -> None:
@@ -353,4 +359,77 @@ def test_disabled_coauthor_policy_accepts_no_trailer(tmp_path: Path, mod) -> Non
         with_trailer=False,
     )
     code, diag = mod.lint(msg, ["src/eawf/x.py"], env={"EAWF_COAUTHOR_MODE": "disabled"})
+    assert code == 0, diag
+
+
+# ---------------------------------------------------------------------------
+# Bare conventional-commits form (out-of-phase): ``<type>: <subject>``.
+# Accepted only when ``state.current.phase_id is None``. The state path is
+# injected via the *state_path* kwarg so tests do not need to touch the
+# checkout's own ``.ea/state.json``.
+# ---------------------------------------------------------------------------
+
+
+def _write_state(tmp_path: Path, *, phase_id: str | None) -> Path:
+    state = {"current": {"phase_id": phase_id, "iter_id": None}}
+    p = tmp_path / "state.json"
+    import json as _json
+
+    p.write_text(_json.dumps(state), encoding="utf-8")
+    return p
+
+
+def test_accepts_bare_conventional_when_no_active_phase(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "chore: pre-flight scrub for v0.4 design\n\nbody\n")
+    state = _write_state(tmp_path, phase_id=None)
+    code, diag = mod.lint(msg, ["AGENTS.md", "tools/commit_prefix_lint.py"], state_path=state)
+    assert code == 0, diag
+
+
+def test_rejects_bare_conventional_when_active_phase(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "chore: pre-flight scrub for v0.4 design\n\nbody\n")
+    state = _write_state(tmp_path, phase_id="P28")
+    code, diag = mod.lint(msg, ["AGENTS.md", "tools/commit_prefix_lint.py"], state_path=state)
+    assert code == 1
+    assert "bare conventional-commits subject rejected" in diag
+    assert "ACTIVE phase exists" in diag
+
+
+def test_bare_conventional_no_state_file_treated_as_no_active_phase(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "feat: bootstrap module\n\nbody\n")
+    missing = tmp_path / "missing-state.json"
+    assert not missing.exists()
+    code, diag = mod.lint(msg, ["src/x.py"], state_path=missing)
+    assert code == 0, diag
+
+
+def test_bare_conventional_all_supported_types(tmp_path: Path, mod) -> None:
+    state = _write_state(tmp_path, phase_id=None)
+    for ctype in (
+        "feat",
+        "fix",
+        "chore",
+        "docs",
+        "refactor",
+        "test",
+        "build",
+        "perf",
+        "ci",
+        "revert",
+        "state",
+    ):
+        msg = _write_msg(tmp_path, f"{ctype}: something\n\nbody\n")
+        code, diag = mod.lint(msg, ["any/path.py"], state_path=state)
+        assert code == 0, f"{ctype} rejected: {diag}"
+
+
+def test_accepts_three_digit_wave_id(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "[P28-W100] feat: late wave\n\nbody\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 0, diag
+
+
+def test_accepts_three_digit_phase_id(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "[P100-W01] feat: distant phase\n\nbody\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 0, diag

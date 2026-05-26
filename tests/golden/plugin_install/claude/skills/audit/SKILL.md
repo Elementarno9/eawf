@@ -17,6 +17,16 @@ disable-model-invocation: false
 4. Parse the verdict; convert refutations into TODOs or new waves.
 5. Render audit evidence through `eawf audit show --md`.
 
+## v0.4 cross-links
+
+The auditor emits one `EvidenceRecord` per criterion (`evidence_kind`
+= `gate` | `claim` | `decision`). The aggregate verdict folds into the
+target wave / iter `CloseReadiness` projection — `/ship` reads the
+same projection so audit and ship share one source of truth on
+"is this iter actually closable?". Roles are pinned via `RoleSpec`
+(`role="auditor"`); fresh-context isolation stays a `RoleSpec`
+invariant, not an ad-hoc dispatch flag.
+
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.

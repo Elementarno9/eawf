@@ -19,8 +19,8 @@ disable-model-invocation: false
    when every check passes and `failed` when any check fails (failing
    check names surface as repair commands).
 
-When the active profile is `security` (a C08 contribution), this skill is
-a required gate for `phase close`.
+When the active profile is `security`, this skill is a required gate
+for `phase close`.
 
 ## Pre-flight checklist
 

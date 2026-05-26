@@ -8,6 +8,17 @@ disable-model-invocation: true
 
 # /memory
 
+## v0.4 cross-links
+
+Each memory mutation carries a typed `MutationKind` —
+`create | update | refresh | demote | archive` — so the audit trail
+distinguishes a freshly captured fact from a content-preserving
+re-touch. `find_stale` is recommender-only (it surfaces candidates
+ranked by age and use-count) and never flips `status=STALE`
+unilaterally; the explicit `demote` mutation does that. Promoted
+memories carry a `Project` row reference so cross-repo recall stays
+scoped.
+
 ## Canonical algorithm
 
 1. Resolve the verb (`save` default / `list` / `forget`) and the target
