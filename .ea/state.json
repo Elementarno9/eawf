@@ -1867,12 +1867,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I01-W06",
-      "P28-I01-W07",
-      "P28-I01-W09",
-      "P28-I01-W13"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I01",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5545,7 +5540,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T19:59:59.196418Z",
+  "updated_at": "2026-05-26T21:40:56.831152Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19274,7 +19269,7 @@
         "P28-I03-W13"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T21:40:51.603015Z",
       "commit": null,
       "deps": [
         "P28-I01-W03",
@@ -19292,10 +19287,10 @@
       "id": "P28-I01-W06",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:12.023166Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "CloseReadiness pure read-only",
         "warns not blocks on legacy",
@@ -19312,7 +19307,7 @@
         "P28-I01-W08"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T21:40:52.940736Z",
       "commit": null,
       "deps": [
         "P28-I01-W05"
@@ -19328,10 +19323,10 @@
       "id": "P28-I01-W07",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:12.485503Z",
-      "outcome": null,
+      "outcome": "landed 0 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "TimeoutExpired to blocked GateResult",
         "scope resolves",
@@ -19385,7 +19380,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T21:40:53.995130Z",
       "commit": null,
       "deps": [
         "P28-I01-W04",
@@ -19402,10 +19397,10 @@
       "id": "P28-I01-W09",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:13.463823Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "GateSpec persistence rejects bad argv at READY"
       ],
@@ -19529,7 +19524,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T21:40:55.749238Z",
       "commit": null,
       "deps": [
         "P28-I01-W12"
@@ -19545,10 +19540,10 @@
       "id": "P28-I01-W13",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:15.401497Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ExecutorReportBody generalized via store_kind_for_role",
         "spawn-seam carries SubagentSpec"
@@ -23640,10 +23635,10 @@
       "branch": "feature/eawf-v0.4-p28-w06",
       "created_at": "2026-05-26T19:59:56.245564Z",
       "id": "WT-P28-I01-W06-1779825596",
-      "merged_commit": null,
+      "merged_commit": "e396258",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w06",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W06"
     },
     "WT-P28-I01-W07-1779825597": {
@@ -23651,10 +23646,10 @@
       "branch": "feature/eawf-v0.4-p28-w07",
       "created_at": "2026-05-26T19:59:57.140517Z",
       "id": "WT-P28-I01-W07-1779825597",
-      "merged_commit": null,
+      "merged_commit": "e396258",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w07",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W07"
     },
     "WT-P28-I01-W09-1779825598": {
@@ -23662,10 +23657,10 @@
       "branch": "feature/eawf-v0.4-p28-w09",
       "created_at": "2026-05-26T19:59:58.228009Z",
       "id": "WT-P28-I01-W09-1779825598",
-      "merged_commit": null,
+      "merged_commit": "2e111bb",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w09",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W09"
     },
     "WT-P28-I01-W12-1779821350": {
@@ -23684,10 +23679,10 @@
       "branch": "feature/eawf-v0.4-p28-w13",
       "created_at": "2026-05-26T19:59:59.196418Z",
       "id": "WT-P28-I01-W13-1779825599",
-      "merged_commit": null,
+      "merged_commit": "21ecc1d",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w13",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W13"
     },
     "WT-P28-I01-W14-1779823636": {
