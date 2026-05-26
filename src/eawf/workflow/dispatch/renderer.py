@@ -129,6 +129,14 @@ class DispatchEnvelope:
             claude-code branch). Each entry is a
             ``"mcp__<server_id>__*"`` glob string; entries the wave's
             sandbox-policy deny-list names are removed before projection.
+        role_contract: Typed projection of the dispatched wave's role
+            (P28-I01-W13). When set, the caller forwards this contract
+            to the spawn seam (``RuntimeAdapter.open_session`` accepts a
+            matching ``role_contract`` keyword) so the freshly-spawned
+            runtime receives the role registry's body without
+            re-walking the registry. ``None`` for waves without
+            ``agent_role`` so the dispatch stays byte-equivalent to
+            the pre-W13 envelope shape.
     """
 
     runtime: str
@@ -136,6 +144,7 @@ class DispatchEnvelope:
     prompt: str
     mcp_servers: list[dict[str, Any]] = field(default_factory=list)
     allowed_tools: list[str] = field(default_factory=list)
+    role_contract: RoleContract | None = None
 
 
 def render_dispatch_envelope(
@@ -175,9 +184,21 @@ def render_dispatch_envelope(
     """
     if runtime not in DISPATCH_RUNTIMES:
         raise ValueError(f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}")
-    prompt = render_wave_prompt(state, wave_id, repo_root=repo_root)
+    # Build the typed spec once: its rendered output IS the prompt body,
+    # and its `role_contract` IS the typed projection the spawn seam reads
+    # (P28-I01-W13). Building the spec once avoids the previous
+    # render-then-re-walk pattern where the renderer projected the role
+    # registry inside `render_wave_prompt` and the envelope would have to
+    # re-project it. The shared spec keeps the two surfaces aligned.
+    spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
+    prompt = spec.render()
     if runtime == _CLI_RUNTIME_CLAUDE_CODE:
-        return DispatchEnvelope(runtime=runtime, wave_id=wave_id, prompt=prompt)
+        return DispatchEnvelope(
+            runtime=runtime,
+            wave_id=wave_id,
+            prompt=prompt,
+            role_contract=spec.role_contract,
+        )
     # claude-agent-sdk branch: project MCP servers + grant-derived tools.
     mcp_servers = _project_mcp_servers(state)
     allowed_tools = _project_allowed_tools(state, wave_id=wave_id)
@@ -187,6 +208,7 @@ def render_dispatch_envelope(
         prompt=prompt,
         mcp_servers=mcp_servers,
         allowed_tools=allowed_tools,
+        role_contract=spec.role_contract,
     )
 
 

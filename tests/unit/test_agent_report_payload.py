@@ -25,6 +25,7 @@ from eawf.kernel.store.kinds.agent_report import (
     ResearcherReportBody,
     ReviewerReportBody,
     ReviewFinding,
+    body_class_for_role,
     report_record_id,
 )
 
@@ -223,3 +224,33 @@ def test_role_body_rejects_unknown_field() -> None:
     raw["unexpected"] = True
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         ExecutorReportBody.model_validate(raw)
+
+
+@pytest.mark.parametrize(
+    ("role", "expected_cls"),
+    [
+        (AgentSessionRole.RESEARCHER, ResearcherReportBody),
+        (AgentSessionRole.PLANNER, PlannerReportBody),
+        (AgentSessionRole.EXECUTOR, ExecutorReportBody),
+        (AgentSessionRole.AUDITOR, AuditorReportBody),
+        (AgentSessionRole.REVIEWER, ReviewerReportBody),
+        (AgentSessionRole.POLISHER, PolisherReportBody),
+        (AgentSessionRole.OPERATOR, OperatorReportBody),
+        (AgentSessionRole.DOMAIN_SPECIALIST, DomainSpecialistReportBody),
+    ],
+    ids=[
+        "researcher",
+        "planner",
+        "executor",
+        "auditor",
+        "reviewer",
+        "polisher",
+        "operator",
+        "domain-specialist",
+    ],
+)
+def test_body_class_for_role_returns_role_typed_class(
+    role: AgentSessionRole, expected_cls: type
+) -> None:
+    """Every registered role maps to its own typed body class (P28-I01-W13)."""
+    assert body_class_for_role(role) is expected_cls

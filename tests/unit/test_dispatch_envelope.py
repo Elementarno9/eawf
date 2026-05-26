@@ -449,3 +449,60 @@ def test_render_dispatch_envelope_claude_code_ignores_deny_policy() -> None:
     }
     envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
     assert envelope.allowed_tools == []
+
+
+# ---- role_contract threading (P28-I01-W13) ---------------------------------
+
+
+def _seed_wave_with_role(state: State, *, role: str) -> None:
+    """Seed P01 → P01-I01 → P01-I01-W01 carrying *role* as agent_role."""
+    from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
+
+    open_phase(state, phase_id="P01", title="Bootstrap")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="Iter1")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="Solo wave",
+        file_scopes=["src/"],
+        agent_role=AgentSessionRole(role),
+        effort_bucket=EffortBucket.M,
+    )
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "claude-agent-sdk"])
+def test_render_dispatch_envelope_carries_role_contract_when_role_set(runtime: str) -> None:
+    """A wave with ``agent_role`` set surfaces a typed ``RoleContract`` on the envelope."""
+    state = _empty_state()
+    _seed_wave_with_role(state, role="auditor")
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", runtime)
+    assert envelope.role_contract is not None
+    assert envelope.role_contract.role == "auditor"
+    assert envelope.role_contract.system_prompt  # non-empty registry body
+    assert envelope.role_contract.report_schema_ref == "auditor_report"
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "claude-agent-sdk"])
+def test_render_dispatch_envelope_role_contract_none_when_no_role(runtime: str) -> None:
+    """A wave without ``agent_role`` keeps ``role_contract`` at ``None``."""
+    state = _empty_state()
+    _seed_single_wave(state)  # no agent_role
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", runtime)
+    assert envelope.role_contract is None
+
+
+def test_render_dispatch_envelope_does_not_double_render_prompt() -> None:
+    """The envelope reuses the SubagentSpec render — no double walk over the spec.
+
+    The shared-spec wiring (P28-I01-W13) builds the spec once and reads
+    both the rendered prompt body AND the typed role contract off the
+    same object, so the dispatcher avoids the previous render-then-
+    re-walk pattern. This test pins byte-equivalence between the
+    envelope's prompt and the standalone render path so the shared seam
+    stays observably correct.
+    """
+    state = _empty_state()
+    _seed_wave_with_role(state, role="executor")
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
+    assert envelope.prompt == render_wave_prompt(state, "P01-I01-W01")

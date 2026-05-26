@@ -263,6 +263,46 @@ def report_store_urn(*, scope_id: str, role: AgentSessionRole, report_id: str) -
     return build_urn("store", owner=scope_id, id=f"{store_kind.value}/{report_id}")
 
 
+_ROLE_BODY_CLASSES: dict[AgentSessionRole, type[AgentReportCommonBody]] = {
+    AgentSessionRole.RESEARCHER: ResearcherReportBody,
+    AgentSessionRole.PLANNER: PlannerReportBody,
+    AgentSessionRole.EXECUTOR: ExecutorReportBody,
+    AgentSessionRole.AUDITOR: AuditorReportBody,
+    AgentSessionRole.REVIEWER: ReviewerReportBody,
+    AgentSessionRole.POLISHER: PolisherReportBody,
+    AgentSessionRole.OPERATOR: OperatorReportBody,
+    AgentSessionRole.DOMAIN_SPECIALIST: DomainSpecialistReportBody,
+}
+
+
+def body_class_for_role(role: AgentSessionRole) -> type[AgentReportCommonBody]:
+    """Return the typed report-body class for *role*.
+
+    The dispatch runner uses this to construct the right-typed body for
+    a non-executor session role on completion. Executor remains the rich
+    path (commit_sha + wave_id + files_changed + tests_run + outcome); the
+    other seven roles build a minimal completion body keyed by the role's
+    required fields. Future waves under I02/I03 wire the full per-role
+    validators (e.g. criteria for the auditor, coverage_refs for the
+    reviewer); this seam keeps the kind routing typed today without
+    pre-building those validators.
+
+    Args:
+        role: The agent session role whose body class to return.
+
+    Returns:
+        The :class:`AgentReportCommonBody` subclass mapped to *role*.
+
+    Raises:
+        KeyError: When *role* has no registered body class (cannot happen
+            for a valid :class:`AgentSessionRole`).
+    """
+    try:
+        return _ROLE_BODY_CLASSES[role]
+    except KeyError as exc:
+        raise KeyError(f"no report body class registered for role: {role.value!r}") from exc
+
+
 __all__ = [
     "AgentReportBody",
     "AgentReportCommonBody",
@@ -282,6 +322,7 @@ __all__ = [
     "ResearcherReportBody",
     "ReviewFinding",
     "ReviewerReportBody",
+    "body_class_for_role",
     "report_record_id",
     "report_store_urn",
     "role_for_store_kind",

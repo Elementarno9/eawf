@@ -19,6 +19,7 @@ import logging
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtime.runtimes.adapter import (
@@ -28,6 +29,9 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
+
+if TYPE_CHECKING:
+    from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +78,7 @@ class OpenCodeAdapter:
         *,
         cache_prefix: str | None = None,
         model_hint: str | None = None,
+        role_contract: RoleContract | None = None,
     ) -> SessionAttempt:
         """Construct a fresh-session :class:`SessionAttempt` row.
 
@@ -84,6 +89,18 @@ class OpenCodeAdapter:
         internally and the OAuth-Claude path strips any caller-side
         marker (upstream ``#17910``), so the eawf adapter has no
         caller-side knob and returns the prefix unchanged.
+
+        The optional *role_contract* keyword carries the typed
+        :class:`~eawf.workflow.agents.specs.models.RoleContract`
+        projection of the dispatched wave's role. When present the
+        spawn seam reads its ``system_prompt`` / ``allowed_tools`` /
+        ``model`` fields rather than a hardcoded executor preamble;
+        today the adapter only debug-logs the attach so callers can
+        observe the seam wire-up, and the live ``opencode run`` spawn
+        in P26-SURFACES consumes the contract to materialise the
+        per-session ``.opencode/agent/<role>.md`` linkage. ``None``
+        (the default) keeps the spawn byte-equivalent to the pre-W13
+        surface.
         """
 
         injected_prefix = inject_cache_control(
@@ -92,6 +109,13 @@ class OpenCodeAdapter:
         )
         if injected_prefix is not None:
             logger.debug(f"open_session runtime={self.id!r} cache_control=no_op")
+        if role_contract is not None:
+            logger.debug(
+                f"open_session runtime={self.id!r} role={role_contract.role!r} "
+                f"allowed_tools={len(role_contract.allowed_tools)} "
+                f"denied_tools={len(role_contract.denied_tools)} "
+                f"model={role_contract.model!r}"
+            )
         session_id = str(uuid.uuid4())
         attempts = sorted(wave.sessions)
         next_attempt = (max(attempts) + 1) if attempts else 1

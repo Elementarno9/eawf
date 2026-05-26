@@ -49,12 +49,28 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
 
-from eawf.kernel.state.enums import AgentReportVerdict, Confidence, StoreKind, WaveStatus
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    Confidence,
+    StoreKind,
+    WaveStatus,
+)
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportBody,
+    AuditorReportBody,
+    DomainSpecialistReportBody,
+    ExecutorReportBody,
+    OperatorReportBody,
+    PlannerReportBody,
+    PolisherReportBody,
+    ResearcherReportBody,
+    ReviewerReportBody,
+)
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events import (
     C09EventPayloadUnion,
@@ -463,6 +479,108 @@ def _completion_verdict(*, switched: bool) -> AgentReportVerdict:
     return AgentReportVerdict.PASS
 
 
+def _build_completion_body(
+    *,
+    role: AgentSessionRole,
+    wave_id: str,
+    commit_sha: str,
+    outcome: str,
+    files_changed: list[str] | None,
+    tests_run: list[str] | None,
+    verdict: AgentReportVerdict,
+    confidence: Confidence,
+) -> AgentReportBody:
+    """Return the typed completion body for a dispatched session *role*.
+
+    Routes by the session's role so each role's dispatch lands a body
+    of its own type — an auditor session lands an :class:`AuditorReportBody`,
+    a reviewer lands a :class:`ReviewerReportBody`, and so on. The
+    executor path keeps the rich body (``wave_id`` + ``commit_sha`` +
+    ``files_changed`` + ``tests_run`` + ``outcome``); the other seven
+    roles build a minimal completion body keyed by the role's
+    required field (``target_id`` for auditor/reviewer, ``scope_id``
+    for polisher, ``phase_id`` for operator, ``question`` /
+    ``recommendation`` for researcher, ``objective`` for planner,
+    ``domain`` / ``assessment`` for domain-specialist).
+
+    The minimal-body strategy: use *wave_id* as the role-required id
+    field and *outcome* as the role-required prose field, mirroring
+    the dispatch runner's pre-W13 executor-only surface so the
+    completion contract stays uniform across roles. Future waves
+    under I02/I03 wire the rich per-role validators (criteria,
+    coverage_refs, etc.); this seam opens the kind routing today
+    without pre-building those validators.
+
+    Args:
+        role: The session role driving the body type selection.
+        wave_id: Wave id used as the role-required id field for
+            non-executor roles AND as the executor body's ``wave_id``.
+        commit_sha: Executor commit SHA (used only when role is
+            :attr:`AgentSessionRole.EXECUTOR`).
+        outcome: One-line completion outcome (used by every body).
+        files_changed: Repo-relative paths (executor only).
+        tests_run: Test commands (executor only).
+        verdict: Resolved report verdict.
+        confidence: Report confidence.
+
+    Returns:
+        A typed :class:`AgentReportBody` discriminated-union member
+        matching *role*.
+
+    Raises:
+        KeyError: When *role* has no mapped body class (cannot happen
+            for a valid :class:`AgentSessionRole`).
+    """
+    if role is AgentSessionRole.EXECUTOR:
+        return ExecutorReportBody(
+            verdict=verdict,
+            confidence=confidence,
+            summary=outcome,
+            wave_id=wave_id,
+            files_changed=list(files_changed or []),
+            tests_run=list(tests_run or []),
+            commit_sha=commit_sha,
+            outcome=outcome,
+        )
+    if role is AgentSessionRole.AUDITOR:
+        return AuditorReportBody(
+            verdict=verdict, confidence=confidence, summary=outcome, target_id=wave_id
+        )
+    if role is AgentSessionRole.REVIEWER:
+        return ReviewerReportBody(
+            verdict=verdict, confidence=confidence, summary=outcome, target_id=wave_id
+        )
+    if role is AgentSessionRole.POLISHER:
+        return PolisherReportBody(
+            verdict=verdict, confidence=confidence, summary=outcome, scope_id=wave_id
+        )
+    if role is AgentSessionRole.OPERATOR:
+        return OperatorReportBody(
+            verdict=verdict, confidence=confidence, summary=outcome, phase_id=wave_id
+        )
+    if role is AgentSessionRole.RESEARCHER:
+        return ResearcherReportBody(
+            verdict=verdict,
+            confidence=confidence,
+            summary=outcome,
+            question=outcome,
+            recommendation=outcome,
+        )
+    if role is AgentSessionRole.PLANNER:
+        return PlannerReportBody(
+            verdict=verdict, confidence=confidence, summary=outcome, objective=outcome
+        )
+    if role is AgentSessionRole.DOMAIN_SPECIALIST:
+        return DomainSpecialistReportBody(
+            verdict=verdict,
+            confidence=confidence,
+            summary=outcome,
+            domain=wave_id,
+            assessment=outcome,
+        )
+    raise KeyError(f"no completion body builder for role: {role.value!r}")
+
+
 def emit_agent_end_report(
     ctx: MethodContext,
     *,
@@ -477,16 +595,23 @@ def emit_agent_end_report(
     confidence: Confidence = Confidence.HIGH,
     switched: bool = False,
 ) -> str:
-    """Emit a typed ``agent_end`` executor report on dispatch completion.
+    """Emit a typed ``agent_end`` report on dispatch completion.
 
-    Builds an :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
-    and persists it through the canonical agent-report writer
-    :func:`eawf.workflow.agent_report.store.append_agent_report`, using the
-    executor :class:`~eawf.kernel.state.models.AgentSession` named by
-    *session_id* as authority. The writer derives the report's role,
-    scope, attempt number, and store kind from the session, so the
-    persisted envelope passes
-    :func:`eawf.kernel.validate.invariants.check_agent_report_invariants`.
+    Builds the role-appropriate
+    :class:`~eawf.kernel.store.kinds.agent_report.AgentReportCommonBody`
+    subclass for the dispatched session and persists it through the
+    canonical agent-report writer
+    :func:`eawf.workflow.agent_report.store.append_agent_report`, using
+    the :class:`~eawf.kernel.state.models.AgentSession` named by
+    *session_id* as authority. The session's role drives both the body
+    type (via :func:`_build_completion_body`) and the destination
+    :class:`~eawf.kernel.state.enums.StoreKind` (via the writer's call
+    to :func:`~eawf.kernel.store.kinds.agent_report.store_kind_for_role`),
+    so the persisted envelope passes
+    :func:`eawf.kernel.validate.invariants.check_agent_report_invariants`
+    and lands in the per-role store (``auditor_report.jsonl``,
+    ``reviewer_report.jsonl``, ...) rather than always
+    ``executor_report.jsonl``.
 
     The dispatched *wave_id* is used as the report ``base_id`` so retried
     dispatches for the same wave append monotonic attempts under one
@@ -494,16 +619,19 @@ def emit_agent_end_report(
 
     Args:
         ctx: Daemon method context — supplies ``state_path``.
-        session_id: Id of the executor session that ran the dispatch;
-            must exist in ``state.json`` with ``role=executor``.
+        session_id: Id of the session that ran the dispatch; must
+            exist in ``state.json``. The session's role decides the
+            body type + destination store kind.
         wave_id: ``W<NN>`` wave the dispatch served. Must exist in
-            ``state.waves`` so the executor-wave invariant holds.
-        commit_sha: Commit the executor landed; must be non-empty so the
-            executor-commit invariant holds (a report with no commit is
-            flagged ``INV.AGENT_REPORT.EXECUTOR_COMMIT_MISSING``).
+            ``state.waves`` for the role's wave-presence invariant
+            (executor-wave / auditor-target / reviewer-target / etc.).
+        commit_sha: Commit the session landed; required for the
+            executor path so the executor-commit invariant holds.
+            Non-executor roles ignore the value.
         outcome: One-line implementation outcome for the report body.
-        files_changed: Repo-relative paths the dispatch changed.
-        tests_run: Test commands the dispatch executed.
+        files_changed: Repo-relative paths the dispatch changed
+            (executor only).
+        tests_run: Test commands the dispatch executed (executor only).
         runtime: Runtime that served the dispatch, recorded on the
             report header.
         verdict: Report verdict; derived from *switched* when ``None``.
@@ -512,14 +640,16 @@ def emit_agent_end_report(
             verdict when *verdict* is ``None``.
 
     Returns:
-        The id of the appended ``executor_report`` envelope.
+        The id of the appended role-specific report envelope.
 
     Raises:
         RuntimeError: When ``ctx.state_path`` is not configured (the
             writer needs state to resolve the session authority).
         KeyError: When *session_id* is absent from ``state.json``.
         eawf.workflow.agent_report.store.AgentReportRoleMismatchError: When the
-            session role is not ``executor``.
+            session role disagrees with the constructed body's role
+            (cannot happen on this path — :func:`_build_completion_body`
+            keys off the session role).
         eawf.workflow.agent_report.store.AgentReportScrubError: When the report
             body text contains local or sensitive tokens.
     """
@@ -527,16 +657,19 @@ def emit_agent_end_report(
         raise RuntimeError("state_path not configured on daemon context")
     state_path = Path(ctx.state_path)
     state = load_state(state_path)
+    session = state.agent_sessions.get(session_id)
+    if session is None:
+        raise KeyError(f"unknown agent session: {session_id!r}")
     resolved_verdict = verdict if verdict is not None else _completion_verdict(switched=switched)
-    body = ExecutorReportBody(
-        verdict=resolved_verdict,
-        confidence=confidence,
-        summary=outcome,
+    body = _build_completion_body(
+        role=session.role,
         wave_id=wave_id,
-        files_changed=list(files_changed or []),
-        tests_run=list(tests_run or []),
         commit_sha=commit_sha,
         outcome=outcome,
+        files_changed=files_changed,
+        tests_run=tests_run,
+        verdict=resolved_verdict,
+        confidence=confidence,
     )
     result = append_agent_report(
         state=state,
@@ -548,7 +681,8 @@ def emit_agent_end_report(
     )
     logger.info(
         f"emit_agent_end_report wave={wave_id} session={session_id!r} "
-        f"verdict={resolved_verdict.value} report_id={result.envelope.id!r}"
+        f"role={session.role.value} verdict={resolved_verdict.value} "
+        f"store_kind={result.store_kind} report_id={result.envelope.id!r}"
     )
     return result.envelope.id
 

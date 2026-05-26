@@ -41,11 +41,14 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
-from typing import Final, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Final, Literal, Protocol, runtime_checkable
 
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
+
+if TYPE_CHECKING:
+    from eawf.workflow.agents.specs.models import RoleContract
 
 # ---------------------------------------------------------------------------
 # Closed error-class set (§5.5)
@@ -143,6 +146,7 @@ class RuntimeAdapter(Protocol):
         *,
         cache_prefix: str | None = None,
         model_hint: str | None = None,
+        role_contract: RoleContract | None = None,
     ) -> SessionAttempt:
         """Spawn a fresh subprocess for ``wave`` with ``prompt``.
 
@@ -152,6 +156,18 @@ class RuntimeAdapter(Protocol):
         ``session_log_handle``, and ``started_at`` at minimum; the
         token / exit fields stay ``None`` until the subprocess
         completes.
+
+        The optional *role_contract* keyword carries the typed projection
+        of the dispatched wave's role
+        (:class:`~eawf.workflow.agents.specs.models.RoleContract`); it
+        feeds the spawn seam's role-driven knobs (``system_prompt``,
+        ``allowed_tools``, ``denied_tools``, ``model``, ``memory``) so
+        the freshly-spawned runtime receives the role registry's body
+        rather than a hardcoded executor preamble. ``None`` (default)
+        keeps the spawn byte-equivalent to the pre-W13 surface for
+        callers that have not yet plumbed the contract through; the
+        live subprocess spawn that consumes the contract lands in
+        P26-SURFACES.
         """
 
     async def continue_session(
