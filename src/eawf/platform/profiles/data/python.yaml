@@ -63,3 +63,36 @@ render_blocks:
 
 skills_referenced: []
 hooks_referenced: []
+
+# P28-I01-W10 — verify spine floor pack (advisory in v0.4.0; W19 flips
+# to gating). Each check runs through the W15-hardened gate runner via
+# :func:`eawf.workflow.verify.compile.compile_floor_pack`. argv heads
+# resolve against the kernel-spec default allowlist + this profile's
+# ``argv_allowlist``.
+verify:
+  argv_allowlist:
+    - uv
+    - run
+    - pre-commit
+    - mypy
+    - pytest
+  floor_checks:
+    - name: pre-commit
+      cmd: ["uv", "run", "pre-commit", "run", "--all-files"]
+      scope: touched
+      cadence: every-wave
+      policy: warn
+      required: true
+    - name: mypy
+      cmd: ["uv", "run", "mypy", "src/"]
+      scope: touched
+      cadence: every-wave
+      policy: warn
+      required: true
+    - name: pytest
+      cmd: ["uv", "run", "pytest", "-q"]
+      scope: touched
+      cadence: every-wave
+      policy: warn
+      required: true
+  waiver_mode: B

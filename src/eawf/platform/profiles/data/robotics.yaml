@@ -1,3 +1,28 @@
 name: robotics
 version: "1.0"
-description: "Robotics profile (stub for v0.1.1)."
+description: "Robotics / hardware-in-the-loop (HIL) profile."
+
+# P28-I01-W10 — verify spine floor pack for HIL pipelines. The
+# ``hil-smoke --sentinel`` check is a hardware-touching sentinel that
+# MUST run outside the sandbox jail (``runs_outside_jail: true``) and
+# requires GPU access (``requires_gpu: true``). Cadence is
+# ``every-phase`` because hardware reservation is expensive; running
+# per-wave would saturate the HIL rig. Mode A waivers (no reason
+# required) reflect the operational reality that hardware availability,
+# not the code under test, is the most common reason to waive HIL gates.
+verify:
+  argv_allowlist:
+    - uv
+    - run
+    - hil-smoke
+  floor_checks:
+    - name: hil-smoke
+      cmd: ["uv", "run", "hil-smoke", "--sentinel"]
+      scope: all
+      cadence: every-phase
+      policy: warn
+      required: true
+      requires_gpu: true
+      runs_outside_jail: true
+      timeout_class: very_slow
+  waiver_mode: A

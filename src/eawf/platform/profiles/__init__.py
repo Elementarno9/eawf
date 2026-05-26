@@ -52,21 +52,25 @@ from eawf.platform.profiles.loader import (
 )
 from eawf.platform.profiles.models import (
     ComposedProfile,
+    FloorCheck,
     InstrumentReq,
     ProfileBody,
     RenderBlock,
     StateExtensions,
+    VerifyBlock,
 )
 
 __all__ = [
     "STRICTEST_KEYS",
     "ComposedProfile",
     "ConflictResolution",
+    "FloorCheck",
     "InstrumentReq",
     "ProfileBody",
     "ProfileConflict",
     "RenderBlock",
     "StateExtensions",
+    "VerifyBlock",
     "compose",
     "list_profiles",
     "load_composed_profile",

@@ -49,9 +49,10 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
+from eawf.platform.profiles.models import VerifyBlock
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
-from eawf.workflow.verify.compile import compile_gate
+from eawf.workflow.verify.compile import compile_floor_pack, compile_gate
 from eawf.workflow.verify.models import (
     CloseReadiness,
     CriterionView,
@@ -473,6 +474,89 @@ def _build_spec_views(
     return views, waived
 
 
+def _load_active_verify_block(scope_id: str, state: State) -> VerifyBlock | None:
+    """Return the active profile's :class:`VerifyBlock`, or ``None``.
+
+    v0.4.0 returns ``None`` for every scope because the on-disk
+    composed-profile cache is not yet wired through to the readiness
+    compute (the daemon's profile-resolve seam lands in a later wave —
+    today the wave-close path does not surface the active profile to
+    the compute boundary).
+
+    The helper stays a separate function (rather than inlined into
+    :func:`compute`) so tests can monkeypatch it to feed a synthetic
+    :class:`VerifyBlock` into the floor-pack integration without
+    having to round-trip through the layered profile loader.
+
+    Args:
+        scope_id: Wave / iter / phase URN. Reserved for future
+            per-scope profile attachments.
+        state: Validated state model. Reserved.
+
+    Returns:
+        ``None`` in v0.4.0. Tests monkeypatch this to return a
+        :class:`VerifyBlock` with non-empty ``floor_checks``.
+    """
+    del scope_id, state  # unused until the profile-resolve seam ships
+    return None
+
+
+def _build_floor_views(
+    verify_block: VerifyBlock | None,
+    *,
+    runner_cwd: Path,
+) -> list[CriterionView]:
+    """Convert the profile-fed floor pack into :class:`CriterionView` rows.
+
+    When the active profile carries a non-empty
+    :attr:`VerifyBlock.floor_checks`, each floor check is compiled
+    into a :class:`~eawf.workflow.audit_dsl.models.CheckSpec` via
+    :func:`compile_floor_pack` and run through
+    :func:`~eawf.workflow.audit_dsl.runner.run_checks`. One floor
+    check yields one ``CriterionView(source="floor")`` whose single
+    gate result mirrors the live run.
+
+    An absent ``verify`` block or an empty ``floor_checks`` list
+    returns ``[]`` so the caller can continue with the legacy /
+    spec-only path unchanged.
+
+    Args:
+        verify_block: Active profile's :class:`VerifyBlock`, or
+            ``None`` when no profile is attached.
+        runner_cwd: Working directory for the deterministic-floor
+            subprocess execution. Threaded from
+            :func:`compute`'s ``repo_root``.
+
+    Returns:
+        Per-floor-check :class:`CriterionView` rows. Empty list when
+        the active profile contributes no floor checks.
+    """
+    if verify_block is None or not verify_block.floor_checks:
+        return []
+    compiled = compile_floor_pack(
+        verify_block.floor_checks,
+        allowlist=list(verify_block.argv_allowlist),
+    )
+    results = run_checks(compiled, cwd=runner_cwd)
+    views: list[CriterionView] = []
+    for check_spec, result in zip(compiled, results, strict=True):
+        # status literal closed by CheckResult validator: pass / fail / blocked.
+        status = result.status or ("pass" if result.passed else "fail")
+        gate_result = GateResult(
+            gate_id=check_spec.name,
+            status=status,
+        )
+        views.append(
+            CriterionView(
+                id=check_spec.name,
+                source="floor",
+                status=status,
+                gate_results=[gate_result],
+            )
+        )
+    return views
+
+
 def _build_legacy_views(wave: Wave) -> tuple[list[CriterionView], list[str]]:
     """Convert ``Wave.success_criteria`` strings into legacy :class:`CriterionView`.
 
@@ -534,6 +618,16 @@ def compute(
       original path); jury votes + operator attestations land in
       v0.4.1+.
 
+    Floor-pack fallback (W10): when the wave has no typed
+    CriterionSpec rows AND the active profile carries a non-empty
+    :attr:`~eawf.platform.profiles.models.VerifyBlock.floor_checks`,
+    each floor check compiles via
+    :func:`~eawf.workflow.verify.compile.compile_floor_pack` and runs
+    through :func:`~eawf.workflow.audit_dsl.runner.run_checks`. Each
+    floor check yields one ``CriterionView(source="floor")``. The
+    floor pack does NOT render when the wave already carries typed
+    CriterionSpec rows — typed specs are authoritative when present.
+
     Args:
         scope_id: Wave id (today; iter / phase scopes land later).
         state: Validated state model. Read-only.
@@ -586,9 +680,19 @@ def compute(
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
 
-    criteria: list[CriterionView] = [*spec_views, *legacy_views]
+    # Profile-fed floor pack (P28-I01-W10). Floor checks render only
+    # when the wave has no typed CriterionSpec rows — the typed-spec
+    # layer is authoritative when present; the floor pack is the
+    # per-domain baseline that applies when no wave-level criteria
+    # have been authored yet.
+    floor_views: list[CriterionView] = []
+    if not spec_views:
+        verify_block = _load_active_verify_block(scope_id, state)
+        floor_views = _build_floor_views(verify_block, runner_cwd=repo_root)
+
+    criteria: list[CriterionView] = [*spec_views, *floor_views, *legacy_views]
     warnings = list(legacy_warnings)
-    if not spec_views and not legacy_views:
+    if not spec_views and not floor_views and not legacy_views:
         # Empty waves cannot be meaningfully blocking — flag the
         # advisory so operators notice the gap without raising.
         warnings.append("no criteria attached to wave")

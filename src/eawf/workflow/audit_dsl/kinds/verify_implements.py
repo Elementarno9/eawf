@@ -73,12 +73,13 @@ logger = logging.getLogger(__name__)
 VERDICT_MARKER_RE = re.compile(r"(?:#|//|<!--)\s*IMPLEMENTS:\s*([VDRH]\d+(?:-[A-Z0-9]+)?)")
 
 
-# The four cadence values the AuditSpec.cadence Literal accepts. Mirror
+# The five cadence values the AuditSpec.cadence Literal accepts. Mirror
 # of :data:`eawf.kernel.spec.audit.AUDIT_CADENCE_VALUES` (declared here too so
 # this module has no eager dependency on :mod:`eawf.kernel.spec.audit` for the
 # cadence short-circuit — the spec model owns the contract, the kind
-# applies it).
-_VALID_CADENCES = {"every-wave", "every-iter", "every-phase", "manual"}
+# applies it). P28-I01-W10 added ``"ship"`` so the verify-spine floor
+# pack + AuditSpec share one cadence enum (AGENTS naming rule 17).
+_VALID_CADENCES = {"every-wave", "every-iter", "every-phase", "ship", "manual"}
 
 
 def _require_str(args: dict[str, Any], key: str, *, name: str, kind: str) -> str:
@@ -183,10 +184,10 @@ def _verdict_ids_in_file(path: Path) -> set[str]:
 def _cadence_matches(cadence: str, current_trigger: str) -> bool:
     """Return True when the configured cadence should fire for the current trigger.
 
-    The cadence values are exactly the four AuditSpec.cadence enum
-    members: ``every-wave``, ``every-iter``, ``every-phase``,
+    The cadence values are exactly the five AuditSpec.cadence enum
+    members: ``every-wave``, ``every-iter``, ``every-phase``, ``ship``,
     ``manual``. ``manual`` cadence only fires on a ``manual`` trigger;
-    the three ``every-*`` cadences fire on their named trigger.
+    each of the other four cadences fires on its same-named trigger.
     """
     if cadence not in _VALID_CADENCES:
         raise ValueError(f"unknown cadence: {cadence!r}")
@@ -202,8 +203,8 @@ def check_verify_implements(spec: CheckSpec, cwd: Path) -> CheckResult:
         phase_id: ``P##`` of the phase whose WaveSpecs are walked.
         diff_base: Git ref to diff ``HEAD`` against. Default ``main``.
         cadence: AuditSpec.cadence value — one of ``every-wave``,
-            ``every-iter``, ``every-phase``, ``manual``. Default
-            ``every-phase``.
+            ``every-iter``, ``every-phase``, ``ship``, ``manual``.
+            Default ``every-phase``.
         current_trigger: Close event firing the audit — same enum as
             ``cadence``. Default ``every-phase``.
 
@@ -217,7 +218,7 @@ def check_verify_implements(spec: CheckSpec, cwd: Path) -> CheckResult:
 
     Raises:
         ValueError: When ``phase_id`` is missing / non-str, or when
-            ``cadence`` / ``current_trigger`` are not one of the four
+            ``cadence`` / ``current_trigger`` are not one of the five
             enum values.
     """
     phase_id = _require_str(spec.args, "phase_id", name=spec.name, kind=spec.kind)

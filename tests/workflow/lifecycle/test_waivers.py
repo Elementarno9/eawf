@@ -188,6 +188,17 @@ def test_resolve_waiver_mode_non_dict_verify_falls_back() -> None:
     assert resolve_waiver_mode({"verify": ["list"]}) == DEFAULT_WAIVER_MODE
 
 
+def test_resolve_waiver_mode_reads_typed_verify_block() -> None:
+    """P28-I01-W10: the helper accepts a typed :class:`VerifyBlock` directly."""
+    from eawf.platform.profiles.models import VerifyBlock
+
+    assert resolve_waiver_mode(VerifyBlock(waiver_mode="A")) == "A"
+    assert resolve_waiver_mode(VerifyBlock(waiver_mode="B")) == "B"
+    assert resolve_waiver_mode(VerifyBlock(waiver_mode="C")) == "C"
+    # Default-constructed VerifyBlock IS mode B.
+    assert resolve_waiver_mode(VerifyBlock()) == "B"
+
+
 # ---- operator-only contract -------------------------------------------------
 
 

@@ -43,7 +43,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from eawf.kernel.spec.audit import AuditCadence
 
 
 class StateExtensions(BaseModel):
@@ -52,6 +54,114 @@ class StateExtensions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     fields_required: list[str] = []
+
+
+class FloorCheck(BaseModel):
+    """One floor-pack check declared on ``ProfileBody.verify.floor_checks``.
+
+    The verify spine (P28-I01-W10) translates each floor check into a
+    runnable :class:`~eawf.workflow.audit_dsl.models.CheckSpec` via
+    :func:`eawf.workflow.verify.compile.compile_floor_pack`. Each check
+    is one ``command_exit_zero`` invocation whose argv passes the L0
+    argv-policy at profile-load time — a malformed argv fails the
+    profile load, never reaches the gate runner.
+
+    The shape is intentionally narrow for v0.4.0: only the metadata the
+    readiness compute + gate runner actually consult right now is
+    exposed. Future fields (e.g. per-check env vars, output capture
+    rules) are additive.
+
+    Attributes:
+        name: Stable, profile-local id for the floor check. Surfaces
+            in the :class:`~eawf.workflow.audit_dsl.models.CheckSpec.name`
+            slot so per-gate evidence + waivers can address it.
+        cmd: argv vector handed to
+            :func:`~eawf.runtime.sandbox.argv_policy.validate_gate_argv`
+            and (post-compile) to :func:`subprocess.run`.
+        scope: File-set scope the runner resolves against the git
+            diff-base — see
+            :data:`~eawf.workflow.audit_dsl.models.Scope`.
+        cadence: When the check fires. Reuses the 5-value
+            :data:`~eawf.kernel.spec.audit.AuditCadence` per AGENTS
+            naming rule 17.
+        policy: How a failure is escalated — ``block`` / ``warn`` /
+            ``advisory``. v0.4.0 keeps all floor checks effectively
+            advisory at the wave-close boundary (W19 flips the
+            enforcement); the field is captured so W19 has the shape
+            it needs.
+        required: Whether the check is required for the rolled-up
+            ``ready`` flag. Defaults ``True``.
+        requires_gpu: Hint to the dispatcher that the check needs GPU
+            access (e.g. CUDA, hardware-in-the-loop). Captured for
+            future sandbox routing; the v0.4.0 runner ignores it.
+        runs_outside_jail: HIL escape hatch — when ``True`` the check
+            is allowed to bypass the jail-mode sandbox. v0.4.0
+            captures the bit so the v0.4.1 jail / spawn machinery has
+            the shape it needs.
+        timeout_class: Timeout-class budget literal handed to the
+            runner — see
+            :data:`~eawf.workflow.audit_dsl.models.TimeoutClass`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=72)
+    cmd: list[str] = Field(min_length=1)
+    scope: Literal["changed", "touched", "all"]
+    cadence: AuditCadence
+    policy: Literal["block", "warn", "advisory"]
+    required: bool = True
+    requires_gpu: bool = False
+    runs_outside_jail: bool = False
+    timeout_class: Literal["quick", "standard", "slow", "very_slow"] = "standard"
+
+
+class VerifyBlock(BaseModel):
+    """Profile-fed verify spine configuration.
+
+    Mounted on :attr:`ProfileBody.verify`. The verify spine (W06 + W08
+    + W10 + W11 + W15) consults this block for:
+
+    * the **floor pack** (:attr:`floor_checks`) — translated into
+      :class:`~eawf.workflow.audit_dsl.models.CheckSpec` rows by
+      :func:`eawf.workflow.verify.compile.compile_floor_pack` and run
+      through the W15-hardened gate runner;
+    * the **argv allowlist** (:attr:`argv_allowlist`) — handed to the
+      L0 argv-policy validator at compile time;
+    * the **timeout-class table** (:attr:`timeout_class_seconds`) — a
+      forward-looking override of the runner's default per-class
+      seconds; ``None`` defers to the runner default (the v0.4.0
+      runner does not yet read overrides — captured for v0.4.1+);
+    * the **waiver-mode** (:attr:`waiver_mode`) — consumed by W11's
+      :func:`~eawf.workflow.lifecycle.waivers.resolve_waiver_mode`.
+
+    All fields are optional; an absent ``verify:`` leaf on a profile
+    yields an empty block so the verify spine has nothing to compile.
+
+    Attributes:
+        floor_checks: Per-profile floor of deterministic checks the
+            verify spine compiles into the readiness view. Empty list
+            means "this profile contributes no floor checks".
+        argv_allowlist: argv heads the L0 argv-policy accepts at
+            floor-pack compile time (and, later, at spec-promote
+            time). Combined with the kernel-spec default allowlist
+            inside :func:`compile_floor_pack`.
+        timeout_class_seconds: Optional per-class seconds override.
+            ``None`` defers to the gate runner default.
+        waiver_mode: Mode-gated linkage policy for operator waivers —
+            see :data:`~eawf.workflow.lifecycle.waivers.WaiverMode`.
+            Defaults to ``"B"`` (reason required, decision/audit
+            optional) per the W11 default.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    floor_checks: list[FloorCheck] = Field(default_factory=list)
+    argv_allowlist: list[str] = Field(default_factory=list)
+    timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] | None = (
+        None
+    )
+    waiver_mode: Literal["A", "B", "C"] = "B"
 
 
 class InstrumentReq(BaseModel):
@@ -184,6 +294,7 @@ class ProfileBody(BaseModel):
     conflicts_with: list[str] = []
     overrides: list[str] = []
     dispatch_session_policy: Literal["fresh", "continue", "hybrid"] | None = None
+    verify: VerifyBlock | None = None
 
 
 class ComposedProfile(BaseModel):
@@ -220,6 +331,7 @@ class ComposedProfile(BaseModel):
     skills_referenced: list[str] = []
     hooks_referenced: list[str] = []
     dispatch_session_policy: Literal["fresh", "continue", "hybrid"] | None = None
+    verify: VerifyBlock | None = None
     provenance: dict[str, list[str]] = {}
     override_audit: dict[str, list[str]] = {}
     conflict_warnings: list[str] = []

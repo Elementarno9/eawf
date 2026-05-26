@@ -53,6 +53,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord, mint_evidence_id
 from eawf.kernel.store.paths import store_path
+from eawf.platform.profiles.models import VerifyBlock
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
@@ -110,29 +111,39 @@ class WaiverInput(_StrictModel):
     audit_ref: IdStr | None = None
 
 
-def resolve_waiver_mode(merged_config: dict[str, object] | None) -> WaiverMode:
-    """Return the active :data:`WaiverMode` from the merged config.
+def resolve_waiver_mode(
+    source: dict[str, object] | VerifyBlock | None,
+) -> WaiverMode:
+    """Return the active :data:`WaiverMode` from a config dict or VerifyBlock.
 
-    Reads ``verify.waiver_mode`` (a string ``"A"`` / ``"B"`` / ``"C"``)
-    off the merged-config dict. The leaf is owned by the W10 profile
-    schema; while W10 has not yet added :attr:`ProfileBody.verify` the
-    leaf is absent on every project and the helper returns
-    :data:`DEFAULT_WAIVER_MODE`.
+    Two input shapes are accepted:
+
+    * **Typed** — a :class:`~eawf.platform.profiles.models.VerifyBlock`
+      (P28-I01-W10). The helper reads
+      :attr:`~eawf.platform.profiles.models.VerifyBlock.waiver_mode`
+      directly; the typed default (``"B"``) means the helper never
+      surfaces ``DEFAULT_WAIVER_MODE`` for a typed input.
+    * **Layered config** — the ``dict[str, object]`` returned by
+      :func:`eawf.kernel.config.layered.merge_config` (the first
+      element of its returned tuple). The helper looks under
+      ``verify.waiver_mode``; the leaf is absent on every project
+      until the layered-config writer wires it in, so this path
+      returns :data:`DEFAULT_WAIVER_MODE` in v0.4.0.
 
     Args:
-        merged_config: Output of
-            :func:`eawf.kernel.config.layered.merge_config` (the first
-            element of its returned tuple). ``None`` is treated as
-            "config layer unavailable" and falls back to the default.
+        source: Either a typed :class:`VerifyBlock`, a layered-config
+            dict, or ``None`` (treated as "layer unavailable").
 
     Returns:
-        The validated :data:`WaiverMode`. Unknown values fall back to
-        :data:`DEFAULT_WAIVER_MODE` so a typo cannot silently flip the
-        policy.
+        The validated :data:`WaiverMode`. Unknown values on the
+        dict-style path fall back to :data:`DEFAULT_WAIVER_MODE` so a
+        typo cannot silently flip the policy.
     """
-    if merged_config is None:
+    if source is None:
         return DEFAULT_WAIVER_MODE
-    verify_cfg = merged_config.get("verify")
+    if isinstance(source, VerifyBlock):
+        return source.waiver_mode
+    verify_cfg = source.get("verify")
     if not isinstance(verify_cfg, dict):
         return DEFAULT_WAIVER_MODE
     value = verify_cfg.get("waiver_mode")

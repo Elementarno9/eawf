@@ -1,14 +1,24 @@
-"""Gate compilation seam for the v0.4 verify spine (W08).
+"""Gate compilation seam for the v0.4 verify spine (W08 + W10).
 
-The :func:`compile_gate` function translates a typed
-:class:`~eawf.kernel.spec.common.GateSpec` plus the parent
-:class:`~eawf.kernel.spec.common.CriterionSpec` into the
-:class:`~eawf.workflow.audit_dsl.models.CheckSpec` shape that the
-gate runner (hardened in W15 — see
-:mod:`eawf.workflow.audit_dsl.registry`) executes against the
-checkout. The compile-gate is the bridge between the typed-spec layer
-(authored by planners + agents) and the audit-DSL runner (the live
-subprocess + diff-base + scope-resolution machinery already in tree).
+Two public entry points:
+
+* :func:`compile_gate` (W08) — translates a typed
+  :class:`~eawf.kernel.spec.common.GateSpec` plus the parent
+  :class:`~eawf.kernel.spec.common.CriterionSpec` into the
+  :class:`~eawf.workflow.audit_dsl.models.CheckSpec` shape that the
+  gate runner (hardened in W15 — see
+  :mod:`eawf.workflow.audit_dsl.registry`) executes against the
+  checkout. The compile-gate is the bridge between the typed-spec
+  layer (authored by planners + agents) and the audit-DSL runner
+  (the live subprocess + diff-base + scope-resolution machinery
+  already in tree).
+* :func:`compile_floor_pack` (W10) — translates the profile-fed
+  floor pack (a list of :class:`~eawf.platform.profiles.models.FloorCheck`
+  rows) into the same :class:`CheckSpec` shape. Each floor check's
+  ``cmd`` argv passes through
+  :func:`~eawf.runtime.sandbox.argv_policy.validate_gate_argv` at
+  compile time so a malformed argv fails the profile load, not the
+  gate run.
 
 v0.4.0 contract: **only ``evidence_kind="deterministic"`` compiles**.
 ``"jury"`` and ``"attested"`` gates return ``None`` here so the
@@ -31,6 +41,9 @@ import logging
 from typing import Any, cast
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.promotion import DEFAULT_GATE_ARGV_ALLOWLIST
+from eawf.platform.profiles.models import FloorCheck
+from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
 from eawf.workflow.audit_dsl.models import CheckKind, CheckSpec
 from eawf.workflow.skills.audit import build_criterion_specs
 
@@ -137,4 +150,90 @@ def compile_gate(gate: GateSpec, *, criterion: CriterionSpec) -> CheckSpec | Non
     return compiled
 
 
-__all__ = ["compile_gate"]
+class FloorPackCompileError(ValueError):
+    """Raised when :func:`compile_floor_pack` rejects a floor check's argv.
+
+    Subclasses :class:`ValueError` so callers that catch the broader
+    type (CLI front-ends mapping value errors to ``InvalidInput``)
+    catch the floor-pack compile failure transparently. The message
+    names the offending floor-check ``name`` and the underlying
+    argv-policy reason so triage works from the typed error alone.
+    """
+
+
+def compile_floor_pack(
+    checks: list[FloorCheck],
+    *,
+    allowlist: list[str],
+) -> list[CheckSpec]:
+    """Compile every floor check in *checks* into a runnable :class:`CheckSpec`.
+
+    Each :class:`~eawf.platform.profiles.models.FloorCheck` becomes one
+    ``command_exit_zero`` :class:`CheckSpec` whose ``argv`` is the
+    floor check's ``cmd`` after L0 argv-policy validation. The
+    ``scope``, ``timeout_class``, ``wave_file_scopes`` (empty here —
+    floor packs are wave-agnostic at compile time), and a synthetic
+    ``criterion`` metadata string are threaded onto ``args`` so the
+    W15-hardened runner has every kwarg it expects.
+
+    Compile-time argv validation: the union of *allowlist* and
+    :data:`~eawf.kernel.spec.promotion.DEFAULT_GATE_ARGV_ALLOWLIST`
+    is handed to :func:`~eawf.runtime.sandbox.argv_policy.validate_gate_argv`.
+    A reject raises :class:`FloorPackCompileError` with the offending
+    floor-check name + the underlying policy-reject message so the
+    operator can fix the profile YAML rather than discovering the
+    issue at gate-run time.
+
+    Args:
+        checks: Floor-check rows from
+            :attr:`~eawf.platform.profiles.models.VerifyBlock.floor_checks`.
+            An empty list returns ``[]``.
+        allowlist: Profile-fed argv head allowlist
+            (:attr:`~eawf.platform.profiles.models.VerifyBlock.argv_allowlist`).
+            Combined with :data:`DEFAULT_GATE_ARGV_ALLOWLIST` so the
+            kernel-spec floor of dev-loop wrappers is always allowed
+            even when a profile forgets to list one.
+
+    Returns:
+        One :class:`CheckSpec` per floor check, in the same order as
+        *checks*. Each ``name`` mirrors the floor-check ``name`` so
+        per-check evidence + waivers address it by its typed identity.
+
+    Raises:
+        FloorPackCompileError: When any floor check's ``cmd`` argv
+            fails the L0 argv-policy. Stops at the first failure (the
+            operator wants the first error, not a flood).
+    """
+    resolved_allowlist = list({*DEFAULT_GATE_ARGV_ALLOWLIST, *allowlist})
+    compiled: list[CheckSpec] = []
+    for check in checks:
+        try:
+            validate_gate_argv(check.cmd, allowlist=resolved_allowlist)
+        except ArgvPolicyError as exc:
+            logger.warning(
+                f"compile_floor_pack reject name={check.name!r} reason=argv-policy detail={exc!s}"
+            )
+            raise FloorPackCompileError(
+                f"floor check {check.name!r} argv rejected by L0 policy: {exc}"
+            ) from exc
+        args: dict[str, Any] = {
+            "argv": list(check.cmd),
+            "criterion": check.name,
+            "scope": check.scope,
+            "timeout_class": check.timeout_class,
+        }
+        compiled.append(
+            CheckSpec(
+                kind="command_exit_zero",
+                name=check.name,
+                args=args,
+            )
+        )
+        logger.debug(
+            f"compile_floor_pack ok name={check.name!r} "
+            f"cadence={check.cadence!r} scope={check.scope!r}"
+        )
+    return compiled
+
+
+__all__ = ["FloorPackCompileError", "compile_floor_pack", "compile_gate"]

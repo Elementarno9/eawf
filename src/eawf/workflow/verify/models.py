@@ -41,13 +41,18 @@ GateStatus = Literal["pass", "fail", "blocked"]
 CriterionStatus = Literal["pass", "fail", "blocked", "pending", "waived"]
 
 
-#: Source of the criterion view — typed spec or the legacy string list.
+#: Source of the criterion view — typed spec, the legacy string list, or
+#: the profile-fed floor pack.
 #:
 #: ``legacy`` views carry no gate results because the legacy
 #: :attr:`~eawf.kernel.state.models.Wave.success_criteria` field is a
 #: free-form ``list[str]``; ``spec`` views carry the criterion's typed
-#: gate results.
-CriterionSource = Literal["legacy", "spec"]
+#: gate results; ``floor`` views (P28-I01-W10) are synthesised one-per-
+#: :class:`~eawf.platform.profiles.models.FloorCheck` when the active
+#: profile carries a non-empty
+#: :attr:`~eawf.platform.profiles.models.VerifyBlock.floor_checks` and
+#: the wave has no typed spec criteria of its own.
+CriterionSource = Literal["legacy", "spec", "floor"]
 
 
 class GateResult(_StrictModel):
