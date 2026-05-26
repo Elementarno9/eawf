@@ -29,8 +29,17 @@ def open_iter(
     iter_id: str,
     phase_id: str,
     title: str,
+    description: str | None = None,
 ) -> Iter:
     """Insert a new iter under *phase_id* with status ``active``.
+
+    Args:
+        state: State to mutate in place.
+        iter_id: Canonical iter id (e.g. ``P03-I02``).
+        phase_id: Parent phase id (must exist and be open).
+        title: Bounded ≤72-char iter title.
+        description: Optional bounded ≤500-char long-form description;
+            persisted on :attr:`Iter.description` for downstream renderers.
 
     Raises:
         LifecycleError: if the phase is missing or not open, or if *iter_id*
@@ -47,6 +56,7 @@ def open_iter(
         id=iter_id,
         phase_id=phase_id,
         title=title,
+        description=description,
         status=IterStatus.ACTIVE,
         wave_ids=[],
         estimate_id=None,
@@ -95,6 +105,7 @@ def plan_iter(
     iter_id: str,
     phase_id: str,
     title: str,
+    description: str | None = None,
 ) -> Iter:
     """Insert a new iter under *phase_id* with status ``planned``.
 
@@ -102,6 +113,14 @@ def plan_iter(
     PLANNED until :func:`activate_iter` (or
     :func:`eawf.workflow.lifecycle.phase.activate_phase` when the parent activates
     and the iter is the sole open child).
+
+    Args:
+        state: State to mutate in place.
+        iter_id: Canonical iter id (e.g. ``P03-I02``).
+        phase_id: Parent phase id (must exist and be PLANNED or ACTIVE).
+        title: Bounded ≤72-char iter title.
+        description: Optional bounded ≤500-char long-form description;
+            persisted on :attr:`Iter.description` for downstream renderers.
 
     Raises:
         LifecycleError: when the phase is missing, the phase is not
@@ -118,6 +137,7 @@ def plan_iter(
         id=iter_id,
         phase_id=phase_id,
         title=title,
+        description=description,
         status=IterStatus.PLANNED,
         wave_ids=[],
         estimate_id=None,
@@ -132,25 +152,47 @@ def plan_iter(
     return it
 
 
-def edit_iter_plan(state: State, *, iter_id: str, title: str) -> Iter:
-    """Rewrite an iter's ``title`` in place. Status-agnostic.
+def edit_iter_plan(
+    state: State,
+    *,
+    iter_id: str,
+    title: str | None = None,
+    description: str | None = None,
+) -> Iter:
+    """Rewrite an iter's ``title`` / ``description`` in place. Status-agnostic.
 
-    Retitle is purely cosmetic metadata: the iter id is preserved and no
-    lifecycle transition fires, so this helper deliberately does NOT gate
-    on iter status — PLANNED, ACTIVE, and CLOSED iters can all be
-    renormalised. The title is routed through the model's assignment
-    validator so the 1-72 character bound is re-checked; an over-cap
-    title raises :class:`pydantic.ValidationError`.
+    Retitle / re-describe is purely cosmetic metadata: the iter id is
+    preserved and no lifecycle transition fires, so this helper deliberately
+    does NOT gate on iter status — PLANNED, ACTIVE, and CLOSED iters can all
+    be renormalised. Each supplied field is routed through the model's
+    assignment validator so the title 1-72 character bound and the
+    description ≤500-character bound are re-checked; an over-cap value
+    raises :class:`pydantic.ValidationError`. Pass ``None`` to leave a
+    field untouched.
+
+    Args:
+        state: State to mutate in place.
+        iter_id: Canonical iter id (e.g. ``P03-I02``).
+        title: Optional replacement title; ``None`` leaves it untouched.
+        description: Optional replacement description (≤500 chars);
+            ``None`` leaves the existing value untouched. The model
+            already permits ``None`` as the "no description" sentinel,
+            so callers cannot clear a description through this helper —
+            that intentional asymmetry mirrors the wave / phase API.
 
     Raises:
         LifecycleError: when *iter_id* is unknown.
-        pydantic.ValidationError: when *title* violates the 1-72 bound.
+        pydantic.ValidationError: when *title* / *description* violates
+            its bound.
     """
     it = state.iters.get(iter_id)
     if it is None:
         raise LifecycleError(f"unknown iter: {iter_id!r}")
-    it.__pydantic_validator__.validate_assignment(it, "title", title)
-    logger.info(f"edit_iter_plan id={iter_id} title={title!r}")
+    if title is not None:
+        it.__pydantic_validator__.validate_assignment(it, "title", title)
+    if description is not None:
+        it.__pydantic_validator__.validate_assignment(it, "description", description)
+    logger.info(f"edit_iter_plan id={iter_id} title={title!r} description={description!r}")
     return it
 
 

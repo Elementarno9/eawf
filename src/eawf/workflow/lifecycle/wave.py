@@ -32,8 +32,22 @@ def plan_wave(
     success_criteria: list[str] | None = None,
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
+    description: str | None = None,
 ) -> Wave:
     """Insert a new wave with status ``pending``.
+
+    Args:
+        state: State to mutate in place.
+        wave_id: Canonical wave id (e.g. ``P03-I02-W04``).
+        iter_id: Parent iter id.
+        title: Bounded ≤72-char wave title.
+        file_scopes: File globs the wave is scoped to.
+        deps: Optional list of prerequisite wave ids.
+        success_criteria: Optional list of success-criterion strings.
+        agent_role: Optional executor role.
+        effort_bucket: Optional XS/S/M/L/XL estimate bucket.
+        description: Optional bounded ≤500-char long-form description;
+            persisted on :attr:`Wave.description` for downstream renderers.
 
     Raises:
         LifecycleError: if iter is missing/closed, wave id duplicates, any
@@ -67,6 +81,7 @@ def plan_wave(
         id=wave_id,
         iter_id=iter_id,
         title=title,
+        description=description,
         status=WaveStatus.PENDING,
         deps=deps_list,
         blocks=[],
@@ -140,20 +155,36 @@ def edit_wave_plan(
     success_criteria: list[str] | None = None,
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
+    description: str | None = None,
 ) -> Wave:
     """Mutate a PENDING wave's plan-time fields. Rejects non-PENDING waves.
 
     Editable surface: title, file_scopes, success_criteria, agent_role,
-    effort_bucket. Dep mutations go through :func:`set_wave_deps` (it
-    maintains the reverse ``blocks`` index and re-runs the cycle check).
+    effort_bucket, description. Dep mutations go through
+    :func:`set_wave_deps` (it maintains the reverse ``blocks`` index and
+    re-runs the cycle check). The description field is routed through the
+    model's assignment validator so the ≤500-character bound is re-checked
+    on edit; an over-cap value raises :class:`pydantic.ValidationError`.
 
     The PENDING gate is also the load-bearing invariant for the
     ACTIVE-phase revise path (P19-W12): the CLI gate accepts an ACTIVE
     parent phase, and this guard ensures only PENDING waves under it
     actually mutate while CLOSED/CLAIMED/IN_PROGRESS waves stay frozen.
 
+    Args:
+        state: State to mutate in place.
+        wave_id: Canonical wave id.
+        title: Optional replacement title; ``None`` leaves it untouched.
+        file_scopes: Optional replacement file globs; ``None`` leaves untouched.
+        success_criteria: Optional replacement criteria; ``None`` leaves untouched.
+        agent_role: Optional replacement role; ``None`` leaves untouched.
+        effort_bucket: Optional replacement bucket; ``None`` leaves untouched.
+        description: Optional replacement description (≤500 chars);
+            ``None`` leaves the existing value untouched.
+
     Raises:
         LifecycleError: when *wave_id* is unknown or not PENDING.
+        pydantic.ValidationError: when *description* exceeds 500 chars.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -172,9 +203,11 @@ def edit_wave_plan(
         wave.agent_role = agent_role
     if effort_bucket is not None:
         wave.effort_bucket = effort_bucket
+    if description is not None:
+        wave.__pydantic_validator__.validate_assignment(wave, "description", description)
     logger.info(
         f"edit_wave_plan id={wave_id} title={title!r} file_scopes={file_scopes} "
-        f"agent_role={agent_role} effort_bucket={effort_bucket}"
+        f"agent_role={agent_role} effort_bucket={effort_bucket} description={description!r}"
     )
     return wave
 

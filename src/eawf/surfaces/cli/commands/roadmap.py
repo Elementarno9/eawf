@@ -270,8 +270,24 @@ def roadmap_propose_cmd(
             help="Title for the auto-created P##-I01 iter (defaults to phase title).",
         ),
     ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option(
+            "--description",
+            help="Optional long-form phase description (≤500 chars).",
+        ),
+    ] = None,
+    iter_description: Annotated[
+        str | None,
+        typer.Option(
+            "--iter-description",
+            help="Optional long-form description for the auto-created P##-I01 iter (≤500 chars).",
+        ),
+    ] = None,
 ) -> None:
     """Propose a new PLANNED phase + I01 iter; emits needs_user envelope."""
+    from pydantic import ValidationError as PydValidationError
+
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.transitions import LifecycleError, plan_iter, plan_phase
 
@@ -302,14 +318,22 @@ def roadmap_propose_cmd(
                     title=title,
                     depends_on=depends_on_list,
                     source_brief_ids=source_brief_list,
+                    description=description,
                 )
                 plan_iter(
                     state,
                     iter_id=iter_id,
                     phase_id=phase_id,
                     title=final_iter_title,
+                    description=iter_description,
                 )
             except LifecycleError as exc:
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+            except PydValidationError as exc:
+                # The ≤500-char description bound trips on the model, not on
+                # the lifecycle guard — translate it to the same InvalidInput
+                # bucket so the CLI surfaces a clean error rather than a
+                # Pydantic stack trace.
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             plan_text = _render_propose_plan_text(state, phase_id)
@@ -322,6 +346,8 @@ def roadmap_propose_cmd(
                     "iter_id": iter_id,
                     "depends_on": depends_on_list,
                     "source_brief_ids": source_brief_list,
+                    "description": description,
+                    "iter_description": iter_description,
                 },
                 scope_id=phase_id,
                 summary=f"roadmap propose {phase_id} title={title!r}",
@@ -339,6 +365,8 @@ def roadmap_propose_cmd(
         "depends_on": depends_on_list,
         "source_brief_ids": source_brief_list,
         "plan_text": plan_text,
+        "description": description,
+        "iter_description": iter_description,
         "options": [
             {
                 "label": "approve",
@@ -442,6 +470,16 @@ def roadmap_revise_cmd(
         str | None,
         typer.Option("--effort-bucket", help="One of XS|S|M|L|XL (only with --add-wave)."),
     ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option(
+            "--description",
+            help=(
+                "Long-form description (≤500 chars) — applied to the new wave with "
+                "--add-wave, or to the retitle target (iter or wave) with --retitle."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Edit a PLANNED or ACTIVE phase's wave plan via structured flags.
 
@@ -449,6 +487,8 @@ def roadmap_revise_cmd(
     PENDING check inside the lifecycle transitions rejects edits aimed
     at CLOSED/CLAIMED/IN_PROGRESS waves.
     """
+    from pydantic import ValidationError as PydValidationError
+
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
@@ -513,6 +553,7 @@ def roadmap_revise_cmd(
                         success_criteria=_split_csv(success),
                         agent_role=role,
                         effort_bucket=bucket,
+                        description=description,
                     )
                     action_summary = f"added wave {full_wave_id}"
                 elif remove_wave:
@@ -531,13 +572,29 @@ def roadmap_revise_cmd(
                     target, _, new_title = retitle.partition("=")
                     target = target.strip()
                     if is_iter_id(target):
-                        edit_iter_plan(state, iter_id=target, title=new_title.strip())
+                        edit_iter_plan(
+                            state,
+                            iter_id=target,
+                            title=new_title.strip(),
+                            description=description,
+                        )
                         action_summary = f"retitled iter {target}: {new_title.strip()!r}"
                     else:
                         full_wave_id = _coerce_full_wave_id(state, phase_id, target)
-                        edit_wave_plan(state, wave_id=full_wave_id, title=new_title.strip())
+                        edit_wave_plan(
+                            state,
+                            wave_id=full_wave_id,
+                            title=new_title.strip(),
+                            description=description,
+                        )
                         action_summary = f"retitled {full_wave_id}: {new_title.strip()!r}"
             except LifecycleError as exc:
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+            except PydValidationError as exc:
+                # The ≤500-char description bound trips on the model, not on
+                # the lifecycle guard — translate it to InvalidInput so the
+                # CLI surfaces a clean error rather than a Pydantic stack
+                # trace.
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             _append_roadmap_event(

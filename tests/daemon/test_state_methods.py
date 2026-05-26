@@ -1218,3 +1218,219 @@ def test_mutate_wal_record_carries_post_apply_envelope(tmp_path: Path) -> None:
         assert record.after_state_version == result["after_version"]
 
     _run(body)
+
+
+# ---- state.mutate (description round-trip P28-W02) -------------------------
+#
+# Description is an existing model field (≤500 char bound) that was not
+# previously surfaced through the daemon's apply functions. These tests
+# pin the wire from CLI -> Mutation.params['description'] -> daemon ->
+# state.json -> read-back.
+
+
+def test_mutate_iter_open_carries_description(tmp_path: Path) -> None:
+    """ITER_OPEN routes the description param onto Iter.description."""
+    payload = _build_state_payload()
+    # Drop the wave so close_iter can later run; for this test we only
+    # need iter_open to land a fresh iter. To make a fresh iter id we
+    # reuse a planned phase fixture instead.
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ITER_OPEN,
+        scope_id="P50-I02",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "iter_id": "P50-I02",
+            "phase_id": "P50",
+            "title": "i02 active",
+            "description": "second iter narrative for the planning phase",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        iter_row = new_state["iters"]["P50-I02"]
+        assert iter_row["description"] == "second iter narrative for the planning phase"
+
+    _run(body)
+
+
+def test_mutate_iter_open_description_optional(tmp_path: Path) -> None:
+    """Omitting description leaves Iter.description == None."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ITER_OPEN,
+        scope_id="P50-I02",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "iter_id": "P50-I02",
+            "phase_id": "P50",
+            "title": "no desc iter",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        assert new_state["iters"]["P50-I02"]["description"] is None
+
+    _run(body)
+
+
+def test_mutate_phase_open_carries_description(tmp_path: Path) -> None:
+    """PHASE_OPEN routes the description param onto Phase.description."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.PHASE_OPEN,
+        scope_id="P51",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "phase_id": "P51",
+            "title": "P51",
+            "description": "fresh phase narrative for the operator surface",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        phase_row = new_state["phases"]["P51"]
+        assert phase_row["description"] == "fresh phase narrative for the operator surface"
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_add_wave_carries_description(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=add_wave routes description onto Wave.description."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "op": "add_wave",
+            "wave_id": "P50-I01-W01",
+            "iter_id": "P50-I01",
+            "title": "feat: new wave",
+            "file_scopes": ["src/eawf/x.py"],
+            "description": "long-form rationale for what this wave does",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        wave_row = new_state["waves"]["P50-I01-W01"]
+        assert wave_row["description"] == "long-form rationale for what this wave does"
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_retitle_wave_carries_description(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=retitle on a wave routes description onto Wave.description."""
+    waves = {"P50-I01-W01": _pending_wave("P50-I01-W01", "P50-I01")}
+    payload = _build_planned_phase_payload(waves=waves)
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "op": "retitle",
+            "wave_id": "P50-I01-W01",
+            "title": "fix: retitled wave",
+            "description": "post-edit description landing on the wave",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        wave_row = new_state["waves"]["P50-I01-W01"]
+        assert wave_row["title"] == "fix: retitled wave"
+        assert wave_row["description"] == "post-edit description landing on the wave"
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_retitle_iter_carries_description(tmp_path: Path) -> None:
+    """ROADMAP_REVISE op=retitle with iter_id routes description onto Iter.description."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "op": "retitle",
+            "iter_id": "P50-I01",
+            "title": "renamed iter",
+            "description": "iter narrative attached post-plan",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        new_state = orjson.loads(state_path.read_bytes())
+        iter_row = new_state["iters"]["P50-I01"]
+        assert iter_row["title"] == "renamed iter"
+        assert iter_row["description"] == "iter narrative attached post-plan"
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_description_over_cap_rejected(tmp_path: Path) -> None:
+    """An over-cap description (>500 chars) is rejected by the model on the daemon path."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "op": "add_wave",
+            "wave_id": "P50-I01-W01",
+            "iter_id": "P50-I01",
+            "title": "feat: over-cap-desc",
+            "file_scopes": ["src/x.py"],
+            "description": "z" * 501,
+        },
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        # state.json untouched on rejection.
+        assert state_path.read_bytes() == before_bytes
+
+    _run(body)
+
+
+def test_mutate_phase_open_then_state_read_roundtrips_description(tmp_path: Path) -> None:
+    """Full round-trip: PHASE_OPEN with description -> state.read returns it."""
+    payload = _build_planned_phase_payload()
+    ctx, _state_path, _, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.PHASE_OPEN,
+        scope_id="P52",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "phase_id": "P52",
+            "title": "P52",
+            "description": "phase open round-trip description",
+        },
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        result: dict[str, Any] = await read(ctx, {})
+        phase_row = result["state"]["phases"]["P52"]
+        assert phase_row["description"] == "phase open round-trip description"
+
+    _run(body)

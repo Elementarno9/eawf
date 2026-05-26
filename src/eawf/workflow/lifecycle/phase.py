@@ -48,8 +48,17 @@ def open_phase(
     phase_id: str,
     title: str,
     scope_id: str | None = None,
+    description: str | None = None,
 ) -> Phase:
     """Insert a new phase into ``state.phases`` with status ``active``.
+
+    Args:
+        state: State to mutate in place.
+        phase_id: Canonical phase id (e.g. ``P03``).
+        title: Bounded ≤72-char phase title.
+        scope_id: Optional scope id override; defaults to the project code.
+        description: Optional bounded ≤500-char long-form description;
+            persisted on :attr:`Phase.description` for downstream renderers.
 
     Raises:
         LifecycleError: if *phase_id* already exists.
@@ -63,6 +72,7 @@ def open_phase(
         scope_id=effective_scope,
         subproject_id=state.current.subproject_id,
         title=title,
+        description=description,
         status=PhaseStatus.ACTIVE,
         iter_ids=[],
         outcome_ids=[],
@@ -197,12 +207,23 @@ def plan_phase(
     scope_id: str | None = None,
     depends_on: list[str] | None = None,
     source_brief_ids: list[str] | None = None,
+    description: str | None = None,
 ) -> Phase:
     """Insert a new phase into ``state.phases`` with status ``planned``.
 
     Phases created via :func:`plan_phase` sit on the PLANNED queue until
     :func:`activate_phase` flips them to ACTIVE. ``depends_on`` declares
     phase-level prerequisites; cycles are rejected up-front.
+
+    Args:
+        state: State to mutate in place.
+        phase_id: Canonical phase id (e.g. ``P03``).
+        title: Bounded ≤72-char phase title.
+        scope_id: Optional scope id override; defaults to the project code.
+        depends_on: Optional list of prerequisite phase ids.
+        source_brief_ids: Optional list of brief ids motivating this phase.
+        description: Optional bounded ≤500-char long-form description;
+            persisted on :attr:`Phase.description` for downstream renderers.
 
     Raises:
         LifecycleError: if *phase_id* already exists, any declared
@@ -228,6 +249,7 @@ def plan_phase(
         scope_id=effective_scope,
         subproject_id=state.current.subproject_id,
         title=title,
+        description=description,
         status=PhaseStatus.PLANNED,
         iter_ids=[],
         outcome_ids=[],

@@ -1264,3 +1264,204 @@ def test_claim_wave_under_terminal_iter_rejected_and_not_activated() -> None:
     with pytest.raises(LifecycleError, match="cannot be claimed"):
         claim_wave(state, wave_id="P01-I01-W01", session_id="SES-2")
     assert state.iters["P01-I01"].status == IterStatus.CLOSED
+
+
+# ---- Description round-trip (P28-W02) ---------------------------------------
+#
+# Description is an existing model field (≤500 char bound enforced in
+# Pydantic) that lifecycle transitions historically did not surface. These
+# tests pin the wire from transition arg -> stored field -> read back.
+
+
+def test_plan_phase_persists_description() -> None:
+    state = _empty_state()
+    phase = plan_phase(
+        state,
+        phase_id="P01",
+        title="t",
+        description="long-form rationale for the phase",
+    )
+    assert phase.description == "long-form rationale for the phase"
+    assert state.phases["P01"].description == "long-form rationale for the phase"
+
+
+def test_plan_phase_description_none_default() -> None:
+    state = _empty_state()
+    phase = plan_phase(state, phase_id="P01", title="t")
+    assert phase.description is None
+
+
+def test_plan_phase_description_over_cap_raises() -> None:
+    state = _empty_state()
+    with pytest.raises(ValidationError):
+        plan_phase(state, phase_id="P01", title="t", description="z" * 501)
+
+
+def test_open_phase_persists_description() -> None:
+    state = _empty_state()
+    phase = open_phase(state, phase_id="P01", title="t", description="why this phase exists")
+    assert phase.description == "why this phase exists"
+    assert state.phases["P01"].description == "why this phase exists"
+
+
+def test_plan_iter_persists_description() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    it = plan_iter(
+        state,
+        iter_id="P01-I01",
+        phase_id="P01",
+        title="i",
+        description="iter scope summary",
+    )
+    assert it.description == "iter scope summary"
+    assert state.iters["P01-I01"].description == "iter scope summary"
+
+
+def test_plan_iter_description_over_cap_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    with pytest.raises(ValidationError):
+        plan_iter(
+            state,
+            iter_id="P01-I01",
+            phase_id="P01",
+            title="i",
+            description="z" * 501,
+        )
+
+
+def test_open_iter_persists_description() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="t")
+    it = open_iter(
+        state,
+        iter_id="P01-I01",
+        phase_id="P01",
+        title="i",
+        description="active iter narrative",
+    )
+    assert it.description == "active iter narrative"
+
+
+def test_plan_wave_persists_description() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    w = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        description="wave goal narrative",
+    )
+    assert w.description == "wave goal narrative"
+    assert state.waves["P01-I01-W01"].description == "wave goal narrative"
+
+
+def test_plan_wave_description_over_cap_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    with pytest.raises(ValidationError):
+        plan_wave(
+            state,
+            wave_id="P01-I01-W01",
+            iter_id="P01-I01",
+            title="w",
+            file_scopes=["src/"],
+            description="z" * 501,
+        )
+
+
+def test_edit_iter_plan_persists_description() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    it = edit_iter_plan(state, iter_id="P01-I01", description="new desc")
+    assert it.description == "new desc"
+    # Title untouched when omitted.
+    assert it.title == "i"
+
+
+def test_edit_iter_plan_description_only_keeps_title() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="orig")
+    edit_iter_plan(state, iter_id="P01-I01", description="annotated")
+    assert state.iters["P01-I01"].title == "orig"
+    assert state.iters["P01-I01"].description == "annotated"
+
+
+def test_edit_iter_plan_title_only_keeps_description() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="orig", description="kept")
+    edit_iter_plan(state, iter_id="P01-I01", title="renamed")
+    assert state.iters["P01-I01"].title == "renamed"
+    assert state.iters["P01-I01"].description == "kept"
+
+
+def test_edit_iter_plan_description_over_cap_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    with pytest.raises(ValidationError):
+        edit_iter_plan(state, iter_id="P01-I01", description="z" * 501)
+
+
+def test_edit_wave_plan_persists_description() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="orig",
+        file_scopes=["x"],
+    )
+    w = edit_wave_plan(
+        state,
+        wave_id="P01-I01-W01",
+        description="why this wave matters",
+    )
+    assert w.description == "why this wave matters"
+    # Title and file_scopes untouched when omitted.
+    assert w.title == "orig"
+    assert w.file_scopes == ["x"]
+
+
+def test_edit_wave_plan_description_over_cap_raises() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["x"],
+    )
+    with pytest.raises(ValidationError):
+        edit_wave_plan(state, wave_id="P01-I01-W01", description="z" * 501)
+
+
+def test_edit_wave_plan_description_non_pending_rejected() -> None:
+    """description edits inherit the PENDING-only guard."""
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["x"],
+    )
+    activate_phase(state, phase_id="P01")
+    activate_iter(state, iter_id="P01-I01")
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    with pytest.raises(LifecycleError, match="not pending"):
+        edit_wave_plan(state, wave_id="P01-I01-W01", description="late annotation")

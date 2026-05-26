@@ -78,6 +78,10 @@ def wave_plan_cmd(
         EffortBucket | None,
         typer.Option("--effort-bucket", help="XS/S/M/L/XL estimate bucket."),
     ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Optional long-form wave description (≤500 chars)."),
+    ] = None,
 ) -> None:
     """Plan a new pending wave under an open iter."""
     from eawf.workflow.lifecycle.transitions import plan_wave
@@ -118,6 +122,7 @@ def wave_plan_cmd(
             "success_criteria": criteria_list,
             "agent_role": agent_role.value if agent_role else None,
             "effort_bucket": effort_bucket.value if effort_bucket else None,
+            "description": description,
         },
         scope_id=wave_id,
         text=f"wave plan {wave_id} iter={iter_id} title={title!r}",
@@ -130,6 +135,7 @@ def wave_plan_cmd(
             "success_criteria": criteria_list,
             "agent_role": agent_role.value if agent_role else None,
             "effort_bucket": effort_bucket.value if effort_bucket else None,
+            "description": description,
         },
         mutate=lambda state: _wrap_no_return(
             plan_wave(
@@ -142,6 +148,7 @@ def wave_plan_cmd(
                 success_criteria=criteria_list,
                 agent_role=agent_role,
                 effort_bucket=effort_bucket,
+                description=description,
             )
         ),
         mutation_kind=MutationKind.ROADMAP_REVISE,
@@ -155,6 +162,7 @@ def wave_plan_cmd(
             "success_criteria": criteria_list,
             "agent_role": agent_role.value if agent_role else None,
             "effort_bucket": effort_bucket.value if effort_bucket else None,
+            "description": description,
         },
     )
 

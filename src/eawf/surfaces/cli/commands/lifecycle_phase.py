@@ -70,6 +70,10 @@ def phase_open_cmd(
         str | None,
         typer.Option("--scope", help="Phase scope_id (defaults to project code)."),
     ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Optional long-form phase description (≤500 chars)."),
+    ] = None,
 ) -> None:
     """Open a new phase. Provide an explicit ID or use ``--auto``."""
     from eawf.workflow.lifecycle.allocator import allocate_phase_id
@@ -102,15 +106,31 @@ def phase_open_cmd(
         target = allocate_phase_id(state) if auto else phase_id
         assert target is not None  # validated above
         chosen["id"] = target
-        open_phase(state, phase_id=target, title=title, scope_id=scope)
+        open_phase(
+            state,
+            phase_id=target,
+            title=title,
+            scope_id=scope,
+            description=description,
+        )
 
     _run_mutation(
         ctx,
         command="phase open",
-        args={"id": phase_id, "auto": auto, "title": title, "scope": scope},
+        args={
+            "id": phase_id,
+            "auto": auto,
+            "title": title,
+            "scope": scope,
+            "description": description,
+        },
         scope_id_factory=lambda: chosen["id"],
         text_factory=lambda: f"phase open {chosen['id']} title={title!r}",
-        envelope_factory=lambda: {"phase": chosen["id"], "title": title},
+        envelope_factory=lambda: {
+            "phase": chosen["id"],
+            "title": title,
+            "description": description,
+        },
         mutate=_mutator,
     )
 

@@ -429,11 +429,13 @@ def _apply_wave_fail(state: State, mutation: Mutation) -> None:
 def _apply_phase_open(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.PHASE_OPEN` — delegate to ``open_phase``."""
     params = mutation.params
+    description = params.get("description")
     open_phase(
         state,
         phase_id=str(params["phase_id"]),
         title=str(params["title"]),
         scope_id=params.get("scope_id"),
+        description=str(description) if description is not None else None,
     )
 
 
@@ -456,11 +458,13 @@ def _apply_phase_close(state: State, mutation: Mutation) -> None:
 def _apply_iter_open(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.ITER_OPEN` — delegate to ``open_iter``."""
     params = mutation.params
+    description = params.get("description")
     open_iter(
         state,
         iter_id=str(params["iter_id"]),
         phase_id=str(params["phase_id"]),
         title=str(params["title"]),
+        description=str(description) if description is not None else None,
     )
 
 
@@ -511,12 +515,20 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     to :func:`eawf.workflow.lifecycle.iter_.edit_iter_plan` when ``params`` carries
     an ``iter_id``; otherwise it retitles the wave named by ``wave_id``.
 
+    The ``description`` param is wired into both ``add_wave`` (passed to
+    :func:`eawf.workflow.lifecycle.wave.plan_wave`) and ``retitle`` (routed to
+    the appropriate ``edit_*_plan`` transition alongside the optional
+    title). Omitting it leaves the underlying field unchanged; a supplied
+    string is bound-checked at ≤500 chars by the model.
+
     Raises:
         LifecycleError: when ``op`` is missing or unknown, or the
             underlying wave transition rejects the edit.
     """
     params = mutation.params
     op = params.get("op")
+    description = params.get("description")
+    description_str = str(description) if description is not None else None
     if op == "add_wave":
         role = AgentSessionRole(params["agent_role"]) if params.get("agent_role") else None
         bucket = EffortBucket(params["effort_bucket"]) if params.get("effort_bucket") else None
@@ -534,16 +546,29 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
             ),
             agent_role=role,
             effort_bucket=bucket,
+            description=description_str,
         )
     elif op == "remove_wave":
         remove_wave_plan(state, wave_id=str(params["wave_id"]))
     elif op == "set_deps":
         set_wave_deps(state, wave_id=str(params["wave_id"]), deps=list(params["deps"]))
     elif op == "retitle":
+        title_raw = params.get("title")
+        title_str = str(title_raw) if title_raw is not None else None
         if params.get("iter_id") is not None:
-            edit_iter_plan(state, iter_id=str(params["iter_id"]), title=str(params["title"]))
+            edit_iter_plan(
+                state,
+                iter_id=str(params["iter_id"]),
+                title=title_str,
+                description=description_str,
+            )
         else:
-            edit_wave_plan(state, wave_id=str(params["wave_id"]), title=str(params["title"]))
+            edit_wave_plan(
+                state,
+                wave_id=str(params["wave_id"]),
+                title=title_str,
+                description=description_str,
+            )
     else:
         raise LifecycleError(f"unknown roadmap revise op: {op!r}")
 
@@ -812,6 +837,14 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 ):
                     raise DaemonValidationError(f"validation_failed: {exc}") from exc
                 raise ValueError(str(exc)) from exc
+            except ValidationError as exc:
+                # Model-level bound rejections (e.g. the ≤500-char Wave /
+                # Iter / Phase description cap) trip on Pydantic before
+                # any lifecycle guard fires. Surface them as
+                # ``validation_failed`` so the wire-error matches the
+                # post-mutation schema rejection at line ~847 and the
+                # CLI exit code stays consistent.
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except KeyError as exc:
                 raise DaemonValidationError(f"validation_failed: missing param {exc!s}") from exc
 

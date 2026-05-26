@@ -262,6 +262,10 @@ def iter_plan_cmd(
     ctx: typer.Context,
     iter_id: Annotated[str, typer.Argument(help="Iter id to stage (e.g. P03-I02).")],
     title: Annotated[str | None, typer.Option("--title", help="Iter title.")] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Optional long-form iter description (≤500 chars)."),
+    ] = None,
 ) -> None:
     """Stage a PLANNED iter under an open phase without moving the current pointer.
 
@@ -288,12 +292,28 @@ def iter_plan_cmd(
     _run_mutation(
         ctx,
         command="iter plan",
-        args={"iter_id": iter_id, "phase": phase_id, "title": title},
+        args={
+            "iter_id": iter_id,
+            "phase": phase_id,
+            "title": title,
+            "description": description,
+        },
         scope_id=iter_id,
         text=f"iter plan {iter_id} title={title!r}",
-        envelope=lambda: {"iter": iter_id, "title": title, "status": "planned"},
+        envelope=lambda: {
+            "iter": iter_id,
+            "title": title,
+            "description": description,
+            "status": "planned",
+        },
         mutate=lambda state: _wrap_no_return(
-            plan_iter(state, iter_id=iter_id, phase_id=phase_id, title=title)
+            plan_iter(
+                state,
+                iter_id=iter_id,
+                phase_id=phase_id,
+                title=title,
+                description=description,
+            )
         ),
     )
 
@@ -366,6 +386,10 @@ def iter_open_cmd(
         typer.Option("--phase", help="Phase ID (when omitting explicit iter id)."),
     ] = None,
     title: Annotated[str | None, typer.Option("--title", help="Iter title.")] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Optional long-form iter description (≤500 chars)."),
+    ] = None,
 ) -> None:
     """Open an iter. Pass an iter ID or a phase id (auto-allocates iter)."""
     from eawf.workflow.lifecycle.allocator import allocate_iter_id
@@ -437,6 +461,7 @@ def iter_open_cmd(
             iter_id=target_iter,
             phase_id=explicit_phase,
             title=title,
+            description=description,
         )
 
     def _text() -> str:
@@ -444,7 +469,7 @@ def iter_open_cmd(
         return f"iter open {chosen['id']} title={title!r}{hint_suffix}"
 
     def _envelope() -> dict[str, Any]:
-        env: dict[str, Any] = {"iter": chosen["id"], "title": title}
+        env: dict[str, Any] = {"iter": chosen["id"], "title": title, "description": description}
         if chosen.get("hints"):
             env["hints"] = list(chosen["hints"])
         return env
@@ -456,6 +481,7 @@ def iter_open_cmd(
             "iter_id": explicit_iter,
             "phase": explicit_phase,
             "title": title,
+            "description": description,
         },
         scope_id_factory=lambda: chosen["id"],
         text_factory=_text,

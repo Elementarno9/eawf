@@ -1003,3 +1003,266 @@ def test_iter_activate_planned_iter(workspace: Path) -> None:
     assert res.exit_code == 0, res.output
     state = _read_state(workspace)
     assert state["iters"]["P21-I01"]["status"] == "active"
+
+
+# ---- --description round-trip (P28-W02) ------------------------------------
+
+
+def test_roadmap_propose_persists_description(workspace: Path) -> None:
+    """roadmap propose --description lands on the Phase.description field."""
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "propose",
+            "--phase",
+            "P21",
+            "--title",
+            "P21",
+            "--description",
+            "long-form phase narrative captured at propose time",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["description"] == (
+        "long-form phase narrative captured at propose time"
+    )
+
+
+def test_roadmap_propose_iter_description(workspace: Path) -> None:
+    """roadmap propose --iter-description lands on the auto-created I01 iter."""
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "propose",
+            "--phase",
+            "P21",
+            "--title",
+            "P21",
+            "--description",
+            "phase desc",
+            "--iter-description",
+            "iter desc",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I01"]["description"] == "iter desc"
+
+
+def test_roadmap_propose_description_over_cap_rejected(workspace: Path) -> None:
+    """--description > 500 chars surfaces a clean error, not a Pydantic stack trace."""
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "propose",
+            "--phase",
+            "P21",
+            "--title",
+            "P21",
+            "--description",
+            "z" * 501,
+        ],
+    )
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    # Clean validation message (not a raw traceback).
+    assert "500" in combined or "string_too_long" in combined
+
+
+def test_roadmap_revise_add_wave_persists_description(workspace: Path) -> None:
+    """roadmap revise --add-wave --description lands on Wave.description."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: w",
+            "--files",
+            "src/",
+            "--description",
+            "wave-level narrative for the add",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P21-I01-W01"]["description"] == "wave-level narrative for the add"
+
+
+def test_roadmap_revise_retitle_wave_with_description(workspace: Path) -> None:
+    """roadmap revise --retitle WAVE --description updates wave description."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: w",
+            "--files",
+            "src/",
+        ],
+    )
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--retitle",
+            "W01=feat: renamed",
+            "--description",
+            "annotation added post-plan",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P21-I01-W01"]["title"] == "feat: renamed"
+    assert state["waves"]["P21-I01-W01"]["description"] == "annotation added post-plan"
+
+
+def test_roadmap_revise_retitle_iter_with_description(workspace: Path) -> None:
+    """roadmap revise --retitle ITER --description updates iter description."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--retitle",
+            "P21-I01=renamed iter",
+            "--description",
+            "iter narrative added post-plan",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I01"]["title"] == "renamed iter"
+    assert state["iters"]["P21-I01"]["description"] == "iter narrative added post-plan"
+
+
+def test_phase_open_persists_description(workspace: Path) -> None:
+    """phase open --description lands on Phase.description."""
+    res = runner.invoke(
+        app,
+        [
+            "phase",
+            "open",
+            "P22",
+            "--title",
+            "P22 phase",
+            "--description",
+            "open-time phase description",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P22"]["description"] == "open-time phase description"
+
+
+def test_iter_plan_persists_description(workspace: Path) -> None:
+    """iter plan --description lands on Iter.description."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        [
+            "iter",
+            "plan",
+            "P21-I02",
+            "--title",
+            "second iter",
+            "--description",
+            "second-iter narrative",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["iters"]["P21-I02"]["description"] == "second-iter narrative"
+
+
+def test_wave_plan_persists_description(workspace: Path) -> None:
+    """wave plan --description lands on Wave.description.
+
+    Exercises the daemon JSON-RPC ROADMAP_REVISE path: ``wave plan`` carries
+    ``mutation_kind=ROADMAP_REVISE`` so the description flows through
+    ``state.mutate`` (when the daemon is up) or the in-process fallback
+    (always exercised in these tests since the test fixture doesn't spawn
+    the daemon).
+    """
+    runner.invoke(
+        app,
+        [
+            "phase",
+            "open",
+            "P22",
+            "--title",
+            "X",
+        ],
+    )
+    runner.invoke(
+        app,
+        [
+            "iter",
+            "open",
+            "P22-I01",
+            "--title",
+            "i",
+        ],
+    )
+    res = runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P22-I01",
+            "--id",
+            "P22-I01-W01",
+            "--title",
+            "feat: w",
+            "--files",
+            "src/",
+            "--description",
+            "wave-plan description landing through the planner",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P22-I01-W01"]["description"] == (
+        "wave-plan description landing through the planner"
+    )
+
+
+def test_roadmap_revise_add_wave_description_over_cap_rejected(workspace: Path) -> None:
+    """An over-cap (>500 chars) --description on add-wave surfaces a clean error."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: w",
+            "--files",
+            "src/",
+            "--description",
+            "z" * 501,
+        ],
+    )
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "500" in combined or "string_too_long" in combined
