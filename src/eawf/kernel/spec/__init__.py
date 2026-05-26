@@ -53,6 +53,12 @@ from eawf.kernel.spec.phase import (
     PhaseShipCriterion,
     PhaseSpec,
 )
+from eawf.kernel.spec.promotion import (
+    ARGV_BEARING_GATE_KINDS,
+    DEFAULT_GATE_ARGV_ALLOWLIST,
+    SpecPromoteValidationError,
+    validate_argv_gates,
+)
 from eawf.kernel.spec.validators import (
     SpecValidationError,
     validate_phase_spec_at_load,
@@ -64,7 +70,9 @@ from eawf.kernel.spec.validators import (
 from eawf.kernel.spec.wave import WaveBehavior, WaveMockup, WaveSpec
 
 __all__ = [
+    "ARGV_BEARING_GATE_KINDS",
     "AUDIT_CADENCE_VALUES",
+    "DEFAULT_GATE_ARGV_ALLOWLIST",
     "UI_SCOPE_PREFIXES",
     "AuditCadence",
     "AuditSpec",
@@ -84,6 +92,7 @@ __all__ = [
     "PhaseKPI",
     "PhaseShipCriterion",
     "PhaseSpec",
+    "SpecPromoteValidationError",
     "SpecValidationError",
     "TestRef",
     "VerdictCitation",
@@ -94,6 +103,7 @@ __all__ = [
     "is_ui_scope",
     "missing_test_paths",
     "requires_mockup_reference",
+    "validate_argv_gates",
     "validate_phase_spec_at_load",
     "validate_phase_spec_has_kpis",
     "validate_wave_spec_at_load",

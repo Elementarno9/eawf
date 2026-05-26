@@ -347,6 +347,198 @@ def test_promote_rejects_skip_step(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     _run(body)
 
 
+# ---- spec.promote argv-policy seam (P28-I01-W09) -------------------------
+
+
+def test_promote_to_ready_routes_through_argv_validator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The READY flip routes embedded GateSpec rows through the L0 argv-policy.
+
+    P28-I01-W09 wires
+    :func:`eawf.kernel.spec.promotion.validate_argv_gates` into the
+    promote handler BEFORE the cache flip. The v0.4.0 body parser
+    (``_extract_gate_specs``) is a placeholder that returns ``[]``
+    until W08 lands the real parser; this test patches the helper to
+    simulate the post-W08 case where the body carries a bad GateSpec
+    + asserts the READY flip rejects atomically (status stays DRAFT,
+    no cache mutation).
+    """
+    ctx, repo_root, _ = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+    # Build a deliberately-rejecting gate that mimics what a parsed
+    # body would yield. ``GateSpec.model_construct`` bypasses the
+    # construction-time argv check so the persistence-layer reject
+    # path is exercised in isolation (defense-in-depth contract: both
+    # layers stand alone).
+    from eawf.kernel.spec.common import GateSpec
+    from eawf.runtime.daemon.methods import spec as spec_module
+
+    bad_gate = GateSpec.model_construct(
+        id="G_BAD",
+        criterion_id="C1",
+        kind="command_exit_zero",
+        args={"argv": ["sh", "-c", "evil"]},
+        policy="block",
+        cadence="every-wave",
+        required=True,
+        timeout_s=None,
+    )
+    monkeypatch.setattr(spec_module, "_extract_gate_specs", lambda _body: [bad_gate])
+
+    async def body() -> None:
+        await init(
+            ctx,
+            {
+                "scope_id": "P25",
+                "title": "Phase",
+                "repo_code": "EAWF",
+                "repo_root": str(repo_root),
+            },
+        )
+        with pytest.raises(ValueError, match="G_BAD"):
+            await promote(
+                ctx,
+                {
+                    "scope_id": "P25",
+                    "repo_code": "EAWF",
+                    "target_status": "READY",
+                    "repo_root": str(repo_root),
+                },
+            )
+        # Atomicity: the spec remains in DRAFT because the cache flip
+        # never ran. A subsequent clean promote (with the patch
+        # cleared via a re-patch to the empty-list fallback) would
+        # succeed; we assert the rejection-state directly via a
+        # second promote attempt that still trips the seam.
+        with pytest.raises(ValueError, match="G_BAD"):
+            await promote(
+                ctx,
+                {
+                    "scope_id": "P25",
+                    "repo_code": "EAWF",
+                    "target_status": "READY",
+                    "repo_root": str(repo_root),
+                    # Use a fresh idempotency key so the call is not
+                    # served from the cached result.
+                    "idempotency_key": "retry-after-reject",
+                },
+            )
+
+    _run(body)
+
+
+def test_promote_to_ready_passes_when_body_carries_clean_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A spec body whose GateSpec rows pass the L0 policy promotes cleanly."""
+    ctx, repo_root, _ = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+    from eawf.kernel.spec.common import GateSpec
+    from eawf.runtime.daemon.methods import spec as spec_module
+
+    good_gate = GateSpec.model_validate(
+        {
+            "id": "G_OK",
+            "criterion_id": "C1",
+            "kind": "command_exit_zero",
+            "args": {"argv": ["uv", "run", "pytest", "-q"]},
+            "policy": "block",
+            "cadence": "every-wave",
+        }
+    )
+    monkeypatch.setattr(spec_module, "_extract_gate_specs", lambda _body: [good_gate])
+
+    async def body() -> None:
+        await init(
+            ctx,
+            {
+                "scope_id": "P25",
+                "title": "Phase",
+                "repo_code": "EAWF",
+                "repo_root": str(repo_root),
+            },
+        )
+        result = await promote(
+            ctx,
+            {
+                "scope_id": "P25",
+                "repo_code": "EAWF",
+                "target_status": "READY",
+                "repo_root": str(repo_root),
+            },
+        )
+        assert result["status"] == "READY"
+
+    _run(body)
+
+
+def test_promote_to_implemented_skips_argv_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """READY→IMPLEMENTED does not re-run the argv-policy check.
+
+    The check is gated on ``target_status == "READY"`` — once a spec
+    is READY the argv shape is already pinned. This test patches the
+    body extractor to a rejecting gate AND graduates past READY; the
+    READY step is exercised first with a clean monkeypatch, then the
+    IMPLEMENTED step runs with the rejecting patch in place to prove
+    the second hop never re-invokes the validator.
+    """
+    ctx, repo_root, _ = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+    from eawf.kernel.spec.common import GateSpec
+    from eawf.runtime.daemon.methods import spec as spec_module
+
+    bad_gate = GateSpec.model_construct(
+        id="G_BAD",
+        criterion_id="C1",
+        kind="command_exit_zero",
+        args={"argv": ["sh", "-c", "evil"]},
+        policy="block",
+        cadence="every-wave",
+        required=True,
+        timeout_s=None,
+    )
+
+    async def body() -> None:
+        await init(
+            ctx,
+            {
+                "scope_id": "P25",
+                "title": "Phase",
+                "repo_code": "EAWF",
+                "repo_root": str(repo_root),
+            },
+        )
+        # First hop: DRAFT→READY with no gates (default placeholder).
+        await promote(
+            ctx,
+            {
+                "scope_id": "P25",
+                "repo_code": "EAWF",
+                "target_status": "READY",
+                "repo_root": str(repo_root),
+            },
+        )
+        # Second hop: READY→IMPLEMENTED with a rejecting gate patched
+        # in — should still succeed because the seam only fires on
+        # READY transitions.
+        monkeypatch.setattr(spec_module, "_extract_gate_specs", lambda _body: [bad_gate])
+        result = await promote(
+            ctx,
+            {
+                "scope_id": "P25",
+                "repo_code": "EAWF",
+                "target_status": "IMPLEMENTED",
+                "repo_root": str(repo_root),
+            },
+        )
+        assert result["status"] == "IMPLEMENTED"
+
+    _run(body)
+
+
 # ---- spec.archive (criterion 2) ------------------------------------------
 
 

@@ -46,6 +46,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.spec import cache as spec_cache
 from eawf.kernel.spec import writer as spec_writer
+from eawf.kernel.spec.common import GateSpec
+from eawf.kernel.spec.promotion import (
+    SpecPromoteValidationError,
+    validate_argv_gates,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods import MethodContext, register
@@ -199,6 +204,27 @@ def _resolve_repo_root(override: str | None) -> Path:
     if override:
         return Path(override)
     return Path.cwd()
+
+
+def _extract_gate_specs(_body: bytes) -> list[GateSpec]:
+    """Extract typed :class:`GateSpec` rows from a spec markdown body.
+
+    v0.4.0 seam — returns an empty list because the spec body is a
+    free-form markdown scaffold (see :func:`spec_writer.scaffold_body`)
+    that does not yet carry typed GateSpec rows in a parseable block.
+    P28-I01-W08 lands the body schema + parser that yields real
+    GateSpec rows; the W09 promote-side argv-policy check
+    (:func:`eawf.kernel.spec.promotion.validate_argv_gates`) already
+    consumes whatever this helper returns, so W08 only needs to
+    replace the body of this function.
+
+    Args:
+        _body: Raw markdown spec body bytes (unused in v0.4.0).
+
+    Returns:
+        Empty list — a placeholder until W08 lands the parser.
+    """
+    return []
 
 
 def _resolve_cache_dir(override: str | None) -> Path | None:
@@ -566,6 +592,22 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             )
         body = file_path.read_bytes()
         file_sha = spec_writer.blob_sha_for(body)
+        if args.target_status == "READY":
+            # W09 — L0 argv-policy attaches at the spec-promote→READY
+            # persistence seam. Walks the spec body's embedded GateSpec
+            # rows and routes each argv-bearing gate's ``args['argv']``
+            # through :func:`validate_gate_argv`. Atomicity: the check
+            # runs BEFORE :func:`write_cache_entry`, so a reject leaves
+            # the spec in its prior DRAFT status with no cache mutation.
+            # The body parser that yields typed GateSpec rows lands in
+            # W08; until then the iterable is empty and the call is a
+            # no-op pass-through — the seam exists so W08 has a single
+            # call site to feed.
+            gates_in_body: list[GateSpec] = _extract_gate_specs(body)
+            try:
+                validate_argv_gates(gates_in_body)
+            except SpecPromoteValidationError as exc:
+                raise ValueError(f"validation_failed: {exc}") from exc
         entry = spec_writer.build_entry(
             spec_urn=spec_urn,
             file_sha=file_sha,

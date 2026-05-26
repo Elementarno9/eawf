@@ -321,12 +321,18 @@ def test_criterion_spec_rejects_missing_required_field() -> None:
 
 
 def _gate(**overrides: object) -> GateSpec:
-    """Return a GateSpec with the given overrides on minimal-valid defaults."""
+    """Return a GateSpec with the given overrides on minimal-valid defaults.
+
+    The default ``kind`` is ``command_exit_zero`` so ``args`` carries a
+    valid ``argv`` vector (W09 model-validator requires one when the
+    kind is argv-bearing). Tests that need a non-argv kind override
+    ``kind`` (and may clear ``args``) explicitly.
+    """
     payload: dict[str, object] = {
         "id": "G1",
         "criterion_id": "C1",
         "kind": "command_exit_zero",
-        "args": {"command": ["uv", "run", "pytest", "-q"]},
+        "args": {"argv": ["uv", "run", "pytest", "-q"]},
         "policy": "block",
         "cadence": "every-wave",
     }
@@ -364,9 +370,16 @@ def test_gate_spec_each_cadence(cadence: str) -> None:
     assert gate.cadence == cadence
 
 
-def test_gate_spec_empty_args_allowed() -> None:
-    """A gate with no args is valid (args defaults to empty dict)."""
-    gate = _gate(args={})
+def test_gate_spec_empty_args_allowed_on_non_argv_kind() -> None:
+    """A non-argv-bearing kind tolerates an empty ``args`` dict.
+
+    The W09 model-validator requires ``args['argv']`` only when the
+    kind is in
+    :data:`eawf.kernel.spec.promotion.ARGV_BEARING_GATE_KINDS`. A
+    schema-validate gate (or any other non-argv kind) is free to
+    default to ``args={}``.
+    """
+    gate = _gate(kind="schema_validate", args={})
     assert gate.args == {}
 
 
@@ -486,3 +499,91 @@ def test_wave_success_criteria_field_remains_list_of_str() -> None:
 
     annotation = Wave.model_fields["success_criteria"].annotation
     assert annotation == list[str]
+
+
+# W09 — GateSpec model-validator catches argv at construction time -------
+
+
+def test_gate_spec_command_exit_zero_accepts_clean_argv() -> None:
+    """``command_exit_zero`` with an L0-clean argv constructs without error.
+
+    The W09 model-validator routes ``args['argv']`` through the L0
+    argv-policy when the kind is in
+    :data:`eawf.kernel.spec.promotion.ARGV_BEARING_GATE_KINDS`. A clean
+    ``uv run pytest -q`` (allowlisted wrapper + tool) passes both the
+    field-level checks and the model-level argv check.
+    """
+    gate = _gate(args={"argv": ["uv", "run", "pytest", "-q"]})
+    assert gate.args["argv"] == ["uv", "run", "pytest", "-q"]
+
+
+def test_gate_spec_command_exit_zero_rejects_shell_deny_argv() -> None:
+    """``args['argv']=["sh", "-c", "evil"]`` raises at construction time.
+
+    Defense-in-depth: any constructor of a GateSpec (model_validate
+    from a body parser, hand-build in code) trips the
+    ``@model_validator`` before the row reaches the spec layer.
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {"argv": ["sh", "-c", "rm -rf /"]},
+                "policy": "block",
+                "cadence": "every-wave",
+            }
+        )
+    message = str(exc_info.value)
+    assert "G1" in message
+    assert "rejected by L0 policy" in message
+
+
+def test_gate_spec_command_exit_zero_rejects_missing_argv() -> None:
+    """``command_exit_zero`` with no ``args['argv']`` raises at construction time."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {},
+                "policy": "block",
+                "cadence": "every-wave",
+            }
+        )
+    message = str(exc_info.value)
+    assert "G1" in message
+    assert "missing required args['argv']" in message
+
+
+def test_gate_spec_non_argv_kind_skips_argv_check() -> None:
+    """Non-argv-bearing kinds (e.g. ``schema_validate``) skip the argv check.
+
+    The validator is opt-in by ``kind`` — kinds outside
+    :data:`eawf.kernel.spec.promotion.ARGV_BEARING_GATE_KINDS` are
+    unaffected so a ``schema_validate`` gate can use whatever
+    ``args`` shape its per-kind validator (W08) defines.
+    """
+    gate = _gate(kind="regex_match", args={"pattern": r"^OK$", "input": "OK"})
+    assert gate.kind == "regex_match"
+    assert "argv" not in gate.args
+
+
+def test_gate_spec_rejects_shell_metachars_in_argv() -> None:
+    """Shell metacharacters inside ``argv`` elements raise at construction time."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G2",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {"argv": ["pytest", "tests/*"]},
+                "policy": "block",
+                "cadence": "every-wave",
+            }
+        )
+    message = str(exc_info.value)
+    assert "G2" in message
+    assert "rejected by L0 policy" in message

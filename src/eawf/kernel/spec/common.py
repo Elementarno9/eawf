@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.models import IdStr
 
@@ -200,8 +200,17 @@ class GateSpec(_StrictModel):
     The ``kind`` field names the check family
     (``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)
     and ``args`` carries the per-kind arguments. The spec layer does
-    not validate the ``args`` shape; the gate-runner subsystem
-    (introduced by W08) registers a per-kind validator that does.
+    not validate the full ``args`` shape — that is the gate-runner
+    subsystem's responsibility (W08 lands per-kind args validators).
+    The one exception is the ``argv`` vector on argv-bearing kinds
+    (``command_exit_zero`` today): an
+    ``@model_validator`` routes ``args["argv"]`` through the L0
+    argv-policy at construction time so a malformed or shell-deny
+    argv cannot reach the spec layer regardless of which builder
+    constructed the row. The same policy fires again at spec-promote
+    persistence via
+    :func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense
+    in depth across the parse-time and persistence-time seams.
 
     ``timeout_s`` is ``None`` by default so a kind that has a class
     default (e.g. command_exit_zero defaults to 30s) does not need an
@@ -216,3 +225,44 @@ class GateSpec(_StrictModel):
     cadence: GateCadence
     required: bool = True
     timeout_s: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _argv_passes_l0_policy(self) -> GateSpec:
+        """Validate ``args['argv']`` through the L0 argv-policy on argv-bearing kinds.
+
+        Defense-in-depth companion to
+        :func:`eawf.kernel.spec.promotion.validate_argv_gates`: catches
+        a bad argv at construction time so it never reaches the
+        promote-time check. Skips silently when ``kind`` is not in
+        :data:`eawf.kernel.spec.promotion.ARGV_BEARING_GATE_KINDS` so
+        non-argv gates (``regex_match``, ``schema_validate``, ...) are
+        unaffected.
+
+        Raises:
+            ValueError: When ``kind`` requires an ``argv`` vector and
+                ``args['argv']`` is missing, mis-shaped, or rejected by
+                the L0 policy. Pydantic wraps this into
+                :class:`pydantic.ValidationError` at the ``model_validate``
+                boundary.
+        """
+        # Local import keeps the module-level layer thin and avoids a
+        # circular import (``promotion`` itself imports :class:`GateSpec`).
+        from eawf.kernel.spec.promotion import (
+            ARGV_BEARING_GATE_KINDS,
+            DEFAULT_GATE_ARGV_ALLOWLIST,
+        )
+        from eawf.runtime.sandbox.argv_policy import (
+            ArgvPolicyError,
+            validate_gate_argv,
+        )
+
+        if self.kind not in ARGV_BEARING_GATE_KINDS:
+            return self
+        argv = self.args.get("argv")
+        if argv is None:
+            raise ValueError(f"gate {self.id!r} kind={self.kind!r} missing required args['argv']")
+        try:
+            validate_gate_argv(argv, allowlist=list(DEFAULT_GATE_ARGV_ALLOWLIST))
+        except ArgvPolicyError as exc:
+            raise ValueError(f"gate {self.id!r} argv rejected by L0 policy: {exc}") from exc
+        return self
