@@ -1857,9 +1857,7 @@
     ],
     "active_wave_ids": [
       "P28-I01-W01",
-      "P28-I01-W02",
-      "P28-I01-W05",
-      "P28-I01-W12"
+      "P28-I01-W05"
     ],
     "iter_id": "P28-I01",
     "phase_id": "P28",
@@ -5441,7 +5439,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T18:49:10.150400Z",
+  "updated_at": "2026-05-26T19:23:13.489613Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19014,7 +19012,7 @@
         "P28-I03-W01"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T19:23:12.339149Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -19028,10 +19026,10 @@
       "id": "P28-I01-W02",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:10.217578Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "--description flows phase/iter/wave",
         "round-trips through daemon"
@@ -19392,7 +19390,7 @@
         "P28-I03-W09"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T19:23:03.808318Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -19407,10 +19405,10 @@
       "id": "P28-I01-W12",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:14.937165Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "render_role_contract feeds SubagentSpec",
         "per-role prompt no longer hardcoded executor"
@@ -23455,10 +23453,10 @@
       "branch": "feature/eawf-v0.4-p28-w02",
       "created_at": "2026-05-26T18:49:08.376859Z",
       "id": "WT-P28-I01-W02-1779821348",
-      "merged_commit": null,
+      "merged_commit": "05238ec",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w02",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W02"
     },
     "WT-P28-I01-W05-1779821349": {
@@ -23477,10 +23475,10 @@
       "branch": "feature/eawf-v0.4-p28-w12",
       "created_at": "2026-05-26T18:49:10.150400Z",
       "id": "WT-P28-I01-W12-1779821350",
-      "merged_commit": null,
+      "merged_commit": "64a0042",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w12",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W12"
     }
   }
