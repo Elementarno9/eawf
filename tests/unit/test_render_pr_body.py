@@ -288,7 +288,6 @@ def test_build_pr_body_renders_docs_research_citation_source_rows() -> None:
                     Citation(
                         n=1,
                         ref="docs/architecture/workflow.md",
-                        kind="repo",
                         title="Workflow docs",
                     )
                 ],
@@ -345,7 +344,7 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
             confidence=Confidence.HIGH,
             summary="executor summary",
             evidence_refs=[
-                AgentReportEvidenceRef(kind="repo", ref="src/eawf/surfaces/render/pr_body.py")
+                AgentReportEvidenceRef(kind="artifact", ref="src/eawf/surfaces/render/pr_body.py")
             ],
             wave_id="P00-I01-W01",
             files_changed=["src/eawf/surfaces/render/pr_body.py"],
@@ -366,12 +365,12 @@ def test_collect_pr_report_inputs_iter_reads_executor_and_reviewer_reports(
             confidence=Confidence.HIGH,
             summary="reviewer summary",
             evidence_refs=[
-                AgentReportEvidenceRef(kind="repo", ref="tests/unit/test_render_pr_body.py")
+                AgentReportEvidenceRef(kind="artifact", ref="tests/unit/test_render_pr_body.py")
             ],
             target_id="HEAD",
             findings=[],
             coverage_refs=[
-                AgentReportEvidenceRef(kind="repo", ref="src/eawf/surfaces/render/pr_body.py:1")
+                AgentReportEvidenceRef(kind="artifact", ref="src/eawf/surfaces/render/pr_body.py:1")
             ],
         ),
         scope_id="P00-I01",
@@ -401,7 +400,7 @@ def test_collect_pr_report_inputs_docs_research_reads_researcher_report(tmp_path
             confidence=Confidence.HIGH,
             summary="research summary",
             evidence_refs=[
-                AgentReportEvidenceRef(kind="repo", ref="docs/architecture/agent-reports.md")
+                AgentReportEvidenceRef(kind="artifact", ref="docs/architecture/agent-reports.md")
             ],
             question="What changed?",
             findings=["typed reports"],

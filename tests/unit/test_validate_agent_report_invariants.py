@@ -190,7 +190,7 @@ def _executor_body(commit_sha: str | None = "abcdef1") -> ExecutorReportBody:
 
 def _reviewer_body(*, coverage: bool = True) -> ReviewerReportBody:
     coverage_refs = (
-        [AgentReportEvidenceRef(kind="repo", ref="src/eawf/validate/invariants.py:1")]
+        [AgentReportEvidenceRef(kind="artifact", ref="src/eawf/validate/invariants.py:1")]
         if coverage
         else []
     )

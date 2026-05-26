@@ -51,7 +51,7 @@ def _body() -> ExecutorReportBody:
         summary="implemented shared primitives",
         evidence_refs=[
             AgentReportEvidenceRef(
-                kind="repo",
+                kind="artifact",
                 ref="src/eawf/store/kinds/agent_report.py:1",
                 note="payload models",
             )
@@ -164,7 +164,9 @@ def test_all_role_bodies_validate_through_payload() -> None:
                 CriterionVerdict(
                     criterion="strict models exist",
                     passed=True,
-                    evidence_refs=[AgentReportEvidenceRef(kind="repo", ref="tests/unit/x.py:1")],
+                    evidence_refs=[
+                        AgentReportEvidenceRef(kind="artifact", ref="tests/unit/x.py:1")
+                    ],
                 )
             ],
         ),
@@ -178,7 +180,7 @@ def test_all_role_bodies_validate_through_payload() -> None:
                 ReviewFinding(
                     severity="must-fix",
                     message="missing test",
-                    evidence_refs=[AgentReportEvidenceRef(kind="commit", ref="abcdef0")],
+                    evidence_refs=[AgentReportEvidenceRef(kind="artifact", ref="abcdef0")],
                 )
             ],
         ),

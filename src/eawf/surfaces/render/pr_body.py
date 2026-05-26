@@ -33,7 +33,7 @@ from eawf.kernel.store.kinds.agent_report import (
     ResearcherReportBody,
     ReviewerReportBody,
 )
-from eawf.platform.artifacts.references import Citation
+from eawf.platform.artifacts.references import Citation, CitationKind
 from eawf.platform.artifacts.validation import validate_text_surface
 from eawf.platform.profiles.models import ComposedProfile
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
@@ -245,17 +245,26 @@ def _report_scope_matches(row: AgentReportRow, scope_id: str) -> bool:
     )
 
 
+_EVIDENCE_KIND_TO_CITATION_KIND: dict[str, CitationKind] = {
+    "artifact": "repo",
+    "audit": "urn",
+    "decision": "urn",
+    "store_record": "urn",
+    "external_url": "url",
+}
+
+
 def _citations_for_evidence_refs(refs: list[AgentReportEvidenceRef]) -> list[Citation]:
     citations: list[Citation] = []
     for item in refs:
-        if item.kind == "commit":
+        citation_kind = _EVIDENCE_KIND_TO_CITATION_KIND.get(item.kind)
+        if citation_kind is None:
             continue
-        kind: Literal["repo", "url", "urn"] = item.kind
         citations.append(
             Citation(
                 n=len(citations) + 1,
                 ref=item.ref,
-                kind=kind,
+                kind=citation_kind,
                 title=item.note,
             )
         )
