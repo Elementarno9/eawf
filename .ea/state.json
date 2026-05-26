@@ -1867,11 +1867,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I01-W03",
-      "P28-I01-W04",
-      "P28-I01-W14"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I01",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5492,7 +5488,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T19:27:16.656913Z",
+  "updated_at": "2026-05-26T19:58:42.742780Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19100,7 +19096,7 @@
         "P28-I01-W08"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T19:58:37.014506Z",
       "commit": null,
       "deps": [
         "P28-I01-W01"
@@ -19117,10 +19113,10 @@
       "id": "P28-I01-W03",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:10.651210Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "models extend _StrictModel",
         "evidence_kind enum lands",
@@ -19140,7 +19136,7 @@
         "P28-I03-W13"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T19:58:39.213460Z",
       "commit": null,
       "deps": [
         "P28-I01-W01"
@@ -19160,10 +19156,10 @@
       "id": "P28-I01-W04",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:11.103337Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "StoreKind.EVIDENCE writes via daemon JSON-RPC",
         "direct JSONL writes rejected outside CI/recovery",
@@ -19509,7 +19505,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T19:58:41.324849Z",
       "commit": null,
       "deps": [
         "P28-I01-W01"
@@ -19526,10 +19522,10 @@
       "id": "P28-I01-W14",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T19:26:50.308829Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "pr_body.py kind mapping uses unified vocab",
         "mypy clean on pr_body.py",
@@ -23554,10 +23550,10 @@
       "branch": "feature/eawf-v0.4-p28-w03",
       "created_at": "2026-05-26T19:27:14.689895Z",
       "id": "WT-P28-I01-W03-1779823634",
-      "merged_commit": null,
+      "merged_commit": "56be584",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w03",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W03"
     },
     "WT-P28-I01-W04-1779823635": {
@@ -23565,10 +23561,10 @@
       "branch": "feature/eawf-v0.4-p28-w04",
       "created_at": "2026-05-26T19:27:15.615396Z",
       "id": "WT-P28-I01-W04-1779823635",
-      "merged_commit": null,
+      "merged_commit": "a74e4f2",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w04",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W04"
     },
     "WT-P28-I01-W05-1779821349": {
@@ -23598,10 +23594,10 @@
       "branch": "feature/eawf-v0.4-p28-w14",
       "created_at": "2026-05-26T19:27:16.656913Z",
       "id": "WT-P28-I01-W14-1779823636",
-      "merged_commit": null,
+      "merged_commit": "a45c560",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w14",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W14"
     }
   }
