@@ -29,7 +29,7 @@ The check kinds frozen for v0.3:
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
-caller (tracked in backlog item B044).
+caller (tracked in backlog item B074).
 """
 
 from __future__ import annotations

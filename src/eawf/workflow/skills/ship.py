@@ -39,6 +39,8 @@ from eawf.kernel.state.enums import AuditKind, AuditVerdict
 from eawf.kernel.state.ids import is_phase_id, parents_of
 from eawf.kernel.state.models import Audit, State
 from eawf.platform.artifacts.validation import validate_markdown_artifact, validate_text_surface
+from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
+from eawf.runtime.sandbox.cwd_guard import CwdGuardError, assert_cwd_inside
 from eawf.runtime.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills.bodies.ship import (
@@ -86,6 +88,26 @@ _DEFAULT_GATE_COMMANDS: dict[str, str] = {
     "typecheck": "uv run mypy .",
     "tests": "uv run pytest",
 }
+
+#: Argv heads the ship gauntlet is permitted to invoke through the L0
+#: argv-policy validator. Covers (a) the outer ``uv`` / ``uvx`` wrappers
+#: used by the default gates, (b) the ``run`` sub-verb consumed by
+#: depth-1 wrapper recursion, (c) the inner tools the canonical default
+#: gates dispatch (``pre-commit``, ``ruff``, ``mypy``, ``pytest``), and
+#: (d) read-only ``git`` (the policy module then narrows it via the
+#: git sub-allowlist). Operator-supplied ``acceptance.commands.*``
+#: overrides must dispatch a head in this set; new heads are an explicit
+#: policy decision, not a casual config knob.
+_GAUNTLET_ARGV_ALLOWLIST: tuple[str, ...] = (
+    "uv",
+    "uvx",
+    "run",
+    "pre-commit",
+    "ruff",
+    "mypy",
+    "pytest",
+    "git",
+)
 
 
 class _AcceptanceCommands(BaseModel):
@@ -349,7 +371,9 @@ def _resolve_gate_command(gate: str, acceptance: AcceptanceConfig) -> str | None
     return _DEFAULT_GATE_COMMANDS.get(gate)
 
 
-def _run_gate_command(name: str, command: str, cwd: Path) -> _GateResult:
+def _run_gate_command(
+    name: str, command: str, cwd: Path, *, repo_root: Path | None = None
+) -> _GateResult:
     """Run one gauntlet *command* as a subprocess and capture its outcome.
 
     The single subprocess seam for the gauntlet; tests monkeypatch this to
@@ -359,16 +383,42 @@ def _run_gate_command(name: str, command: str, cwd: Path) -> _GateResult:
     binary or timeout collapses to a failed gate rather than raising, so one
     misconfigured gate cannot crash the whole ship.
 
+    Before any subprocess spawn the argv runs through
+    :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv` and *cwd*
+    runs through
+    :func:`eawf.runtime.sandbox.cwd_guard.assert_cwd_inside`. A policy
+    violation collapses to the same failed :class:`_GateResult` as a
+    missing binary so one mis-configured gate cannot crash the whole ship
+    and the operator's triage surface stays uniform.
+
     Args:
         name: The gate name (for the result + logs).
         command: The shell command line to execute.
-        cwd: Working directory for the subprocess (the repo root).
+        cwd: Working directory for the subprocess.
+        repo_root: The repo root *cwd* must sit inside; defaults to
+            *cwd* so today's single-caller (``_run_gauntlet``) is a
+            no-op pass-through. A future caller that runs gates in a
+            sub-directory passes the resolved repo root so the cwd
+            guard can refuse an escape.
 
     Returns:
         The :class:`_GateResult` for this gate; ``passed`` is true only when
         the process exits zero.
     """
     argv = shlex.split(command)
+    guard_root = repo_root if repo_root is not None else cwd
+    try:
+        validate_gate_argv(argv, allowlist=list(_GAUNTLET_ARGV_ALLOWLIST))
+        assert_cwd_inside(cwd, root=guard_root)
+    except (ArgvPolicyError, CwdGuardError) as exc:
+        logger.warning(f"_run_gate_command gate={name!r} command={command!r} reason=policy-reject")
+        return _GateResult(
+            name=name,
+            command=command,
+            passed=False,
+            returncode=None,
+            output=f"argv/cwd policy rejected gate command: {exc}",
+        )
     try:
         proc = subprocess.run(
             argv,
@@ -466,6 +516,11 @@ def _run_gauntlet(acceptance: AcceptanceConfig, cwd: Path) -> list[_GateResult]:
         command = _resolve_gate_command(gate, acceptance)
         if command is None:
             continue
+        # repo_root defaults to cwd so the single in-tree call site stays
+        # signature-compatible with the stubbed runners in
+        # ``tests/unit/test_skill_ship.py`` (3-positional ``(name,
+        # command, cwd)``). New callers may pass ``repo_root`` explicitly
+        # when the gate runs in a sub-directory of the repo root.
         results.append(_run_gate_command(gate, command, cwd))
     return results
 

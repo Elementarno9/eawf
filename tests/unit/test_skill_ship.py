@@ -667,10 +667,23 @@ def test_run_gauntlet_defaults_lead_then_build(
     assert calls == ["lint", "tests", "build"]
 
 
-def test_run_gate_command_missing_binary_is_red(tmp_path: Path) -> None:
-    """A non-existent binary collapses to a failed gate, not an exception."""
+def test_run_gate_command_missing_binary_is_red(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-existent binary collapses to a failed gate, not an exception.
+
+    The P28-I01-W05 argv-policy wrap rejects un-allowlisted heads before
+    they can reach :func:`subprocess.run`; this test stubs the validator
+    to a pass so the FileNotFoundError branch under test still runs.
+    """
+    from eawf.workflow.skills import ship as ship_module
     from eawf.workflow.skills.ship import _run_gate_command
 
+    monkeypatch.setattr(
+        ship_module,
+        "validate_gate_argv",
+        lambda argv, *, allowlist: argv,
+    )
     result = _run_gate_command("tests", "this-binary-does-not-exist-eawf --x", tmp_path)
     assert result.passed is False
     assert result.returncode is None
@@ -678,13 +691,23 @@ def test_run_gate_command_missing_binary_is_red(tmp_path: Path) -> None:
 
 
 def test_run_gate_command_nonzero_exit_is_red(tmp_path: Path) -> None:
-    """A real subprocess exiting non-zero is reported as a red gate."""
+    """A real subprocess exiting non-zero is reported as a red gate.
+
+    Uses ``uv run pytest --collect-only -q -p no:cacheprovider`` against
+    an empty tmp_path so pytest itself exits non-zero (no tests found is
+    exit 5). ``pytest`` is in the L0 gauntlet allowlist and the argv
+    carries no shell metacharacters.
+    """
     from eawf.workflow.skills.ship import _run_gate_command
 
-    # ``python -c 'raise SystemExit(3)'`` is a portable non-zero exit.
-    result = _run_gate_command("tests", 'uv run python -c "raise SystemExit(3)"', tmp_path)
+    result = _run_gate_command(
+        "tests",
+        "uv run pytest --collect-only -q -p no:cacheprovider",
+        tmp_path,
+    )
     assert result.passed is False
-    assert result.returncode == 3
+    # exit 5 == pytest's "no tests collected"; any non-zero is acceptable.
+    assert result.returncode is not None and result.returncode != 0
 
 
 def test_run_gate_command_zero_exit_is_green(tmp_path: Path) -> None:

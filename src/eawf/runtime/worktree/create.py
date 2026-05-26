@@ -23,6 +23,7 @@ import eawf.runtime.worktree.git as git
 from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
 from eawf.kernel.state.ids import is_wave_id
 from eawf.kernel.state.models import State, Wave, WorktreeRecord
+from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
@@ -71,17 +72,20 @@ def _default_path(repo_root: Path, wave_id: str) -> Path:
 def _validate_path_inside_repo(repo_root: Path, target: Path) -> None:
     """Refuse if *target* resolves outside *repo_root* (path-traversal guard).
 
-    Explicit absolute paths and ``..`` segments are honoured by
-    :func:`pathlib.Path.resolve` then compared via
-    :func:`pathlib.PurePath.is_relative_to`.
+    Thin adapter over :func:`eawf.runtime.sandbox.cwd_guard.is_path_inside`
+    that maps the boolean predicate onto the worktree CLI's
+    :class:`~eawf.surfaces.cli.errors.UserError` contract (``kind=
+    "InvalidInput"``). The shared predicate handles ``..`` segments,
+    absolute paths, and symlink resolution.
     """
+    if is_path_inside(target, root=repo_root):
+        return
     target_resolved = target.resolve(strict=False)
     repo_resolved = repo_root.resolve(strict=False)
-    if not target_resolved.is_relative_to(repo_resolved):
-        raise cli_errors.UserError(
-            f"worktree path {target_resolved} resolves outside repo root {repo_resolved}",
-            kind="InvalidInput",
-        )
+    raise cli_errors.UserError(
+        f"worktree path {target_resolved} resolves outside repo root {repo_resolved}",
+        kind="InvalidInput",
+    )
 
 
 def _make_id(wave_id: str, *, now: datetime) -> str:

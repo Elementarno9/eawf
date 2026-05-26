@@ -11,8 +11,9 @@ Sandbox-policy boundary
 The DSL runner does NOT enforce the sandbox/permission policy table
 in v0.2 — callers (the ``audit run`` command, CI driver, etc.) are
 responsible for invoking ``eawf wave policy show`` and refusing
-disallowed argv. Tracked as backlog item B044 for v0.3 hardening.
-See ``docs/architecture/audit-checks.md`` for the full boundary
+disallowed argv. Tracked as backlog item B074 for v0.4 hardening
+via :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv`. See
+``docs/architecture/audit-checks.md`` for the full boundary
 discussion.
 """
 
@@ -143,7 +144,7 @@ def _check_command_exit_zero(spec: CheckSpec, cwd: Path) -> CheckResult:
             f"check {spec.name!r} kind=command_exit_zero: arg 'argv' must be a non-empty list[str]"
         )
     # Sandbox-policy enforcement is the caller's responsibility in v0.2;
-    # see docs/architecture/audit-checks.md (B044 follow-up).
+    # see docs/architecture/audit-checks.md (B074 follow-up).
     try:
         completed = subprocess.run(
             argv,

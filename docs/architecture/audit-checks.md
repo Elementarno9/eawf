@@ -11,8 +11,8 @@ pass/fail booleans on the resulting audit record. The original
 hatch but is mutually exclusive with `--checks`.
 
 Decision: D02 (yaml-declarative + check-kind registry).
-Backlog: B019 (DSL skeleton); B044 (sandbox-policy enforcement,
-v0.3).
+Backlog: B019 (DSL skeleton); B074 (sandbox-policy enforcement,
+v0.4 via `eawf.runtime.sandbox.argv_policy`).
 
 ## Grammar
 
@@ -99,7 +99,7 @@ The library entrypoint is `eawf.audit_dsl.runner.run_checks(specs,
 cwd=...)`; importing the package directly is equivalent (`from
 eawf.audit_dsl import run_checks, load_spec`).
 
-## Sandbox-policy boundary (B044)
+## Sandbox-policy boundary (B074)
 
 `command_exit_zero` shells out via `subprocess.run`. In v0.2 the DSL
 runner does **not** consult the sandbox / permission policy table
@@ -112,8 +112,10 @@ responsibility:
 
 Hardening — pulling the policy check inside the runner so a hostile
 `argv` cannot reach `subprocess.run` — is tracked as backlog item
-**B044** for v0.3. The yaml schema remains stable across that
-transition; only the runtime check changes.
+**B074** for v0.4 (delivered for the ship gauntlet by P28-I01-W05;
+the audit-DSL `command_exit_zero` adoption follows on a later wave).
+The yaml schema remains stable across that transition; only the
+runtime check changes.
 
 ## Error handling
 
