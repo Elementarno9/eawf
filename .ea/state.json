@@ -1802,6 +1802,18 @@
       "status": "open",
       "title": "Recalibrate EU buckets vs actual elapsed_eu (actual ~8x bucket)"
     },
+    "B074": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-05-26T19:25:22.209351Z",
+      "description": null,
+      "id": "B074",
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Sandbox argv-policy enforcement at gate-runner boundary (L0 v0.4)"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -1855,10 +1867,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I01-W01",
-      "P28-I01-W05"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I01",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5439,7 +5448,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T19:23:13.489613Z",
+  "updated_at": "2026-05-26T19:25:55.879560Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -18978,7 +18987,7 @@
         "P28-I02-W07"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T19:25:55.054077Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -18992,10 +19001,10 @@
       "id": "P28-I01-W01",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:09.774568Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "EvidenceRef.kind accepts decision",
         "two vocabularies reconciled"
@@ -19128,8 +19137,8 @@
         "P28-I01-W09"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-26T19:25:34.760599Z",
+      "commit": "3af86d09d501dfbdc8bd1f0b159e30a66f4ccedc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19143,10 +19152,10 @@
       "id": "P28-I01-W05",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:11.579814Z",
-      "outcome": null,
+      "outcome": "L0 sandbox tranche shipped via manual cherry-pick (state conflict on .ea state files resolved by taking parent HEAD; B074 re-minted on parent)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "validate_gate_argv rejects shell-deny",
         "git sub-allowlist",
@@ -23442,10 +23451,10 @@
       "branch": "feature/eawf-v0.4-p28-w01",
       "created_at": "2026-05-26T18:49:07.385628Z",
       "id": "WT-P28-I01-W01-1779821347",
-      "merged_commit": null,
+      "merged_commit": "8c1ee4b",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w01",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W01"
     },
     "WT-P28-I01-W02-1779821348": {
@@ -23467,7 +23476,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w05",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I01-W05"
     },
     "WT-P28-I01-W12-1779821350": {
