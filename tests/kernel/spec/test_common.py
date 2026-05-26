@@ -1,10 +1,11 @@
 """Tests for the shared spec primitives in ``eawf.kernel.spec.common``.
 
 Covers ``EvidenceRef`` and the ``EvidenceKind`` Literal added in
-P28-I01-W01 plus the agent-report reconciliation invariant: the
-:class:`eawf.kernel.store.kinds.agent_report.AgentReportEvidenceRef`
-``kind`` field is a strict subset (equal) of the spec
-:data:`eawf.kernel.spec.common.EvidenceKind` vocabulary.
+P28-I01-W01, the agent-report reconciliation invariant, and the
+P28-I01-W03 :class:`CriterionSpec` / :class:`GateSpec` strict models
+plus the ``CriterionEvidenceKind`` Literal (deterministic / jury /
+attested) the readiness compute (W06) and compile-gate (W08) will
+consume.
 """
 
 from __future__ import annotations
@@ -14,7 +15,13 @@ from typing import Literal, get_args
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.spec.common import EvidenceKind, EvidenceRef
+from eawf.kernel.spec.common import (
+    CriterionEvidenceKind,
+    CriterionSpec,
+    EvidenceKind,
+    EvidenceRef,
+    GateSpec,
+)
 from eawf.kernel.store.kinds.agent_report import AgentReportEvidenceRef
 
 
@@ -119,3 +126,363 @@ def test_evidence_kind_is_a_literal_type() -> None:
     # Cross-check: a Literal of the same shape is structurally equivalent.
     expected = Literal["audit", "artifact", "decision", "store_record", "external_url"]
     assert set(get_args(expected)) == set(args)
+
+
+# CriterionEvidenceKind Literal -----------------------------------------
+
+
+def test_criterion_evidence_kind_has_three_members() -> None:
+    """The verification-flavor vocabulary has exactly three values."""
+    assert set(get_args(CriterionEvidenceKind)) == {
+        "deterministic",
+        "jury",
+        "attested",
+    }
+
+
+def test_criterion_evidence_kind_distinct_from_evidence_kind() -> None:
+    """The verification flavor is a different vocabulary than the reference kind."""
+    assert set(get_args(CriterionEvidenceKind)).isdisjoint(set(get_args(EvidenceKind)))
+
+
+# CriterionSpec — happy path --------------------------------------------
+
+
+def _criterion(**overrides: object) -> CriterionSpec:
+    """Return a CriterionSpec with the given overrides on minimal-valid defaults."""
+    payload: dict[str, object] = {
+        "id": "C1",
+        "text": "the ship CI must exit zero on the phase PR",
+        "kind": "ci_exit_zero",
+        "acceptance_style": "binary",
+        "evidence_kind": "deterministic",
+        "gate_ids": ["G1"],
+    }
+    payload.update(overrides)
+    return CriterionSpec.model_validate(payload)
+
+
+def test_criterion_spec_happy_path_round_trip() -> None:
+    """Minimal valid CriterionSpec serialises and deserialises through JSON."""
+    crit = _criterion()
+    payload = crit.model_dump_json()
+    reloaded = CriterionSpec.model_validate_json(payload)
+    assert reloaded == crit
+    assert reloaded.required is True
+    assert reloaded.waiver_reason is None
+
+
+# CriterionSpec — boundary cases ----------------------------------------
+
+
+@pytest.mark.parametrize("style", ["binary", "graded"])
+def test_criterion_spec_each_acceptance_style(style: str) -> None:
+    """Every member of CriterionAcceptanceStyle round-trips."""
+    crit = _criterion(acceptance_style=style)
+    assert crit.acceptance_style == style
+
+
+@pytest.mark.parametrize("flavor", ["deterministic", "jury", "attested"])
+def test_criterion_spec_each_evidence_kind(flavor: str) -> None:
+    """Every CriterionEvidenceKind value validates on CriterionSpec."""
+    crit = _criterion(evidence_kind=flavor)
+    assert crit.evidence_kind == flavor
+
+
+def test_criterion_spec_empty_gate_ids_allowed() -> None:
+    """A criterion with no gates is valid (gate_ids defaults to empty list)."""
+    crit = _criterion(gate_ids=[])
+    assert crit.gate_ids == []
+
+
+def test_criterion_spec_single_gate_id() -> None:
+    """One gate id is valid (boundary: single-element list)."""
+    crit = _criterion(gate_ids=["G42"])
+    assert crit.gate_ids == ["G42"]
+
+
+def test_criterion_spec_max_length_text_accepted() -> None:
+    """Text at exactly 500 chars (the max) validates."""
+    crit = _criterion(text="x" * 500)
+    assert len(crit.text) == 500
+
+
+def test_criterion_spec_waiver_reason_set() -> None:
+    """A waiver_reason string is accepted (set only via W11 waiver flow)."""
+    crit = _criterion(waiver_reason="superseded by C2 in P28-I01-W11")
+    assert crit.waiver_reason == "superseded by C2 in P28-I01-W11"
+
+
+# CriterionSpec — error cases -------------------------------------------
+
+
+def test_criterion_spec_rejects_unknown_field() -> None:
+    """extra='forbid' rejects keys that are not declared on the model (rule 2)."""
+    with pytest.raises(ValidationError) as exc_info:
+        CriterionSpec.model_validate(
+            {
+                "id": "C1",
+                "text": "x" * 20,
+                "kind": "k",
+                "acceptance_style": "binary",
+                "evidence_kind": "deterministic",
+                "gate_ids": [],
+                "bogus_field": True,
+            }
+        )
+    assert "bogus_field" in str(exc_info.value)
+
+
+def test_criterion_spec_rejects_invalid_acceptance_style() -> None:
+    """An out-of-vocabulary acceptance_style is rejected and the value appears."""
+    with pytest.raises(ValidationError) as exc_info:
+        CriterionSpec.model_validate(
+            {
+                "id": "C1",
+                "text": "x" * 20,
+                "kind": "k",
+                "acceptance_style": "weighted",
+                "evidence_kind": "deterministic",
+                "gate_ids": [],
+            }
+        )
+    message = str(exc_info.value)
+    assert "weighted" in message
+    assert "acceptance_style" in message
+
+
+def test_criterion_spec_rejects_invalid_evidence_kind() -> None:
+    """An out-of-vocabulary evidence_kind is rejected and the value appears."""
+    with pytest.raises(ValidationError) as exc_info:
+        CriterionSpec.model_validate(
+            {
+                "id": "C1",
+                "text": "x" * 20,
+                "kind": "k",
+                "acceptance_style": "binary",
+                "evidence_kind": "hand_wave",
+                "gate_ids": [],
+            }
+        )
+    message = str(exc_info.value)
+    assert "hand_wave" in message
+    assert "evidence_kind" in message
+
+
+def test_criterion_spec_rejects_text_over_max_length() -> None:
+    """Text longer than 500 chars is rejected."""
+    with pytest.raises(ValidationError) as exc_info:
+        CriterionSpec.model_validate(
+            {
+                "id": "C1",
+                "text": "x" * 501,
+                "kind": "k",
+                "acceptance_style": "binary",
+                "evidence_kind": "deterministic",
+                "gate_ids": [],
+            }
+        )
+    assert "text" in str(exc_info.value)
+
+
+def test_criterion_spec_rejects_empty_text() -> None:
+    """Empty text fails the min_length=1 bound."""
+    with pytest.raises(ValidationError) as exc_info:
+        CriterionSpec.model_validate(
+            {
+                "id": "C1",
+                "text": "",
+                "kind": "k",
+                "acceptance_style": "binary",
+                "evidence_kind": "deterministic",
+                "gate_ids": [],
+            }
+        )
+    assert "text" in str(exc_info.value)
+
+
+def test_criterion_spec_rejects_missing_required_field() -> None:
+    """A missing required field raises ValidationError naming the field."""
+    with pytest.raises(ValidationError) as exc_info:
+        CriterionSpec.model_validate(
+            {
+                "id": "C1",
+                "text": "x" * 20,
+                "kind": "k",
+                # missing acceptance_style
+                "evidence_kind": "deterministic",
+                "gate_ids": [],
+            }
+        )
+    assert "acceptance_style" in str(exc_info.value)
+
+
+# GateSpec — happy path -------------------------------------------------
+
+
+def _gate(**overrides: object) -> GateSpec:
+    """Return a GateSpec with the given overrides on minimal-valid defaults."""
+    payload: dict[str, object] = {
+        "id": "G1",
+        "criterion_id": "C1",
+        "kind": "command_exit_zero",
+        "args": {"command": ["uv", "run", "pytest", "-q"]},
+        "policy": "block",
+        "cadence": "every-wave",
+    }
+    payload.update(overrides)
+    return GateSpec.model_validate(payload)
+
+
+def test_gate_spec_happy_path_round_trip() -> None:
+    """Minimal valid GateSpec serialises and deserialises through JSON."""
+    gate = _gate()
+    payload = gate.model_dump_json()
+    reloaded = GateSpec.model_validate_json(payload)
+    assert reloaded == gate
+    assert reloaded.required is True
+    assert reloaded.timeout_s is None
+
+
+# GateSpec — boundary cases ---------------------------------------------
+
+
+@pytest.mark.parametrize("policy", ["block", "warn", "advisory"])
+def test_gate_spec_each_policy(policy: str) -> None:
+    """Every member of GatePolicy round-trips."""
+    gate = _gate(policy=policy)
+    assert gate.policy == policy
+
+
+@pytest.mark.parametrize(
+    "cadence",
+    ["every-wave", "every-iter", "every-phase", "ship", "manual"],
+)
+def test_gate_spec_each_cadence(cadence: str) -> None:
+    """Every member of GateCadence round-trips."""
+    gate = _gate(cadence=cadence)
+    assert gate.cadence == cadence
+
+
+def test_gate_spec_empty_args_allowed() -> None:
+    """A gate with no args is valid (args defaults to empty dict)."""
+    gate = _gate(args={})
+    assert gate.args == {}
+
+
+def test_gate_spec_timeout_zero_allowed() -> None:
+    """timeout_s=0 is the boundary value the ge=0 bound permits."""
+    gate = _gate(timeout_s=0)
+    assert gate.timeout_s == 0
+
+
+def test_gate_spec_timeout_set_explicit() -> None:
+    """An explicit timeout_s overrides the inherit-default None."""
+    gate = _gate(timeout_s=120)
+    assert gate.timeout_s == 120
+
+
+# GateSpec — error cases ------------------------------------------------
+
+
+def test_gate_spec_rejects_unknown_field() -> None:
+    """extra='forbid' rejects keys that are not declared on the model (rule 2)."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {},
+                "policy": "block",
+                "cadence": "every-wave",
+                "extra_knob": 42,
+            }
+        )
+    assert "extra_knob" in str(exc_info.value)
+
+
+def test_gate_spec_rejects_invalid_policy() -> None:
+    """An out-of-vocabulary policy is rejected and the value appears."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {},
+                "policy": "soft-block",
+                "cadence": "every-wave",
+            }
+        )
+    message = str(exc_info.value)
+    assert "soft-block" in message
+    assert "policy" in message
+
+
+def test_gate_spec_rejects_invalid_cadence() -> None:
+    """An out-of-vocabulary cadence is rejected and the value appears."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {},
+                "policy": "block",
+                "cadence": "nightly",
+            }
+        )
+    message = str(exc_info.value)
+    assert "nightly" in message
+    assert "cadence" in message
+
+
+def test_gate_spec_rejects_negative_timeout() -> None:
+    """timeout_s < 0 fails the ge=0 bound."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {},
+                "policy": "block",
+                "cadence": "every-wave",
+                "timeout_s": -1,
+            }
+        )
+    assert "timeout_s" in str(exc_info.value)
+
+
+def test_gate_spec_rejects_missing_required_field() -> None:
+    """A missing required field raises ValidationError naming the field."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G1",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {},
+                # missing policy
+                "cadence": "every-wave",
+            }
+        )
+    assert "policy" in str(exc_info.value)
+
+
+# Wave.success_criteria stays untouched ---------------------------------
+
+
+def test_wave_success_criteria_field_remains_list_of_str() -> None:
+    """The state-model Wave.success_criteria field stays list[str] for v0.4.0.
+
+    The W03 deliverable is the TYPED shape (CriterionSpec / GateSpec) that
+    downstream waves operate on; the migration of the state-model field is
+    out of scope until a later release. This test pins the contract so a
+    drive-by edit that re-types the field fails fast.
+    """
+    from eawf.kernel.state.models import Wave
+
+    annotation = Wave.model_fields["success_criteria"].annotation
+    assert annotation == list[str]

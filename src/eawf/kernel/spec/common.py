@@ -10,9 +10,11 @@ authoritative place.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from eawf.kernel.state.models import IdStr
 
 
 class _StrictModel(BaseModel):
@@ -123,3 +125,94 @@ class EvidenceRef(_StrictModel):
     kind: EvidenceKind
     ref: str
     summary: str = Field(min_length=1, max_length=400)
+
+
+# Criterion verification flavor — how a CriterionSpec is checked.
+#
+# Distinct from :data:`EvidenceKind` (which classifies *what* a
+# reference points at). This Literal classifies *how* a criterion's
+# evidence is gathered when the readiness compute (W06) and the
+# compile-gate (W08) score it:
+#
+#   "deterministic" -> an automated check (test exit code, regex match,
+#                      schema validation) that produces a bit answer.
+#   "jury"          -> a vote of multiple agent reviewers; the
+#                      minority-veto policy lives in the gate machinery.
+#   "attested"      -> a human operator signs off; the attestation is
+#                      stored as a typed Decision row.
+CriterionEvidenceKind = Literal[
+    "deterministic",
+    "jury",
+    "attested",
+]
+
+
+# How a CriterionSpec is scored — binary (pass / fail) or graded
+# (a continuous score the gate machinery thresholds).
+CriterionAcceptanceStyle = Literal["binary", "graded"]
+
+
+# How a GateSpec failure is escalated — block (hard stop), warn
+# (advise but proceed), or advisory (record-only, never gates).
+GatePolicy = Literal["block", "warn", "advisory"]
+
+
+# When a GateSpec runs — per wave, per iter, per phase, on ship CI,
+# or only when invoked by hand.
+GateCadence = Literal[
+    "every-wave",
+    "every-iter",
+    "every-phase",
+    "ship",
+    "manual",
+]
+
+
+class CriterionSpec(_StrictModel):
+    """One success-criterion row attached to a wave / iter / phase.
+
+    The v0.4 spec layer types the criterion separately from the
+    free-form ``Wave.success_criteria: list[str]`` field on the state
+    model. The state-model field stays string-shaped for v0.4.0 so the
+    existing roadmap / planner / dispatch surfaces are not perturbed;
+    downstream waves (W06 readiness compute, W08 compile-gate, W11
+    waivers) operate on :class:`CriterionSpec` once the field migrates
+    in a later release.
+
+    The ``gate_ids`` list addresses :class:`GateSpec` rows by id; the
+    spec layer does not enforce referential integrity (the W08
+    compile-gate does that when both lists are co-resident).
+    """
+
+    id: IdStr
+    text: Annotated[str, Field(min_length=1, max_length=500)]
+    kind: str
+    acceptance_style: CriterionAcceptanceStyle
+    evidence_kind: CriterionEvidenceKind
+    gate_ids: list[IdStr] = Field(default_factory=list)
+    required: bool = True
+    waiver_reason: str | None = None
+
+
+class GateSpec(_StrictModel):
+    """One gate row that scores a :class:`CriterionSpec` at some cadence.
+
+    The ``kind`` field names the check family
+    (``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)
+    and ``args`` carries the per-kind arguments. The spec layer does
+    not validate the ``args`` shape; the gate-runner subsystem
+    (introduced by W08) registers a per-kind validator that does.
+
+    ``timeout_s`` is ``None`` by default so a kind that has a class
+    default (e.g. command_exit_zero defaults to 30s) does not need an
+    explicit override.
+    """
+
+    id: IdStr
+    criterion_id: IdStr
+    kind: str
+    args: dict[str, Any] = Field(default_factory=dict)
+    policy: GatePolicy
+    cadence: GateCadence
+    required: bool = True
+    timeout_s: int | None = Field(default=None, ge=0)
