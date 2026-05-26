@@ -1,25 +1,40 @@
-"""Derived close-readiness view for v0.4 verify spine (W06).
+"""Derived close-readiness view for v0.4 verify spine (W06 + W08).
 
 The :func:`compute` function returns a :class:`CloseReadiness` projection
 of three inputs:
 
 * typed :class:`~eawf.kernel.spec.common.CriterionSpec` /
   :class:`~eawf.kernel.spec.common.GateSpec` definitions attached to
-  the scope (none today; W03 landed the models, later waves migrate
-  callers — :func:`_load_criterion_specs` /
-  :func:`_load_gate_specs` give tests + future call sites a clean
-  injection point);
+  the scope, loaded via :func:`_load_criterion_specs` /
+  :func:`_load_gate_specs`. These loaders return ``[]`` in v0.4.0
+  because the on-disk spec persistence (per-phase cache +
+  ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md`` body) cannot yet
+  round-trip typed criterion / gate rows; tests monkeypatch the
+  loaders to inject synthetic specs;
 * the legacy :attr:`~eawf.kernel.state.models.Wave.success_criteria`
   string list (still load-bearing in v0.4.0);
 * :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows in
   ``<store_dir>/evidence.jsonl`` whose ``scope_id`` matches the wave's
   derived SHA (see :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`).
 
-``compute`` is **pure read-only**: it does not mutate *state*, and the
-function is idempotent on its inputs (calling it twice on the same
-tuple returns equal results). The three wave-close seams attach it as
-an **advisory** call — warnings flow but no close path blocks. W19
-(later wave) flips that behaviour behind ``profile.verify.enforce``.
+W08 layers the **deterministic floor** on top of W06: criteria whose
+``evidence_kind == "deterministic"`` have their gates compiled via
+:func:`eawf.workflow.verify.compile.compile_gate` and executed live via
+:func:`eawf.workflow.audit_dsl.runner.run_checks`. Jury / attested
+criteria stay on the W06 evidence-row path until v0.4.1 lands the
+jury + attestation subsystems. Waivers (W11) pre-empt the live run
+across both flavours so operator overrides survive the floor.
+
+``compute`` is read-only at the state-mutation boundary: it does not
+mutate *state* nor write any file. The W08 deterministic floor DOES
+invoke subprocesses for live gate execution; those subprocesses are
+scored as gate results, not persisted. The function is idempotent on
+its inputs (calling it twice on the same tuple returns equal results
+for the evidence path; the deterministic floor's idempotency depends
+on the gate's own idempotency, e.g. ``git status``). The three
+wave-close seams attach :func:`compute` as an **advisory** call —
+warnings flow but no close path blocks. W19 (later wave) flips that
+behaviour behind ``profile.verify.enforce``.
 """
 
 from __future__ import annotations
@@ -34,7 +49,9 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
+from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
+from eawf.workflow.verify.compile import compile_gate
 from eawf.workflow.verify.models import (
     CloseReadiness,
     CriterionView,
@@ -47,12 +64,22 @@ logger = logging.getLogger(__name__)
 def _load_criterion_specs(scope_id: str, state: State) -> list[CriterionSpec]:
     """Return typed CriterionSpec rows attached to *scope_id*.
 
-    Today this returns ``[]`` for every scope because no v0.4.0 state
-    field carries typed specs yet (W03 landed the model; W08 + W11
-    introduce the storage + attachment). The helper exists so tests
-    can monkeypatch it to feed synthetic specs into :func:`compute`
-    and so the migration that wires real storage is one-import-site
-    later.
+    v0.4.0 returns ``[]`` for every scope because the on-disk source
+    of truth — the per-phase spec cache at
+    ``<runtime_dir>/spec-cache/<phase_id>.json`` (mirrors
+    :class:`eawf.kernel.spec.cache.SpecCachePhase`) plus the markdown
+    spec body at ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md`` — does
+    not yet carry parseable typed CriterionSpec rows. The body parser
+    that yields typed rows lands in a later wave; see
+    :func:`eawf.runtime.daemon.methods.spec._extract_gate_specs` for the
+    symmetric gate-side stub already in place behind the daemon
+    ``spec.promote`` handler.
+
+    The helper stays a separate function (rather than inlined into
+    :func:`compute`) so tests can monkeypatch it to feed synthetic
+    specs into the deterministic-floor integration (W08) and the
+    waiver-aware rollup (W11) without having to round-trip through
+    the spec-cache writer.
 
     Args:
         scope_id: Wave / iter / phase URN. Reserved for the future
@@ -61,9 +88,10 @@ def _load_criterion_specs(scope_id: str, state: State) -> list[CriterionSpec]:
         state: Validated state model. Reserved likewise.
 
     Returns:
-        Empty list in v0.4.0. Future waves attach real specs here.
+        Empty list in v0.4.0. Future waves attach real specs here
+        without changing the call signature on :func:`compute`.
     """
-    del scope_id, state  # unused until W08+W11 migrate the storage
+    del scope_id, state  # unused until the body parser ships
     return []
 
 
@@ -71,17 +99,24 @@ def _load_gate_specs(scope_id: str, state: State) -> list[GateSpec]:
     """Return typed GateSpec rows attached to *scope_id*.
 
     Symmetric to :func:`_load_criterion_specs` — returns ``[]`` today
-    because no state field carries gates yet. Tests monkeypatch this
-    helper to exercise the spec branch of :func:`compute`.
+    because the spec-cache + spec-body persistence (authority-map row
+    10) cannot yet round-trip typed gate rows; the markdown body
+    parser arrives in a later wave. The daemon-side companion stub
+    :func:`eawf.runtime.daemon.methods.spec._extract_gate_specs` is the
+    canonical extraction site whose verdict will feed both this loader
+    and the W09 argv-policy promote check once the parser ships.
+
+    Tests monkeypatch this helper to exercise the deterministic-floor
+    integration (W08) without persisting typed gates on disk first.
 
     Args:
         scope_id: Wave / iter / phase URN. Reserved.
-        state: Validated state model. Reserved.
+        state: Validated state model. Reserved likewise.
 
     Returns:
         Empty list in v0.4.0.
     """
-    del scope_id, state  # unused until W08+W11 migrate the storage
+    del scope_id, state  # unused until the body parser ships
     return []
 
 
@@ -263,10 +298,87 @@ def _criterion_status_from_gates(
     return "pass"
 
 
+def _latest_waiver_for_gate(
+    gate: GateSpec, evidence: list[EvidenceRecord]
+) -> EvidenceRecord | None:
+    """Return the most-recent waiver row that references *gate*, or ``None``.
+
+    The caller is responsible for filtering out SHA-stale waiver rows
+    via :func:`_is_stale_waiver` BEFORE invoking this helper; only
+    fresh waivers reach the lookup so the per-gate roll-up never
+    surfaces an outdated operator override.
+
+    Args:
+        gate: Gate spec whose id we match against ``EvidenceRecord.refs``.
+        evidence: Scope-filtered evidence rows with stale waivers
+            already removed.
+
+    Returns:
+        The latest :class:`EvidenceRecord` whose ``status == "waived"``
+        AND whose ``refs`` list mentions ``gate.id``. ``None`` when
+        no such row exists.
+    """
+    waivers = [r for r in evidence if gate.id in r.refs and r.status == "waived"]
+    return waivers[-1] if waivers else None
+
+
+def _run_deterministic_gate(
+    gate: GateSpec,
+    criterion: CriterionSpec,
+    *,
+    runner_cwd: Path,
+) -> str:
+    """Compile + execute *gate* via the W15-hardened audit-DSL runner.
+
+    Delegates the shape transform to
+    :func:`eawf.workflow.verify.compile.compile_gate` and the live
+    subprocess + diff-base + scope-resolution machinery to
+    :func:`eawf.workflow.audit_dsl.runner.run_checks`. Returns the
+    rolled-up :data:`~eawf.workflow.verify.models.GateStatus` literal
+    so the caller can stamp it onto a :class:`GateResult` row
+    untouched.
+
+    The function defends against the case where
+    :func:`compile_gate` legitimately returns ``None`` for a
+    deterministic criterion (e.g. ``command_exit_zero`` gate with no
+    usable ``argv``) by mapping that to ``"blocked"`` — the readiness
+    view surfaces the gap as a non-pass criterion without raising out
+    of the read-only :func:`compute` boundary.
+
+    Args:
+        gate: Typed gate spec attached to *criterion*.
+        criterion: Parent criterion (read for ``id`` + ``evidence_kind``
+            only; the deterministic-floor caller has already verified
+            ``criterion.evidence_kind == "deterministic"``).
+        runner_cwd: Working directory for the subprocess + git
+            diff-base + scope resolution. Threaded through from
+            :func:`compute`'s ``repo_root``.
+
+    Returns:
+        One of ``"pass"`` / ``"fail"`` / ``"blocked"``.
+    """
+    compiled = compile_gate(gate, criterion=criterion)
+    if compiled is None:
+        logger.debug(
+            f"_run_deterministic_gate gate_id={gate.id!r} status=blocked reason=compile-none"
+        )
+        return "blocked"
+    results = run_checks([compiled], cwd=runner_cwd)
+    result = results[0]
+    status = result.status or ("pass" if result.passed else "fail")
+    logger.debug(
+        f"_run_deterministic_gate gate_id={gate.id!r} status={status!r} "
+        f"evidence_kind={criterion.evidence_kind!r}"
+    )
+    return status
+
+
 def _build_spec_views(
     criterion_specs: list[CriterionSpec],
     gate_specs: list[GateSpec],
     evidence: list[EvidenceRecord],
+    *,
+    runner_cwd: Path,
 ) -> tuple[list[CriterionView], list[str]]:
     """Convert typed CriterionSpec / GateSpec into :class:`CriterionView` rows.
 
@@ -274,12 +386,30 @@ def _build_spec_views(
     (collected across all criteria so :class:`CloseReadiness` can
     surface them at the top level).
 
+    Per the W08 deterministic-floor contract, scoring branches on
+    ``criterion.evidence_kind``:
+
+    * ``"deterministic"`` — the gate is executed live via
+      :func:`_run_deterministic_gate` (compile-gate +
+      W15-hardened runner). A fresh waiver row on the gate
+      pre-empts the live run and yields ``("pass", was_waived=True)``
+      so W11's waiver semantics still apply on top of the live
+      floor.
+    * ``"jury"`` / ``"attested"`` — defer to
+      :func:`_gate_status_from_evidence`; jury votes + operator
+      attestations land in v0.4.1+, so v0.4.0 reads them as
+      evidence rows recorded by external means.
+
     Args:
         criterion_specs: Typed criterion rows attached to the scope.
         gate_specs: Typed gate rows attached to the scope.
         evidence: Already scope-filtered evidence rows. The caller is
             responsible for filtering out SHA-stale waiver rows BEFORE
             invoking this helper (see :func:`_is_stale_waiver`).
+        runner_cwd: Working directory for the deterministic-floor
+            subprocess execution. Threaded from
+            :func:`compute`'s ``repo_root`` so wave-anchored diff-base
+            + scope-resolution land in the right git tree.
 
     Returns:
         ``(views, waived_gate_ids)``.
@@ -295,13 +425,31 @@ def _build_spec_views(
         gate_results: list[GateResult] = []
         per_criterion_waived: list[str] = []
         for gate in gates:
-            status, was_waived = _gate_status_from_evidence(gate, evidence)
+            if criterion.evidence_kind == "deterministic":
+                # Waiver pre-empts the live run so W11's operator
+                # override semantics survive the deterministic floor.
+                waiver = _latest_waiver_for_gate(gate, evidence)
+                if waiver is not None:
+                    status = "pass"
+                    was_waived = True
+                else:
+                    status = _run_deterministic_gate(
+                        gate,
+                        criterion,
+                        runner_cwd=runner_cwd,
+                    )
+                    was_waived = False
+            else:
+                # jury / attested -> the evidence-row path remains
+                # authoritative until v0.4.1's jury + attestation
+                # subsystems land.
+                status, was_waived = _gate_status_from_evidence(gate, evidence)
             gate_results.append(
                 GateResult(
                     gate_id=gate.id,
                     # status literal is closed; cast not needed because
-                    # _gate_status_from_evidence returns one of the four
-                    # GateStatus values by construction.
+                    # both branches return one of the four GateStatus
+                    # values by construction.
                     status=status,  # type: ignore[arg-type]
                 )
             )
@@ -365,11 +513,26 @@ def compute(
 ) -> CloseReadiness:
     """Return the close-readiness projection for *scope_id*.
 
-    Pure read-only — does not mutate *state* nor write any file. Reads
-    the typed CriterionSpec / GateSpec attachments (via
-    :func:`_load_criterion_specs` / :func:`_load_gate_specs`), the
-    legacy :attr:`~eawf.kernel.state.models.Wave.success_criteria`
-    list, and the SHA-bound EvidenceRecord rows under *store_dir*.
+    Read-only at the state-mutation boundary — does not mutate *state*
+    nor write any file. The W08 deterministic floor DOES spawn live
+    subprocesses for ``evidence_kind="deterministic"`` gates via the
+    W15-hardened gate runner; those subprocesses are scored as gate
+    results, not persisted. Reads the typed CriterionSpec / GateSpec
+    attachments (via :func:`_load_criterion_specs` /
+    :func:`_load_gate_specs`), the legacy
+    :attr:`~eawf.kernel.state.models.Wave.success_criteria` list, and
+    the SHA-bound EvidenceRecord rows under *store_dir*.
+
+    Scoring branches on ``criterion.evidence_kind``:
+
+    * ``"deterministic"`` — gates compile via
+      :func:`eawf.workflow.verify.compile.compile_gate` and run via
+      :func:`eawf.workflow.audit_dsl.runner.run_checks` with
+      *repo_root* as the cwd. Fresh waiver rows pre-empt the live
+      run so W11's operator override semantics still apply.
+    * ``"jury"`` / ``"attested"`` — evidence-row scoring (W06's
+      original path); jury votes + operator attestations land in
+      v0.4.1+.
 
     Args:
         scope_id: Wave id (today; iter / phase scopes land later).
@@ -379,6 +542,9 @@ def compute(
         repo_root: Repository root, forwarded to
             :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha` so
             the SHA-bound freshness lookup runs in the right git tree.
+            Also forwarded as the deterministic-floor subprocess cwd
+            so wave-anchored ``diff_base`` + scope resolution land in
+            the right tree.
 
     Returns:
         A :class:`CloseReadiness` view. Empty waves (no typed specs +
@@ -412,7 +578,12 @@ def compute(
     scope_evidence = _filter_evidence_for_scope(evidence_rows, scope_id=scope_id)
     fresh_evidence = [row for row in scope_evidence if not _is_stale_waiver(row, current_sha=sha)]
 
-    spec_views, waived_gate_ids = _build_spec_views(criterion_specs, gate_specs, fresh_evidence)
+    spec_views, waived_gate_ids = _build_spec_views(
+        criterion_specs,
+        gate_specs,
+        fresh_evidence,
+        runner_cwd=repo_root,
+    )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
 
     criteria: list[CriterionView] = [*spec_views, *legacy_views]

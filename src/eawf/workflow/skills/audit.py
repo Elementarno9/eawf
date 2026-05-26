@@ -225,6 +225,17 @@ def _build_criterion_specs(
     return specs
 
 
+#: Public alias for :func:`_build_criterion_specs` so W08's
+#: :func:`eawf.workflow.verify.compile.compile_gate` can reuse the same
+#: directive->CheckSpec shape without duplicating the construction. The
+#: underscored name remains the canonical call site inside this module
+#: (the docstring cross-reference in
+#: :class:`eawf.workflow.audit_dsl.models.CommandExitZeroArgs` points
+#: at it) so renaming the function itself would force an out-of-scope
+#: edit; aliasing keeps both names valid.
+build_criterion_specs = _build_criterion_specs
+
+
 def _auditor_instruction(wave_id: str, diff_base: str, criteria: list[str]) -> str:
     """Render the human-readable auditor dispatch instruction."""
     return (
@@ -431,4 +442,4 @@ class AuditSkill(Skill):
         )
 
 
-__all__ = ["AuditSkill"]
+__all__ = ["AuditSkill", "build_criterion_specs"]

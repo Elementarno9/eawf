@@ -19,6 +19,14 @@ The spec layer attaches CriterionSpec / GateSpec via the
 :func:`~eawf.workflow.verify.readiness._load_gate_specs` helpers (today
 they return ``[]`` because no state field carries typed specs yet).
 Tests monkeypatch those helpers to inject synthetic specs.
+
+The W06-era tests use ``evidence_kind="jury"`` on the criterion fixture
+because they exercise the evidence-row scoring path. W08 introduces the
+deterministic floor (``evidence_kind="deterministic"`` -> live
+compile_gate + run_checks); those integration tests live below at
+:func:`test_deterministic_floor_*` and use the
+:func:`_make_deterministic_criterion` fixture which sets the live-run
+opt-in explicitly.
 """
 
 from __future__ import annotations
@@ -113,14 +121,25 @@ def _write_evidence_row(store_dir: Path, *, record: EvidenceRecord) -> None:
 
 
 def _make_criterion(
-    cid: str, *, gate_ids: list[str] | None = None, waiver_reason: str | None = None
+    cid: str,
+    *,
+    gate_ids: list[str] | None = None,
+    waiver_reason: str | None = None,
+    evidence_kind: str = "jury",
 ) -> CriterionSpec:
+    """Build a synthetic CriterionSpec for the W06 evidence-row tests.
+
+    Defaults ``evidence_kind="jury"`` so the criterion routes through
+    the W06 evidence-row scoring path. The W08 deterministic floor is
+    tested via :func:`_make_deterministic_criterion` further down so
+    the live-run opt-in stays explicit at the call site.
+    """
     return CriterionSpec(
         id=cid,
         text=f"criterion {cid}",
         kind="behavior",
         acceptance_style="binary",
-        evidence_kind="deterministic",
+        evidence_kind=evidence_kind,  # type: ignore[arg-type]
         gate_ids=list(gate_ids or []),
         required=True,
         waiver_reason=waiver_reason,
@@ -596,3 +615,334 @@ def test_advisory_failure_returns_not_ready_without_raising(
     assert result.ready is False
     pending_view = next(v for v in result.criteria if v.id == "CRIT-pending")
     assert pending_view.status == "pending"
+
+
+# ---- W08 deterministic-floor integration ----------------------------------
+
+
+def _make_deterministic_criterion(cid: str, *, gate_ids: list[str] | None = None) -> CriterionSpec:
+    """Build a deterministic CriterionSpec — opts into the W08 live-run floor."""
+    return _make_criterion(cid, gate_ids=gate_ids, evidence_kind="deterministic")
+
+
+def _make_command_gate(
+    gid: str,
+    *,
+    criterion_id: str,
+    argv: list[str],
+) -> GateSpec:
+    """Build a ``command_exit_zero`` GateSpec with *argv*.
+
+    Argv heads must satisfy the L0 argv-policy
+    (:func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv`) per
+    W09 — practical W08 tests use ``["git", <subverb>, ...]`` where the
+    subverb is in :data:`eawf.runtime.sandbox.argv_policy.GIT_ALLOWED_SUBVERBS`
+    (read-only inspection only).
+    """
+    return GateSpec(
+        id=gid,
+        criterion_id=criterion_id,
+        kind="command_exit_zero",
+        args={"argv": list(argv)},
+        policy="block",
+        cadence="every-wave",
+        required=True,
+    )
+
+
+def _init_test_repo(repo_root: Path) -> None:
+    """Initialise *repo_root* as a minimal git repo with one commit.
+
+    The W08 deterministic floor invokes the W15-hardened runner which
+    in turn calls :func:`eawf.workflow.lifecycle.wave_sha.derive_diff_base`
+    + :func:`eawf.platform.lint._conditional.changed_files`; both expect
+    a real git tree under *repo_root*. The seed commit + ``main``
+    branch lets ``git merge-base HEAD main`` succeed so the runner
+    does not spend time chasing a fail-open fallback.
+    """
+    import subprocess
+
+    repo_root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "-C", str(repo_root), "init", "-q", "-b", "main"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "test"], check=True)
+    (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-q", "-m", "seed"], check=True)
+
+
+def test_deterministic_floor_passing_gate_yields_pass_criterion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SC #2: deterministic gate runs end-to-end + lands as pass.
+
+    Uses ``["git", "status", "--porcelain"]`` — a read-only argv
+    allowed by the L0 policy and reliably exit-zero against the
+    seeded test repo. The result must surface as
+    ``CriterionView(status="pass", gate_results=[GateResult(status="pass")])``
+    with no mocks on the runner.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    _init_test_repo(tmp_path)
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    criterion = _make_deterministic_criterion("CRIT-det-pass", gate_ids=["GATE-det-pass"])
+    gate = _make_command_gate(
+        "GATE-det-pass",
+        criterion_id="CRIT-det-pass",
+        argv=["git", "status", "--porcelain"],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    view = next(v for v in result.criteria if v.id == "CRIT-det-pass")
+    assert view.source == "spec"
+    assert view.status == "pass"
+    assert view.gate_results is not None
+    assert len(view.gate_results) == 1
+    assert view.gate_results[0].gate_id == "GATE-det-pass"
+    assert view.gate_results[0].status == "pass"
+    assert result.waived_gate_ids == []
+
+
+def test_deterministic_floor_failing_gate_yields_fail_criterion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Live failing deterministic gate -> ``CriterionView(status='fail')``.
+
+    Uses ``["git", "show", "nonexistent-ref-xyz"]`` — passes the L0
+    policy (``show`` is in
+    :data:`~eawf.runtime.sandbox.argv_policy.GIT_ALLOWED_SUBVERBS`)
+    and reliably exits non-zero (git surfaces a "bad revision" error).
+    The criterion rolls up to ``fail`` and ``ready=False``.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    _init_test_repo(tmp_path)
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    criterion = _make_deterministic_criterion("CRIT-det-fail", gate_ids=["GATE-det-fail"])
+    gate = _make_command_gate(
+        "GATE-det-fail",
+        criterion_id="CRIT-det-fail",
+        argv=["git", "show", "nonexistent-ref-xyz-w08"],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is False
+    view = next(v for v in result.criteria if v.id == "CRIT-det-fail")
+    assert view.status == "fail"
+    assert view.gate_results is not None
+    assert view.gate_results[0].status == "fail"
+
+
+def test_deterministic_floor_waiver_preempts_live_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SC #6: fresh waiver on a deterministic gate overrides the live run.
+
+    The gate's argv would fail (``git show <bad-ref>``) BUT the
+    waiver evidence row pre-empts the live invocation. The criterion
+    rolls up to ``waived`` and the gate id appears in
+    ``waived_gate_ids``. Cross-pins W11's waiver semantics on top of
+    the W08 deterministic floor.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    _init_test_repo(tmp_path)
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    criterion = _make_deterministic_criterion("CRIT-det-waived", gate_ids=["GATE-det-waived"])
+    gate = _make_command_gate(
+        "GATE-det-waived",
+        criterion_id="CRIT-det-waived",
+        # Same failing argv as the fail test — if the live run fires,
+        # the assertion below would see status="fail" instead of
+        # "pass"+waived.
+        argv=["git", "show", "would-fail-but-waived"],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+    # Pin the wave sha so the waiver passes the SHA-bound freshness
+    # filter (W11) without touching the git tree.
+    monkeypatch.setattr(
+        readiness_mod,
+        "derive_wave_sha",
+        lambda scope_id, repo_root=None: "fresh_sha_for_w08",
+    )
+
+    waiver = EvidenceRecord(
+        id=mint_evidence_id(),
+        scope_id=WAVE_ID,
+        produced_by="human",
+        evidence_kind="attested",
+        status="waived",
+        summary="operator waived the deterministic gate",
+        refs=["GATE-det-waived"],
+        metrics={"wave_sha": "fresh_sha_for_w08"},
+        created_at=datetime.now(UTC),
+    )
+    _write_evidence_row(store_dir, record=waiver)
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    view = next(v for v in result.criteria if v.id == "CRIT-det-waived")
+    assert view.status == "waived"
+    assert view.gate_results is not None
+    assert view.gate_results[0].status == "pass"
+    assert result.waived_gate_ids == ["GATE-det-waived"]
+
+
+def test_deterministic_floor_compile_none_yields_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deterministic gate whose compile_gate returns None -> ``blocked``.
+
+    Patches compile_gate to return ``None`` (the defensive branch the
+    readiness loader cannot trip via construction without bypassing
+    Pydantic). The gate result lands as ``blocked``, the criterion
+    as ``blocked``, and ``ready=False`` — pure-function pin: the
+    boundary still returns cleanly.
+    """
+    from eawf.workflow.verify import readiness as readiness_mod_inner
+
+    state = _empty_state()
+    _seed_wave(state)
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    criterion = _make_deterministic_criterion("CRIT-det-blocked", gate_ids=["GATE-det-blocked"])
+    gate = _make_command_gate(
+        "GATE-det-blocked",
+        criterion_id="CRIT-det-blocked",
+        argv=["git", "status"],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+    monkeypatch.setattr(readiness_mod_inner, "compile_gate", lambda gate_arg, *, criterion: None)
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is False
+    view = next(v for v in result.criteria if v.id == "CRIT-det-blocked")
+    assert view.status == "blocked"
+    assert view.gate_results is not None
+    assert view.gate_results[0].status == "blocked"
+
+
+def test_legacy_path_unchanged_under_w08(tmp_path: Path) -> None:
+    """SC #3: legacy ``list[str]`` waves still render the W06 warning path.
+
+    A wave with no typed specs (the v0.4.0 default for every wave)
+    yields ``CriterionView(source='legacy', status='pass')`` plus
+    one ``not gated`` warning per legacy criterion. Pins the
+    backward-compatible behaviour W08 must preserve.
+    """
+    state = _empty_state()
+    _seed_wave(state, success_criteria=["legacy w08 a", "legacy w08 b"])
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    assert all(view.source == "legacy" for view in result.criteria)
+    assert len(result.warnings) == 2
+    assert all("not gated" in w for w in result.warnings)
+
+
+def test_seams_dont_block_on_failing_deterministic_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SC #5: the 3 close seams stay non-blocking under W08's deterministic floor.
+
+    Uses :class:`typer.testing.CliRunner` to drive ``eawf wave close``
+    end-to-end with a deterministic gate whose live argv exit-codes
+    non-zero. The W06 advisory contract (the close seams attach
+    readiness as **advisory**, never blocking) must survive the W08
+    integration — ``ready=False`` from the readiness compute does
+    not raise out of ``_close_and_pin``.
+    """
+    from typer.testing import CliRunner
+
+    from eawf.surfaces.cli.app import app
+
+    _init_test_repo(tmp_path)
+    state_path = tmp_path / ".ea" / "state.json"
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    runner = CliRunner()
+    assert (
+        runner.invoke(
+            app,
+            ["project", "init", "VFY", "--title", "V", "--domains", "x"],
+        ).exit_code
+        == 0
+    )
+    assert runner.invoke(app, ["phase", "open", "--auto", "--title", "x"]).exit_code == 0
+    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "wave",
+                "plan",
+                "P01-I01",
+                "--id",
+                WAVE_ID,
+                "--title",
+                "wave",
+                "--files",
+                "src/",
+                "--success",
+                "legacy",
+            ],
+        ).exit_code
+        == 0
+    )
+    assert runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", "SES-w08"]).exit_code == 0
+
+    # Inject a deterministic criterion + failing gate at the live
+    # close seam by monkeypatching the loaders on the readiness
+    # module the seam imports.
+    criterion = _make_deterministic_criterion("CRIT-seam-fail", gate_ids=["GATE-seam-fail"])
+    gate = _make_command_gate(
+        "GATE-seam-fail",
+        criterion_id="CRIT-seam-fail",
+        argv=["git", "show", "no-such-ref-w08-seam"],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+
+    # Close path must succeed even though readiness will report
+    # ready=False because the deterministic gate fails live.
+    result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])
+    assert result.exit_code == 0, result.stdout
