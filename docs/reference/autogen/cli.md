@@ -201,6 +201,14 @@ Create or update EU estimates for a scope.
 | `set` | Create (or replace) the estimate for *scope*. |
 | `update` | Update the estimate for *scope*, replacing the current summary record. |
 
+### `eawf evidence`
+
+Attest verify-spine evidence (attest).
+
+| Verb | Summary |
+|---|---|
+| `attest` | Append a typed verify-spine evidence row. |
+
 ### `eawf flow`
 
 Operator surface for the /flow skill (run, status, abort).

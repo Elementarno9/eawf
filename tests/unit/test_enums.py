@@ -453,6 +453,8 @@ def test_store_kind_values() -> None:
         "memory",
         "decision",
         "event",
+        # P28-I01-W04 — verify-spine attestation store (daemon-owned append).
+        "evidence",
         "flow",
         "researcher_report",
         "planner_report",

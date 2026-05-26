@@ -12,6 +12,7 @@ from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
 from eawf.kernel.store.kinds.decision import DecisionPayload
 from eawf.kernel.store.kinds.estimate import EstimatePayload
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.kinds.flow import FlowPayload
 from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.kinds.memory import MemoryPayload
@@ -30,6 +31,7 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.ACTUAL: ActualPayload,
     StoreKind.FLOW: FlowPayload,
     StoreKind.EVENT: EventPayload,
+    StoreKind.EVIDENCE: EvidenceRecord,
     StoreKind.RESEARCHER_REPORT: AgentReportPayload,
     StoreKind.PLANNER_REPORT: AgentReportPayload,
     StoreKind.EXECUTOR_REPORT: AgentReportPayload,

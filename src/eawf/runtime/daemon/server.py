@@ -36,6 +36,7 @@ import eawf.runtime.daemon.methods.agent
 import eawf.runtime.daemon.methods.config  # registers config.read / set_layer_value / list_layers
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.event
+import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.state  # registers state.read / state.mutate / state.digest

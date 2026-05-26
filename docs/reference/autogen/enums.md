@@ -40,7 +40,7 @@ that module is listed with its members.
 | `ScopeKind` | `repo`, `workspace` |
 | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` |
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
-| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated` |
+| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated` |
 | `SubprojectStatus` | `active`, `planned`, `deferred`, `retired` |
 | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` |
 | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` |

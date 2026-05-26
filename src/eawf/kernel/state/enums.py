@@ -351,6 +351,7 @@ class StoreKind(StrEnum):
     MEMORY = "memory"
     DECISION = "decision"
     EVENT = "event"
+    EVIDENCE = "evidence"
     FLOW = "flow"
     RESEARCHER_REPORT = "researcher_report"
     PLANNER_REPORT = "planner_report"
