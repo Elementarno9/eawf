@@ -31,6 +31,7 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
+from eawf.kernel.store.paths import store_dir as _store_dir
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.runtime.worktree.merge_back import (
     STRATEGY_CHERRY_PICK,
@@ -38,7 +39,9 @@ from eawf.runtime.worktree.merge_back import (
     merge_back,
 )
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli.scope import resolve_state_path
 from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
+from eawf.workflow.verify import compute as compute_readiness
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +202,29 @@ def wave_land(
         # was active when we checked but raced into a terminal state
         # before close_wave ran. Surface the canonical exit code.
         raise cli_errors.ValidationError(str(exc)) from exc
+
+    # W06 advisory: compute readiness AFTER ``close_wave`` so the
+    # post-close state is what we score. Pure read-only — does not
+    # mutate ``state``. Failures (missing state.json on a
+    # non-init'd workspace; KeyError on an unknown wave) are
+    # logged + swallowed; this wave is non-blocking by design.
+    # W19 flips this to gating behind ``profile.verify.enforce``.
+    try:
+        state_path = resolve_state_path(repo_root)
+        readiness = compute_readiness(
+            wave_id,
+            state=state,
+            store_dir=_store_dir(state_path),
+            repo_root=repo_root,
+        )
+    except (FileNotFoundError, KeyError) as exc:
+        logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+    else:
+        for view in readiness.criteria:
+            if view.status != "pass":
+                logger.warning(
+                    f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
+                )
 
     cleanup_result: CleanupResult | None = None
     worktree_cleaned = False

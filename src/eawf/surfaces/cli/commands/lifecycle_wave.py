@@ -292,8 +292,12 @@ def wave_close_cmd(
     Both paths converge on the same ``state.json`` + ``event.jsonl``
     on-disk shape.
     """
+    from eawf.kernel.store.paths import store_dir as _store_dir
+    from eawf.surfaces.cli.scope import resolve_state_path
     from eawf.workflow.lifecycle.criterion_drift import check_wave_criteria_drift
     from eawf.workflow.lifecycle.transitions import close_wave
+    from eawf.workflow.verify import compute as compute_readiness
+    from eawf.workflow.verify.models import CloseReadiness
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -336,6 +340,7 @@ def wave_close_cmd(
 
     drift_warnings: list[str] = []
     close_succeeded = [False]
+    readiness_holder: list[CloseReadiness] = []
 
     def _close_and_pin(state: State) -> None:
         wave = close_wave(state, wave_id=wave_id, outcome=outcome)
@@ -344,6 +349,33 @@ def wave_close_cmd(
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
         if repo_root is not None:
             drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
+        # W06 advisory: compute readiness AFTER ``close_wave`` so the
+        # SHA-bound evidence rows reflect the post-close state. Pure
+        # read-only — does not mutate ``state``. Failures (KeyError,
+        # OSError on the evidence file) are non-blocking by design;
+        # advisory warnings flow through ``readiness.warnings`` and
+        # the rolled-up ``readiness_warnings_count`` extra. W19 flips
+        # this to gating behind ``profile.verify.enforce``.
+        state_path = resolve_state_path(flags.workspace)
+        evidence_store_dir = _store_dir(state_path)
+        anchor_for_sha = repo_root if repo_root is not None else state_path.parent
+        try:
+            readiness = compute_readiness(
+                wave_id,
+                state=state,
+                store_dir=evidence_store_dir,
+                repo_root=anchor_for_sha,
+            )
+        except KeyError as exc:
+            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+        else:
+            readiness_holder.append(readiness)
+            for view in readiness.criteria:
+                if view.status != "pass":
+                    logger.warning(
+                        f"close_advisory wave={wave_id!r} "
+                        f"criterion={view.id!r} status={view.status!r}"
+                    )
         close_succeeded[0] = True
 
     _run_mutation(
@@ -356,6 +388,9 @@ def wave_close_cmd(
             "wave": wave_id,
             "outcome": outcome,
             "commit": resolved_sha,
+            "readiness_warnings_count": (
+                len(readiness_holder[0].warnings) if readiness_holder else 0
+            ),
         },
         mutate=_close_and_pin,
     )
@@ -366,6 +401,10 @@ def wave_close_cmd(
                 f"that resolves to zero files: {glob!r}",
                 file=sys.stderr,
             )
+        if readiness_holder:
+            readiness = readiness_holder[0]
+            for warning in readiness.warnings:
+                print(f"advisory: wave {wave_id} readiness: {warning}", file=sys.stderr)
 
 
 @wave_app.command("show")

@@ -416,6 +416,63 @@ def _apply_wave_close(state: State, mutation: Mutation) -> None:
         wave.commit = str(commit)
 
 
+def _compute_wave_close_extras(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> dict[str, str | int | float | bool]:
+    """Return the W06 close-readiness advisory metrics for *mutation*.
+
+    Computes :func:`eawf.workflow.verify.readiness.compute` against the
+    post-apply *state* (the wave is CLOSED in-memory at this point) and
+    folds the rolled-up advisory tally into an
+    :attr:`EventPayload.extras`-shaped dict. Failures are non-blocking
+    by design (W06 is purely advisory; W19 flips this to gating
+    behind ``profile.verify.enforce``).
+
+    Args:
+        state: In-memory state AFTER ``_apply_wave_close`` succeeds.
+        mutation: The wave_close mutation just applied; its
+            ``scope_id`` names the wave under evaluation.
+        state_path: Filesystem path to ``state.json``; the readiness
+            compute uses this to locate ``<state_dir>/store/`` for
+            evidence rows.
+        repo_root: Repository root the evidence freshness check runs
+            against (forwarded to
+            :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`).
+
+    Returns:
+        Dict with the ``readiness_warnings_count`` key (always set;
+        ``0`` on the happy path). Empty dict on KeyError so the
+        envelope-extras merge stays a no-op for non-wave scopes.
+    """
+    from eawf.kernel.store.paths import store_dir as _store_dir
+    from eawf.workflow.verify import compute as compute_readiness
+
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id:
+        return {}
+    try:
+        readiness = compute_readiness(
+            wave_id,
+            state=state,
+            store_dir=_store_dir(state_path),
+            repo_root=repo_root,
+        )
+    except KeyError as exc:
+        logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+        return {}
+    count = len(readiness.warnings)
+    for view in readiness.criteria:
+        if view.status != "pass":
+            logger.warning(
+                f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
+            )
+    return {"readiness_warnings_count": count}
+
+
 def _apply_wave_fail(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.WAVE_FAIL` — delegate to ``fail_wave``."""
     params = mutation.params
@@ -660,6 +717,7 @@ def _build_event_envelope(
     mutation: Mutation,
     before_version: str,
     after_version: str,
+    extras: dict[str, str | int | float | bool] | None = None,
 ) -> Envelope:
     """Build the canonical ``StoreKind.EVENT`` envelope for *mutation*.
 
@@ -667,6 +725,19 @@ def _build_event_envelope(
     so subscribers cannot tell whether the envelope was produced via
     the daemon or the daemonless fallback — both paths converge on
     the same on-disk row.
+
+    Args:
+        mutation: The mutation just applied; supplies ``kind`` /
+            ``scope_id`` / params hash.
+        before_version: State digest before the apply.
+        after_version: State digest after the apply.
+        extras: Optional rolled-up advisory metrics to surface on the
+            envelope's :attr:`EventPayload.extras` map. Today only the
+            ``WAVE_CLOSE`` path populates this (with
+            ``readiness_warnings_count`` from the W06 close-readiness
+            advisory); future verify-spine waves may extend the set
+            (compile-gate fail count, waiver count, etc.). Additive —
+            existing subscribers ignore unknown extras.
     """
     now = datetime.now(UTC)
     summary = f"state.mutate {mutation.kind.value} scope={mutation.scope_id}"
@@ -680,6 +751,7 @@ def _build_event_envelope(
         after_state_version=after_version,
         status="ok",
         message=summary,
+        extras=dict(extras) if extras else {},
     ).model_dump(mode="json")
     return Envelope(
         schema_version="1.0",
@@ -863,10 +935,25 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 )
             after_version = _state_version(new_payload)
 
+            # W06 advisory: compute close-readiness AFTER the apply
+            # succeeds and pin the rolled-up count on the envelope
+            # extras. Wave-close only; non-wave mutations get an empty
+            # extras dict so the envelope shape stays uniform.
+            extras: dict[str, str | int | float | bool] = {}
+            if mutation.kind == MutationKind.WAVE_CLOSE:
+                repo_anchor = Path(args.repo_root) if args.repo_root else state_path.parent
+                extras = _compute_wave_close_extras(
+                    state,
+                    mutation,
+                    state_path=state_path,
+                    repo_root=repo_anchor,
+                )
+
             envelope = _build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
+                extras=extras,
             )
 
             # Outcome-WAL pending record carries the post-apply envelope
