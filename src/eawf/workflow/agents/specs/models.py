@@ -131,6 +131,61 @@ class SpecWorktree(_SpecModel):
     base_branch: str
 
 
+class RoleContract(_SpecModel):
+    """Typed projection of role-level invariants for one dispatch.
+
+    A :class:`RoleContract` is the keystone projection that lets every
+    per-role plugin surface (Claude / Codex / OpenCode / dispatch
+    :class:`SubagentSpec`) share one canonical source of role data
+    (P28-I01-W12). The dispatch
+    :func:`~eawf.workflow.dispatch.renderer.build_role_contract`
+    helper reads a :class:`~eawf.workflow.agents.specs.roles.RoleSpec`
+    and emits a :class:`RoleContract`; :class:`SubagentSpec` carries the
+    projection so the role's ``system_prompt`` (and tool / model wiring)
+    are driven by the registry rather than by hardcoded constants.
+
+    The contract is a *projection* — it does not re-author role data; it
+    copies the canonical fields off :class:`RoleSpec` so downstream
+    surfaces consume one typed shape instead of re-walking the registry.
+
+    Attributes:
+        role: The role identifier (e.g. ``"executor"``). Bare ``role``
+            here because the surrounding :class:`RoleContract` type
+            already disambiguates per AGENTS naming rule 17.
+        summary: One-sentence role description (mirrors
+            :attr:`RoleSpec.summary`).
+        system_prompt: The role contract Markdown — method, output
+            contract, anti-patterns — rendered as the
+            ``## Role contract`` section of the dispatch prompt.
+        allowed_tools: Tools the role may invoke at dispatch time. The
+            dispatcher feeds this into per-runtime tool grants
+            (``settings.json`` for claude-code, ``allowed_tools`` on the
+            SDK envelope, etc.).
+        denied_tools: Tools the role MUST NOT invoke. Wave-scoped
+            sandbox policies intersect into this list at envelope
+            projection time via
+            :func:`~eawf.runtime.sandbox.policy.resolve_denied_tools`.
+        model: Preferred model identifier, or ``None`` to inherit the
+            dispatcher's default.
+        memory: Whether the role retains memory across invocations.
+        report_schema_ref: Typed-report store-kind reference for the
+            role's ``agent_end`` reports.
+        stop_conditions: Role-specific stop conditions surfaced under
+            the ``## Stop conditions`` section. Empty when the role has
+            no role-specific stop conditions beyond the defaults.
+    """
+
+    role: str
+    summary: str
+    system_prompt: str
+    allowed_tools: list[str] = Field(default_factory=list)
+    denied_tools: list[str] = Field(default_factory=list)
+    model: str | None = None
+    memory: bool = False
+    report_schema_ref: str = Field(min_length=1)
+    stop_conditions: list[str] = Field(default_factory=list)
+
+
 class SubagentSpec(_SpecModel):
     """Typed dispatch spec for one wave.
 
@@ -163,6 +218,14 @@ class SubagentSpec(_SpecModel):
             legacy renderer skipped it entirely when no brief matched).
         worktree: Worktree wire-up, or ``None`` (renders the
             ``Worktree path: inline`` fallback).
+        role_contract: Typed projection of the dispatched wave's role
+            (P28-I01-W12). When set, the spec renders a
+            ``## Role contract`` section carrying the role's
+            ``system_prompt`` plus role-driven tool / model wiring; a
+            ``## Stop conditions`` section follows when the role lists
+            any. ``None`` keeps the dispatch byte-equivalent to the
+            pre-W12 ad-hoc renderer so callers that have not yet
+            plumbed the role registry through stay unchanged.
     """
 
     wave_id: str
@@ -180,6 +243,7 @@ class SubagentSpec(_SpecModel):
     recent_audits: list[SpecAudit] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
     worktree: SpecWorktree | None = None
+    role_contract: RoleContract | None = None
 
     # ---- Section renderers --------------------------------------------------
 
@@ -294,6 +358,35 @@ class SubagentSpec(_SpecModel):
             "- Never `git commit --no-verify`; root-cause the hook instead."
         )
 
+    def _render_role_contract(self) -> str | None:
+        """Return the ``## Role contract`` section, or ``None`` when absent.
+
+        Renders the role's ``system_prompt`` body verbatim under a
+        ``## Role contract`` heading when :attr:`role_contract` is set.
+        ``None`` (the default) omits the section, keeping the dispatch
+        prompt byte-equivalent to the pre-W12 renderer for callers that
+        have not yet plumbed the role registry through.
+        """
+        if self.role_contract is None:
+            return None
+        body = self.role_contract.system_prompt.rstrip("\n")
+        return f"## Role contract\n\n{body}"
+
+    def _render_stop_conditions(self) -> str | None:
+        """Return the ``## Stop conditions`` section, or ``None`` when absent.
+
+        Renders one bullet per :attr:`RoleContract.stop_conditions`
+        entry. ``None`` keeps the prompt byte-equivalent when the role
+        has no role-specific stop conditions (the wave's default
+        ``## Out of scope`` block already names the dispatch-wide stop
+        rules).
+        """
+        if self.role_contract is None or not self.role_contract.stop_conditions:
+            return None
+        lines = ["## Stop conditions", ""]
+        lines.extend(f"- {condition}" for condition in self.role_contract.stop_conditions)
+        return "\n".join(lines)
+
     def render(self) -> str:
         """Return the full Markdown wave prompt.
 
@@ -325,8 +418,14 @@ class SubagentSpec(_SpecModel):
         if references is not None:
             sections.append(references)
         sections.append(self._render_working_tree())
+        role_contract = self._render_role_contract()
+        if role_contract is not None:
+            sections.append(role_contract)
         sections.append(self._render_workflow())
         sections.append(self._render_out_of_scope())
+        stop_conditions = self._render_stop_conditions()
+        if stop_conditions is not None:
+            sections.append(stop_conditions)
         return "\n\n".join(sections).rstrip() + "\n"
 
 
@@ -349,6 +448,7 @@ def _phase_wave_segments(wave_id: str) -> tuple[str, str]:
 
 
 __all__ = [
+    "RoleContract",
     "SpecAudit",
     "SpecDecision",
     "SpecDependency",

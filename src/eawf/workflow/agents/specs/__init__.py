@@ -19,6 +19,7 @@ module-level loggers.
 from __future__ import annotations
 
 from eawf.workflow.agents.specs.models import (
+    RoleContract,
     SpecAudit,
     SpecDecision,
     SpecDependency,
@@ -37,6 +38,7 @@ from eawf.workflow.agents.specs.roles import (
 __all__ = [
     "KEPT_RUNTIMES",
     "ROLE_REGISTRY",
+    "RoleContract",
     "RoleSpec",
     "SpecAudit",
     "SpecDecision",

@@ -27,6 +27,7 @@ from __future__ import annotations
 from eawf.workflow.dispatch.renderer import (
     DISPATCH_RUNTIMES,
     DispatchEnvelope,
+    build_role_contract,
     build_subagent_spec,
     render_dispatch_envelope,
     render_wave_prompt,
@@ -35,6 +36,7 @@ from eawf.workflow.dispatch.renderer import (
 __all__ = [
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "build_role_contract",
     "build_subagent_spec",
     "render_dispatch_envelope",
     "render_wave_prompt",

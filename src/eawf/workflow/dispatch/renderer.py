@@ -55,6 +55,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.state.models import (
     Audit,
     Decision,
@@ -65,6 +66,7 @@ from eawf.kernel.state.models import (
 )
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.workflow.agents.specs.models import (
+    RoleContract,
     SpecAudit,
     SpecDecision,
     SpecDependency,
@@ -72,6 +74,7 @@ from eawf.workflow.agents.specs.models import (
     SpecWorktree,
     SubagentSpec,
 )
+from eawf.workflow.agents.specs.roles import RoleSpec, get_role_spec
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +243,69 @@ def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
     return sorted(allowed)
 
 
+def build_role_contract(
+    role: RoleSpec,
+    *,
+    state: State | None = None,
+    wave_id: str | None = None,
+) -> RoleContract:
+    """Project a :class:`RoleSpec` into a typed :class:`RoleContract`.
+
+    P28-I01-W12 introduces this projection as the keystone seam every
+    per-role plugin surface (Claude / Codex / OpenCode / dispatch
+    :class:`SubagentSpec`) reads from. The contract is the role-level
+    invariants — ``system_prompt``, ``allowed_tools``, ``denied_tools``,
+    ``model``, ``memory``, ``report_schema_ref``, ``stop_conditions`` —
+    copied off the registered :class:`RoleSpec`.
+
+    Sandbox enforcement: when ``state`` and ``wave_id`` are supplied,
+    the wave's :class:`~eawf.runtime.sandbox.policy.SandboxPolicy`
+    deny-list is unioned into the contract's ``denied_tools`` and any
+    intersecting ``allowed_tools`` are dropped. This mirrors the
+    SDK-envelope projection in
+    :func:`_project_allowed_tools` — a role's tool grant cannot leak
+    past the per-wave sandbox.
+
+    Args:
+        role: The source :class:`RoleSpec` (typically resolved from
+            :data:`~eawf.workflow.agents.specs.roles.ROLE_REGISTRY` via
+            :func:`~eawf.workflow.agents.specs.roles.get_role_spec`).
+        state: Optional validated state snapshot. Required when
+            ``wave_id`` is supplied so the sandbox deny-list resolves.
+        wave_id: Optional wave id. When supplied, the wave's sandbox
+            deny-list is intersected into the contract.
+
+    Returns:
+        A :class:`RoleContract` carrying the projected role-level
+        invariants. The ``allowed_tools`` / ``denied_tools`` lists are
+        sorted for deterministic output.
+    """
+    allowed = set(role.allowed_tools)
+    denied = set(role.denied_tools)
+    if state is not None and wave_id is not None:
+        policy_denied = resolve_denied_tools(state.sandbox_policies, wave_id=wave_id)
+        if policy_denied:
+            denied |= policy_denied
+            removed = allowed & policy_denied
+            if removed:
+                logger.debug(
+                    f"build_role_contract role={role.role.value!r} wave={wave_id!r} "
+                    f"removed={sorted(removed)}"
+                )
+            allowed -= policy_denied
+    return RoleContract(
+        role=role.role.value,
+        summary=role.summary,
+        system_prompt=role.system_prompt,
+        allowed_tools=sorted(allowed),
+        denied_tools=sorted(denied),
+        model=role.model,
+        memory=role.memory,
+        report_schema_ref=role.report_schema_ref,
+        stop_conditions=list(role.stop_conditions),
+    )
+
+
 def build_subagent_spec(
     state: State,
     wave_id: str,
@@ -291,13 +357,46 @@ def build_subagent_spec(
         recent_audits=_build_recent_audits(state, scope_id=scope_id),
         references=_find_spike_briefs(wave, repo_root=repo_root) if repo_root is not None else [],
         worktree=_build_worktree(state, wave),
+        role_contract=_build_role_contract_for_wave(state, wave),
     )
     logger.debug(
         f"build_subagent_spec wave={wave.id!r} scope={scope_id!r} "
         f"deps={len(spec.dependencies)} decisions={len(spec.decisions)} "
-        f"refs={len(spec.references)}"
+        f"refs={len(spec.references)} role_contract={spec.role_contract is not None}"
     )
     return spec
+
+
+def _build_role_contract_for_wave(state: State, wave: Wave) -> RoleContract | None:
+    """Return the wave's :class:`RoleContract`, or ``None`` when no role set.
+
+    Looks up the wave's :attr:`Wave.agent_role` in the global
+    :data:`~eawf.workflow.agents.specs.roles.ROLE_REGISTRY` and projects
+    the resolved :class:`RoleSpec` via :func:`build_role_contract`,
+    threading the wave's sandbox deny-list through. A wave without an
+    ``agent_role`` returns ``None`` so the dispatch prompt stays
+    byte-equivalent to the pre-W12 renderer.
+    """
+    if wave.agent_role is None:
+        return None
+    try:
+        role_spec = get_role_spec(_as_agent_session_role(wave.agent_role))
+    except KeyError:
+        return None
+    return build_role_contract(role_spec, state=state, wave_id=wave.id)
+
+
+def _as_agent_session_role(value: AgentSessionRole | str) -> AgentSessionRole:
+    """Coerce a wave's ``agent_role`` field into an :class:`AgentSessionRole`.
+
+    The state model declares ``Wave.agent_role`` as the enum, but
+    JSON-loaded snapshots may surface it as the string value; the
+    coercion stays defensive so the role lookup never blows up on a
+    valid registry value.
+    """
+    if isinstance(value, AgentSessionRole):
+        return value
+    return AgentSessionRole(value)
 
 
 def render_wave_prompt(
@@ -523,6 +622,7 @@ def _phase_wave_commit_prefix(wave_id: str) -> tuple[str, str]:
 __all__ = [
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "build_role_contract",
     "build_subagent_spec",
     "render_dispatch_envelope",
     "render_wave_prompt",
