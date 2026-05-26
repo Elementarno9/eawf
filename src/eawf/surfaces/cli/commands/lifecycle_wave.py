@@ -12,6 +12,7 @@ read / dispatch / budget verbs live in
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -47,6 +48,188 @@ logger = logging.getLogger(__name__)
 def _wrap_no_return(_value: object) -> None:
     """Adapter so transition helpers can be passed directly to ``mutate=``."""
     return None
+
+
+def _parse_waiver_flags(
+    *,
+    waive: list[str] | None,
+    waive_reason: list[str] | None,
+    waive_decision: list[str] | None,
+    waive_audit: list[str] | None,
+) -> list[Any]:
+    """Parse the repeatable W11 waiver flags into a list of WaiverInput.
+
+    All four lists pair by position with ``waive``. ``waive_reason``,
+    ``waive_decision``, and ``waive_audit`` MUST be either empty (no
+    flags supplied) or have the same length as ``waive`` so a slot can
+    be left blank with an empty string. Bare ``--waive`` with no
+    ``--reason`` slot in modes B and C is caught later inside
+    :func:`eawf.workflow.lifecycle.waivers.apply_waiver`; this helper
+    catches only structural mismatches (length, parse-time empties).
+
+    Args:
+        waive: Repeatable ``--waive GATE_ID`` values.
+        waive_reason: Repeatable ``--reason TEXT`` values aligned by
+            index with *waive*.
+        waive_decision: Repeatable ``--decision URN`` values aligned by
+            index with *waive*. Empty string means "no decision ref for
+            this slot".
+        waive_audit: Repeatable ``--audit URN`` values aligned by
+            index with *waive*. Empty string means "no audit ref for
+            this slot".
+
+    Returns:
+        List of ``WaiverInput`` rows, one per ``--waive`` value.
+
+    Raises:
+        cli_errors.UserError: When a parallel-list length disagreement
+            is detected.
+    """
+    from eawf.workflow.lifecycle.waivers import WaiverInput
+
+    if not waive:
+        return []
+
+    def _check_len(name: str, values: list[str] | None) -> list[str]:
+        if values is None:
+            return [""] * len(waive)
+        if len(values) != len(waive):
+            raise cli_errors.UserError(
+                f"--{name} list length ({len(values)}) must equal "
+                f"--waive list length ({len(waive)}); "
+                f"use an empty string to skip a slot",
+                kind="InvalidInput",
+            )
+        return values
+
+    reasons = _check_len("reason", waive_reason)
+    decisions = _check_len("decision", waive_decision)
+    audits = _check_len("audit", waive_audit)
+
+    inputs: list[Any] = []
+    for index, gate_id in enumerate(waive):
+        if not gate_id:
+            raise cli_errors.UserError(
+                f"--waive value at position {index + 1} is empty",
+                kind="InvalidInput",
+            )
+        inputs.append(
+            WaiverInput(
+                gate_id=gate_id,
+                reason=reasons[index] or None,
+                decision_ref=decisions[index] or None,
+                audit_ref=audits[index] or None,
+            )
+        )
+    return inputs
+
+
+def _persist_waivers(
+    *,
+    ctx: typer.Context,
+    flags: GlobalFlags,
+    wave_id: str,
+    waive_inputs: list[Any],
+) -> None:
+    """Persist parsed waiver inputs via the daemon RPC or direct fallback.
+
+    Loads the state read-only to resolve the operator session +
+    :class:`~eawf.workflow.lifecycle.waivers.WaiverMode`, then calls
+    :func:`~eawf.workflow.lifecycle.waivers.apply_waiver` once per
+    waiver. Each returned :class:`EvidenceRecord` is either already
+    persisted (when ``EAWF_EVIDENCE_DIRECT_WRITE=1``) or POSTed
+    through the daemon ``evidence.append`` RPC by this helper.
+
+    Args:
+        ctx: Typer context — owns the read-only state loader.
+        flags: Resolved CLI flags (workspace, json mode).
+        wave_id: Wave id the waivers are scoped to.
+        waive_inputs: Parsed :class:`WaiverInput` rows from the CLI.
+
+    Raises:
+        cli_errors.ValidationError: When the operator-only contract or
+            the linkage policy reject any waiver.
+        cli_errors.UserError: When state resolution fails.
+        cli_errors.DaemonUnreachable / cli_errors.InternalError: When
+            the daemon RPC path fails (mapped from the JSON-RPC error
+            code).
+    """
+    from eawf.kernel.config.layered import merge_config
+    from eawf.surfaces.cli.scope import resolve_state_path
+    from eawf.workflow.lifecycle.waivers import (
+        apply_waiver,
+        resolve_waiver_mode,
+    )
+
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        # _load_state_readonly already emitted; treat as "exit raised"
+        # by raising here so the close path stops.
+        raise cli_errors.UserError(
+            "state not loadable; waivers cannot be persisted", kind="NotFound"
+        )
+    state, _ = loaded
+
+    # Anchor config-merge on the resolved state.json so an ``EA_STATE``
+    # override (canonical in test fixtures + CI / recovery shells) still
+    # picks up the ``.ea/config.yaml`` overlay next to it.
+    state_path = resolve_state_path(flags.workspace)
+    repo = state_path.parent.parent
+    workspace_for_merge = flags.workspace if flags.workspace is not None else repo
+    try:
+        merged, _src = merge_config(workspace=workspace_for_merge, repo=repo)
+    except (OSError, ValueError, KeyError) as exc:
+        logger.debug(f"_persist_waivers merge_config status='skip' err={exc!s}")
+        merged = {}
+    mode = resolve_waiver_mode(merged)
+
+    operator_identity = (
+        state.current.active_session_ids[0] if state.current.active_session_ids else None
+    )
+
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
+
+    direct_write = os.environ.get("EAWF_EVIDENCE_DIRECT_WRITE") == "1"
+    for waiver in waive_inputs:
+        record = apply_waiver(
+            state,
+            wave_id=wave_id,
+            waiver=waiver,
+            operator_identity=operator_identity,
+            mode=mode,
+            state_path=state_path,
+            repo_root=repo_root,
+        )
+        logger.info(
+            f"_persist_waivers wave={wave_id!r} gate_id={waiver.gate_id!r} "
+            f"produced_by={record.produced_by!r} mode={mode!r} "
+            f"evidence_id={record.id!r}"
+        )
+        if direct_write:
+            # apply_waiver already wrote the row via _append_direct.
+            continue
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient() as client:
+                client.call(
+                    "evidence.append",
+                    {"record": record.model_dump(mode="json")},
+                )
+        except DaemonRpcError as exc:
+            raise cli_errors.UserError(
+                f"daemon rejected evidence.append for waiver: code={exc.code} {exc.message}",
+                kind="DaemonError",
+            ) from exc
+        except (OSError, RuntimeError) as exc:
+            raise cli_errors.UserError(
+                (
+                    f"daemon unavailable for evidence.append: {exc}; "
+                    "set EAWF_EVIDENCE_DIRECT_WRITE=1 to fall back to a direct "
+                    "evidence.jsonl append (CI / recovery shell only)"
+                ),
+                kind="DaemonError",
+            ) from exc
 
 
 @wave_app.command("plan")
@@ -275,6 +458,55 @@ def wave_close_cmd(
             ),
         ),
     ] = None,
+    waive: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--waive",
+            help=(
+                "Operator waiver — gate id to mark waived (repeatable). "
+                "Pairs by position with --reason / --decision / --audit. "
+                "Modes B and C require a matching --reason; mode C also "
+                "requires --decision or --audit. Persists one "
+                "EvidenceRecord(produced_by='human', status='waived') per "
+                "gate via the daemon evidence.append RPC."
+            ),
+        ),
+    ] = None,
+    waive_reason: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--reason",
+            help=(
+                "Reason text for the matching --waive entry (repeatable). "
+                "Length MUST equal the --waive list length when supplied; "
+                "use an empty string to leave a slot blank in mode A."
+            ),
+        ),
+    ] = None,
+    waive_decision: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--decision",
+            help=(
+                "Decision URN backing the matching --waive entry "
+                "(repeatable; pairs by position). Empty string skips the "
+                "slot. Mode C requires at least one of --decision or "
+                "--audit per waiver."
+            ),
+        ),
+    ] = None,
+    waive_audit: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--audit",
+            help=(
+                "Audit URN backing the matching --waive entry "
+                "(repeatable; pairs by position). Empty string skips the "
+                "slot. Mode C requires at least one of --decision or "
+                "--audit per waiver."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Close a claimed/in-progress wave with an outcome string.
 
@@ -291,6 +523,13 @@ def wave_close_cmd(
     ``kind=WAVE_CLOSE``); otherwise the legacy in-process path runs.
     Both paths converge on the same ``state.json`` + ``event.jsonl``
     on-disk shape.
+
+    P28-I01-W11: when ``--waive`` flags are present each named gate is
+    waived via :func:`eawf.workflow.lifecycle.waivers.apply_waiver`
+    BEFORE the close mutation lands; this guarantees the readiness
+    compute (W06) sees the waivers when it scores the closed wave.
+    Waivers are operator-only — the active session MUST carry the
+    OPERATOR role.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.surfaces.cli.scope import resolve_state_path
@@ -312,12 +551,43 @@ def wave_close_cmd(
             flags=flags,
         )
         return
+
+    # W11: parse + validate the per-gate waiver flags BEFORE the close
+    # mutation lands. The persistence path runs after the input shape
+    # is validated so a bad waiver does not leave the state half-
+    # written. ``waive_inputs`` is the empty list when --waive is not
+    # supplied.
+    try:
+        waive_inputs = _parse_waiver_flags(
+            waive=waive,
+            waive_reason=waive_reason,
+            waive_decision=waive_decision,
+            waive_audit=waive_audit,
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
     # Resolve the commit ref BEFORE any state mutation so a bad ref
     # fails the precondition without touching state.json.
     resolved_sha: str | None = None
     if commit_ref is not None:
         try:
             resolved_sha = _resolve_commit_sha(commit_ref)
+        except cli_errors.CliError as err:
+            cli_errors.emit_error(err, flags=flags)
+            return
+
+    # W11: persist the operator waivers (if any) BEFORE the close +
+    # readiness compute so the readiness view sees the waiver rows.
+    if waive_inputs:
+        try:
+            _persist_waivers(
+                ctx=ctx,
+                flags=flags,
+                wave_id=wave_id,
+                waive_inputs=waive_inputs,
+            )
         except cli_errors.CliError as err:
             cli_errors.emit_error(err, flags=flags)
             return

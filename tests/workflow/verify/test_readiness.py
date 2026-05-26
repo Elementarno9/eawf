@@ -128,11 +128,14 @@ def _make_criterion(
 
 
 def _make_gate(gid: str, *, criterion_id: str) -> GateSpec:
+    # The ``command_exit_zero`` kind requires ``args['argv']`` per the
+    # L0 argv-policy validator landed by W09 (defense-in-depth at the
+    # spec layer). Use a benign allow-listed argv ``uv run pytest -q``.
     return GateSpec(
         id=gid,
         criterion_id=criterion_id,
         kind="command_exit_zero",
-        args={},
+        args={"argv": ["uv", "run", "pytest", "-q"]},
         policy="block",
         cadence="every-wave",
         required=True,
@@ -281,7 +284,14 @@ def test_spec_wave_one_gate_fail_flips_ready(
 def test_spec_wave_waived_gate_passes_and_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A waived gate flips the criterion to ``pass`` + records the waived id."""
+    """A waived gate flips the criterion to ``waived`` + records the waived id (W11).
+
+    W11 contract: when every gate on a criterion is waived, the
+    rolled-up criterion status is ``waived`` (not ``pass``) so
+    renderers can flag operator overrides explicitly. The per-gate
+    :class:`GateResult.status` still surfaces ``pass`` because the
+    gate is treated as satisfied for ``ready`` rollup.
+    """
     state = _empty_state()
     _seed_wave(state)
     state_path = tmp_path / "state.json"
@@ -305,7 +315,7 @@ def test_spec_wave_waived_gate_passes_and_counts(
 
     assert result.ready is True
     waived_view = next(v for v in result.criteria if v.id == "CRIT-waived")
-    assert waived_view.status == "pass"
+    assert waived_view.status == "waived"
     assert waived_view.gate_results is not None
     assert waived_view.gate_results[0].status == "pass"
     assert result.waived_gate_ids == ["GATE-waived"]
@@ -402,6 +412,157 @@ def test_idempotent_on_same_inputs(tmp_path: Path) -> None:
     second = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
 
     assert first.model_dump() == second.model_dump()
+
+
+def test_sha_stale_waiver_is_filtered_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A waiver whose stamped ``wave_sha`` no longer matches is ignored (W11 sc #6).
+
+    SHA-bound freshness contract: each waiver carries the wave's
+    commit SHA in ``metrics['wave_sha']``. When the wave advances to
+    a new SHA, prior waivers are stale and MUST NOT contribute to
+    ``waived_gate_ids`` (the gate goes back to ``blocked`` because no
+    fresh evidence references it).
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    state_path = tmp_path / "state.json"
+    store_dir = _store_dir(state_path)
+
+    criterion = _make_criterion("CRIT-stale", gate_ids=["GATE-stale"])
+    gate = _make_gate("GATE-stale", criterion_id="CRIT-stale")
+
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+
+    # Pin the "current" wave sha to a known value via monkeypatching
+    # derive_wave_sha so the test is hermetic against the git repo
+    # under tmp_path.
+    monkeypatch.setattr(
+        readiness_mod,
+        "derive_wave_sha",
+        lambda scope_id, repo_root=None: "current_sha_xyz",
+    )
+
+    # Write a waiver row stamped with an OUTDATED wave sha.
+    stale = EvidenceRecord(
+        id=mint_evidence_id(),
+        scope_id=WAVE_ID,
+        produced_by="human",
+        evidence_kind="attested",
+        status="waived",
+        summary="stale waiver",
+        refs=["GATE-stale"],
+        metrics={"wave_sha": "old_sha_abc"},
+        created_at=datetime.now(UTC),
+    )
+    _write_evidence_row(store_dir, record=stale)
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    # The stale waiver was filtered; gate has no fresh evidence;
+    # rolled-up to blocked + ready=False.
+    assert result.ready is False
+    assert result.waived_gate_ids == []
+    view = next(v for v in result.criteria if v.id == "CRIT-stale")
+    assert view.status == "blocked"
+    assert view.gate_results is not None
+    assert view.gate_results[0].status == "blocked"
+
+
+def test_sha_matching_waiver_is_honoured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A waiver whose stamped ``wave_sha`` matches counts as fresh (W11)."""
+    state = _empty_state()
+    _seed_wave(state)
+    state_path = tmp_path / "state.json"
+    store_dir = _store_dir(state_path)
+
+    criterion = _make_criterion("CRIT-fresh", gate_ids=["GATE-fresh"])
+    gate = _make_gate("GATE-fresh", criterion_id="CRIT-fresh")
+
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+    monkeypatch.setattr(
+        readiness_mod,
+        "derive_wave_sha",
+        lambda scope_id, repo_root=None: "fresh_sha_999",
+    )
+
+    fresh = EvidenceRecord(
+        id=mint_evidence_id(),
+        scope_id=WAVE_ID,
+        produced_by="human",
+        evidence_kind="attested",
+        status="waived",
+        summary="fresh waiver",
+        refs=["GATE-fresh"],
+        metrics={"wave_sha": "fresh_sha_999"},
+        created_at=datetime.now(UTC),
+    )
+    _write_evidence_row(store_dir, record=fresh)
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    assert result.waived_gate_ids == ["GATE-fresh"]
+    view = next(v for v in result.criteria if v.id == "CRIT-fresh")
+    assert view.status == "waived"
+
+
+def test_waiver_without_sha_metric_treated_as_fresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A waiver row missing ``metrics['wave_sha']`` is treated as fresh (W11).
+
+    Defensive contract: the SHA freshness check fires ONLY when both
+    the stamped SHA and the current SHA are present and disagree.
+    Missing-stamp rows (e.g. produced by an older CLI version, or by
+    the spec-attest path that does not stamp a SHA) are honoured to
+    avoid silently breaking the W06 evidence pipeline.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    state_path = tmp_path / "state.json"
+    store_dir = _store_dir(state_path)
+
+    criterion = _make_criterion("CRIT-nostamp", gate_ids=["GATE-nostamp"])
+    gate = _make_gate("GATE-nostamp", criterion_id="CRIT-nostamp")
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+    monkeypatch.setattr(
+        readiness_mod,
+        "derive_wave_sha",
+        lambda scope_id, repo_root=None: "any_sha_111",
+    )
+
+    unstamped = EvidenceRecord(
+        id=mint_evidence_id(),
+        scope_id=WAVE_ID,
+        produced_by="human",
+        evidence_kind="attested",
+        status="waived",
+        summary="unstamped waiver",
+        refs=["GATE-nostamp"],
+        metrics=None,
+        created_at=datetime.now(UTC),
+    )
+    _write_evidence_row(store_dir, record=unstamped)
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    assert result.waived_gate_ids == ["GATE-nostamp"]
 
 
 def test_advisory_failure_returns_not_ready_without_raising(
