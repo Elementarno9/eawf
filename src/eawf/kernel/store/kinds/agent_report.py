@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from eawf.kernel.spec.common import EvidenceKind
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence, StoreKind
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.urn import build as build_urn
@@ -34,9 +35,14 @@ class _StrictModel(BaseModel):
 
 
 class AgentReportEvidenceRef(_StrictModel):
-    """Pointer to evidence supporting a report claim."""
+    """Pointer to evidence supporting a report claim.
 
-    kind: Literal["repo", "urn", "url", "commit"]
+    The ``kind`` Literal is imported from :data:`eawf.kernel.spec.common.EvidenceKind`
+    so the agent-report vocabulary equals the spec-layer vocabulary —
+    one canonical kind set across spec and report layers.
+    """
+
+    kind: EvidenceKind
     ref: Annotated[str, Field(min_length=1)]
     note: Annotated[str, Field(max_length=240)] | None = None
 

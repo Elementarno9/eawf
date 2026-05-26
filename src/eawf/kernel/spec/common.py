@@ -90,15 +90,36 @@ class VerdictCitation(_StrictModel):
     note: str | None = None
 
 
+# Canonical evidence-reference vocabulary shared across the spec layer
+# (HypothesisSpec.evidence_chain, DecisionSpec citations, EvidenceRecord
+# refs) AND the agent-report layer (AgentReportEvidenceRef). Defining it
+# once here means downstream models import the same Literal — the
+# agent-report kind set is a strict subset (equal) by construction
+# rather than by convention.
+#
+#   "audit"        -> audit URN
+#   "artifact"     -> artifact id / URN
+#   "decision"     -> decision URN (urn:eawf:v1:decision:OWNER/ID)
+#   "store_record" -> store-record URN
+#   "external_url" -> external http(s) URL
+EvidenceKind = Literal[
+    "audit",
+    "artifact",
+    "decision",
+    "store_record",
+    "external_url",
+]
+
+
 class EvidenceRef(_StrictModel):
     """One row of a HypothesisSpec.evidence_chain.
 
     Slim by design: the audit-DSL runner walks evidence chains looking
-    for a typed reference (audit URN, artifact id, store record URN, or
-    external URL) plus a short summary. The full evidence document lives
-    behind the ``ref``, not inlined here.
+    for a typed reference (audit URN, artifact id, decision URN, store
+    record URN, or external URL) plus a short summary. The full
+    evidence document lives behind the ``ref``, not inlined here.
     """
 
-    kind: Literal["audit", "artifact", "store_record", "external_url"]
+    kind: EvidenceKind
     ref: str
     summary: str = Field(min_length=1, max_length=400)
