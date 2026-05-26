@@ -7,7 +7,16 @@ Yaml-declarative check spec + check-kind registry. The CLI command
 
 from __future__ import annotations
 
-from eawf.workflow.audit_dsl.models import CheckFile, CheckKind, CheckResult, CheckSpec
+from eawf.workflow.audit_dsl.models import (
+    CheckFile,
+    CheckKind,
+    CheckResult,
+    CheckSpec,
+    CheckStatus,
+    CommandExitZeroArgs,
+    Scope,
+    TimeoutClass,
+)
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY, CheckFn
 from eawf.workflow.audit_dsl.runner import load_spec, run_checks
 
@@ -18,6 +27,10 @@ __all__ = [
     "CheckKind",
     "CheckResult",
     "CheckSpec",
+    "CheckStatus",
+    "CommandExitZeroArgs",
+    "Scope",
+    "TimeoutClass",
     "load_spec",
     "run_checks",
 ]

@@ -77,6 +77,86 @@ def _candidate_prefixes(wave_id: str) -> list[str]:
     return [canonical, f"[{phase}-{wave}]"]
 
 
+def _git_merge_base_head_main(
+    *, repo_root: Path | None = None, fallback: str = "origin/main"
+) -> str:
+    """Return ``git merge-base HEAD main`` or ``fallback`` on failure.
+
+    Used as the diff-base of last resort when a wave-anchored SHA is
+    unavailable (no ``wave_id`` was threaded into the gate, or the
+    wave has not yet committed). The merge-base is preferred over the
+    raw ``main`` ref because it scopes the diff to "commits unique to
+    this branch", which is what every other ``changed_files`` caller
+    already expects.
+
+    Args:
+        repo_root: Repository working directory; defaults to the process
+            cwd.
+        fallback: String returned when git is missing, ``main`` is not
+            reachable, or the call times out. Defaults to ``origin/main``
+            so callers can still feed it to ``git diff <base>...HEAD``
+            via ``changed_files``.
+
+    Returns:
+        The 40-char merge-base SHA on success; ``fallback`` otherwise.
+    """
+    if shutil.which("git") is None:
+        logger.debug("_git_merge_base_head_main git=not-on-path")
+        return fallback
+    try:
+        out = subprocess.run(
+            ["git", "merge-base", "HEAD", "main"],
+            cwd=str(repo_root) if repo_root else None,
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        logger.debug(f"_git_merge_base_head_main status=failed err={exc!s}")
+        return fallback
+    if out.returncode != 0:
+        logger.debug(
+            f"_git_merge_base_head_main status=non-zero rc={out.returncode} "
+            f"stderr={out.stderr.strip()!r}"
+        )
+        return fallback
+    sha = out.stdout.strip()
+    if not sha:
+        return fallback
+    return sha
+
+
+def derive_diff_base(
+    wave_id: str | None,
+    *,
+    repo_root: Path | None = None,
+    fallback: str = "origin/main",
+) -> str:
+    """Return a diff-base ref suitable for ``git diff <base>...HEAD``.
+
+    Threading order matches the W15 audit-DSL runner contract:
+
+    1. When *wave_id* resolves via :func:`derive_wave_sha`, return
+       ``f"{sha}~1"`` so the diff scopes to the wave's own delta.
+    2. Otherwise, fall back to ``git merge-base HEAD main`` (per
+       :func:`_git_merge_base_head_main`).
+    3. If even the merge-base lookup fails, return *fallback* — keeps
+       the call site fail-open (matches :data:`~eawf.platform.lint.
+       _conditional.DEFAULT_DIFF_BASE`).
+
+    The fallback chain matters because audit gates run in environments
+    that range from a fully-fledged repo (with the wave already
+    committed) to a fresh clone in CI (where ``derive_wave_sha`` legitimately
+    returns ``None``).
+    """
+    if wave_id is not None:
+        sha = derive_wave_sha(wave_id, repo_root=repo_root)
+        if sha is not None:
+            return f"{sha}~1"
+    return _git_merge_base_head_main(repo_root=repo_root, fallback=fallback)
+
+
 def derive_wave_sha(wave_id: str, *, repo_root: Path | None = None) -> str | None:
     """Return the most recent commit SHA whose subject carries the wave's prefix.
 
