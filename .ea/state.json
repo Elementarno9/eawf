@@ -1856,8 +1856,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P28-I01",
+    "phase_id": "P28",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -4707,7 +4707,7 @@
       "id": "P28-I01",
       "opened_at": "2026-05-26T18:04:28.702029Z",
       "phase_id": "P28",
-      "status": "planned",
+      "status": "active",
       "title": "verify spine + foundations",
       "wave_ids": [
         "P28-I01-W01",
@@ -5346,7 +5346,7 @@
       "source_brief_ids": [
         "2026-05-26-v04-roadmap.md"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "Build v0.4 verify spine + lifecycle + clarity + plugins + trust + eval"
     }
@@ -5384,7 +5384,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T18:15:00.235853Z",
+  "updated_at": "2026-05-26T18:45:16.469219Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
