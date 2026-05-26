@@ -1867,9 +1867,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I01-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I01",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5595,7 +5593,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T22:51:27.512586Z",
+  "updated_at": "2026-05-26T23:24:24.005783Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19470,7 +19468,7 @@
         "P28-I03-W10"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-26T23:24:22.673440Z",
       "commit": null,
       "deps": [
         "P28-I01-W08"
@@ -19487,10 +19485,10 @@
       "id": "P28-I01-W10",
       "iter_id": "P28-I01",
       "opened_at": "2026-05-26T18:06:14.000839Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ProfileBody.verify schema lands",
         "3 profiles compile distinct packs same CloseReadiness shape"
@@ -23773,10 +23771,10 @@
       "branch": "feature/eawf-v0.4-p28-w10",
       "created_at": "2026-05-26T22:51:27.512586Z",
       "id": "WT-P28-I01-W10-1779835887",
-      "merged_commit": null,
+      "merged_commit": "eef5a23",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w10",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I01-W10"
     },
     "WT-P28-I01-W11-1779831765": {
