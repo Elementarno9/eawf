@@ -525,8 +525,7 @@ class WizardCancelled(UserError):  # noqa: N818 — domain cancel name; kind fol
 
 
 # Pinned questionary style — cyan question marks / pointers, green answer
-# text, dim grey instruction. Matches the demo at ``/tmp/eawf-questionary-demo.py``
-# (do NOT commit the demo). The colours are 256-colour hex codes so a TTY
+# text, dim grey instruction. The colours are 256-colour hex codes so a TTY
 # without truecolour still renders sensibly.
 _MODERN_STYLE: tuple[tuple[str, str], ...] = (
     ("qmark", "fg:#5fafff bold"),
@@ -669,8 +668,8 @@ def run_wizard_interactive(target_dir: Path, *, force: bool = False) -> WizardRe
     Walks :data:`~eawf.platform.install.steps.WIZARD_STEPS` sequentially. Each step
     is dispatched to :func:`_ask_step`, the typed answer is collected into
     a dict keyed by ``step.id``, and a one-line summary is printed via the
-    shared :class:`rich.console.Console` (matching the demo's collapse
-    style at ``/tmp/eawf-questionary-demo.py``).
+    shared :class:`rich.console.Console` using a collapsed one-line-per-step
+    layout.
 
     Heavy imports (``questionary``, ``rich``) are deferred to the function
     body so pure ``--no-input`` callers never pay the prompt_toolkit /

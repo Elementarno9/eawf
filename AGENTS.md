@@ -198,7 +198,7 @@ fallback). Do not hand-edit ``state.json`` to make it agree with a spec;
 drive the state mutation and let the spec follow.
 
 <!-- END EAWF:managed id=state-vs-specs -->
-<!-- BEGIN EAWF:managed id=verify-before-claim version=1.1 hash=da4d1a7a1791bb85 -->
+<!-- BEGIN EAWF:managed id=verify-before-claim version=1.1 hash=173c4c129ee6a1b5 -->
 ### Verify before claiming
 
 Quantitative or behavioural claims about command I/O, schema fields,
@@ -215,10 +215,12 @@ Design-intent docs (command matrix, schema inventory, ADRs) are the
 drift, quote the implementation. Treat doc/memory citations as a
 hypothesis to verify, not as ground truth.
 
-Wave commit SHA (P19-W04): ``Wave.commit`` no longer exists on the
-state model. Quote the SHA via
-``eawf wave show --commit <wave-id>`` (which walks ``git log
---grep '[P##-W##]'``) instead of reading the dropped field.
+Wave commit SHA: ``Wave.commit`` is an optional ``ShaStr`` field
+on the state model — set by ``eawf wave close --commit <ref>``
+when the operator pins a SHA at close time. Quote the SHA via
+``eawf wave show --commit <wave-id>``, which prefers the pinned
+``Wave.commit`` and falls back to deriving via ``git log --grep
+'[P##-W##]'`` so cherry-picked or unpinned waves still resolve.
 
 <!-- END EAWF:managed id=verify-before-claim -->
 <!-- BEGIN EAWF:managed id=worktree-discipline version=1.1 hash=36802bc751ac9da7 -->

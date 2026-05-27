@@ -1,9 +1,10 @@
 """Derive a wave's commit SHA from git history via the ``[P##-W##]`` prefix.
 
-P19-W04 replaces the persisted ``Wave.commit`` field with a runtime derive
-step: the commit subject's ``[P##-W##]`` prefix is the durable signal —
-git history rewrites preserve subjects, so the SHA is stable even after
-cherry-pick or rebase.
+The derive step is the fallback path behind ``eawf wave show --commit``:
+when ``Wave.commit`` has not been pinned (via ``wave close --commit
+<ref>``), the commit subject's ``[P##-W##]`` prefix is the durable
+signal. Git history rewrites preserve subjects, so the SHA stays
+discoverable even after cherry-pick or rebase.
 
 The helpers in this module are intentionally thin subprocess wrappers
 that return ``None`` rather than raise when git is unavailable or the
