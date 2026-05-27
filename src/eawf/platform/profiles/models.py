@@ -85,10 +85,9 @@ class FloorCheck(BaseModel):
             :data:`~eawf.kernel.spec.audit.AuditCadence` per AGENTS
             naming rule 17.
         policy: How a failure is escalated — ``block`` / ``warn`` /
-            ``advisory``. v0.4.0 keeps all floor checks effectively
-            advisory at the wave-close boundary (W19 flips the
-            enforcement); the field is captured so W19 has the shape
-            it needs.
+            ``advisory``. The profile-level ``enforce`` bit controls
+            whether a non-ready close-readiness view rejects the close
+            mutation or stays advisory.
         required: Whether the check is required for the rolled-up
             ``ready`` flag. Defaults ``True``.
         requires_gpu: Hint to the dispatcher that the check needs GPU
@@ -133,7 +132,11 @@ class VerifyBlock(BaseModel):
       seconds; ``None`` defers to the runner default (the v0.4.0
       runner does not yet read overrides — captured for v0.4.1+);
     * the **waiver-mode** (:attr:`waiver_mode`) — consumed by W11's
-      :func:`~eawf.workflow.lifecycle.waivers.resolve_waiver_mode`.
+      :func:`~eawf.workflow.lifecycle.waivers.resolve_waiver_mode`;
+    * the **enforcement bit** (:attr:`enforce`) — when true, close
+      seams reject a non-ready
+      :class:`~eawf.workflow.verify.models.CloseReadiness` instead
+      of surfacing it as advisory-only.
 
     All fields are optional; an absent ``verify:`` leaf on a profile
     yields an empty block so the verify spine has nothing to compile.
@@ -152,6 +155,9 @@ class VerifyBlock(BaseModel):
             see :data:`~eawf.workflow.lifecycle.waivers.WaiverMode`.
             Defaults to ``"B"`` (reason required, decision/audit
             optional) per the W11 default.
+        enforce: Whether close readiness is a hard gate. Defaults
+            ``False`` so existing profiles keep the advisory close
+            behavior until they opt in.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -162,6 +168,7 @@ class VerifyBlock(BaseModel):
         None
     )
     waiver_mode: Literal["A", "B", "C"] = "B"
+    enforce: bool = False
 
 
 class InstrumentReq(BaseModel):

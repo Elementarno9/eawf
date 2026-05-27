@@ -31,10 +31,10 @@ invoke subprocesses for live gate execution; those subprocesses are
 scored as gate results, not persisted. The function is idempotent on
 its inputs (calling it twice on the same tuple returns equal results
 for the evidence path; the deterministic floor's idempotency depends
-on the gate's own idempotency, e.g. ``git status``). The three
-wave-close seams attach :func:`compute` as an **advisory** call —
-warnings flow but no close path blocks. W19 (later wave) flips that
-behaviour behind ``profile.verify.enforce``.
+on the gate's own idempotency, e.g. ``git status``). Wave-close seams
+use :func:`compute` as advisory by default; profiles that set
+``verify.enforce=true`` promote a non-ready result to a lifecycle
+rejection.
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.workflow.audit_dsl.runner import run_checks
+from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 from eawf.workflow.verify.compile import compile_floor_pack, compile_gate
 from eawf.workflow.verify.models import (
@@ -588,6 +589,37 @@ def _build_legacy_views(wave: Wave) -> tuple[list[CriterionView], list[str]]:
     return views, warnings
 
 
+def _not_ready_criteria(criteria: list[CriterionView]) -> list[str]:
+    """Return compact ``criterion_id:status`` strings for non-ready criteria."""
+    return [
+        f"{view.id}:{view.status}" for view in criteria if view.status not in ("pass", "waived")
+    ]
+
+
+def _enforce_readiness(
+    *,
+    scope_id: str,
+    readiness: CloseReadiness,
+    verify_block: VerifyBlock | None,
+) -> None:
+    """Raise when the active profile makes close readiness mandatory.
+
+    Args:
+        scope_id: Wave id being closed.
+        readiness: Rolled-up readiness view for the scope.
+        verify_block: Active profile verify configuration, or ``None``.
+
+    Raises:
+        LifecycleError: When ``verify.enforce`` is true and
+            ``readiness.ready`` is false.
+    """
+    if verify_block is None or not verify_block.enforce or readiness.ready:
+        return
+    blocked = _not_ready_criteria(readiness.criteria)
+    details = ", ".join(blocked) if blocked else "ready=false"
+    raise LifecycleError(f"readiness enforcement failed for wave {scope_id!r}: {details}")
+
+
 def compute(
     scope_id: str,
     *,
@@ -627,6 +659,10 @@ def compute(
     floor check yields one ``CriterionView(source="floor")``. The
     floor pack does NOT render when the wave already carries typed
     CriterionSpec rows — typed specs are authoritative when present.
+    When the active profile sets ``verify.enforce=true``, a non-ready
+    result raises :class:`~eawf.workflow.lifecycle._errors.LifecycleError`
+    so close seams reject the mutation. With the default ``False``,
+    non-ready results stay advisory and are returned normally.
 
     Args:
         scope_id: Wave id (today; iter / phase scopes land later).
@@ -650,6 +686,8 @@ def compute(
         KeyError: When *scope_id* is not a known wave id in *state*.
             (Iter / phase scopes will resolve to their own loader once
             attached in a later wave; today only waves are scored.)
+        LifecycleError: When active ``profile.verify.enforce`` is
+            true and the computed readiness is not ready.
     """
     wave = state.waves.get(scope_id)
     if wave is None:
@@ -679,6 +717,7 @@ def compute(
         runner_cwd=repo_root,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
+    verify_block = _load_active_verify_block(scope_id, state)
 
     # Profile-fed floor pack (P28-I01-W10). Floor checks render only
     # when the wave has no typed CriterionSpec rows — the typed-spec
@@ -687,7 +726,6 @@ def compute(
     # have been authored yet.
     floor_views: list[CriterionView] = []
     if not spec_views:
-        verify_block = _load_active_verify_block(scope_id, state)
         floor_views = _build_floor_views(verify_block, runner_cwd=repo_root)
 
     criteria: list[CriterionView] = [*spec_views, *floor_views, *legacy_views]
@@ -698,12 +736,14 @@ def compute(
         warnings.append("no criteria attached to wave")
 
     ready = _is_ready(criteria)
-    return CloseReadiness(
+    readiness = CloseReadiness(
         ready=ready,
         criteria=criteria,
         warnings=warnings,
         waived_gate_ids=waived_gate_ids,
     )
+    _enforce_readiness(scope_id=scope_id, readiness=readiness, verify_block=verify_block)
+    return readiness
 
 
 def _is_ready(criteria: list[CriterionView]) -> bool:
