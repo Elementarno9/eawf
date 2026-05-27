@@ -235,6 +235,12 @@ exclude = []
 # the SonarSource default "needs refactoring" threshold.
 max-complexity = 15
 
+[tool.eawf.agents_md_budget]
+# Tier-0 render blocks are the short, always-visible AGENTS.md rule layer.
+# Every existing profile block defaults to ``reference``; future tier-0
+# blocks must keep their combined body below this ratchet.
+max-tier0-tokens = 1200
+
 [tool.mutmut]
 # Mutation-testing config for the four load-bearing "core" packages
 # (state / lifecycle / daemon / validate). mutmut runs as a

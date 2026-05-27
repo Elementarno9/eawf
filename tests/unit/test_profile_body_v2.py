@@ -139,6 +139,7 @@ def test_render_block_prose_shape_validates() -> None:
     block = RenderBlock(id="rules", target="AGENTS.md", body_template="## Rules\n\n- one")
     assert block.body_template == "## Rules\n\n- one"
     assert block.rationale is None
+    assert block.tier == "reference"
     assert block.is_structured is False
 
 
@@ -154,6 +155,31 @@ def test_render_block_structured_shape_validates() -> None:
     assert block.is_structured is True
     assert block.body_template == ""
     assert block.rationale == "Claims must be backed by evidence."
+    assert block.tier == "reference"
+
+
+def test_render_block_accepts_tier0() -> None:
+    """A block may opt into the short tier-0 AGENTS.md budget."""
+    block = RenderBlock(
+        id="core-rule",
+        target="AGENTS.md",
+        body_template="## Core\n\n- Keep this short.",
+        tier="tier0",
+    )
+    assert block.tier == "tier0"
+
+
+def test_render_block_rejects_unknown_tier() -> None:
+    """Render block tiers are closed so budget accounting cannot drift."""
+    with pytest.raises(ValidationError):
+        RenderBlock.model_validate(
+            {
+                "id": "bad-tier",
+                "target": "AGENTS.md",
+                "body_template": "body",
+                "tier": "hot",
+            }
+        )
 
 
 def test_render_block_rejects_both_prose_and_triad() -> None:

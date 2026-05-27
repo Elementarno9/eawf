@@ -18,7 +18,7 @@ Field semantics mirror ``docs/architecture/profiles.md``:
 
 - ``state_extensions.fields_required`` — top-level state keys to materialise.
 - ``instrument_requirements`` — ``{name, kind, probe, version_args, version_regex}``.
-- ``render_blocks`` — ``{id, target, body_template | (rationale, mechanism,
+- ``render_blocks`` — ``{id, target, tier, body_template | (rationale, mechanism,
   verification), version}``. ``id`` is the composition merge key; later
   overrides earlier per id. A block carries its body in exactly one of two
   shapes: a prose ``body_template`` or the structured
@@ -46,6 +46,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.audit import AuditCadence
+from eawf.platform.render_block import DEFAULT_RENDER_BLOCK_TIER, RenderBlockTier
 
 
 class StateExtensions(BaseModel):
@@ -220,6 +221,7 @@ class RenderBlock(BaseModel):
     rationale: str | None = None
     mechanism: str | None = None
     verification: str | None = None
+    tier: RenderBlockTier = DEFAULT_RENDER_BLOCK_TIER
     version: str = "1.0"
 
     @property

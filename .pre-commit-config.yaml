@@ -103,6 +103,12 @@ repos:
         # retroactively rejected.
         pass_filenames: false
         stages: [pre-commit]
+      - id: agents-md-budget
+        name: agents-md-budget
+        entry: uv run python -m eawf.platform.lint.tools.agents_md_budget
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift
