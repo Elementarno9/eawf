@@ -10,8 +10,10 @@ fork+exec coverage lives in the cold-spawn benchmark under
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -48,7 +50,8 @@ def test_auto_spawn_returns_existing_pid_when_alive(
         spawn_called.append(True)
 
     monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
-    monkeypatch.setattr(spawn_mod, "_wait_for_socket", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: os.getpid())
     pid = auto_spawn_daemon(runtime_dir)
     assert pid == os.getpid()
     assert spawn_called == []
@@ -72,12 +75,15 @@ def test_auto_spawn_detects_stale_pid_and_respawns(
         spawn_called.append(True)
         # Simulate the freshly spawned daemon writing its pid file +
         # opening its socket. The test does not actually need a live
-        # socket — we override ``_wait_for_socket`` so the helper
+        # socket — we override ``_ping_daemon_once`` so the helper
         # short-circuits.
         _write_pid_file(runtime_dir, os.getpid())
 
+    pings: list[int | None] = [None, os.getpid()]
+
     monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
-    monkeypatch.setattr(spawn_mod, "_wait_for_socket", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: pings.pop(0))
     pid = auto_spawn_daemon(runtime_dir)
     assert pid == os.getpid()
     assert spawn_called == [True]
@@ -96,8 +102,11 @@ def test_auto_spawn_no_pid_file_triggers_spawn(
         spawn_called.append(True)
         _write_pid_file(runtime_dir, os.getpid())
 
+    pings: list[int | None] = [None, os.getpid()]
+
     monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
-    monkeypatch.setattr(spawn_mod, "_wait_for_socket", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: pings.pop(0))
     pid = auto_spawn_daemon(runtime_dir)
     assert pid == os.getpid()
     assert spawn_called == [True]
@@ -112,11 +121,14 @@ def test_auto_spawn_timeout_raises_when_socket_never_opens(
 
     def _fake_spawn(_runtime_dir: Path) -> None:
         # No-op: deliberately do NOT write the pid file or open a
-        # socket so ``_wait_for_socket`` fails.
+        # socket so the readiness wait fails.
         return
 
     monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
-    monkeypatch.setattr(spawn_mod, "_wait_for_socket", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: None)
+    monkeypatch.setattr(spawn_mod, "SPAWN_POLL_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(spawn_mod, "SPAWN_POLL_INTERVAL_SECONDS", 0.001)
     with pytest.raises(DaemonSpawnTimeout):
         auto_spawn_daemon(runtime_dir)
 
@@ -132,8 +144,11 @@ def test_auto_spawn_silent_unless_verbose(
     def _fake_spawn(_runtime_dir: Path) -> None:
         _write_pid_file(runtime_dir, os.getpid())
 
+    pings: list[int | None] = [None, os.getpid()]
+
     monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
-    monkeypatch.setattr(spawn_mod, "_wait_for_socket", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: pings.pop(0))
     monkeypatch.delenv("EAWF_VERBOSE", raising=False)
 
     auto_spawn_daemon(runtime_dir)
@@ -153,8 +168,11 @@ def test_auto_spawn_verbose_prints_step(
     def _fake_spawn(_runtime_dir: Path) -> None:
         _write_pid_file(runtime_dir, os.getpid())
 
+    pings: list[int | None] = [None, os.getpid()]
+
     monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
-    monkeypatch.setattr(spawn_mod, "_wait_for_socket", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: pings.pop(0))
     monkeypatch.setenv("EAWF_VERBOSE", "1")
 
     auto_spawn_daemon(runtime_dir)
@@ -172,6 +190,78 @@ def test_pid_alive_helper_returns_false_for_missing_pid(
 
 def test_pid_alive_helper_returns_true_for_self() -> None:
     assert spawn_mod._pid_alive(os.getpid()) is True
+
+
+def test_auto_spawn_waits_on_singleton_locked_startup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lock-held startup waits for readiness and does not fork again."""
+    runtime_dir = tmp_path / "rt"
+    spawn_called: list[bool] = []
+
+    def _fake_spawn(_runtime_dir: Path) -> None:
+        spawn_called.append(True)
+
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: True)
+    monkeypatch.setattr(spawn_mod, "wait_for_daemon_ready", lambda _runtime_dir: 4242)
+    monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
+
+    assert auto_spawn_daemon(runtime_dir) == 4242
+    assert spawn_called == []
+
+
+def test_auto_spawn_rechecks_readiness_under_spawn_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second CLI attaching after another starter avoids a second fork."""
+    runtime_dir = tmp_path / "rt"
+    spawn_called: list[bool] = []
+    lock_events: list[str] = []
+
+    @contextlib.contextmanager
+    def _fake_spawn_lock(_runtime_dir: Path, *, timeout_seconds: float) -> Iterator[None]:
+        assert timeout_seconds > 0
+        lock_events.append("enter")
+        yield
+        lock_events.append("exit")
+
+    def _fake_spawn(_runtime_dir: Path) -> None:
+        spawn_called.append(True)
+
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "acquire_spawn_lock", _fake_spawn_lock)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: 5150)
+    monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
+
+    assert auto_spawn_daemon(runtime_dir) == 5150
+    assert spawn_called == []
+    assert lock_events == ["enter", "exit"]
+
+
+def test_auto_spawn_live_pid_without_ping_does_not_return_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live PID file alone is not readiness."""
+    runtime_dir = tmp_path / "rt"
+    runtime_dir.mkdir()
+    _write_pid_file(runtime_dir, os.getpid())
+    spawn_called: list[bool] = []
+
+    def _fake_spawn(_runtime_dir: Path) -> None:
+        spawn_called.append(True)
+
+    monkeypatch.setattr(spawn_mod, "daemon_singleton_locked", lambda _runtime_dir: False)
+    monkeypatch.setattr(spawn_mod, "_ping_daemon_once", lambda _runtime_dir: None)
+    monkeypatch.setattr(spawn_mod, "_spawn_posix", _fake_spawn)
+    monkeypatch.setattr(spawn_mod, "SPAWN_POLL_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(spawn_mod, "SPAWN_POLL_INTERVAL_SECONDS", 0.001)
+
+    with pytest.raises(DaemonSpawnTimeout):
+        auto_spawn_daemon(runtime_dir)
+    assert spawn_called == [True]
 
 
 def test_read_pid_file_handles_missing_file(tmp_path: Path) -> None:

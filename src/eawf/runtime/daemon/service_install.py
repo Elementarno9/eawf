@@ -12,8 +12,9 @@ Wraps the three native service surfaces:
 
 The verbs are operator-facing and idempotent on the disable path:
 disabling a never-installed service must succeed without raising.
-Each enable call waits up to ten seconds for the daemon to write its
-PID file so the operator gets a synchronous "service is up" signal.
+Each enable call waits up to ten seconds for the daemon to answer
+``daemon.ping`` so the operator gets a synchronous "service is up"
+signal.
 
 The NSSM fallback is *documented* but not shipped; the install verb
 relies on pywin32 being importable. Operators can manually layer NSSM
@@ -38,6 +39,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.runtime.daemon.runtime_dir import pid_path, runtime_dir
+from eawf.runtime.daemon.spawn import DaemonSpawnTimeoutError, wait_for_daemon_ready
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,7 @@ _SYSTEMD_UNIT_NAME = "eawfd.service"
 _LAUNCHD_LABEL = "dev.eawf.eawfd"
 _WINDOWS_SERVICE_NAME = "eawfd"
 
-# Per-OS PID-file wait window (seconds).
+# Per-OS readiness wait window (seconds).
 _PID_WAIT_TIMEOUT_SECONDS = 10.0
 _PID_WAIT_POLL_INTERVAL_SECONDS = 0.25
 
@@ -315,11 +317,35 @@ def _wait_for_pid_file(timeout_seconds: float = _PID_WAIT_TIMEOUT_SECONDS) -> in
     )
 
 
+def _wait_for_daemon_ready(timeout_seconds: float = _PID_WAIT_TIMEOUT_SECONDS) -> int:
+    """Block until the daemon answers ``daemon.ping`` or *timeout* elapses.
+
+    Args:
+        timeout_seconds: Wait window in seconds; rejected when zero
+            or negative because the caller always wants a positive
+            grace period after enable.
+
+    Returns:
+        The PID reported by the ready daemon.
+
+    Raises:
+        ServiceInstallError: When readiness does not arrive in time.
+    """
+    if timeout_seconds <= 0:
+        raise ServiceInstallError(f"timeout must be positive, got {timeout_seconds!r}")
+    try:
+        return wait_for_daemon_ready(runtime_dir(), timeout_seconds=timeout_seconds)
+    except DaemonSpawnTimeoutError as exc:
+        raise ServiceInstallError(
+            f"daemon did not answer daemon.ping within {timeout_seconds:.1f}s"
+        ) from exc
+
+
 # --- Linux (systemd user) ---------------------------------------------
 
 
 def _enable_systemd() -> ServiceEnvelope:
-    """Render the systemd unit, reload, enable + start, await PID file."""
+    """Render the systemd unit, reload, enable + start, await RPC readiness."""
     unit_path = _systemd_unit_path()
     unit_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = _render_template(_SYSTEMD_TEMPLATE, runtime_dir_value=runtime_dir())
@@ -328,7 +354,7 @@ def _enable_systemd() -> ServiceEnvelope:
 
     _run(["systemctl", "--user", "daemon-reload"])
     _run(["systemctl", "--user", "enable", "--now", _SYSTEMD_UNIT_NAME])
-    pid = _wait_for_pid_file()
+    pid = _wait_for_daemon_ready()
     return ServiceEnvelope(
         event_type="daemon_service_enabled",
         platform="linux",
@@ -395,7 +421,7 @@ def _launchd_uid_target() -> str:
 
 
 def _enable_launchd() -> ServiceEnvelope:
-    """Render the plist, bootstrap + enable + kickstart, await PID file."""
+    """Render the plist, bootstrap + enable + kickstart, await RPC readiness."""
     plist_path = _launchd_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = _render_template(_LAUNCHD_TEMPLATE, runtime_dir_value=runtime_dir())
@@ -412,7 +438,7 @@ def _enable_launchd() -> ServiceEnvelope:
     _run(["launchctl", "bootstrap", uid_target, str(plist_path)])
     _run(["launchctl", "enable", f"{uid_target}/{_LAUNCHD_LABEL}"])
     _run(["launchctl", "kickstart", f"{uid_target}/{_LAUNCHD_LABEL}"])
-    pid = _wait_for_pid_file()
+    pid = _wait_for_daemon_ready()
     return ServiceEnvelope(
         event_type="daemon_service_enabled",
         platform="darwin",
@@ -466,7 +492,7 @@ def _status_launchd() -> ServiceStatus:
 
 
 def _enable_windows() -> ServiceEnvelope:
-    """Install + start the pywin32 service and await the PID file.
+    """Install + start the pywin32 service and await RPC readiness.
 
     Uses :func:`win32serviceutil.InstallService` directly rather than
     shelling out to ``python -m eawf.runtime.daemon.win_service install`` so
@@ -475,8 +501,8 @@ def _enable_windows() -> ServiceEnvelope:
 
     Raises:
         ServiceInstallError: When pywin32 is not importable, the SCM
-            install call fails, or the daemon does not write its PID
-            file within the wait window.
+            install call fails, or the daemon does not answer
+            ``daemon.ping`` within the wait window.
     """
     try:  # pragma: no cover - win32-only branch
         win32serviceutil: Any = importlib.import_module("win32serviceutil")
@@ -498,7 +524,7 @@ def _enable_windows() -> ServiceEnvelope:
     except Exception as exc:  # pragma: no cover - win32-only branch
         raise ServiceInstallError(f"windows install failed: {exc!s}") from exc
 
-    pid = _wait_for_pid_file()
+    pid = _wait_for_daemon_ready()
     return ServiceEnvelope(
         event_type="daemon_service_enabled",
         platform="win32",
@@ -567,7 +593,7 @@ def enable_service() -> ServiceEnvelope:
 
     Raises:
         ServiceInstallError: When the install fails — template
-            missing, supervisor command exit non-zero, PID-file wait
+            missing, supervisor command exit non-zero, daemon readiness
             timeout, or platform unsupported.
     """
     if sys.platform.startswith("linux"):

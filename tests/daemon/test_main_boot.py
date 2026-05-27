@@ -178,7 +178,7 @@ def test_run_replays_wal_before_serve(tmp_path: Path, monkeypatch: pytest.Monkey
     wal_dir.mkdir(parents=True)
     log_file = rt_dir / "eawfd.log"
     pid_file = rt_dir / "eawfd.pid"
-    monkeypatch.setattr(daemon_main, "runtime_dir", lambda: rt_dir)
+    monkeypatch.setattr(daemon_main, "ensure_runtime_dir", lambda: rt_dir)
     monkeypatch.setattr(daemon_main, "pid_path", lambda: pid_file)
     monkeypatch.setattr(daemon_main, "log_path", lambda: log_file)
     monkeypatch.setattr(daemon_main, "socket_path", lambda: rt_dir / "eawfd.sock")
@@ -223,7 +223,7 @@ def test_run_replay_clean_boot_is_noop(tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.setenv("EA_STATE", str(state_path))
     rt_dir = tmp_path / "runtime"
-    monkeypatch.setattr(daemon_main, "runtime_dir", lambda: rt_dir)
+    monkeypatch.setattr(daemon_main, "ensure_runtime_dir", lambda: rt_dir)
     monkeypatch.setattr(daemon_main, "pid_path", lambda: rt_dir / "eawfd.pid")
     monkeypatch.setattr(daemon_main, "log_path", lambda: rt_dir / "eawfd.log")
     monkeypatch.setattr(daemon_main, "socket_path", lambda: rt_dir / "eawfd.sock")
@@ -240,6 +240,90 @@ def test_run_replay_clean_boot_is_noop(tmp_path: Path, monkeypatch: pytest.Monke
     assert exit_code == 0
     # No records → no event row.
     assert not event_path.exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason=_BOOT_SKIP_REASON)
+def test_run_acquires_singleton_before_pid_wal_and_socket(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Daemon boot owns the singleton before PID, WAL, or socket work."""
+    ea_dir = tmp_path / "project" / ".ea"
+    ea_dir.mkdir(parents=True)
+    state_path = ea_dir / "state.json"
+    state_path.write_bytes(orjson.dumps({"placeholder": True}))
+    monkeypatch.setenv("EA_STATE", str(state_path))
+
+    rt_dir = tmp_path / "runtime"
+    pid_file = rt_dir / "eawfd.pid"
+    events: list[str] = []
+
+    @contextlib.contextmanager
+    def _fake_singleton(_runtime_dir: Path) -> Iterator[None]:
+        events.append("singleton")
+        yield
+
+    class _ReplayReport:
+        pending_count = 0
+        applied_count = 0
+        fsynced_count = 0
+        poisoned_count = 0
+        replayed_event_count = 0
+
+    def _fake_write_pid(_path: Path, _pid: int, _started_at: str) -> None:
+        events.append("pid")
+
+    def _fake_replay_wal(*_args: object, **_kwargs: object) -> _ReplayReport:
+        events.append("wal")
+        return _ReplayReport()
+
+    def _close_coro(coro: object) -> None:
+        events.append("socket")
+        if hasattr(coro, "close"):
+            coro.close()
+
+    monkeypatch.setattr(daemon_main, "ensure_runtime_dir", lambda: rt_dir)
+    monkeypatch.setattr(daemon_main, "pid_path", lambda: pid_file)
+    monkeypatch.setattr(daemon_main, "socket_path", lambda: rt_dir / "eawfd.sock")
+    monkeypatch.setattr(daemon_main, "acquire_daemon_singleton", _fake_singleton)
+    monkeypatch.setattr(daemon_main, "_write_pid_file", _fake_write_pid)
+    monkeypatch.setattr(daemon_main, "replay_wal", _fake_replay_wal)
+    monkeypatch.setattr(daemon_main.asyncio, "run", _close_coro)
+
+    assert daemon_main.run(foreground=True) == 0
+    assert events == ["singleton", "pid", "wal", "socket"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason=_BOOT_SKIP_REASON)
+def test_run_duplicate_boot_exits_without_runtime_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplicate daemon attempts do not overwrite PID or unlink sockets."""
+    rt_dir = tmp_path / "runtime"
+    rt_dir.mkdir()
+    pid_file = rt_dir / "eawfd.pid"
+    sock_file = rt_dir / "eawfd.sock"
+    pid_file.write_text("1234\n1\nold\n", encoding="utf-8")
+    sock_file.write_text("socket sentinel", encoding="utf-8")
+
+    def _locked(_runtime_dir: Path) -> Iterator[None]:
+        raise daemon_main.DaemonAlreadyRunningError("locked")
+
+    def _unexpected(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("duplicate daemon mutated runtime")
+
+    monkeypatch.setattr(daemon_main, "ensure_runtime_dir", lambda: rt_dir)
+    monkeypatch.setattr(daemon_main, "pid_path", lambda: pid_file)
+    monkeypatch.setattr(daemon_main, "socket_path", lambda: sock_file)
+    monkeypatch.setattr(daemon_main, "acquire_daemon_singleton", _locked)
+    monkeypatch.setattr(daemon_main, "_write_pid_file", _unexpected)
+    monkeypatch.setattr(daemon_main, "replay_wal", _unexpected)
+    monkeypatch.setattr(daemon_main.asyncio, "run", _unexpected)
+
+    assert daemon_main.run(foreground=True) == 0
+    assert pid_file.read_text(encoding="utf-8") == "1234\n1\nold\n"
+    assert sock_file.read_text(encoding="utf-8") == "socket sentinel"
 
 
 # ---------------------------------------------------------------------------

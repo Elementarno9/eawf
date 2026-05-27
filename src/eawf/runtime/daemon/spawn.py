@@ -1,15 +1,14 @@
 """On-demand auto-spawn of the eawfd daemon for the CLI.
 
-The CLI auto-starts the daemon when no live process is attached to
-the runtime dir. Procedure:
+The CLI auto-starts the daemon when no RPC-ready process is attached
+to the runtime dir. Procedure:
 
-1. Read ``<runtime_dir>/eawfd.pid``; when the file exists, the holder
-   PID is alive, and the holder UID matches the calling UID, return
-   the PID (a daemon is already running).
-2. Otherwise treat as a cold start: POSIX uses the double-fork pattern
-   (fork → setsid → fork → exec), Windows uses ``subprocess.Popen``
-   with ``DETACHED_PROCESS`` + ``CREATE_NEW_PROCESS_GROUP``. The
-   parent CLI then polls the socket/pipe for up to 5 s for liveness.
+1. If the daemon lifetime lock is already held, wait for the starter
+   to answer ``daemon.ping`` and return that PID.
+2. Otherwise acquire the short-lived spawn lock, re-check RPC
+   readiness, and fork only if the runtime is still cold.
+3. The parent CLI then polls ``daemon.ping`` for up to 5 s before
+   returning a PID.
 
 The cold-spawn is **silent** — no stdout/stderr noise unless the
 operator opts in with ``EAWF_VERBOSE=1``. The :mod:`eawf.surfaces.cli`
@@ -24,6 +23,7 @@ test fixtures does not trigger the full daemon module graph.
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import socket
@@ -31,6 +31,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from eawf.runtime.daemon.singleton import (
+    DaemonSpawnLockTimeoutError,
+    acquire_spawn_lock,
+    daemon_singleton_locked,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +205,91 @@ def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
     return False
 
 
+def _ping_daemon_once(runtime_dir: Path) -> int | None:
+    """Return the daemon PID when ``daemon.ping`` succeeds once.
+
+    Args:
+        runtime_dir: Daemon runtime directory.
+
+    Returns:
+        Daemon PID from the JSON-RPC result, or ``None`` when the
+        transport is not ready yet.
+    """
+    if sys.platform == "win32":
+        # The Windows synchronous named-pipe client is still separate
+        # work. Keep the readiness predicate no weaker than the current
+        # pipe-open gate on that platform.
+        deadline = time.monotonic() + SPAWN_POLL_INTERVAL_SECONDS
+        if not _wait_for_pipe(runtime_dir, deadline):
+            return None
+        return _read_pid_file(runtime_dir / "eawfd.pid")
+    sock_path = runtime_dir / "eawfd.sock"
+    if not sock_path.exists():
+        return None
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            probe.connect(str(sock_path))
+            request = {
+                "jsonrpc": "2.0",
+                "id": "spawn-readiness",
+                "method": "daemon.ping",
+                "params": {},
+            }
+            probe.sendall(json.dumps(request).encode("utf-8") + b"\n")
+            reader = probe.makefile("rb")
+            try:
+                line = reader.readline()
+            finally:
+                reader.close()
+    except OSError:
+        return None
+    if not line:
+        return None
+    try:
+        response = json.loads(line.decode("utf-8"))
+        result = response.get("result")
+        if not isinstance(result, dict):
+            return None
+        pid = result.get("pid")
+        if isinstance(pid, int) and pid > 0:
+            return pid
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+        return None
+    return None
+
+
+def wait_for_daemon_ready(
+    runtime_dir: Path,
+    *,
+    timeout_seconds: float = SPAWN_POLL_TIMEOUT_SECONDS,
+) -> int:
+    """Poll ``daemon.ping`` until the daemon is RPC-ready.
+
+    Args:
+        runtime_dir: Daemon runtime directory.
+        timeout_seconds: Wait window in seconds.
+
+    Returns:
+        PID reported by ``daemon.ping``.
+
+    Raises:
+        DaemonSpawnTimeout: When readiness does not arrive in time.
+    """
+    if timeout_seconds <= 0:
+        raise DaemonSpawnTimeout(f"timeout must be positive, got {timeout_seconds!r}")
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        pid = _ping_daemon_once(runtime_dir)
+        if pid is not None:
+            return pid
+        time.sleep(SPAWN_POLL_INTERVAL_SECONDS)
+    raise DaemonSpawnTimeout(
+        f"daemon did not answer daemon.ping within {timeout_seconds:.1f}s "
+        f"(runtime={runtime_dir.name!r})"
+    )
+
+
 def _spawn_posix(runtime_dir: Path) -> None:
     """Fork-fork-exec the daemon and detach via :func:`os.setsid`.
 
@@ -298,47 +389,55 @@ def auto_spawn_daemon(runtime_dir: Path) -> int:
         or the freshly spawned one.
 
     Raises:
-        DaemonSpawnTimeout: When the daemon failed to expose its
-            socket / pipe within :data:`SPAWN_POLL_TIMEOUT_SECONDS`.
+        DaemonSpawnTimeout: When the daemon failed to answer
+            ``daemon.ping`` within :data:`SPAWN_POLL_TIMEOUT_SECONDS`.
     """
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    if daemon_singleton_locked(runtime_dir):
+        logger.info(f"auto_spawn_daemon startup-in-progress runtime={runtime_dir.name!r}")
+        return wait_for_daemon_ready(runtime_dir)
+
+    try:
+        spawn_lock = acquire_spawn_lock(
+            runtime_dir,
+            timeout_seconds=SPAWN_POLL_TIMEOUT_SECONDS,
+        )
+        with spawn_lock:
+            return _auto_spawn_daemon_locked(runtime_dir)
+    except DaemonSpawnLockTimeoutError as exc:
+        raise DaemonSpawnTimeout(str(exc)) from exc
+
+
+def _auto_spawn_daemon_locked(runtime_dir: Path) -> int:
+    """Spawn or attach while the caller holds the spawn lock."""
+    ready_pid = _ping_daemon_once(runtime_dir)
+    if ready_pid is not None:
+        logger.info(f"auto_spawn_daemon already-ready pid={ready_pid} runtime={runtime_dir.name!r}")
+        return ready_pid
+    if daemon_singleton_locked(runtime_dir):
+        logger.info(f"auto_spawn_daemon startup-in-progress runtime={runtime_dir.name!r}")
+        return wait_for_daemon_ready(runtime_dir)
+
     # Resolve against the caller-supplied runtime_dir so tests can
     # point the helper at a per-test temporary directory without
     # mutating the global runtime-dir resolution.
     pid_file = runtime_dir / "eawfd.pid"
     existing = _read_pid_file(pid_file)
-    if existing is not None and _pid_alive(existing) and _pid_owned_by_current_uid(existing):
-        logger.info(
-            f"auto_spawn_daemon already-running pid={existing} runtime={runtime_dir.name!r}"
-        )
-        return existing
     if existing is not None:
-        # Stale PID — file present but the holder is dead or owned
-        # by another UID. Clean up so the fresh daemon can write a
-        # new pid file without colliding.
-        logger.info(f"auto_spawn_daemon stale-pid pid={existing} runtime={runtime_dir.name!r}")
+        if _pid_alive(existing) and _pid_owned_by_current_uid(existing):
+            logger.info(
+                f"auto_spawn_daemon pid-without-rpc pid={existing} runtime={runtime_dir.name!r}"
+            )
+        else:
+            logger.info(f"auto_spawn_daemon stale-pid pid={existing} runtime={runtime_dir.name!r}")
         with contextlib.suppress(OSError):
             pid_file.unlink()
     _emit(f"eawf: spawning eawfd from {runtime_dir.name}")
-    runtime_dir.mkdir(parents=True, exist_ok=True)
     if sys.platform == "win32":
         _spawn_windows(runtime_dir)
     else:
         _spawn_posix(runtime_dir)
-    deadline = time.monotonic() + SPAWN_POLL_TIMEOUT_SECONDS
-    if sys.platform == "win32":
-        ready = _wait_for_pipe(runtime_dir, deadline)
-    else:
-        ready = _wait_for_socket(runtime_dir, deadline)
-    if not ready:
-        raise DaemonSpawnTimeout(
-            f"daemon did not open socket within {SPAWN_POLL_TIMEOUT_SECONDS}s "
-            f"(runtime={runtime_dir.name!r})"
-        )
-    spawned = _read_pid_file(pid_file)
-    if spawned is None:
-        raise DaemonSpawnTimeout(
-            f"daemon socket up but pid file missing (runtime={runtime_dir.name!r})"
-        )
+    spawned = wait_for_daemon_ready(runtime_dir)
     logger.info(f"auto_spawn_daemon spawned pid={spawned} runtime={runtime_dir.name!r}")
     return spawned
 
@@ -348,4 +447,5 @@ __all__ = [
     "DaemonSpawnTimeout",
     "DaemonSpawnTimeoutError",
     "auto_spawn_daemon",
+    "wait_for_daemon_ready",
 ]

@@ -153,6 +153,7 @@ def test_enable_service_linux_renders_unit_and_invokes_systemctl(
         responses=[_StubProcess(), _StubProcess()],
     )
     _seed_pid_file(stub_runtime_dir, pid=9876)
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 9876)
 
     envelope = enable_service()
 
@@ -174,7 +175,7 @@ def test_enable_service_linux_renders_unit_and_invokes_systemctl(
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux-only systemd path")
-def test_enable_service_linux_times_out_when_pid_file_absent(
+def test_enable_service_linux_times_out_when_daemon_ping_absent(
     monkeypatch: pytest.MonkeyPatch,
     stub_runtime_dir: Path,
     stub_systemd_unit: Path,
@@ -184,17 +185,13 @@ def test_enable_service_linux_times_out_when_pid_file_absent(
         monkeypatch,
         responses=[_StubProcess(), _StubProcess()],
     )
-    # Shorten the timeout so the test runs quickly.
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.service_install._PID_WAIT_TIMEOUT_SECONDS",
-        0.2,
-    )
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.service_install._PID_WAIT_POLL_INTERVAL_SECONDS",
-        0.05,
-    )
 
-    with pytest.raises(ServiceInstallError, match="did not write pid file"):
+    def _fail_ready() -> int:
+        raise ServiceInstallError("daemon did not answer daemon.ping within 0.2s")
+
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", _fail_ready)
+
+    with pytest.raises(ServiceInstallError, match=r"daemon\.ping"):
         enable_service()
 
 
@@ -247,6 +244,7 @@ def test_enable_service_macos_renders_plist_and_invokes_launchctl(
         responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
     )
     _seed_pid_file(stub_runtime_dir, pid=11111)
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 11111)
     _stub_invoking_user(
         monkeypatch,
         uid=501,
@@ -266,6 +264,7 @@ def test_enable_service_macos_renders_plist_and_invokes_launchctl(
     assert str(stub_runtime_dir) in body
     assert "<key>Label</key>" in body
     assert "<string>dev.eawf.eawfd</string>" in body
+    assert "<string>--foreground</string>" in body
 
     assert recorder.calls[0] == [
         "launchctl",
@@ -301,6 +300,7 @@ def test_enable_service_macos_uses_sudo_uid_when_run_as_root(
         responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
     )
     _seed_pid_file(stub_runtime_dir, pid=22222)
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 22222)
     _stub_invoking_user(
         monkeypatch,
         uid=0,
@@ -351,6 +351,7 @@ def test_enable_service_macos_boots_out_before_bootstrap(
         responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
     )
     _seed_pid_file(stub_runtime_dir, pid=33333)
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 33333)
     _stub_invoking_user(
         monkeypatch,
         uid=501,
@@ -563,6 +564,10 @@ def test_render_launchd_template_substitutes_runtime_dir(tmp_path: Path) -> None
     assert f"<string>{tmp_path / 'runtime'}/eawfd.err</string>" in body
     assert "<key>Label</key>" in body
     assert "<string>dev.eawf.eawfd</string>" in body
+    assert "<string>--foreground</string>" in body
+    assert "<key>SuccessfulExit</key>" in body
+    assert "<false/>" in body
+    assert "<key>KeepAlive</key>\n    <dict>" in body
 
 
 # ---------------------------------------------------------------------
@@ -619,6 +624,23 @@ def test_wait_for_pid_file_rejects_nonpositive_timeout() -> None:
         service_install._wait_for_pid_file(timeout_seconds=0)
 
 
+def test_wait_for_daemon_ready_rejects_nonpositive_timeout() -> None:
+    """The readiness wait raises immediately on a non-positive timeout."""
+    with pytest.raises(ServiceInstallError, match="timeout must be positive"):
+        service_install._wait_for_daemon_ready(timeout_seconds=0)
+
+
+def test_wait_for_daemon_ready_wraps_ping_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spawn-layer ping timeout becomes a service-install error."""
+
+    def _fail_ready(*_args: object, **_kwargs: object) -> int:
+        raise service_install.DaemonSpawnTimeoutError("timeout")
+
+    monkeypatch.setattr(service_install, "wait_for_daemon_ready", _fail_ready)
+    with pytest.raises(ServiceInstallError, match=r"daemon\.ping"):
+        service_install._wait_for_daemon_ready(timeout_seconds=0.1)
+
+
 def test_run_raises_service_install_error_on_check_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -671,6 +693,7 @@ def test_enable_service_windows_invokes_install_and_start(  # pragma: no cover -
         _FakeWin32ServiceUtil,
     )
     _seed_pid_file(stub_runtime_dir, pid=7777)
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 7777)
 
     envelope = enable_service()
 

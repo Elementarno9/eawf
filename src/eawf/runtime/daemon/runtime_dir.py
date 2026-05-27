@@ -115,6 +115,26 @@ def pid_path() -> Path:
     return runtime_dir() / "eawfd.pid"
 
 
+def daemon_singleton_lock_path() -> Path:
+    """Return the daemon lifetime singleton lock file path.
+
+    Returns:
+        ``<runtime_dir>/eawfd.lock`` — held by the live daemon process
+        before it writes a PID file, replays WAL, or binds the socket.
+    """
+    return runtime_dir() / "eawfd.lock"
+
+
+def daemon_spawn_lock_path() -> Path:
+    """Return the CLI auto-spawn coordination lock file path.
+
+    Returns:
+        ``<runtime_dir>/eawfd.spawn.lock`` — held only while a CLI is
+        deciding whether it needs to fork a daemon.
+    """
+    return runtime_dir() / "eawfd.spawn.lock"
+
+
 def log_path() -> Path:
     """Return the daemon log file path.
 

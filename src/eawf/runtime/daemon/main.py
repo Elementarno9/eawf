@@ -32,14 +32,15 @@ from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.recovery import replay_wal
 from eawf.runtime.daemon.runtime_dir import (
+    ensure_runtime_dir,
     harden_runtime_dir,
     log_path,
     pid_path,
-    runtime_dir,
     socket_path,
 )
 from eawf.runtime.daemon.server import process_frame_bytes, serve_unix
 from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
+from eawf.runtime.daemon.singleton import DaemonAlreadyRunningError, acquire_daemon_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -307,83 +308,86 @@ def run(*, foreground: bool = True) -> int:
             or equivalent). The named-pipe transport requires pywin32.
     """
     _configure_logging(foreground)
-    rt_dir = runtime_dir()
     # Create + retighten the runtime dir to owner-only (0700) on every boot:
     # it holds the PID file, socket, log, and WAL, all of which embed the
     # operator's cwd / state paths, so other local users must not traverse it.
-    rt_dir.mkdir(parents=True, exist_ok=True)
-    harden_runtime_dir(rt_dir)
-    pid_file = pid_path()
-
-    started_at = datetime.now(UTC).isoformat()
-    pid = os.getpid()
-    _write_pid_file(pid_file, pid, started_at)
-
-    # Resolve the project's state path so the daemon's ``state.*``
-    # mutator can locate ``state.json`` + ``event.jsonl``. Precedence
-    # is the same as the CLI resolver — ``EA_STATE`` env var wins,
-    # otherwise pwd-upward from the spawn cwd. Registry-driven repo
-    # resolution lands in W10 alongside the layered-config writer.
-    project_state_path, _state_reason = resolve_with_reason(workspace=None)
-    project_event_path = store_path(project_state_path, StoreKind.EVENT)
-    daemon_wal_dir = rt_dir / "wal"
-    daemon_wal_dir.mkdir(parents=True, exist_ok=True)
-
-    # Startup WAL replay: walk the WAL once before the listener starts
-    # accepting connections so any post-apply outcome record from a
-    # prior unclean exit (SIGKILL between event-append and fsync-rename)
-    # gets reconciled against the event log. Idempotent on subsequent
-    # boots — fully-replayed records rename to ``.fsynced.json`` and
-    # the next pass is a no-op.
-    replay_report = replay_wal(
-        daemon_wal_dir,
-        state_path=project_state_path,
-        event_path=project_event_path,
-    )
-    logger.info(
-        f"run wal-replay pending={replay_report.pending_count} "
-        f"applied={replay_report.applied_count} "
-        f"fsynced={replay_report.fsynced_count} "
-        f"poisoned={replay_report.poisoned_count} "
-        f"replayed={replay_report.replayed_event_count}"
-    )
-    if replay_report.poisoned_count > 0:
-        logger.warning(
-            f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
-            f"operator should run 'eawf daemon replay-wal --inspect'"
-        )
-
-    ctx = MethodContext(
-        started_at=started_at,
-        pid=pid,
-        protocol_version=PROTOCOL_VERSION,
-        version=__version__,
-        shutdown_event=asyncio.Event(),
-        bus=EventBus(),
-        event_path=project_event_path,
-        state_path=project_state_path,
-        wal_dir=daemon_wal_dir,
-        idempotency_cache={},
-    )
-
-    logger.info(f"run boot pid={pid} version={__version__!r} protocol={PROTOCOL_VERSION!r}")
-    sock_path = socket_path() if sys.platform != "win32" else None
+    rt_dir = ensure_runtime_dir()
     try:
-        if sys.platform == "win32":
-            asyncio.run(_run_windows_server(ctx))
-        else:
-            assert sock_path is not None
-            if sock_path.exists():
-                # Stale socket from a prior unclean exit — unlink before bind.
-                sock_path.unlink()
-            asyncio.run(_run_server(sock_path, ctx, expected_uid=os.geteuid()))
-    finally:
-        if sock_path is not None:
-            with contextlib.suppress(FileNotFoundError):
-                sock_path.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            pid_file.unlink()
-        logger.info("run exit")
+        with acquire_daemon_singleton(rt_dir):
+            pid_file = pid_path()
+
+            started_at = datetime.now(UTC).isoformat()
+            pid = os.getpid()
+            _write_pid_file(pid_file, pid, started_at)
+
+            # Resolve the project's state path so the daemon's ``state.*``
+            # mutator can locate ``state.json`` + ``event.jsonl``. Precedence
+            # is the same as the CLI resolver — ``EA_STATE`` env var wins,
+            # otherwise pwd-upward from the spawn cwd. Registry-driven repo
+            # resolution lands in W10 alongside the layered-config writer.
+            project_state_path, _state_reason = resolve_with_reason(workspace=None)
+            project_event_path = store_path(project_state_path, StoreKind.EVENT)
+            daemon_wal_dir = rt_dir / "wal"
+            daemon_wal_dir.mkdir(parents=True, exist_ok=True)
+
+            # Startup WAL replay: walk the WAL once before the listener starts
+            # accepting connections so any post-apply outcome record from a
+            # prior unclean exit (SIGKILL between event-append and fsync-rename)
+            # gets reconciled against the event log. Idempotent on subsequent
+            # boots — fully-replayed records rename to ``.fsynced.json`` and
+            # the next pass is a no-op.
+            replay_report = replay_wal(
+                daemon_wal_dir,
+                state_path=project_state_path,
+                event_path=project_event_path,
+            )
+            logger.info(
+                f"run wal-replay pending={replay_report.pending_count} "
+                f"applied={replay_report.applied_count} "
+                f"fsynced={replay_report.fsynced_count} "
+                f"poisoned={replay_report.poisoned_count} "
+                f"replayed={replay_report.replayed_event_count}"
+            )
+            if replay_report.poisoned_count > 0:
+                logger.warning(
+                    f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
+                    f"operator should run 'eawf daemon replay-wal --inspect'"
+                )
+
+            ctx = MethodContext(
+                started_at=started_at,
+                pid=pid,
+                protocol_version=PROTOCOL_VERSION,
+                version=__version__,
+                shutdown_event=asyncio.Event(),
+                bus=EventBus(),
+                event_path=project_event_path,
+                state_path=project_state_path,
+                wal_dir=daemon_wal_dir,
+                idempotency_cache={},
+            )
+
+            logger.info(f"run boot pid={pid} version={__version__!r} protocol={PROTOCOL_VERSION!r}")
+            sock_path = socket_path() if sys.platform != "win32" else None
+            try:
+                if sys.platform == "win32":
+                    asyncio.run(_run_windows_server(ctx))
+                else:
+                    assert sock_path is not None
+                    if sock_path.exists():
+                        # Stale socket from a prior unclean exit — unlink before bind.
+                        sock_path.unlink()
+                    asyncio.run(_run_server(sock_path, ctx, expected_uid=os.geteuid()))
+            finally:
+                if sock_path is not None:
+                    with contextlib.suppress(FileNotFoundError):
+                        sock_path.unlink()
+                with contextlib.suppress(FileNotFoundError):
+                    pid_file.unlink()
+                logger.info("run exit")
+    except DaemonAlreadyRunningError:
+        logger.info(f"run duplicate-daemon runtime={rt_dir.name!r}")
+        return 0
     return 0
 
 
