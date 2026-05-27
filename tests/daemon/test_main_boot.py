@@ -38,6 +38,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.session import reset_registry
 from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS
+from eawf.runtime.daemon.stale_wave import DEFAULT_STALE_WINDOW_SECONDS
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, write_pending
 
 pytestmark = pytest.mark.unit
@@ -141,6 +142,47 @@ def _build_state_with_expired_session(*, wave_id: str) -> dict[str, object]:
             "repo_urn": "urn:eawf:v1:repo:QR",
         },
         "current": {"project_code": "QR"},
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {wave_id: wave.model_dump(mode="json")},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
+def _build_state_with_stale_wave(*, wave_id: str) -> dict[str, object]:
+    """Build a minimal state payload with one active stale wave."""
+    opened = _now() - timedelta(seconds=DEFAULT_STALE_WINDOW_SECONDS + 10)
+    wave = Wave.model_validate(
+        {
+            "id": wave_id,
+            "iter_id": "P24-I02",
+            "title": "stale-wave-test",
+            "status": "claimed",
+            "claim_session_id": "SES-test",
+            "opened_at": opened.isoformat(),
+            "sessions": {},
+        }
+    )
+    return {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": _now().isoformat(),
+        "project": {
+            "code": "QR",
+            "slug": "qr",
+            "title": "QR",
+            "description": None,
+            "domains": ["x"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {"project_code": "QR", "active_wave_ids": [wave_id]},
         "workspace": None,
         "phases": {},
         "iters": {},
@@ -387,6 +429,49 @@ def test_schedule_session_ttl_sweep_prunes_expired_attempt(
             await asyncio.wait_for(task, timeout=2.0)
         assert len(published) == 1
         assert published[0].payload["event_type"] == "session_handle_pruned"
+
+    _run(body)
+
+
+def test_schedule_stale_wave_sweep_returns_none_without_state(tmp_path: Path) -> None:
+    """Daemonless / unit-test contexts (state_path=None) skip the sweep."""
+
+    async def body() -> None:
+        ctx = _build_ctx(state_path=None, bus=None)
+        task = daemon_main._schedule_stale_wave_sweep(ctx)
+        assert task is None
+
+    _run(body)
+
+
+def test_schedule_stale_wave_sweep_publishes_needs_user_pause(tmp_path: Path) -> None:
+    """Scheduled stale-wave sweep appends + publishes a needs_user prompt."""
+    state_path = tmp_path / "state.json"
+    payload = _build_state_with_stale_wave(wave_id="P24-I02-W20")
+    state_path.write_bytes(orjson.dumps(payload))
+
+    async def body() -> None:
+        published: list[Envelope] = []
+
+        class _CapturingBus:
+            """Minimal publish() stub matching EventBus's narrow API."""
+
+            def publish(self, envelope: Envelope) -> None:
+                published.append(envelope)
+
+        ctx = _build_ctx(state_path=state_path, bus=_CapturingBus())
+        task = daemon_main._schedule_stale_wave_sweep(ctx)
+        assert task is not None
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert isinstance(ctx.shutdown_event, asyncio.Event)
+        ctx.shutdown_event.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=2.0)
+        assert len(published) == 1
+        assert published[0].payload["event_type"] == "needs_user_pause"
+        assert published[0].payload["event_kind"] == "stale_wave_detected"
+        assert ctx.last_event_id == published[0].id
 
     _run(body)
 

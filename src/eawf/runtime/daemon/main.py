@@ -24,6 +24,7 @@ from pathlib import Path
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
 from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.runtime.daemon import PROTOCOL_VERSION
@@ -41,6 +42,12 @@ from eawf.runtime.daemon.runtime_dir import (
 from eawf.runtime.daemon.server import process_frame_bytes, serve_unix
 from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
 from eawf.runtime.daemon.singleton import DaemonAlreadyRunningError, acquire_daemon_singleton
+from eawf.runtime.daemon.stale_wave import (
+    DEFAULT_STALE_WINDOW_SECONDS,
+)
+from eawf.runtime.daemon.stale_wave import (
+    run_sweep_loop as run_stale_wave_loop,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +100,27 @@ def _resolve_session_ttl_seconds() -> int:
     if value <= 0:
         logger.warning(f"_resolve_session_ttl_seconds non-positive raw={raw!r}; using default")
         return DEFAULT_TTL_SECONDS
+    return value
+
+
+def _resolve_stale_wave_seconds() -> int:
+    """Return the stale-wave threshold in seconds.
+
+    The env var ``EAWF_DAEMON_STALE_WAVE_SECONDS`` exists for tests and
+    operator tuning while the layered-config daemon reader is still
+    landing. Invalid values fall back to the 15-minute default.
+    """
+    raw = os.environ.get("EAWF_DAEMON_STALE_WAVE_SECONDS")
+    if not raw:
+        return DEFAULT_STALE_WINDOW_SECONDS
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"_resolve_stale_wave_seconds unparseable raw={raw!r}; using default")
+        return DEFAULT_STALE_WINDOW_SECONDS
+    if value <= 0:
+        logger.warning(f"_resolve_stale_wave_seconds non-positive raw={raw!r}; using default")
+        return DEFAULT_STALE_WINDOW_SECONDS
     return value
 
 
@@ -154,6 +182,29 @@ def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None
             state_path=ctx.state_path,
             ttl_seconds=ttl_seconds,
             publish=publish,
+            stop_event=ctx.shutdown_event,
+        )
+    )
+
+
+def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
+    """Schedule the stale-wave detector loop on the running loop."""
+    if ctx.state_path is None:
+        return None
+    stale_window_seconds = _resolve_stale_wave_seconds()
+
+    def _publish(envelope: Envelope) -> None:
+        if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+            ctx.bus.publish(envelope)
+        ctx.last_event_id = envelope.id
+
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    return asyncio.create_task(
+        run_stale_wave_loop(
+            state_path=ctx.state_path,
+            event_path=Path(ctx.event_path) if ctx.event_path is not None else None,
+            stale_window_seconds=stale_window_seconds,
+            publish=_publish,
             stop_event=ctx.shutdown_event,
         )
     )
@@ -233,6 +284,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     ttl_task = _schedule_session_ttl_sweep(ctx)
+    stale_wave_task = _schedule_stale_wave_sweep(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
@@ -243,6 +295,10 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             ttl_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ttl_task
+        if stale_wave_task is not None:
+            stale_wave_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await stale_wave_task
         server.close()
         await server.wait_closed()
 
@@ -278,6 +334,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     watchdog = _build_watchdog(ctx, idle_timeout)
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     ttl_task = _schedule_session_ttl_sweep(ctx)
+    stale_wave_task = _schedule_stale_wave_sweep(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
@@ -288,6 +345,10 @@ async def _run_windows_server(ctx: MethodContext) -> None:
             ttl_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ttl_task
+        if stale_wave_task is not None:
+            stale_wave_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await stale_wave_task
         pipe_server.stop()
 
 
