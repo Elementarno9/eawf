@@ -137,6 +137,7 @@ def append_agent_report(
         summary=body.summary[:500],
         artifact_ids=artifact_list,
         blob_refs=blob_list,
+        agent_principal_id=session.agent_principal_id,
     )
     payload = AgentReportPayload(header=header, body=body)
     envelope = Envelope(

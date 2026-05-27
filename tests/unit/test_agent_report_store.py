@@ -25,7 +25,11 @@ from eawf.workflow.agent_report.store import (
 )
 
 
-def _state(*, role: AgentSessionRole = AgentSessionRole.EXECUTOR) -> State:
+def _state(
+    *,
+    role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+    agent_principal_id: str | None = None,
+) -> State:
     return State.model_validate(
         {
             "schema_version": "1.0",
@@ -67,6 +71,7 @@ def _state(*, role: AgentSessionRole = AgentSessionRole.EXECUTOR) -> State:
                     "started_at": "2026-05-14T00:00:00Z",
                     "ended_at": None,
                     "summary": None,
+                    "agent_principal_id": agent_principal_id,
                 }
             },
             "plugins": {},
@@ -134,6 +139,22 @@ def test_append_agent_report_writes_attempt_one(tmp_path: Path) -> None:
     payload = AgentReportPayload.model_validate(parsed.payload)
     assert payload.header.attempt == 1
     assert payload.header.role is AgentSessionRole.EXECUTOR
+
+
+def test_append_agent_report_copies_agent_principal_id_to_header(tmp_path: Path) -> None:
+    result = append_agent_report(
+        state=_state(agent_principal_id="u-12345678"),
+        state_path=_state_path(tmp_path),
+        session_id="SES-001",
+        base_id="P18-I01-W04",
+        body=_body(),
+        generated_at=datetime(2026, 5, 14, tzinfo=UTC),
+    )
+
+    path = store_path(tmp_path / ".ea" / "state.json", result.envelope.kind)
+    parsed = Envelope.model_validate_json(path.read_text(encoding="utf-8").splitlines()[0])
+    payload = AgentReportPayload.model_validate(parsed.payload)
+    assert payload.header.agent_principal_id == "u-12345678"
 
 
 def test_append_agent_report_increments_attempt_for_same_role_base(tmp_path: Path) -> None:

@@ -44,6 +44,7 @@ pytestmark = pytest.mark.integration
 
 _WAVE_ID = "P27-I03-W10"
 _SESSION_ID = "SES-executor"
+_AGENT_PRINCIPAL_ID = "u-12345678"
 _EXECUTOR_REPORT_KIND = store_kind_for_role(AgentSessionRole.EXECUTOR)
 
 
@@ -133,6 +134,7 @@ def _state_payload() -> dict[str, Any]:
                 "started_at": "2026-05-23T00:00:00Z",
                 "ended_at": None,
                 "summary": None,
+                "agent_principal_id": _AGENT_PRINCIPAL_ID,
             }
         },
         "plugins": {},
@@ -200,6 +202,7 @@ def test_emit_agent_end_report_passes_invariants(tmp_path: Path) -> None:
     assert envelope.id == report_id
     payload = AgentReportPayload.model_validate(envelope.payload)
     assert isinstance(payload.body, ExecutorReportBody)
+    assert payload.header.agent_principal_id == _AGENT_PRINCIPAL_ID
     assert payload.body.verdict is AgentReportVerdict.PASS
     assert payload.body.commit_sha == "abcdef1"
 
@@ -231,6 +234,8 @@ def test_run_dispatch_emits_agent_end_report_on_completion(tmp_path: Path) -> No
     assert result.report_id is not None
     envelope = _report_envelope(state_path)
     assert envelope.id == result.report_id
+    payload = AgentReportPayload.model_validate(envelope.payload)
+    assert payload.header.agent_principal_id == _AGENT_PRINCIPAL_ID
     state = State.model_validate(_state_payload())
     assert list(check_agent_report_invariants(state, [envelope])) == []
 

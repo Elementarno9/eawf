@@ -67,9 +67,8 @@ class AgentReportHeader(_StrictModel):
     bearing identity for backward compatibility remains
     :attr:`session_id` + :attr:`runtime`. Default ``None`` keeps the
     field replay-safe / additive — existing on-disk envelopes continue
-    to validate without backfill. The v0.5+ governance phase
-    populates it through the canonical agent-report writer once the
-    per-repo Principal database lands.
+    to validate without backfill. The canonical agent-report writer
+    copies the value from the session when present.
     """
 
     report_id: Annotated[str, Field(min_length=1)]
