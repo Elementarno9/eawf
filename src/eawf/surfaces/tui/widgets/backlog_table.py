@@ -27,11 +27,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from textual.binding import Binding, BindingType
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable
 
-from eawf.kernel.state.enums import BacklogPriority
+from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.ids import natural_key
 
 if TYPE_CHECKING:
@@ -56,6 +57,11 @@ _PRIORITY_RANK: dict[BacklogPriority, int] = {
     BacklogPriority.P2: 2,
     BacklogPriority.P3: 3,
 }
+
+#: Backlog statuses that ``show_closed=False`` filters out. CLOSED rows
+#: are the obvious "done" set; the toggle reveals them so an operator
+#: can audit the closure trail without scrolling past them by default.
+_CLOSED_STATUSES: frozenset[BacklogStatus] = frozenset({BacklogStatus.CLOSED})
 
 #: Column ids in display order. The free-text ``title`` is last so the
 #: three fixed-shape columns (id / priority / status) absorb a deterministic
@@ -137,10 +143,15 @@ def title_budget(
 
 
 def sort_items(items: list[BacklogItem], sort_key: str) -> list[BacklogItem]:
-    """Return *items* ordered by *sort_key*.
+    """Return *items* ordered by *sort_key*, then by the remaining keys.
 
-    The sort is stable and total: every key falls back to the item id so
-    ties resolve deterministically.
+    The sort is **compound**, stable, and total: *sort_key* picks the
+    primary ordering and the other two canonical keys (priority /
+    status / id, in that fixed order) act as deterministic
+    tiebreakers. Tying on priority alone — e.g. two ``P0`` rows — falls
+    through to status, then to the natural id sort, so two rows with the
+    same primary value still resolve in a single deterministic order
+    across renders.
 
     Args:
         items: The backlog items to order.
@@ -155,10 +166,47 @@ def sort_items(items: list[BacklogItem], sort_key: str) -> list[BacklogItem]:
     if sort_key not in SORT_KEYS:
         raise ValueError(f"unknown sort key: {sort_key!r}")
     if sort_key == "priority":
-        return sorted(items, key=lambda it: (_priority_rank(it.priority), natural_key(it.id)))
+        return sorted(
+            items,
+            key=lambda it: (
+                _priority_rank(it.priority),
+                it.status.value,
+                natural_key(it.id),
+            ),
+        )
     if sort_key == "status":
-        return sorted(items, key=lambda it: (it.status.value, natural_key(it.id)))
-    return sorted(items, key=lambda it: natural_key(it.id))
+        return sorted(
+            items,
+            key=lambda it: (
+                it.status.value,
+                _priority_rank(it.priority),
+                natural_key(it.id),
+            ),
+        )
+    return sorted(
+        items,
+        key=lambda it: (
+            natural_key(it.id),
+            _priority_rank(it.priority),
+            it.status.value,
+        ),
+    )
+
+
+def hide_closed(items: list[BacklogItem]) -> list[BacklogItem]:
+    """Return the subset of *items* whose status is not :attr:`BacklogStatus.CLOSED`.
+
+    The default backlog render hides closed rows so the operator sees only
+    actionable work; flipping the widget's ``show_closed`` reactive
+    bypasses this filter.
+
+    Args:
+        items: The backlog items to filter.
+
+    Returns:
+        The non-CLOSED items in input order.
+    """
+    return [it for it in items if it.status not in _CLOSED_STATUSES]
 
 
 def filter_items(items: list[BacklogItem], needle: str) -> list[BacklogItem]:
@@ -231,6 +279,10 @@ class BacklogTable(DataTable[str]):
       detail modal (modal screen lands in a later wave).
     """
 
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("c", "toggle_show_closed", "Show closed", show=False),
+    ]
+
     DEFAULT_CSS: ClassVar[str] = """
     BacklogTable {
         height: 1fr;
@@ -262,6 +314,13 @@ class BacklogTable(DataTable[str]):
 
     #: Active substring filter (empty = show all).
     filter_text: reactive[str] = reactive("")
+
+    #: When ``False`` (the default), backlog items with
+    #: :attr:`BacklogStatus.CLOSED` are filtered out of the rendered
+    #: rows; bound to the ``c`` key via
+    #: :meth:`action_toggle_show_closed` so the operator can flip
+    #: visibility without touching the palette.
+    show_closed: reactive[bool] = reactive(False)
 
     def __init__(self, **kwargs: Any) -> None:
         """Construct the table with row-cursor selection.
@@ -299,6 +358,14 @@ class BacklogTable(DataTable[str]):
         """Rebuild rows when the filter changes."""
         self._rebuild()
 
+    def watch_show_closed(self) -> None:
+        """Rebuild rows when the show-closed toggle flips."""
+        self._rebuild()
+
+    def action_toggle_show_closed(self) -> None:
+        """Flip the :attr:`show_closed` toggle (bound to the ``c`` key)."""
+        self.show_closed = not self.show_closed
+
     def on_resize(self, event: Resize) -> None:
         """Re-truncate titles when the pane width changes.
 
@@ -329,15 +396,19 @@ class BacklogTable(DataTable[str]):
         """Return the current sorted + filtered backlog items.
 
         Pure-ish accessor (no side effects) so a host / test can read the
-        rendered order without scraping the rendered cells.
+        rendered order without scraping the rendered cells. Applies the
+        substring filter, then the ``show_closed`` toggle (off by
+        default — hides ``CLOSED`` rows), then the compound sort.
 
         Returns:
-            The items in display order after sort + filter.
+            The items in display order after sort + filter + closed-toggle.
         """
         if self.state is None or self.state.backlog is None:
             return []
         items = list(self.state.backlog.values())
         filtered = filter_items(items, self.filter_text)
+        if not self.show_closed:
+            filtered = hide_closed(filtered)
         return sort_items(filtered, self.sort_key)
 
     def _rebuild(self) -> None:
@@ -418,6 +489,7 @@ __all__ = [
     "SORT_KEYS",
     "BacklogTable",
     "filter_items",
+    "hide_closed",
     "next_sort_key",
     "sort_items",
     "title_budget",

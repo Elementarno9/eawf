@@ -111,6 +111,7 @@ class DecisionStatus(StrEnum):
     ACTIVE = "active"
     SUPERSEDED = "superseded"
     REVERSED = "reversed"
+    OBSOLETE = "obsolete"
 
 
 class BacklogPriority(StrEnum):
@@ -340,6 +341,30 @@ class Health(StrEnum):
 class ScopeKind(StrEnum):
     REPO = "repo"
     WORKSPACE = "workspace"
+
+
+class ScopeTier(StrEnum):
+    """Lifecycle-hierarchy tier of a state scope.
+
+    Names the level a ``scope_id`` resolves to in the project lifecycle
+    hierarchy. Used by projections (decision graph, backlog filters,
+    EU-projection roll-ups) that need to group rows by tier rather
+    than by the workspace-vs-repo split that :class:`ScopeKind`
+    captures.
+
+    Values:
+        WORKSPACE: A workspace-scoped row (one workspace registry).
+        REPO: A repo-scoped row (project code).
+        PHASE: A phase-scoped row (``P<NN>``).
+        ITER: An iter-scoped row (``P<NN>-I<NN>``).
+        WAVE: A wave-scoped row (``P<NN>-W<NN>`` / ``P<NN>-I<NN>-W<NN>``).
+    """
+
+    WORKSPACE = "workspace"
+    REPO = "repo"
+    PHASE = "phase"
+    ITER = "iter"
+    WAVE = "wave"
 
 
 class StoreKind(StrEnum):

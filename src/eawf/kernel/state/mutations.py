@@ -45,7 +45,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier
+from eawf.kernel.state.enums import (
+    Confidence,
+    DecisionStatus,
+    MemoryStatus,
+    MemoryTier,
+)
 from eawf.kernel.state.models import MemorySummary, State
 
 logger = logging.getLogger(__name__)
@@ -90,6 +95,7 @@ class MutationKind(StrEnum):
     MEMORY_SUPERSEDE = "memory_supersede"
     MEMORY_PRUNE = "memory_prune"
     MEMORY_REVIEW = "memory_review"
+    DECISION_OBSOLETE = "decision_obsolete"
 
 
 class Mutation(BaseModel):
@@ -435,7 +441,83 @@ def apply_memory_review(state: State, mutation: Mutation) -> None:
     )
 
 
+# ---- DECISION_OBSOLETE error type + payload + apply ------------------------
+
+
+class DecisionMutationError(ValueError):
+    """Raised when a ``DECISION_*`` apply rejects the mutation.
+
+    Mirrors :class:`MemoryMutationError` so the daemon's existing
+    ``LifecycleError`` -> ``-32602 invalid_params`` mapping carries
+    decision rejections with the same wire shape.
+    """
+
+
+class DecisionObsoletePayload(_StrictPayload):
+    """Params for :attr:`MutationKind.DECISION_OBSOLETE`.
+
+    Marks an existing decision as no-longer-relevant: flips ``status`` to
+    :attr:`DecisionStatus.OBSOLETE` and stamps ``obsoleted_at`` with the
+    caller-supplied UTC timestamp (typically ``datetime.now(UTC)``).
+
+    Attributes:
+        id: Existing decision id to obsolete.
+        obsoleted_at: UTC timestamp to record on the row; the caller
+            supplies the value so the apply stays pure (no
+            wall-clock read inside the mutator).
+    """
+
+    id: str = Field(min_length=1)
+    obsoleted_at: datetime
+
+
+def apply_decision_obsolete(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.DECISION_OBSOLETE`.
+
+    Flips the named decision's status to :attr:`DecisionStatus.OBSOLETE`
+    and stamps ``obsoleted_at``. Only :attr:`DecisionStatus.ACTIVE`
+    decisions may be obsoleted: a :attr:`DecisionStatus.SUPERSEDED` row
+    carries a non-null ``superseded_by`` link that the
+    ``INV.DECISION.LINK_WITHOUT_SUPERSEDED`` invariant requires status
+    to remain ``SUPERSEDED`` for, and an already-:attr:`OBSOLETE` row
+    has nothing to do (the repeat-call rejection makes the no-op
+    visible to the caller).
+
+    Args:
+        state: Loaded :class:`State`. Mutated in place.
+        mutation: :class:`Mutation` carrying a :class:`DecisionObsoletePayload`
+            in ``params``.
+
+    Raises:
+        DecisionMutationError: when no decision matches ``id`` or the
+            decision is not :attr:`DecisionStatus.ACTIVE`.
+    """
+    payload = DecisionObsoletePayload.model_validate(mutation.params)
+    decisions = state.decisions or {}
+    existing = decisions.get(payload.id)
+    if existing is None:
+        raise DecisionMutationError(f"unknown decision: {payload.id!r}")
+    if existing.status == DecisionStatus.OBSOLETE:
+        raise DecisionMutationError(f"decision already obsolete: {payload.id!r}")
+    if existing.status != DecisionStatus.ACTIVE:
+        raise DecisionMutationError(
+            f"cannot obsolete decision in status {existing.status.value!r}: {payload.id!r}"
+        )
+    decisions[payload.id] = existing.model_copy(
+        update={
+            "status": DecisionStatus.OBSOLETE,
+            "obsoleted_at": payload.obsoleted_at,
+        }
+    )
+    state.decisions = decisions
+    logger.info(
+        f"apply_decision_obsolete id={payload.id!r} obsoleted_at={payload.obsoleted_at.isoformat()}"
+    )
+
+
 __all__ = [
+    "DecisionMutationError",
+    "DecisionObsoletePayload",
     "MemoryAddPayload",
     "MemoryMutationError",
     "MemoryPrunePayload",
@@ -444,6 +526,7 @@ __all__ = [
     "MemoryUpdatePayload",
     "Mutation",
     "MutationKind",
+    "apply_decision_obsolete",
     "apply_memory_add",
     "apply_memory_prune",
     "apply_memory_review",

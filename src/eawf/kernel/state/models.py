@@ -395,6 +395,11 @@ class Decision(_StrictModel):
     status: DecisionStatus
     created_at: UtcDatetime
     superseded_by: str | None = None
+    # Stamp set when :func:`apply_decision_obsolete` flips ``status`` to
+    # :attr:`DecisionStatus.OBSOLETE`. Default-``None`` so pre-existing
+    # decision rows (written before the field existed) still validate
+    # without a schema bump.
+    obsoleted_at: UtcDatetime | None = None
 
 
 class BacklogItem(_StrictModel):

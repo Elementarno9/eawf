@@ -26,6 +26,7 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.state.enums import DecisionStatus
 from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
@@ -65,15 +66,30 @@ class DecisionGraph(_StrictModel):
     edges: list[DecisionEdge] = Field(default_factory=list)
 
 
-def build_decision_graph(state: State) -> DecisionGraph:
+def build_decision_graph(state: State, *, show_obsolete: bool = False) -> DecisionGraph:
     """Project ``state.decisions`` into a :class:`DecisionGraph`.
 
     Nodes are sorted by id for deterministic output. Edges are populated only
-    when ``Decision.superseded_by`` references an id that exists in
-    ``state.decisions``; dangling references are silently skipped (the
-    schema-level invariant covers the dangling-link surface separately).
+    when ``Decision.superseded_by`` references an id that exists in the
+    visible (post-filter) decision set; dangling references are silently
+    skipped (the schema-level invariant covers the dangling-link surface
+    separately). Edges whose ``src`` or ``dst`` is filtered out as
+    ``OBSOLETE`` are dropped together with the hidden node so the
+    rendered graph stays self-consistent.
+
+    Args:
+        state: The validated state whose ``decisions`` dict is projected.
+        show_obsolete: When ``False`` (the default), decisions with
+            :attr:`DecisionStatus.OBSOLETE` status are filtered out of
+            both the node list and the edge list. Set ``True`` to
+            include them in the graph (e.g. the ``--show-obsolete``
+            CLI escape hatch).
     """
     decisions = state.decisions or {}
+    if show_obsolete:
+        visible = decisions
+    else:
+        visible = {d.id: d for d in decisions.values() if d.status != DecisionStatus.OBSOLETE}
     nodes = [
         DecisionNode(
             id=d.id,
@@ -81,11 +97,11 @@ def build_decision_graph(state: State) -> DecisionGraph:
             status=d.status.value if hasattr(d.status, "value") else str(d.status),
             scope_id=d.scope_id,
         )
-        for d in sorted(decisions.values(), key=lambda r: r.id)
+        for d in sorted(visible.values(), key=lambda r: r.id)
     ]
     edges: list[DecisionEdge] = []
-    for d in sorted(decisions.values(), key=lambda r: r.id):
-        if d.superseded_by and d.superseded_by in decisions:
+    for d in sorted(visible.values(), key=lambda r: r.id):
+        if d.superseded_by and d.superseded_by in visible:
             edges.append(DecisionEdge(src=d.id, dst=d.superseded_by, kind="superseded_by"))
     return DecisionGraph(nodes=nodes, edges=edges)
 
