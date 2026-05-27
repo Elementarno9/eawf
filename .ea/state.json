@@ -131,6 +131,18 @@
       "scope_id": "P28-I02-W26",
       "status": "done",
       "updated_at": "2026-05-27T17:55:44.033036Z"
+    },
+    "P28-I02-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W30",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W30",
+      "scope_id": "P28-I02-W30",
+      "status": "done",
+      "updated_at": "2026-05-27T17:59:48.273129Z"
     }
   },
   "agent_sessions": {
@@ -2096,8 +2108,7 @@
     "active_wave_ids": [
       "P28-I02-W27",
       "P28-I02-W28",
-      "P28-I02-W29",
-      "P28-I02-W30"
+      "P28-I02-W29"
     ],
     "iter_id": "P28-I02",
     "phase_id": "P28",
@@ -6320,7 +6331,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T17:58:14.742304Z",
+  "updated_at": "2026-05-27T17:59:48.273604Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21930,8 +21941,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T17:59:48.273129Z",
+      "commit": "42dc3d7e0e0fae3f7cd0bcc173a9f1d0dee559e6",
       "deps": [],
       "description": "Follow-up from W26 close verification: avoid running non-enforced profile floor checks inside the state transaction lock while preserving enforced close gating.",
       "dispatch_history": [],
@@ -21946,10 +21957,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-27T17:58:14.171315Z",
-      "outcome": null,
+      "outcome": "kept enforced readiness preflight while skipping non-enforced profile floors under state lock",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "enforced profiles still run readiness before close mutation",
         "non-enforced profile floors do not run while the state lock is held",
