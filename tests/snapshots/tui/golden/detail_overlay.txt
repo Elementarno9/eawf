@@ -2,25 +2,34 @@
 
 
 
-
-
-
-
-
-
-
-
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
             │                                                                                              │
             │  wave P01-I01-W01                                                                            │
-            │   h history  d detail  m metrics  p dispatch                                                 │
+            │   h history  d detail  m metrics                                                             │
             │  ━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-            │  id:     P01-I01-W01                                                                         │
-            │  iter:   P01-I01                                                                             │
-            │  title:  Implement validate                                                                  │
-            │  status: in_progress                                                                         │
-            │  files:                                                                                      │
-            │    src/eawf/validate                                                                         │
+            │                                                                                              │
+            │                                                                                              │
+            │    What                                                                                      │
+            │                                                                                              │
+            │    • P01 Bootstrap (active).                                                                 │
+            │    • P01-I01-W01 Implement validate.                                                         │
+            │                                                                                              │
+            │                                                                                              │
+            │    Why                                                                                       │
+            │                                                                                              │
+            │    • No explicit motivation recorded.                                                        │
+            │                                                                                              │
+            │                                                                                              │
+            │    Validation                                                                                │
+            │                                                                                              │
+            │    • 0/1 wave(s) closed.                                                                     │
+            │                                                                                              │
+            │                                                                                              │
+            │    Risks                                                                                     │
+            │                                                                                              │
+            │    • Open wave(s): P01-I01-W01.                                                              │
+            │    • No phase audit recorded.                                                                │
+            │                                                                                              │
             │                                                                                              │
             │  [ Tab/Shift+Tab cycle · Esc close ]                                                         │
             │                                                                                              │

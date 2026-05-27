@@ -270,10 +270,10 @@ def test_confirm_overlay_snapshot() -> None:
 
 
 def test_detail_overlay_snapshot() -> None:
-    """The detail card aligns its ``label: value`` colons in one column.
+    """The wave detail tab renders its NarrativeBundle preview.
 
     Lands on the default ``d`` (detail) tab — the enlarged box + the tab
-    strip frame the field rows.
+    strip frame the rendered What/Why/Validation/Risks preview.
     """
 
     async def body() -> None:

@@ -9,11 +9,10 @@ carrying a wave id), the shared
 :class:`~eawf.surfaces.tui.scopes.ScopeScreen` routes the message here, and this
 modal renders the resolved entity's detail in a tabbed, scrollable card.
 
-The card body is split across up to five tabs — ``h`` history, ``d``
-detail, ``m`` metrics, ``e`` events, ``dp`` dispatch-prompt — mirroring
-the per-overlay tab set the C06 brief reserved. ``Tab`` / ``Shift+Tab``
-cycle the tabs, the single-letter keys ``h`` / ``d`` / ``m`` / ``e`` /
-``p`` jump straight to a tab (``p`` reaches the two-char ``dp`` tab), and
+The card body is split across up to four tabs — ``h`` history, ``d``
+detail, ``m`` metrics, ``e`` events — mirroring the per-overlay tab set
+the C06 brief reserved. ``Tab`` / ``Shift+Tab`` cycle the tabs, the
+single-letter keys ``h`` / ``d`` / ``m`` / ``e`` jump straight to a tab, and
 the arrow keys keep their native scroll behaviour inside the focused pane
 (they are *not* rebound to tab-switching). Only tabs that have data for
 the resolved entity are built, so an entity with no dispatch history shows
@@ -44,11 +43,15 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
+from eawf.surfaces.render.narrative import (
+    NarrativeNotFoundError,
+    build_narrative,
+    render_narrative_bundle,
+)
 from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
 )
-from eawf.workflow.dispatch.renderer import render_wave_prompt
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave
@@ -63,7 +66,6 @@ _TAB_LABELS: dict[str, str] = {
     "d": "d detail",
     "m": "m metrics",
     "e": "e events",
-    "dp": "p dispatch",
 }
 
 
@@ -74,9 +76,10 @@ class DetailCard:
     The card carries one row group per overlay tab. ``rows`` is the
     canonical ``d`` (detail) field group — always populated; the remaining
     groups are populated only when the entity has data for them, and the
-    modal builds a tab only for a non-empty group. ``dispatch_prompt`` is
-    the verbatim text of the ``dp`` tab (a rendered wave prompt, or a
-    fallback note for non-wave entities).
+    modal builds a tab only for a non-empty group. ``detail_markdown`` is
+    the optional Markdown body for the ``d`` tab; wave cards use it for
+    the phase NarrativeBundle preview, while non-wave cards render the
+    regular ``rows`` group.
 
     Attributes:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
@@ -87,8 +90,8 @@ class DetailCard:
         history: The ``h`` group — lifecycle rows (status, timestamps).
         events: The ``e`` group — recent activity rows (e.g. a wave's
             dispatch history), ``(label, value)`` pairs.
-        dispatch_prompt: The ``dp`` group — the rendered dispatch prompt
-            for a wave, or a fallback note. ``None`` suppresses the tab.
+        detail_markdown: Optional Markdown body for the ``d`` tab. When
+            ``None``, the ``d`` tab renders ``rows`` as aligned field rows.
     """
 
     title: str
@@ -96,7 +99,7 @@ class DetailCard:
     metrics: tuple[tuple[str, str], ...] = ()
     history: tuple[tuple[str, str], ...] = ()
     events: tuple[tuple[str, str], ...] = ()
-    dispatch_prompt: str | None = None
+    detail_markdown: str | None = None
 
 
 def _fmt_dt(value: object) -> str:
@@ -259,30 +262,35 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
         metrics=_wave_metrics(wave),
         history=tuple(history),
         events=tuple(events),
-        dispatch_prompt=_wave_dispatch_prompt(state, wave_id),
+        detail_markdown=_wave_narrative_preview(state, wave),
     )
 
 
-def _wave_dispatch_prompt(state: State, wave_id: str) -> str:
-    """Render the wave's dispatch prompt for the ``dp`` tab.
+def _wave_narrative_preview(state: State, wave: Wave) -> str:
+    """Render the wave's phase NarrativeBundle for the ``d`` tab.
 
-    The renderer raises :class:`KeyError` when the wave → iter → phase →
-    scope chain has a broken link; the drill-in seam must stay total, so a
-    broken chain degrades to a short note rather than propagating.
+    The narrative builder targets a phase id. A broken wave → iter → phase
+    chain degrades to a short note rather than propagating so the drill-in
+    seam stays total.
 
     Args:
         state: The bound state.
-        wave_id: The wave whose prompt to render.
+        wave: The wave whose parent phase narrative to preview.
 
     Returns:
-        The rendered Markdown prompt, or a fallback note when the scope
+        The rendered Markdown narrative, or a fallback note when the scope
         chain cannot be resolved.
     """
+    it = state.iters.get(wave.iter_id)
+    if it is None:
+        logger.info(f"_wave_narrative_preview unresolved iter={wave.iter_id!r} wave={wave.id!r}")
+        return "narrative preview unavailable (scope chain unresolved)"
     try:
-        return render_wave_prompt(state, wave_id)
-    except KeyError as exc:
-        logger.info(f"_wave_dispatch_prompt unresolved wave={wave_id!r} reason={exc}")
-        return "dispatch prompt unavailable (scope chain unresolved)"
+        bundle = build_narrative(state, it.phase_id)
+    except NarrativeNotFoundError as exc:
+        logger.info(f"_wave_narrative_preview unresolved wave={wave.id!r} reason={exc}")
+        return "narrative preview unavailable (scope chain unresolved)"
+    return render_narrative_bundle(bundle)
 
 
 def _iter_card(state: State, iter_id: str) -> DetailCard | None:
@@ -318,7 +326,6 @@ def _iter_card(state: State, iter_id: str) -> DetailCard | None:
         rows=tuple(rows),
         metrics=_completion_metrics(closed, total),
         history=tuple(history),
-        dispatch_prompt=_NON_WAVE_DISPATCH_NOTE,
     )
 
 
@@ -364,7 +371,6 @@ def _phase_card(state: State, phase_id: str) -> DetailCard | None:
         rows=tuple(rows),
         metrics=_completion_metrics(closed, total),
         history=tuple(history),
-        dispatch_prompt=_NON_WAVE_DISPATCH_NOTE,
     )
 
 
@@ -427,11 +433,6 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     return DetailCard(title=f"backlog {item.id}", rows=tuple(rows))
 
 
-#: ``dp`` tab body for non-wave entities, which have no rendered dispatch
-#: prompt. Kept as a single constant so the fallback wording stays uniform.
-_NON_WAVE_DISPATCH_NOTE: str = "no dispatch prompt for this entity"
-
-
 def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
     """Resolve *selection_id* to a :class:`DetailCard` from *state*.
 
@@ -470,7 +471,7 @@ class DetailModal(ModalScreen[None]):
     resolves the card from ``app.state`` via :func:`resolve_detail` when
     it routes the selection message. The modal owns only the presentation,
     the ``Tab`` / ``Shift+Tab`` tab cycle, the single-letter tab hotkeys
-    (``h`` / ``d`` / ``m`` / ``e`` / ``p``), and the ``Esc`` close
+    (``h`` / ``d`` / ``m`` / ``e``), and the ``Esc`` close
     binding. The arrow keys keep their native per-pane scroll behaviour —
     they are deliberately not bound here.
     """
@@ -507,8 +508,7 @@ class DetailModal(ModalScreen[None]):
     """
 
     #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs; the
-    #: single-letter keys jump straight to a tab (``p`` reaches the
-    #: two-char ``dp`` dispatch tab, since one keypress cannot be ``dp``).
+    #: single-letter keys jump straight to a tab.
     #: The arrow keys are intentionally absent so they keep scrolling the
     #: focused pane rather than switching tabs.
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -519,7 +519,6 @@ class DetailModal(ModalScreen[None]):
         Binding("d", "show_tab('d')", "detail", show=False),
         Binding("m", "show_tab('m')", "metrics", show=False),
         Binding("e", "show_tab('e')", "events", show=False),
-        Binding("p", "show_tab('dp')", "dispatch", show=False),
     ]
 
     def __init__(self, card: DetailCard) -> None:
@@ -539,7 +538,7 @@ class DetailModal(ModalScreen[None]):
 
         The ``d`` detail tab is always present (every card carries field
         rows); the rest appear only when their section is non-empty. Order
-        follows the ``h / d / m / e / dp`` brief sequence.
+        follows the ``h / d / m / e`` brief sequence.
 
         Args:
             card: The resolved card.
@@ -555,8 +554,6 @@ class DetailModal(ModalScreen[None]):
             present.append("m")
         if card.events:
             present.append("e")
-        if card.dispatch_prompt is not None:
-            present.append("dp")
         return tuple(present)
 
     def _section_rows(self, tab_id: str) -> tuple[tuple[str, str], ...]:
@@ -584,8 +581,8 @@ class DetailModal(ModalScreen[None]):
         group's widest label so the ``label: value`` colons line up in one
         column (the same mechanism
         :class:`~eawf.surfaces.tui.widgets.status_pane.StatusPane` uses for its
-        counter block). The ``dp`` pane renders the dispatch-prompt text as
-        Markdown.
+        counter block). Wave ``d`` panes render the NarrativeBundle
+        preview as Markdown.
         """
         with VerticalScroll(id="detail-card"):
             yield Static(self._card.title, classes="detail-title")
@@ -606,10 +603,11 @@ class DetailModal(ModalScreen[None]):
 
         Yields:
             The pane's child widgets — aligned ``label: value`` rows for a
-            row-group tab, or a rendered Markdown block for the ``dp`` tab.
+            row-group tab, or a rendered Markdown block for the ``d`` tab
+            when the card supplies one.
         """
-        if tab_id == "dp":
-            yield Markdown(self._card.dispatch_prompt or "")
+        if tab_id == "d" and self._card.detail_markdown is not None:
+            yield Markdown(self._card.detail_markdown)
             return
         rows = self._section_rows(tab_id)
         label_width = max((len(label) for label, _ in rows), default=0)
@@ -638,7 +636,7 @@ class DetailModal(ModalScreen[None]):
         """Jump straight to the *tab_id* pane, or no-op when it is absent.
 
         Bound to the single-letter tab hotkeys (``h`` / ``d`` / ``m`` /
-        ``e`` / ``p``→``dp``). A key for a tab the card does not carry
+        ``e``). A key for a tab the card does not carry
         (e.g. ``e`` on an event-less card) is silently ignored so the
         binding stays harmless on every card shape.
 

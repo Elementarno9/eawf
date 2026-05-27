@@ -1010,6 +1010,33 @@ def test_wave_show_without_commit_rejected(workspace: Path) -> None:
     assert res.exit_code != 0
 
 
+def test_wave_show_dispatch_prompt_returns_prompt(workspace: Path) -> None:
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+
+    res = runner.invoke(app, ["wave", "show", "P21-I01-W01", "--dispatch-prompt"])
+
+    assert res.exit_code == 0, res.output
+    assert "P21-I01-W01" in res.stdout
+    assert "feat: foo" in res.stdout
+    assert "## Wave tags" in res.stdout
+
+
 def test_wave_claim_out_of_order_flag_overrides_monotonic_gate(workspace: Path) -> None:
     """CLI flag plumbs through to ``claim_wave``'s out_of_order escape hatch."""
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])

@@ -358,6 +358,50 @@ def test_render_includes_attached_decisions() -> None:
     assert out.index("### D01") < out.index("### D02")
 
 
+def test_render_filters_obsolete_and_superseded_decisions() -> None:
+    """Dispatch prompts exclude stale decisions from the in-scope list."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.decisions = {
+        "D01": Decision(
+            id="D01",
+            scope_id="QR",
+            title="Active decision",
+            rationale="Should appear.",
+            alternatives=[],
+            status=DecisionStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            superseded_by=None,
+        ),
+        "D02": Decision(
+            id="D02",
+            scope_id="QR",
+            title="Superseded decision",
+            rationale="Should not appear.",
+            alternatives=[],
+            status=DecisionStatus.SUPERSEDED,
+            created_at=datetime.now(UTC),
+            superseded_by="D01",
+        ),
+        "D03": Decision(
+            id="D03",
+            scope_id="QR",
+            title="Obsolete decision",
+            rationale="Should not appear.",
+            alternatives=[],
+            status=DecisionStatus.OBSOLETE,
+            created_at=datetime.now(UTC),
+            superseded_by=None,
+        ),
+    }
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "### D01: Active decision" in out
+    assert "D02" not in out
+    assert "D03" not in out
+
+
 def test_render_includes_hypotheses_with_open_verdict() -> None:
     """A hypothesis without a verdict appears with verdict=open."""
     state = _empty_state()

@@ -60,7 +60,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from eawf.kernel.state.enums import AgentSessionRole, StoreKind
+from eawf.kernel.state.enums import AgentSessionRole, DecisionStatus, StoreKind
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import (
     Audit,
@@ -100,6 +100,9 @@ _CLI_RUNTIME_CLAUDE_AGENT_SDK: str = "claude-agent-sdk"
 DISPATCH_RUNTIMES: tuple[str, ...] = (
     _CLI_RUNTIME_CLAUDE_CODE,
     _CLI_RUNTIME_CLAUDE_AGENT_SDK,
+)
+_HIDDEN_DECISION_STATUSES: frozenset[DecisionStatus] = frozenset(
+    {DecisionStatus.OBSOLETE, DecisionStatus.SUPERSEDED}
 )
 
 
@@ -730,7 +733,11 @@ def _find_spike_briefs(wave: Wave, *, repo_root: Path) -> list[str]:
 def _decisions_for_scope(state: State, *, scope_id: str) -> list[Decision]:
     """Return decisions attached to *scope_id*, sorted by id."""
     pool = state.decisions or {}
-    out = [d for d in pool.values() if d.scope_id == scope_id]
+    out = [
+        d
+        for d in pool.values()
+        if d.scope_id == scope_id and d.status not in _HIDDEN_DECISION_STATUSES
+    ]
     out.sort(key=lambda d: d.id)
     return out
 

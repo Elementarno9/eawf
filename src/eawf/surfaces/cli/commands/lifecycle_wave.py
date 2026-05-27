@@ -750,8 +750,15 @@ def wave_show_cmd(
             ),
         ),
     ] = False,
+    show_dispatch_prompt: Annotated[
+        bool,
+        typer.Option(
+            "--dispatch-prompt",
+            help="Print the rendered dispatch prompt for the wave.",
+        ),
+    ] = False,
 ) -> None:
-    """Inspect a wave. ``--commit`` prints the pinned-or-derived SHA."""
+    """Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt."""
     from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
     flags: GlobalFlags = ctx.obj
@@ -761,11 +768,37 @@ def wave_show_cmd(
             flags=flags,
         )
         return
-    if not show_commit:
+    if show_commit and show_dispatch_prompt:
         cli_errors.emit_error(
-            cli_errors.UserError("wave show currently requires --commit", kind="InvalidInput"),
+            cli_errors.UserError(
+                "choose only one of --commit or --dispatch-prompt",
+                kind="InvalidInput",
+            ),
             flags=flags,
         )
+        return
+    if not show_commit and not show_dispatch_prompt:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "wave show requires --commit or --dispatch-prompt",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    if show_dispatch_prompt:
+        from eawf.workflow.dispatch import render_wave_prompt
+
+        loaded = _load_state_readonly(ctx)
+        if loaded is None:
+            return
+        state, _ = loaded
+        try:
+            prompt = render_wave_prompt(state, wave_id)
+        except KeyError as exc:
+            cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+            return
+        typer.echo(prompt)
         return
     # Prefer the pinned SHA (set by ``wave close --commit``) over the
     # derive-from-git-log fallback so closed waves round-trip the value

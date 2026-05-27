@@ -145,9 +145,9 @@ def test_wave_card_files_row_renders_as_tree() -> None:
     assert ", ".join(wave.file_scopes) not in files_value
 
 
-def test_dp_tab_label_advertises_p_hotkey_not_dp() -> None:
-    """The dispatch tab labels its real ``p`` hotkey (one keypress is not ``dp``)."""
-    assert _TAB_LABELS["dp"] == "p dispatch"
+def test_dispatch_tab_label_is_removed() -> None:
+    """The modal no longer carries a dedicated dispatch-prompt tab."""
+    assert "dp" not in _TAB_LABELS
 
 
 # --------------------------------------------------------------------------
@@ -216,28 +216,28 @@ def test_resolve_detail_iter_metrics_eu_tokens_empty_state() -> None:
     assert metrics["tokens"] == EMPTY_STATE
 
 
-def test_resolve_detail_wave_has_dispatch_prompt() -> None:
+def test_resolve_detail_wave_has_narrative_preview() -> None:
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
-    assert card.dispatch_prompt is not None
-    # The rendered prompt is a wave dispatch Markdown doc — it names the wave.
-    assert wave_id in card.dispatch_prompt
+    assert card.detail_markdown is not None
+    assert "## What" in card.detail_markdown
+    assert "## Validation" in card.detail_markdown
 
 
-def test_resolve_detail_iter_dispatch_prompt_is_fallback() -> None:
+def test_resolve_detail_iter_has_no_narrative_preview() -> None:
     state = _load(_PHASE_ITER_WAVE)
     iter_id = next(iter(state.iters))
     card = resolve_detail(state, iter_id)
-    assert card.dispatch_prompt == "no dispatch prompt for this entity"
+    assert card.detail_markdown is None
 
 
-def test_resolve_detail_backlog_has_no_metrics_or_dispatch() -> None:
+def test_resolve_detail_backlog_has_no_metrics_or_narrative() -> None:
     state = _load(_BACKLOG)
     item_id = next(iter(state.backlog))
     card = resolve_detail(state, item_id)
     assert card.metrics == ()
-    assert card.dispatch_prompt is None
+    assert card.detail_markdown is None
 
 
 # --------------------------------------------------------------------------
@@ -250,14 +250,14 @@ def test_present_tabs_detail_always_present() -> None:
     assert DetailModal._present_tabs(card) == ("d",)
 
 
-def test_present_tabs_wave_includes_metrics_and_dispatch() -> None:
+def test_present_tabs_wave_includes_metrics_not_dispatch() -> None:
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
     tabs = DetailModal._present_tabs(card)
     assert "d" in tabs
     assert "m" in tabs
-    assert "dp" in tabs
+    assert "dp" not in tabs
 
 
 def test_present_tabs_skips_empty_events() -> None:
@@ -276,9 +276,9 @@ def test_present_tabs_order_follows_brief_sequence() -> None:
         metrics=(("size", "###--  M"),),
         history=(("status", "open"),),
         events=(("attempt 1", "fresh"),),
-        dispatch_prompt="body",
+        detail_markdown="body",
     )
-    assert DetailModal._present_tabs(card) == ("h", "d", "m", "e", "dp")
+    assert DetailModal._present_tabs(card) == ("h", "d", "m", "e")
 
 
 # --------------------------------------------------------------------------
@@ -474,24 +474,24 @@ def test_detail_modal_iter_opens_with_tabs() -> None:
 
 
 # --------------------------------------------------------------------------
-# DetailModal tab hotkeys + markdown dp + label escape + bucket text (W13)
+# DetailModal tab hotkeys + markdown detail + label escape + bucket text (W13)
 # --------------------------------------------------------------------------
 
 
 def _full_card() -> DetailCard:
-    """A card carrying every section so all five tabs (h/d/m/e/dp) are built."""
+    """A card carrying every section so all four tabs (h/d/m/e) are built."""
     return DetailCard(
         title="wave P00-I01-W01",
         rows=(("id", "P00-I01-W01"), ("title", "demo")),
         metrics=(("size", "M"),),
         history=(("status", "open"),),
         events=(("attempt 1", "fresh (claude)"),),
-        dispatch_prompt="# heading\n\n**bold** body",
+        detail_markdown="# heading\n\n**bold** body",
     )
 
 
 def test_detail_modal_hotkey_activates_matching_tab() -> None:
-    """``h``/``m``/``e``/``p`` jump straight to their pane when present."""
+    """``h``/``m``/``e`` jump straight to their pane when present."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -504,7 +504,6 @@ def test_detail_modal_hotkey_activates_matching_tab() -> None:
                 ("m", "detail-tab-m"),
                 ("h", "detail-tab-h"),
                 ("e", "detail-tab-e"),
-                ("p", "detail-tab-dp"),
                 ("d", "detail-tab-d"),
             ):
                 await pilot.press(key)
@@ -518,7 +517,7 @@ def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
     """A hotkey for a tab the card lacks leaves the active tab unchanged.
 
     Boundary: a card carrying only the ``d`` tab (field rows, no metrics /
-    history / events / dispatch). Pressing ``m`` (and ``h``/``e``/``p``)
+    history / events). Pressing ``m`` (and ``h``/``e``)
     must be a no-op rather than raising or switching to a missing pane.
     """
 
@@ -532,7 +531,7 @@ def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
             await pilot.pause()
             tabs = app.screen.query_one(TabbedContent)
             assert tabs.active == "detail-tab-d"
-            for key in ("m", "h", "e", "p"):
+            for key in ("m", "h", "e"):
                 await pilot.press(key)
                 await pilot.pause()
                 assert tabs.active == "detail-tab-d"
@@ -541,10 +540,10 @@ def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
 
 
 def test_detail_modal_footer_omits_tab_hotkey_list() -> None:
-    """The footer hint drops the ``h/d/m/e/p`` list — the tabs already show them.
+    """The footer hint drops the ``h/d/m/e`` list — the tabs already show them.
 
-    Each tab pane label carries its own mnemonic (``h history`` / ``p
-    dispatch`` / …), so repeating the per-letter list in the footer hint is
+    Each tab pane label carries its own mnemonic (``h history`` / …), so
+    repeating the per-letter list in the footer hint is
     redundant. The footer keeps only the cycle + close affordances.
     """
 
@@ -555,15 +554,15 @@ def test_detail_modal_footer_omits_tab_hotkey_list() -> None:
             app.push_screen(DetailModal(_full_card()))
             await pilot.pause()
             hint = str(app.screen.query_one(".detail-hint", Static).render())
-            assert "h/d/m/e/p" not in hint
+            assert "h/d/m/e" not in hint
             assert "Tab/Shift+Tab cycle" in hint
             assert "Esc close" in hint
 
     asyncio.run(body())
 
 
-def test_detail_modal_dp_pane_mounts_markdown() -> None:
-    """The ``dp`` tab body is a ``Markdown`` widget, not a plain ``Static``."""
+def test_detail_modal_wave_detail_pane_mounts_narrative_markdown() -> None:
+    """The wave ``d`` tab body is Markdown, not aligned field rows."""
 
     async def body() -> None:
         state, wave_id = _state_with_bucketed_wave(EffortBucket.L)
@@ -571,13 +570,13 @@ def test_detail_modal_dp_pane_mounts_markdown() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             card = resolve_detail(state, wave_id)
-            assert card.dispatch_prompt is not None
+            assert card.detail_markdown is not None
             modal = DetailModal(card)
             app.push_screen(modal)
             await pilot.pause()
-            pane = modal.query_one("#detail-tab-dp")
+            pane = modal.query_one("#detail-tab-d")
             assert pane.query(Markdown)
-            # The raw prompt text is not emitted as a detail-row Static.
+            # The narrative preview is not emitted as aligned detail rows.
             assert not pane.query("Static.detail-row")
 
     asyncio.run(body())
