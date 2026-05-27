@@ -252,6 +252,11 @@ class EaApp(App[None]):
     #: rerenders in the other glyph set in one pass.
     render_mode: reactive[RenderMode] = reactive[RenderMode]("braille", init=False)
 
+    #: Focused repo root published by the workspace / user zoom lifecycle.
+    #: ``r`` uses this while zoomed so repo-scope rebinding follows the
+    #: selected row instead of falling back to the launch ``state.json``.
+    _active_repo_path: reactive[Path | None] = reactive(None, init=False)
+
     def __init__(
         self,
         scope: ScopeName,
@@ -483,6 +488,10 @@ class EaApp(App[None]):
             from eawf.surfaces.tui.scopes.user import synthesize_user_state
 
             self.state = synthesize_user_state()
+        elif scope == "repo" and self._active_repo_path is not None:
+            from eawf.surfaces.tui.state_binding import load_state
+
+            self.state = load_state(self._active_repo_path / ".ea" / "state.json")
         elif self._state_path is not None:
             from eawf.surfaces.tui.state_binding import load_state
 

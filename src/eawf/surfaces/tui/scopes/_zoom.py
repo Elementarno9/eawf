@@ -138,6 +138,7 @@ class RepoZoomMixin(_Base):
             return
         repo_path = Path(ref.path)
         repo_state = load_state(repo_path / ".ea" / "state.json")
+        self.app._active_repo_path = repo_path
         mount = self.query_one("#zoom-mount", Container)
         roadmap = RoadmapTree(id="zoom-roadmap")
         status = StatusPane(id="zoom-status")
@@ -181,6 +182,7 @@ class RepoZoomMixin(_Base):
         await self._clear_zoom_mount()
         self.query_one(self.ZOOM_BROWSE_PANE, Vertical).display = True
         self._zoomed_code = None
+        self.app._active_repo_path = None
 
     async def _clear_zoom_mount(self) -> None:
         """Remove any mounted quadrant, awaiting the prune to completion.

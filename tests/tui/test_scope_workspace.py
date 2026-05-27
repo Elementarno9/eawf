@@ -25,9 +25,10 @@ import orjson
 import pytest
 from rich.text import Text
 
+from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.scopes import ScopeScreen, WorkspaceScreen
+from eawf.surfaces.tui.scopes import RepoScreen, ScopeScreen, WorkspaceScreen
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
@@ -48,6 +49,7 @@ from eawf.surfaces.tui.widgets.workspace_table import (
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
+_REPO = _FIXTURES / "03-phase-iter-wave-active.json"
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +84,23 @@ def _multi_repo_state(codes: list[str]) -> State:
         for code in codes
     }
     payload["workspace"]["current_repo_code"] = codes[0]
+    return State.model_validate(payload)
+
+
+def _workspace_state_with_repo(code: str, repo_path: Path) -> State:
+    """Return a workspace state whose only repo points at *repo_path*."""
+    payload = orjson.loads(_WORKSPACE.read_bytes())
+    payload["workspace"]["repos"] = {
+        code: {
+            "code": code,
+            "path": str(repo_path),
+            "state_urn": f"urn:eawf:v1:repo:{code}",
+            "project_code": code,
+            "title": f"{code} repo",
+            "status": "active",
+        }
+    }
+    payload["workspace"]["current_repo_code"] = code
     return State.model_validate(payload)
 
 
@@ -252,13 +271,50 @@ def test_enter_zooms_focused_repo() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             assert screen.zoomed
+            assert app.state is not None
+            assert app.state.workspace is not None
+            assert app._active_repo_path == Path(app.state.workspace.repos["QR"].path)
             assert screen.query_one("#zoom-quadrant RoadmapTree", RoadmapTree)
             assert screen.query_one("#zoom-quadrant StatusPane", StatusPane)
             assert screen.query_one("#zoom-quadrant BacklogTable", BacklogTable)
             await pilot.press("escape")
             await pilot.pause()
             assert not screen.zoomed
+            assert app._active_repo_path is None
             assert not screen.query("#zoom-quadrant")
+
+    asyncio.run(body())
+
+
+def test_r_key_from_zoom_rebinds_repo_state_path(tmp_path: Path) -> None:
+    """Pressing ``r`` while zoomed loads the focused repo's state."""
+    repo_path = tmp_path / "abc"
+    state_dir = repo_path / ".ea"
+    state_dir.mkdir(parents=True)
+    (state_dir / "state.json").write_bytes(_REPO.read_bytes())
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.state = _workspace_state_with_repo("ABC", repo_path)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            assert app._active_repo_path == repo_path
+            await pilot.press("r")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert isinstance(app.screen, RepoScreen)
+            assert app.state is not None
+            assert app.state.scope_kind is ScopeKind.REPO
+            assert app._active_repo_path is None
 
     asyncio.run(body())
 
