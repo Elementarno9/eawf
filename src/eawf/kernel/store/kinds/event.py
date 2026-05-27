@@ -72,6 +72,7 @@ EventKind = Literal[
     "wal_recovery",
     "git_state_drift_detected",
     "bucket_drift_detected",
+    "wave_elapsed_update",
 ]
 """Closed ``EventKind`` literal. Adding a new kind requires a
 ``schema_version`` bump (planned for v0.5+ when the typed Mutation

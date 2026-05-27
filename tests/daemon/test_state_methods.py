@@ -30,7 +30,7 @@ import asyncio
 import os
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -287,6 +287,34 @@ def test_state_digest_returns_sha256(tmp_path: Path) -> None:
         second: dict[str, Any] = await digest(ctx, {})
         assert first["version"] == second["version"]
         assert len(first["version"]) == 16
+
+    _run(body)
+
+
+def test_state_digest_publishes_wave_elapsed_update_once_per_minute(tmp_path: Path) -> None:
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    wave["effort_bucket"] = "M"  # type: ignore[index]
+    wave["opened_at"] = (datetime.now(UTC) - timedelta(minutes=45, seconds=5)).isoformat()  # type: ignore[index]
+    ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    bus = ctx.bus
+    assert isinstance(bus, EventBus)
+    sub = bus.register(connection_id="elapsed-sub")
+
+    async def body() -> None:
+        await digest(ctx, {})
+        await digest(ctx, {})
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+        event = orjson.loads(rows[0])
+        payload = event["payload"]
+        assert payload["event_type"] == "wave_elapsed_update"
+        assert payload["event_kind"] == "wave_elapsed_update"
+        assert payload["status"] == "error"
+        assert payload["extras"]["wave_id"] == "P24-I01-W09"
+        assert payload["extras"]["elapsed_minute"] >= 45
+        assert payload["extras"]["elapsed_band"] == "err"
+        assert len(sub.queue) == 1
 
     _run(body)
 

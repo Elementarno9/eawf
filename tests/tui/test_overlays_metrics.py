@@ -11,9 +11,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import orjson
 from rich.text import Text
 from textual.widgets import Static
 
+from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.palette.verbs import split_verb_args
 from eawf.surfaces.tui.screens.overlays.metrics import (
@@ -23,6 +25,7 @@ from eawf.surfaces.tui.screens.overlays.metrics import (
     MetricsArgs,
     MetricsModal,
     parse_metrics_args,
+    render_wave_elapsed_tile,
 )
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -32,6 +35,10 @@ _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 def _text(widget: Static) -> str:
     rendered = widget.render()
     return rendered.plain if isinstance(rendered, Text) else str(rendered)
+
+
+def _load_state() -> State:
+    return State.model_validate(orjson.loads(_PHASE_ITER_WAVE.read_bytes()))
 
 
 # --------------------------------------------------------------------------
@@ -98,6 +105,21 @@ def test_metric_windows_are_the_three_v7_windows() -> None:
 
 
 # --------------------------------------------------------------------------
+# tile-elapsed — local state-binding metric (W15)
+# --------------------------------------------------------------------------
+
+
+def test_render_wave_elapsed_tile_uses_compute_wave_elapsed() -> None:
+    body = render_wave_elapsed_tile(_load_state())
+    assert "median 0.0m" in body
+    assert "samples 0" in body
+
+
+def test_render_wave_elapsed_tile_none_keeps_placeholder() -> None:
+    assert render_wave_elapsed_tile(None) == "[$text-muted]awaiting telemetry projection[/]"
+
+
+# --------------------------------------------------------------------------
 # MetricsModal — mounting + the /metrics verb (Pilot)
 # --------------------------------------------------------------------------
 
@@ -113,6 +135,7 @@ def test_metrics_modal_mounts_six_tiles() -> None:
             tiles = [app.screen.query_one(f"#{spec.tile_id}", Static) for spec in TILE_SPECS]
             assert len(tiles) == 6
             assert tiles[0].border_title == TILE_SPECS[0].title
+            assert "median 0.0m" in _text(app.screen.query_one("#tile-elapsed", Static))
 
     asyncio.run(body())
 

@@ -45,6 +45,7 @@ completion bar's plain renderer already does).
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.text import Text
@@ -80,6 +81,12 @@ logger = logging.getLogger(__name__)
 #: 5 (one cell per 20 %) so it matches the inline EU bar's width and the
 #: ``<glyph> <id>  <title>  <bar>`` row still fits the narrow roadmap pane.
 COMPLETION_BAR_CELLS: int = 5
+
+#: Active-wave elapsed burn bands. The row marker uses ``~`` at/above the
+#: warning threshold and ``!`` at/above the error threshold so the status is
+#: visible even when the plain bar is colourless inside a Rich tree label.
+TIME_WARN_FRACTION: float = 0.8
+TIME_ERROR_FRACTION: float = 1.0
 
 #: Minimum blank cells kept between a (possibly truncated) row title and a
 #: right-pinned bar, so the bar never abuts the title even when the title
@@ -342,6 +349,35 @@ def _pin_bar_right(
     label = _row_label(glyph, truncated, glyph_colour)
     label.append(f"{' ' * pad}{bar}")
     return label
+
+
+def _burn_marker(consumed: float, total: float) -> str:
+    """Return the visible burn-band marker for a consumed / total pair."""
+    fraction = consumed / total if total > 0 else 0.0
+    if fraction >= TIME_ERROR_FRACTION:
+        return "!"
+    if fraction >= TIME_WARN_FRACTION:
+        return "~"
+    return "."
+
+
+def _burn_bar_with_band(label: str, consumed: float, total: float, *, mode: RenderMode) -> str:
+    """Return ``<label><band>:<bar>`` for a time or token burn gauge."""
+    return f"{label}{_burn_marker(consumed, total)}:{render_bar_plain(consumed, total, mode=mode)}"
+
+
+def _wave_time_budget_minutes(state: State, wave: Wave) -> float | None:
+    """Return a wave's elapsed-time budget in minutes, preferring estimates."""
+    estimates = state.estimates or {}
+    estimate = estimates.get(wave.id)
+    if estimate is not None and estimate.pessimistic_minutes > 0:
+        return estimate.pessimistic_minutes
+    if wave.effort_bucket is None:
+        return None
+    from eawf.workflow.estimation.buckets import EU_MINUTES, wave_estimate_eu
+
+    minutes = wave_estimate_eu(wave) * EU_MINUTES
+    return minutes if minutes > 0 else None
 
 
 class RoadmapTree(Tree[str]):
@@ -618,25 +654,26 @@ class RoadmapTree(Tree[str]):
         for wave_id in iter_obj.wave_ids:
             wave = state.waves.get(wave_id)
             if wave is not None:
-                self._add_wave(node, wave)
+                self._add_wave(state, node, wave)
 
-    def _add_wave(self, parent: TreeNode[str], wave: Wave) -> None:
+    def _add_wave(self, state: State, parent: TreeNode[str], wave: Wave) -> None:
         """Add a wave leaf row with a right-pinned hybrid size/burn bar.
 
         The bar is the wave's ``effort_bucket`` size bar by default,
-        auto-upgrading to the live ``tokens_consumed / token_budget`` burn
-        bar (the same gauge the dispatch band shows) once a budget exists,
+        auto-upgrading to elapsed-time and ``tokens_consumed / token_budget``
+        burn bars once those budgets exist,
         status-tinted via the row's glyph colour. A wave with neither a
         budget nor a bucket shows
         :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` pinned right rather
         than a fabricated 0 % bar.
 
         Args:
+            state: The bound state, used to resolve per-wave estimates.
             parent: The iter node to attach under.
             wave: The wave to add.
         """
         glyph = _glyph_for(wave.status, WAVE_GLYPHS)
-        bar = self._wave_burn_bar(wave)
+        bar = self._wave_burn_bar(state, wave)
         label = _pin_bar_right(
             glyph,
             f"{wave.id.ljust(self._wave_id_width)}  {wave.title}",
@@ -646,34 +683,65 @@ class RoadmapTree(Tree[str]):
         )
         parent.add_leaf(label, data=wave.id)
 
-    def _wave_burn_bar(self, wave: Wave) -> str:
-        """Return the wave's hybrid size/burn bar string, or :data:`EMPTY_STATE`.
+    def _wave_burn_bar(self, state: State, wave: Wave) -> str:
+        """Return the wave's hybrid size/time/token bar, or :data:`EMPTY_STATE`.
 
         Resolves the wave-row gauge in priority order:
 
-        1. A positive ``token_budget`` lights the live
-           ``tokens_consumed / token_budget`` burn bar — the gauge becomes
-           meaningful once v0.4 dispatch assigns per-wave budgets.
-        2. Otherwise an ``effort_bucket`` lights the ``XS``..``XL`` size
+        1. Active waves with a time budget render an elapsed-time bar.
+        2. A positive ``token_budget`` renders the live token burn bar.
+        3. If both are available, both bars render side by side.
+        4. Otherwise an ``effort_bucket`` lights the ``XS``..``XL`` size
            bar, the populated signal for today's planned waves.
-        3. Neither falls back to the empty-state sentinel.
+        5. Neither falls back to the empty-state sentinel.
 
         Args:
+            state: The bound state, used to resolve per-wave estimates.
             wave: The wave whose ``token_budget`` / ``tokens_consumed`` and
                 ``effort_bucket`` drive the bar.
 
         Returns:
-            A plain braille / ASCII burn bar, a size bar, or
+            One or two plain braille / ASCII burn bars, a size bar, or
             :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` when the wave has
             neither a positive ``token_budget`` nor an ``effort_bucket``.
         """
+        time_bar = self._wave_time_burn_bar(state, wave)
+        token_bar = None
         if wave.token_budget:
-            return render_bar_plain(
-                wave.tokens_consumed, wave.token_budget, mode=self._render_mode()
+            token_bar = _burn_bar_with_band(
+                "K",
+                float(wave.tokens_consumed),
+                float(wave.token_budget),
+                mode=self._render_mode(),
             )
+        if time_bar is not None and token_bar is not None:
+            return f"{time_bar} {token_bar}"
+        if time_bar is not None:
+            return time_bar
+        if token_bar is not None:
+            return token_bar
         if wave.effort_bucket is not None:
             return render_size_bar(wave.effort_bucket.value, mode=self._render_mode())
         return EMPTY_STATE
+
+    def _wave_time_burn_bar(self, state: State, wave: Wave) -> str | None:
+        """Return the active wave's elapsed-time burn bar, when computable."""
+        if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+            return None
+        if wave.opened_at is None:
+            return None
+        budget_minutes = _wave_time_budget_minutes(state, wave)
+        if budget_minutes is None:
+            return None
+        elapsed_seconds = (datetime.now(UTC) - wave.opened_at).total_seconds()
+        if elapsed_seconds < 0:
+            return None
+        return _burn_bar_with_band(
+            "T",
+            elapsed_seconds / 60.0,
+            budget_minutes,
+            mode=self._render_mode(),
+        )
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
         """Route Enter on a **wave** leaf to a :class:`WaveSelected` message.

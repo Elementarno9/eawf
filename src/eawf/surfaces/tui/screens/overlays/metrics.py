@@ -41,6 +41,9 @@ from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.kernel.state.models import State
+from eawf.workflow.estimation.metrics import compute_wave_elapsed
+
 if TYPE_CHECKING:
     from textual.app import App
 
@@ -99,6 +102,26 @@ class MetricsArgs:
 
     window: str
     scope_filter: str | None
+
+
+def _format_minutes(value: float) -> str:
+    """Return a compact minute value for metric tiles."""
+    return f"{value:.1f}m"
+
+
+def render_wave_elapsed_tile(state: State | None) -> str:
+    """Render the elapsed-wave tile from :func:`compute_wave_elapsed`."""
+    if state is None:
+        return _AWAITING
+    metric = compute_wave_elapsed(state)
+    return "\n".join(
+        [
+            f"median {_format_minutes(metric.median_minutes)}",
+            f"mean {_format_minutes(metric.mean_minutes)}",
+            f"max {_format_minutes(metric.max_minutes)}",
+            f"samples {metric.sample_count}",
+        ]
+    )
 
 
 def parse_metrics_args(args: str) -> MetricsArgs:
@@ -227,6 +250,8 @@ class MetricsModal(ModalScreen[None]):
         Returns:
             The tile's content-markup body string.
         """
+        if spec.tile_id == "tile-elapsed":
+            return render_wave_elapsed_tile(self._current_state())
         return _AWAITING
 
     def on_mount(self) -> None:
@@ -248,12 +273,26 @@ class MetricsModal(ModalScreen[None]):
         per-tile ``update_from(metrics)`` fan-out slots in here when the
         client arrives.
         """
+        self._refresh_elapsed_tile()
         client = self._telemetry_client()
         if client is None:
             return
         logger.info(
             f"metrics_refresh window={self._args.window!r} scope={self._args.scope_filter!r}"
         )
+
+    def _current_state(self) -> State | None:
+        """Return the host app's current state, if mounted and loaded."""
+        try:
+            state = getattr(self.app, "state", None)
+        except RuntimeError:
+            return None
+        return state if isinstance(state, State) else None
+
+    def _refresh_elapsed_tile(self) -> None:
+        """Refresh the elapsed tile from the local state-binding snapshot."""
+        tile = self.query_one("#tile-elapsed", Static)
+        tile.update(render_wave_elapsed_tile(self._current_state()))
 
     def _telemetry_client(self) -> object | None:
         """Return the daemon telemetry client, or ``None`` when unwired.
@@ -308,4 +347,5 @@ __all__ = [
     "TileSpec",
     "open_metrics",
     "parse_metrics_args",
+    "render_wave_elapsed_tile",
 ]

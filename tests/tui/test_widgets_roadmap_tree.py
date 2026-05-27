@@ -38,6 +38,7 @@ from eawf.surfaces.tui.widgets.roadmap_tree import (
     PHASE_GLYPHS,
     WAVE_GLYPHS,
     RoadmapTree,
+    _burn_marker,
     _pin_bar_right,
     _truncate_body,
     _wave_completion,
@@ -1121,7 +1122,7 @@ def test_wave_burn_bar_narrow_pane_keeps_bar() -> None:
             tree = app.query_one("#rt", RoadmapTree)
             tree.state = _state_wave_token_burn()
             await pilot.pause()
-            label = next(lbl for lbl in _labels(tree) if "P01-I01-W01" in lbl)
+            label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
             assert label.rstrip().endswith("50%")  # bar intact at the right edge
             assert ELLIPSIS in label  # title truncated to fit
 
@@ -1143,6 +1144,13 @@ def test_render_bar_plain_matches_wave_row_ascii() -> None:
             assert label.rstrip().endswith(expected)
 
     asyncio.run(body())
+
+
+def test_burn_marker_warns_at_80_and_errors_at_100() -> None:
+    """Time/token burn markers flip at the W15 80% and 100% bands."""
+    assert _burn_marker(79, 100) == "."
+    assert _burn_marker(80, 100) == "~"
+    assert _burn_marker(100, 100) == "!"
 
 
 # --------------------------------------------------------------------------
@@ -1210,7 +1218,10 @@ def test_wave_row_burn_bar_wins_over_bucket_when_budget_set() -> None:
             tree.state = _state_wave_hybrid_metric()
             await pilot.pause()
             label = next(lbl for lbl in _labels(tree) if "P01-I01-W02" in lbl)
-            # 500/1000 == 50 % burn bar, not the bucket size bar.
+            # Active + budgeted waves show both elapsed time and token burn.
+            assert "T!:" in label
+            assert "K.:" in label
+            # 500/1000 == 50 % token burn bar, not the bucket size bar.
             assert label.rstrip().endswith("50%")
             assert not label.rstrip().endswith("L")
 

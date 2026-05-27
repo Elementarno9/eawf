@@ -64,7 +64,13 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, PhaseStatus, StoreKind
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    EffortBucket,
+    PhaseStatus,
+    StoreKind,
+    WaveStatus,
+)
 from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import (
     MemoryMutationError,
@@ -125,6 +131,17 @@ _ANCHOR_FALLBACK_WARN_EMITTED: bool = False
 #: the daemon treats the call as new (the WAL record carries the
 #: durable replay guarantee).
 IDEMPOTENCY_TTL_SECONDS: Final[float] = 60.0
+
+#: Active-wave elapsed updates are coarse-grained to one event per wave per
+#: elapsed minute. The in-memory cache suppresses repeated digest polls inside
+#: the same minute; a daemon restart may re-emit the current minute, which is
+#: acceptable for a live advisory stream.
+_WAVE_ELAPSED_ACTIVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
+    {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
+)
+_WAVE_ELAPSED_WARN_FRACTION: Final[float] = 0.8
+_WAVE_ELAPSED_ERROR_FRACTION: Final[float] = 1.0
+_WAVE_ELAPSED_LAST_MINUTE: dict[int, dict[str, int]] = {}
 
 
 # ---- Params + Result models ------------------------------------------------
@@ -805,6 +822,127 @@ def _bucket_drift_extras(state: State) -> dict[str, str | int | float | bool]:
     }
 
 
+def _wave_elapsed_cache(ctx: MethodContext) -> dict[str, int]:
+    """Return the daemon-local ``wave_id -> elapsed_minute`` publish cache."""
+    return _WAVE_ELAPSED_LAST_MINUTE.setdefault(id(ctx), {})
+
+
+def _wave_elapsed_budget_minutes(state: State, wave_id: str) -> float | None:
+    """Return the time-burn budget for *wave_id*, preferring estimates."""
+    estimates = state.estimates or {}
+    estimate = estimates.get(wave_id)
+    if estimate is not None and estimate.pessimistic_minutes > 0:
+        return estimate.pessimistic_minutes
+    wave = state.waves.get(wave_id)
+    if wave is None or wave.effort_bucket is None:
+        return None
+    from eawf.workflow.estimation.buckets import EU_MINUTES, wave_estimate_eu
+
+    minutes = wave_estimate_eu(wave) * EU_MINUTES
+    return minutes if minutes > 0 else None
+
+
+def _wave_elapsed_band(elapsed_minutes: float, budget_minutes: float | None) -> str:
+    """Classify elapsed time against the 80% warning / 100% error bands."""
+    if budget_minutes is None or budget_minutes <= 0:
+        return "ok"
+    fraction = elapsed_minutes / budget_minutes
+    if fraction >= _WAVE_ELAPSED_ERROR_FRACTION:
+        return "err"
+    if fraction >= _WAVE_ELAPSED_WARN_FRACTION:
+        return "warn"
+    return "ok"
+
+
+def _build_wave_elapsed_envelope(
+    *,
+    wave_id: str,
+    elapsed_minute: int,
+    elapsed_minutes: float,
+    budget_minutes: float | None,
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build one ``wave_elapsed_update`` event envelope."""
+    now = datetime.now(UTC)
+    band = _wave_elapsed_band(elapsed_minutes, budget_minutes)
+    status = "error" if band == "err" else band
+    ratio = elapsed_minutes / budget_minutes if budget_minutes else 0.0
+    args_raw = f"{wave_id}:{elapsed_minute}".encode()
+    extras: dict[str, str | int | float | bool] = {
+        "wave_id": wave_id,
+        "elapsed_minute": elapsed_minute,
+        "elapsed_minutes": round(elapsed_minutes, 4),
+        "elapsed_band": band,
+    }
+    if budget_minutes is not None:
+        extras["elapsed_budget_minutes"] = round(budget_minutes, 4)
+        extras["elapsed_ratio"] = round(ratio, 4)
+        extras["elapsed_percent"] = round(ratio * 100.0, 2)
+    summary = f"wave_elapsed_update wave={wave_id} minute={elapsed_minute}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="wave_elapsed_update",
+        event_kind="wave_elapsed_update",
+        actor="daemon",
+        command="state.digest.wave_elapsed_update",
+        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status=status,
+        message=summary,
+        extras=extras,
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def _publish_wave_elapsed_updates(
+    *,
+    ctx: MethodContext,
+    state: State,
+    event_path: Path,
+    version: str,
+    now: datetime,
+) -> None:
+    """Append + publish at most one elapsed update per active wave minute."""
+    cache = _wave_elapsed_cache(ctx)
+    for wave in state.waves.values():
+        if wave.status not in _WAVE_ELAPSED_ACTIVE_STATUSES or wave.opened_at is None:
+            continue
+        elapsed_seconds = (now - wave.opened_at).total_seconds()
+        if elapsed_seconds < 60.0:
+            continue
+        elapsed_minute = int(elapsed_seconds // 60)
+        if cache.get(wave.id) == elapsed_minute:
+            continue
+        cache[wave.id] = elapsed_minute
+        elapsed_minutes = elapsed_seconds / 60.0
+        envelope = _build_wave_elapsed_envelope(
+            wave_id=wave.id,
+            elapsed_minute=elapsed_minute,
+            elapsed_minutes=elapsed_minutes,
+            budget_minutes=_wave_elapsed_budget_minutes(state, wave.id),
+            before_version=version,
+            after_version=version,
+        )
+        append_envelope(event_path, envelope)
+        if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+            ctx.bus.publish(envelope)
+        ctx.last_event_id = envelope.id
+        logger.info(f"wave_elapsed_update wave={wave.id!r} minute={elapsed_minute}")
+
+
 def _build_event_envelope(
     *,
     mutation: Mutation,
@@ -932,9 +1070,13 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
 @register("state.digest")
 async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Return the digest of the on-disk state.
+    """Return the digest of the on-disk state and emit elapsed ticks.
 
-    Used by the TUI mtime-poll fallback.
+    Used by the TUI mtime-poll fallback. The same poll cadence is also
+    the lightweight live-clock source for active-wave elapsed updates:
+    once an active wave crosses a new elapsed-minute boundary, the daemon
+    appends and publishes a ``wave_elapsed_update`` event without
+    mutating ``state.json``.
 
     Args:
         ctx: Server context — ``ctx.state_path`` is consulted only as a
@@ -951,7 +1093,26 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         # TUI poll path from faulting on an uninitialised project.
         return DigestResult(version=hashlib.sha256(b"").hexdigest()[:16]).model_dump(mode="json")
     raw = state_path.read_bytes()
-    return DigestResult(version=hashlib.sha256(raw).hexdigest()[:16]).model_dump(mode="json")
+    version = hashlib.sha256(raw).hexdigest()[:16]
+    try:
+        payload = orjson.loads(raw)
+        state = State.model_validate(payload)
+    except (orjson.JSONDecodeError, ValidationError) as exc:
+        logger.warning(f"digest_elapsed_update status='skip' err={exc!r}")
+    else:
+        event_path = (
+            Path(ctx.event_path)
+            if args.repo_root is None and ctx.event_path is not None
+            else store_path(state_path, StoreKind.EVENT)
+        )
+        _publish_wave_elapsed_updates(
+            ctx=ctx,
+            state=state,
+            event_path=event_path,
+            version=version,
+            now=datetime.now(UTC),
+        )
+    return DigestResult(version=version).model_dump(mode="json")
 
 
 @register("state.mutate")

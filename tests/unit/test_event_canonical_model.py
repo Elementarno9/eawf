@@ -224,5 +224,6 @@ def test_event_kind_includes_subscription_and_observability_kinds() -> None:
         "config_reloaded",
         "subscription_lag",
         "subscription_dropped",
+        "wave_elapsed_update",
     }
     assert expected.issubset(members)
