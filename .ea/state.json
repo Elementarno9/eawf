@@ -276,6 +276,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:25:53.271898Z"
     },
+    "P28-I03-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W14",
+      "scope_id": "P28-I03-W14",
+      "status": "done",
+      "updated_at": "2026-05-27T21:45:16.166622Z"
+    },
     "P28-I03-W15": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2362,7 +2374,6 @@
       "P28-I03-W08",
       "P28-I03-W09",
       "P28-I03-W11",
-      "P28-I03-W14",
       "P28-I03-W18"
     ],
     "iter_id": "P28-I03",
@@ -6898,7 +6909,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:42:27.619679Z",
+  "updated_at": "2026-05-27T21:45:16.167169Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -23035,8 +23046,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:45:16.166622Z",
+      "commit": "b0575957770ff80b713d95ad4d2498d0e0226675",
       "deps": [
         "P28-I03-W13"
       ],
@@ -23051,10 +23062,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:28.920962Z",
-      "outcome": null,
+      "outcome": "ceremony recommender renders A/B/C dispatch guidance with lifecycle and renderer tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "compute_ceremony recommends A/B/C",
         "counter computed on demand",
