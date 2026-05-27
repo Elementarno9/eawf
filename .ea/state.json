@@ -1961,7 +1961,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I02-W01",
       "P28-I02-W03",
       "P28-I02-W09"
     ],
@@ -5899,7 +5898,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T02:24:00.401084Z",
+  "updated_at": "2026-05-27T07:59:53.365849Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20412,7 +20411,7 @@
         "P28-I02-W02"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T07:59:52.585141Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -20431,10 +20430,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:04.048125Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "doctor reports git/state drift + plugin cross-scope duplication",
         "ManifestEntry gains scope",
@@ -24659,10 +24658,10 @@
       "branch": "feature/eawf-v0.1-p28-w01",
       "created_at": "2026-05-27T02:23:57.860762Z",
       "id": "WT-P28-I02-W01-1779848637",
-      "merged_commit": null,
+      "merged_commit": "e2b4ef8",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w01",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W01"
     },
     "WT-P28-I02-W03-1779848639": {
