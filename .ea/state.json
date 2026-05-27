@@ -156,6 +156,18 @@
       "status": "done",
       "updated_at": "2026-05-27T18:09:56.191727Z"
     },
+    "P28-I02-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W29",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W29",
+      "scope_id": "P28-I02-W29",
+      "status": "done",
+      "updated_at": "2026-05-27T18:13:21.687973Z"
+    },
     "P28-I02-W30": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2129,9 +2141,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I02-W29"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -6353,7 +6363,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T18:09:56.192067Z",
+  "updated_at": "2026-05-27T18:13:21.688894Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21930,8 +21940,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T18:13:21.687973Z",
+      "commit": "2ae4e09d404abffc23987541cd107a30be35591e",
       "deps": [],
       "description": "Repair audit finding that bootstrap seeds Project but omits the IntentBrief and bucket-EU defaults expected by W12.",
       "dispatch_history": [],
@@ -21945,10 +21955,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-27T17:38:07.931007Z",
-      "outcome": null,
+      "outcome": "wizard bootstrap now seeds project goals and estimation bucket overrides after template merge",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "repo bootstrap seeds an IntentBrief or explicit project intent reference",
         "bucket EU defaults are written through typed config",
