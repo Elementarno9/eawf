@@ -7,6 +7,11 @@ import re
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State
 from eawf.platform.artifacts.validation import validate_markdown_artifact
+from eawf.surfaces.render.narrative import (
+    NarrativeBundle,
+    build_narrative,
+    generated_changelog_lines,
+)
 
 
 class ReleaseNotesValidationError(ValueError):
@@ -73,6 +78,23 @@ def _artifact_rows(state: State, phase_ids: set[str]) -> list[str]:
     return rows
 
 
+def _bundle_rows(bundles: list[NarrativeBundle], section: str) -> list[str]:
+    rows: list[str] = []
+    for bundle in bundles:
+        if section == "what":
+            items = bundle.what
+        elif section == "why":
+            items = bundle.why
+        elif section == "validation":
+            items = bundle.validation
+        else:
+            items = bundle.risks
+        for item in items:
+            prefix = "" if item.startswith(f"`{bundle.scope_id}`") else f"`{bundle.scope_id}` "
+            rows.append(f"- {prefix}{item}")
+    return rows
+
+
 def build_release_notes(
     state: State,
     *,
@@ -87,15 +109,20 @@ def build_release_notes(
         if _phase_in_range(phase.id, from_phase, to_phase)
     ]
     phase_ids = {phase.id for phase in phases}
-    changelog_lines = mine_unreleased_changelog(changelog_text or "")
+    bundles = [build_narrative(state, phase.id) for phase in phases]
+    mined_changelog_lines = mine_unreleased_changelog(changelog_text or "")
+    generated_changelog = [line for bundle in bundles for line in generated_changelog_lines(bundle)]
+    changelog_lines = mined_changelog_lines or generated_changelog
     summary_rows = [
         f"- `{phase.id}` {phase.title} ({phase.status.value}) [1]" for phase in phases
     ] or ["- No phases matched the requested range [1]."]
-    if changelog_lines:
+    if mined_changelog_lines:
         summary_rows.append("- Unreleased changelog entries mined from `CHANGELOG.md` [2].")
+    elif generated_changelog:
+        summary_rows.append("- Changelog entries generated from narrative bundles [1].")
     artifact_rows = _artifact_rows(state, phase_ids)
     references = ["[1] .ea/state.json"]
-    if changelog_lines:
+    if mined_changelog_lines:
         references.append("[2] CHANGELOG.md")
     body = "\n".join(
         [
@@ -105,11 +132,27 @@ def build_release_notes(
             "",
             *summary_rows,
             "",
+            "## What",
+            "",
+            *(_bundle_rows(bundles, "what") or ["- No narrative entries found."]),
+            "",
+            "## Why",
+            "",
+            *(_bundle_rows(bundles, "why") or ["- No narrative entries found."]),
+            "",
+            "## Validation",
+            "",
+            *(_bundle_rows(bundles, "validation") or ["- No validation entries found."]),
+            "",
+            "## Risks",
+            "",
+            *(_bundle_rows(bundles, "risks") or ["- No risk entries found."]),
+            "",
             "## Artifacts",
             "",
             *(artifact_rows or ["- No committed artifact rows found."]),
             "",
-            "## Changelog Mine",
+            "## Changelog",
             "",
             *(changelog_lines or ["- No unreleased changelog entries found."]),
             "",

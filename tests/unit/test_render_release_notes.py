@@ -126,6 +126,25 @@ def test_build_release_notes_validates_as_artifact() -> None:
         changelog_text="# Changelog\n\n## [Unreleased]\n\n- PR hardening\n",
     )
     assert "`P17` PR hardening" in body
+    assert "## What" in body
+    assert "- `P17` PR hardening (closed)." in body
+    assert "## Validation" in body
     assert "`ART-A22-P17`" in body
     assert "`ART-A21-P16`" not in body
+    assert "## Changelog" in body
+    assert "- PR hardening" in body
+    assert validate_markdown_artifact(body).ok
+
+
+def test_build_release_notes_generates_changelog_when_unreleased_is_empty() -> None:
+    state = State.model_validate(_state_payload())
+    body = build_release_notes(
+        state,
+        from_phase="P17",
+        to_phase="P17",
+        changelog_text="# Changelog\n\n## [Unreleased]\n\n",
+    )
+
+    assert "- PR hardening." in body
+    assert "- Changelog entries generated from narrative bundles [1]." in body
     assert validate_markdown_artifact(body).ok

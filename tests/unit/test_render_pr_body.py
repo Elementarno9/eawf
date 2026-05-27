@@ -197,20 +197,24 @@ def test_build_pr_body_phase_with_iters_and_waves(
     state = State.model_validate(payload)
     body = build_pr_body(state, "P00")
     assert body.startswith("# P00: bootstrap\n")
-    assert "## Summary\n" in body
-    assert "- first iter" in body
-    assert "## Phase deliverables" in body
-    assert "| `P00-I01-W01` | Wave P00-I01-W01 | `abcdef0` | did stuff |" in body
+    assert "## What\n" in body
+    assert "- `P00-I01-W01` did stuff." in body
+    assert "## Why\n" in body
+    assert "- No explicit motivation recorded." in body
+    assert "## Validation\n" in body
+    assert "- 1/1 wave(s) closed." in body
+    assert "## Risks\n" in body
+    assert "- No phase audit recorded." in body
     assert "## Test plan" in body
     assert "- [ ] `uv run pytest -q`" in body
 
 
-def test_build_pr_body_phase_with_no_waves_shows_placeholder() -> None:
+def test_build_pr_body_phase_with_no_waves_shows_validation_placeholder() -> None:
     payload = _base_state()
     payload["phases"] = {"P00": _phase("P00")}
     state = State.model_validate(payload)
     body = build_pr_body(state, "P00")
-    assert "_(no waves recorded for this phase)_" in body
+    assert "- No validation record available." in body
 
 
 def test_pr_body_input_rejects_extra_fields() -> None:

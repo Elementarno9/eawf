@@ -1,18 +1,4 @@
-"""Render a phase PR body (Markdown) from ``state.json``.
-
-The output mirrors the convention captured in ``AGENTS.md`` (the project
-PR template):
-
-- ``## Summary`` — 3-6 bullets pulled from phase-scoped decisions and the
-  titles of iters under the phase.
-- ``## Phase deliverables`` — table of every wave under the phase with
-  ``wave_id``, ``title``, the wave's commit short-SHA (first 7 chars), and
-  ``outcome``.
-- ``## Test plan`` — standard checklist anchored at the phase.
-
-Public API: :func:`build_pr_body` returns the rendered Markdown string given
-a validated :class:`State` and a phase id.
-"""
+"""Render a laconic phase PR body (Markdown) from ``state.json``."""
 
 from __future__ import annotations
 
@@ -36,6 +22,11 @@ from eawf.kernel.store.kinds.agent_report import (
 from eawf.platform.artifacts.references import Citation, CitationKind
 from eawf.platform.artifacts.validation import validate_text_surface
 from eawf.platform.profiles.models import ComposedProfile
+from eawf.surfaces.render.narrative import (
+    NarrativeNotFoundError,
+    build_narrative,
+    render_narrative_bundle,
+)
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports, operator_rollup
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
@@ -423,51 +414,27 @@ def build_pr_body(
     if phase is None:
         raise PrBodyNotFound(f"phase not found: {phase_id!r}")
 
-    decisions = _decisions_for_phase(state, phase_id)
-    iters = _iters_for_phase(state, phase_id)
-    waves = _waves_for_phase(state, phase_id)
+    try:
+        narrative = build_narrative(state, phase_id)
+    except NarrativeNotFoundError as exc:
+        raise PrBodyNotFound(str(exc)) from exc
     rendered_inputs = _with_dense_input_citations(inputs)
 
-    audit_line = ""
-    if phase.audit_id:
-        audits = state.audits or {}
-        audit = audits.get(phase.audit_id)
-        if audit is not None and audit.verdict is not None:
-            audit_line = f"Audit `{phase.audit_id}` verdict: **{audit.verdict.value}**."
-
     lines: list[str] = [
-        f"# {phase_id}: {phase.title}",
+        f"# {narrative.title}",
         "",
-        "## Summary",
-        "",
+        render_narrative_bundle(narrative),
     ]
-    if audit_line:
-        lines.append(f"- {audit_line}")
-    for summary in decisions:
-        lines.append(f"- {summary}")
-    for _iter_id, title in iters:
-        lines.append(f"- {title}")
-    if not decisions and not iters and not audit_line:
-        lines.append("- (no decisions or iters recorded for this phase)")
-    lines.extend(["", "## Phase deliverables", ""])
-    if waves:
-        lines.append("| Wave | Title | Commit | Outcome |")
-        lines.append("|------|-------|--------|---------|")
-        for wave_id, title, short, outcome in waves:
-            outcome_cell = outcome.replace("|", "\\|") if outcome else ""
-            title_cell = title.replace("|", "\\|")
-            lines.append(f"| `{wave_id}` | {title_cell} | `{short}` | {outcome_cell} |")
-    else:
-        lines.append("_(no waves recorded for this phase)_")
     for input_model in rendered_inputs:
         lines.extend(["", _INPUT_RENDERERS[input_model.kind](input_model)])
 
     context = {
         "phase_id": phase_id,
         "phase": phase,
-        "decisions": decisions,
-        "iters": iters,
-        "waves": waves,
+        "narrative": narrative,
+        "decisions": _decisions_for_phase(state, phase_id),
+        "iters": _iters_for_phase(state, phase_id),
+        "waves": _waves_for_phase(state, phase_id),
     }
     for block_body in _render_profile_blocks(composed_profile, kind=kind, context=context):
         lines.extend(["", block_body])
