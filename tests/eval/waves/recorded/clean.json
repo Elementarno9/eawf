@@ -1,0 +1,14 @@
+{
+  "case_id": "clean",
+  "transcript": "Implemented eval scoring with typed models and focused verification.",
+  "commands": [
+    "rtk uv run pytest tests/unit/test_eval_score.py",
+    "rtk git status --short"
+  ],
+  "changed_files": [
+    "src/eawf/observability/eval/score.py",
+    "tests/unit/test_eval_score.py"
+  ],
+  "verify_count": 2,
+  "expected_failed_rules": []
+}

@@ -1,0 +1,14 @@
+{
+  "case_id": "missing-rtk",
+  "transcript": "Focused tests passed.",
+  "commands": [
+    "uv run pytest tests/unit/test_eval_score.py"
+  ],
+  "changed_files": [
+    "tests/unit/test_eval_score.py"
+  ],
+  "verify_count": 1,
+  "expected_failed_rules": [
+    "commands_use_rtk"
+  ]
+}

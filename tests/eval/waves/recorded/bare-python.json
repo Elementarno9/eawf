@@ -1,0 +1,14 @@
+{
+  "case_id": "bare-python",
+  "transcript": "Ran focused pytest directly.",
+  "commands": [
+    "rtk pytest tests/unit/test_eval_score.py"
+  ],
+  "changed_files": [
+    "tests/unit/test_eval_score.py"
+  ],
+  "verify_count": 1,
+  "expected_failed_rules": [
+    "python_invocations_use_uv_run"
+  ]
+}

@@ -15,6 +15,27 @@ check parameterised over the same six skill cases.
 from __future__ import annotations
 
 from eawf.observability.eval.models import EvalScore
-from eawf.observability.eval.score import score_envelope
+from eawf.observability.eval.rule_adherence import (
+    RULE_IDS,
+    RecordedWaveCase,
+    RuleAdherenceBaseline,
+    RuleAdherenceReport,
+    load_recorded_wave_cases,
+)
+from eawf.observability.eval.score import (
+    score_envelope,
+    score_recorded_wave_corpus,
+    score_rule_adherence,
+)
 
-__all__ = ["EvalScore", "score_envelope"]
+__all__ = [
+    "RULE_IDS",
+    "EvalScore",
+    "RecordedWaveCase",
+    "RuleAdherenceBaseline",
+    "RuleAdherenceReport",
+    "load_recorded_wave_cases",
+    "score_envelope",
+    "score_recorded_wave_corpus",
+    "score_rule_adherence",
+]

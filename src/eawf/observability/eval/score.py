@@ -28,9 +28,17 @@ pending later footer additions (P14+).
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from eawf.observability.eval.models import EvalScore
+from eawf.observability.eval.rule_adherence import (
+    RecordedWaveCase,
+    RuleAdherenceBaseline,
+    RuleAdherenceReport,
+    build_rule_adherence_baseline,
+    check_rule_adherence,
+)
 from eawf.surfaces.render.envelope import OutputEnvelope
 
 logger = logging.getLogger(__name__)
@@ -162,4 +170,18 @@ def score_envelope(env: OutputEnvelope, golden: dict[str, Any]) -> EvalScore:
     return EvalScore(total=total, per_dim=per_dim, pass_threshold=threshold)
 
 
-__all__ = ["score_envelope"]
+def score_rule_adherence(case: RecordedWaveCase | Mapping[str, object]) -> RuleAdherenceReport:
+    """Run advisory rule-adherence scoring for one recorded wave case."""
+    return check_rule_adherence(case)
+
+
+def score_recorded_wave_corpus(
+    cases: Iterable[RecordedWaveCase | Mapping[str, object]],
+    *,
+    experiment_id: str = "Exp-1",
+) -> RuleAdherenceBaseline:
+    """Aggregate advisory rule-adherence scoring for a recorded wave corpus."""
+    return build_rule_adherence_baseline(cases, experiment_id=experiment_id)
+
+
+__all__ = ["score_envelope", "score_recorded_wave_corpus", "score_rule_adherence"]

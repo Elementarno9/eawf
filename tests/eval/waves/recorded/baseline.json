@@ -1,0 +1,78 @@
+{
+  "experiment_id": "Exp-1",
+  "advisory_only": true,
+  "checker_count": 6,
+  "rule_ids": [
+    "commands_use_rtk",
+    "python_invocations_use_uv_run",
+    "no_local_path_leaks",
+    "no_direct_state_json_edits",
+    "pydantic_models_forbid_extra",
+    "no_destructive_git_reverts"
+  ],
+  "corpus_count": 6,
+  "verify_count": 7,
+  "pass_rate": 0.8611111111111112,
+  "rule_pass_rates": {
+    "commands_use_rtk": 0.8333333333333334,
+    "python_invocations_use_uv_run": 0.8333333333333334,
+    "no_local_path_leaks": 1.0,
+    "no_direct_state_json_edits": 0.8333333333333334,
+    "pydantic_models_forbid_extra": 0.8333333333333334,
+    "no_destructive_git_reverts": 0.8333333333333334
+  },
+  "cases": [
+    {
+      "case_id": "bare-python",
+      "verify_count": 1,
+      "passed": false,
+      "score": 0.8333333333333334,
+      "failed_rules": [
+        "python_invocations_use_uv_run"
+      ]
+    },
+    {
+      "case_id": "clean",
+      "verify_count": 2,
+      "passed": true,
+      "score": 1.0,
+      "failed_rules": []
+    },
+    {
+      "case_id": "destructive-git",
+      "verify_count": 1,
+      "passed": false,
+      "score": 0.8333333333333334,
+      "failed_rules": [
+        "no_destructive_git_reverts"
+      ]
+    },
+    {
+      "case_id": "direct-state-edit",
+      "verify_count": 1,
+      "passed": false,
+      "score": 0.8333333333333334,
+      "failed_rules": [
+        "no_direct_state_json_edits"
+      ]
+    },
+    {
+      "case_id": "missing-rtk",
+      "verify_count": 1,
+      "passed": false,
+      "score": 0.8333333333333334,
+      "failed_rules": [
+        "commands_use_rtk"
+      ]
+    },
+    {
+      "case_id": "pydantic-extra-open",
+      "verify_count": 1,
+      "passed": false,
+      "score": 0.8333333333333334,
+      "failed_rules": [
+        "pydantic_models_forbid_extra"
+      ]
+    }
+  ]
+}

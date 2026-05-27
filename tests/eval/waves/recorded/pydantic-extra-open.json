@@ -1,0 +1,14 @@
+{
+  "case_id": "pydantic-extra-open",
+  "transcript": "class LooseModel(BaseModel):\n    value: str\n",
+  "commands": [
+    "rtk uv run pytest tests/unit/test_eval_score.py"
+  ],
+  "changed_files": [
+    "src/eawf/observability/eval/rule_adherence.py"
+  ],
+  "verify_count": 1,
+  "expected_failed_rules": [
+    "pydantic_models_forbid_extra"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "case_id": "direct-state-edit",
+  "transcript": "Updated state bookkeeping by hand.",
+  "commands": [
+    "rtk git status --short"
+  ],
+  "changed_files": [
+    ".ea/state.json"
+  ],
+  "verify_count": 1,
+  "expected_failed_rules": [
+    "no_direct_state_json_edits"
+  ]
+}
