@@ -258,7 +258,7 @@ the reason in the plan or handoff before dispatching worktrees or
 starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.4 hash=2bf0f6710c9e5801 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.4 hash=e49ce06109070916 -->
 ### Commit prefix
 
 ``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types:
@@ -303,6 +303,8 @@ Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any
 state-bookkeeping path) and ``type == 'docs'`` (restricted to
 ``.ea/artifacts/**``); for every other type the ``-W<NN>`` or
 ``-CORE`` suffix remains mandatory.
+
+Non-final iter closes are still in-phase state bookkeeping: use ``[P<NN>-I<NN>] state: close iter`` while the phase remains ACTIVE. Bare conventional commits are reserved for the gap after phase close clears ``state.current.phase_id`` and before the next phase activates, such as a pre-flight chore before ``/roadmap propose``.
 
 **Operational coupling: ship + PR-review ride the
 phase-co-closing iter.** The final iter of a phase is where the

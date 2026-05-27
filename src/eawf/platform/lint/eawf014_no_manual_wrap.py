@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Container
 from dataclasses import dataclass
 
 RULE_CODE = "EAWF014"
@@ -57,11 +58,16 @@ def _line_joins_forward(line: str) -> bool:
     return not stripped.endswith((".", "!", "?", ":", ";"))
 
 
-def check_source(source: str) -> list[ManualWrapViolation]:
+def check_source(
+    source: str, *, candidate_lines: Container[int] | None = None
+) -> list[ManualWrapViolation]:
     """Return EAWF014 violations for likely hard-wrapped paragraphs.
 
     Args:
         source: Markdown text to inspect.
+        candidate_lines: Optional 1-based line numbers to report. When
+            provided, a wrap is reported only when either side of the
+            joined line pair is in this set.
 
     Returns:
         Violations in source order. Fenced code, lists, blockquotes,
@@ -92,13 +98,19 @@ def check_source(source: str) -> list[ManualWrapViolation]:
         if previous_plain is not None:
             prev_lineno, prev_line = previous_plain
             if _line_joins_forward(prev_line):
-                violations.append(
-                    ManualWrapViolation(
-                        lineno=lineno,
-                        col_offset=len(line) - len(line.lstrip()),
-                        snippet=stripped[:80],
-                        reason=f"paragraph appears manually wrapped after line {prev_lineno}",
-                    )
+                in_scope = (
+                    candidate_lines is None
+                    or lineno in candidate_lines
+                    or prev_lineno in candidate_lines
                 )
+                if in_scope:
+                    violations.append(
+                        ManualWrapViolation(
+                            lineno=lineno,
+                            col_offset=len(line) - len(line.lstrip()),
+                            snippet=stripped[:80],
+                            reason=f"paragraph appears manually wrapped after line {prev_lineno}",
+                        )
+                    )
         previous_plain = (lineno, line)
     return violations

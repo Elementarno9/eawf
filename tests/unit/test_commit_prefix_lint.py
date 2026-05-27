@@ -379,8 +379,8 @@ def _write_state(tmp_path: Path, *, phase_id: str | None) -> Path:
     return p
 
 
-def test_accepts_bare_conventional_when_no_active_phase(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "chore: pre-flight scrub for v0.4 design\n\nbody\n")
+def test_accepts_pre_flight_chore_when_no_active_phase(tmp_path: Path, mod) -> None:
+    msg = _write_msg(tmp_path, "chore: pre-flight chore before roadmap\n\nbody\n")
     state = _write_state(tmp_path, phase_id=None)
     code, diag = mod.lint(msg, ["AGENTS.md", "tools/commit_prefix_lint.py"], state_path=state)
     assert code == 0, diag

@@ -400,6 +400,59 @@ def test_eawf014_no_manual_wrap_cli_blocks(tmp_path: Path) -> None:
     assert "EAWF014" in result.stdout
 
 
+def test_eawf014_staged_scope_ignores_unchanged_debt(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q"], repo)
+    _git(["config", "user.email", "noreply@anthropic.com"], repo)
+    _git(["config", "user.name", "Test"], repo)
+    path = repo / "docs" / "note.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("Old wrapped\nparagraph continues.\n", encoding="utf-8")
+    _git(["add", "docs/note.md"], repo)
+    _git(["commit", "-qm", "base"], repo)
+
+    path.write_text("Old wrapped\nparagraph continues.\n\nNew paragraph.\n", encoding="utf-8")
+    _git(["add", "docs/note.md"], repo)
+
+    result = runner.invoke(app, ["-w", str(repo), "hook", "eawf014-no-manual-wrap"])
+    assert result.exit_code == 0, result.stdout
+
+
+def test_eawf014_staged_scope_blocks_new_wrap(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q"], repo)
+    _git(["config", "user.email", "noreply@anthropic.com"], repo)
+    _git(["config", "user.name", "Test"], repo)
+    path = repo / "docs" / "note.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("Old wrapped\nparagraph continues.\n", encoding="utf-8")
+    _git(["add", "docs/note.md"], repo)
+    _git(["commit", "-qm", "base"], repo)
+
+    path.write_text(
+        "Old wrapped\nparagraph continues.\n\nNew wrapped\nparagraph continues.\n",
+        encoding="utf-8",
+    )
+    _git(["add", "docs/note.md"], repo)
+
+    result = runner.invoke(app, ["-w", str(repo), "hook", "eawf014-no-manual-wrap"])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF014" in result.stdout
+
+
+def test_eawf014_staged_scope_skips_agents_md_goldens(tmp_path: Path) -> None:
+    repo = _init_repo_with_staged(
+        tmp_path,
+        rel="tests/golden/agents_md/core_only.md",
+        body="Generated wrapped\nfixture debt.\n",
+    )
+
+    result = runner.invoke(app, ["-w", str(repo), "hook", "eawf014-no-manual-wrap"])
+    assert result.exit_code == 0, result.stdout
+
+
 def test_eawf015_ears_advisory_cli_warns_without_blocking(tmp_path: Path) -> None:
     note = tmp_path / "note.md"
     note.write_text("The operator should review this before merge.\n")

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -488,6 +489,40 @@ def _resolve_scan_paths(
     return [p for p in candidates if not _is_state_bookkeeping_path(p)]
 
 
+_DIFF_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
+
+
+def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
+    """Return 1-based new-file lines added by the staged diff."""
+    proc = subprocess.run(
+        ["git", "diff", "--cached", "--unified=0", "--", rel],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return set()
+    candidates: set[int] = set()
+    new_lineno: int | None = None
+    for line in proc.stdout.splitlines():
+        hunk = _DIFF_HUNK_RE.match(line)
+        if hunk is not None:
+            new_lineno = int(hunk.group("start"))
+            continue
+        if new_lineno is None or line.startswith(("diff --git", "index ", "--- ", "+++ ")):
+            continue
+        if line.startswith("+"):
+            candidates.add(new_lineno)
+            new_lineno += 1
+            continue
+        if line.startswith("-") or line.startswith("\\"):
+            continue
+        new_lineno += 1
+    return candidates
+
+
 def _is_state_bookkeeping_path(rel: str) -> bool:
     """Return ``True`` for daemon-managed bookkeeping files excluded from leak scans.
 
@@ -503,6 +538,11 @@ def _is_state_bookkeeping_path(rel: str) -> bool:
     if norm == ".ea/state.json":
         return True
     return norm.startswith(".ea/store/") and norm.endswith(".jsonl")
+
+
+def _is_generated_markdown_fixture_path(rel: str) -> bool:
+    """Return ``True`` for generated markdown fixtures checked by golden tests."""
+    return rel.replace("\\", "/").startswith("tests/golden/agents_md/")
 
 
 def _emit_leak_result(
@@ -895,8 +935,11 @@ def eawf014_no_manual_wrap(
     paths = _resolve_scan_paths(files, hook_name="eawf014-no-manual-wrap", base=base, cwd=cwd)
     rows: list[str] = []
     scanned = 0
+    diff_scoped = not files
     for rel in paths:
         if not rel.endswith(".md"):
+            continue
+        if _is_generated_markdown_fixture_path(rel):
             continue
         target = cwd / rel
         try:
@@ -904,7 +947,11 @@ def eawf014_no_manual_wrap(
         except OSError, UnicodeDecodeError:
             continue
         scanned += 1
-        rows.extend(f"  {rel}:{violation.render()}" for violation in check_source(source))
+        candidate_lines = _staged_added_line_candidates(rel, cwd=cwd) if diff_scoped else None
+        rows.extend(
+            f"  {rel}:{violation.render()}"
+            for violation in check_source(source, candidate_lines=candidate_lines)
+        )
     _emit_static_lint_result(
         hook_name="eawf014-no-manual-wrap",
         rows=rows,

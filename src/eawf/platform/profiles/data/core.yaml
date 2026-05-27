@@ -380,6 +380,8 @@ render_blocks:
       ``.ea/artifacts/**``); for every other type the ``-W<NN>`` or
       ``-CORE`` suffix remains mandatory.
 
+      Non-final iter closes are still in-phase state bookkeeping: use ``[P<NN>-I<NN>] state: close iter`` while the phase remains ACTIVE. Bare conventional commits are reserved for the gap after phase close clears ``state.current.phase_id`` and before the next phase activates, such as a pre-flight chore before ``/roadmap propose``.
+
       **Operational coupling: ship + PR-review ride the
       phase-co-closing iter.** The final iter of a phase is where the
       PR-review pass + ship CI happen; review-feedback waves append to
