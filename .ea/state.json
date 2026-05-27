@@ -60,6 +60,18 @@
       "status": "done",
       "updated_at": "2026-05-27T16:56:36.572753Z"
     },
+    "P28-I02-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W19",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W19",
+      "scope_id": "P28-I02-W19",
+      "status": "done",
+      "updated_at": "2026-05-27T17:11:21.457699Z"
+    },
     "P28-I02-W23": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2045,9 +2057,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I02-W19"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -6172,7 +6182,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T16:58:48.398326Z",
+  "updated_at": "2026-05-27T17:11:21.962406Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21388,7 +21398,7 @@
         "P28-I02-W20"
       ],
       "claim_session_id": "SES-20260527T170000Z-operator-codex",
-      "closed_at": null,
+      "closed_at": "2026-05-27T17:11:21.457699Z",
       "commit": null,
       "deps": [
         "P28-I02-W11",
@@ -21407,10 +21417,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:13.570958Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "SubagentSpec workflow inserts wave close instruction",
         "close_wave accepts tokens_consumed param",
@@ -25196,10 +25206,10 @@
       "branch": "feature/eawf-v0.4-p28-w19",
       "created_at": "2026-05-27T16:58:48.398326Z",
       "id": "WT-P28-I02-W19-1779901128",
-      "merged_commit": null,
+      "merged_commit": "9240d05",
       "owner_session_id": "SES-20260527T170000Z-operator-codex",
       "path": ".ea/worktrees/p28-w19",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W19"
     },
     "WT-P28-I02-W21-1779846426": {
