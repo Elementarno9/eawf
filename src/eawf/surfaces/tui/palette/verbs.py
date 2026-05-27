@@ -13,21 +13,8 @@ frozen dataclasses (no widget imports, no app state) means the filter
 predicate :func:`visible_verbs` and the fuzzy ranker
 :func:`rank_verbs` are unit-testable without mounting Textual.
 
-Scope of this wave (P26-W19). The palette infrastructure + the
-navigation / read-only verbs land here; the mutating + overlay-opening
-handlers (``/metrics``, ``/pr``, ``/events``, the ``/wave`` family, the
-skill-dispatch passthroughs) are registered with **placeholder handlers**
-that surface a "not yet wired" toast. The follow-up waves of this band
-(W20 PlanPreview / NeedsUser / Audit overlays, W21 ``/metrics`` + ``/pr``)
-replace those placeholders in place — the registry shape and the palette
-contract do not change. Per V11 the ``/wave`` palette verbs are
-read-only; mutating wave actions never appear in the palette and only
-reach the operator through the audit-failed overlay's structured menu.
-
 ``allowed_scopes`` is matched against the App's resolved scope name
-(``"repo"`` / ``"workspace"`` / ``"user"`` / ``"wave_board"``); the
-wave-board scope lands with the wave-board screen in a later wave but is
-declared here so the wave verbs carry their final scope set.
+(``"repo"`` / ``"workspace"`` / ``"user"``).
 """
 
 from __future__ import annotations
@@ -45,14 +32,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Scope names a verb may be allowed on. Mirrors the App scope names
-#: (``repo`` / ``workspace`` / ``user``) plus ``wave_board`` for the
-#: wave-board screen that lands in a later wave of this band.
-ScopeName = Literal["repo", "workspace", "user", "wave_board"]
+#: Scope names a verb may be allowed on. Mirrors the App scope names.
+ScopeName = Literal["repo", "workspace", "user"]
 
-#: All four scopes — the common ``allowed_scopes`` value for cross-screen
+#: All scopes — the common ``allowed_scopes`` value for cross-screen
 #: verbs (search, theme, help, quit, etc.).
-SCOPES_ALL: tuple[ScopeName, ...] = ("repo", "workspace", "user", "wave_board")
+SCOPES_ALL: tuple[ScopeName, ...] = ("repo", "workspace", "user")
 
 #: A verb handler: ``(app, args)`` where ``args`` is the raw argument
 #: string the operator typed after the verb name (already split off). The
@@ -61,34 +46,13 @@ SCOPES_ALL: tuple[ScopeName, ...] = ("repo", "workspace", "user", "wave_board")
 VerbHandler = Callable[["App[None]", str], None]
 
 
-def _placeholder(verb_name: str) -> VerbHandler:
-    """Build a placeholder handler that toasts a "not yet wired" notice.
-
-    Used for verbs whose concrete behaviour lands in a later wave of this
-    band (W20 / W21). The registry shape stays final; only the handler is
-    swapped when the real overlay arrives.
-
-    Args:
-        verb_name: The verb the placeholder stands in for (for the toast).
-
-    Returns:
-        A :data:`VerbHandler` that notifies and logs, mutating nothing.
-    """
-
-    def handler(app: App[None], args: str) -> None:
-        logger.info(f"palette_verb_placeholder verb={verb_name!r} args={args!r}")
-        app.notify(f"{verb_name} is not wired yet", severity="information")
-
-    return handler
-
-
 @dataclass(frozen=True)
 class PaletteVerb:
     """One row in the static palette verb registry.
 
     Attributes:
-        name: The verb token including the leading slash (e.g. ``/find``,
-            ``/wave open``). Matched + ranked by the palette filter.
+        name: The verb token including the leading slash (e.g. ``/find``).
+            Matched + ranked by the palette filter.
         hint: A one-line description shown beside the verb in the palette.
         handler: The callable run on ``Enter`` — ``(app, args)``.
         allowed_scopes: Scope names the verb is offered on; a verb is
@@ -559,10 +523,8 @@ def _backlog_table(app: App[None]) -> BacklogTable | None:
     return None
 
 
-#: The static verb registry. Order is display order in the palette
-#: before fuzzy ranking. Handlers that land in a later wave use
-#: :func:`_placeholder` so the registry is complete now and the follow-up
-#: wave swaps the handler in place.
+#: The static verb registry. Order is display order in the palette before
+#: fuzzy ranking.
 VERBS: tuple[PaletteVerb, ...] = (
     # --- cross-screen navigation + filter ---------------------------------
     PaletteVerb(
@@ -580,13 +542,6 @@ VERBS: tuple[PaletteVerb, ...] = (
         args_grammar="<pane> <key>",
     ),
     PaletteVerb("/sort", "cycle sort key", _handle_sort, SCOPES_ALL, args_grammar="<pane> <col>"),
-    PaletteVerb(
-        "/switch",
-        "switch scope",
-        _placeholder("/switch"),
-        ("workspace", "user"),
-        args_grammar="<scope> <id>",
-    ),
     PaletteVerb(
         "/theme",
         "theme dark/light/cb/auto",
@@ -606,72 +561,6 @@ VERBS: tuple[PaletteVerb, ...] = (
     PaletteVerb("/pr", "open PRs (gh shell-out, cached)", _handle_pr, SCOPES_ALL),
     PaletteVerb("/help", "verb help / keymap", _handle_help, SCOPES_ALL, args_grammar="[verb]"),
     PaletteVerb("/quit", "quit", _handle_quit, SCOPES_ALL),
-    # --- wave-board read-only verbs (V11 — read-only only) ----------------
-    PaletteVerb(
-        "/wave",
-        "wave-scoped action",
-        _placeholder("/wave"),
-        ("repo", "wave_board"),
-        args_grammar="<verb> [<id>]",
-    ),
-    PaletteVerb(
-        "/wave open",
-        "open worktree in $EDITOR",
-        _placeholder("/wave open"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave log",
-        "tail session log",
-        _placeholder("/wave log"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave state",
-        "show wave state JSON",
-        _placeholder("/wave state"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave report",
-        "last agent report",
-        _placeholder("/wave report"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave criteria",
-        "WaveSpec body",
-        _placeholder("/wave criteria"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave deps",
-        "wave DAG",
-        _placeholder("/wave deps"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave events",
-        "events scoped to wave",
-        _placeholder("/wave events"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    PaletteVerb(
-        "/wave dispatch",
-        "session-handle history",
-        _placeholder("/wave dispatch"),
-        ("repo", "wave_board"),
-        args_grammar="[<id>]",
-    ),
-    # --- worktree ---------------------------------------------------------
-    PaletteVerb("/wt", "worktrees overlay", _placeholder("/wt"), SCOPES_ALL),
     # --- skill-dispatch passthrough (CLI verb wrappers) -------------------
     PaletteVerb(
         "/roadmap",
@@ -680,37 +569,7 @@ VERBS: tuple[PaletteVerb, ...] = (
         SCOPES_ALL,
         args_grammar="<sub-verb> ...",
     ),
-    PaletteVerb("/prep", "prep phase", _placeholder("/prep"), SCOPES_ALL, args_grammar="<P##>"),
-    PaletteVerb(
-        "/flow", "flow pipeline", _placeholder("/flow"), SCOPES_ALL, args_grammar="<topic>"
-    ),
-    PaletteVerb(
-        "/research", "research brief", _placeholder("/research"), SCOPES_ALL, args_grammar="<topic>"
-    ),
-    PaletteVerb(
-        "/spike",
-        "spike brief",
-        _placeholder("/spike"),
-        SCOPES_ALL,
-        requires_profile=("research",),
-        args_grammar="<slug>",
-    ),
-    PaletteVerb(
-        "/design",
-        "design pass",
-        _placeholder("/design"),
-        SCOPES_ALL,
-        requires_profile=("research",),
-        args_grammar="<surface>",
-    ),
     PaletteVerb("/audit", "audit the current scope", _handle_audit, SCOPES_ALL),
-    PaletteVerb("/ship", "ship phase", _placeholder("/ship"), SCOPES_ALL, args_grammar="<P##>"),
-    PaletteVerb(
-        "/review", "review PR", _placeholder("/review"), SCOPES_ALL, args_grammar="[--pr <url>]"
-    ),
-    PaletteVerb(
-        "/polish", "polish sweep", _placeholder("/polish"), SCOPES_ALL, args_grammar="[<scope>]"
-    ),
 )
 
 
@@ -761,9 +620,9 @@ def fuzzy_score(needle: str, haystack: str) -> int | None:
     scores ``0`` (everything matches equally).
 
     The score is the sum of the gaps between consecutive matched
-    positions plus the index of the first match, so ``"wo"`` ranks
-    ``/wt`` (no — not a subsequence) out and ranks ``/wave open`` by how
-    tightly ``w`` and ``o`` cluster.
+    positions plus the index of the first match, so ``"cf"`` ranks
+    ``/theme`` (no — not a subsequence) out and ranks ``/config`` by how
+    tightly ``c`` and ``f`` cluster.
 
     Args:
         needle: The operator's filter text (the leading ``/`` is matched
@@ -826,8 +685,7 @@ def split_verb_args(text: str) -> tuple[str, str]:
     """Split palette input into the matched verb name and its arg string.
 
     Resolves the **longest** registered verb name that the input starts
-    with (so ``/wave open W01`` resolves the two-token ``/wave open`` verb
-    rather than the bare ``/wave``), then returns ``(verb_name, args)``
+    with, then returns ``(verb_name, args)``
     with the remaining text trimmed. When no registered verb prefixes the
     input, the first whitespace-delimited token is returned as the name
     and the remainder as args (so an unknown verb still parses cleanly).

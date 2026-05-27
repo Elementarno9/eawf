@@ -11,8 +11,8 @@ operator types.
 Palette UX:
 
 * The verbs shown are :func:`~eawf.surfaces.tui.palette.verbs.visible_verbs`
-  for the App's resolved scope (so wave-board verbs hide on the user
-  screen, profile-gated verbs hide off their profile, etc.), then
+  for the App's resolved scope (so profile-gated verbs hide off their
+  profile, etc.), then
   :func:`~eawf.surfaces.tui.palette.verbs.rank_verbs` re-orders by the typed
   filter.
 * ``Tab`` autocompletes the input to the highlighted option's verb name.
@@ -150,7 +150,7 @@ class CommandPalette(ModalScreen[None]):
             test harness.
         """
         scope = getattr(self.app, "_scope", "repo")
-        if scope in ("repo", "workspace", "user", "wave_board"):
+        if scope in ("repo", "workspace", "user"):
             return scope  # type: ignore[return-value]
         return "repo"
 

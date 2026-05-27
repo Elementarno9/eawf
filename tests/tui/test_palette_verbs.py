@@ -43,23 +43,42 @@ def test_registry_every_name_starts_with_slash() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_visible_verbs_repo_includes_cross_screen_and_wave() -> None:
+def test_visible_verbs_repo_includes_cross_screen_verbs() -> None:
     names = {v.name for v in visible_verbs("repo")}
     assert "/find" in names  # SCOPES_ALL
-    assert "/wave open" in names  # repo + wave_board
+    assert "/theme" in names  # SCOPES_ALL
 
 
-def test_visible_verbs_user_hides_wave_verbs_keeps_switch() -> None:
+def test_visible_verbs_user_hides_removed_placeholder_verbs() -> None:
     names = {v.name for v in visible_verbs("user")}
-    assert "/wave open" not in names  # repo / wave_board only
-    assert "/switch" in names  # workspace / user scoped — user keeps it
+    assert "/wave open" not in names
+    assert "/switch" not in names
     assert "/find" in names  # cross-screen
 
 
-def test_visible_verbs_switch_only_on_workspace_and_user() -> None:
-    assert "/switch" in {v.name for v in visible_verbs("workspace")}
-    assert "/switch" in {v.name for v in visible_verbs("user")}
-    assert "/switch" not in {v.name for v in visible_verbs("repo")}
+def test_visible_verbs_placeholder_verbs_removed() -> None:
+    names = {v.name for v in VERBS}
+    assert {
+        "/switch",
+        "/wave",
+        "/wave open",
+        "/wave log",
+        "/wave state",
+        "/wave report",
+        "/wave criteria",
+        "/wave deps",
+        "/wave events",
+        "/wave dispatch",
+        "/wt",
+        "/prep",
+        "/flow",
+        "/research",
+        "/spike",
+        "/design",
+        "/ship",
+        "/review",
+        "/polish",
+    }.isdisjoint(names)
 
 
 def test_visible_verbs_profile_gate_hides_research_verbs_by_default() -> None:
@@ -68,10 +87,10 @@ def test_visible_verbs_profile_gate_hides_research_verbs_by_default() -> None:
     assert "/design" not in names
 
 
-def test_visible_verbs_profile_gate_shows_research_verbs_when_enabled() -> None:
+def test_visible_verbs_profile_gate_keeps_removed_research_verbs_hidden() -> None:
     names = {v.name for v in visible_verbs("repo", profiles={"research"})}
-    assert "/spike" in names
-    assert "/design" in names
+    assert "/spike" not in names
+    assert "/design" not in names
 
 
 def test_visible_verbs_runtime_gate_empty_runtime_keeps_ungated() -> None:
@@ -102,8 +121,8 @@ def test_fuzzy_score_non_subsequence_is_none() -> None:
 
 
 def test_fuzzy_score_contiguous_beats_scattered() -> None:
-    contiguous = fuzzy_score("/wa", "/wave")
-    scattered = fuzzy_score("/we", "/wave")
+    contiguous = fuzzy_score("/th", "/theme")
+    scattered = fuzzy_score("/te", "/theme")
     assert contiguous is not None and scattered is not None
     assert contiguous < scattered
 
@@ -128,9 +147,9 @@ def test_rank_verbs_filters_to_matches() -> None:
 
 
 def test_rank_verbs_best_match_first() -> None:
-    ranked = rank_verbs(visible_verbs("repo"), "/wave")
+    ranked = rank_verbs(visible_verbs("repo"), "/theme")
     assert ranked
-    assert ranked[0].name == "/wave"
+    assert ranked[0].name == "/theme"
 
 
 def test_rank_verbs_no_match_returns_empty() -> None:
@@ -140,12 +159,6 @@ def test_rank_verbs_no_match_returns_empty() -> None:
 # --------------------------------------------------------------------------
 # split_verb_args — longest-match verb/arg split
 # --------------------------------------------------------------------------
-
-
-def test_split_verb_args_resolves_longest_two_token_verb() -> None:
-    name, args = split_verb_args("/wave open W01")
-    assert name == "/wave open"
-    assert args == "W01"
 
 
 def test_split_verb_args_bare_verb_no_args() -> None:

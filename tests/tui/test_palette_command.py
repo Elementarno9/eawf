@@ -231,7 +231,7 @@ def test_palette_esc_closes_without_running() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_palette_user_scope_hides_wave_verbs(
+def test_palette_user_scope_hides_removed_placeholder_verbs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Isolate the user registry to an empty tmp home so the synthesized
@@ -247,7 +247,7 @@ def test_palette_user_scope_hides_wave_verbs(
             await pilot.pause()
             option_list = app.screen.query_one(OptionList)
             ids = {option_list.get_option_at_index(i).id for i in range(option_list.option_count)}
-            # No /wave* verb is offered on the user scope.
+            # No placeholder /wave* verb is offered.
             assert not any((i or "").startswith("/wave") for i in ids)
 
     asyncio.run(body())

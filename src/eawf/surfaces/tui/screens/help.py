@@ -69,13 +69,11 @@ _PANE_NAV: tuple[tuple[str, str, str], ...] = (
 
 #: Per-scope extra keys — the "Per-screen extras". ``c`` (open config) is
 #: scope-agnostic and lives in :data:`_GLOBAL_KEYS`; only genuinely
-#: scope-local keys (workspace ``z`` zoom, wave-board ``f`` filter) belong
-#: here.
+#: scope-local keys (workspace ``z`` zoom) belong here.
 _SCOPE_KEYS: dict[ScopeName, tuple[tuple[str, str], ...]] = {
     "repo": (),
     "workspace": (("z", "zoom focused repo to repo screen"),),
     "user": (),
-    "wave_board": (("f", "cycle filter (all / active-only)"),),
 }
 
 #: Config-overlay keys (key, action) — the "Config overlay" table. Arrows
@@ -203,7 +201,7 @@ class HelpScreen(ModalScreen[None]):
             overlay degrades under a bare harness.
         """
         scope = getattr(self.app, "_scope", "repo")
-        if scope in ("repo", "workspace", "user", "wave_board"):
+        if scope in ("repo", "workspace", "user"):
             return scope  # type: ignore[return-value]
         return "repo"
 
