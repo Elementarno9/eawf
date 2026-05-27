@@ -20,5 +20,4 @@ disable-model-invocation: false
 
 ## Output contract
 
-Skill envelope listing the discriminating experiments and the
-recommended next move.
+Skill envelope listing the discriminating experiments and the recommended next move.

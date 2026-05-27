@@ -15,6 +15,7 @@ defaults to the workspace root):
         <event_type>.sh                 # one per event in render.hooks.HOOK_REGISTRY
       settings.json                     # __eawf_managed namespace patched in;
                                           # user-owned keys preserved verbatim
+    .mcp.json                           # project-scoped MCP config scaffold
 
 The renderer is *idempotent*: invoked twice on the same target with the
 same input, the second run produces a byte-identical tree (acceptance
@@ -96,6 +97,7 @@ class InstallResult:
         agents: Per-agent :class:`FileDelta` list, in registry order.
         hooks: Per-hook :class:`FileDelta` list, in registry order.
         settings: :class:`FileDelta` for ``settings.json``.
+        mcp_config: :class:`FileDelta` for project-scoped ``.mcp.json``.
         dry_run: Whether the run was a dry run (``True`` → no bytes
             were written).
     """
@@ -105,6 +107,7 @@ class InstallResult:
     agents: list[FileDelta] = field(default_factory=list)
     hooks: list[FileDelta] = field(default_factory=list)
     settings: FileDelta | None = None
+    mcp_config: FileDelta | None = None
     dry_run: bool = False
 
 
@@ -140,6 +143,31 @@ def _hook_target(target_dir: Path, spec: HookSpec) -> Path:
 def _settings_target(target_dir: Path) -> Path:
     """Return the disk path for ``settings.json``."""
     return target_dir / ".claude" / "settings.json"
+
+
+def _mcp_config_target(target_dir: Path) -> Path:
+    """Return the disk path for Claude's project-scoped MCP config."""
+    return target_dir / ".mcp.json"
+
+
+def _render_mcp_config() -> bytes:
+    """Return the empty project-scoped Claude MCP config scaffold."""
+    return (json.dumps({"mcpServers": {}}, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+
+def _mcp_config_payload_for_install(path: Path) -> tuple[bytes, bool]:
+    """Return the MCP config bytes and whether install should write them.
+
+    Plugin install seeds Claude's project-scope MCP file when it is
+    absent or blank. Existing nonblank content belongs to the MCP
+    installer/user and is preserved byte-for-byte.
+    """
+    if not path.exists():
+        return _render_mcp_config(), True
+    existing = path.read_bytes()
+    if not existing.strip():
+        return _render_mcp_config(), True
+    return existing, False
 
 
 def _render_skill(spec: SkillSpec) -> str:
@@ -463,6 +491,17 @@ def install_plugin(
         atomic_write_text(settings_path, settings_bytes.decode("utf-8"))
     settings_delta = FileDelta(path=settings_path, action=settings_action)
 
+    # Seed Claude's project-scoped MCP config. Actual server rows are
+    # materialised by eawf mcp install; plugin install writes only when
+    # the project file is missing or blank.
+    mcp_config_path = _mcp_config_target(target_dir)
+    mcp_config_bytes, should_write_mcp_config = _mcp_config_payload_for_install(mcp_config_path)
+    mcp_config_action = _classify(mcp_config_path, mcp_config_bytes)
+    if not dry_run and should_write_mcp_config:
+        _ensure_dir(mcp_config_path.parent)
+        atomic_write_text(mcp_config_path, mcp_config_bytes.decode("utf-8"))
+    mcp_config_delta = FileDelta(path=mcp_config_path, action=mcp_config_action)
+
     # Persist updated manifest.
     if not dry_run and persist_manifest:
         new_manifest = _build_manifest(target_dir, timestamp=ts, base_manifest=base_manifest)
@@ -473,7 +512,7 @@ def install_plugin(
     logger.info(
         f"install_plugin target={target_dir} skills={len(skill_deltas)} "
         f"agents={len(agent_deltas)} hooks={len(hook_deltas)} "
-        f"settings={settings_action} dry_run={dry_run}"
+        f"settings={settings_action} mcp_config={mcp_config_action} dry_run={dry_run}"
     )
     return InstallResult(
         target_dir=target_dir,
@@ -481,6 +520,7 @@ def install_plugin(
         agents=agent_deltas,
         hooks=hook_deltas,
         settings=settings_delta,
+        mcp_config=mcp_config_delta,
         dry_run=dry_run,
     )
 

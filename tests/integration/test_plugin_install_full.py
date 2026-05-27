@@ -49,6 +49,7 @@ def test_plugin_install_via_cli_dry_run(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     assert "dry-run" in result.stdout
     assert not (tmp_path / ".claude").exists()
+    assert not (tmp_path / ".mcp.json").exists()
 
 
 def test_plugin_install_via_cli_writes_tree(tmp_path: Path) -> None:
@@ -62,6 +63,7 @@ def test_plugin_install_via_cli_writes_tree(tmp_path: Path) -> None:
     settings = tmp_path / ".claude" / "settings.json"
     parsed = json.loads(settings.read_text(encoding="utf-8"))
     assert "__eawf_managed" in parsed
+    assert json.loads((tmp_path / ".mcp.json").read_text(encoding="utf-8")) == {"mcpServers": {}}
 
 
 def test_plugin_install_then_doctor_clean(tmp_path: Path) -> None:
@@ -97,9 +99,11 @@ def test_plugin_install_idempotent_via_cli(tmp_path: Path) -> None:
     _equip_ea_dir(tmp_path)
     runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
     snapshot_settings = (tmp_path / ".claude" / "settings.json").read_bytes()
+    snapshot_mcp = (tmp_path / ".mcp.json").read_bytes()
     snapshot_skill = (tmp_path / ".claude" / "skills" / "research" / "SKILL.md").read_bytes()
     runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
     assert (tmp_path / ".claude" / "settings.json").read_bytes() == snapshot_settings
+    assert (tmp_path / ".mcp.json").read_bytes() == snapshot_mcp
     assert (
         tmp_path / ".claude" / "skills" / "research" / "SKILL.md"
     ).read_bytes() == snapshot_skill

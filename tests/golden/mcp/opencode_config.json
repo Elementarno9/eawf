@@ -1,5 +1,5 @@
 {
-  "mcpServers": {
+  "mcp": {
     "eawf-mcp": {
       "__eawf_managed_at": "1970-01-01T00:00:00+00:00",
       "__eawf_owner": "eawf",

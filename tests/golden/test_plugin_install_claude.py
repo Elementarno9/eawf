@@ -9,12 +9,12 @@ To regenerate the fixture (intentional drift):
 
 .. code-block:: bash
 
-    uv run python - <<'PY'
+    rtk uv run python - <<'PY'
     import shutil
     from pathlib import Path
     from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
-    src = Path("/tmp/eawf-plugin-render")
+    src = Path("build/eawf-plugin-render")
     if src.exists():
         shutil.rmtree(src)
     src.mkdir(parents=True)
@@ -23,6 +23,9 @@ To regenerate the fixture (intentional drift):
     if golden.exists():
         shutil.rmtree(golden)
     shutil.copytree(src / ".claude", golden)
+    Path("tests/golden/plugin_install/claude.mcp.json").write_bytes(
+        (src / ".mcp.json").read_bytes()
+    )
     PY
 
 Mirrors :file:`tests/golden/test_golden_agents_md.py`'s
@@ -39,6 +42,7 @@ import pytest
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "plugin_install" / "claude"
+_MCP_FIXTURE: Path = Path(__file__).parent / "plugin_install" / "claude.mcp.json"
 
 
 def _walk_files(root: Path) -> list[Path]:
@@ -58,6 +62,7 @@ def test_plugin_install_matches_golden_tree(tmp_path: Path) -> None:
 
     expected_files = _walk_files(_FIXTURE_DIR)
     assert expected_files, "golden fixture is empty — regeneration mistake?"
+    assert (tmp_path / ".mcp.json").read_bytes() == _MCP_FIXTURE.read_bytes()
 
     for expected_path in expected_files:
         rel = expected_path.relative_to(_FIXTURE_DIR)
@@ -83,6 +88,7 @@ def test_plugin_install_two_renders_byte_stable(tmp_path: Path) -> None:
 
     files_a = _walk_files(target_a / ".claude")
     files_b = _walk_files(target_b / ".claude")
+    assert (target_a / ".mcp.json").read_bytes() == (target_b / ".mcp.json").read_bytes()
     assert {p.relative_to(target_a / ".claude") for p in files_a} == {
         p.relative_to(target_b / ".claude") for p in files_b
     }

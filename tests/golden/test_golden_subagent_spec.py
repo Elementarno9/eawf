@@ -30,9 +30,15 @@ from eawf.workflow.agents.specs.models import (
     SpecWorktree,
     SubagentSpec,
 )
-from eawf.workflow.agents.specs.roles import KEPT_RUNTIMES, render_role_contract
+from eawf.workflow.agents.specs.roles import (
+    KEPT_RUNTIMES,
+    get_role_spec,
+    render_role_contract,
+)
+from eawf.workflow.dispatch.renderer import build_role_contract
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "subagent_spec"
+_ROLE_PARITY_FIXTURE: Path = _FIXTURE_DIR / "role_surface_parity" / "executor.system_prompt.txt"
 
 
 def _full_spec() -> SubagentSpec:
@@ -122,3 +128,40 @@ def test_role_contract_matches_golden(role: AgentSessionRole, runtime: str) -> N
         f"role contract render drifted from golden fixture {fixture.name!r}. "
         "If intentional, regenerate the fixture and commit the new bytes."
     )
+
+
+def _role_contract_body(runtime: str) -> str:
+    rendered = render_role_contract(AgentSessionRole.EXECUTOR, runtime)  # type: ignore[arg-type]
+    start = rendered.index("# Executor")
+    end = rendered.rindex("\n\nOn completion emit")
+    return rendered[start:end]
+
+
+def _dispatch_role_contract_body() -> str:
+    role = get_role_spec(AgentSessionRole.EXECUTOR)
+    spec = SubagentSpec(
+        wave_id="P28-I03-W09",
+        iter_id="P28-I03",
+        title="Claude MCP config parity",
+        scope_id="EAWF",
+        agent_role="executor",
+        effort_bucket="M",
+        role_contract=build_role_contract(role),
+    )
+    rendered = spec.render()
+    start = rendered.index("## Role contract\n\n") + len("## Role contract\n\n")
+    end = rendered.index("\n\n## Workflow")
+    return rendered[start:end]
+
+
+@pytest.mark.golden
+def test_executor_role_body_byte_equal_across_four_surfaces() -> None:
+    """One RoleSpec body is byte-identical across three runtimes + dispatch."""
+    expected = _ROLE_PARITY_FIXTURE.read_text(encoding="utf-8").rstrip("\n")
+    surfaces = {
+        "claude-code": _role_contract_body("claude-code"),
+        "codex": _role_contract_body("codex"),
+        "opencode": _role_contract_body("opencode"),
+        "dispatch": _dispatch_role_contract_body(),
+    }
+    assert surfaces == dict.fromkeys(surfaces, expected)

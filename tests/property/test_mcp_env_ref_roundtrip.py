@@ -3,7 +3,7 @@
 Invariant: for any (env_var_name, secret_value) drawn from the
 strategy, monkeypatching ``os.environ[env_var_name] = secret_value``
 and running the full ``add → install`` pipeline produces a
-settings.json on disk where ``secret_value`` does not appear in the
+Claude MCP config on disk where ``secret_value`` does not appear in the
 raw bytes.
 
 This is the secret-leak smoke test. The Eä installer never reads
@@ -78,7 +78,7 @@ def test_install_never_writes_secret_value_to_disk(
 
     # Set the secret in the ambient environment. The installer must
     # never read it back out — the property is precisely that the
-    # secret never reaches the on-disk settings.json.
+    # secret never reaches the on-disk MCP config.
     prior = os.environ.get(env_var_name)
     os.environ[env_var_name] = secret_value
     try:
@@ -91,7 +91,7 @@ def test_install_never_writes_secret_value_to_disk(
             force=False,
             timestamp="1970-01-01T00:00:00+00:00",
         )
-        settings_path = tmp_path / ".claude" / "settings.json"
+        settings_path = tmp_path / ".mcp.json"
         raw = settings_path.read_bytes()
         # The secret value, encoded as UTF-8, must not appear
         # anywhere in the persisted bytes. The literal token *should*

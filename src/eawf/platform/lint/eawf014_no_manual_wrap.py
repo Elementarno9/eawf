@@ -69,9 +69,19 @@ def check_source(source: str) -> list[ManualWrapViolation]:
     """
     violations: list[ManualWrapViolation] = []
     in_fence = False
+    in_frontmatter = False
     previous_plain: tuple[int, str] | None = None
     for lineno, line in enumerate(source.splitlines(), start=1):
         stripped = line.strip()
+        if lineno == 1 and stripped == "---":
+            in_frontmatter = True
+            previous_plain = None
+            continue
+        if in_frontmatter:
+            if stripped == "---":
+                in_frontmatter = False
+            previous_plain = None
+            continue
         if stripped.startswith("```") or stripped.startswith("~~~"):
             in_fence = not in_fence
             previous_plain = None

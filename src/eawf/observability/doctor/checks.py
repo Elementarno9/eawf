@@ -350,7 +350,7 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
     present on disk — with a matching command / args / env grant — under
     whichever runtime adapters have materialised an MCP block:
 
-    - Claude: ``<workspace>/.claude/settings.json:mcpServers[<id>]``
+    - Claude: ``<workspace>/.mcp.json:mcpServers[<id>]``
     - OpenCode: ``<workspace>/opencode.json:mcp[<id>]``
     - Codex: ``<workspace>/.codex/config.toml:mcp_servers[<id>]``.
 
@@ -384,7 +384,7 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
     orphans: list[str] = []
     drifted: list[str] = []
     runtime_files = (
-        (repo_root / ".claude" / "settings.json", "mcpServers", "claude", "json"),
+        (repo_root / ".mcp.json", "mcpServers", "claude", "json"),
         (repo_root / "opencode.json", "mcp", "opencode", "json"),
         (repo_root / ".codex" / "config.toml", "mcp_servers", "codex", "toml"),
     )

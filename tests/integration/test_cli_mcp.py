@@ -67,7 +67,7 @@ def tmp_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_mcp_add_install_list_remove_round_trip(tmp_path: Path, tmp_state: Path) -> None:
-    """Full happy path: state.mcp_servers populates, settings.json patches,
+    """Full happy path: state.mcp_servers populates, .mcp.json patches,
     list reflects the change, remove reverts both layers."""
     add = runner.invoke(
         app,
@@ -77,7 +77,7 @@ def test_mcp_add_install_list_remove_round_trip(tmp_path: Path, tmp_state: Path)
             "add",
             "demo",
             "--command",
-            "/demo",
+            "demo-mcp",
             "--env-ref",
             "${ENV:DEMO_KEY}",
         ],
@@ -102,7 +102,7 @@ def test_mcp_add_install_list_remove_round_trip(tmp_path: Path, tmp_state: Path)
     assert install.exit_code == 0, install.output
     install_payload = json.loads(install.output)
     assert install_payload["status"] == "installed"
-    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path = tmp_path / ".mcp.json"
     assert settings_path.exists()
     parsed = json.loads(settings_path.read_text(encoding="utf-8"))
     entry = parsed["mcpServers"]["demo"]
@@ -125,7 +125,7 @@ def test_mcp_add_install_list_remove_round_trip(tmp_path: Path, tmp_state: Path)
 
 
 def test_mcp_update_warns_about_reinstall_required(tmp_path: Path, tmp_state: Path) -> None:
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
     runner.invoke(
         app,
         ["--no-input", "-w", str(tmp_path), "mcp", "install", "demo"],
@@ -138,17 +138,17 @@ def test_mcp_update_warns_about_reinstall_required(tmp_path: Path, tmp_state: Pa
             "update",
             "demo",
             "--command",
-            "/demo-v2",
+            "demo-mcp-v2",
         ],
     )
     assert update.exit_code == 0, update.output
     payload = json.loads(update.output)
     assert payload["reinstall_required"] is True
-    assert payload["command"] == "/demo-v2"
+    assert payload["command"] == "demo-mcp-v2"
 
     update_text = runner.invoke(
         app,
-        ["mcp", "update", "demo", "--command", "/demo-v3"],
+        ["mcp", "update", "demo", "--command", "demo-mcp-v3"],
     )
     assert update_text.exit_code == 0, update_text.output
     assert "eawf mcp install demo" in update_text.output
@@ -156,7 +156,7 @@ def test_mcp_update_warns_about_reinstall_required(tmp_path: Path, tmp_state: Pa
 
 def test_mcp_install_no_input_skips_prompt(tmp_path: Path, tmp_state: Path) -> None:
     """``--no-input`` succeeds with exit 0 even when stdin is closed."""
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
     result = runner.invoke(
         app,
         ["--no-input", "-w", str(tmp_path), "mcp", "install", "demo"],
@@ -168,7 +168,7 @@ def test_mcp_install_without_no_input_user_declined_when_stdin_not_tty(
     tmp_path: Path, tmp_state: Path
 ) -> None:
     """Without ``--no-input`` and a non-TTY stdin, fail closed (exit 7)."""
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
     # CliRunner.invoke pipes a non-TTY stdin by default. The handler
     # must raise UserDeclined rather than silently proceed.
     result = runner.invoke(
@@ -192,7 +192,7 @@ def test_mcp_install_user_declines_at_prompt(tmp_path: Path, tmp_state: Path) ->
     import builtins
     import sys
 
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
 
     real_isatty = sys.stdin.isatty
     sys.stdin.isatty = lambda: True  # type: ignore[method-assign]
@@ -210,7 +210,7 @@ def test_mcp_install_user_declines_at_prompt(tmp_path: Path, tmp_state: Path) ->
 
 
 def test_mcp_install_unknown_runtime_invalid_input(tmp_path: Path, tmp_state: Path) -> None:
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
     result = runner.invoke(
         app,
         [
@@ -221,7 +221,7 @@ def test_mcp_install_unknown_runtime_invalid_input(tmp_path: Path, tmp_state: Pa
             "install",
             "demo",
             "--runtime",
-            "opencode",
+            "goose",
         ],
     )
     assert result.exit_code == 1, result.output
@@ -245,7 +245,7 @@ def test_mcp_install_missing_id_returns_not_found(tmp_path: Path, tmp_state: Pat
 def test_mcp_add_malformed_env_ref_invalid_input(tmp_state: Path) -> None:
     result = runner.invoke(
         app,
-        ["mcp", "add", "demo", "--command", "/demo", "--env-ref", "BAD"],
+        ["mcp", "add", "demo", "--command", "demo-mcp", "--env-ref", "BAD"],
     )
     assert result.exit_code == 1, result.output
 
@@ -279,12 +279,12 @@ def test_mcp_list_owner_filter_invalid(tmp_state: Path) -> None:
 def test_mcp_remove_keep_runtime_entry_does_not_touch_settings(
     tmp_path: Path, tmp_state: Path
 ) -> None:
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
     runner.invoke(
         app,
         ["--no-input", "-w", str(tmp_path), "mcp", "install", "demo"],
     )
-    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path = tmp_path / ".mcp.json"
     settings_before = settings_path.read_bytes()
     result = runner.invoke(
         app,
@@ -302,16 +302,16 @@ def test_mcp_remove_keep_runtime_entry_does_not_touch_settings(
 
 
 def test_mcp_add_force_overrides_existing_eawf_entry(tmp_state: Path) -> None:
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/v1"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "v1-mcp"])
     second = runner.invoke(
         app,
-        ["--json", "mcp", "add", "demo", "--command", "/v2", "--force"],
+        ["--json", "mcp", "add", "demo", "--command", "v2-mcp", "--force"],
     )
     assert second.exit_code == 0, second.output
-    assert json.loads(second.output)["command"] == "/v2"
+    assert json.loads(second.output)["command"] == "v2-mcp"
 
 
 def test_mcp_update_no_changes_returns_invalid_input(tmp_state: Path) -> None:
-    runner.invoke(app, ["mcp", "add", "demo", "--command", "/demo"])
+    runner.invoke(app, ["mcp", "add", "demo", "--command", "demo-mcp"])
     result = runner.invoke(app, ["mcp", "update", "demo"])
     assert result.exit_code == 1, result.output

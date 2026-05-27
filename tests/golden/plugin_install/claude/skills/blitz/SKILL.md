@@ -11,10 +11,8 @@ disable-model-invocation: false
 ## Canonical algorithm
 
 1. Read residual unknown count and follow-up research args.
-2. Increment the recursion guard (`EAWF_BLITZ_DEPTH_COUNTER`) against
-   `EAWF_BLITZ_DEPTH` (default 8).
-3. Return a follow-up `/research` action with `blitz=false` so the next
-   research pass does not recurse indefinitely.
+2. Increment the recursion guard (`EAWF_BLITZ_DEPTH_COUNTER`) against `EAWF_BLITZ_DEPTH` (default 8).
+3. Return a follow-up `/research` action with `blitz=false` so the next research pass does not recurse indefinitely.
 
 ## Pre-flight checklist
 
@@ -23,5 +21,4 @@ disable-model-invocation: false
 
 ## Output contract
 
-Skill envelope with `header.skill = "/blitz"`. Body carries depth,
-depth_cap, residual_unknowns, followup_research_args, and next_actions.
+Skill envelope with `header.skill = "/blitz"`. Body carries depth, depth_cap, residual_unknowns, followup_research_args, and next_actions.

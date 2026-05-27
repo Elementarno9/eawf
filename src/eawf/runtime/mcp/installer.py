@@ -2,9 +2,8 @@
 
 Public API:
 
-- :func:`install_runtime_entry` — write one Eä-owned MCP entry into
-  ``<target_dir>/.claude/settings.json``. Preserves every non-Eä
-  ``mcpServers`` key byte-equal.
+- :func:`install_runtime_entry` — write one Eä-owned MCP entry into a
+  runtime-native config file. Preserves every non-Eä MCP key byte-equal.
 - :func:`remove_runtime_entry` — delete one Eä-owned MCP entry from
   the same file. Refuses to touch user-owned entries.
 - :func:`list_runtime_entries` — read-only enumeration of the
@@ -37,11 +36,12 @@ from eawf.surfaces.render._atomic import atomic_write_text
 logger = logging.getLogger(__name__)
 
 
-# Top-level key inside .claude/settings.json holding the MCP map. Hard-
-# coded by Claude Code's documented schema. Intentionally not a constant
-# in :mod:`eawf.runtime.runtimes.claude.plugin_install` because that module owns
-# a different namespace (``__eawf_managed``); the two never overlap.
+# Top-level key inside Claude .mcp.json holding the MCP map. Hard-coded
+# by Claude Code's documented project-scope MCP schema. Intentionally
+# not a constant in :mod:`eawf.runtime.runtimes.claude.plugin_install`
+# because that module owns only the empty scaffold.
 _MCP_SERVERS_KEY: str = "mcpServers"
+_OPENCODE_MCP_KEY: str = "mcp"
 
 # Per-entry owner marker. When present and equal to ``"eawf"``, this
 # entry is Eä-managed; the CLI may rewrite or delete it. Any other
@@ -183,7 +183,14 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
         # splice an ``[mcp_servers.<id>]`` table into a marker-wrapped region
         # of this file, preserving the plugin block and user TOML verbatim.
         return target_dir / ".codex" / "config.toml"
-    return target_dir / ".claude" / "settings.json"
+    return target_dir / ".mcp.json"
+
+
+def _json_mcp_key(runtime: str) -> str:
+    """Return the top-level MCP map key for a JSON runtime config."""
+    if runtime == "opencode":
+        return _OPENCODE_MCP_KEY
+    return _MCP_SERVERS_KEY
 
 
 def _read_settings(path: Path) -> dict[str, Any]:
@@ -203,10 +210,10 @@ def _read_settings(path: Path) -> dict[str, Any]:
     try:
         parsed: Any = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"settings.json at {path} is not valid JSON: {exc}") from exc
+        raise ValueError(f"{path.name} at {path} is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise ValueError(
-            f"settings.json at {path} must be a JSON object; got {type(parsed).__name__}"
+            f"{path.name} at {path} must be a JSON object; got {type(parsed).__name__}"
         )
     return dict(parsed)
 
@@ -283,15 +290,21 @@ def _grant_fields(body: dict[str, Any]) -> tuple[str, list[str], dict[str, str]]
     )
 
 
-def _verify_json_entry(path: Path, server: McpServer, intended: dict[str, Any]) -> None:
-    """Re-read *path* and assert ``mcpServers[id]`` matches *intended*.
+def _verify_json_entry(
+    path: Path,
+    server: McpServer,
+    intended: dict[str, Any],
+    *,
+    block_key: str,
+) -> None:
+    """Re-read *path* and assert the JSON MCP entry matches *intended*.
 
     Raises:
         VerifyFailure: The on-disk entry is missing or its grant triple
             diverges from what the installer intended to write.
     """
     parsed = _read_settings(path)
-    raw_servers = parsed.get(_MCP_SERVERS_KEY, {})
+    raw_servers = parsed.get(block_key, {})
     written = raw_servers.get(server.id) if isinstance(raw_servers, dict) else None
     if not isinstance(written, dict) or _grant_fields(written) != _grant_fields(intended):
         raise VerifyFailure(
@@ -656,11 +669,12 @@ def install_runtime_entry(
             server=server, target_dir=target_dir, force=force, timestamp=timestamp
         )
     settings_path = _settings_path(runtime, target_dir)
+    block_key = _json_mcp_key(runtime)
     parsed = _read_settings(settings_path)
-    raw_servers = parsed.get(_MCP_SERVERS_KEY, {})
+    raw_servers = parsed.get(block_key, {})
     if not isinstance(raw_servers, dict):
         raise ValueError(
-            f"settings.json at {settings_path} has non-object {_MCP_SERVERS_KEY!r}; "
+            f"{settings_path.name} at {settings_path} has non-object {block_key!r}; "
             f"got {type(raw_servers).__name__}"
         )
     mcp_servers: dict[str, Any] = dict(raw_servers)
@@ -674,14 +688,14 @@ def install_runtime_entry(
 
     new_body = _build_entry_body(server, timestamp=timestamp)
     mcp_servers[server.id] = new_body
-    parsed[_MCP_SERVERS_KEY] = mcp_servers
+    parsed[block_key] = mcp_servers
 
     rendered = _render_settings(parsed)
     payload = rendered.encode("utf-8")
     action = _classify(settings_path, payload)
     if action != "unchanged":
         atomic_write_text(settings_path, rendered)
-    _verify_json_entry(settings_path, server, new_body)
+    _verify_json_entry(settings_path, server, new_body, block_key=block_key)
     user_entries = _user_entry_keys(mcp_servers)
     logger.info(
         f"mcp install_runtime_entry id={server.id} runtime={runtime} "
@@ -729,11 +743,12 @@ def remove_runtime_entry(
     if runtime == "codex":
         return _remove_codex_entry(server_id=server_id, target_dir=target_dir, force=force)
     settings_path = _settings_path(runtime, target_dir)
+    block_key = _json_mcp_key(runtime)
     parsed = _read_settings(settings_path)
-    raw_servers = parsed.get(_MCP_SERVERS_KEY, {})
+    raw_servers = parsed.get(block_key, {})
     if not isinstance(raw_servers, dict):
         raise ValueError(
-            f"settings.json at {settings_path} has non-object {_MCP_SERVERS_KEY!r}; "
+            f"{settings_path.name} at {settings_path} has non-object {block_key!r}; "
             f"got {type(raw_servers).__name__}"
         )
     mcp_servers: dict[str, Any] = dict(raw_servers)
@@ -754,9 +769,9 @@ def remove_runtime_entry(
 
     del mcp_servers[server_id]
     if mcp_servers:
-        parsed[_MCP_SERVERS_KEY] = mcp_servers
-    elif _MCP_SERVERS_KEY in parsed:
-        del parsed[_MCP_SERVERS_KEY]
+        parsed[block_key] = mcp_servers
+    elif block_key in parsed:
+        del parsed[block_key]
 
     rendered = _render_settings(parsed)
     payload = rendered.encode("utf-8")
@@ -797,11 +812,12 @@ def list_runtime_entries(*, runtime: str, target_dir: Path) -> list[RuntimeEntry
     settings_path = _settings_path(runtime, target_dir)
     if not settings_path.exists():
         return []
+    block_key = _json_mcp_key(runtime)
     parsed = _read_settings(settings_path)
-    raw_servers = parsed.get(_MCP_SERVERS_KEY, {})
+    raw_servers = parsed.get(block_key, {})
     if not isinstance(raw_servers, dict):
         raise ValueError(
-            f"settings.json at {settings_path} has non-object {_MCP_SERVERS_KEY!r}; "
+            f"{settings_path.name} at {settings_path} has non-object {block_key!r}; "
             f"got {type(raw_servers).__name__}"
         )
     rows: list[RuntimeEntry] = []

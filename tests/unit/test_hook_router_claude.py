@@ -21,12 +21,12 @@ from eawf.runtime.runtimes.claude.hooks_router import route_claude_payload
 
 def test_router_session_start_maps_to_session_start() -> None:
     event = route_claude_payload(
-        {"hook_event_name": "SessionStart", "session_id": "abc", "cwd": "/tmp/x"}
+        {"hook_event_name": "SessionStart", "session_id": "abc", "cwd": "workspace"}
     )
     assert isinstance(event, HookEvent)
     assert event.event_type == HookEventType.SESSION_START
     assert event.runtime == "claude"
-    assert event.scope_id == "/tmp/x"
+    assert event.scope_id == "workspace"
     assert event.payloads["claude_code"]["hook_event_name"] == "SessionStart"
 
 
@@ -40,6 +40,18 @@ def test_router_explicit_session_end_maps_to_session_end() -> None:
     event = route_claude_payload({"hook_event_name": "SessionEnd", "session_id": "abc"})
     assert isinstance(event, HookEvent)
     assert event.event_type == HookEventType.SESSION_END
+
+
+def test_router_subagent_stop_maps_to_subagent_stop() -> None:
+    event = route_claude_payload({"hook_event_name": "SubagentStop", "session_id": "abc"})
+    assert isinstance(event, HookEvent)
+    assert event.event_type == HookEventType.SUBAGENT_STOP
+
+
+def test_router_pre_compact_maps_to_pre_compact() -> None:
+    event = route_claude_payload({"hook_event_name": "PreCompact", "session_id": "abc"})
+    assert isinstance(event, HookEvent)
+    assert event.event_type == HookEventType.PRE_COMPACT
 
 
 def test_router_pretooluse_bash_git_commit_maps_to_pre_commit() -> None:
@@ -92,7 +104,7 @@ def test_router_pretooluse_non_bash_returns_none_with_warning(
         {
             "hook_event_name": "PreToolUse",
             "tool_name": "Read",
-            "tool_input": {"file_path": "/tmp/x.txt"},
+            "tool_input": {"file_path": "workspace/x.txt"},
         }
     )
     assert out is None

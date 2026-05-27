@@ -17,11 +17,9 @@ Behaviour rules per Phase 4 W04 design spec §3.3 / acceptance §2:
   ``None`` and a single ``logging.warning(...)`` entry. We MUST NOT
   raise from the router so a bad upstream payload cannot crash an Eä
   CLI invocation.
-- Mapping is intentionally narrow: only the payloads that have a
-  well-defined Eä counterpart in v1 :class:`HookEventType` map. Claude
-  events without an Eä counterpart (``PreCompact``, ``Notification``,
-  ``UserPromptSubmit``, ``SubagentStop``) are warned-and-skipped — W05
-  may broaden the mapping later.
+- Mapping is intentionally narrow: only payloads with a well-defined Eä
+  counterpart map. Claude events without an Eä counterpart
+  (``Notification``, ``UserPromptSubmit``) are warned-and-skipped.
 
 The router never reads or writes state. The CLI handler in
 :mod:`eawf.surfaces.cli.commands.hook` consumes the typed event and dispatches
@@ -47,6 +45,8 @@ _CLAUDE_TO_EAWF: dict[str, HookEventType] = {
     "SessionStart": HookEventType.SESSION_START,
     "SessionEnd": HookEventType.SESSION_END,
     "Stop": HookEventType.SESSION_END,
+    "SubagentStop": HookEventType.SUBAGENT_STOP,
+    "PreCompact": HookEventType.PRE_COMPACT,
 }
 
 # Tool-name → Eä event mapping for ``PreToolUse`` / ``PostToolUse`` payloads.

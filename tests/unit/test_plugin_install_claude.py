@@ -53,6 +53,7 @@ def test_install_plugin_writes_full_tree(tmp_path: Path) -> None:
     assert len(result.agents) == len(AGENT_REGISTRY)
     assert len(result.hooks) == len(HOOK_REGISTRY)
     assert result.settings is not None and result.settings.action == "created"
+    assert result.mcp_config is not None and result.mcp_config.action == "created"
     # Every file exists on disk.
     for p in _all_skill_paths(tmp_path):
         assert p.exists(), f"missing skill: {p}"
@@ -62,6 +63,8 @@ def test_install_plugin_writes_full_tree(tmp_path: Path) -> None:
         assert p.exists(), f"missing hook: {p}"
     settings = tmp_path / ".claude" / "settings.json"
     assert settings.exists()
+    mcp_config = tmp_path / ".mcp.json"
+    assert json.loads(mcp_config.read_text(encoding="utf-8")) == {"mcpServers": {}}
 
 
 def test_install_plugin_is_idempotent(tmp_path: Path) -> None:
@@ -70,6 +73,7 @@ def test_install_plugin_is_idempotent(tmp_path: Path) -> None:
     # Snapshot every owned file's bytes.
     paths = _all_skill_paths(tmp_path) + _all_agent_paths(tmp_path) + _all_hook_paths(tmp_path)
     paths.append(tmp_path / ".claude" / "settings.json")
+    paths.append(tmp_path / ".mcp.json")
     first_snapshot = {p: p.read_bytes() for p in paths}
 
     second = install_plugin(tmp_path)
@@ -79,6 +83,7 @@ def test_install_plugin_is_idempotent(tmp_path: Path) -> None:
     for delta in second.skills + second.agents + second.hooks:
         assert delta.action == "unchanged", f"unexpected action: {delta}"
     assert second.settings is not None and second.settings.action == "unchanged"
+    assert second.mcp_config is not None and second.mcp_config.action == "unchanged"
 
 
 def test_install_plugin_dry_run_writes_nothing(tmp_path: Path) -> None:
@@ -89,6 +94,7 @@ def test_install_plugin_dry_run_writes_nothing(tmp_path: Path) -> None:
     # Action labels reflect what *would* happen against the empty tree.
     for delta in result.skills + result.agents + result.hooks:
         assert delta.action == "created"
+    assert result.mcp_config is not None and result.mcp_config.action == "created"
 
 
 def test_install_plugin_aborts_on_hand_edit(tmp_path: Path) -> None:
@@ -198,6 +204,8 @@ def test_install_plugin_returns_paths_under_target_dir(tmp_path: Path) -> None:
         assert str(delta.path).startswith(str(target_resolved))
     assert result.settings is not None
     assert str(result.settings.path).startswith(str(target_resolved))
+    assert result.mcp_config is not None
+    assert str(result.mcp_config.path).startswith(str(target_resolved))
 
 
 def test_install_plugin_settings_re_run_byte_identical(tmp_path: Path) -> None:
@@ -207,6 +215,24 @@ def test_install_plugin_settings_re_run_byte_identical(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     rerun = (tmp_path / ".claude" / "settings.json").read_bytes()
     assert snapshot == rerun
+
+
+def test_install_plugin_preserves_existing_mcp_config(tmp_path: Path) -> None:
+    """Existing MCP entries are owned by the MCP installer/user, not plugin install."""
+    mcp_config = tmp_path / ".mcp.json"
+    payload = {
+        "mcpServers": {
+            "eawf-mcp": {
+                "command": "eawf-mcp",
+                "args": [],
+            }
+        }
+    }
+    mcp_config.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    result = install_plugin(tmp_path)
+    assert result.mcp_config is not None
+    assert result.mcp_config.action == "unchanged"
+    assert json.loads(mcp_config.read_text(encoding="utf-8")) == payload
 
 
 def test_install_plugin_creates_target_dir(tmp_path: Path) -> None:

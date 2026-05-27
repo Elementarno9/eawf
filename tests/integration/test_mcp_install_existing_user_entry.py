@@ -81,7 +81,7 @@ def tmp_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return state_path
 
 
-def _make_server(server_id: str, command: str = "/eawf-demo") -> McpServer:
+def _make_server(server_id: str, command: str = "eawf-mcp-demo") -> McpServer:
     return McpServer(
         id=server_id,
         owner="eawf",
@@ -100,10 +100,10 @@ def test_user_serena_entry_survives_byte_equal_across_install_and_remove(
 ) -> None:
     """User-owned ``mcpServers["serena"]`` is byte-equal across the
     full install→remove cycle for a different Eä-managed id."""
-    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path = tmp_path / ".mcp.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     user_entry = {
-        "command": "/usr/bin/serena",
+        "command": "serena-mcp",
         "args": ["--config", "user.toml"],
         "env": {"SERENA_KEY": "literal-user-token"},
         "transport": "stdio",
@@ -138,18 +138,18 @@ def test_user_serena_entry_survives_byte_equal_across_install_and_remove(
 
 def test_user_dup_id_blocks_install_without_force(tmp_path: Path, tmp_state: Path) -> None:
     """Pre-existing user ``mcpServers["dup-id"]`` blocks install with exit 8."""
-    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path = tmp_path / ".mcp.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
-            {"mcpServers": {"dup-id": {"command": "/manual"}}},
+            {"mcpServers": {"dup-id": {"command": "manual-mcp"}}},
             sort_keys=True,
             indent=2,
         )
         + "\n",
         encoding="utf-8",
     )
-    runner.invoke(app, ["mcp", "add", "dup-id", "--command", "/eawf"])
+    runner.invoke(app, ["mcp", "add", "dup-id", "--command", "eawf-mcp"])
     result = runner.invoke(
         app,
         [
@@ -165,18 +165,18 @@ def test_user_dup_id_blocks_install_without_force(tmp_path: Path, tmp_state: Pat
 
 
 def test_user_dup_id_force_overrides_install(tmp_path: Path, tmp_state: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path = tmp_path / ".mcp.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
-            {"mcpServers": {"dup-id": {"command": "/manual"}}},
+            {"mcpServers": {"dup-id": {"command": "manual-mcp"}}},
             sort_keys=True,
             indent=2,
         )
         + "\n",
         encoding="utf-8",
     )
-    runner.invoke(app, ["mcp", "add", "dup-id", "--command", "/eawf"])
+    runner.invoke(app, ["mcp", "add", "dup-id", "--command", "eawf-mcp"])
     result = runner.invoke(
         app,
         [
@@ -193,4 +193,4 @@ def test_user_dup_id_force_overrides_install(tmp_path: Path, tmp_state: Path) ->
     parsed = json.loads(settings_path.read_text(encoding="utf-8"))
     entry = parsed["mcpServers"]["dup-id"]
     assert entry["__eawf_owner"] == "eawf"
-    assert entry["command"] == "/eawf"
+    assert entry["command"] == "eawf-mcp"

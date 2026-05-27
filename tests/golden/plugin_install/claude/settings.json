@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "01ebca83fdf20341",
+    "hash": "43fd5db874f487a4",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -96,6 +96,14 @@
       {
         "event_type": "agent_end",
         "path": ".claude/hooks/agent_end.sh"
+      },
+      {
+        "event_type": "subagent_stop",
+        "path": ".claude/hooks/subagent_stop.sh"
+      },
+      {
+        "event_type": "pre_compact",
+        "path": ".claude/hooks/pre_compact.sh"
       }
     ],
     "skills": [

@@ -129,6 +129,8 @@ def _spec_for(event_type: HookEventType) -> HookSpec:
 #   AGENT_END) carry the eawf-native value as ``hook_event_name`` so the
 #   router's warning path triggers a clear "skipped: unknown" log line if
 #   the wrapper is ever invoked outside an Eä CLI context.
+# - SubagentStop and PreCompact map to Claude's native event names so
+#   hook manifests can subscribe to them directly.
 # ---------------------------------------------------------------------------
 HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(event_type=HookEventType.PRE_COMMIT, claude_event_name="PreToolUse"),
@@ -146,6 +148,8 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(event_type=HookEventType.PHASE_OPEN, claude_event_name="phase_open"),
     HookSpec(event_type=HookEventType.PHASE_CLOSE, claude_event_name="phase_close"),
     HookSpec(event_type=HookEventType.AGENT_END, claude_event_name="agent_end"),
+    HookSpec(event_type=HookEventType.SUBAGENT_STOP, claude_event_name="SubagentStop"),
+    HookSpec(event_type=HookEventType.PRE_COMPACT, claude_event_name="PreCompact"),
 )
 
 

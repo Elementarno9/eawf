@@ -10,25 +10,13 @@ disable-model-invocation: true
 
 ## v0.4 cross-links
 
-Each memory mutation carries a typed `MutationKind` —
-`create | update | refresh | demote | archive` — so the audit trail
-distinguishes a freshly captured fact from a content-preserving
-re-touch. `find_stale` is recommender-only (it surfaces candidates
-ranked by age and use-count) and never flips `status=STALE`
-unilaterally; the explicit `demote` mutation does that. Promoted
-memories carry a `Project` row reference so cross-repo recall stays
-scoped.
+Each memory mutation carries a typed `MutationKind` — `create | update | refresh | demote | archive` — so the audit trail distinguishes a freshly captured fact from a content-preserving re-touch. `find_stale` is recommender-only (it surfaces candidates ranked by age and use-count) and never flips `status=STALE` unilaterally; the explicit `demote` mutation does that. Promoted memories carry a `Project` row reference so cross-repo recall stays scoped.
 
 ## Canonical algorithm
 
-1. Resolve the verb (`save` default / `list` / `forget`) and the target
-   tier (`working` default / `archival` / `retrieval`).
-2. A named verb (`save` / `forget`) without a `name` degrades to
-   `status=needs_user`.
-3. Append a single append-only `EVENT` describing the operation intent;
-   the daemon is the sole canonical writer of the memory JSONL store, so
-   the skill routes the operator to the `eawf memory` writer via
-   `next_valid_actions` rather than mutating the store itself.
+1. Resolve the verb (`save` default / `list` / `forget`) and the target tier (`working` default / `archival` / `retrieval`).
+2. A named verb (`save` / `forget`) without a `name` degrades to `status=needs_user`.
+3. Append a single append-only `EVENT` describing the operation intent; the daemon is the sole canonical writer of the memory JSONL store, so the skill routes the operator to the `eawf memory` writer via `next_valid_actions` rather than mutating the store itself.
 
 ## Pre-flight checklist
 
@@ -37,11 +25,8 @@ scoped.
 
 ## Decision surfaces
 
-A named verb (`save` / `forget`) without a `name` degrades to
-`status=needs_user`, which routes the operator to an `AskUserQuestion`
-prompt for the missing entry name rather than inventing one.
+A named verb (`save` / `forget`) without a `name` degrades to `status=needs_user`, which routes the operator to an `AskUserQuestion` prompt for the missing entry name rather than inventing one.
 
 ## Output contract
 
-Skill envelope with `header.skill = "/memory"`. Body carries verb, name,
-and tier (or a reason on the needs_user path).
+Skill envelope with `header.skill = "/memory"`. Body carries verb, name, and tier (or a reason on the needs_user path).

@@ -14,6 +14,9 @@ from pathlib import Path
 
 from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
+from eawf.surfaces.render.agents import AGENT_REGISTRY
+from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
 def test_doctor_clean_after_install(tmp_path: Path) -> None:
@@ -23,7 +26,7 @@ def test_doctor_clean_after_install(tmp_path: Path) -> None:
     assert not report.drifted
     assert not report.missing
     # Total ok count = skills + agents + hooks + settings.
-    assert len(report.ok) == 23 + 8 + 15 + 1
+    assert len(report.ok) == (len(SKILL_REGISTRY) + len(AGENT_REGISTRY) + len(HOOK_REGISTRY) + 1)
 
 
 def test_doctor_detects_skill_drift(tmp_path: Path) -> None:

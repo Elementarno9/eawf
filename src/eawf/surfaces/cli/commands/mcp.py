@@ -64,7 +64,7 @@ mcp_app = typer.Typer(
 )
 
 
-_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex")
+_SUPPORTED_RUNTIMES: tuple[str, ...] = ("claude", "codex", "opencode")
 _OWNER_FILTERS: tuple[str, ...] = ("eawf", "user", "all")
 
 
@@ -270,7 +270,7 @@ def install_cmd(
     server_id: Annotated[str, typer.Argument(help="MCP id to install.", metavar="ID")],
     runtime: Annotated[
         str,
-        typer.Option("--runtime", help="Target runtime: claude | codex."),
+        typer.Option("--runtime", help="Target runtime: claude | codex | opencode."),
     ] = "claude",
     target_dir: Annotated[
         Path | None,

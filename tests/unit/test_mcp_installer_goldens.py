@@ -3,8 +3,8 @@
 The MCP config writers are byte-deterministic: a fresh install of a fixed
 server (with the epoch timestamp sentinel) produces exactly the checked-in
 golden, and a second install of the same server re-reads ``unchanged`` and
-leaves the file byte-identical. The goldens cover both the Claude JSON
-``settings.json`` writer and the Codex TOML ``config.toml`` writer.
+leaves the file byte-identical. The goldens cover the Claude ``.mcp.json``
+writer, Codex TOML writer, and OpenCode ``opencode.json`` writer.
 
 Regenerate the goldens (only on an intentional format change) with::
 
@@ -32,9 +32,9 @@ _GOLDEN_DIR = Path(__file__).parent.parent / "golden" / "mcp"
 def _golden_server() -> McpServer:
     """The canonical server the goldens are rendered from."""
     return McpServer(
-        id="demo",
+        id="eawf-mcp",
         owner="eawf",
-        command="/usr/local/bin/demo",
+        command="eawf-mcp",
         args=["--port", "8080"],
         env_refs=["${ENV:DEMO_KEY}"],
         risk=McpRisk.READ,
@@ -47,8 +47,9 @@ def _golden_server() -> McpServer:
 @pytest.mark.parametrize(
     ("runtime", "rel_path", "golden_name"),
     [
-        ("claude", ".claude/settings.json", "claude_settings.json"),
+        ("claude", ".mcp.json", "claude_mcp.json"),
         ("codex", ".codex/config.toml", "codex_config.toml"),
+        ("opencode", "opencode.json", "opencode_config.json"),
     ],
 )
 def test_install_matches_golden_and_is_idempotent(

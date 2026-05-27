@@ -5,7 +5,7 @@ Phase 4 W04 freezes the v1 :class:`HookEventType` set and the
 pin:
 
 - the required-field set (``event_type``, ``occurred_at``);
-- the frozen :class:`HookEventType` enumeration (15 entries — the v1
+- the frozen :class:`HookEventType` enumeration (17 entries — the v1
   list per ``docs/hook-events.md``);
 - the ``runtime`` Literal (``claude``/``codex``/``opencode``/``generic``);
 - the ``extra="forbid"`` rejection on unknown keys; and
@@ -40,7 +40,7 @@ def _base_payload(**overrides: object) -> dict[str, object]:
 
 
 def test_hook_event_v1_event_type_set_is_frozen() -> None:
-    """The v1 :class:`HookEventType` enumeration carries exactly 15 entries."""
+    """The v1 :class:`HookEventType` enumeration carries exactly 17 entries."""
     expected: set[str] = {
         "pre_commit",
         "post_commit",
@@ -57,6 +57,8 @@ def test_hook_event_v1_event_type_set_is_frozen() -> None:
         "phase_open",
         "phase_close",
         "agent_end",
+        "subagent_stop",
+        "pre_compact",
     }
     assert {member.value for member in HookEventType} == expected
 

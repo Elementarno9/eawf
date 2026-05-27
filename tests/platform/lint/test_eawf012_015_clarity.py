@@ -93,6 +93,20 @@ def test_eawf014_ignores_lists_and_fences() -> None:
     assert check_014(markdown) == []
 
 
+def test_eawf014_ignores_yaml_frontmatter() -> None:
+    markdown = textwrap.dedent(
+        """
+        ---
+        name: prep
+        description: Activate the next PLANNED phase
+        ---
+
+        Body is a single rendered paragraph.
+        """
+    ).lstrip()
+    assert check_014(markdown) == []
+
+
 def test_eawf015_warns_on_non_ears_requirement_language() -> None:
     markdown = "The operator should review the output before merge.\n"
     advisories = check_015(markdown)

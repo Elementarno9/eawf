@@ -41,7 +41,7 @@ pytestmark = pytest.mark.unit
 def _make_server(
     *,
     server_id: str = "demo",
-    command: str = "/usr/local/bin/demo",
+    command: str = "demo-mcp",
     args: list[str] | None = None,
     env_refs: list[str] | None = None,
 ) -> McpServer:
@@ -76,16 +76,16 @@ def test_install_runtime_entry_creates_settings_when_absent(tmp_path: Path) -> N
     entry = settings["mcpServers"]["demo"]  # type: ignore[index]
     assert entry["__eawf_owner"] == "eawf"
     assert entry["env"] == {"DEMO_KEY": "${ENV:DEMO_KEY}"}
-    assert entry["command"] == "/usr/local/bin/demo"
+    assert entry["command"] == "demo-mcp"
     assert entry["transport"] == "stdio"
 
 
 def test_install_runtime_entry_preserves_user_entry_byte_equal(tmp_path: Path) -> None:
     """A user-owned ``mcpServers["serena"]`` survives byte-equal."""
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     user_serena = {
-        "command": "/usr/bin/serena",
+        "command": "serena-mcp",
         "args": ["--config", "x"],
         "env": {"SERENA_KEY": "literal-user-value"},
         "transport": "stdio",
@@ -112,11 +112,11 @@ def test_install_runtime_entry_preserves_user_entry_byte_equal(tmp_path: Path) -
 def test_install_runtime_entry_refuses_user_owned_collision_without_force(
     tmp_path: Path,
 ) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
-            {"mcpServers": {"dup": {"command": "/usr/bin/dup", "args": []}}},
+            {"mcpServers": {"dup": {"command": "dup-mcp", "args": []}}},
             indent=2,
         )
         + "\n",
@@ -133,17 +133,17 @@ def test_install_runtime_entry_refuses_user_owned_collision_without_force(
 
 
 def test_install_runtime_entry_force_overrides_user_owned_collision(tmp_path: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
-            {"mcpServers": {"dup": {"command": "/usr/bin/dup", "args": []}}},
+            {"mcpServers": {"dup": {"command": "dup-mcp", "args": []}}},
             indent=2,
         )
         + "\n",
         encoding="utf-8",
     )
-    server = _make_server(server_id="dup", command="/eawf/replacement")
+    server = _make_server(server_id="dup", command="eawf-replacement")
     result = install_runtime_entry(
         server=server,
         runtime="claude",
@@ -154,19 +154,19 @@ def test_install_runtime_entry_force_overrides_user_owned_collision(tmp_path: Pa
     parsed = _read_json(settings_path)
     entry = parsed["mcpServers"]["dup"]  # type: ignore[index]
     assert entry["__eawf_owner"] == "eawf"
-    assert entry["command"] == "/eawf/replacement"
+    assert entry["command"] == "eawf-replacement"
 
 
 def test_install_runtime_entry_overwrites_eawf_owned_silently(tmp_path: Path) -> None:
     """Re-installing the same Eä-owned entry just rewrites it."""
-    server = _make_server(command="/v1")
+    server = _make_server(command="v1-mcp")
     install_runtime_entry(
         server=server,
         runtime="claude",
         target_dir=tmp_path,
         force=False,
     )
-    server_v2 = _make_server(command="/v2")
+    server_v2 = _make_server(command="v2-mcp")
     result = install_runtime_entry(
         server=server_v2,
         runtime="claude",
@@ -174,15 +174,15 @@ def test_install_runtime_entry_overwrites_eawf_owned_silently(tmp_path: Path) ->
         force=False,
     )
     assert result.action == "updated"
-    parsed = _read_json(tmp_path / ".claude" / "settings.json")
-    assert parsed["mcpServers"]["demo"]["command"] == "/v2"  # type: ignore[index]
+    parsed = _read_json(tmp_path / ".mcp.json")
+    assert parsed["mcpServers"]["demo"]["command"] == "v2-mcp"  # type: ignore[index]
 
 
 def test_remove_runtime_entry_refuses_user_owned(tmp_path: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
-        json.dumps({"mcpServers": {"manual": {"command": "/manual"}}}, indent=2) + "\n",
+        json.dumps({"mcpServers": {"manual": {"command": "manual-mcp"}}}, indent=2) + "\n",
         encoding="utf-8",
     )
     with pytest.raises(IntegrityViolation):
@@ -196,9 +196,9 @@ def test_remove_runtime_entry_refuses_user_owned(tmp_path: Path) -> None:
 
 def test_remove_runtime_entry_force_overrides_user_owner(tmp_path: Path) -> None:
     """``force=True`` deletes a user-owned entry the IntegrityViolation would normally protect."""
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
-    user_block = {"command": "/manual", "args": ["--keep"]}
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    user_block = {"command": "manual-mcp", "args": ["--keep"]}
     settings_path.write_text(
         json.dumps({"mcpServers": {"manual": user_block}}, indent=2) + "\n",
         encoding="utf-8",
@@ -217,15 +217,15 @@ def test_remove_runtime_entry_force_overrides_user_owner(tmp_path: Path) -> None
 
 
 def test_remove_runtime_entry_deletes_only_eawf_owned(tmp_path: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
-    user_block = {"command": "/manual", "args": []}
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    user_block = {"command": "manual-mcp", "args": []}
     settings_path.write_text(
         json.dumps({"mcpServers": {"manual": user_block}}, indent=2) + "\n",
         encoding="utf-8",
     )
     install_runtime_entry(
-        server=_make_server(server_id="ours", command="/ours"),
+        server=_make_server(server_id="ours", command="ours-mcp"),
         runtime="claude",
         target_dir=tmp_path,
         force=False,
@@ -257,13 +257,13 @@ def test_remove_runtime_entry_drops_empty_mcp_servers_key(tmp_path: Path) -> Non
         target_dir=tmp_path,
         force=False,
     )
-    parsed = _read_json(tmp_path / ".claude" / "settings.json")
+    parsed = _read_json(tmp_path / ".mcp.json")
     assert "mcpServers" not in parsed
 
 
 def test_remove_runtime_entry_absent_id_is_no_op(tmp_path: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps({}, indent=2) + "\n", encoding="utf-8")
     result = remove_runtime_entry(
         server_id="missing",
@@ -275,15 +275,15 @@ def test_remove_runtime_entry_absent_id_is_no_op(tmp_path: Path) -> None:
 
 
 def test_list_runtime_entries_returns_owner_annotation(tmp_path: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(
         json.dumps(
             {
                 "mcpServers": {
-                    "manual": {"command": "/manual"},
+                    "manual": {"command": "manual-mcp"},
                     "ours": {
-                        "command": "/ours",
+                        "command": "ours-mcp",
                         "__eawf_owner": "eawf",
                         "__eawf_managed_at": "1970-01-01T00:00:00+00:00",
                         "args": [],
@@ -308,6 +308,41 @@ def test_list_runtime_entries_missing_settings_returns_empty(tmp_path: Path) -> 
     assert rows == []
 
 
+def test_install_opencode_entry_creates_json_when_absent(tmp_path: Path) -> None:
+    server = _make_server(args=["--flag"], env_refs=["${ENV:DEMO_KEY}"])
+    result = install_runtime_entry(
+        server=server,
+        runtime="opencode",
+        target_dir=tmp_path,
+        force=False,
+    )
+    assert result.action == "created"
+    assert result.target_path == tmp_path / "opencode.json"
+    parsed = _read_json(result.target_path)
+    entry = parsed["mcp"]["demo"]  # type: ignore[index]
+    assert entry["command"] == "demo-mcp"
+    assert entry["args"] == ["--flag"]
+    assert entry["env"] == {"DEMO_KEY": "${ENV:DEMO_KEY}"}
+    assert entry["__eawf_owner"] == "eawf"
+
+
+def test_remove_opencode_entry_drops_empty_mcp_key(tmp_path: Path) -> None:
+    install_runtime_entry(
+        server=_make_server(),
+        runtime="opencode",
+        target_dir=tmp_path,
+        force=False,
+    )
+    remove_runtime_entry(
+        server_id="demo",
+        runtime="opencode",
+        target_dir=tmp_path,
+        force=False,
+    )
+    parsed = _read_json(tmp_path / "opencode.json")
+    assert "mcp" not in parsed
+
+
 def test_install_runtime_entry_unknown_runtime_raises(tmp_path: Path) -> None:
     # ``opencode`` and ``codex`` landed in P14-W06/W07; use a still-
     # deferred id (``goose``) to exercise the rejection path.
@@ -321,8 +356,8 @@ def test_install_runtime_entry_unknown_runtime_raises(tmp_path: Path) -> None:
 
 
 def test_install_runtime_entry_malformed_settings_json_raises(tmp_path: Path) -> None:
-    settings_path = tmp_path / ".claude" / "settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path = tmp_path / ".mcp.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text("not json", encoding="utf-8")
     with pytest.raises(ValueError):
         install_runtime_entry(
@@ -349,7 +384,7 @@ def test_install_codex_entry_creates_toml_when_absent(tmp_path: Path) -> None:
     assert result.target_path == tmp_path / ".codex" / "config.toml"
     parsed = _read_toml(result.target_path)
     table = parsed["mcp_servers"]["demo"]  # type: ignore[index]
-    assert table["command"] == "/usr/local/bin/demo"
+    assert table["command"] == "demo-mcp"
     assert table["args"] == ["--flag"]
     assert table["env"] == {"DEMO_KEY": "${ENV:DEMO_KEY}"}
     assert table["__eawf_owner"] == "eawf"
@@ -362,7 +397,7 @@ def test_install_codex_preserves_user_table_and_plugin_block(tmp_path: Path) -> 
     config.write_text(
         "# user header\n"
         '[mcp_servers."user-keep"]\n'
-        'command = "/usr/bin/keep"\n\n'
+        'command = "keep-mcp"\n\n'
         "# ---- __eawf_managed begin ----\n"
         "[plugins.eawf]\n"
         "enabled = true\n"
@@ -370,14 +405,14 @@ def test_install_codex_preserves_user_table_and_plugin_block(tmp_path: Path) -> 
         encoding="utf-8",
     )
     result = install_runtime_entry(
-        server=_make_server(server_id="ours", command="/ours"),
+        server=_make_server(server_id="ours", command="ours-mcp"),
         runtime="codex",
         target_dir=tmp_path,
         force=False,
     )
     assert result.user_entries_preserved == ["user-keep"]
     parsed = _read_toml(config)
-    assert parsed["mcp_servers"]["user-keep"] == {"command": "/usr/bin/keep"}  # type: ignore[index]
+    assert parsed["mcp_servers"]["user-keep"] == {"command": "keep-mcp"}  # type: ignore[index]
     assert parsed["plugins"] == {"eawf": {"enabled": True}}  # type: ignore[index]
     assert parsed["mcp_servers"]["ours"]["__eawf_owner"] == "eawf"  # type: ignore[index]
 
@@ -385,7 +420,7 @@ def test_install_codex_preserves_user_table_and_plugin_block(tmp_path: Path) -> 
 def test_install_codex_refuses_user_owned_collision_without_force(tmp_path: Path) -> None:
     config = tmp_path / ".codex" / "config.toml"
     config.parent.mkdir(parents=True)
-    config.write_text('[mcp_servers."dup"]\ncommand = "/manual"\n', encoding="utf-8")
+    config.write_text('[mcp_servers."dup"]\ncommand = "manual-mcp"\n', encoding="utf-8")
     with pytest.raises(IntegrityViolation):
         install_runtime_entry(
             server=_make_server(server_id="dup"),
@@ -399,7 +434,7 @@ def test_install_codex_force_over_user_owned_raises_valueerror(tmp_path: Path) -
     """Force cannot splice out a user table; the installer fails loudly."""
     config = tmp_path / ".codex" / "config.toml"
     config.parent.mkdir(parents=True)
-    config.write_text('[mcp_servers."dup"]\ncommand = "/manual"\n', encoding="utf-8")
+    config.write_text('[mcp_servers."dup"]\ncommand = "manual-mcp"\n', encoding="utf-8")
     with pytest.raises(ValueError, match="manually"):
         install_runtime_entry(
             server=_make_server(server_id="dup"),
@@ -412,9 +447,9 @@ def test_install_codex_force_over_user_owned_raises_valueerror(tmp_path: Path) -
 def test_remove_codex_entry_deletes_only_eawf_owned(tmp_path: Path) -> None:
     config = tmp_path / ".codex" / "config.toml"
     config.parent.mkdir(parents=True)
-    config.write_text('[mcp_servers."manual"]\ncommand = "/manual"\n', encoding="utf-8")
+    config.write_text('[mcp_servers."manual"]\ncommand = "manual-mcp"\n', encoding="utf-8")
     install_runtime_entry(
-        server=_make_server(server_id="ours", command="/ours"),
+        server=_make_server(server_id="ours", command="ours-mcp"),
         runtime="codex",
         target_dir=tmp_path,
         force=False,
@@ -428,13 +463,13 @@ def test_remove_codex_entry_deletes_only_eawf_owned(tmp_path: Path) -> None:
     assert result.action == "removed"
     parsed = _read_toml(config)
     assert "ours" not in parsed["mcp_servers"]  # type: ignore[operator]
-    assert parsed["mcp_servers"]["manual"] == {"command": "/manual"}  # type: ignore[index]
+    assert parsed["mcp_servers"]["manual"] == {"command": "manual-mcp"}  # type: ignore[index]
 
 
 def test_remove_codex_entry_refuses_user_owned(tmp_path: Path) -> None:
     config = tmp_path / ".codex" / "config.toml"
     config.parent.mkdir(parents=True)
-    config.write_text('[mcp_servers."manual"]\ncommand = "/manual"\n', encoding="utf-8")
+    config.write_text('[mcp_servers."manual"]\ncommand = "manual-mcp"\n', encoding="utf-8")
     with pytest.raises(IntegrityViolation):
         remove_runtime_entry(
             server_id="manual",
@@ -457,9 +492,9 @@ def test_remove_codex_entry_absent_id_is_no_op(tmp_path: Path) -> None:
 def test_list_runtime_entries_codex_owner_annotation(tmp_path: Path) -> None:
     config = tmp_path / ".codex" / "config.toml"
     config.parent.mkdir(parents=True)
-    config.write_text('[mcp_servers."manual"]\ncommand = "/manual"\n', encoding="utf-8")
+    config.write_text('[mcp_servers."manual"]\ncommand = "manual-mcp"\n', encoding="utf-8")
     install_runtime_entry(
-        server=_make_server(server_id="ours", command="/ours"),
+        server=_make_server(server_id="ours", command="ours-mcp"),
         runtime="codex",
         target_dir=tmp_path,
         force=False,
@@ -470,7 +505,7 @@ def test_list_runtime_entries_codex_owner_annotation(tmp_path: Path) -> None:
     assert by_id["ours"].owner == "eawf"
 
 
-@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("runtime", ["claude", "codex", "opencode"])
 def test_install_raises_verify_failure_on_corrupt_writeback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: str
 ) -> None:
@@ -481,17 +516,22 @@ def test_install_raises_verify_failure_on_corrupt_writeback(
         # parse step in the verifier succeeds and the *content* check fails.
         path.parent.mkdir(parents=True, exist_ok=True)
         if runtime == "codex":
-            path.write_text('[mcp_servers."demo"]\ncommand = "/WRONG"\n', encoding="utf-8")
+            path.write_text('[mcp_servers."demo"]\ncommand = "wrong-mcp"\n', encoding="utf-8")
+        elif runtime == "opencode":
+            path.write_text(
+                json.dumps({"mcp": {"demo": {"command": "wrong-mcp"}}}),
+                encoding="utf-8",
+            )
         else:
             path.write_text(
-                json.dumps({"mcpServers": {"demo": {"command": "/WRONG"}}}),
+                json.dumps({"mcpServers": {"demo": {"command": "wrong-mcp"}}}),
                 encoding="utf-8",
             )
 
     monkeypatch.setattr(installer, "atomic_write_text", _corrupt)
     with pytest.raises(VerifyFailure):
         install_runtime_entry(
-            server=_make_server(command="/right"),
+            server=_make_server(command="right-mcp"),
             runtime=runtime,
             target_dir=tmp_path,
             force=False,

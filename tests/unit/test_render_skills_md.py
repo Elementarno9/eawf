@@ -106,11 +106,37 @@ def test_render_skill_md_terminates_with_newline() -> None:
     assert output.endswith("\n"), repr(output[-10:])
 
 
-def test_render_skill_md_body_inserted_verbatim() -> None:
+def test_render_skill_md_body_inserted_after_frontmatter() -> None:
     """Body markdown lands after the frontmatter without escaping."""
     output = render_skill_md(_ctx())
     assert "# /test\n" in output
     assert output.index("# /test") > output.index("---\n")
+
+
+def test_render_skill_md_unwraps_body_prose() -> None:
+    """Rendered SKILL.md body prose follows the no-manual-wrap rule."""
+    ctx = SkillTemplateContext(
+        skill_name="research",
+        description="d",
+        argument_hint="",
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=(
+            "# x\n\n"
+            "A paragraph split across\n"
+            "two lines.\n\n"
+            "- A list item split across\n"
+            "  two lines.\n\n"
+            "```\n"
+            "keep\n"
+            "wrapped\n"
+            "```\n"
+        ),
+    )
+    output = render_skill_md(ctx)
+    assert "A paragraph split across two lines." in output
+    assert "- A list item split across two lines." in output
+    assert "```\nkeep\nwrapped\n```" in output
 
 
 def test_render_skill_md_strips_trailing_body_newlines() -> None:

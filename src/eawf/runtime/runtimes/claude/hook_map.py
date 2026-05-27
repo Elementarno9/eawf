@@ -21,6 +21,8 @@ HookEventType       CC event               Matcher
 ``POST_COMMIT``     ``PostToolUse``        ``Bash`` (cmd starts ``git commit``)
 ``PRE_PUSH``        ``PreToolUse``         ``Bash`` (cmd starts ``git push``)
 ``POST_PUSH``       ``PostToolUse``        ``Bash`` (cmd starts ``git push``)
+``SUBAGENT_STOP``   ``SubagentStop``       (none)
+``PRE_COMPACT``     ``PreCompact``         (none)
 ==================  =====================  ====================================
 
 Each entry resolves to a ``${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh``
@@ -76,12 +78,14 @@ class PluginHookSpec:
     matcher: str = ""
 
 
-# Frozen v0.2 registry. Only the six session-level entries Claude Code's
-# plugin event surface can observe reliably; see the module docstring
-# for the rationale.
+# Frozen v0.2 registry. Only entries Claude Code's plugin event surface
+# can observe reliably are subscribed here; workflow-internal lifecycle
+# events still fire through explicit ``eawf hook run`` calls.
 PLUGIN_HOOK_REGISTRY: tuple[PluginHookSpec, ...] = (
     PluginHookSpec(event_type=HookEventType.SESSION_START, cc_event="SessionStart"),
     PluginHookSpec(event_type=HookEventType.SESSION_END, cc_event="Stop"),
+    PluginHookSpec(event_type=HookEventType.SUBAGENT_STOP, cc_event="SubagentStop"),
+    PluginHookSpec(event_type=HookEventType.PRE_COMPACT, cc_event="PreCompact"),
     PluginHookSpec(event_type=HookEventType.PRE_COMMIT, cc_event="PreToolUse", matcher="Bash"),
     PluginHookSpec(event_type=HookEventType.POST_COMMIT, cc_event="PostToolUse", matcher="Bash"),
     PluginHookSpec(event_type=HookEventType.PRE_PUSH, cc_event="PreToolUse", matcher="Bash"),
