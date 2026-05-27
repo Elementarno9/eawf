@@ -29,6 +29,7 @@ nav:
   - Home: README.md
   - Tutorial:
       - Quickstart: tutorial/quickstart.md
+      - Troubleshooting: tutorial/troubleshooting.md
   - Concepts: concepts.md
   - Architecture:
       - Overview: architecture/overview.md
@@ -43,6 +44,7 @@ nav:
       - Installation: architecture/installation.md
   - Reference:
       - Overview: reference/index.md
+      - Doctor: reference/doctor.md
       - Enums: reference/enums.md
       - Exit codes: reference/exit-codes.md
       - Error codes: reference/error-codes.md
