@@ -4,8 +4,10 @@
     "approval_required",
     "dag",
     "iter_id",
+    "no_op",
     "non_goals",
     "objective",
+    "plan_text",
     "user_question",
     "waves"
   ],

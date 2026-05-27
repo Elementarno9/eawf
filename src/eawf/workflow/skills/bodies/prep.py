@@ -17,7 +17,15 @@ from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 
 class PrepDagTask(BaseModel):
-    """One DAG task in a prep plan."""
+    """One DAG task in a prep plan.
+
+    Extended in P28-W18 with ``agent_role`` / ``effort_bucket`` /
+    ``estimate_eu`` so the prep body carries the same three planning
+    signals the canonical ``plan_view`` renderer surfaces in
+    ``roadmap show --md`` and the TUI roadmap tree. The three fields
+    default to ``None`` / ``0.0`` so a wave that has not yet been
+    tagged still projects cleanly into the DAG.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -27,6 +35,9 @@ class PrepDagTask(BaseModel):
     commands: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     risk: str
+    agent_role: str | None = None
+    effort_bucket: str | None = None
+    estimate_eu: float = 0.0
 
 
 class PrepWave(BaseModel):
@@ -50,7 +61,15 @@ class PrepAcceptance(BaseModel):
 
 
 class PrepBody(BaseModel):
-    """Body for ``/prep``."""
+    """Body for ``/prep``.
+
+    The optional ``plan_text`` field carries the markdown surface a
+    Claude-runtime ``EnterPlanMode`` (or a Codex text-prompt) renders to
+    the operator — sourced from the canonical
+    :func:`eawf.surfaces.render.plan_view.render_markdown` so the
+    plan-mode body, ``eawf roadmap show --md``, and the TUI roadmap
+    tree all draw from the same projection (P28-W18).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -63,6 +82,7 @@ class PrepBody(BaseModel):
     approval_required: bool = False
     no_op: bool = False
     user_question: UserQuestion | None = None
+    plan_text: str | None = None
 
 
 __all__ = ["PrepAcceptance", "PrepBody", "PrepDagTask", "PrepWave"]

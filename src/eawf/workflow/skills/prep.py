@@ -119,8 +119,12 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
     and emits one :class:`PrepDagTask` per wave whose status is
     :attr:`WaveStatus.PENDING`. Tasks are keyed by their canonical wave id
     (no synthetic ``T01``); ``deps`` and ``file_scope`` mirror the wave
-    record. Each iter that contributes at least one PENDING wave yields one
-    :class:`PrepWave` grouping its task ids.
+    record. Each task also carries ``agent_role`` / ``effort_bucket`` /
+    ``estimate_eu`` (P28-W18) so the prep body surfaces the same three
+    planning signals the canonical ``plan_view`` renderer projects into
+    ``roadmap show --md`` and the TUI tree. Each iter that contributes
+    at least one PENDING wave yields one :class:`PrepWave` grouping its
+    task ids; the wave estimate sums the per-task ``estimate_eu``.
 
     Args:
         phase: The target phase record.
@@ -130,6 +134,8 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
         A two-tuple ``(dag, waves)`` of the projected tasks and wave groups.
         Both are empty when the phase has no PENDING waves.
     """
+    from eawf.workflow.estimation.buckets import wave_estimate_eu
+
     dag: list[PrepDagTask] = []
     waves: list[PrepWave] = []
     for iter_id in phase.iter_ids:
@@ -137,10 +143,12 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
         if iter_record is None:
             continue
         iter_task_ids: list[str] = []
+        iter_estimate_eu: float = 0.0
         for wave_id in iter_record.wave_ids:
             wave = state.waves.get(wave_id)
             if wave is None or wave.status != WaveStatus.PENDING:
                 continue
+            estimate_eu = wave_estimate_eu(wave)
             dag.append(
                 PrepDagTask(
                     task_id=wave.id,
@@ -149,22 +157,51 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
                     commands=[],
                     evidence=[],
                     risk="low",
+                    agent_role=wave.agent_role.value if wave.agent_role else None,
+                    effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
+                    estimate_eu=estimate_eu,
                 )
             )
             iter_task_ids.append(wave.id)
+            iter_estimate_eu += estimate_eu
         if iter_task_ids:
             waves.append(
                 PrepWave(
                     wave_id=iter_id,
                     tasks=iter_task_ids,
                     worktree_policy="auto",
-                    estimate_eu=float(len(iter_task_ids)),
+                    estimate_eu=iter_estimate_eu,
                 )
             )
     return dag, waves
 
 
 _PREP_NEXT_ACTIONS: tuple[str, ...] = ("eawf wave plan", "eawf audit")
+
+
+def _render_plan_mode_markdown(inputs: _PrepInputs) -> str | None:
+    """Render the plan-mode markdown body via the canonical ``plan_view``.
+
+    The Claude-runtime ``EnterPlanMode`` (and Codex text-prompt) surface
+    for ``/prep`` plan-mode draws from
+    :func:`eawf.surfaces.render.plan_view.render_phase_markdown` so the
+    skill body, ``eawf roadmap show --md``, and the TUI roadmap tree
+    all consume one projection (P28-W18). ``None`` when neither a
+    phase nor a state document resolved — the renderer needs both to
+    walk iters under the phase.
+
+    Args:
+        inputs: The resolved ``/prep`` inputs (state + phase + iter id).
+
+    Returns:
+        The rendered markdown body, or ``None`` when the projection
+        cannot run.
+    """
+    if inputs.state is None or inputs.phase is None:
+        return None
+    from eawf.surfaces.render.plan_view import render_phase_markdown
+
+    return render_phase_markdown(inputs.state, inputs.phase.id)
 
 
 @dataclass
@@ -348,6 +385,7 @@ class PrepSkill(SkillAction):
 
     def _render(self, run: ActionRun, inputs: _PrepInputs, outcome: _PrepPlan) -> SkillResult:
         # Step 10 — approval gate.
+        plan_text = _render_plan_mode_markdown(inputs)
         body = PrepBody(
             iter_id=inputs.iter_id,
             objective=outcome.objective,
@@ -359,6 +397,7 @@ class PrepSkill(SkillAction):
                 baselines=[],
             ),
             approval_required=inputs.approval == "ask",
+            plan_text=plan_text,
         )
         if inputs.approval == "ask":
             self._trace(

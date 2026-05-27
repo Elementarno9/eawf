@@ -289,3 +289,99 @@ def test_prep_skill_registered_with_canonical_name() -> None:
 
     cls = registry.lookup("/prep")
     assert cls is PrepSkill
+
+
+# ---- P28-W18: unified plan_view renderer ----------------------------------
+
+
+def _wave_with_role(
+    wave_id: str,
+    iter_id: str,
+    *,
+    agent_role: str | None = None,
+    effort_bucket: str | None = None,
+) -> dict[str, Any]:
+    """Build a PENDING wave payload with optional ``agent_role`` / bucket."""
+    base = _wave(wave_id, iter_id, "pending", file_scopes=["src/a.py"])
+    if agent_role is not None:
+        base["agent_role"] = agent_role
+    if effort_bucket is not None:
+        base["effort_bucket"] = effort_bucket
+    return base
+
+
+def test_prep_dag_task_carries_agent_role_effort_bucket_estimate(state_dir: Path) -> None:
+    """P28-W18: PrepDagTask surfaces agent_role + effort_bucket + estimate_eu."""
+    _write_state(
+        state_dir,
+        waves=[
+            _wave_with_role(
+                "P03-I02-W01",
+                "P03-I02",
+                agent_role="executor",
+                effort_bucket="M",
+            ),
+            _wave_with_role(
+                "P03-I02-W02",
+                "P03-I02",
+                agent_role="auditor",
+                effort_bucket="S",
+            ),
+        ],
+    )
+    skill = PrepSkill()
+    ctx = _ctx()
+    ctx.args = {"iter_id": "P03-I02"}
+    env = run_skill(skill, ctx)
+    body = PrepBody.model_validate(cast(dict, env.body))
+    by_id = {t.task_id: t for t in body.dag}
+    assert by_id["P03-I02-W01"].agent_role == "executor"
+    assert by_id["P03-I02-W01"].effort_bucket == "M"
+    assert by_id["P03-I02-W01"].estimate_eu > 0.0
+    assert by_id["P03-I02-W02"].agent_role == "auditor"
+    assert by_id["P03-I02-W02"].effort_bucket == "S"
+
+
+def test_prep_dag_task_role_fields_default_none_when_wave_untagged(state_dir: Path) -> None:
+    """An untagged wave projects to (None, None, 0.0) — no crash, clean defaults."""
+    _write_state(state_dir)  # default wave has no agent_role / bucket
+    skill = PrepSkill()
+    ctx = _ctx()
+    ctx.args = {"iter_id": "P03-I02"}
+    env = run_skill(skill, ctx)
+    body = PrepBody.model_validate(cast(dict, env.body))
+    assert body.dag, "expected one PENDING task in the projected DAG"
+    task = body.dag[0]
+    assert task.agent_role is None
+    assert task.effort_bucket is None
+    assert task.estimate_eu == 0.0
+
+
+def test_prep_body_plan_text_uses_canonical_plan_view(state_dir: Path) -> None:
+    """The body's plan_text is the markdown render_phase_markdown emits.
+
+    Pins the W18 unification — the prep skill body, ``roadmap show --md``,
+    and the TUI roadmap tree all draw from the same projection.
+    """
+    from eawf.kernel.state.models import State
+    from eawf.surfaces.render.plan_view import render_phase_markdown
+
+    _write_state(state_dir)
+    skill = PrepSkill()
+    ctx = _ctx()
+    ctx.args = {"iter_id": "P03-I02"}
+    env = run_skill(skill, ctx)
+    body = PrepBody.model_validate(cast(dict, env.body))
+    state_path = state_dir / "state.json"
+    state = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    expected = render_phase_markdown(state, "P03")
+    assert body.plan_text == expected
+
+
+def test_prep_plan_text_none_when_no_state(state_dir: Path) -> None:
+    """No state on disk → plan_text degrades to None, no crash."""
+    # No _write_state call.
+    skill = PrepSkill()
+    env = run_skill(skill, _ctx())
+    body = PrepBody.model_validate(cast(dict, env.body))
+    assert body.plan_text is None

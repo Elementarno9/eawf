@@ -835,7 +835,20 @@ def roadmap_show_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
 
-    text = _render_show_md(rows) if md else _render_show_rich(nested, plain=flags.plain_output)
+    # Markdown branch: delegate to the canonical ``plan_view`` renderer so
+    # ``roadmap show --md``, ``/prep`` plan-mode, and the TUI all draw from
+    # one projection (P28-W18). The rich/plain branches stay local because
+    # they carry presentation chrome (Rich table styling, ANSI dimming) that
+    # the markdown surface does not.
+    if md:
+        from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+        # Re-enter the read-only transaction so the renderer sees the same
+        # state snapshot the rows projection used.
+        with state_transaction(state_path, read_only=True) as state:
+            text = render_roadmap_markdown(state, phase_id_filter=phase)
+    else:
+        text = _render_show_rich(nested, plain=flags.plain_output)
     emit_json_or_text({"phases": rows}, text, flags=flags)
 
 
@@ -1041,6 +1054,16 @@ def _render_show_plain(nodes: list[dict[str, Any]]) -> str:
 
 
 def _render_show_md(rows: list[dict[str, Any]]) -> str:
+    """Render the roadmap-show markdown table from a row projection.
+
+    Thin wrapper retained for back-compat callers that already have the
+    ``_phase_summary`` row dicts in hand. The canonical surface (the
+    ``roadmap show --md`` command path) calls
+    :func:`eawf.surfaces.render.plan_view.render_roadmap_markdown`
+    directly so the renderer lives in one place — this helper just
+    mirrors the same row → markdown layout so existing tests that pass
+    a dict list keep working.
+    """
     if not rows:
         return "_(no phases in state)_"
     out = ["| Phase | Status | Waves | Depends on | Title |", "|---|---|---|---|---|"]

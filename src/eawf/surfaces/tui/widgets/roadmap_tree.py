@@ -58,7 +58,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.kernel.state.ids import natural_key
+from eawf.surfaces.render.plan_view import build_roadmap_rows
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
@@ -501,10 +501,14 @@ class RoadmapTree(Tree[str]):
     def _rebuild(self, state: State | None) -> None:
         """Repopulate the tree from *state* (phase → iter → wave).
 
-        Phases sort by id; iters sort by their order in the phase's
-        ``iter_ids``; waves sort by their order in the iter's ``wave_ids``.
-        A ``None`` state clears the tree to just the (hidden) root so a
-        fresh / unreadable workspace renders an empty tree rather than
+        Phase order is driven by
+        :func:`eawf.surfaces.render.plan_view.build_roadmap_rows`
+        (P28-W18 unification) so the TUI, ``eawf roadmap show --md``,
+        and ``/prep`` plan-mode share one canonical phase projection.
+        Iters sort by their order in the phase's ``iter_ids``; waves
+        sort by their order in the iter's ``wave_ids``. A ``None``
+        state clears the tree to just the (hidden) root so a fresh /
+        unreadable workspace renders an empty tree rather than
         crashing.
 
         Args:
@@ -526,8 +530,10 @@ class RoadmapTree(Tree[str]):
         self._phase_id_width = max((len(pid) for pid in state.phases), default=3)
         self._iter_id_width = max((len(iid) for iid in state.iters), default=6)
         self._wave_id_width = max((len(wid) for wid in state.waves), default=10)
-        for phase_id in sorted(state.phases, key=natural_key):
-            phase = state.phases[phase_id]
+        for row in build_roadmap_rows(state):
+            phase = state.phases.get(row.id)
+            if phase is None:
+                continue
             self._add_phase(state, phase)
         self._scroll_to_active_phase(state)
 

@@ -54,6 +54,7 @@ from eawf.kernel.state.enums import (
     IncidentStatus,
     WaveStatus,
 )
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import (
     Audit,
     BacklogItem,
@@ -885,6 +886,137 @@ def _format_risks(view: PlanView) -> list[str]:
         sev = r.severity or ""
         lines.append(f"| {r.id} | {r.kind} | {sev} | {r.title} |")
     return lines
+
+
+class RoadmapRow(_StrictModel):
+    """One row in the roadmap-show table (P28-W18 unification).
+
+    Compact projection of a phase that ``plan_view`` exposes to both the
+    ``roadmap show --md`` CLI surface and the TUI roadmap tree — the
+    two consumers walk the same typed row instead of re-walking
+    ``state.phases`` independently. ``wave_count`` totals the phase's
+    waves; ``depends_on`` mirrors :attr:`Phase.depends_on`.
+    """
+
+    id: str
+    status: str
+    title: str
+    depends_on: list[str]
+    wave_count: int
+    iter_ids: list[str]
+    source_brief_ids: list[str]
+
+
+def build_roadmap_rows(state: State, *, phase_id_filter: str | None = None) -> list[RoadmapRow]:
+    """Project *state* into the ordered roadmap-row list.
+
+    Walks ``state.phases`` in ``id`` order (matching :mod:`roadmap` CLI
+    behaviour); when *phase_id_filter* is set only the matching phase is
+    returned. Wave count tallies every wave whose ``iter_id`` belongs to
+    the phase's ``iter_ids``.
+
+    Args:
+        state: The validated state document.
+        phase_id_filter: Restrict the rows to a single phase id, or
+            ``None`` to project every phase.
+
+    Returns:
+        The ordered :class:`RoadmapRow` list (possibly empty).
+    """
+    rows: list[RoadmapRow] = []
+    phases = sorted(state.phases.values(), key=lambda p: natural_key(p.id))
+    if phase_id_filter is not None:
+        phases = [p for p in phases if p.id == phase_id_filter]
+    for phase in phases:
+        iter_ids = [iid for iid in phase.iter_ids if iid in state.iters]
+        iter_id_set = set(iter_ids)
+        wave_count = sum(1 for w in state.waves.values() if w.iter_id in iter_id_set)
+        rows.append(
+            RoadmapRow(
+                id=phase.id,
+                status=phase.status.value,
+                title=phase.title,
+                depends_on=list(phase.depends_on),
+                wave_count=wave_count,
+                iter_ids=iter_ids,
+                source_brief_ids=list(phase.source_brief_ids),
+            )
+        )
+    return rows
+
+
+def render_roadmap_markdown(state: State, *, phase_id_filter: str | None = None) -> str:
+    """Render the roadmap-show markdown table from *state*.
+
+    Canonical markdown surface for ``eawf roadmap show --md`` after the
+    P28-W18 unification: the CLI's ``_render_show_md`` thin-wraps this
+    helper so the renderer lives in ``plan_view`` alongside per-iter
+    :func:`render_markdown`. Output is byte-stable: empty-state literal
+    when *state* has no phases (or none match the filter), otherwise a
+    pipe-delimited table with one row per phase.
+
+    Args:
+        state: The validated state document.
+        phase_id_filter: Restrict the rendered queue to one phase, or
+            ``None`` for the full queue.
+
+    Returns:
+        A markdown string — either the empty-state literal or the
+        rendered table.
+    """
+    rows = build_roadmap_rows(state, phase_id_filter=phase_id_filter)
+    if not rows:
+        return "_(no phases in state)_"
+    out = ["| Phase | Status | Waves | Depends on | Title |", "|---|---|---|---|---|"]
+    for row in rows:
+        deps = ", ".join(row.depends_on) or "—"
+        out.append(f"| `{row.id}` | `{row.status}` | {row.wave_count} | {deps} | {row.title} |")
+    return "\n".join(out)
+
+
+def render_phase_markdown(state: State, phase_id: str) -> str:
+    """Render *phase_id*'s plan as the per-iter ``plan_view`` markdown.
+
+    The body the Claude-runtime ``EnterPlanMode`` (and Codex
+    text-prompt) surfaces for ``/prep`` plan-mode: a phase header
+    followed by :func:`render_markdown` over each iter under the phase
+    so the operator reads the full DAG + wave table per iter from the
+    same renderer that ``eawf plan show`` uses. A phase missing from
+    *state* renders an empty-state line.
+
+    Args:
+        state: The validated state document.
+        phase_id: The target phase id (resolved against
+            ``state.phases``).
+
+    Returns:
+        A markdown string — either the empty-state literal or the
+        header + per-iter plan-view body.
+    """
+    phase = state.phases.get(phase_id) if state.phases else None
+    if phase is None:
+        return f"_(phase {phase_id!r} not in state)_"
+    out: list[str] = [
+        f"# Roadmap: {phase.id} — {phase.title}",
+        "",
+        f"> Status: {phase.status.value}",
+        "",
+    ]
+    rendered_any = False
+    for iter_id in phase.iter_ids:
+        if iter_id not in state.iters:
+            continue
+        try:
+            view = build_view(state, iter_id)
+        except PlanViewNotFound:
+            continue
+        out.append(render_markdown(view))
+        out.append("")
+        rendered_any = True
+    if not rendered_any:
+        out.append("_(no iters under phase)_")
+        out.append("")
+    return "\n".join(out).rstrip() + "\n"
 
 
 def render_markdown(
