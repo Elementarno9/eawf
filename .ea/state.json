@@ -1889,7 +1889,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
     "subproject_id": null
@@ -4963,7 +4963,7 @@
       "id": "P28-I02",
       "opened_at": "2026-05-26T18:07:39.063122Z",
       "phase_id": "P28",
-      "status": "planned",
+      "status": "active",
       "title": "lifecycle / EU / memory / IDs / observability",
       "wave_ids": [
         "P28-I02-W01",
@@ -5614,7 +5614,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T00:36:26.520923Z",
+  "updated_at": "2026-05-27T00:50:28.226496Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
