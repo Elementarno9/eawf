@@ -119,7 +119,8 @@ def parents_of(lifecycle_id: str) -> tuple[str, ...]:
     - Iter ID ``P03-I02`` → ``("P03",)``.
     - Wave ID ``P13-I04-W01`` → ``("P13", "P13-I04")``.
 
-    Raises ``ValueError`` if ``lifecycle_id`` does not match any lifecycle pattern.
+    Raises:
+        ValueError: ``lifecycle_id`` does not match any lifecycle pattern.
     """
     if is_phase_id(lifecycle_id):
         return ()

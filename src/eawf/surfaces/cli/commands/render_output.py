@@ -9,7 +9,7 @@ The command is the operator-facing edge of :mod:`eawf.surfaces.render.envelope`.
 Skills emit a JSON envelope; chat-runtime adapters pipe it through this
 command to produce a renderable markdown blob (and back again, e.g. to
 parse a hand-authored response into the canonical JSON shape for the
-state CLI).
+daemon-backed mutation surface).
 
 ``--strict`` is the loud-failure switch: malformed input raises
 :class:`~eawf.surfaces.cli.errors.ValidationError` (exit 4). Without ``--strict``

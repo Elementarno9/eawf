@@ -882,7 +882,7 @@ def roadmap_drop_cmd(
     phase_id: Annotated[str, typer.Argument(help="PLANNED phase id to archive.")],
 ) -> None:
     """Archive a PLANNED phase (PLANNED → ARCHIVED). Irreversible via the
-    state CLI; recover with ``git restore`` if needed."""
+    roadmap surface; recover with ``git restore`` if needed."""
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.transitions import LifecycleError, archive_phase
 

@@ -110,7 +110,7 @@ def _plugin_root(target: Path) -> Path:
 
 
 def _render_marketplace() -> bytes:
-    """Render ``marketplace.json`` per Codex marketplace schema.
+    """Render ``marketplace.json`` using the Codex marketplace schema.
 
     Required fields (from Codex Build-plugin reference):
     ``name``, ``interface.displayName``, ``plugins`` array with each

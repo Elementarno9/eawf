@@ -27,7 +27,7 @@ def _extract_cache_ratio(payload: dict[str, Any]) -> float | None:
 
     Probes (in order):
 
-    1. ``payload["token_usage"]`` mapping — primary location per Claude
+    1. ``payload["token_usage"]`` mapping — primary location from Claude
        Code's session info hook.
     2. ``payload["usage"]`` mapping.
     3. The flat payload itself (legacy shape).

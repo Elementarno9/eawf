@@ -247,12 +247,12 @@ def _render_skill(spec: SkillSpec) -> str:
 def _render_manifest() -> bytes:
     """Render the Codex-native ``.codex-plugin/plugin.json`` body.
 
-    Schema (per Codex Build-plugin reference): ``name``, ``version``,
-    ``description``, ``skills``, ``hooks``, plus the ``interface`` block
-    consumed by the Codex marketplace picker (display name, category,
-    short / long descriptions, default prompt). Codex has no top-level
-    ``agents`` key in ``plugin.json`` — agents live nested inside
-    skills, so no top-level ``agents/`` directory is emitted.
+    Schema follows the Codex plugin manifest reference: ``name``,
+    ``version``, ``description``, ``skills``, ``hooks``, plus the
+    ``interface`` block consumed by the Codex marketplace picker (display
+    name, category, short / long descriptions, default prompt). Codex has
+    no top-level ``agents`` key in ``plugin.json`` — agents live nested
+    inside skills, so no top-level ``agents/`` directory is emitted.
 
     URL fields (``websiteURL``, ``privacyPolicyURL``,
     ``termsOfServiceURL``) and asset paths (``composerIcon``, ``logo``)

@@ -130,8 +130,9 @@ def _commit_state(
 ) -> None:
     """Validate and atomically persist *state*.
 
-    Raises :class:`errors.ValidationError` on schema/invariant errors so the
-    mutation never lands on disk in an invalid form.
+    Raises:
+        errors.ValidationError: Schema or invariant validation failed before
+            persistence.
     """
     from eawf.kernel.validate.strict import validate_state
 

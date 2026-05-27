@@ -5,8 +5,8 @@ Public surface
 
 * :func:`load_spec` — read a yaml file, validate it against
   :class:`~eawf.workflow.audit_dsl.models.CheckFile`, return the typed
-  ``checks`` list. Raises :class:`~eawf.surfaces.cli.errors.UserError`
-  (``kind="InvalidInput"``) on missing file, bad yaml, or schema-mismatch.
+  ``checks`` list. Bad input is reported as
+  :class:`~eawf.surfaces.cli.errors.UserError` with ``kind="InvalidInput"``.
 * :func:`run_checks` — iterate the spec list, dispatch each via
   :data:`~eawf.workflow.audit_dsl.registry.CHECK_REGISTRY`, return the list
   of :class:`~eawf.workflow.audit_dsl.models.CheckResult` values.

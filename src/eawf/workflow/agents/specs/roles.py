@@ -13,8 +13,8 @@ verbatim — it does not re-author them — and layers the per-runtime
 placement note plus the typed-report store-kind pointer on top, so the
 registry stays the single source of truth for the contract text (DRY).
 
-Kept runtimes (per decision D12, v0.3-v0.5 scope): ``claude-code``,
-``codex``, ``opencode``. :meth:`RoleSpec.render` accepts one of those
+Kept runtimes for v0.3-v0.5: ``claude-code``, ``codex``, ``opencode``.
+:meth:`RoleSpec.render` accepts one of those
 ids and returns a runtime-tailored contract block; an unknown runtime id
 raises :class:`ValueError`. :func:`render_role_contract` is the
 free-function entry point used by callers that hold a role + runtime
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 #: Runtimes the role library renders to. Pinned to the v0.3-v0.5 kept set
-#: (decision D12) and ordered to match
+#: and ordered to match
 #: :data:`eawf.runtime.runtimes.capabilities.RUNTIME_IDS`.
 KEPT_RUNTIMES: tuple[RuntimeId, ...] = ("claude-code", "codex", "opencode")
 

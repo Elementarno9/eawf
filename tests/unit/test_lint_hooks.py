@@ -376,6 +376,14 @@ def test_eawf012_design_provenance_cli_blocks(tmp_path: Path) -> None:
     assert "EAWF012" in result.stdout
 
 
+def test_eawf012_design_provenance_cli_blocks_docstrings(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text('"""per Q12 during implementation."""\n')
+    result = runner.invoke(app, ["hook", "eawf012-design-provenance", str(bad)])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF012" in result.stdout
+
+
 def test_eawf013_bracket_position_cli_blocks(tmp_path: Path) -> None:
     bad = tmp_path / "bad.md"
     bad.write_text("A claim ends. [1]\n\n## References\n\n[1] `src/x.py`\n")

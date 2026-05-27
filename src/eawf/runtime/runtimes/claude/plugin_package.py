@@ -19,15 +19,15 @@ Crucially, this tree carries NO ``.claude/`` prefix, NO ``settings.json``,
 and NO ``.ea/`` — it is a self-contained plugin, not a per-repo workspace
 render.
 
-Per P13 W05 (B015), the packaged tree now ALSO emits a session-level
-``hooks.json`` at the plugin root plus the corresponding wrapper scripts
-under ``hooks/``. Only the six session-level events Claude Code can
-observe reliably (``SessionStart``, ``Stop``, ``PreToolUse``/
-``PostToolUse`` on bash ``git commit``/``git push``) appear in the
-manifest — workflow-internal lifecycle events (``wave_*``, ``iter_*``,
-``phase_*``, ``*_audit``) stay fired by the state CLI through
-``eawf hook run`` because CC's ``UserPromptSubmit`` matcher cannot
-observe slash-command sub-skill dispatch or agent-driven state writes.
+The packaged tree also emits a session-level ``hooks.json`` at the plugin
+root plus the corresponding wrapper scripts under ``hooks/``. Only the six
+session-level events Claude Code can observe reliably (``SessionStart``,
+``Stop``, ``PreToolUse``/``PostToolUse`` on bash ``git commit``/``git push``)
+appear in the manifest — workflow-internal lifecycle events (``wave_*``,
+``iter_*``, ``phase_*``, ``*_audit``) stay fired by explicit
+``eawf hook run`` calls from the lifecycle surfaces because CC's
+``UserPromptSubmit`` matcher cannot observe slash-command sub-skill
+dispatch or daemon-proxied state writes.
 
 Public API::
 
@@ -454,8 +454,8 @@ def package_plugin(
 
     # Pre-render hooks.json + per-event wrappers (B015). Only the six
     # session-level events in PLUGIN_HOOK_REGISTRY are emitted; the
-    # workflow-internal lifecycle events stay fired by the state CLI
-    # through ``eawf hook run`` (see hook_map.py for the rationale).
+    # workflow-internal lifecycle events stay fired by explicit
+    # ``eawf hook run`` calls (see hook_map.py for the rationale).
     hooks_manifest: str | None = None
     hook_outputs: list[tuple[Path, str]] = []
     if include_hooks:

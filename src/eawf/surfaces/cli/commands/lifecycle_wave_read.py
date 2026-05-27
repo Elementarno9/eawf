@@ -91,9 +91,8 @@ def _topo_order_with_depth(waves: list[tuple[str, list[str]]]) -> list[tuple[str
                 bisect.insort(ready, child, key=natural_key)
             else:
                 depth[child] = max(depth[child], depth[node] + 1)
-    # Any nodes left unprocessed (cycles) get appended at the end in id order
-    # — defensive: ``plan_wave`` rejects cycles, so this branch is unreachable
-    # for state.json produced by the state CLI alone.
+    # Any nodes left unprocessed (cycles) get appended at the end in id order.
+    # Defensive only: ``plan_wave`` rejects cycles before state reaches disk.
     remaining = sorted((wid for wid in ids if wid not in {n for n, _ in order}), key=natural_key)
     for wid in remaining:
         order.append((wid, depth[wid]))

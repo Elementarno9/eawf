@@ -127,8 +127,8 @@ PLANNED-queue state:
      `planner` agent (`build/eawf-plugin/agents/planner.md`). The
      planner returns a sequence of `eawf roadmap revise --add-wave`
      commands (or a YAML payload). **Apply the planner's commands
-     first** through the state CLI — waves land as PENDING on the
-     still-PLANNED iter — then render the resulting DAG via
+     first** through the daemon-backed roadmap surface — waves land as
+     PENDING on the still-PLANNED iter — then render the resulting DAG via
      `eawf roadmap show --phase <id> --md` and enter Claude Code
      plan mode (`EnterPlanMode`) with that rendering. Surface
      `AskUserQuestion` with `approve`, `edit`, `cancel`. The
@@ -407,8 +407,8 @@ _ROADMAP_BODY = """# /roadmap
 
 ## Pre-flight checklist
 
-- [ ] State CLI is the only mutator; `state.json` writes happen
-      inside `state_transaction` so the sibling lock is held.
+- [ ] The daemon is the canonical mutator; roadmap commands proxy
+      state mutations through its single-writer path.
 - [ ] Brief ids passed via `--from-briefs` should be promoted
       research artefacts (RES-YYYY-MM-DD-NNN).
 - [ ] One phase at a time. Bulk-propose is deferred.
@@ -812,7 +812,7 @@ companion, never the source of truth.
    chain is reconstructible (research-workflow rule).
 - Keep prose scrub-clean: no machine paths, hostnames, or PII; references
    stay repo-relative, an external URL, or an Eä URN.
-- The ADR records WHY; provenance ids (audit, roundtable) live in the
+- The ADR records WHY; provenance ids from audits and review discussions live in the
    decision row and the commit body, not in source comments (rule 25).
 """
 

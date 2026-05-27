@@ -24,10 +24,26 @@ def test_eawf012_flags_design_provenance_comments() -> None:
     assert violations[0].lineno == 3
 
 
-def test_eawf012_ignores_docstrings_and_ordinary_comments() -> None:
+def test_eawf012_flags_design_provenance_docstrings() -> None:
     source = textwrap.dedent(
         '''
-        """per Q12 is documentation prose here, not a source comment."""
+        """per Q12 this branch is operator-approved."""
+
+        def run() -> None:
+            # Explain why the branch exists.
+            pass
+        '''
+    )
+    violations = check_012(source)
+    assert len(violations) == 1
+    assert violations[0].code == "EAWF012"
+    assert violations[0].lineno == 2
+
+
+def test_eawf012_ignores_ordinary_docstrings_and_comments() -> None:
+    source = textwrap.dedent(
+        '''
+        """Explain module behavior without implementation provenance."""
 
         def run() -> None:
             # Explain why the branch exists.

@@ -1231,8 +1231,8 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     apply_func = _resolve_apply(mutation.kind)
 
     # The portalock keeps the daemon's defense-in-depth guard live
-    # (rule 4 V1 carve-out); concurrent CLI fallback writers serialise
-    # against it just like they did pre-daemon.
+    # (rule 4 V1 carve-out); concurrent recovery writers serialise
+    # against it through the same lock path.
     from eawf.runtime.lock import portalock
 
     ctx.in_flight_mutations += 1

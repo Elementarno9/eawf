@@ -91,7 +91,9 @@ class Urn:
 def parse(raw: str) -> Urn:
     """Parse a ``urn:eawf:v1:*`` string into a :class:`Urn`.
 
-    Raises ``ValueError`` for malformed strings, unknown kinds, or unsupported versions.
+    Raises:
+        ValueError: ``raw`` is malformed, has an unknown kind, or uses an
+            unsupported version.
     """
     match = _URN_RE.match(raw)
     if not match:

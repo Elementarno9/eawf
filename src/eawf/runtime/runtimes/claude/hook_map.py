@@ -4,11 +4,11 @@ Per Phase 13 W05 (B015), the Claude Code plugin tree emitted by
 :func:`eawf.runtime.runtimes.claude.plugin_package.package_plugin` carries a
 ``hooks.json`` manifest that subscribes only to **session-level** Claude
 Code events. Workflow-internal lifecycle events (``wave_*``, ``iter_*``,
-``phase_*``, ``*_audit``) stay fired by the state CLI through
-``eawf hook run`` — Claude Code's ``UserPromptSubmit`` matcher cannot
-observe slash-command sub-skill dispatch, and agent calls to the state
-CLI never emit a prompt at all, so a manifest-level subscription would
-be lossy in both directions.
+``phase_*``, ``*_audit``) stay fired by explicit ``eawf hook run`` calls
+from the lifecycle surfaces — Claude Code's ``UserPromptSubmit`` matcher
+cannot observe slash-command sub-skill dispatch, and daemon-proxied state
+mutations never emit a prompt at all, so a manifest-level subscription
+would be lossy in both directions.
 
 The six session-level events Claude Code CAN observe reliably:
 

@@ -9,7 +9,7 @@ Public API:
   is rendered from a typed spec rather than ad-hoc string concatenation.
 - :class:`~eawf.workflow.agents.specs.roles.RoleSpec` + :data:`ROLE_REGISTRY` —
   the role library. Each role renders a contract block to every kept
-  runtime (``claude-code`` / ``codex`` / ``opencode`` per decision D12)
+  runtime (``claude-code`` / ``codex`` / ``opencode``)
   via :meth:`RoleSpec.render` / :func:`render_role_contract`.
 
 All rendering is pure — no I/O, no logging side-effects beyond the

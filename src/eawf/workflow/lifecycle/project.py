@@ -25,7 +25,11 @@ def add_subproject(
     title: str,
     domains: list[str] | None = None,
 ) -> Subproject:
-    """Add a new subproject. Raises if ``code`` already exists."""
+    """Add a new subproject.
+
+    Raises:
+        LifecycleError: State has no project or ``code`` already exists.
+    """
     if state.project is None:
         raise LifecycleError("cannot add subproject: state has no project")
     if state.subprojects is None:
@@ -49,7 +53,11 @@ def add_subproject(
 
 
 def switch_subproject(state: State, *, code: str) -> None:
-    """Set ``current.subproject_id`` to *code*. Raises if unknown."""
+    """Set ``current.subproject_id`` to *code*.
+
+    Raises:
+        LifecycleError: ``code`` is unknown.
+    """
     if state.subprojects is None or code not in state.subprojects:
         raise LifecycleError(f"unknown subproject {code!r}")
     state.current.subproject_id = code

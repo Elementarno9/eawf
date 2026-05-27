@@ -141,7 +141,8 @@ wave_app.add_typer(wave_budget_app, name="budget")
 def _read_state_payload(path: Path) -> dict[str, Any]:
     """Read and JSON-decode *path*.
 
-    Raises ``cli_errors.UserError`` (``kind="NotFound"``) on miss.
+    Raises:
+        cli_errors.UserError: State file does not exist.
     """
     if not path.exists():
         raise cli_errors.UserError(f"state file not found: {path}", kind="NotFound")
