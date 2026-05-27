@@ -57,6 +57,8 @@ def _bootstrap_with_parent(workspace: Path) -> str:
             "parent wave",
             "--files",
             "src/eawf/foo.py",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.stdout

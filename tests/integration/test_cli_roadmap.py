@@ -207,6 +207,8 @@ def test_roadmap_revise_set_deps(workspace: Path) -> None:
                 f"feat: {wid}",
                 "--files",
                 "src/",
+                "--effort-bucket",
+                "M",
             ],
         )
     res = runner.invoke(
@@ -232,6 +234,8 @@ def test_roadmap_revise_remove_wave(workspace: Path) -> None:
             "feat: a",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["roadmap", "revise", "P21", "--remove-wave", "W01"])
@@ -285,6 +289,8 @@ def _propose_with_wave(workspace: Path) -> None:
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
 
@@ -398,6 +404,8 @@ def test_roadmap_revise_active_phase_add_wave_allowed(workspace: Path) -> None:
             "feat: extra",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -456,6 +464,8 @@ def test_roadmap_apply_requires_wave(workspace: Path) -> None:
             "feat: a",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["roadmap", "apply", "P21"])
@@ -467,7 +477,19 @@ def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Pat
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
     runner.invoke(
         app,
-        ["roadmap", "revise", "P21", "--add-wave", "W01", "--title", "feat: a", "--files", "src/a"],
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: a",
+            "--files",
+            "src/a",
+            "--effort-bucket",
+            "M",
+        ],
     )
     runner.invoke(
         app,
@@ -483,6 +505,8 @@ def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Pat
             "src/b",
             "--deps",
             "W01",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["--json", "roadmap", "apply", "P21"])
@@ -554,7 +578,19 @@ def test_roadmap_drop_cascades_pending_waves_to_abandoned(workspace: Path) -> No
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
     runner.invoke(
         app,
-        ["roadmap", "revise", "P21", "--add-wave", "W01", "--title", "feat: a", "--files", "src/"],
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: a",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
     )
     res = runner.invoke(app, ["roadmap", "drop", "P21"])
     assert res.exit_code == 0, res.output
@@ -596,6 +632,8 @@ def test_roadmap_show_rich_renders_phases_iters_waves(workspace: Path) -> None:
             "feat: alpha",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["roadmap", "show"])
@@ -626,6 +664,8 @@ def test_roadmap_show_plain_fallback(workspace: Path) -> None:
             "feat: alpha",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["--plain", "roadmap", "show"])
@@ -666,6 +706,8 @@ def test_roadmap_show_active_phase_not_stale(workspace: Path) -> None:
             "feat: alpha",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     # Backdate + flip to ACTIVE so the freshness check would trip if it
@@ -698,6 +740,8 @@ def test_roadmap_show_dormant_iter_marked(workspace: Path) -> None:
             "feat: alpha",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     state_path = workspace / ".ea" / "state.json"
@@ -743,6 +787,8 @@ def test_phase_activate_planned_phase(workspace: Path) -> None:
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["phase", "activate", "P21"])
@@ -776,6 +822,8 @@ def test_phase_activate_dirty_worktree_rejected(workspace: Path) -> None:
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     # Leave an untracked file in the worktree so the porcelain check trips.
@@ -808,6 +856,8 @@ def test_phase_activate_behind_upstream_rejected(workspace: Path, tmp_path: Path
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     # Commit roadmap mutations so the dirty gate does not mask the currency gate.
@@ -840,6 +890,8 @@ def test_phase_activate_allow_stale_bypasses_currency_gate(workspace: Path, tmp_
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     _commit_state_changes(workspace, msg="seed roadmap")
@@ -866,6 +918,8 @@ def test_phase_activate_local_only_branch_skips_currency_check(workspace: Path) 
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     _commit_state_changes(workspace, msg="seed roadmap")
@@ -911,6 +965,8 @@ def test_roadmap_revise_emits_event(workspace: Path) -> None:
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     events = _read_events(workspace)
@@ -940,6 +996,8 @@ def test_wave_show_commit_returns_sha_when_present(workspace: Path) -> None:
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["wave", "show", "P21-I01-W01", "--commit"])
@@ -968,6 +1026,8 @@ def test_wave_claim_out_of_order_flag_overrides_monotonic_gate(workspace: Path) 
                 f"feat: {wid}",
                 "--files",
                 "src/",
+                "--effort-bucket",
+                "M",
             ],
         )
     # Default claim of W02 is rejected because W01 is still PENDING + ready.
@@ -996,6 +1056,8 @@ def test_iter_activate_planned_iter(workspace: Path) -> None:
             "feat: foo",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["phase", "activate", "P21"])
@@ -1090,6 +1152,8 @@ def test_roadmap_revise_add_wave_persists_description(workspace: Path) -> None:
             "src/",
             "--description",
             "wave-level narrative for the add",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -1112,6 +1176,8 @@ def test_roadmap_revise_retitle_wave_with_description(workspace: Path) -> None:
             "feat: w",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(
@@ -1235,6 +1301,8 @@ def test_wave_plan_persists_description(workspace: Path) -> None:
             "src/",
             "--description",
             "wave-plan description landing through the planner",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -1261,6 +1329,8 @@ def test_roadmap_revise_add_wave_description_over_cap_rejected(workspace: Path) 
             "src/",
             "--description",
             "z" * 501,
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code != 0

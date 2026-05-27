@@ -78,6 +78,7 @@ def _seed_single_wave(state: State, wave_id: str = "P01-I01-W01") -> None:
         iter_id="P01-I01",
         title="Solo wave",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
 
 

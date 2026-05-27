@@ -221,6 +221,7 @@ def test_build_subagent_spec_role_contract_none_when_no_role() -> None:
         iter_id="P01-I01",
         title="Roleless wave",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     spec = build_subagent_spec(state, "P01-I01-W01")
     assert spec.role_contract is None
@@ -289,6 +290,7 @@ def test_render_wave_prompt_no_role_omits_role_contract_section() -> None:
         iter_id="P01-I01",
         title="Roleless wave",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     prompt = render_wave_prompt(state, "P01-I01-W01")
     assert "## Role contract" not in prompt

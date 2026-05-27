@@ -68,6 +68,8 @@ def _bootstrap_chain(workspace: Path) -> None:
             "Solo wave",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.stdout

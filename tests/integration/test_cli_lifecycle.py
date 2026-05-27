@@ -220,6 +220,8 @@ def test_phase_close_happy(workspace: Path) -> None:
             "w",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
@@ -262,6 +264,8 @@ def test_phase_close_single_closed_wave_without_decision_exits_4(workspace: Path
             "w",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
@@ -299,6 +303,8 @@ def test_phase_reopen_happy_allows_followup_iter(workspace: Path) -> None:
             "w",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
@@ -389,6 +395,8 @@ def test_iter_close_with_pending_wave_exits_4(workspace: Path) -> None:
             "w",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-1"])
@@ -474,6 +482,8 @@ def test_wave_plan_happy(workspace: Path) -> None:
             "Implement allocator",
             "--files",
             "src/eawf/lifecycle/",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.stdout
@@ -496,6 +506,8 @@ def test_wave_plan_id_iter_mismatch_exits_3(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 1
@@ -516,6 +528,8 @@ def test_wave_plan_closed_iter_exits_3(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     # closure invariant fires before structural; either way must be non-zero
@@ -537,6 +551,8 @@ def test_wave_claim_happy(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(
@@ -567,6 +583,8 @@ def test_wave_claim_invalid_policy_exits_3(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     res = runner.invoke(
@@ -598,6 +616,8 @@ def test_wave_close_without_outcome_exits_3(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
@@ -619,6 +639,8 @@ def test_wave_close_happy(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
@@ -652,6 +674,8 @@ def test_wave_fail_without_reason_exits_3(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
@@ -673,6 +697,8 @@ def test_wave_fail_happy(workspace: Path) -> None:
             "x",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
@@ -715,6 +741,8 @@ def _bootstrap_update_pending_wave(
                 "w",
                 "--files",
                 files_csv,
+                "--effort-bucket",
+                "M",
             ],
         ).exit_code
         == 0
@@ -940,6 +968,8 @@ def test_full_lifecycle_emits_events(workspace: Path) -> None:
             "W1",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])

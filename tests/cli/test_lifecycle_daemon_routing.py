@@ -100,7 +100,19 @@ def _bootstrap_to_pending_wave(workspace: Path, wave_id: str = "P01-I01-W01") ->
     assert (
         runner.invoke(
             app,
-            ["wave", "plan", "P01-I01", "--id", wave_id, "--title", "w", "--files", "src/"],
+            [
+                "wave",
+                "plan",
+                "P01-I01",
+                "--id",
+                wave_id,
+                "--title",
+                "w",
+                "--files",
+                "src/",
+                "--effort-bucket",
+                "M",
+            ],
         ).exit_code
         == 0
     )
@@ -162,7 +174,19 @@ def _enable_proxy(monkeypatch: pytest.MonkeyPatch, *, client: type) -> None:
 _ROUTED_VERBS: list[tuple[str, list[str], MutationKind, str]] = [
     (
         "wave_plan",
-        ["wave", "plan", "P01-I01", "--id", "P01-I01-W02", "--title", "w2", "--files", "src/"],
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W02",
+            "--title",
+            "w2",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
         MutationKind.ROADMAP_REVISE,
         "P01-I01-W02",
     ),
@@ -361,7 +385,19 @@ def test_next_mutation_reissues_applied_event_after_crash(
     # re-issues the prior .applied record's envelope.
     res2 = runner.invoke(
         app,
-        ["wave", "plan", "P01-I01", "--id", "P01-I01-W02", "--title", "w2", "--files", "src/"],
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W02",
+            "--title",
+            "w2",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
     )
     assert res2.exit_code == 0, res2.stdout
 

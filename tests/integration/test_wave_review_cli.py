@@ -52,6 +52,8 @@ def _bootstrap_wave(workspace: Path, wave_id: str = "P01-I01-W01") -> None:
             f"title-{wave_id}",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.stdout

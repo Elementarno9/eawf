@@ -86,6 +86,7 @@ def _seed_chain(state: State) -> None:
         iter_id="P01-I01",
         title="First wave",
         file_scopes=["src/foo/", "tests/unit/test_foo.py"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -94,6 +95,7 @@ def _seed_chain(state: State) -> None:
         title="Second wave",
         file_scopes=["src/bar/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
 
 
@@ -173,6 +175,7 @@ def test_render_minimal_wave_prompt() -> None:
         iter_id="P01-I01",
         title="Solo wave",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     out = render_wave_prompt(state, "P01-I01-W01")
     # Required section headers.

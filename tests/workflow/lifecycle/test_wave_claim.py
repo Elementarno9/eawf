@@ -1,10 +1,10 @@
 """Tests for the ``effort_bucket`` claim-time gate on :func:`claim_wave`.
 
-The wave-lifecycle gate (P28-I02-W16) rejects a claim when the wave was
-planned without an ``effort_bucket``: estimates, variance, and the
-EU-projection table all key off that field, so a bucketless wave silently
-degrades the dispatch + reporting story. The error message points the
-operator at the one-line fix (``eawf roadmap revise --set-bucket``).
+The wave-lifecycle gate (P28-I02-W16) rejects a claim when a legacy wave
+record has no ``effort_bucket``: estimates, variance, and the EU-projection
+table all key off that field, so a bucketless wave silently degrades the
+dispatch + reporting story. The error message points the operator at the
+one-line fix (``eawf roadmap revise --set-bucket``).
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def _seed_wave_state() -> State:
 
 
 def test_claim_wave_rejects_when_effort_bucket_none() -> None:
-    """A wave planned without an ``effort_bucket`` cannot be claimed.
+    """A wave record without an ``effort_bucket`` cannot be claimed.
 
     The gate surfaces the canonical one-line fix
     (``eawf roadmap revise --set-bucket``) in the error message so the
@@ -77,8 +77,9 @@ def test_claim_wave_rejects_when_effort_bucket_none() -> None:
         iter_id="P01-I01",
         title="w",
         file_scopes=["src/"],
-        effort_bucket=None,
+        effort_bucket=EffortBucket.M,
     )
+    state.waves["P01-I01-W01"].effort_bucket = None
     with pytest.raises(LifecycleError, match="effort_bucket"):
         claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     # Also assert the operator-facing fix is named in the message so the

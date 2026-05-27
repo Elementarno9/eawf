@@ -96,6 +96,7 @@ def _seed_claimed_wave(state: State, *, criteria: list[str] | None = None) -> No
         title="wave",
         file_scopes=["src/"],
         success_criteria=criteria or [],
+        effort_bucket="M",
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
 
@@ -145,6 +146,8 @@ def test_close_and_pin_calls_compute_after_close_wave(
                 "src/",
                 "--success",
                 "legacy a",
+                "--effort-bucket",
+                "M",
             ],
         ).exit_code
         == 0

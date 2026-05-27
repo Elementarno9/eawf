@@ -57,6 +57,8 @@ def _bootstrap_pending_wave(workspace: Path, wave_id: str = "P01-I01-W01") -> No
                 "w",
                 "--files",
                 "src/",
+                "--effort-bucket",
+                "M",
             ],
         ).exit_code
         == 0

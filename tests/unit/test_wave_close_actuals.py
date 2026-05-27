@@ -33,6 +33,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
+from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.transitions import (
     claim_wave,
     close_wave,
@@ -78,7 +79,7 @@ def _seed_wave(
     wave_id: str = "P01-I01-W01",
     effort_bucket: EffortBucket | None = EffortBucket.M,
 ) -> None:
-    """Plan a phase -> iter -> single wave with *effort_bucket* set."""
+    """Plan a phase -> iter -> single wave for estimate/actual tests."""
     open_phase(state, phase_id="P01", title="x")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
     plan_wave(
@@ -87,8 +88,10 @@ def _seed_wave(
         iter_id="P01-I01",
         title="w",
         file_scopes=["src/"],
-        effort_bucket=effort_bucket,
+        effort_bucket=effort_bucket or EffortBucket.M,
     )
+    if effort_bucket is None:
+        state.waves[wave_id].effort_bucket = None
 
 
 # ---- default_estimate_summary (pure helper) ---------------------------------
@@ -138,14 +141,14 @@ def test_claim_wave_seeds_default_estimate_from_bucket() -> None:
     assert est.scope_id == "P01-I01-W01"
 
 
-def test_claim_wave_no_bucket_writes_no_estimate() -> None:
+def test_claim_wave_no_bucket_rejects_before_estimate() -> None:
     state = _empty_state()
     _seed_wave(state, effort_bucket=None)
 
-    with pytest.raises(Exception, match="has no effort_bucket"):
+    with pytest.raises(LifecycleError, match="effort_bucket"):
         claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
 
-    # No bucket -> claim is rejected before any estimate can be seeded.
+    # Rejected claim -> no estimate seeded; the dict stays None/empty.
     assert not (state.estimates or {})
 
 

@@ -103,10 +103,38 @@ def test_wave_many_blockers_hint() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
-    plan_wave(state, wave_id="P03-I01-W01", iter_id="P03-I01", title="dep1", file_scopes=["x"])
-    plan_wave(state, wave_id="P03-I01-W02", iter_id="P03-I01", title="dep2", file_scopes=["x"])
-    plan_wave(state, wave_id="P03-I01-W03", iter_id="P03-I01", title="dep3", file_scopes=["x"])
-    plan_wave(state, wave_id="P03-I01-W04", iter_id="P03-I01", title="dep4", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P03-I01-W01",
+        iter_id="P03-I01",
+        title="dep1",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
+    plan_wave(
+        state,
+        wave_id="P03-I01-W02",
+        iter_id="P03-I01",
+        title="dep2",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
+    plan_wave(
+        state,
+        wave_id="P03-I01-W03",
+        iter_id="P03-I01",
+        title="dep3",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
+    plan_wave(
+        state,
+        wave_id="P03-I01-W04",
+        iter_id="P03-I01",
+        title="dep4",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
     plan_wave(
         state,
         wave_id="P03-I01-W05",
@@ -114,6 +142,7 @@ def test_wave_many_blockers_hint() -> None:
         title="dependent",
         file_scopes=["y"],
         deps=["P03-I01-W01", "P03-I01-W02", "P03-I01-W03", "P03-I01-W04"],
+        effort_bucket="M",
     )
     hints = _compute_iter_bump_hints(state, phase_id="P03")
     assert "wave_with_many_blockers" in hints
@@ -130,6 +159,7 @@ def test_phase_scope_expansion_hint() -> None:
             iter_id="P03-I01",
             title=f"w{n}",
             file_scopes=["x"],
+            effort_bucket="M",
         )
     _add_audit(state, audit_id="A77-P03", verdict=AuditVerdict.PASS)
     # Close iter requires no open waves; force-mark via direct mutation.

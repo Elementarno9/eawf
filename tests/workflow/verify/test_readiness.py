@@ -100,6 +100,7 @@ def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> No
         title="wave",
         file_scopes=["src/"],
         success_criteria=success_criteria or [],
+        effort_bucket="M",
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
 
@@ -920,6 +921,8 @@ def test_seams_dont_block_on_failing_deterministic_gate(
                 "src/",
                 "--success",
                 "legacy",
+                "--effort-bucket",
+                "M",
             ],
         ).exit_code
         == 0

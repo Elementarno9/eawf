@@ -90,7 +90,14 @@ def test_prepare_close_flags_open_wave() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
-    plan_wave(state, wave_id="P03-I01-W01", iter_id="P03-I01", title="w", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P03-I01-W01",
+        iter_id="P03-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
     out = _phase_prepare_close_checklist(state, phase_id="P03")
     assert out["ok"] is False
     assert out["open_waves"] == ["P03-I01-W01"]
@@ -119,7 +126,14 @@ def test_prepare_close_flags_closed_wave_missing_commit(
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
-    plan_wave(state, wave_id="P03-I01-W01", iter_id="P03-I01", title="w", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P03-I01-W01",
+        iter_id="P03-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
     w.closed_at = datetime.now(UTC)
@@ -138,7 +152,14 @@ def test_prepare_close_flags_single_wave_without_decision(
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
-    plan_wave(state, wave_id="P03-I01-W01", iter_id="P03-I01", title="w", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P03-I01-W01",
+        iter_id="P03-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
     w.closed_at = datetime.now(UTC)
@@ -167,7 +188,14 @@ def test_prepare_close_allows_single_wave_with_scope_collapse_decision(
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     open_iter(state, iter_id="P03-I01", phase_id="P03", title="i")
-    plan_wave(state, wave_id="P03-I01-W01", iter_id="P03-I01", title="w", file_scopes=["x"])
+    plan_wave(
+        state,
+        wave_id="P03-I01-W01",
+        iter_id="P03-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
     w.closed_at = datetime.now(UTC)

@@ -60,6 +60,8 @@ def _bootstrap_diamond(workspace: Path) -> None:
             f"title-{wid}",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ]
         if deps is not None:
             args.extend(["--deps", deps])

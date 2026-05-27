@@ -56,6 +56,8 @@ def _bootstrap_wave(workspace: Path) -> str:
             "ship-gate-fixture-wave",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 0, res.stdout

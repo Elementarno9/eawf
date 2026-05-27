@@ -52,6 +52,8 @@ def _bootstrap_chain(workspace: Path) -> None:
             f"title-{wid}",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ]
         if deps is not None:
             args.extend(["--deps", deps])
@@ -223,6 +225,8 @@ def test_wave_plan_self_dep_exits_invalid_input(workspace: Path) -> None:
             "src/",
             "--deps",
             "P01-I01-W04",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert res.exit_code == 1, res.stdout

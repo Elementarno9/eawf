@@ -73,6 +73,7 @@ def test_plan_wave_appends_to_blocks_index() -> None:
         iter_id="P01-I01",
         title="W2",
         file_scopes=["src/foo/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -81,6 +82,7 @@ def test_plan_wave_appends_to_blocks_index() -> None:
         title="W1",
         file_scopes=["src/bar/"],
         deps=["P01-I01-W02"],
+        effort_bucket="M",
     )
     assert state.waves["P01-I01-W02"].blocks == ["P01-I01-W01"]
     assert state.waves["P01-I01-W01"].deps == ["P01-I01-W02"]
@@ -97,6 +99,7 @@ def test_plan_wave_blocks_index_multi_dependents() -> None:
         iter_id="P01-I01",
         title="W1",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -105,6 +108,7 @@ def test_plan_wave_blocks_index_multi_dependents() -> None:
         title="W2",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -113,6 +117,7 @@ def test_plan_wave_blocks_index_multi_dependents() -> None:
         title="W3",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02", "P01-I01-W03"]
 
@@ -131,6 +136,7 @@ def test_plan_wave_idempotent_blocks() -> None:
         iter_id="P01-I01",
         title="W2",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -139,6 +145,7 @@ def test_plan_wave_idempotent_blocks() -> None:
         title="W1",
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
+        effort_bucket="M",
     )
     # Re-plan with the same id must error.
     with pytest.raises(LifecycleError, match="already exists"):
@@ -149,6 +156,7 @@ def test_plan_wave_idempotent_blocks() -> None:
             title="W1-bis",
             file_scopes=["src/"],
             deps=["P01-I01-W02"],
+            effort_bucket="M",
         )
     assert state.waves["P01-I01-W02"].blocks == ["P01-I01-W01"]
 
@@ -167,6 +175,7 @@ def test_plan_wave_self_dep_refused() -> None:
             title="W1",
             file_scopes=["src/"],
             deps=["P01-I01-W01"],
+            effort_bucket="M",
         )
 
 
@@ -199,6 +208,7 @@ def test_plan_wave_cycle_refused() -> None:
         iter_id="P01-I01",
         title="W1",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -207,6 +217,7 @@ def test_plan_wave_cycle_refused() -> None:
         title="W2",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     # Forge a back-edge: pretend W01 already depends on a (yet-to-be-planned) W03.
     # plan_wave then tries to insert W03 with deps=[W02]; that closes the loop
@@ -220,6 +231,7 @@ def test_plan_wave_cycle_refused() -> None:
             title="W3",
             file_scopes=["src/"],
             deps=["P01-I01-W02"],
+            effort_bucket="M",
         )
     # The forged back-edge should leave state.waves[W03] absent (rollback).
     assert "P01-I01-W03" not in state.waves
@@ -236,6 +248,7 @@ def test_plan_wave_unknown_dep_already_refused() -> None:
             title="W1",
             file_scopes=["src/"],
             deps=["P01-I01-W99"],
+            effort_bucket="M",
         )
 
 
@@ -251,6 +264,7 @@ def test_plan_wave_chain_persists_blocks_and_deps() -> None:
         iter_id="P01-I01",
         title="A",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -259,6 +273,7 @@ def test_plan_wave_chain_persists_blocks_and_deps() -> None:
         title="B",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -267,6 +282,7 @@ def test_plan_wave_chain_persists_blocks_and_deps() -> None:
         title="C",
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
+        effort_bucket="M",
     )
     assert state.waves["P01-I01-W01"].deps == []
     assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02"]
@@ -285,6 +301,7 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         iter_id="P01-I01",
         title="A",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -293,6 +310,7 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         title="B",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")

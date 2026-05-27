@@ -70,6 +70,8 @@ def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
             "W1",
             "--files",
             "src/foo.py",
+            "--effort-bucket",
+            "M",
         ],
     )
     assert r.exit_code == 0, r.output

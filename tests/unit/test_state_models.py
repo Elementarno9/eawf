@@ -74,6 +74,7 @@ def _seed_chain() -> State:
         iter_id="P01-I01",
         title="A",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -82,6 +83,7 @@ def _seed_chain() -> State:
         title="B",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -90,6 +92,7 @@ def _seed_chain() -> State:
         title="C",
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
+        effort_bucket="M",
     )
     return state
 
@@ -105,6 +108,7 @@ def _seed_diamond() -> State:
         iter_id="P01-I01",
         title="A",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -113,6 +117,7 @@ def _seed_diamond() -> State:
         title="B",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -121,6 +126,7 @@ def _seed_diamond() -> State:
         title="C",
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
+        effort_bucket="M",
     )
     plan_wave(
         state,
@@ -129,6 +135,7 @@ def _seed_diamond() -> State:
         title="D",
         file_scopes=["src/"],
         deps=["P01-I01-W02", "P01-I01-W03"],
+        effort_bucket="M",
     )
     return state
 
@@ -357,6 +364,7 @@ def test_edges_for_iter_filters_by_iter_id() -> None:
         iter_id="P01-I02",
         title="X",
         file_scopes=["src/"],
+        effort_bucket="M",
     )
     result = wave_graph.edges_for_iter("P01-I01", state)
     assert "P01-I02-W01" not in result

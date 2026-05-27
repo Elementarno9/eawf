@@ -110,6 +110,7 @@ def _seed_wave_with_operator(state: State) -> None:
         title="wave",
         file_scopes=["src/"],
         success_criteria=[],
+        effort_bucket="M",
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
 
@@ -136,6 +137,7 @@ def _seed_wave_with_executor(state: State) -> None:
         title="wave",
         file_scopes=["src/"],
         success_criteria=[],
+        effort_bucket="M",
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
 
@@ -646,6 +648,8 @@ def _bootstrap_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[obj
                 "wave",
                 "--files",
                 "src/",
+                "--effort-bucket",
+                "M",
             ],
         ).exit_code
         == 0

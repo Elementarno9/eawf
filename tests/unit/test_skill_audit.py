@@ -241,6 +241,7 @@ def _seed_state_with_wave(
         title="Wave under audit",
         file_scopes=file_scopes,
         success_criteria=success_criteria,
+        effort_bucket="M",
     )
     (state_dir / "state.json").write_text(
         json.dumps(state.model_dump(mode="json")), encoding="utf-8"

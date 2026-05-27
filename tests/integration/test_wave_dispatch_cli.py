@@ -52,6 +52,8 @@ def _bootstrap_chain(workspace: Path) -> None:
             f"title-{wid}",
             "--files",
             "src/",
+            "--effort-bucket",
+            "M",
         ]
         if deps is not None:
             args.extend(["--deps", deps])
