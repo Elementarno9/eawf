@@ -11,6 +11,18 @@
       "scope_id": "P28-I02-W07",
       "status": "done",
       "updated_at": "2026-05-27T15:48:36.464621Z"
+    },
+    "P28-I02-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W13",
+      "scope_id": "P28-I02-W13",
+      "status": "done",
+      "updated_at": "2026-05-27T15:55:43.571646Z"
     }
   },
   "agent_sessions": {
@@ -1975,7 +1987,6 @@
     ],
     "active_wave_ids": [
       "P28-I02-W23",
-      "P28-I02-W13",
       "P28-I02-W15"
     ],
     "iter_id": "P28-I02",
@@ -6049,7 +6060,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T15:52:39.393225Z",
+  "updated_at": "2026-05-27T15:55:44.175026Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21038,7 +21049,7 @@
         "P28-I03-W26"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T15:55:43.571646Z",
       "commit": null,
       "deps": [
         "P28-I02-W03",
@@ -21056,10 +21067,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:10.440324Z",
-      "outcome": null,
+      "outcome": "implemented bucket drift metric and bucket_drift_detected publish path",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "EuCalibrationMetric.bucket_drift populated",
         "bucket_drift_detected event publishes",
@@ -24960,10 +24971,10 @@
       "branch": "feature/eawf-v0.4-p28-w13",
       "created_at": "2026-05-27T15:45:20.070871Z",
       "id": "WT-P28-I02-W13-1779896720",
-      "merged_commit": null,
+      "merged_commit": "b984921",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w13",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W13"
     },
     "WT-P28-I02-W15-1779896725": {
