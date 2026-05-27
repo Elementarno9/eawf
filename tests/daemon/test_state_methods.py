@@ -38,7 +38,7 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.event import EventKind
 from eawf.kernel.store.paths import store_path
@@ -206,6 +206,28 @@ def _pending_wave(
         "claim_session_id": None,
         "opened_at": _now().isoformat(),
         "sessions": {},
+    }
+
+
+def _decision_payload(
+    decision_id: str,
+    *,
+    status: str = "active",
+    superseded_by: str | None = None,
+    obsoleted_at: str | None = None,
+) -> dict[str, object]:
+    """Build one minimal decision row for daemon mutation tests."""
+    return {
+        "id": decision_id,
+        "scope_id": "ABC",
+        "title": f"decision {decision_id}",
+        "rationale": "because",
+        "alternatives": [],
+        "consequences": [],
+        "status": status,
+        "created_at": _now().isoformat(),
+        "superseded_by": superseded_by,
+        "obsoleted_at": obsoleted_at,
     }
 
 
@@ -716,6 +738,60 @@ def test_apply_registry_has_no_stub_kinds() -> None:
         assert callable(func)
 
 
+# ---- state.mutate (newly-wired kinds: DECISION_OBSOLETE) -------------------
+
+
+def test_mutate_decision_obsolete_marks_active_decision(tmp_path: Path) -> None:
+    """DECISION_OBSOLETE flips an active decision and stamps ``obsoleted_at``."""
+    payload = _build_state_payload()
+    obsolete_at = datetime(2026, 5, 27, 12, 30, 0, tzinfo=UTC)
+    payload["decisions"] = {"D010": _decision_payload("D010")}  # type: ignore[index]
+    ctx, state_path, event_path, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.DECISION_OBSOLETE,
+        scope_id="D010",
+        mutation_id=uuid.uuid4().hex,
+        params={"id": "D010", "obsoleted_at": obsolete_at.isoformat()},
+    )
+
+    async def body() -> None:
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert result["before_version"] != result["after_version"]
+        new_state = orjson.loads(state_path.read_bytes())
+        decision = new_state["decisions"]["D010"]
+        assert decision["status"] == DecisionStatus.OBSOLETE.value
+        assert datetime.fromisoformat(decision["obsoleted_at"]) == obsolete_at
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+
+    _run(body)
+
+
+def test_mutate_decision_obsolete_rejects_superseded_decision(tmp_path: Path) -> None:
+    """DECISION_OBSOLETE preserves supersede-link semantics."""
+    payload = _build_state_payload()
+    payload["decisions"] = {
+        "D010": _decision_payload("D010", status="superseded", superseded_by="D011"),
+        "D011": _decision_payload("D011"),
+    }  # type: ignore[index]
+    ctx, state_path, event_path, _ = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    before_bytes = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.DECISION_OBSOLETE,
+        scope_id="D010",
+        mutation_id=uuid.uuid4().hex,
+        params={"id": "D010", "obsoleted_at": _now().isoformat()},
+    )
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="cannot obsolete decision in status"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before_bytes
+        assert not event_path.exists() or event_path.read_text() == ""
+
+    _run(body)
+
+
 # ---- state.mutate (newly-wired kinds: WAVE_RELEASE) ------------------------
 
 
@@ -837,6 +913,7 @@ def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> 
             "title": "feat: new wave",
             "file_scopes": ["src/eawf/x.py"],
             "success_criteria": ["does x"],
+            "effort_bucket": "S",
         },
     )
 
@@ -1451,6 +1528,7 @@ def test_mutate_roadmap_revise_add_wave_carries_description(tmp_path: Path) -> N
             "title": "feat: new wave",
             "file_scopes": ["src/eawf/x.py"],
             "description": "long-form rationale for what this wave does",
+            "effort_bucket": "S",
         },
     )
 
@@ -1532,6 +1610,7 @@ def test_mutate_roadmap_revise_description_over_cap_rejected(tmp_path: Path) -> 
             "title": "feat: over-cap-desc",
             "file_scopes": ["src/x.py"],
             "description": "z" * 501,
+            "effort_bucket": "S",
         },
     )
 

@@ -73,9 +73,11 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import (
+    DecisionMutationError,
     MemoryMutationError,
     Mutation,
     MutationKind,
+    apply_decision_obsolete,
     apply_memory_add,
     apply_memory_prune,
     apply_memory_review,
@@ -772,6 +774,7 @@ _APPLY_REGISTRY: Final[dict[MutationKind, ApplyFunc]] = {
     MutationKind.MEMORY_SUPERSEDE: apply_memory_supersede,
     MutationKind.MEMORY_PRUNE: apply_memory_prune,
     MutationKind.MEMORY_REVIEW: apply_memory_review,
+    MutationKind.DECISION_OBSOLETE: apply_decision_obsolete,
 }
 
 
@@ -1206,12 +1209,12 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 ):
                     raise DaemonValidationError(f"validation_failed: {exc}") from exc
                 raise ValueError(str(exc)) from exc
-            except MemoryMutationError as exc:
-                # Memory-kind apply rejections (duplicate id, unknown id,
-                # already-pruned) surface the same way non-closure
+            except (MemoryMutationError, DecisionMutationError) as exc:
+                # Memory/decision apply rejections (duplicate id, unknown id,
+                # already-pruned/obsolete) surface the same way non-closure
                 # lifecycle rejections do: plain ValueError -> -32602
-                # (UserError kind="InvalidInput", exit 1). No MEMORY_* kind
-                # is a closure kind, so no -32002 mapping is needed.
+                # (UserError kind="InvalidInput", exit 1). These kinds are
+                # not closure kinds, so no -32002 mapping is needed.
                 raise ValueError(str(exc)) from exc
             except ValidationError as exc:
                 # Model-level bound rejections (e.g. the ≤500-char Wave /
