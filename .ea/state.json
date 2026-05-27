@@ -252,6 +252,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:20:47.444499Z"
     },
+    "P28-I03-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W07",
+      "scope_id": "P28-I03-W07",
+      "status": "done",
+      "updated_at": "2026-05-27T21:48:35.648340Z"
+    },
     "P28-I03-W08": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -323,6 +335,18 @@
       "scope_id": "P28-I03-W15",
       "status": "done",
       "updated_at": "2026-05-27T21:19:33.049556Z"
+    },
+    "P28-I03-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W18",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W18",
+      "scope_id": "P28-I03-W18",
+      "status": "done",
+      "updated_at": "2026-05-27T21:48:35.545962Z"
     },
     "P28-I03-W19": {
       "actual_cost_usd": 0.0,
@@ -2394,9 +2418,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I03-W07",
-      "P28-I03-W09",
-      "P28-I03-W18"
+      "P28-I03-W09"
     ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
@@ -6931,7 +6953,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:46:22.490524Z",
+  "updated_at": "2026-05-27T21:48:35.648646Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -22800,8 +22822,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:48:35.648340Z",
+      "commit": "c5e1244f4e2479f91f34936add3d3ee2b7e4f8cb",
       "deps": [
         "P28-I01-W12"
       ],
@@ -22817,10 +22839,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:25.089813Z",
-      "outcome": null,
+      "outcome": "Codex plugin-scope skills and agents TOML emission shipped with golden tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         ".codex/agents toml emitted",
         "skills under .codex/plugins/eawf/skills/ only",
@@ -23212,8 +23234,8 @@
         "P28-I03-W29"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:48:35.545962Z",
+      "commit": "0fcf3972d40bb8d8983ee986dc101c9eb10da6a9",
       "deps": [
         "P28-I03-W05"
       ],
@@ -23229,10 +23251,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:30.906954Z",
-      "outcome": null,
+      "outcome": "metrics projection model and six-tile TUI binding shipped with telemetry/TUI tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "compute_metrics_projection emits MetricsProjection Pydantic",
         "binds 6 tiles",
@@ -26291,10 +26313,10 @@
       "branch": "feature/eawf-v0.1-p28-w07",
       "created_at": "2026-05-27T21:32:08.158913Z",
       "id": "WT-P28-I03-W07-1779917528",
-      "merged_commit": null,
+      "merged_commit": "c5e1244",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w07",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W07"
     },
     "WT-P28-I03-W08-1779917532": {
@@ -26379,10 +26401,10 @@
       "branch": "feature/eawf-v0.1-p28-w18",
       "created_at": "2026-05-27T21:32:44.226581Z",
       "id": "WT-P28-I03-W18-1779917564",
-      "merged_commit": null,
+      "merged_commit": "0fcf397",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w18",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W18"
     },
     "WT-P28-I03-W19-1779915892": {
