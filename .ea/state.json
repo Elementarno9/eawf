@@ -6049,7 +6049,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T15:48:37.302603Z",
+  "updated_at": "2026-05-27T15:52:39.393225Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21125,7 +21125,12 @@
       "file_scopes": [
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/kernel/store/kinds/event.py",
-        "src/eawf/surfaces/tui/widgets/roadmap_tree.py"
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "tests/tui/test_widgets_roadmap_tree.py",
+        "tests/tui/test_overlays_metrics.py",
+        "tests/unit/test_event_canonical_model.py",
+        "tests/daemon/test_state_methods.py"
       ],
       "id": "P28-I02-W15",
       "intent": null,
