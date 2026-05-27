@@ -974,12 +974,14 @@ def roadmap_show_cmd(
     # they carry presentation chrome (Rich table styling, ANSI dimming) that
     # the markdown surface does not.
     if md:
+        from eawf.kernel.config.layered import merge_config
         from eawf.surfaces.render.plan_view import render_roadmap_markdown
 
+        merged_config, _sources = merge_config(workspace=flags.workspace, repo=Path.cwd())
         # Re-enter the read-only transaction so the renderer sees the same
         # state snapshot the rows projection used.
         with state_transaction(state_path, read_only=True) as state:
-            text = render_roadmap_markdown(state, phase_id_filter=phase)
+            text = render_roadmap_markdown(state, phase_id_filter=phase, config=merged_config)
     else:
         text = _render_show_rich(nested, plain=flags.plain_output)
     emit_json_or_text({"phases": rows}, text, flags=flags)

@@ -617,6 +617,23 @@ def test_roadmap_show_json_envelope(workspace: Path) -> None:
     assert any(row["id"] == "P21" for row in body["phases"])
 
 
+def test_roadmap_show_md_consumes_eu_view_config(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI ``--md`` threads merged ``tui.eu_view`` config into the renderer."""
+    _propose_with_wave(workspace)
+    monkeypatch.setenv("EAWF_TUI__EU_VIEW__DENSITY", "compact")
+    monkeypatch.setenv("EAWF_TUI__EU_VIEW__FIELDS", "realistic")
+
+    res = runner.invoke(app, ["roadmap", "show", "--phase", "P21", "--md"])
+
+    assert res.exit_code == 0, res.output
+    assert "| Phase | Metric | EU | Hours |" in res.output
+    assert "| `P21` | realistic |" in res.output
+    assert "work-sum" not in res.output
+
+
 def test_roadmap_show_rich_renders_phases_iters_waves(workspace: Path) -> None:
     """P20-W01: rich-table renderer surfaces phases, iters, and waves."""
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test phase"])

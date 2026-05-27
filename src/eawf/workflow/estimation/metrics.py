@@ -40,12 +40,15 @@ from __future__ import annotations
 import math
 import re
 from datetime import UTC, datetime, timedelta
+from heapq import heappop, heappush
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AuditVerdict, WaveStatus
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State, Wave
+from eawf.workflow.estimation.buckets import critical_path_eu, sum_wave_eu, wave_estimate_eu
 
 # Schema version for the JSON envelope. Bump only when fields change in a
 # wire-breaking way.
@@ -179,6 +182,31 @@ class WeeklyBurnMetric(BaseModel):
     window_days: int = Field(gt=0)
 
 
+class RealisticWallClockMetric(BaseModel):
+    """Phase/iter wall-clock projection from DAG, queue, and calibration.
+
+    ``work_sum_eu`` is total serial work. ``critical_path_eu`` is the
+    dependency lower bound. ``queue_wall_clock_eu`` is deterministic
+    list-scheduling over the DAG with ``max_parallel_waves`` workers.
+    ``realistic_wall_clock_eu`` applies a calibration multiplier derived
+    from ``inside_pessimistic_share``: a lower share means recent work more
+    often exceeded pessimistic estimates, so the wall-clock projection
+    expands accordingly.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    work_sum_eu: float = Field(ge=0.0)
+    critical_path_eu: float = Field(ge=0.0)
+    queue_wall_clock_eu: float = Field(ge=0.0)
+    inside_pessimistic_share: float | None = Field(default=None, ge=0.0, le=1.0)
+    pessimism_multiplier: float = Field(ge=1.0)
+    realistic_wall_clock_eu: float = Field(ge=0.0)
+    realistic_wall_clock_hours: float = Field(ge=0.0)
+    max_parallel_waves: int = Field(ge=1)
+    eu_minutes: float = Field(gt=0.0)
+
+
 class MetricsSummary(BaseModel):
     """Top-level metrics payload for ``eawf metrics``.
 
@@ -246,6 +274,114 @@ def _median(values: list[float]) -> float:
     if n % 2 == 1:
         return ordered[mid]
     return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def _ready_wave_ids(
+    *,
+    waiting: set[str],
+    parents: dict[str, set[str]],
+    completed: set[str],
+) -> list[str]:
+    """Return dependency-ready wave ids in deterministic display order."""
+    ready = [wave_id for wave_id in waiting if parents[wave_id] <= completed]
+    return sorted(ready, key=natural_key)
+
+
+def _queue_wall_clock_eu(waves: list[Wave], *, max_parallel_waves: int) -> float:
+    """Return DAG queue wall-clock in EU using deterministic list scheduling."""
+    if not waves:
+        return 0.0
+    if max_parallel_waves < 1:
+        raise ValueError(f"max_parallel_waves must be >= 1: {max_parallel_waves!r}")
+
+    by_id = {wave.id: wave for wave in waves}
+    parents: dict[str, set[str]] = {wave.id: set() for wave in waves}
+    for wave in waves:
+        for dep in wave.deps:
+            if dep not in by_id:
+                continue
+            parents[wave.id].add(dep)
+
+    waiting = set(by_id)
+    completed: set[str] = set()
+    running: list[tuple[float, tuple[object, ...], str]] = []
+    now_eu = 0.0
+    while waiting or running:
+        ready = _ready_wave_ids(waiting=waiting, parents=parents, completed=completed)
+        while ready and len(running) < max_parallel_waves:
+            wave_id = ready.pop(0)
+            waiting.remove(wave_id)
+            finish_eu = now_eu + wave_estimate_eu(by_id[wave_id])
+            heappush(running, (finish_eu, natural_key(wave_id), wave_id))
+
+        if not running:
+            # Cyclic graph: critical_path_eu has the cycle guard, so use it
+            # as the least surprising fallback instead of hanging.
+            return critical_path_eu(waves)
+
+        now_eu = running[0][0]
+        while running and running[0][0] == now_eu:
+            _finish_eu, _sort_key, wave_id = heappop(running)
+            completed.add(wave_id)
+
+    return round(now_eu, 2)
+
+
+def compute_realistic_wall_clock(
+    waves: list[Wave],
+    *,
+    max_parallel_waves: int = 4,
+    inside_pessimistic_share: float | None = None,
+    eu_minutes: float = 30.0,
+) -> RealisticWallClockMetric:
+    """Compute realistic wall-clock for a DAG of waves.
+
+    The projection combines three independent signals:
+
+    1. Work sum: total serial EU across all waves.
+    2. Critical path + queue: dependency lower bound plus finite worker
+       scheduling via ``max_parallel_waves``.
+    3. Calibration: ``inside_pessimistic_share`` inflates the queued
+       projection when recent waves often exceeded pessimistic estimates.
+
+    Args:
+        waves: Waves to schedule as one iter or phase DAG.
+        max_parallel_waves: Worker count for queue simulation.
+        inside_pessimistic_share: Fraction of calibrated samples inside
+            pessimistic estimate bounds. ``None`` means no calibration data.
+        eu_minutes: Conversion factor for the rendered hours column.
+
+    Raises:
+        ValueError: ``max_parallel_waves < 1``, ``eu_minutes <= 0``, or
+            ``inside_pessimistic_share`` outside ``[0.0, 1.0]``.
+    """
+    if max_parallel_waves < 1:
+        raise ValueError(f"max_parallel_waves must be >= 1: {max_parallel_waves!r}")
+    if eu_minutes <= 0:
+        raise ValueError(f"eu_minutes must be > 0: {eu_minutes!r}")
+    if inside_pessimistic_share is not None and not 0.0 <= inside_pessimistic_share <= 1.0:
+        raise ValueError(
+            f"inside_pessimistic_share must be between 0 and 1: {inside_pessimistic_share!r}"
+        )
+
+    work_sum = sum_wave_eu(waves)
+    critical = critical_path_eu(waves)
+    queued = max(critical, _queue_wall_clock_eu(waves, max_parallel_waves=max_parallel_waves))
+    multiplier = 1.0
+    if inside_pessimistic_share is not None:
+        multiplier += 1.0 - inside_pessimistic_share
+    realistic_eu = round(queued * multiplier, 2)
+    return RealisticWallClockMetric(
+        work_sum_eu=work_sum,
+        critical_path_eu=critical,
+        queue_wall_clock_eu=queued,
+        inside_pessimistic_share=inside_pessimistic_share,
+        pessimism_multiplier=round(multiplier, 4),
+        realistic_wall_clock_eu=realistic_eu,
+        realistic_wall_clock_hours=round(realistic_eu * eu_minutes / 60.0, 2),
+        max_parallel_waves=max_parallel_waves,
+        eu_minutes=eu_minutes,
+    )
 
 
 def compute_eu_variance(state: State) -> EuVarianceMetric:
@@ -492,6 +628,7 @@ __all__ = [
     "EuVarianceMetric",
     "MetricsSummary",
     "PlannedVsReactiveMetric",
+    "RealisticWallClockMetric",
     "WaveElapsedMetric",
     "WeeklyBurnMetric",
     "compute_audit_pass_rate",
@@ -499,6 +636,7 @@ __all__ = [
     "compute_eu_variance",
     "compute_metrics",
     "compute_planned_vs_reactive",
+    "compute_realistic_wall_clock",
     "compute_wave_elapsed",
     "compute_weekly_burn",
 ]

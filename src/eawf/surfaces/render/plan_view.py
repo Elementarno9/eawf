@@ -41,10 +41,11 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.state.enums import (
     BacklogPriority,
@@ -69,6 +70,10 @@ from eawf.workflow.estimation.buckets import (
     critical_path_eu,
     sum_wave_eu,
     wave_estimate_eu,
+)
+from eawf.workflow.estimation.metrics import (
+    RealisticWallClockMetric,
+    compute_realistic_wall_clock,
 )
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
@@ -907,6 +912,35 @@ class RoadmapRow(_StrictModel):
     source_brief_ids: list[str]
 
 
+EuRollupField = Literal["work_sum", "critical_path", "queue", "realistic"]
+EuRollupDensity = Literal["full", "compact"]
+
+_DEFAULT_EU_ROLLUP_FIELDS: tuple[EuRollupField, ...] = (
+    "work_sum",
+    "critical_path",
+    "queue",
+    "realistic",
+)
+_EU_ROLLUP_FIELD_ALIASES: dict[str, EuRollupField] = {
+    "work-sum": "work_sum",
+    "work_sum": "work_sum",
+    "critical-path": "critical_path",
+    "critical_path": "critical_path",
+    "queue": "queue",
+    "queued": "queue",
+    "realistic": "realistic",
+    "realistic-wall-clock": "realistic",
+    "realistic_wall_clock": "realistic",
+}
+
+
+class EuViewConfig(_StrictModel):
+    """Config consumed from ``tui.eu_view`` for roadmap EU rollups."""
+
+    density: EuRollupDensity = "full"
+    fields: tuple[EuRollupField, ...] = Field(default=_DEFAULT_EU_ROLLUP_FIELDS, min_length=1)
+
+
 def build_roadmap_rows(state: State, *, phase_id_filter: str | None = None) -> list[RoadmapRow]:
     """Project *state* into the ordered roadmap-row list.
 
@@ -945,7 +979,222 @@ def build_roadmap_rows(state: State, *, phase_id_filter: str | None = None) -> l
     return rows
 
 
-def render_roadmap_markdown(state: State, *, phase_id_filter: str | None = None) -> str:
+def _coerce_eu_rollup_fields(raw: Any) -> Any:
+    """Normalise comma strings and hyphenated aliases before strict validation."""
+    if isinstance(raw, str):
+        values: list[Any] = [item.strip() for item in raw.split(",") if item.strip()]
+    elif isinstance(raw, list | tuple):
+        values = list(raw)
+    else:
+        return raw
+    return [_EU_ROLLUP_FIELD_ALIASES.get(str(item), item) for item in values]
+
+
+def _eu_view_config(config: Mapping[str, Any] | None) -> EuViewConfig:
+    """Return strict ``tui.eu_view`` config with a safe default fallback."""
+    raw: Any = None
+    if isinstance(config, Mapping):
+        tui = config.get("tui")
+        if isinstance(tui, Mapping):
+            raw = tui.get("eu_view")
+    if raw is None:
+        return EuViewConfig()
+    if not isinstance(raw, Mapping):
+        logger.warning(f"eu_view_config invalid_shape={type(raw).__name__!r}; using defaults")
+        return EuViewConfig()
+    normalised = dict(raw)
+    if "fields" in normalised:
+        normalised["fields"] = _coerce_eu_rollup_fields(normalised["fields"])
+    try:
+        return EuViewConfig.model_validate(normalised)
+    except ValidationError as exc:
+        err_type = exc.errors()[0]["type"]
+        logger.warning(f"eu_view_config validation_error={err_type!r}; using defaults")
+        return EuViewConfig()
+
+
+def _phase_waves(state: State, phase_id: str) -> list[Wave]:
+    """Return waves under *phase_id* in phase/iter order."""
+    phase = state.phases.get(phase_id) if state.phases else None
+    if phase is None:
+        return []
+    waves: list[Wave] = []
+    for iter_id in phase.iter_ids:
+        iter_obj = state.iters.get(iter_id) if state.iters else None
+        if iter_obj is None:
+            continue
+        for wave_id in iter_obj.wave_ids:
+            wave = state.waves.get(wave_id) if state.waves else None
+            if wave is not None:
+                waves.append(wave)
+    return waves
+
+
+def _lookup_by_key_or_scope(rows: Mapping[str, Any], scope_id: str) -> Any | None:
+    """Return a state summary row keyed by *scope_id* or carrying it as ``scope_id``."""
+    direct = rows.get(scope_id)
+    if direct is not None:
+        return direct
+    for row in rows.values():
+        if getattr(row, "scope_id", None) == scope_id:
+            return row
+    return None
+
+
+def _inside_pessimistic_share(state: State, wave_ids: set[str]) -> float | None:
+    """Return calibrated inside-pessimistic share for the given wave ids."""
+    estimates = state.estimates or {}
+    actuals = state.actuals or {}
+    sample_count = 0
+    inside = 0
+    for wave_id in sorted(wave_ids, key=natural_key):
+        est = _lookup_by_key_or_scope(estimates, wave_id)
+        act = _lookup_by_key_or_scope(actuals, wave_id)
+        if est is None or act is None:
+            continue
+        sample_count += 1
+        if act.elapsed_eu <= est.pessimistic_eu:
+            inside += 1
+    if sample_count == 0:
+        return None
+    return inside / sample_count
+
+
+def _positive_int_from_config(
+    config: Mapping[str, Any] | None,
+    *,
+    section: str,
+    key: str,
+    default: int,
+) -> int:
+    """Read a positive integer leaf from nested config or return *default*."""
+    if isinstance(config, Mapping):
+        section_value = config.get(section)
+        if isinstance(section_value, Mapping):
+            raw = section_value.get(key)
+            if isinstance(raw, int) and raw >= 1:
+                return raw
+    return default
+
+
+def _positive_float_from_config(
+    config: Mapping[str, Any] | None,
+    *,
+    section: str,
+    key: str,
+    default: float,
+) -> float:
+    """Read a positive float leaf from nested config or return *default*."""
+    if isinstance(config, Mapping):
+        section_value = config.get(section)
+        if isinstance(section_value, Mapping):
+            raw = section_value.get(key)
+            if isinstance(raw, int | float) and raw > 0:
+                return float(raw)
+    return default
+
+
+def _phase_eu_rollup(
+    state: State,
+    phase_id: str,
+    *,
+    config: Mapping[str, Any] | None,
+) -> RealisticWallClockMetric:
+    """Compute the phase EU rollup used by roadmap markdown."""
+    waves = _phase_waves(state, phase_id)
+    wave_ids = {wave.id for wave in waves}
+    return compute_realistic_wall_clock(
+        waves,
+        max_parallel_waves=_positive_int_from_config(
+            config,
+            section="planning",
+            key="max_parallel_waves",
+            default=4,
+        ),
+        inside_pessimistic_share=_inside_pessimistic_share(state, wave_ids),
+        eu_minutes=_positive_float_from_config(
+            config,
+            section="estimation",
+            key="eu_minutes",
+            default=30.0,
+        ),
+    )
+
+
+def _metric_eu(rollup: RealisticWallClockMetric, field: EuRollupField) -> float:
+    """Return the EU value for one rollup field."""
+    if field == "work_sum":
+        return rollup.work_sum_eu
+    if field == "critical_path":
+        return rollup.critical_path_eu
+    if field == "queue":
+        return rollup.queue_wall_clock_eu
+    return rollup.realistic_wall_clock_eu
+
+
+def _metric_detail(rollup: RealisticWallClockMetric, field: EuRollupField) -> str:
+    """Return explanatory detail for one full-density rollup row."""
+    if field == "work_sum":
+        return "serial wave work"
+    if field == "critical_path":
+        return "longest dependency path"
+    if field == "queue":
+        return f"DAG queue at {rollup.max_parallel_waves} workers"
+    share = (
+        "n/a"
+        if rollup.inside_pessimistic_share is None
+        else f"{rollup.inside_pessimistic_share:.0%}"
+    )
+    return f"queue x {rollup.pessimism_multiplier:g}; inside_pess={share}"
+
+
+def _format_hours(eu: float, eu_minutes: float) -> str:
+    """Render an EU value as hours via the configured EU-minute factor."""
+    return f"{(eu * eu_minutes / 60.0):g}"
+
+
+def _render_eu_rollup_markdown(
+    state: State,
+    rows: list[RoadmapRow],
+    *,
+    config: Mapping[str, Any] | None,
+) -> list[str]:
+    """Render phase-level EU/hour rows for roadmap markdown."""
+    eu_view = _eu_view_config(config)
+    lines: list[str] = ["", "## EU/hour rollup", ""]
+    if eu_view.density == "compact":
+        lines.append("| Phase | Metric | EU | Hours |")
+        lines.append("|---|---|---:|---:|")
+    else:
+        lines.append("| Phase | Metric | EU | Hours | Detail |")
+        lines.append("|---|---|---:|---:|---|")
+    label_by_field: dict[EuRollupField, str] = {
+        "work_sum": "work-sum",
+        "critical_path": "critical-path",
+        "queue": "queue",
+        "realistic": "realistic",
+    }
+    for row in rows:
+        rollup = _phase_eu_rollup(state, row.id, config=config)
+        for field in eu_view.fields:
+            eu = _metric_eu(rollup, field)
+            hours = _format_hours(eu, rollup.eu_minutes)
+            if eu_view.density == "compact":
+                lines.append(f"| `{row.id}` | {label_by_field[field]} | {eu:g} | {hours} |")
+            else:
+                detail = _metric_detail(rollup, field)
+                lines.append(
+                    f"| `{row.id}` | {label_by_field[field]} | {eu:g} | {hours} | {detail} |"
+                )
+    return lines
+
+
+def render_roadmap_markdown(
+    state: State,
+    *,
+    phase_id_filter: str | None = None,
+    config: Mapping[str, Any] | None = None,
+) -> str:
     """Render the roadmap-show markdown table from *state*.
 
     Canonical markdown surface for ``eawf roadmap show --md`` after the
@@ -959,6 +1208,8 @@ def render_roadmap_markdown(state: State, *, phase_id_filter: str | None = None)
         state: The validated state document.
         phase_id_filter: Restrict the rendered queue to one phase, or
             ``None`` for the full queue.
+        config: Optional merged layered config. ``tui.eu_view.density`` and
+            ``tui.eu_view.fields`` control the EU/hour rollup table.
 
     Returns:
         A markdown string — either the empty-state literal or the
@@ -971,6 +1222,7 @@ def render_roadmap_markdown(state: State, *, phase_id_filter: str | None = None)
     for row in rows:
         deps = ", ".join(row.depends_on) or "—"
         out.append(f"| `{row.id}` | `{row.status}` | {row.wave_count} | {deps} | {row.title} |")
+    out.extend(_render_eu_rollup_markdown(state, rows, config=config))
     return "\n".join(out)
 
 

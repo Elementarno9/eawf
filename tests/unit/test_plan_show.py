@@ -110,6 +110,7 @@ def _wave(
     claim_session_id: str | None = None,
     outcome: str | None = None,
     closed_at: str | None = None,
+    effort_bucket: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": wave_id,
@@ -121,6 +122,7 @@ def _wave(
         "file_scopes": [],
         "claim_session_id": claim_session_id,
         "worktree_id": None,
+        "effort_bucket": effort_bucket,
         "outcome": outcome,
         "opened_at": "2026-05-08T00:00:00Z",
         "closed_at": closed_at,
@@ -510,6 +512,55 @@ def test_render_json_risks_envelope() -> None:
     # Each row carries the documented surface keys.
     for r in env["risks"]:
         assert set(r.keys()) >= {"kind", "id", "severity", "title", "status"}
+
+
+def test_render_roadmap_markdown_emits_four_eu_hour_rows() -> None:
+    """Default ``roadmap show --md`` includes work, path, queue, and realistic rows."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01", effort_bucket="M"))
+    _add_wave(s, _wave("P05-I01-W02", effort_bucket="M"))
+    _add_wave(s, _wave("P05-I01-W03", effort_bucket="S", deps=["P05-I01-W01"]))
+    state = State.model_validate(s)
+
+    md = render_roadmap_markdown(state)
+
+    assert "## EU/hour rollup" in md
+    rows = [
+        line for line in md.splitlines() if line.startswith("| `P05` | ") and "`active`" not in line
+    ]
+    assert [row.split("|")[2].strip() for row in rows] == [
+        "work-sum",
+        "critical-path",
+        "queue",
+        "realistic",
+    ]
+    assert len(rows) == 4
+
+
+def test_render_roadmap_markdown_consumes_eu_view_density_and_fields() -> None:
+    """``tui.eu_view`` config can compact and subset the EU/hour table."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    s = _base_state()
+    _add_wave(s, _wave("P05-I01-W01", effort_bucket="M"))
+    _add_wave(s, _wave("P05-I01-W02", effort_bucket="M"))
+    state = State.model_validate(s)
+
+    md = render_roadmap_markdown(
+        state,
+        config={
+            "tui": {"eu_view": {"density": "compact", "fields": ["realistic"]}},
+            "planning": {"max_parallel_waves": 1},
+            "estimation": {"eu_minutes": 60},
+        },
+    )
+
+    assert "| Phase | Metric | EU | Hours |" in md
+    assert "| Phase | Metric | EU | Hours | Detail |" not in md
+    assert "| `P05` | realistic | 2 | 2 |" in md
+    assert "work-sum" not in md
 
 
 def test_parse_check_result_skips_malformed_row() -> None:
