@@ -360,6 +360,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:19:36.053408Z"
     },
+    "P28-I03-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W26",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W26",
+      "scope_id": "P28-I03-W26",
+      "status": "done",
+      "updated_at": "2026-05-27T21:42:27.619362Z"
+    },
     "P28-I03-W30": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2351,8 +2363,7 @@
       "P28-I03-W09",
       "P28-I03-W11",
       "P28-I03-W14",
-      "P28-I03-W18",
-      "P28-I03-W26"
+      "P28-I03-W18"
     ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
@@ -6887,7 +6898,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:35:02.842653Z",
+  "updated_at": "2026-05-27T21:42:27.619679Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -23434,8 +23445,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:42:27.619362Z",
+      "commit": "c85b6405c8cb1ac954d1c0b48ca10a781700a0dc",
       "deps": [
         "P28-I02-W13"
       ],
@@ -23451,10 +23462,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:34.873006Z",
-      "outcome": null,
+      "outcome": "calibrate apply writes confirmed bucket overrides through layered config with CLI tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "tool.eawf.estimation.bucket_eu_overrides added",
         "calibrate apply subcommand",
