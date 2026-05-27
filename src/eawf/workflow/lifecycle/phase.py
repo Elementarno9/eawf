@@ -13,6 +13,7 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.kernel.state.enums import DecisionStatus, IterStatus, PhaseStatus, WaveStatus
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Phase, State
 from eawf.workflow.lifecycle._errors import LifecycleError
 
@@ -128,7 +129,9 @@ def _validate_phase_closable(state: State, *, phase_id: str) -> Phase:
         if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
     ]
     if open_children:
-        raise LifecycleError(f"phase {phase_id!r} has open iters: {sorted(open_children)}")
+        raise LifecycleError(
+            f"phase {phase_id!r} has open iters: {sorted(open_children, key=natural_key)}"
+        )
     iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
     closed_wave_count = sum(
         1
@@ -140,9 +143,12 @@ def _validate_phase_closable(state: State, *, phase_id: str) -> Phase:
             f"phase {phase_id!r} has no closed waves; close_phase requires at least one closed wave"
         )
     iters_without_audit = sorted(
-        iid
-        for iid, it in state.iters.items()
-        if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+        (
+            iid
+            for iid, it in state.iters.items()
+            if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+        ),
+        key=natural_key,
     )
     if iters_without_audit:
         raise LifecycleError(
@@ -296,7 +302,9 @@ def activate_phase(state: State, *, phase_id: str) -> Phase:
         )
     unmet = [pid for pid in phase.depends_on if state.phases[pid].status != PhaseStatus.CLOSED]
     if unmet:
-        raise LifecycleError(f"phase {phase_id!r} blocked on un-closed dep phases: {sorted(unmet)}")
+        raise LifecycleError(
+            f"phase {phase_id!r} blocked on un-closed dep phases: {sorted(unmet, key=natural_key)}"
+        )
     iter_ids = phase.iter_ids
     wave_count = sum(1 for w in state.waves.values() if w.iter_id in set(iter_ids))
     if wave_count == 0:

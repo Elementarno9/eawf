@@ -26,7 +26,7 @@ import logging
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.ids import is_phase_id
+from eawf.kernel.state.ids import is_phase_id, natural_key
 from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ def build_impact_graph(state: State, *, decision_id: str | None = None) -> Impac
         d = decisions.get(decision_id)
         candidates = [d] if d is not None else []
     else:
-        candidates = sorted(decisions.values(), key=lambda r: r.id)
+        candidates = sorted(decisions.values(), key=lambda r: natural_key(r.id))
 
     iters = state.iters or {}
     waves = state.waves or {}
@@ -106,7 +106,7 @@ def build_impact_graph(state: State, *, decision_id: str | None = None) -> Impac
         scope_iters = {it.id for it in iters.values() if it.phase_id in scope_phases}
         scope_waves = sorted(
             (w for w in waves.values() if w.iter_id in scope_iters),
-            key=lambda r: r.id,
+            key=lambda r: natural_key(r.id),
         )
         wave_ids = [w.id for w in scope_waves]
         file_globs = sorted({g for w in scope_waves for g in w.file_scopes})

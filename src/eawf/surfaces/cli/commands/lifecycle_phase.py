@@ -24,7 +24,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.kernel.state.ids import is_phase_id
+from eawf.kernel.state.ids import is_phase_id, natural_key
 from eawf.kernel.state.mutations import MutationKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.lifecycle import (
@@ -565,13 +565,17 @@ def _closed_wave_commit_summary(
         and ``closed_waves_missing_commit`` (sorted wave ids lacking a SHA).
     """
     closed_wave_ids = sorted(
-        wid
-        for wid, w in state.waves.items()
-        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+        (
+            wid
+            for wid, w in state.waves.items()
+            if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+        ),
+        key=natural_key,
     )
     closed_wave_shas = [derive_wave_sha(wid) for wid in closed_wave_ids]
     closed_waves_missing_commit = sorted(
-        wid for wid, sha in zip(closed_wave_ids, closed_wave_shas, strict=True) if not sha
+        (wid for wid, sha in zip(closed_wave_ids, closed_wave_shas, strict=True) if not sha),
+        key=natural_key,
     )
     unique_closed_wave_commits = sorted({sha for sha in closed_wave_shas if sha})
     return {
@@ -599,20 +603,29 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
         raise LifecycleError(f"unknown phase: {phase_id!r}")
     iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
     open_iters = sorted(
-        iid
-        for iid, it in state.iters.items()
-        if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
+        (
+            iid
+            for iid, it in state.iters.items()
+            if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
+        ),
+        key=natural_key,
     )
     open_waves = sorted(
-        wid
-        for wid, w in state.waves.items()
-        if w.iter_id in iter_ids_in_phase
-        and w.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
+        (
+            wid
+            for wid, w in state.waves.items()
+            if w.iter_id in iter_ids_in_phase
+            and w.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
+        ),
+        key=natural_key,
     )
     iters_without_audit = sorted(
-        iid
-        for iid, it in state.iters.items()
-        if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+        (
+            iid
+            for iid, it in state.iters.items()
+            if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+        ),
+        key=natural_key,
     )
 
     commit_summary = _closed_wave_commit_summary(

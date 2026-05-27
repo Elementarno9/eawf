@@ -80,13 +80,18 @@ _WATCHED_DIRS: tuple[str, ...] = tuple(
 # ``tools/commit_prefix_lint.py`` narrowed to ``type == 'test'``. The
 # ``(?!00)`` lookaheads reject ``I00`` / ``W00`` (1-based indices). Both
 # the ``-W##`` planned-wave suffix and the legacy ``-CORE`` bookkeeping
-# alias satisfy the pairing contract.
-_PAIRED_SUBJECT_RE = re.compile(r"^\[P\d{2}(-I(?!00)\d{2})?(-W(?!00)\d{2}|-CORE)\]\s+test:\s+\S.*$")
+# alias satisfy the pairing contract. The digit-width is ``\d{2,}`` so
+# 3-digit ids (``P100`` / ``I100`` / ``W100``) parse cleanly once the
+# queue grows past 99 — matches the widened ``commit_prefix_lint.py``
+# grammar per AGENTS symbol-conventions.
+_PAIRED_SUBJECT_RE = re.compile(
+    r"^\[P\d{2,}(-I(?!00)\d{2,})?(-W(?!00)\d{2,}|-CORE)\]\s+test:\s+\S.*$"
+)
 
 # Phase/iter scope key at the head of a commit subject, e.g. ``[P27-I04-W04]``
 # -> ``P27-I04`` and the bare pre-I02 form ``[P27-W19]`` -> ``P27``. Used to
 # tell a multi-iter phase-PR range apart from a single-iter small-CL range.
-_ITER_KEY_RE = re.compile(r"^\[(P\d{2}(?:-I\d{2})?)")
+_ITER_KEY_RE = re.compile(r"^\[(P\d{2,}(?:-I\d{2,})?)")
 
 
 def _run_git(args: list[str]) -> str:

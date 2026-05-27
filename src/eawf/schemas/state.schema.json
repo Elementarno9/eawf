@@ -106,7 +106,7 @@
         },
         "claimed_wave_ids": {
           "items": {
-            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
             "type": "string"
           },
           "title": "Claimed Wave Ids",
@@ -507,7 +507,7 @@
         },
         "active_wave_ids": {
           "items": {
-            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
             "type": "string"
           },
           "title": "Active Wave Ids",
@@ -516,7 +516,7 @@
         "iter_id": {
           "anyOf": [
             {
-              "pattern": "^P\\d{2}-I\\d{2}$",
+              "pattern": "^P\\d{2,}-I\\d{2,}$",
               "type": "string"
             },
             {
@@ -529,7 +529,7 @@
         "phase_id": {
           "anyOf": [
             {
-              "pattern": "^P\\d{2}$",
+              "pattern": "^P\\d{2,}$",
               "type": "string"
             },
             {
@@ -933,7 +933,7 @@
           "title": "Description"
         },
         "id": {
-          "pattern": "^(?:H\\d{2}-\\d{2}|[A-Z][A-Z0-9_-]{1,15}-H\\d{2}-\\d{2})$",
+          "pattern": "^(?:H\\d{2,}-\\d{2,}|[A-Z][A-Z0-9_-]{1,15}-H\\d{2,}-\\d{2,})$",
           "title": "Id",
           "type": "string"
         },
@@ -1228,7 +1228,7 @@
           "title": "Estimate Id"
         },
         "id": {
-          "pattern": "^P\\d{2}-I\\d{2}$",
+          "pattern": "^P\\d{2,}-I\\d{2,}$",
           "title": "Id",
           "type": "string"
         },
@@ -1238,7 +1238,7 @@
           "type": "string"
         },
         "phase_id": {
-          "pattern": "^P\\d{2}$",
+          "pattern": "^P\\d{2,}$",
           "title": "Phase Id",
           "type": "string"
         },
@@ -1253,7 +1253,7 @@
         },
         "wave_ids": {
           "items": {
-            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
             "type": "string"
           },
           "title": "Wave Ids",
@@ -1617,7 +1617,7 @@
         },
         "depends_on": {
           "items": {
-            "pattern": "^P\\d{2}$",
+            "pattern": "^P\\d{2,}$",
             "type": "string"
           },
           "title": "Depends On",
@@ -1637,13 +1637,13 @@
           "title": "Description"
         },
         "id": {
-          "pattern": "^P\\d{2}$",
+          "pattern": "^P\\d{2,}$",
           "title": "Id",
           "type": "string"
         },
         "iter_ids": {
           "items": {
-            "pattern": "^P\\d{2}-I\\d{2}$",
+            "pattern": "^P\\d{2,}-I\\d{2,}$",
             "type": "string"
           },
           "title": "Iter Ids",
@@ -2147,7 +2147,7 @@
         },
         "blocks": {
           "items": {
-            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
             "type": "string"
           },
           "title": "Blocks",
@@ -2193,7 +2193,7 @@
         },
         "deps": {
           "items": {
-            "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+            "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
             "type": "string"
           },
           "title": "Deps",
@@ -2238,12 +2238,12 @@
           "type": "array"
         },
         "id": {
-          "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
           "title": "Id",
           "type": "string"
         },
         "iter_id": {
-          "pattern": "^P\\d{2}-I\\d{2}$",
+          "pattern": "^P\\d{2,}-I\\d{2,}$",
           "title": "Iter Id",
           "type": "string"
         },
@@ -2494,7 +2494,7 @@
           "$ref": "#/$defs/WorktreeStatus"
         },
         "wave_id": {
-          "pattern": "^P\\d{2}-I\\d{2}-W\\d{2}$",
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
           "title": "Wave Id",
           "type": "string"
         }

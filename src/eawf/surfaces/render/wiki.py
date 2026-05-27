@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 
 from eawf.kernel.state.enums import PhaseStatus
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
@@ -50,7 +51,7 @@ def _phase_section(state: State, phase_id: str) -> list[str]:
 
     phase_iters = sorted(
         (it for it in iters.values() if it.phase_id == phase_id),
-        key=lambda r: r.id,
+        key=lambda r: natural_key(r.id),
     )
     if phase_iters:
         lines.extend(["## Iters", ""])
@@ -61,7 +62,7 @@ def _phase_section(state: State, phase_id: str) -> list[str]:
     iter_ids = {it.id for it in phase_iters}
     phase_waves = sorted(
         (w for w in waves.values() if w.iter_id in iter_ids),
-        key=lambda r: r.id,
+        key=lambda r: natural_key(r.id),
     )
     if phase_waves:
         lines.extend(
@@ -99,7 +100,7 @@ def build_wiki(state: State) -> str:
 
     if decisions:
         lines.extend(["## Decisions", ""])
-        for d in sorted(decisions.values(), key=lambda r: r.id):
+        for d in sorted(decisions.values(), key=lambda r: natural_key(r.id)):
             status = d.status.value if hasattr(d.status, "value") else str(d.status)
             lines.append(f"- `{d.id}` [{status}] {d.title}")
         lines.append("")
@@ -107,7 +108,7 @@ def build_wiki(state: State) -> str:
     phases = state.phases or {}
     closed_phases = sorted(
         (p for p in phases.values() if p.status == PhaseStatus.CLOSED),
-        key=lambda r: r.id,
+        key=lambda r: natural_key(r.id),
     )
     for phase in closed_phases:
         lines.extend(_phase_section(state, phase.id))

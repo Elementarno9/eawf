@@ -58,6 +58,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
+from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
@@ -396,6 +397,14 @@ class RoadmapTree(Tree[str]):
         super().__init__("roadmap", data="__root__", **kwargs)
         self.show_root = False
         self.guide_depth = 2
+        # Cosmetic id-column padding widths, recomputed per rebuild so 2-
+        # and 3-digit ids (P9 / P10 / P100) co-render with their titles in
+        # a single aligned column. Seeded to the historical narrow widths
+        # so an unbound tree (pre-rebuild) does not crash if a label
+        # render slips through.
+        self._phase_id_width: int = 3
+        self._iter_id_width: int = 6
+        self._wave_id_width: int = 10
 
     def on_mount(self) -> None:
         """Seed from the app's reactive state and watch for revisions.
@@ -503,8 +512,21 @@ class RoadmapTree(Tree[str]):
         """
         self.root.remove_children()
         if state is None:
+            self._phase_id_width = 0
+            self._iter_id_width = 0
+            self._wave_id_width = 0
             return
-        for phase_id in sorted(state.phases):
+        # Cosmetic display-pad: compute the widest id at each level once
+        # per rebuild so mixed 2-digit and 3-digit ids (P9 / P10 / P100)
+        # render with their titles aligned in a single column, rather than
+        # the title jitter that raw ``{id}  {title}`` produces. Min-width
+        # ``3`` matches the post-AGENTS ``\d{2,}`` widening floor (``P##``
+        # is the historical narrow form; ``P###`` is the wide form), so
+        # an all-2-digit project still renders at its natural width.
+        self._phase_id_width = max((len(pid) for pid in state.phases), default=3)
+        self._iter_id_width = max((len(iid) for iid in state.iters), default=6)
+        self._wave_id_width = max((len(wid) for wid in state.waves), default=10)
+        for phase_id in sorted(state.phases, key=natural_key):
             phase = state.phases[phase_id]
             self._add_phase(state, phase)
         self._scroll_to_active_phase(state)
@@ -548,7 +570,7 @@ class RoadmapTree(Tree[str]):
         )
         label = _pin_bar_right(
             glyph,
-            f"{phase.id}  {phase.title}",
+            f"{phase.id.ljust(self._phase_id_width)}  {phase.title}",
             bar,
             budget=self._body_budget(depth=0),
             glyph_colour=_status_colour(phase.status),
@@ -577,7 +599,7 @@ class RoadmapTree(Tree[str]):
         )
         label = _pin_bar_right(
             glyph,
-            f"{iter_obj.id}  {iter_obj.title}",
+            f"{iter_obj.id.ljust(self._iter_id_width)}  {iter_obj.title}",
             bar,
             budget=self._body_budget(depth=1),
             glyph_colour=_status_colour(iter_obj.status),
@@ -611,7 +633,7 @@ class RoadmapTree(Tree[str]):
         bar = self._wave_burn_bar(wave)
         label = _pin_bar_right(
             glyph,
-            f"{wave.id}  {wave.title}",
+            f"{wave.id.ljust(self._wave_id_width)}  {wave.title}",
             bar,
             budget=self._body_budget(depth=2),
             glyph_colour=_status_colour(wave.status),

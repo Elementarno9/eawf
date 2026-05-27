@@ -17,6 +17,7 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State
 from eawf.workflow.lifecycle._errors import LifecycleError
 
@@ -88,7 +89,9 @@ def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
         and w.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
     ]
     if open_waves:
-        raise LifecycleError(f"iter {iter_id!r} has open waves: {sorted(open_waves)}")
+        raise LifecycleError(
+            f"iter {iter_id!r} has open waves: {sorted(open_waves, key=natural_key)}"
+        )
     it.status = IterStatus.CLOSED
     it.closed_at = datetime.now(UTC)
     it.audit_id = audit_id

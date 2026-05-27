@@ -50,7 +50,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
+from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id, natural_key
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -826,7 +826,7 @@ def roadmap_show_cmd(
         # Read-only view: read_only=True bypasses the §5.5 --daemonless
         # mutating-verb gate so `roadmap show --daemonless` still works.
         with state_transaction(state_path, read_only=True) as state:
-            phases = sorted(state.phases.values(), key=lambda p: p.id)
+            phases = sorted(state.phases.values(), key=lambda p: natural_key(p.id))
             if phase is not None:
                 phases = [p for p in phases if p.id == phase]
             rows = [_phase_summary(state, p.id) for p in phases]

@@ -97,7 +97,7 @@ def worktree_create_cmd(
     ctx: typer.Context,
     wave: Annotated[
         str,
-        typer.Option("--wave", help="Wave id (P\\d{2}-I\\d{2}-W\\d{2})."),
+        typer.Option("--wave", help="Wave id (P\\d{2,}-I\\d{2,}-W\\d{2,})."),
     ],
     branch: Annotated[
         str | None,

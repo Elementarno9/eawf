@@ -22,7 +22,7 @@ import orjson
 import typer
 
 from eawf.kernel.state.enums import WaveStatus
-from eawf.kernel.state.ids import is_wave_id
+from eawf.kernel.state.ids import is_wave_id, natural_key
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.lifecycle import (
@@ -75,25 +75,26 @@ def _topo_order_with_depth(waves: list[tuple[str, list[str]]]) -> list[tuple[str
             children[d].append(wid)
     in_degree = {wid: len(deps_in[wid]) for wid in ids}
     depth: dict[str, int] = dict.fromkeys(ids, 0)
-    # Kahn with deterministic id-sorted ready queue.
-    ready = sorted([wid for wid, deg in in_degree.items() if deg == 0])
+    # Kahn with deterministic natural-key ready queue (so W9 dispatches
+    # before W10 once the queue grows past single digits).
+    ready = sorted([wid for wid, deg in in_degree.items() if deg == 0], key=natural_key)
     order: list[tuple[str, int]] = []
     while ready:
         # Pop deterministically: smallest id at the current frontier.
         node = ready.pop(0)
         order.append((node, depth[node]))
-        for child in sorted(children[node]):
+        for child in sorted(children[node], key=natural_key):
             in_degree[child] -= 1
             if in_degree[child] == 0:
                 depth[child] = max(depth[child], depth[node] + 1)
-                # Insert in sort order so the next pop stays deterministic.
-                bisect.insort(ready, child)
+                # Insert in natural-key order so the next pop stays deterministic.
+                bisect.insort(ready, child, key=natural_key)
             else:
                 depth[child] = max(depth[child], depth[node] + 1)
     # Any nodes left unprocessed (cycles) get appended at the end in id order
     # — defensive: ``plan_wave`` rejects cycles, so this branch is unreachable
     # for state.json produced by the state CLI alone.
-    remaining = sorted(wid for wid in ids if wid not in {n for n, _ in order})
+    remaining = sorted((wid for wid in ids if wid not in {n for n, _ in order}), key=natural_key)
     for wid in remaining:
         order.append((wid, depth[wid]))
     return order
@@ -121,7 +122,7 @@ def wave_graph_cmd(
     if target_iter is None:
         return
     rows = [(wid, w) for wid, w in state.waves.items() if w.iter_id == target_iter]
-    rows.sort(key=lambda kv: kv[0])
+    rows.sort(key=lambda kv: natural_key(kv[0]))
     deps_pairs = [(wid, list(w.deps)) for wid, w in rows]
     order = _topo_order_with_depth(deps_pairs)
     wave_by_id = dict(rows)
@@ -173,7 +174,7 @@ def wave_next_ready_cmd(
         return
     ready: list[str] = []
     blocked_by_failure: list[str] = []
-    for wid, w in sorted(state.waves.items()):
+    for wid, w in sorted(state.waves.items(), key=lambda kv: natural_key(kv[0])):
         if w.iter_id != target_iter:
             continue
         if w.status != WaveStatus.PENDING:
@@ -244,7 +245,8 @@ def wave_blocks_rebuild_cmd(
         state = State.model_validate(payload)
         for wave_id, wave in state.waves.items():
             new_blocks = sorted(
-                child_id for child_id, child in state.waves.items() if wave_id in child.deps
+                (child_id for child_id, child in state.waves.items() if wave_id in child.deps),
+                key=natural_key,
             )
             if list(wave.blocks) != new_blocks:
                 rewritten.append({"id": wave_id, "from": list(wave.blocks), "to": new_blocks})
@@ -259,7 +261,7 @@ def wave_blocks_rebuild_cmd(
             raw = state_path.read_bytes()
             payload = orjson.loads(raw)
             state = State.model_validate(payload)
-        for wave_id in sorted(state.waves):
+        for wave_id in sorted(state.waves, key=natural_key):
             view = wave_graph.edges(wave_id, state)
             edge_summary.append(
                 {
@@ -288,7 +290,7 @@ def _waves_in_iter(state: State, iter_id: str) -> list[tuple[str, Any]]:
     """Return (wave_id, Wave) pairs in id-ascending order for *iter_id*."""
     return sorted(
         ((wid, w) for wid, w in state.waves.items() if w.iter_id == iter_id),
-        key=lambda kv: kv[0],
+        key=lambda kv: natural_key(kv[0]),
     )
 
 

@@ -32,6 +32,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable
 
 from eawf.kernel.state.enums import BacklogPriority
+from eawf.kernel.state.ids import natural_key
 
 if TYPE_CHECKING:
     from textual.events import Resize
@@ -154,10 +155,10 @@ def sort_items(items: list[BacklogItem], sort_key: str) -> list[BacklogItem]:
     if sort_key not in SORT_KEYS:
         raise ValueError(f"unknown sort key: {sort_key!r}")
     if sort_key == "priority":
-        return sorted(items, key=lambda it: (_priority_rank(it.priority), it.id))
+        return sorted(items, key=lambda it: (_priority_rank(it.priority), natural_key(it.id)))
     if sort_key == "status":
-        return sorted(items, key=lambda it: (it.status.value, it.id))
-    return sorted(items, key=lambda it: it.id)
+        return sorted(items, key=lambda it: (it.status.value, natural_key(it.id)))
+    return sorted(items, key=lambda it: natural_key(it.id))
 
 
 def filter_items(items: list[BacklogItem], needle: str) -> list[BacklogItem]:

@@ -54,8 +54,10 @@ METRICS_SCHEMA_VERSION: Literal[1] = 1
 # Wave-id grammar (mirrors :data:`eawf.kernel.state.ids.RE_WAVE`). Used to extract
 # the iter suffix (``I01`` vs ``I02+``) for the planned/reactive split
 # without dragging the ``ids`` module into a pure compute path that
-# already has the full wave-id available.
-_WAVE_ITER_RE = re.compile(r"^P\d{2}-(I\d{2})-W\d{2}$")
+# already has the full wave-id available. ``\d{2,}`` matches the widened
+# grammar per AGENTS symbol-conventions so 3-digit ids (P100 / I100 /
+# W100) bin correctly once the queue grows past 99.
+_WAVE_ITER_RE = re.compile(r"^P\d{2,}-(I\d{2,})-W\d{2,}$")
 
 
 class EuVarianceMetric(BaseModel):

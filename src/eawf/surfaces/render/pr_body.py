@@ -25,7 +25,7 @@ from jinja2 import Environment, StrictUndefined
 from pydantic import BaseModel, ConfigDict
 
 from eawf.kernel.state.enums import AgentSessionRole
-from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
+from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id, natural_key
 from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportEvidenceRef,
@@ -126,7 +126,7 @@ def _decisions_for_phase(state: State, phase_id: str) -> list[str]:
     """
     decisions = state.decisions or {}
     out: list[str] = []
-    for d in sorted(decisions.values(), key=lambda r: r.id):
+    for d in sorted(decisions.values(), key=lambda r: natural_key(r.id)):
         if phase_id in d.title:
             out.append(d.title)
     return out
@@ -137,7 +137,7 @@ def _iters_for_phase(state: State, phase_id: str) -> list[tuple[str, str]]:
     iters = state.iters or {}
     return [
         (it.id, it.title)
-        for it in sorted(iters.values(), key=lambda r: r.id)
+        for it in sorted(iters.values(), key=lambda r: natural_key(r.id))
         if it.phase_id == phase_id
     ]
 
@@ -147,7 +147,7 @@ def _waves_for_phase(state: State, phase_id: str) -> list[tuple[str, str, str, s
     iter_ids = {iid for iid, _t in _iters_for_phase(state, phase_id)}
     waves = state.waves or {}
     rows: list[tuple[str, str, str, str]] = []
-    for w in sorted(waves.values(), key=lambda r: r.id):
+    for w in sorted(waves.values(), key=lambda r: natural_key(r.id)):
         if w.iter_id not in iter_ids:
             continue
         rows.append(

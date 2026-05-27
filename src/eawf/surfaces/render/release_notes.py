@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State
 from eawf.platform.artifacts.validation import validate_markdown_artifact
 
@@ -59,7 +60,7 @@ def _artifact_matches_phase(artifact_id: str, uri: str, phase_ids: set[str]) -> 
 def _artifact_rows(state: State, phase_ids: set[str]) -> list[str]:
     rows: list[str] = []
     audit_artifact_ids = _artifact_ids_for_phases(state, phase_ids)
-    for artifact in sorted((state.artifacts or {}).values(), key=lambda a: a.id):
+    for artifact in sorted((state.artifacts or {}).values(), key=lambda a: natural_key(a.id)):
         if not artifact.uri.startswith("repo:.ea/artifacts/"):
             continue
         if artifact.id not in audit_artifact_ids and not _artifact_matches_phase(
@@ -82,7 +83,7 @@ def build_release_notes(
     """Render a chassis-valid release notes draft."""
     phases = [
         phase
-        for phase in sorted(state.phases.values(), key=lambda p: p.id)
+        for phase in sorted(state.phases.values(), key=lambda p: natural_key(p.id))
         if _phase_in_range(phase.id, from_phase, to_phase)
     ]
     phase_ids = {phase.id for phase in phases}

@@ -1,12 +1,20 @@
 """ID grammar for eawf.
 
 Project codes: ``^[A-Z][A-Z0-9_-]{1,15}$``.
-Phase IDs: ``P\\d{2}`` (e.g., ``P01``).
-Iter IDs: ``P\\d{2}-I\\d{2}`` (e.g., ``P13-I04``).
-Wave IDs: ``P\\d{2}-I\\d{2}-W\\d{2}`` (e.g., ``P13-I04-W01``).
-Hypothesis IDs: ``H\\d{2}-\\d{2}`` plus an optional subproject prefix.
+Phase IDs: ``P\\d{2,}`` (e.g., ``P01``, ``P100``).
+Iter IDs: ``P\\d{2,}-I\\d{2,}`` (e.g., ``P13-I04``).
+Wave IDs: ``P\\d{2,}-I\\d{2,}-W\\d{2,}`` (e.g., ``P13-I04-W01``).
+Hypothesis IDs: ``H\\d{2,}-\\d{2,}`` plus an optional subproject prefix.
+Backlog IDs: ``B\\d{3,}`` (e.g., ``B001``, ``B100``).
 
-All IDs use two-digit zero-padded suffixes per `docs/architecture/state-model.md`.
+The ``\\d{2,}`` width matches ``tools/commit_prefix_lint.py`` per AGENTS
+``symbol-conventions`` so 3-digit ids (``P100``, ``I100``, ``W100``) parse
+cleanly once the queue grows past ``P99`` / ``I99`` / ``W99``.
+
+All ids use zero-padded numeric suffixes per
+``docs/architecture/state-model.md``; sorting them by raw string would lex
+``P10`` before ``P9``. Use :func:`natural_key` everywhere a list of ids is
+displayed or persisted in human-meaningful order.
 """
 
 from __future__ import annotations
@@ -14,11 +22,17 @@ from __future__ import annotations
 import re
 
 RE_PROJECT_CODE = re.compile(r"^[A-Z][A-Z0-9_-]{1,15}$")
-RE_PHASE = re.compile(r"^P\d{2}$")
-RE_ITER = re.compile(r"^P\d{2}-I\d{2}$")
-RE_WAVE = re.compile(r"^P\d{2}-I\d{2}-W\d{2}$")
-RE_HYPOTHESIS = re.compile(r"^H\d{2}-\d{2}$")
-RE_HYPOTHESIS_SCOPED = re.compile(r"^[A-Z][A-Z0-9_-]{1,15}-H\d{2}-\d{2}$")
+RE_PHASE = re.compile(r"^P\d{2,}$")
+RE_ITER = re.compile(r"^P\d{2,}-I\d{2,}$")
+RE_WAVE = re.compile(r"^P\d{2,}-I\d{2,}-W\d{2,}$")
+RE_HYPOTHESIS = re.compile(r"^H\d{2,}-\d{2,}$")
+RE_HYPOTHESIS_SCOPED = re.compile(r"^[A-Z][A-Z0-9_-]{1,15}-H\d{2,}-\d{2,}$")
+
+# Split on runs of digits so a mixed alpha+numeric id sorts numerically by
+# each numeric segment but alphabetically elsewhere. The pre-compiled regex
+# is module-level to avoid the per-call ``re.compile`` cost on hot render
+# paths (the TUI tree resorts on every frame).
+_NATURAL_KEY_RE = re.compile(r"(\d+)")
 
 
 def normalize_to_project_code(name: str) -> str:
@@ -41,6 +55,36 @@ def normalize_to_project_code(name: str) -> str:
 
 
 _MAX_SUFFIX = 99
+
+
+def natural_key(id_str: str) -> tuple[object, ...]:
+    """Return a sort key that orders ids numerically by trailing digits.
+
+    Lexicographic sort puts ``P10`` before ``P9`` and ``W100`` before ``W99``
+    because string comparison is character-by-character. ``natural_key``
+    splits the id on runs of digits so each numeric run sorts as an integer
+    while the alphabetic separators (``P``, ``-I``, ``-W``) stay
+    lex-compared. The result tuple is heterogeneous (``str`` and ``int``)
+    but Python's tuple comparison only compares positionally — every id with
+    the same shape (``P##-I##-W##``) produces tuples of the same length and
+    layout, so the comparison is well-defined.
+
+    Examples:
+        ``P9 < P10 < P100`` instead of ``P10 < P100 < P9``.
+        ``P13-I04-W09 < P13-I04-W10 < P13-I04-W100``.
+        ``B001 < B010 < B100``.
+
+    Args:
+        id_str: Any eawf id (phase, iter, wave, hypothesis, backlog), or any
+            string containing zero or more digit runs.
+
+    Returns:
+        A tuple alternating between non-digit string chunks (lower-cased for
+        case-insensitive sort) and integer numeric chunks. The tuple is
+        suitable as the ``key=`` argument to :func:`sorted` and ``list.sort``.
+    """
+    parts = _NATURAL_KEY_RE.split(id_str)
+    return tuple(int(part) if part.isdigit() else part.lower() for part in parts)
 
 
 def is_project_code(s: str) -> bool:

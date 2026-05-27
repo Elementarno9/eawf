@@ -24,13 +24,16 @@ def test_project_code_rejects(code: str) -> None:
 def test_phase_id_format() -> None:
     assert ids.is_phase_id("P01")
     assert ids.is_phase_id("P13")
+    # 3-digit ids accepted per the AGENTS ``\d{2,}`` widening so the queue
+    # can grow past P99 without re-fitting the grammar.
+    assert ids.is_phase_id("P100")
     assert not ids.is_phase_id("P1")
-    assert not ids.is_phase_id("P001")
     assert not ids.is_phase_id("P13-I04")
 
 
 def test_iter_id_format() -> None:
     assert ids.is_iter_id("P13-I04")
+    assert ids.is_iter_id("P100-I100")
     assert not ids.is_iter_id("P13")
     assert not ids.is_iter_id("P13-I04-W01")
 
@@ -38,9 +41,9 @@ def test_iter_id_format() -> None:
 def test_wave_id_format() -> None:
     assert ids.is_wave_id("P13-I04-W01")
     assert ids.is_wave_id("P01-I02-W99")
+    assert ids.is_wave_id("P100-I100-W100")
     assert not ids.is_wave_id("P13-I04")
     assert not ids.is_wave_id("P13-I04-W1")
-    assert not ids.is_wave_id("P13-I04-W001")
 
 
 def test_hypothesis_id_format() -> None:
@@ -116,3 +119,52 @@ def test_allocate_next_wave_id_saturation() -> None:
 def test_allocate_next_wave_id_invalid_iter() -> None:
     with pytest.raises(ValueError):
         ids.allocate_next_wave_id("P13", set())
+
+
+def test_natural_key_orders_phases_numerically() -> None:
+    phases = ["P10", "P9", "P100", "P01", "P2"]
+    assert sorted(phases, key=ids.natural_key) == ["P01", "P2", "P9", "P10", "P100"]
+
+
+def test_natural_key_orders_waves_numerically() -> None:
+    waves = ["P13-I04-W10", "P13-I04-W09", "P13-I04-W100", "P13-I04-W01"]
+    assert sorted(waves, key=ids.natural_key) == [
+        "P13-I04-W01",
+        "P13-I04-W09",
+        "P13-I04-W10",
+        "P13-I04-W100",
+    ]
+
+
+def test_natural_key_orders_iters_across_phases() -> None:
+    iters = ["P9-I10", "P10-I01", "P9-I02", "P100-I01"]
+    assert sorted(iters, key=ids.natural_key) == [
+        "P9-I02",
+        "P9-I10",
+        "P10-I01",
+        "P100-I01",
+    ]
+
+
+def test_natural_key_orders_backlog_ids() -> None:
+    backlog = ["B100", "B009", "B010", "B001"]
+    assert sorted(backlog, key=ids.natural_key) == ["B001", "B009", "B010", "B100"]
+
+
+def test_natural_key_mixed_phase_iter_wave_levels() -> None:
+    # Mixed-shape ids still compare deterministically — same prefix sorts
+    # by trailing structure, different prefixes by their first numeric
+    # divergence.
+    mixed = ["P09", "P10-I01", "P09-I02-W03", "P10"]
+    assert sorted(mixed, key=ids.natural_key) == [
+        "P09",
+        "P09-I02-W03",
+        "P10",
+        "P10-I01",
+    ]
+
+
+def test_natural_key_handles_empty_and_pure_alpha() -> None:
+    # No digit runs: the key is a single lower-cased string chunk.
+    assert ids.natural_key("") == ("",)
+    assert ids.natural_key("ABC") == ("abc",)

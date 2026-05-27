@@ -14,6 +14,7 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import LifecycleError
@@ -232,7 +233,7 @@ def remove_wave_plan(state: State, *, wave_id: str) -> None:
         )
     if wave.blocks:
         raise LifecycleError(
-            f"wave {wave_id!r} blocks other waves {sorted(wave.blocks)}; "
+            f"wave {wave_id!r} blocks other waves {sorted(wave.blocks, key=natural_key)}; "
             "remove those first or break the dep"
         )
     for dep_id in wave.deps:
@@ -353,14 +354,15 @@ def claim_wave(
     ]
     if unmet_deps:
         raise LifecycleError(
-            f"wave {wave_id!r} blocked on un-closed dep waves: {sorted(unmet_deps)}"
+            f"wave {wave_id!r} blocked on un-closed dep waves: "
+            f"{sorted(unmet_deps, key=natural_key)}"
         )
     if not out_of_order:
         skipped = _lower_w_sibling_pending(state, wave)
         if skipped:
             raise LifecycleError(
                 f"wave {wave_id!r} would skip lower-numbered ready siblings: "
-                f"{sorted(skipped)}; pass --out-of-order to claim regardless"
+                f"{sorted(skipped, key=natural_key)}; pass --out-of-order to claim regardless"
             )
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
