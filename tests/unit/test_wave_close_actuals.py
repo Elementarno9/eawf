@@ -1,14 +1,20 @@
-"""Default estimate on claim + no auto-actual on close (P27-I05-W28).
+"""Default estimate on claim + token-only auto-actual on close.
 
 Claiming a wave seeds a default :class:`~eawf.kernel.state.models.EstimateSummary`
-from its effort bucket (the estimate side of the learning loop, unchanged).
+from its effort bucket (the estimate side of the learning loop, unchanged
+since P27-I05-W28).
 
-Closing a wave records NO actual: the open->close wall-clock span is not
-agent effort (it counts overnight / cross-session / other-wave idle), so
-the W28 EU-actual fix retired the auto-record. Real actuals come from
-measured sources only (the manual ``eawf actual start/stop`` segments now,
-per-wave token accounting in v0.4), so ``compute_estimate_actual_variance``
-reads the honest empty state until a measured actual exists.
+Closing a wave upserts an :class:`ActualSummary` carrying the
+close-time ``actual_tokens`` tally from :attr:`Wave.tokens_consumed`
+plus ``actual_cost_usd=0.0`` (P28-I02-W03: per-model rate table not
+yet wired). The auto-created actual leaves ``elapsed_eu=0.0`` — the
+open->close wall-clock span is not agent effort (it counts overnight
+/ cross-session / other-wave idle, inflating consumed EU by ~10x per
+the P27-I05-W28 EU-actual research). Measured elapsed-EU still comes
+from manual ``eawf actual start/stop`` segments only, so
+``compute_estimate_actual_variance`` continues to read the honest
+zero-EU state until a measured actual exists — even though
+``state.actuals`` is now populated for the cost / token side.
 """
 
 from __future__ import annotations
@@ -136,27 +142,85 @@ def test_claim_wave_no_bucket_writes_no_estimate() -> None:
     state = _empty_state()
     _seed_wave(state, effort_bucket=None)
 
-    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    with pytest.raises(Exception, match="has no effort_bucket"):
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
 
-    # No bucket -> no estimate seeded; the dict stays None/empty.
+    # No bucket -> claim is rejected before any estimate can be seeded.
     assert not (state.estimates or {})
 
 
-# ---- close_wave records NO actual (W28: wall-clock auto-record retired) ------
+# ---- close_wave upserts ActualSummary (P28-I02-W03 token-only auto-actual) ---
 
 
-def test_close_wave_records_no_actual() -> None:
+def test_close_wave_upserts_actual_with_token_tally() -> None:
+    """close_wave creates ActualSummary carrying Wave.tokens_consumed."""
     state = _empty_state()
     _seed_wave(state)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    # A positive open->close span used to fabricate a wall-clock actual.
+    state.waves["P01-I01-W01"].tokens_consumed = 4242
+    # A positive open->close span historically fabricated a wall-clock
+    # actual; the token-only auto-actual leaves elapsed_eu at 0.0.
     state.waves["P01-I01-W01"].opened_at = datetime.now(UTC) - timedelta(minutes=60)
 
     wave = close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
     assert wave.status == WaveStatus.CLOSED
-    # No actual is auto-recorded from the wall-clock span.
-    assert not (state.actuals or {})
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.scope_id == "P01-I01-W01"
+    assert actual.actual_tokens == 4242
+    # Cost stays at 0.0 until the per-model rate table lands.
+    assert actual.actual_cost_usd == pytest.approx(0.0)
+    # Token-only auto-actual leaves elapsed_eu at 0.0 (W28 invariant).
+    assert actual.elapsed_eu == pytest.approx(0.0)
+
+
+def test_close_wave_upserts_actual_zero_tokens_when_unaccrued() -> None:
+    """A wave that never accrued tokens still upserts (zero token tally)."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.actual_tokens == 0
+    assert actual.actual_cost_usd == pytest.approx(0.0)
+
+
+def test_close_wave_refreshes_existing_actual_tokens() -> None:
+    """A pre-existing ActualSummary keeps elapsed_eu; token tally refreshed."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    # Pre-seed a measured actual (as if `eawf actual stop` had run).
+    from eawf.kernel.state.enums import ActualStatus
+    from eawf.kernel.state.models import ActualSummary
+
+    seeded_at = datetime(2026, 5, 1, tzinfo=UTC)
+    state.actuals = {
+        "P01-I01-W01": ActualSummary(
+            id="ACT-P01-I01-W01",
+            scope_id="P01-I01-W01",
+            status=ActualStatus.ACTIVE,
+            elapsed_eu=1.25,
+            actual_tokens=100,
+            current_store_record_id="REC-P01-I01-W01",
+            updated_at=seeded_at,
+        )
+    }
+    state.waves["P01-I01-W01"].tokens_consumed = 9999
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    actual = state.actuals["P01-I01-W01"]
+    # Token tally refreshed, status flipped to DONE, but the measured
+    # elapsed_eu segment is preserved.
+    assert actual.actual_tokens == 9999
+    assert actual.status == ActualStatus.DONE
+    assert actual.elapsed_eu == pytest.approx(1.25)
+    assert actual.updated_at > seeded_at
 
 
 def test_close_wave_missing_opened_at_does_not_crash() -> None:
@@ -168,7 +232,9 @@ def test_close_wave_missing_opened_at_does_not_crash() -> None:
     wave = close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
     assert wave.status == WaveStatus.CLOSED
-    assert not (state.actuals or {})
+    # The token-only upsert still runs even when opened_at is missing.
+    assert state.actuals is not None
+    assert "P01-I01-W01" in state.actuals
 
 
 def test_close_wave_idempotent_double_close_is_safe() -> None:
@@ -183,10 +249,16 @@ def test_close_wave_idempotent_double_close_is_safe() -> None:
         close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
 
-# ---- variance metric reads the honest empty state without a measured actual --
+# ---- variance metric still empty without measured elapsed-EU (W28 invariant) -
 
 
-def test_metrics_variance_empty_without_measured_actual() -> None:
+def test_metrics_variance_empty_without_measured_elapsed_eu() -> None:
+    """compute_estimate_actual_variance ignores token-only auto-actuals.
+
+    The upserted ActualSummary leaves ``elapsed_eu=0.0``; the variance
+    metric sums ``actual.elapsed_eu`` so the aggregate stays at zero,
+    matching the W28 invariant that wall-clock spans never feed M26.
+    """
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
@@ -195,6 +267,10 @@ def test_metrics_variance_empty_without_measured_actual() -> None:
 
     metric = compute_estimate_actual_variance(state)
 
-    # Close records no actual, so the variance metric has no sample to report.
-    assert metric.sample_count == 0
-    assert metric.variance_pct is None
+    # One sample (the token-only auto-actual), but zero actual_eu means
+    # the aggregate variance is -100% (close came in under the M-bucket
+    # planned estimate of 1.0 EU because no measured elapsed_eu landed).
+    assert metric.sample_count == 1
+    assert metric.actual_eu == pytest.approx(0.0)
+    assert metric.planned_eu == pytest.approx(1.0)
+    assert metric.variance_pct == pytest.approx(-100.0)

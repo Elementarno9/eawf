@@ -14,9 +14,15 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
+from eawf.kernel.state.enums import (
+    ActualStatus,
+    AgentSessionRole,
+    EffortBucket,
+    IterStatus,
+    WaveStatus,
+)
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import State, Wave
+from eawf.kernel.state.models import ActualSummary, State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import LifecycleError
 
@@ -503,6 +509,19 @@ def close_wave(
     left ``None``, callers fall back to
     :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`, which walks
     ``git log --grep '[P##-W##]'`` against the active branch.
+
+    Telemetry handoff (P28-I02-W03): the close path upserts
+    :class:`ActualSummary` for *wave_id* in ``state.actuals`` carrying
+    the wave's :attr:`Wave.tokens_consumed` tally on ``actual_tokens``.
+    The auto-created actual leaves ``elapsed_eu=0.0`` — the open->close
+    wall-clock span is not agent effort (it counts overnight,
+    cross-session, and other-wave idle time, inflating consumed EU by
+    ~10x per P27-I05 EU research); real elapsed-EU comes from measured
+    ``eawf actual start/stop`` segments when an operator runs them.
+    ``actual_cost_usd`` stays at ``0.0`` for v0.4 — the per-model rate
+    table that turns tokens into dollars is not yet wired (the field
+    exists so the post-mutation event envelope can publish a typed cost
+    value once the rate table lands).
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -514,15 +533,38 @@ def close_wave(
         )
     wave.status = WaveStatus.CLOSED
     wave.outcome = outcome
-    wave.closed_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    wave.closed_at = now
     if wave_id in state.current.active_wave_ids:
         state.current.active_wave_ids.remove(wave_id)
-    # No actual is auto-recorded here. The open->close wall-clock span is
-    # not agent effort: it counts overnight, cross-session, and other-wave
-    # idle time, inflating consumed EU by ~10x (P27-I05 EU research). Real
-    # actuals come from measured sources only -- the manual ``eawf actual
-    # start/stop`` segments now, and per-wave token accounting in v0.4.
-    logger.info(f"close_wave id={wave_id} outcome={outcome!r}")
+    # Upsert the ActualSummary so M26 + the wave_closed event payload
+    # carry the close-time token tally. Existing records (e.g. seeded
+    # by a manual ``eawf actual stop``) keep their elapsed_eu /
+    # attention_eu / runtime_eu fields and only the token rollup is
+    # refreshed; auto-created records leave elapsed_eu at 0.0 per the
+    # docstring note above.
+    if state.actuals is None:
+        state.actuals = {}
+    existing = state.actuals.get(wave_id)
+    if existing is None:
+        state.actuals[wave_id] = ActualSummary(
+            id=f"ACT-{wave_id}",
+            scope_id=wave_id,
+            status=ActualStatus.DONE,
+            elapsed_eu=0.0,
+            actual_tokens=wave.tokens_consumed,
+            actual_cost_usd=0.0,
+            current_store_record_id=f"REC-{wave_id}",
+            updated_at=now,
+        )
+    else:
+        existing.status = ActualStatus.DONE
+        existing.actual_tokens = wave.tokens_consumed
+        existing.updated_at = now
+    logger.info(
+        f"close_wave id={wave_id} outcome={outcome!r} "
+        f"actual_tokens={wave.tokens_consumed} actual_cost_usd=0.0"
+    )
     return wave
 
 

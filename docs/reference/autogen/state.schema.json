@@ -16,8 +16,20 @@
     },
     "ActualSummary": {
       "additionalProperties": false,
-      "description": "Latest actual (segments in store).",
+      "description": "Latest actual (segments in store).\n\n``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the M26\nvariance / cost view has the close-time token tally without\nre-reading the wave record. ``actual_cost_usd`` is the per-token\ncost rollup; v0.4 leaves it at ``0.0`` until a per-model rate table\nwires in (see :func:`eawf.workflow.lifecycle.wave.close_wave`).\nBoth fields default to ``0`` / ``0.0`` so existing on-disk rows\nstay valid without a schema bump.",
       "properties": {
+        "actual_cost_usd": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Actual Cost Usd",
+          "type": "number"
+        },
+        "actual_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Actual Tokens",
+          "type": "integer"
+        },
         "agent_runtime_eu": {
           "anyOf": [
             {

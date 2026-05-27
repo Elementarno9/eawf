@@ -357,6 +357,66 @@ def test_mutate_publishes_to_bus(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> None:
+    """WAVE_CLOSE envelope carries ``event_kind='wave_closed'`` + token/cost extras.
+
+    P28-I02-W03: the daemon's wave-close mutator maps MutationKind.WAVE_CLOSE
+    to the closed ``EventKind`` literal ``wave_closed`` and surfaces the
+    upserted ActualSummary's ``actual_tokens`` + ``actual_cost_usd`` on the
+    envelope ``extras`` so subscribers see the cost view without re-reading
+    state.json.
+    """
+    # Pre-seed the wave with a token tally so the upsert lands a non-zero
+    # rollup on the event extras.
+    payload = _build_state_payload()
+    payload["waves"]["P24-I01-W09"]["tokens_consumed"] = 7777  # type: ignore[index]
+    ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        envelope_payload = result["event"]["payload"]
+        assert envelope_payload["event_kind"] == "wave_closed"
+        assert envelope_payload["extras"]["actual_tokens"] == 7777
+        assert envelope_payload["extras"]["actual_cost_usd"] == 0.0
+        # The on-disk JSONL row carries the same typed discriminator + extras.
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+        on_disk = orjson.loads(rows[0])
+        assert on_disk["payload"]["event_kind"] == "wave_closed"
+        assert on_disk["payload"]["extras"]["actual_tokens"] == 7777
+
+    _run(body)
+
+
+def test_mutate_non_wave_close_omits_event_kind(tmp_path: Path) -> None:
+    """Mutation kinds not yet in _MUTATION_EVENT_KIND emit ``event_kind=None``.
+
+    P28-I02-W03 wires only WAVE_CLOSE; other kinds land with the
+    discriminator left ``None`` during the v0.3-v0.5 migration window so
+    on-disk rows pre-dating the typed event-kind era stay valid.
+    """
+    ctx, _state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path)
+    mutation = Mutation(
+        kind=MutationKind.EVENT_APPEND,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"event_type": "note.recorded", "message": "hi"},
+    )
+
+    async def body() -> None:
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        envelope_payload = result["event"]["payload"]
+        assert envelope_payload["event_kind"] is None
+
+    _run(body)
+
+
 def test_mutate_last_event_id_updated(tmp_path: Path) -> None:
     """``ctx.last_event_id`` reflects the most recent envelope id."""
     ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)

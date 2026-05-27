@@ -455,3 +455,61 @@ def test_metrics_summary_rejects_extra_keys() -> None:
     payload["unexpected_metric"] = {"foo": "bar"}
     with pytest.raises(ValueError, match="unexpected_metric"):
         MetricsSummary.model_validate(payload)
+
+
+# ---- ActualSummary v0.4 fields (P28-I02-W03) --------------------------------
+
+
+def test_actual_summary_defaults_zero_tokens_and_cost() -> None:
+    """ActualSummary defaults ``actual_tokens=0`` and ``actual_cost_usd=0.0``.
+
+    Existing on-disk rows (pre-P28-I02-W03) omit these fields; the
+    defaults keep the model additive / replay-safe with no schema bump.
+    """
+    actual = _actual(wave_id="P01-I01-W01", elapsed_eu=1.5)
+    assert actual.actual_tokens == 0
+    assert actual.actual_cost_usd == 0.0
+
+
+def test_actual_summary_accepts_token_and_cost_overrides() -> None:
+    """The two new fields round-trip through validation when explicit."""
+    actual = ActualSummary(
+        id="ACT-P01-I01-W01",
+        scope_id="P01-I01-W01",
+        status=ActualStatus.DONE,
+        elapsed_eu=1.5,
+        actual_tokens=12345,
+        actual_cost_usd=0.42,
+        current_store_record_id="REC-P01-I01-W01",
+        updated_at=_T0,
+    )
+    assert actual.actual_tokens == 12345
+    assert actual.actual_cost_usd == pytest.approx(0.42)
+
+
+def test_actual_summary_rejects_negative_tokens() -> None:
+    """``actual_tokens`` carries ``Field(ge=0)`` — negative values fail."""
+    with pytest.raises(ValueError, match="actual_tokens"):
+        ActualSummary(
+            id="ACT-W01",
+            scope_id="P01-I01-W01",
+            status=ActualStatus.DONE,
+            elapsed_eu=0.0,
+            actual_tokens=-1,
+            current_store_record_id="REC-W01",
+            updated_at=_T0,
+        )
+
+
+def test_actual_summary_rejects_negative_cost() -> None:
+    """``actual_cost_usd`` carries ``Field(ge=0.0)`` — negative cost fails."""
+    with pytest.raises(ValueError, match="actual_cost_usd"):
+        ActualSummary(
+            id="ACT-W01",
+            scope_id="P01-I01-W01",
+            status=ActualStatus.DONE,
+            elapsed_eu=0.0,
+            actual_cost_usd=-0.01,
+            current_store_record_id="REC-W01",
+            updated_at=_T0,
+        )

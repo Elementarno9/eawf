@@ -79,7 +79,7 @@ from eawf.kernel.state.mutations import (
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.kinds.event import EventKind, EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
 from eawf.runtime.daemon import wal
@@ -455,8 +455,13 @@ def _compute_wave_close_extras(
 
     Returns:
         Dict with the ``readiness_warnings_count`` key (always set;
-        ``0`` on the happy path). Empty dict on KeyError so the
-        envelope-extras merge stays a no-op for non-wave scopes.
+        ``0`` on the happy path) and — when the wave's close path
+        upserted an :class:`ActualSummary` (P28-I02-W03) — the
+        ``actual_tokens`` + ``actual_cost_usd`` rollup so the
+        ``wave_closed`` event publishes the close-time cost view
+        without subscribers re-reading state.json. Empty dict on
+        KeyError so the envelope-extras merge stays a no-op for
+        non-wave scopes.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.verify import compute as compute_readiness
@@ -480,7 +485,17 @@ def _compute_wave_close_extras(
             logger.warning(
                 f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
             )
-    return {"readiness_warnings_count": count}
+    extras: dict[str, str | int | float | bool] = {"readiness_warnings_count": count}
+    # P28-I02-W03: surface the close-time token + cost rollup on the
+    # event envelope. The wave_close apply (close_wave -> upsert
+    # ActualSummary) populated these from Wave.tokens_consumed; cost
+    # stays 0.0 until the per-model rate table lands.
+    actuals = state.actuals or {}
+    actual = actuals.get(wave_id)
+    if actual is not None:
+        extras["actual_tokens"] = actual.actual_tokens
+        extras["actual_cost_usd"] = actual.actual_cost_usd
+    return extras
 
 
 def _apply_wave_fail(state: State, mutation: Mutation) -> None:
@@ -758,6 +773,19 @@ def _resolve_apply(kind: MutationKind) -> ApplyFunc:
 # ---- Envelope construction --------------------------------------------------
 
 
+#: Map :class:`MutationKind` -> closed :data:`EventKind` literal so the
+#: post-mutation envelope carries a typed ``event_kind`` discriminator
+#: (P28-I02-W03). Kinds not in this table land with ``event_kind=None``
+#: during the v0.3-v0.5 migration window — the field is optional on
+#: :class:`EventPayload` until every emitter is migrated, at which point
+#: v0.5+ governance flips it to non-optional. Today only ``WAVE_CLOSE``
+#: is wired; subsequent verify-spine waves extend the table as the
+#: claim / fail / phase / iter lifecycle catches up.
+_MUTATION_EVENT_KIND: Final[dict[MutationKind, EventKind]] = {
+    MutationKind.WAVE_CLOSE: "wave_closed",
+}
+
+
 def _build_event_envelope(
     *,
     mutation: Mutation,
@@ -778,18 +806,21 @@ def _build_event_envelope(
         before_version: State digest before the apply.
         after_version: State digest after the apply.
         extras: Optional rolled-up advisory metrics to surface on the
-            envelope's :attr:`EventPayload.extras` map. Today only the
-            ``WAVE_CLOSE`` path populates this (with
-            ``readiness_warnings_count`` from the W06 close-readiness
-            advisory); future verify-spine waves may extend the set
-            (compile-gate fail count, waiver count, etc.). Additive —
-            existing subscribers ignore unknown extras.
+            envelope's :attr:`EventPayload.extras` map. Today the
+            ``WAVE_CLOSE`` path populates this (W06
+            ``readiness_warnings_count`` + the P28-I02-W03
+            ``actual_tokens`` / ``actual_cost_usd`` rollup from the
+            close-time ActualSummary); future verify-spine waves may
+            extend the set (compile-gate fail count, waiver count,
+            etc.). Additive — existing subscribers ignore unknown
+            extras.
     """
     now = datetime.now(UTC)
     summary = f"state.mutate {mutation.kind.value} scope={mutation.scope_id}"
     payload = EventPayload(
         timestamp=now,
         event_type=f"state.mutate.{mutation.kind.value}",
+        event_kind=_MUTATION_EVENT_KIND.get(mutation.kind),
         actor="daemon",
         command=f"state.mutate.{mutation.kind.value}",
         args_hash=_args_hash(mutation),

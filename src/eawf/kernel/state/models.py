@@ -435,7 +435,16 @@ class EstimateSummary(_StrictModel):
 
 
 class ActualSummary(_StrictModel):
-    """Latest actual (segments in store)."""
+    """Latest actual (segments in store).
+
+    ``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the M26
+    variance / cost view has the close-time token tally without
+    re-reading the wave record. ``actual_cost_usd`` is the per-token
+    cost rollup; v0.4 leaves it at ``0.0`` until a per-model rate table
+    wires in (see :func:`eawf.workflow.lifecycle.wave.close_wave`).
+    Both fields default to ``0`` / ``0.0`` so existing on-disk rows
+    stay valid without a schema bump.
+    """
 
     id: IdStr
     scope_id: str
@@ -443,6 +452,8 @@ class ActualSummary(_StrictModel):
     elapsed_eu: float
     attention_eu: float | None = None
     agent_runtime_eu: float | None = None
+    actual_tokens: Annotated[int, Field(ge=0)] = 0
+    actual_cost_usd: Annotated[float, Field(ge=0.0)] = 0.0
     current_store_record_id: str
     updated_at: UtcDatetime
 
