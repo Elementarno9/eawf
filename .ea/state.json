@@ -2069,7 +2069,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P28-I02-W25"
+    ],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -4601,6 +4603,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P28-I02-W24",
       "updated_at": "2026-05-27T16:16:19.578306Z"
+    },
+    "P28-I02-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W25-bucket-20260527T173049Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P28-I02-W25",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P28-I02-W25",
+      "updated_at": "2026-05-27T17:30:49.087204Z"
     }
   },
   "goals": {
@@ -5550,7 +5565,8 @@
         "P28-I02-W21",
         "P28-I02-W22",
         "P28-I02-W23",
-        "P28-I02-W24"
+        "P28-I02-W24",
+        "P28-I02-W25"
       ]
     },
     "P28-I03": {
@@ -6207,7 +6223,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T17:26:14.215460Z",
+  "updated_at": "2026-05-27T17:30:49.087437Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21024,7 +21040,8 @@
       "agent_role": "executor",
       "blocks": [
         "P28-I03-W01",
-        "P28-I03-W21"
+        "P28-I03-W21",
+        "P28-I02-W25"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-27T15:38:16.263964Z",
@@ -21643,6 +21660,41 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P28-I02-W24-1779898585"
+    },
+    "P28-I02-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260527T193500Z-operator-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W09"
+      ],
+      "description": "Repair ship-gate failure where MutationKind.DECISION_OBSOLETE exists but the daemon apply registry has no implementation.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/workflow/evidence/decision.py",
+        "tests/daemon/test_state_methods.py"
+      ],
+      "id": "P28-I02-W25",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T17:30:42.869712Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "DECISION_OBSOLETE has a daemon apply function",
+        "obsolete mutation preserves decision lifecycle semantics",
+        "full state-methods registry test passes"
+      ],
+      "title": "fix: wire decision obsolete daemon mutation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     },
     "P28-I03-W01": {
       "agent_role": "executor",
