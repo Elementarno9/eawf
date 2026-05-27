@@ -28,6 +28,7 @@ from eawf.kernel.store.paths import store_dir as _store_dir
 from eawf.platform.profiles import load_profile
 from eawf.platform.profiles.models import FloorCheck, VerifyBlock
 from eawf.workflow.lifecycle.transitions import (
+    LifecycleError,
     claim_wave,
     open_iter,
     open_phase,
@@ -128,6 +129,42 @@ def _failing_floor_check(name: str) -> FloorCheck:
     )
 
 
+def _write_verify_profile(
+    repo_root: Path,
+    *,
+    enforce: bool,
+    command: list[str] | None = None,
+) -> None:
+    """Write a workspace profile selected by ``profiles.enabled``."""
+    profile_dir = repo_root / ".ea" / "profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled:\n    - enforcing\n",
+        encoding="utf-8",
+    )
+    cmd = command or ["git", "show", "no-such-ref-w26-floor"]
+    rendered_cmd = ", ".join(f'"{part}"' for part in cmd)
+    profile_dir.joinpath("enforcing.yaml").write_text(
+        "\n".join(
+            [
+                "name: enforcing",
+                "verify:",
+                f"  enforce: {'true' if enforce else 'false'}",
+                "  argv_allowlist:",
+                "    - git",
+                "  floor_checks:",
+                "    - name: fail-floor",
+                f"      cmd: [{rendered_cmd}]",
+                "      scope: all",
+                "      cadence: every-wave",
+                "      policy: warn",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 # ---- integration: floor pack -> readiness ---------------------------------
 
 
@@ -165,7 +202,7 @@ def test_floor_pack_renders_one_criterion_view_per_check(
     monkeypatch.setattr(
         readiness_mod,
         "_load_active_verify_block",
-        lambda scope_id, state_arg: block,
+        lambda scope_id, state_arg, **kwargs: block,
     )
 
     result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
@@ -196,7 +233,7 @@ def test_floor_pack_failing_check_flips_ready(
     monkeypatch.setattr(
         readiness_mod,
         "_load_active_verify_block",
-        lambda scope_id, state_arg: block,
+        lambda scope_id, state_arg, **kwargs: block,
     )
 
     result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
@@ -207,6 +244,44 @@ def test_floor_pack_failing_check_flips_ready(
     assert fail_view.status == "fail"
     assert fail_view.gate_results is not None
     assert fail_view.gate_results[0].status == "fail"
+
+
+def test_real_profile_verify_enforce_rejects_not_ready(tmp_path: Path) -> None:
+    """``profile.verify.enforce`` loaded from config turns readiness into a gate."""
+    state = _empty_state()
+    _seed_wave(state)
+    _init_test_repo(tmp_path)
+    _write_verify_profile(tmp_path, enforce=True)
+    store_dir = _store_dir(tmp_path / ".ea" / "state.json")
+
+    with pytest.raises(LifecycleError, match="readiness enforcement failed"):
+        readiness_mod.compute(
+            WAVE_ID,
+            state=state,
+            store_dir=store_dir,
+            repo_root=tmp_path,
+            config_root=tmp_path,
+        )
+
+
+def test_real_profile_without_enforce_stays_advisory(tmp_path: Path) -> None:
+    """Default advisory profile mode returns ``ready=False`` without raising."""
+    state = _empty_state()
+    _seed_wave(state)
+    _init_test_repo(tmp_path)
+    _write_verify_profile(tmp_path, enforce=False)
+    store_dir = _store_dir(tmp_path / ".ea" / "state.json")
+
+    result = readiness_mod.compute(
+        WAVE_ID,
+        state=state,
+        store_dir=store_dir,
+        repo_root=tmp_path,
+        config_root=tmp_path,
+    )
+
+    assert result.ready is False
+    assert [view.id for view in result.criteria] == ["fail-floor"]
 
 
 def test_floor_pack_yields_to_typed_spec_when_both_present(
@@ -245,7 +320,7 @@ def test_floor_pack_yields_to_typed_spec_when_both_present(
     monkeypatch.setattr(
         readiness_mod,
         "_load_active_verify_block",
-        lambda scope_id, state_arg: block,
+        lambda scope_id, state_arg, **kwargs: block,
     )
 
     result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
@@ -265,7 +340,7 @@ def test_empty_floor_pack_does_not_render(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(
         readiness_mod,
         "_load_active_verify_block",
-        lambda scope_id, state_arg: block,
+        lambda scope_id, state_arg, **kwargs: block,
     )
 
     result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
@@ -341,7 +416,7 @@ def test_three_profiles_yield_identical_readiness_shape(
         monkeypatch.setattr(
             readiness_mod,
             "_load_active_verify_block",
-            lambda scope_id, state_arg, _b=block: _b,
+            lambda scope_id, state_arg, _b=block, **kwargs: _b,
         )
         result = readiness_mod.compute(
             WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path

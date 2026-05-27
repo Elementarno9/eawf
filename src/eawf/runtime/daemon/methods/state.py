@@ -116,6 +116,7 @@ from eawf.workflow.lifecycle.transitions import (
     remove_wave_plan,
     set_wave_deps,
 )
+from eawf.workflow.verify.models import CloseReadiness
 
 logger = logging.getLogger(__name__)
 
@@ -447,21 +448,48 @@ def _apply_wave_close(state: State, mutation: Mutation) -> None:
         wave.commit = str(commit)
 
 
+def _config_root_for_state_path(state_path: Path) -> Path:
+    """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
+    return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+
+
+def _compute_wave_close_readiness(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> CloseReadiness | None:
+    """Return the pre-close readiness view for a wave-close mutation."""
+    from eawf.kernel.store.paths import store_dir as _store_dir
+    from eawf.workflow.verify import compute as compute_readiness
+
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id or wave_id not in state.waves:
+        return None
+    return compute_readiness(
+        wave_id,
+        state=state,
+        store_dir=_store_dir(state_path),
+        repo_root=repo_root,
+        config_root=_config_root_for_state_path(state_path),
+    )
+
+
 def _compute_wave_close_extras(
     state: State,
     mutation: Mutation,
     *,
     state_path: Path,
     repo_root: Path,
+    readiness: CloseReadiness | None = None,
 ) -> dict[str, str | int | float | bool]:
     """Return the W06 close-readiness advisory metrics for *mutation*.
 
-    Computes :func:`eawf.workflow.verify.readiness.compute` against the
-    post-apply *state* (the wave is CLOSED in-memory at this point) and
-    folds the rolled-up advisory tally into an
+    Folds the rolled-up advisory tally into an
     :attr:`EventPayload.extras`-shaped dict. Failures are non-blocking
-    by design (W06 is purely advisory; W19 flips this to gating
-    behind ``profile.verify.enforce``).
+    unless the pre-close readiness pass already raised under
+    ``profile.verify.enforce``.
 
     Args:
         state: In-memory state AFTER ``_apply_wave_close`` succeeds.
@@ -473,6 +501,8 @@ def _compute_wave_close_extras(
         repo_root: Repository root the evidence freshness check runs
             against (forwarded to
             :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`).
+        readiness: Optional pre-close readiness view. When absent, the
+            helper computes an advisory view itself.
 
     Returns:
         Dict with the ``readiness_warnings_count`` key (always set;
@@ -484,21 +514,21 @@ def _compute_wave_close_extras(
         KeyError so the envelope-extras merge stays a no-op for
         non-wave scopes.
     """
-    from eawf.kernel.store.paths import store_dir as _store_dir
-    from eawf.workflow.verify import compute as compute_readiness
-
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id:
         return {}
-    try:
-        readiness = compute_readiness(
-            wave_id,
-            state=state,
-            store_dir=_store_dir(state_path),
-            repo_root=repo_root,
-        )
-    except KeyError as exc:
-        logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+    if readiness is None:
+        try:
+            readiness = _compute_wave_close_readiness(
+                state,
+                mutation,
+                state_path=state_path,
+                repo_root=repo_root,
+            )
+        except KeyError as exc:
+            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+            return {}
+    if readiness is None:
         return {}
     count = len(readiness.warnings)
     for view in readiness.criteria:
@@ -1187,8 +1217,19 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         with portalock.acquire(state_path, timeout=5.0):
             state, payload = _read_state(state_path)
             before_version = _state_version(payload)
+            wave_close_readiness: CloseReadiness | None = None
+            repo_anchor = (
+                Path(args.repo_root) if args.repo_root else _config_root_for_state_path(state_path)
+            )
 
             try:
+                if mutation.kind == MutationKind.WAVE_CLOSE:
+                    wave_close_readiness = _compute_wave_close_readiness(
+                        state,
+                        mutation,
+                        state_path=state_path,
+                        repo_root=repo_anchor,
+                    )
                 apply_func(state, mutation)
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
@@ -1249,12 +1290,12 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             extras: dict[str, str | int | float | bool] = {}
             drift_extras: dict[str, str | int | float | bool] = {}
             if mutation.kind == MutationKind.WAVE_CLOSE:
-                repo_anchor = Path(args.repo_root) if args.repo_root else state_path.parent
                 extras = _compute_wave_close_extras(
                     state,
                     mutation,
                     state_path=state_path,
                     repo_root=repo_anchor,
+                    readiness=wave_close_readiness,
                 )
                 drift_extras = _bucket_drift_extras(state)
 

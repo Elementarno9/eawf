@@ -657,6 +657,35 @@ def _bootstrap_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[obj
     return runner, state_path
 
 
+def _write_cli_verify_profile(tmp_path: Path, *, enforce: bool) -> None:
+    """Select a local profile with a deterministic failing floor check."""
+    profile_dir = tmp_path / ".ea" / "profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled:\n    - enforcing\n",
+        encoding="utf-8",
+    )
+    profile_dir.joinpath("enforcing.yaml").write_text(
+        "\n".join(
+            [
+                "name: enforcing",
+                "verify:",
+                f"  enforce: {'true' if enforce else 'false'}",
+                "  argv_allowlist:",
+                "    - git",
+                "  floor_checks:",
+                "    - name: fail-floor",
+                '      cmd: ["git", "show", "no-such-ref-w26-close"]',
+                "      scope: all",
+                "      cadence: every-wave",
+                "      policy: warn",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def _seed_operator_session_into_disk_state(state_path: Path, *, session_id: str) -> None:
     """Read state.json, attach an OPERATOR session + claim wave, persist."""
     raw = orjson.loads(state_path.read_bytes())
@@ -747,6 +776,42 @@ def test_cli_wave_close_with_waive_and_reason_persists(
     assert waiver.evidence_kind == "attested"
     assert "GATE-good" in waiver.refs
     assert waiver.summary == "code reviewed"
+
+
+def test_cli_wave_close_enforced_readiness_rejects_before_state_persists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real ``profile.verify.enforce=true`` blocks close before state write."""
+    runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
+    _write_cli_verify_profile(tmp_path, enforce=True)
+    _seed_operator_session_into_disk_state(state_path, session_id=OPERATOR_SESSION_ID)
+
+    from eawf.surfaces.cli.app import app
+
+    result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])
+
+    assert result.exit_code != 0
+    combined = result.stdout + (result.stderr or "")
+    assert "readiness enforcement failed" in combined
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    assert state.waves[WAVE_ID].status == "claimed"
+
+
+def test_cli_wave_close_failing_readiness_without_enforce_stays_advisory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failing floor check stays advisory when the active profile does not enforce."""
+    runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
+    _write_cli_verify_profile(tmp_path, enforce=False)
+    _seed_operator_session_into_disk_state(state_path, session_id=OPERATOR_SESSION_ID)
+
+    from eawf.surfaces.cli.app import app
+
+    result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])
+
+    assert result.exit_code == 0, (result.stdout, result.stderr)
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    assert state.waves[WAVE_ID].status == "closed"
 
 
 def test_cli_wave_close_mode_c_missing_ref_is_rejected(

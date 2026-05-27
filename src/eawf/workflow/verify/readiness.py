@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Literal
 
 import orjson
 
@@ -475,31 +476,113 @@ def _build_spec_views(
     return views, waived
 
 
-def _load_active_verify_block(scope_id: str, state: State) -> VerifyBlock | None:
+def _config_root_for_readiness(config_root: Path | None, repo_root: Path) -> Path:
+    """Return the config anchor used to resolve active profile bodies."""
+    return config_root if config_root is not None else repo_root
+
+
+def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
+    """Merge active profile verify blocks into one effective block."""
+    if not blocks:
+        return None
+    floor_checks = []
+    argv_allowlist: list[str] = []
+    seen_argv: set[str] = set()
+    timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] = {}
+    has_timeout_overrides = False
+    waiver_mode: Literal["A", "B", "C"] = "B"
+    enforce = False
+    for block in blocks:
+        floor_checks.extend(block.floor_checks)
+        for argv_head in block.argv_allowlist:
+            if argv_head in seen_argv:
+                continue
+            argv_allowlist.append(argv_head)
+            seen_argv.add(argv_head)
+        if block.timeout_class_seconds is not None:
+            has_timeout_overrides = True
+            timeout_class_seconds.update(block.timeout_class_seconds)
+        waiver_mode = block.waiver_mode
+        enforce = enforce or block.enforce
+    return VerifyBlock(
+        floor_checks=floor_checks,
+        argv_allowlist=argv_allowlist,
+        timeout_class_seconds=timeout_class_seconds if has_timeout_overrides else None,
+        waiver_mode=waiver_mode,
+        enforce=enforce,
+    )
+
+
+def _load_active_verify_block(
+    scope_id: str,
+    state: State,
+    *,
+    repo_root: Path,
+    config_root: Path | None = None,
+) -> VerifyBlock | None:
     """Return the active profile's :class:`VerifyBlock`, or ``None``.
 
-    v0.4.0 returns ``None`` for every scope because the on-disk
-    composed-profile cache is not yet wired through to the readiness
-    compute (the daemon's profile-resolve seam lands in a later wave —
-    today the wave-close path does not surface the active profile to
-    the compute boundary).
-
-    The helper stays a separate function (rather than inlined into
-    :func:`compute`) so tests can monkeypatch it to feed a synthetic
-    :class:`VerifyBlock` into the floor-pack integration without
-    having to round-trip through the layered profile loader.
+    The helper resolves ``profiles.enabled`` from layered config,
+    loads each profile body through the profile discovery layer, and
+    folds the present ``verify`` leaves into one effective block.
+    Tests can still monkeypatch this function to feed a synthetic
+    :class:`VerifyBlock` into the floor-pack integration.
 
     Args:
-        scope_id: Wave / iter / phase URN. Reserved for future
-            per-scope profile attachments.
-        state: Validated state model. Reserved.
+        scope_id: Wave / iter / phase URN. Reserved for future per-scope
+            profile attachments.
+        state: Validated state model. Reserved for future per-scope
+            profile attachments.
+        repo_root: Repository root used when no separate config root is
+            supplied.
+        config_root: Optional config/profile-discovery anchor. Close
+            paths pass the directory that owns ``.ea/config.yaml`` so
+            ``EA_STATE`` recovery shells and daemon cross-repo calls do
+            not accidentally read the daemon process cwd.
 
     Returns:
-        ``None`` in v0.4.0. Tests monkeypatch this to return a
-        :class:`VerifyBlock` with non-empty ``floor_checks``.
+        Merged :class:`VerifyBlock`, or ``None`` when no enabled
+        profile contributes one.
     """
-    del scope_id, state  # unused until the profile-resolve seam ships
-    return None
+    del scope_id, state  # reserved for scoped profile attachments
+    from eawf.kernel.config.layered import merge_config
+    from eawf.platform.profiles.loader import load_profile
+
+    anchor = _config_root_for_readiness(config_root, repo_root)
+    try:
+        merged, _sources = merge_config(workspace=anchor, repo=anchor)
+    except (OSError, ValueError, KeyError) as exc:
+        logger.warning(f"_load_active_verify_block status=skip err={exc!s}")
+        return None
+    profiles = merged.get("profiles")
+    if not isinstance(profiles, dict):
+        return None
+    enabled_raw = profiles.get("enabled") or []
+    if not isinstance(enabled_raw, list):
+        logger.warning(
+            f"_load_active_verify_block status=skip reason=bad-enabled "
+            f"type={type(enabled_raw).__name__!r}"
+        )
+        return None
+    blocks: list[VerifyBlock] = []
+    for profile_id_raw in enabled_raw:
+        if not isinstance(profile_id_raw, str):
+            logger.warning(
+                f"_load_active_verify_block status=skip-profile reason=bad-id "
+                f"type={type(profile_id_raw).__name__!r}"
+            )
+            continue
+        try:
+            body = load_profile(profile_id_raw, workspace=anchor)
+        except (OSError, ValueError, KeyError) as exc:
+            logger.warning(
+                f"_load_active_verify_block status=skip-profile "
+                f"profile={profile_id_raw!r} err={exc!s}"
+            )
+            continue
+        if body.verify is not None:
+            blocks.append(body.verify)
+    return _merge_verify_blocks(blocks)
 
 
 def _build_floor_views(
@@ -626,6 +709,7 @@ def compute(
     state: State,
     store_dir: Path,
     repo_root: Path,
+    config_root: Path | None = None,
 ) -> CloseReadiness:
     """Return the close-readiness projection for *scope_id*.
 
@@ -675,6 +759,8 @@ def compute(
             Also forwarded as the deterministic-floor subprocess cwd
             so wave-anchored ``diff_base`` + scope resolution land in
             the right tree.
+        config_root: Optional root for layered config and workspace
+            profile discovery. Defaults to *repo_root*.
 
     Returns:
         A :class:`CloseReadiness` view. Empty waves (no typed specs +
@@ -717,7 +803,12 @@ def compute(
         runner_cwd=repo_root,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
-    verify_block = _load_active_verify_block(scope_id, state)
+    verify_block = _load_active_verify_block(
+        scope_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root,
+    )
 
     # Profile-fed floor pack (P28-I01-W10). Floor checks render only
     # when the wave has no typed CriterionSpec rows — the typed-spec

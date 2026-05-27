@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
@@ -43,6 +44,11 @@ if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
+
+
+def _config_root_for_state_path(state_path: Path) -> Path:
+    """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
+    return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
 
 
 def _wrap_no_return(_value: object) -> None:
@@ -630,33 +636,18 @@ def wave_close_cmd(
     readiness_holder: list[CloseReadiness] = []
 
     def _close_and_pin(state: State) -> None:
-        wave = close_wave(
-            state,
-            wave_id=wave_id,
-            outcome=outcome,
-            tokens_consumed=tokens_consumed,
-        )
-        if resolved_sha is not None:
-            wave.commit = resolved_sha
-        repo_root = _resolve_repo_root_for_drift(flags.workspace)
-        if repo_root is not None:
-            drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
-        # W06 advisory: compute readiness AFTER ``close_wave`` so the
-        # SHA-bound evidence rows reflect the post-close state. Pure
-        # read-only — does not mutate ``state``. Failures (KeyError,
-        # OSError on the evidence file) are non-blocking by design;
-        # advisory warnings flow through ``readiness.warnings`` and
-        # the rolled-up ``readiness_warnings_count`` extra. W19 flips
-        # this to gating behind ``profile.verify.enforce``.
         state_path = resolve_state_path(flags.workspace)
         evidence_store_dir = _store_dir(state_path)
-        anchor_for_sha = repo_root if repo_root is not None else state_path.parent
+        config_root = _config_root_for_state_path(state_path)
+        repo_root = _resolve_repo_root_for_drift(flags.workspace)
+        anchor_for_sha = repo_root if repo_root is not None else config_root
         try:
             readiness = compute_readiness(
                 wave_id,
                 state=state,
                 store_dir=evidence_store_dir,
                 repo_root=anchor_for_sha,
+                config_root=config_root,
             )
         except KeyError as exc:
             logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
@@ -668,6 +659,16 @@ def wave_close_cmd(
                         f"close_advisory wave={wave_id!r} "
                         f"criterion={view.id!r} status={view.status!r}"
                     )
+        wave = close_wave(
+            state,
+            wave_id=wave_id,
+            outcome=outcome,
+            tokens_consumed=tokens_consumed,
+        )
+        if resolved_sha is not None:
+            wave.commit = resolved_sha
+        if repo_root is not None:
+            drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
         close_succeeded[0] = True
 
     _run_mutation(
@@ -691,6 +692,7 @@ def wave_close_cmd(
             ),
         },
         mutate=_close_and_pin,
+        closure_kind=True,
     )
     if close_succeeded[0]:
         for glob in drift_warnings:

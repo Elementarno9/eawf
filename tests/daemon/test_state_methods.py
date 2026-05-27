@@ -236,6 +236,35 @@ def _write_state(path: Path, payload: dict[str, object]) -> None:
     path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
 
 
+def _write_verify_profile(root: Path, *, enforce: bool) -> None:
+    """Select a local profile with a deterministic failing floor check."""
+    profile_dir = root / ".ea" / "profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (root / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled:\n    - enforcing\n",
+        encoding="utf-8",
+    )
+    profile_dir.joinpath("enforcing.yaml").write_text(
+        "\n".join(
+            [
+                "name: enforcing",
+                "verify:",
+                f"  enforce: {'true' if enforce else 'false'}",
+                "  argv_allowlist:",
+                "    - git",
+                "  floor_checks:",
+                "    - name: fail-floor",
+                '      cmd: ["git", "show", "no-such-ref-w26-daemon"]',
+                "      scope: all",
+                "      cadence: every-wave",
+                "      policy: warn",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def _build_ctx(
     *,
     tmp_path: Path,
@@ -441,6 +470,51 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
         on_disk = orjson.loads(rows[0])
         assert on_disk["payload"]["event_kind"] == "wave_closed"
         assert on_disk["payload"]["extras"]["actual_tokens"] == 7777
+
+    _run(body)
+
+
+def test_mutate_wave_close_enforced_readiness_rejects_before_write(tmp_path: Path) -> None:
+    """Daemon path enforces real profile readiness before persisting close."""
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
+    _write_verify_profile(tmp_path, enforce=True)
+    ctx, state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="readiness enforcement failed"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        payload = orjson.loads(state_path.read_bytes())
+        assert payload["waves"]["P24-I01-W09"]["status"] == "claimed"
+        assert not event_path.exists() or not event_path.read_text(encoding="utf-8").strip()
+
+    _run(body)
+
+
+def test_mutate_wave_close_failing_readiness_without_enforce_is_advisory(
+    tmp_path: Path,
+) -> None:
+    """Daemon path still closes when the active profile leaves enforce false."""
+    _write_verify_profile(tmp_path, enforce=False)
+    ctx, state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        payload = orjson.loads(state_path.read_bytes())
+        assert payload["waves"]["P24-I01-W09"]["status"] == "closed"
+        assert event_path.read_text(encoding="utf-8").strip()
 
     _run(body)
 
