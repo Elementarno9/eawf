@@ -789,6 +789,164 @@ def log_format_lint(
     )
 
 
+def _emit_static_lint_result(
+    *,
+    hook_name: str,
+    rows: list[str],
+    scanned: int,
+    flags: GlobalFlags,
+    blocking: bool,
+) -> None:
+    """Emit a static lint result, optionally failing for blocking rules."""
+    payload: dict[str, object] = {
+        "hook": hook_name,
+        "scanned": scanned,
+        "clean": not rows,
+        "violations": len(rows),
+        "blocking": blocking,
+    }
+    if rows:
+        noun = "violation" if blocking else "warning"
+        body = "\n".join([f"{hook_name}: {len(rows)} {noun}(s) across {scanned} file(s)", *rows])
+        emit_json_or_text(payload, body, flags=flags)
+        if blocking:
+            raise typer.Exit(exit_codes.USER_ERROR)
+        return
+    emit_json_or_text(payload, f"{hook_name}: clean ({scanned} file(s) scanned)", flags=flags)
+
+
+@hook_app.command(name="eawf012-design-provenance")
+def eawf012_design_provenance(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject design/audit/agent provenance breadcrumbs in source comments."""
+    from eawf.platform.lint.eawf012_design_provenance import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf012-design-provenance", base=base, cwd=cwd)
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        if not rel.endswith(".py"):
+            continue
+        target = cwd / rel
+        try:
+            source = target.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        scanned += 1
+        rows.extend(f"  {rel}:{violation.render()}" for violation in check_source(source))
+    _emit_static_lint_result(
+        hook_name="eawf012-design-provenance",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf013-bracket-position")
+def eawf013_bracket_position(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject detached or post-punctuation numeric citation brackets."""
+    from eawf.platform.lint.eawf013_bracket_position import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf013-bracket-position", base=base, cwd=cwd)
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        if not rel.endswith(".md"):
+            continue
+        target = cwd / rel
+        try:
+            source = target.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        scanned += 1
+        rows.extend(f"  {rel}:{violation.render()}" for violation in check_source(source))
+    _emit_static_lint_result(
+        hook_name="eawf013-bracket-position",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf014-no-manual-wrap")
+def eawf014_no_manual_wrap(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject manually wrapped rendered Markdown paragraphs."""
+    from eawf.platform.lint.eawf014_no_manual_wrap import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf014-no-manual-wrap", base=base, cwd=cwd)
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        if not rel.endswith(".md"):
+            continue
+        target = cwd / rel
+        try:
+            source = target.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        scanned += 1
+        rows.extend(f"  {rel}:{violation.render()}" for violation in check_source(source))
+    _emit_static_lint_result(
+        hook_name="eawf014-no-manual-wrap",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf015-ears-advisory")
+def eawf015_ears_advisory(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Warn on requirement-like prose outside EARS shape without blocking."""
+    from eawf.platform.lint.eawf015_ears_advisory import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf015-ears-advisory", base=base, cwd=cwd)
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        if not rel.endswith(".md"):
+            continue
+        target = cwd / rel
+        try:
+            source = target.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        scanned += 1
+        rows.extend(f"  {rel}:{violation.render()}" for violation in check_source(source))
+    _emit_static_lint_result(
+        hook_name="eawf015-ears-advisory",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=False,
+    )
+
+
 @hook_app.command(name="plugin-doctor-drift")
 def plugin_doctor_drift(
     ctx: typer.Context,

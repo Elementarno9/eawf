@@ -109,6 +109,35 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+      - id: eawf012-design-provenance
+        name: eawf012-design-provenance
+        entry: uv run eawf hook eawf012-design-provenance
+        language: system
+        files: '^src/eawf/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf013-bracket-position
+        name: eawf013-bracket-position
+        entry: uv run eawf hook eawf013-bracket-position
+        language: system
+        files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf014-no-manual-wrap
+        name: eawf014-no-manual-wrap
+        entry: uv run eawf hook eawf014-no-manual-wrap
+        language: system
+        files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf015-ears-advisory
+        name: eawf015-ears-advisory
+        entry: uv run eawf hook eawf015-ears-advisory
+        language: system
+        files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+        verbose: true
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

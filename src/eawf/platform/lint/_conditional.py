@@ -41,6 +41,7 @@ DEFAULT_DIFF_BASE = "origin/main"
 # Per-hook path filters keyed by hook name. A changed file is "relevant"
 # to a hook when its repo-relative path matches the hook's pattern.
 _PYTHON_LIBRARY = re.compile(r"^src/eawf/.*\.py$")
+_MARKDOWN = re.compile(r".*\.md$")
 _PLUGIN_SURFACE = re.compile(r"^(AGENTS\.md|skills/.*|src/eawf/runtime/runtimes/.*|build/.*)$")
 # The leak gates care about any tracked text blob; an explicit deny-list
 # of binary-ish suffixes keeps the scan from reading non-text payloads.
@@ -50,6 +51,10 @@ HOOK_FILTERS: dict[str, re.Pattern[str]] = {
     "path-leak-lint": _LEAK_SURFACE,
     "email-leak-lint": _LEAK_SURFACE,
     "log-format-lint": _PYTHON_LIBRARY,
+    "eawf012-design-provenance": _PYTHON_LIBRARY,
+    "eawf013-bracket-position": _MARKDOWN,
+    "eawf014-no-manual-wrap": _MARKDOWN,
+    "eawf015-ears-advisory": _MARKDOWN,
     "plugin-doctor-drift": _PLUGIN_SURFACE,
 }
 

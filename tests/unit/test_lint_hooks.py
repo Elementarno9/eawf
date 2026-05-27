@@ -365,6 +365,42 @@ def test_log_format_lint_ignores_non_python_arg(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
+# --- clarity lints --------------------------------------------------------
+
+
+def test_eawf012_design_provenance_cli_blocks(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text("def f():\n    # per Codex during implementation\n    return None\n")
+    result = runner.invoke(app, ["hook", "eawf012-design-provenance", str(bad)])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF012" in result.stdout
+
+
+def test_eawf013_bracket_position_cli_blocks(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.md"
+    bad.write_text("A claim ends. [1]\n\n## References\n\n[1] `src/x.py`\n")
+    result = runner.invoke(app, ["hook", "eawf013-bracket-position", str(bad)])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF013" in result.stdout
+
+
+def test_eawf014_no_manual_wrap_cli_blocks(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.md"
+    bad.write_text("A paragraph was manually wrapped\nacross two physical lines.\n")
+    result = runner.invoke(app, ["hook", "eawf014-no-manual-wrap", str(bad)])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF014" in result.stdout
+
+
+def test_eawf015_ears_advisory_cli_warns_without_blocking(tmp_path: Path) -> None:
+    note = tmp_path / "note.md"
+    note.write_text("The operator should review this before merge.\n")
+    result = runner.invoke(app, ["hook", "eawf015-ears-advisory", str(note)])
+    assert result.exit_code == 0, result.stdout
+    assert "EAWF015" in result.stdout
+    assert "warning" in result.stdout.lower()
+
+
 # --- plugin-doctor-drift conditional skip ---------------------------------
 
 
@@ -393,7 +429,16 @@ def test_plugin_doctor_drift_skip_json(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["path-leak-lint", "email-leak-lint", "log-format-lint", "plugin-doctor-drift"],
+    [
+        "path-leak-lint",
+        "email-leak-lint",
+        "log-format-lint",
+        "eawf012-design-provenance",
+        "eawf013-bracket-position",
+        "eawf014-no-manual-wrap",
+        "eawf015-ears-advisory",
+        "plugin-doctor-drift",
+    ],
 )
 def test_hook_subcommands_registered(name: str) -> None:
     result = runner.invoke(app, ["hook", "--help"])
