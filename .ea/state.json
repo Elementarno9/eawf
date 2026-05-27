@@ -23,6 +23,18 @@
       "scope_id": "P28-I02-W13",
       "status": "done",
       "updated_at": "2026-05-27T15:55:43.571646Z"
+    },
+    "P28-I02-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W23",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W23",
+      "scope_id": "P28-I02-W23",
+      "status": "done",
+      "updated_at": "2026-05-27T16:11:47.715280Z"
     }
   },
   "agent_sessions": {
@@ -1986,7 +1998,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I02-W23",
       "P28-I02-W15"
     ],
     "iter_id": "P28-I02",
@@ -6061,7 +6072,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T16:07:17.451610Z",
+  "updated_at": "2026-05-27T16:11:59.905197Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21423,8 +21434,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T16:11:47.715280Z",
+      "commit": "144e8d39e9d67c06a43299b96f09d886ed8765cf",
       "deps": [
         "P28-I02-W02",
         "P28-I02-W16"
@@ -21439,10 +21450,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-27T00:56:48.447955Z",
-      "outcome": null,
+      "outcome": "backfilled effort_bucket across plan_wave and CLI test fixtures",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "all tests/ plan_wave calls set effort_bucket explicitly",
         "full pytest suite green post-W02+W16 gates",
@@ -25088,7 +25099,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w23",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I02-W23"
     }
   }
