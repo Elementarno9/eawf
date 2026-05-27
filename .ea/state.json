@@ -2495,7 +2495,9 @@
       "P28-I03-W28",
       "P28-I03-W29",
       "P28-I03-W32",
-      "P28-I03-W35"
+      "P28-I03-W35",
+      "P28-I03-W34",
+      "P28-I03-W37"
     ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
@@ -5536,6 +5538,19 @@
       "scope_id": "P28-I03-W33",
       "updated_at": "2026-05-27T21:50:02.791432Z"
     },
+    "P28-I03-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W34-bucket-20260527T224414Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W34",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W34",
+      "updated_at": "2026-05-27T22:44:14.631756Z"
+    },
     "P28-I03-W35": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I03-W35-bucket-20260527T220307Z",
@@ -5561,6 +5576,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W36",
       "updated_at": "2026-05-27T21:21:26.056855Z"
+    },
+    "P28-I03-W37": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W37-bucket-20260527T224415Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W37",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W37",
+      "updated_at": "2026-05-27T22:44:15.185318Z"
     }
   },
   "goals": {
@@ -7173,7 +7201,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T22:11:58.273690Z",
+  "updated_at": "2026-05-27T22:45:40.760137Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -24022,7 +24050,7 @@
     "P28-I03-W34": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260528T000000Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -24046,7 +24074,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "_validate_phase_closable extended",
         "commit lint accepts (release=v...) annotation",
@@ -24056,7 +24084,7 @@
       "title": "feat: phase-close release pre-flight gate + post-merge auto-tag",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P28-I03-W34-1779921939"
     },
     "P28-I03-W35": {
       "agent_role": "executor",
@@ -24134,7 +24162,7 @@
     "P28-I03-W37": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260528T000000Z-operator-claude",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -24158,7 +24186,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "RoadmapPlan strict pydantic model lands",
         "--from-plan accepts YAML/JSON manifest",
@@ -24169,7 +24197,7 @@
       "title": "feat: roadmap propose --from-plan stages iters+waves atomically",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P28-I03-W37-1779921940"
     }
   },
   "workspace": null,
@@ -26690,7 +26718,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w21",
-      "status": "active",
+      "status": "conflicted",
       "wave_id": "P28-I03-W21"
     },
     "WT-P28-I03-W22-1779915887": {
@@ -26814,6 +26842,28 @@
       "status": "merged",
       "wave_id": "P28-I03-W33"
     },
+    "WT-P28-I03-W34-1779921874": {
+      "base_branch": "feature/eawf-v0.4-p28",
+      "branch": "feature/eawf-v0.1-p28-w34",
+      "created_at": "2026-05-27T22:44:34.615445Z",
+      "id": "WT-P28-I03-W34-1779921874",
+      "merged_commit": "ea0e609",
+      "owner_session_id": "SES-20260528T000000Z-operator-claude",
+      "path": ".ea/worktrees/p28-w34",
+      "status": "merged",
+      "wave_id": "P28-I03-W34"
+    },
+    "WT-P28-I03-W34-1779921939": {
+      "base_branch": "feature/eawf-v0.4-p28",
+      "branch": "feature/eawf-v0.4-p28-i03-w34",
+      "created_at": "2026-05-27T22:45:39.912098Z",
+      "id": "WT-P28-I03-W34-1779921939",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260528T000000Z-operator-claude",
+      "path": ".ea/worktrees/p28-i03-w34",
+      "status": "active",
+      "wave_id": "P28-I03-W34"
+    },
     "WT-P28-I03-W35-1779919398": {
       "base_branch": "feature/eawf-v0.4-p28",
       "branch": "feature/eawf-v0.4-p28-i03-w35",
@@ -26835,6 +26885,28 @@
       "path": ".ea/worktrees/p28-i03-w36",
       "status": "merged",
       "wave_id": "P28-I03-W36"
+    },
+    "WT-P28-I03-W37-1779921875": {
+      "base_branch": "feature/eawf-v0.4-p28",
+      "branch": "feature/eawf-v0.1-p28-w37",
+      "created_at": "2026-05-27T22:44:35.555693Z",
+      "id": "WT-P28-I03-W37-1779921875",
+      "merged_commit": "ea0e609",
+      "owner_session_id": "SES-20260528T000000Z-operator-claude",
+      "path": ".ea/worktrees/p28-w37",
+      "status": "merged",
+      "wave_id": "P28-I03-W37"
+    },
+    "WT-P28-I03-W37-1779921940": {
+      "base_branch": "feature/eawf-v0.4-p28",
+      "branch": "feature/eawf-v0.4-p28-i03-w37",
+      "created_at": "2026-05-27T22:45:40.760137Z",
+      "id": "WT-P28-I03-W37-1779921940",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260528T000000Z-operator-claude",
+      "path": ".ea/worktrees/p28-i03-w37",
+      "status": "active",
+      "wave_id": "P28-I03-W37"
     }
   }
 }

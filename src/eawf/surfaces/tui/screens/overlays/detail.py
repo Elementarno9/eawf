@@ -344,7 +344,6 @@ def _format_attempt_table_row(row: tuple[str, ...], widths: list[int]) -> str:
 
 def _wave_narrative_preview(state: State, wave: Wave) -> str:
     """Render the wave's phase NarrativeBundle for the ``d`` tab.
-
     The narrative builder targets a phase id. A broken wave → iter → phase
     chain degrades to a short note rather than propagating so the drill-in
     seam stays total.

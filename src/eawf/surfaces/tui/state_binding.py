@@ -134,6 +134,7 @@ class StateBinding:
         )
         self._stopping = False
         self._scope_id: str | None = None
+        self._is_degraded = False
         env_interval = os.environ.get("EAWF_POLL_INTERVAL_S")
         if poll_interval_s is not None:
             self._poll_interval = poll_interval_s
@@ -152,7 +153,7 @@ class StateBinding:
         if self._state_path is not None and self._state_path.is_file():
             self._last_mtime = self._state_path.stat().st_mtime
         if self._daemon_socket_available():
-            self._subscribe_task = asyncio.create_task(self._subscribe_loop())
+            await self._start_subscribe_loop()
             return
         await self._start_poll_fallback()
 
@@ -164,9 +165,22 @@ class StateBinding:
 
     async def _start_poll_fallback(self) -> None:
         """Mark degraded and start the mtime-poll loop once."""
-        await self._callbacks.on_degraded(True)
+        await self._set_degraded(True)
         if self._poll_task is None or self._poll_task.done():
             self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _start_subscribe_loop(self) -> None:
+        """Start the daemon subscription loop when not already running."""
+        if self._subscribe_task is not None and not self._subscribe_task.done():
+            return
+        self._subscribe_task = asyncio.create_task(self._subscribe_loop())
+
+    async def _set_degraded(self, degraded: bool) -> None:
+        """Emit ``on_degraded`` only when the degraded flag changes."""
+        if self._is_degraded == degraded:
+            return
+        self._is_degraded = degraded
+        await self._callbacks.on_degraded(degraded)
 
     async def _subscribe_loop(self) -> None:
         """Run blocking daemon subscription off-thread and fall back on error."""
@@ -179,6 +193,9 @@ class StateBinding:
             logger.debug(f"_subscribe_loop fallback cause={exc!r}")
             if not self._stopping:
                 await self._start_poll_fallback()
+        else:
+            if not self._stopping:
+                await self._start_poll_fallback()
 
     def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
         """Subscribe to ``state.subscribe`` with ``DaemonClient``."""
@@ -187,17 +204,17 @@ class StateBinding:
             params["scope_id"] = self._scope_id
         with self._client_factory() as client:
             client.call("state.subscribe", params)
-            asyncio.run_coroutine_threadsafe(self._callbacks.on_degraded(False), loop)
+            asyncio.run_coroutine_threadsafe(self._set_degraded(False), loop)
             while not self._stopping:
                 reader = getattr(client, "_reader", None)
                 if reader is None:
-                    return
+                    raise RuntimeError("daemon reader unavailable")
                 try:
                     line = reader.readline()
                 except TimeoutError:
                     continue
                 if not line:
-                    return
+                    raise RuntimeError("daemon subscribe stream ended")
                 self._handle_push_line(loop, line)
 
     def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:
@@ -236,6 +253,11 @@ class StateBinding:
         """
         while True:
             await asyncio.sleep(self._poll_interval)
+            if self._stopping:
+                return
+            if self._daemon_socket_available():
+                await self._start_subscribe_loop()
+                return
             if self._state_path is None or not self._state_path.is_file():
                 continue
             try:

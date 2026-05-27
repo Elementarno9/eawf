@@ -334,6 +334,67 @@ def test_state_binding_subscribes_via_daemon_client(
     assert len(seen_state) == 2
 
 
+def test_state_binding_reconnects_when_push_stream_ends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_state: list[State] = []
+    seen_degraded: list[bool] = []
+    seen_events: list[Envelope] = []
+    calls: list[tuple[str, dict[str, object]]] = []
+    event = _live_event()
+    push = (
+        orjson.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": "event.push",
+                "params": {"event": event.model_dump(mode="json")},
+            }
+        )
+        + b"\n"
+    )
+
+    async def on_state(s: State) -> None:
+        seen_state.append(s)
+
+    async def on_degraded(d: bool) -> None:
+        seen_degraded.append(d)
+
+    async def on_event(e: Envelope) -> None:
+        seen_events.append(e)
+
+    async def body() -> None:
+        def _daemon_client_factory() -> _FakeDaemonClient:
+            return _FakeDaemonClient(push, calls)  # type: ignore[arg-type]
+
+        binder = StateBinding(
+            state_path=_EMPTY_REPO,
+            callbacks=StateBindingCallbacks(
+                on_state=on_state,
+                on_degraded=on_degraded,
+                on_event=on_event,
+            ),
+            daemon_client_factory=_daemon_client_factory,
+            poll_interval_s=0.01,
+        )
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: len(calls) <= 1)
+        await binder.connect()
+        await asyncio.sleep(0.2)
+        await binder.disconnect()
+
+    asyncio.run(body())
+    expected = (
+        "state.subscribe",
+        {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"},
+    )
+    assert calls == [expected, expected]
+    assert seen_events
+    assert [e.id for e in seen_events] == ["EV-live", "EV-live"]
+    assert seen_degraded.count(True) >= 1
+    assert seen_degraded[0] is False
+    assert seen_degraded[-1] is True
+    assert len(seen_state) >= 3
+
+
 # --------------------------------------------------------------------------
 # Pilot first-paint smoke — confirms the shell renders the brand
 # --------------------------------------------------------------------------
