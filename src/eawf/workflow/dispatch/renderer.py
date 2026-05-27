@@ -61,6 +61,7 @@ from pathlib import Path
 from typing import Any
 
 from eawf.kernel.state.enums import AgentSessionRole, StoreKind
+from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import (
     Audit,
     Decision,
@@ -77,6 +78,7 @@ from eawf.workflow.agents.specs.models import (
     SpecAudit,
     SpecDecision,
     SpecDependency,
+    SpecEstimate,
     SpecHypothesis,
     SpecWorktree,
     SubagentSpec,
@@ -386,6 +388,7 @@ def build_subagent_spec(
         recent_audits=_build_recent_audits(state, scope_id=scope_id),
         references=_find_spike_briefs(wave, repo_root=repo_root) if repo_root is not None else [],
         worktree=_build_worktree(state, wave),
+        estimate=_build_estimate(state, wave),
         role_contract=_build_role_contract_for_wave(state, wave),
     )
     logger.debug(
@@ -394,6 +397,31 @@ def build_subagent_spec(
         f"refs={len(spec.references)} role_contract={spec.role_contract is not None}"
     )
     return spec
+
+
+def _build_estimate(state: State, wave: Wave) -> SpecEstimate:
+    """Return dispatch estimate hints for *wave*."""
+    estimate = (state.estimates or {}).get(wave.id)
+    return SpecEstimate(
+        effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
+        expected_eu=estimate.expected_eu if estimate is not None else None,
+        expected_minutes=estimate.expected_minutes if estimate is not None else None,
+        token_budget=wave.token_budget,
+        parallel_siblings=_parallel_siblings(state, wave),
+    )
+
+
+def _parallel_siblings(state: State, wave: Wave) -> list[str]:
+    """Return active sibling waves in the same iter, excluding *wave*."""
+    siblings: list[str] = []
+    for active_wave_id in state.current.active_wave_ids:
+        if active_wave_id == wave.id:
+            continue
+        active_wave = state.waves.get(active_wave_id)
+        if active_wave is None or active_wave.iter_id != wave.iter_id:
+            continue
+        siblings.append(active_wave_id)
+    return sorted(siblings, key=natural_key)
 
 
 def _build_role_contract_for_wave(state: State, wave: Wave) -> RoleContract | None:

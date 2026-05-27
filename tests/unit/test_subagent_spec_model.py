@@ -17,6 +17,7 @@ from eawf.workflow.agents.specs.models import (
     SpecAudit,
     SpecDecision,
     SpecDependency,
+    SpecEstimate,
     SpecHypothesis,
     SpecWorktree,
     SubagentSpec,
@@ -51,6 +52,7 @@ def test_render_minimal_spec_emits_all_headers() -> None:
     assert "## Working tree" in out
     assert "## Workflow" in out
     assert "## Out of scope" in out
+    assert "## Estimate" in out
     # Empty-section sentinels + inline worktree fallback.
     assert "None." in out
     assert "Worktree path: inline" in out
@@ -85,6 +87,42 @@ def test_render_role_bucket_and_criteria_present() -> None:
     assert "- success_criteria:" in out
     assert "  - criterion one" in out
     assert "  - criterion two" in out
+
+
+def test_render_estimate_section_defaults_to_unknowns() -> None:
+    """A spec without estimate inputs still renders the required section."""
+    out = _minimal_spec().render()
+    block = out.split("## Estimate", 1)[1]
+    assert "- bucket: unknown" in block
+    assert "- expected_eu: unknown" in block
+    assert "- expected_minutes: unknown" in block
+    assert "- token_budget: unknown" in block
+    assert "- parallel_siblings: none" in block
+
+
+def test_render_estimate_section_with_values() -> None:
+    """A populated estimate renders bucket, effort, budget, and siblings."""
+    out = _minimal_spec(
+        estimate=SpecEstimate(
+            effort_bucket="M",
+            expected_eu=2.5,
+            expected_minutes=75.0,
+            token_budget=4096,
+            parallel_siblings=["P01-I01-W02", "P01-I01-W03"],
+        )
+    ).render()
+    block = out.split("## Estimate", 1)[1]
+    assert "- bucket: M" in block
+    assert "- expected_eu: 2.5" in block
+    assert "- expected_minutes: 75.0" in block
+    assert "- token_budget: 4096" in block
+    assert "- parallel_siblings: P01-I01-W02, P01-I01-W03" in block
+
+
+def test_render_estimate_lands_after_out_of_scope() -> None:
+    """``## Estimate`` sits immediately after ``## Out of scope``."""
+    out = _minimal_spec().render()
+    assert out.index("## Out of scope") < out.index("## Estimate")
 
 
 def test_render_empty_file_scopes_shows_none_placeholder() -> None:

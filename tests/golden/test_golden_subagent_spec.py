@@ -25,6 +25,7 @@ from eawf.workflow.agents.specs.models import (
     SpecAudit,
     SpecDecision,
     SpecDependency,
+    SpecEstimate,
     SpecHypothesis,
     SpecWorktree,
     SubagentSpec,
@@ -81,6 +82,13 @@ def _full_spec() -> SubagentSpec:
             branch="feature/eawf-v0.3-p27-w14",
             path=".ea/worktrees/p27-w14",
             base_branch="feature/eawf-v0.3-p27",
+        ),
+        estimate=SpecEstimate(
+            effort_bucket="XL",
+            expected_eu=8.0,
+            expected_minutes=240.0,
+            token_budget=32768,
+            parallel_siblings=["P27-I03-W13", "P27-I03-W15"],
         ),
     )
 

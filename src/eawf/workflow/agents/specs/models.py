@@ -131,6 +131,43 @@ class SpecWorktree(_SpecModel):
     base_branch: str
 
 
+class SpecEstimate(_SpecModel):
+    """Estimate hints surfaced in a :class:`SubagentSpec`.
+
+    Attributes:
+        effort_bucket: The wave's effort bucket, or ``None`` when
+            unclassified.
+        expected_eu: Latest expected effort-unit estimate, or ``None``
+            when no estimate has been recorded yet.
+        expected_minutes: Latest expected minutes estimate, or ``None``
+            when no estimate has been recorded yet.
+        token_budget: Token budget attached to the wave, or ``None``
+            when unset.
+        parallel_siblings: Other active waves in the same iter. Empty
+            renders as ``none`` so subagents can distinguish solo waves
+            from sibling-dispatch waves without reading state.
+    """
+
+    effort_bucket: str | None = None
+    expected_eu: float | None = None
+    expected_minutes: float | None = None
+    token_budget: int | None = None
+    parallel_siblings: list[str] = Field(default_factory=list)
+
+    def render(self) -> str:
+        """Return the ``## Estimate`` section."""
+        siblings = ", ".join(self.parallel_siblings) if self.parallel_siblings else "none"
+        return (
+            "## Estimate\n"
+            "\n"
+            f"- bucket: {_display_value(self.effort_bucket)}\n"
+            f"- expected_eu: {_display_value(self.expected_eu)}\n"
+            f"- expected_minutes: {_display_value(self.expected_minutes)}\n"
+            f"- token_budget: {_display_value(self.token_budget)}\n"
+            f"- parallel_siblings: {siblings}"
+        )
+
+
 class RoleContract(_SpecModel):
     """Typed projection of role-level invariants for one dispatch.
 
@@ -218,6 +255,9 @@ class SubagentSpec(_SpecModel):
             legacy renderer skipped it entirely when no brief matched).
         worktree: Worktree wire-up, or ``None`` (renders the
             ``Worktree path: inline`` fallback).
+        estimate: Typed estimate hints rendered after ``## Out of
+            scope``. Defaults to unknown values so all prompts carry the
+            section even when no estimate has been seeded.
         role_contract: Typed projection of the dispatched wave's role
             (P28-I01-W12). When set, the spec renders a
             ``## Role contract`` section carrying the role's
@@ -243,6 +283,7 @@ class SubagentSpec(_SpecModel):
     recent_audits: list[SpecAudit] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
     worktree: SpecWorktree | None = None
+    estimate: SpecEstimate = Field(default_factory=SpecEstimate)
     role_contract: RoleContract | None = None
 
     # ---- Section renderers --------------------------------------------------
@@ -393,9 +434,8 @@ class SubagentSpec(_SpecModel):
         Sections render in the canonical order — header, description
         (omitted when unset), wave tags, scope, dependencies, decisions,
         hypotheses, recent audits, references (omitted when empty), working
-        tree, workflow, out of scope — joined by a blank line. The trailing
-        newline mirrors the legacy renderer so emitting the prompt verbatim
-        stays byte-clean.
+        tree, workflow, out of scope, estimate, stop conditions (omitted
+        when empty) — joined by a blank line.
 
         Returns:
             The wave prompt as a single string ending in ``"\\n"``.
@@ -423,6 +463,7 @@ class SubagentSpec(_SpecModel):
             sections.append(role_contract)
         sections.append(self._render_workflow())
         sections.append(self._render_out_of_scope())
+        sections.append(self.estimate.render())
         stop_conditions = self._render_stop_conditions()
         if stop_conditions is not None:
             sections.append(stop_conditions)
@@ -447,11 +488,19 @@ def _phase_wave_segments(wave_id: str) -> tuple[str, str]:
     return parts[0], parts[2]
 
 
+def _display_value(value: object | None) -> str:
+    """Render absent estimate fields with the stable ``unknown`` sentinel."""
+    if value is None:
+        return "unknown"
+    return str(value)
+
+
 __all__ = [
     "RoleContract",
     "SpecAudit",
     "SpecDecision",
     "SpecDependency",
+    "SpecEstimate",
     "SpecHypothesis",
     "SpecWorktree",
     "SubagentSpec",

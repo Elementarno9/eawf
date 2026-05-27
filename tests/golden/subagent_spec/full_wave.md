@@ -66,3 +66,11 @@ Base commit: feature/eawf-v0.3-p27
 - Do **not** open a PR.
 - Do **not** edit `.ea/state.json` or `.ea/store/event.jsonl` directly — every mutation goes through `uv run eawf state ...`.
 - Never `git commit --no-verify`; root-cause the hook instead.
+
+## Estimate
+
+- bucket: XL
+- expected_eu: 8.0
+- expected_minutes: 240.0
+- token_budget: 32768
+- parallel_siblings: P27-I03-W13, P27-I03-W15

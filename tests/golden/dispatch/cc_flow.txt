@@ -89,3 +89,11 @@ criterion lacks evidence, surface the gap explicitly in the
 - Do **not** open a PR.
 - Do **not** edit `.ea/state.json` or `.ea/store/event.jsonl` directly — every mutation goes through `uv run eawf state ...`.
 - Never `git commit --no-verify`; root-cause the hook instead.
+
+## Estimate
+
+- bucket: L
+- expected_eu: unknown
+- expected_minutes: unknown
+- token_budget: unknown
+- parallel_siblings: none

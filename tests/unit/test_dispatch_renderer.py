@@ -17,6 +17,7 @@ from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
     AuditVerdict,
+    Confidence,
     DecisionStatus,
     HypothesisStatus,
     HypothesisVerdict,
@@ -29,6 +30,7 @@ from eawf.kernel.state.models import (
     Audit,
     CurrentPointers,
     Decision,
+    EstimateSummary,
     Hypothesis,
     Project,
     State,
@@ -41,6 +43,8 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+
+_T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 # ---- Builders ---------------------------------------------------------------
 
@@ -99,6 +103,23 @@ def _seed_chain(state: State) -> None:
     )
 
 
+def _estimate(*, wave_id: str, expected_eu: float, expected_minutes: float) -> EstimateSummary:
+    """Return a deterministic estimate summary for renderer tests."""
+    return EstimateSummary(
+        id=f"EST-{wave_id}",
+        scope_id=wave_id,
+        expected_eu=expected_eu,
+        pessimistic_eu=expected_eu * 1.5,
+        expected_minutes=expected_minutes,
+        pessimistic_minutes=expected_minutes * 1.5,
+        display=f"{expected_eu} EU",
+        reference_class="test",
+        confidence=Confidence.MEDIUM,
+        current_store_record_id=f"REC-{wave_id}",
+        updated_at=_T0,
+    )
+
+
 # ---- Typed-spec projection (P27-I03-W14) -----------------------------------
 
 
@@ -112,6 +133,7 @@ def test_build_subagent_spec_returns_typed_spec() -> None:
     assert spec.iter_id == "P01-I01"
     assert spec.title == "Second wave"
     assert spec.scope_id == "QR"
+    assert spec.estimate.effort_bucket == "M"
     # The single closed/pending dep is projected as a typed row.
     assert len(spec.dependencies) == 1
     assert spec.dependencies[0].wave_id == "P01-I01-W01"
@@ -141,6 +163,29 @@ def test_build_subagent_spec_projects_wave_description() -> None:
     state.waves["P01-I01-W01"].description = "Long-form purpose of the first wave."
     spec = build_subagent_spec(state, "P01-I01-W01")
     assert spec.description == "Long-form purpose of the first wave."
+
+
+def test_build_subagent_spec_projects_estimate_hints() -> None:
+    """``build_subagent_spec`` copies estimate state and active siblings."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.estimates = {
+        "P01-I01-W01": _estimate(
+            wave_id="P01-I01-W01",
+            expected_eu=2.5,
+            expected_minutes=75.0,
+        )
+    }
+    state.waves["P01-I01-W01"].token_budget = 4096
+    state.current.active_wave_ids = ["P01-I01-W01", "P01-I01-W02"]
+
+    spec = build_subagent_spec(state, "P01-I01-W01")
+
+    assert spec.estimate.effort_bucket == "M"
+    assert spec.estimate.expected_eu == 2.5
+    assert spec.estimate.expected_minutes == 75.0
+    assert spec.estimate.token_budget == 4096
+    assert spec.estimate.parallel_siblings == ["P01-I01-W02"]
 
 
 def test_render_wave_prompt_surfaces_description_section() -> None:
@@ -188,10 +233,43 @@ def test_render_minimal_wave_prompt() -> None:
     assert "## Working tree" in out
     assert "## Workflow" in out
     assert "## Out of scope" in out
+    assert "## Estimate" in out
     # No-dep / no-evidence sentinels.
     assert "None." in out
     # Commit-prefix uses the wave's phase + wave segments (Pxx-Wzz).
     assert "[P01-W01]" in out
+
+
+def test_render_wave_prompt_estimate_after_out_of_scope() -> None:
+    """The estimate section follows the out-of-scope section."""
+    state = _empty_state()
+    _seed_chain(state)
+    out = render_wave_prompt(state, "P01-I01-W01")
+    assert out.index("## Out of scope") < out.index("## Estimate")
+
+
+def test_render_wave_prompt_estimate_values() -> None:
+    """Estimate fields render from state as stable Markdown bullets."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.estimates = {
+        "P01-I01-W01": _estimate(
+            wave_id="P01-I01-W01",
+            expected_eu=3.0,
+            expected_minutes=90.0,
+        )
+    }
+    state.waves["P01-I01-W01"].token_budget = 8192
+    state.current.active_wave_ids = ["P01-I01-W02", "P01-I01-W01"]
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    block = out.split("## Estimate", 1)[1]
+    assert "- bucket: M" in block
+    assert "- expected_eu: 3.0" in block
+    assert "- expected_minutes: 90.0" in block
+    assert "- token_budget: 8192" in block
+    assert "- parallel_siblings: P01-I01-W02" in block
 
 
 def test_render_includes_dependencies_with_status() -> None:
