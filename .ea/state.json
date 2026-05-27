@@ -228,6 +228,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:20:47.444499Z"
     },
+    "P28-I03-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W10",
+      "scope_id": "P28-I03-W10",
+      "status": "done",
+      "updated_at": "2026-05-27T21:23:12.003517Z"
+    },
     "P28-I03-W15": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2263,7 +2275,6 @@
     ],
     "active_wave_ids": [
       "P28-I03-W05",
-      "P28-I03-W10",
       "P28-I03-W13",
       "P28-I03-W02",
       "P28-I03-W23",
@@ -6712,7 +6723,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:21:29.084227Z",
+  "updated_at": "2026-05-27T21:23:12.003990Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -22689,8 +22700,8 @@
         "P28-I03-W32"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:23:12.003517Z",
+      "commit": "9e382d9c0b5e0e4746305e8fd23c35424918ae25",
       "deps": [
         "P28-I01-W10"
       ],
@@ -22707,10 +22718,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:26.826139Z",
-      "outcome": null,
+      "outcome": "quick init packs and auto-install preview landed",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "init --quick lands",
         "lang auto-detect feeds profile",
@@ -26072,10 +26083,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w10",
       "created_at": "2026-05-27T21:07:15.596300Z",
       "id": "WT-P28-I03-W10-1779916035",
-      "merged_commit": null,
+      "merged_commit": "9e382d9",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w10",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W10"
     },
     "WT-P28-I03-W13-1779916036": {
