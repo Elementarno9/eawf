@@ -2045,7 +2045,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P28-I02-W19"
+    ],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -4500,6 +4502,19 @@
       "scope_id": "P28-I02-W18",
       "updated_at": "2026-05-27T00:57:28.261784Z"
     },
+    "P28-I02-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W19-bucket-20260527T165836Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I02-W19",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I02-W19",
+      "updated_at": "2026-05-27T16:58:36.202766Z"
+    },
     "P28-I02-W21": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I02-W21-bucket-20260527T014705Z",
@@ -6157,7 +6172,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T16:56:37.111500Z",
+  "updated_at": "2026-05-27T16:58:48.398326Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21372,7 +21387,7 @@
       "blocks": [
         "P28-I02-W20"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-20260527T170000Z-operator-codex",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -21395,7 +21410,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "SubagentSpec workflow inserts wave close instruction",
         "close_wave accepts tokens_consumed param",
@@ -21405,7 +21420,7 @@
       "title": "feat: plugin-dispatch state-mutation parity + event producers",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P28-I02-W19-1779901128"
     },
     "P28-I02-W20": {
       "agent_role": "executor",
@@ -25175,6 +25190,17 @@
       "path": ".ea/worktrees/p28-w18",
       "status": "abandoned",
       "wave_id": "P28-I02-W18"
+    },
+    "WT-P28-I02-W19-1779901128": {
+      "base_branch": "feature/eawf-v0.4-p28",
+      "branch": "feature/eawf-v0.4-p28-w19",
+      "created_at": "2026-05-27T16:58:48.398326Z",
+      "id": "WT-P28-I02-W19-1779901128",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260527T170000Z-operator-codex",
+      "path": ".ea/worktrees/p28-w19",
+      "status": "active",
+      "wave_id": "P28-I02-W19"
     },
     "WT-P28-I02-W21-1779846426": {
       "base_branch": "feature/eawf-v0.4-p28",
