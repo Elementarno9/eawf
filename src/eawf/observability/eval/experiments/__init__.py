@@ -1,0 +1,51 @@
+"""Rule-adherence experiment runners for the eval corpus."""
+
+from __future__ import annotations
+
+from eawf.observability.eval.experiments.rule_adherence import (
+    AB_MIN_DELTA_PP,
+    AB_MIN_DELTA_RATE,
+    ABComparison,
+    MechanismBakeoffReport,
+    MechanismCandidate,
+    MechanismResult,
+    MinedViolation,
+    RuleAdherenceExperimentSuite,
+    RuleBaselineRow,
+    RuleProjection,
+    TieredABReport,
+    VariantResult,
+    ViolationMiningReport,
+    compare_ab_variants,
+    dump_rule_adherence_experiments,
+    meets_ab_threshold,
+    run_mechanism_bakeoff,
+    run_recorded_rule_adherence_experiments,
+    run_rule_adherence_experiments,
+    run_tiered_ab,
+    run_violation_mining,
+)
+
+__all__ = [
+    "AB_MIN_DELTA_PP",
+    "AB_MIN_DELTA_RATE",
+    "ABComparison",
+    "MechanismBakeoffReport",
+    "MechanismCandidate",
+    "MechanismResult",
+    "MinedViolation",
+    "RuleAdherenceExperimentSuite",
+    "RuleBaselineRow",
+    "RuleProjection",
+    "TieredABReport",
+    "VariantResult",
+    "ViolationMiningReport",
+    "compare_ab_variants",
+    "dump_rule_adherence_experiments",
+    "meets_ab_threshold",
+    "run_mechanism_bakeoff",
+    "run_recorded_rule_adherence_experiments",
+    "run_rule_adherence_experiments",
+    "run_tiered_ab",
+    "run_violation_mining",
+]

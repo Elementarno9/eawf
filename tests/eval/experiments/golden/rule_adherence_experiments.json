@@ -1,0 +1,396 @@
+{
+  "corpus_count": 6,
+  "experiment_ids": [
+    "Exp-1",
+    "Exp-2",
+    "Exp-3"
+  ],
+  "mechanism_bakeoff": {
+    "candidates": [
+      {
+        "covered_rules": [
+          "commands_use_rtk",
+          "python_invocations_use_uv_run",
+          "no_direct_state_json_edits",
+          "no_destructive_git_reverts"
+        ],
+        "label": "Runtime guardrails",
+        "mechanism_id": "runtime_guardrails",
+        "prevented_violation_count": 4,
+        "projected_pass_rate": 0.9722222222222222,
+        "rule_projections": [
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "commands_use_rtk",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "python_invocations_use_uv_run",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 1.0,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 1.0,
+            "rule_id": "no_local_path_leaks",
+            "tier": "blocking"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "no_direct_state_json_edits",
+            "tier": "blocking"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "pydantic_models_forbid_extra",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "no_destructive_git_reverts",
+            "tier": "blocking"
+          }
+        ],
+        "weighted_prevented_violation_count": 8
+      },
+      {
+        "covered_rules": [
+          "commands_use_rtk",
+          "python_invocations_use_uv_run",
+          "pydantic_models_forbid_extra"
+        ],
+        "label": "Prompt checklist",
+        "mechanism_id": "prompt_checklist",
+        "prevented_violation_count": 3,
+        "projected_pass_rate": 0.9444444444444444,
+        "rule_projections": [
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "commands_use_rtk",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "python_invocations_use_uv_run",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 1.0,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 1.0,
+            "rule_id": "no_local_path_leaks",
+            "tier": "blocking"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "no_direct_state_json_edits",
+            "tier": "blocking"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "pydantic_models_forbid_extra",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "no_destructive_git_reverts",
+            "tier": "blocking"
+          }
+        ],
+        "weighted_prevented_violation_count": 3
+      },
+      {
+        "covered_rules": [
+          "no_local_path_leaks",
+          "pydantic_models_forbid_extra"
+        ],
+        "label": "Static artifact scan",
+        "mechanism_id": "static_artifact_scan",
+        "prevented_violation_count": 1,
+        "projected_pass_rate": 0.8888888888888888,
+        "rule_projections": [
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "commands_use_rtk",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "python_invocations_use_uv_run",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 1.0,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 1.0,
+            "rule_id": "no_local_path_leaks",
+            "tier": "blocking"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "no_direct_state_json_edits",
+            "tier": "blocking"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 16.666666666666664,
+            "projected_pass_rate": 1.0,
+            "rule_id": "pydantic_models_forbid_extra",
+            "tier": "advisory"
+          },
+          {
+            "baseline_pass_rate": 0.8333333333333334,
+            "delta_pp": 0.0,
+            "projected_pass_rate": 0.8333333333333334,
+            "rule_id": "no_destructive_git_reverts",
+            "tier": "blocking"
+          }
+        ],
+        "weighted_prevented_violation_count": 1
+      }
+    ],
+    "experiment_id": "Exp-3",
+    "name": "mechanism_bakeoff",
+    "winner_id": "runtime_guardrails"
+  },
+  "tiered_ab": {
+    "comparison": {
+      "control_id": "control",
+      "control_pass_rate": 0.8611111111111112,
+      "delta_pp": 5.55555555555554,
+      "delta_rate": 0.0555555555555554,
+      "meets_threshold": true,
+      "min_delta_pp": 2.0,
+      "min_delta_rate": 0.02,
+      "treatment_id": "tiered_blocking",
+      "treatment_pass_rate": 0.9166666666666666
+    },
+    "control": {
+      "label": "Advisory-only baseline",
+      "pass_rate": 0.8611111111111112,
+      "passed_checks": 31,
+      "prevented_rules": [],
+      "prevented_violation_count": 0,
+      "rule_pass_rates": {
+        "commands_use_rtk": 0.8333333333333334,
+        "no_destructive_git_reverts": 0.8333333333333334,
+        "no_direct_state_json_edits": 0.8333333333333334,
+        "no_local_path_leaks": 1.0,
+        "pydantic_models_forbid_extra": 0.8333333333333334,
+        "python_invocations_use_uv_run": 0.8333333333333334
+      },
+      "total_checks": 36,
+      "variant_id": "control"
+    },
+    "experiment_id": "Exp-2",
+    "name": "tiered_ab",
+    "rule_projections": [
+      {
+        "baseline_pass_rate": 0.8333333333333334,
+        "delta_pp": 0.0,
+        "projected_pass_rate": 0.8333333333333334,
+        "rule_id": "commands_use_rtk",
+        "tier": "advisory"
+      },
+      {
+        "baseline_pass_rate": 0.8333333333333334,
+        "delta_pp": 0.0,
+        "projected_pass_rate": 0.8333333333333334,
+        "rule_id": "python_invocations_use_uv_run",
+        "tier": "advisory"
+      },
+      {
+        "baseline_pass_rate": 1.0,
+        "delta_pp": 0.0,
+        "projected_pass_rate": 1.0,
+        "rule_id": "no_local_path_leaks",
+        "tier": "blocking"
+      },
+      {
+        "baseline_pass_rate": 0.8333333333333334,
+        "delta_pp": 16.666666666666664,
+        "projected_pass_rate": 1.0,
+        "rule_id": "no_direct_state_json_edits",
+        "tier": "blocking"
+      },
+      {
+        "baseline_pass_rate": 0.8333333333333334,
+        "delta_pp": 0.0,
+        "projected_pass_rate": 0.8333333333333334,
+        "rule_id": "pydantic_models_forbid_extra",
+        "tier": "advisory"
+      },
+      {
+        "baseline_pass_rate": 0.8333333333333334,
+        "delta_pp": 16.666666666666664,
+        "projected_pass_rate": 1.0,
+        "rule_id": "no_destructive_git_reverts",
+        "tier": "blocking"
+      }
+    ],
+    "treatment": {
+      "label": "Blocking tier prevents high-severity violations",
+      "pass_rate": 0.9166666666666666,
+      "passed_checks": 33,
+      "prevented_rules": [
+        "no_local_path_leaks",
+        "no_direct_state_json_edits",
+        "no_destructive_git_reverts"
+      ],
+      "prevented_violation_count": 2,
+      "rule_pass_rates": {
+        "commands_use_rtk": 0.8333333333333334,
+        "no_destructive_git_reverts": 1.0,
+        "no_direct_state_json_edits": 1.0,
+        "no_local_path_leaks": 1.0,
+        "pydantic_models_forbid_extra": 0.8333333333333334,
+        "python_invocations_use_uv_run": 0.8333333333333334
+      },
+      "total_checks": 36,
+      "variant_id": "tiered_blocking"
+    }
+  },
+  "verify_count": 7,
+  "violation_mining": {
+    "baseline_pass_rate": 0.8611111111111112,
+    "corpus_count": 6,
+    "experiment_id": "Exp-1",
+    "name": "violation_mining",
+    "per_rule_baselines": [
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "missing-rtk"
+        ],
+        "pass_count": 5,
+        "pass_rate": 0.8333333333333334,
+        "rule_id": "commands_use_rtk",
+        "tier": "advisory",
+        "total_cases": 6
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "bare-python"
+        ],
+        "pass_count": 5,
+        "pass_rate": 0.8333333333333334,
+        "rule_id": "python_invocations_use_uv_run",
+        "tier": "advisory",
+        "total_cases": 6
+      },
+      {
+        "fail_count": 0,
+        "failed_case_ids": [],
+        "pass_count": 6,
+        "pass_rate": 1.0,
+        "rule_id": "no_local_path_leaks",
+        "tier": "blocking",
+        "total_cases": 6
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "direct-state-edit"
+        ],
+        "pass_count": 5,
+        "pass_rate": 0.8333333333333334,
+        "rule_id": "no_direct_state_json_edits",
+        "tier": "blocking",
+        "total_cases": 6
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "pydantic-extra-open"
+        ],
+        "pass_count": 5,
+        "pass_rate": 0.8333333333333334,
+        "rule_id": "pydantic_models_forbid_extra",
+        "tier": "advisory",
+        "total_cases": 6
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "destructive-git"
+        ],
+        "pass_count": 5,
+        "pass_rate": 0.8333333333333334,
+        "rule_id": "no_destructive_git_reverts",
+        "tier": "blocking",
+        "total_cases": 6
+      }
+    ],
+    "top_violations": [
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "missing-rtk"
+        ],
+        "rule_id": "commands_use_rtk",
+        "tier": "advisory"
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "destructive-git"
+        ],
+        "rule_id": "no_destructive_git_reverts",
+        "tier": "blocking"
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "direct-state-edit"
+        ],
+        "rule_id": "no_direct_state_json_edits",
+        "tier": "blocking"
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "pydantic-extra-open"
+        ],
+        "rule_id": "pydantic_models_forbid_extra",
+        "tier": "advisory"
+      },
+      {
+        "fail_count": 1,
+        "failed_case_ids": [
+          "bare-python"
+        ],
+        "rule_id": "python_invocations_use_uv_run",
+        "tier": "advisory"
+      }
+    ],
+    "verify_count": 7
+  }
+}
