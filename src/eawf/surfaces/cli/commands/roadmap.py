@@ -657,14 +657,22 @@ def roadmap_revise_cmd(
                 if not is_iter_retitle:
                     _resolve_revisable_phase(state, phase_id)
                 if add_wave:
-                    if not wave_title or not files:
+                    if not wave_title or not files or not effort_bucket:
                         raise cli_errors.UserError(
-                            "--add-wave requires --title and --files", kind="InvalidInput"
+                            "--add-wave requires --title, --files, and --effort-bucket",
+                            kind="InvalidInput",
                         )
                     full_wave_id = _coerce_full_wave_id(state, phase_id, add_wave)
                     iter_id = _iter_id_for_phase(state, phase_id)
                     role = AgentSessionRole(agent_role) if agent_role else None
-                    bucket = EffortBucket(effort_bucket) if effort_bucket else None
+                    try:
+                        bucket = EffortBucket(effort_bucket)
+                    except ValueError as exc:
+                        raise cli_errors.UserError(
+                            f"invalid effort_bucket: {effort_bucket!r}; "
+                            "expected one of XS|S|M|L|XL",
+                            kind="InvalidInput",
+                        ) from exc
                     plan_wave(
                         state,
                         wave_id=full_wave_id,

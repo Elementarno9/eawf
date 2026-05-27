@@ -48,7 +48,7 @@ def plan_wave(
         deps: Optional list of prerequisite wave ids.
         success_criteria: Optional list of success-criterion strings.
         agent_role: Optional executor role.
-        effort_bucket: Optional XS/S/M/L/XL estimate bucket.
+        effort_bucket: Required XS/S/M/L/XL estimate bucket.
         description: Optional bounded ≤500-char long-form description;
             persisted on :attr:`Wave.description` for downstream renderers.
         intent: Optional typed :class:`IntentBrief` attaching the goal /
@@ -60,7 +60,8 @@ def plan_wave(
     Raises:
         LifecycleError: if iter is missing/closed, wave id duplicates, any
             declared dep references a missing wave id, the dep set names
-            the wave itself, or the resulting graph would contain a cycle.
+            the wave itself, ``effort_bucket`` is missing, or the
+            resulting graph would contain a cycle.
 
     Side-effects on the reverse-index: for every ``dep`` in *deps*, the
     dep wave's ``blocks`` list is mutated in-place to include *wave_id*
@@ -76,6 +77,10 @@ def plan_wave(
     deps_list = list(deps or [])
     if wave_id in deps_list:
         raise LifecycleError(f"wave {wave_id!r} cannot depend on itself")
+    if effort_bucket is None:
+        raise LifecycleError(
+            f"wave {wave_id!r} has no effort_bucket; set --effort-bucket before planning"
+        )
     for dep in deps_list:
         if dep not in state.waves:
             raise LifecycleError(f"unknown dep wave {dep!r}")

@@ -29,7 +29,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from eawf.kernel.state.enums import WaveStatus
+import eawf.runtime.worktree.git as git
+from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_dir as _store_dir
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
@@ -42,6 +43,7 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.scope import resolve_state_path
 from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
 from eawf.workflow.verify import compute as compute_readiness
+from eawf.workflow.verify.models import CloseReadiness
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,8 @@ class WaveLandResult:
             the cherry-pick. Empty when the worktree had no commits beyond
             the merge-base (e.g., wave already merged out-of-band).
         outcome: Outcome text stamped on the wave.
+        closed: ``True`` iff :func:`close_wave` ran. A landed wave can
+            remain open when close-readiness computes ``ready=False``.
         worktree_cleaned: ``True`` iff :func:`cleanup_worktree` ran
             successfully after the close.
         merged_commit: HEAD of the parent branch post-merge — same as the
@@ -69,6 +73,7 @@ class WaveLandResult:
     wave_id: str
     commits: list[str]
     outcome: str
+    closed: bool
     worktree_cleaned: bool
     merged_commit: str
     cleanup: CleanupResult | None
@@ -131,6 +136,68 @@ def _refuse_on_conflict(
     raise cli_errors.StateConflict(detail, kind="IntegrityViolation")
 
 
+def _merged_record_result(
+    state: State,
+    *,
+    repo_root: Path,
+    wave_id: str,
+) -> MergeBackResult | None:
+    """Return a synthetic merge result when a prior land already merged commits."""
+    wave = state.waves[wave_id]
+    if state.worktrees is None or wave.worktree_id is None:
+        return None
+    record = state.worktrees.get(wave.worktree_id)
+    if record is None or record.status != WorktreeStatus.MERGED:
+        return None
+    merged_commit = record.merged_commit or git.head_sha(repo_root)
+    logger.info(f"wave_land wave={wave_id} reuse_merged_record={record.id}")
+    return MergeBackResult(
+        record=record,
+        strategy=STRATEGY_CHERRY_PICK,
+        picked_commits=[],
+        target_branch=record.base_branch,
+        merged_commit=merged_commit,
+        conflicted=False,
+        conflict_files=[],
+        conflict_commit=None,
+    )
+
+
+def _log_readiness_advisory(wave_id: str, readiness: CloseReadiness) -> None:
+    """Log non-passing criterion rows from close-readiness."""
+    for view in readiness.criteria:
+        if view.status != "pass":
+            logger.warning(
+                f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
+            )
+
+
+def _compute_close_readiness(
+    state: State,
+    *,
+    repo_root: Path,
+    wave_id: str,
+) -> CloseReadiness | None:
+    """Compute close-readiness for auto-close gating.
+
+    ``None`` means the readiness store could not be resolved; callers
+    keep the legacy non-blocking close behaviour in that case.
+    """
+    try:
+        state_path = resolve_state_path(repo_root)
+        readiness = compute_readiness(
+            wave_id,
+            state=state,
+            store_dir=_store_dir(state_path),
+            repo_root=repo_root,
+        )
+    except (FileNotFoundError, KeyError) as exc:
+        logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+        return None
+    _log_readiness_advisory(wave_id, readiness)
+    return readiness
+
+
 def wave_land(
     state: State,
     *,
@@ -167,14 +234,20 @@ def wave_land(
     """
     _check_wave_exists_and_active(state, wave_id)
 
-    # merge_back will raise UserError (kind="NotFound") when the worktree
-    # record is missing (e.g., wave was never claimed via `worktree create`).
-    merge_result = merge_back(
-        state,
-        repo_root=repo_root,
-        wave_id=wave_id,
-        strategy=STRATEGY_CHERRY_PICK,
-    )
+    # A prior ``wave land`` may have landed commits but skipped close
+    # because readiness was not ready. Re-running should re-check
+    # readiness and close, not cherry-pick the same source branch again.
+    merge_result = _merged_record_result(state, repo_root=repo_root, wave_id=wave_id)
+    if merge_result is None:
+        # merge_back will raise UserError (kind="NotFound") when the
+        # worktree record is missing (e.g., wave was never claimed via
+        # `worktree create`).
+        merge_result = merge_back(
+            state,
+            repo_root=repo_root,
+            wave_id=wave_id,
+            strategy=STRATEGY_CHERRY_PICK,
+        )
 
     record_path_value = Path(merge_result.record.path)
     abs_record_path = (
@@ -191,44 +264,26 @@ def wave_land(
     commits = list(merge_result.picked_commits)
     chosen_outcome = outcome if outcome else _format_default_outcome(len(commits))
 
-    try:
-        close_wave(
-            state,
-            wave_id=wave_id,
-            outcome=chosen_outcome,
-        )
-    except LifecycleError as exc:
-        # Close-time rejection is a validation-side failure — the wave
-        # was active when we checked but raced into a terminal state
-        # before close_wave ran. Surface the canonical exit code.
-        raise cli_errors.ValidationError(str(exc)) from exc
-
-    # W06 advisory: compute readiness AFTER ``close_wave`` so the
-    # post-close state is what we score. Pure read-only — does not
-    # mutate ``state``. Failures (missing state.json on a
-    # non-init'd workspace; KeyError on an unknown wave) are
-    # logged + swallowed; this wave is non-blocking by design.
-    # W19 flips this to gating behind ``profile.verify.enforce``.
-    try:
-        state_path = resolve_state_path(repo_root)
-        readiness = compute_readiness(
-            wave_id,
-            state=state,
-            store_dir=_store_dir(state_path),
-            repo_root=repo_root,
-        )
-    except (FileNotFoundError, KeyError) as exc:
-        logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+    readiness = _compute_close_readiness(state, repo_root=repo_root, wave_id=wave_id)
+    closed = readiness is None or readiness.ready
+    if closed:
+        try:
+            close_wave(
+                state,
+                wave_id=wave_id,
+                outcome=chosen_outcome,
+            )
+        except LifecycleError as exc:
+            # Close-time rejection is a validation-side failure — the wave
+            # was active when we checked but raced into a terminal state
+            # before close_wave ran. Surface the canonical exit code.
+            raise cli_errors.ValidationError(str(exc)) from exc
     else:
-        for view in readiness.criteria:
-            if view.status != "pass":
-                logger.warning(
-                    f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
-                )
+        logger.info(f"wave_land wave={wave_id} readiness_ready=False closed=False")
 
     cleanup_result: CleanupResult | None = None
     worktree_cleaned = False
-    if not keep_worktree:
+    if closed and not keep_worktree:
         # The cleanup runs under the same state lock; the worktree-
         # registry lock is held by the caller (see worktree.py for the
         # always-registry-then-state ordering).
@@ -243,12 +298,13 @@ def wave_land(
 
     logger.info(
         f"wave_land wave={wave_id} commits={commits} outcome={chosen_outcome!r} "
-        f"cleaned={worktree_cleaned}"
+        f"closed={closed} cleaned={worktree_cleaned}"
     )
     return WaveLandResult(
         wave_id=wave_id,
         commits=commits,
         outcome=chosen_outcome,
+        closed=closed,
         worktree_cleaned=worktree_cleaned,
         merged_commit=merged_commit,
         cleanup=cleanup_result,
@@ -384,6 +440,15 @@ def wave_land_batch(
                 skipped=skipped,
             )
         landed.append(result)
+        if not result.closed:
+            error = "close-readiness not ready; wave left open after landing commits"
+            logger.info(f"wave_land_batch stopping wave={wid} error={error}")
+            return WaveLandBatchResult(
+                landed=landed,
+                failed_wave=wid,
+                error=error,
+                skipped=skipped,
+            )
 
     return WaveLandBatchResult(
         landed=landed,
