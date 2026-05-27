@@ -49,12 +49,12 @@ logger = logging.getLogger(__name__)
 # ``parents[2]`` is the installed ``eawf`` package root and ``parents[4]``
 # is the repo root in an editable checkout.
 #
+# - Editable / source checkout: use the version-controlled repo-root
+#   ``templates/`` directory even when a prior local build left a
+#   generated ``_data/`` tree behind.
 # - Wheel / PyPI install: ``tools/bundle_data.py`` copies the templates
 #   into ``eawf/_data/service_templates/`` at build time; that copy is
 #   the only one present when there is no repo checkout.
-# - Editable / source checkout: ``_data/`` is gitignored and absent, so
-#   the daemon reads the version-controlled source at the repo-root
-#   ``templates/`` directory the bundle hook copies from.
 _BUNDLED_TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "_data" / "service_templates"
 _REPO_TEMPLATE_DIR = Path(__file__).resolve().parents[4] / "templates"
 
@@ -70,7 +70,7 @@ def _template_dir() -> Path:
     Raises:
         ServiceInstallError: When neither candidate directory exists.
     """
-    for candidate in (_BUNDLED_TEMPLATE_DIR, _REPO_TEMPLATE_DIR):
+    for candidate in (_REPO_TEMPLATE_DIR, _BUNDLED_TEMPLATE_DIR):
         if candidate.is_dir():
             return candidate
     raise ServiceInstallError(

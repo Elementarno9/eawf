@@ -575,18 +575,18 @@ def test_render_launchd_template_substitutes_runtime_dir(tmp_path: Path) -> None
 # ---------------------------------------------------------------------
 
 
-def test_template_dir_prefers_bundled_when_present(
+def test_template_dir_prefers_repo_when_present(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The bundled wheel copy wins when both candidate dirs exist."""
+    """Editable checkouts use source templates when both dirs exist."""
     bundled = tmp_path / "bundled"
     repo = tmp_path / "repo"
     bundled.mkdir()
     repo.mkdir()
     monkeypatch.setattr(service_install, "_BUNDLED_TEMPLATE_DIR", bundled)
     monkeypatch.setattr(service_install, "_REPO_TEMPLATE_DIR", repo)
-    assert service_install._template_dir() == bundled
+    assert service_install._template_dir() == repo
 
 
 def test_template_dir_falls_back_to_repo_when_bundled_absent(
