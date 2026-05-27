@@ -86,6 +86,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-26-p27-i06-cleanup-closeout.md",
       "urn": "urn:eawf:v1:artifact:P27-I06/A40-P27-i06-cleanup-report"
     },
+    "A41-P28-i01-verify-spine-report": {
+      "created_at": "2026-05-27T00:36:20.491180Z",
+      "id": "A41-P28-i01-verify-spine-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-05-27-p28-i01-verify-spine-closeout.md",
+      "urn": "urn:eawf:v1:artifact:P28-I01/A41-P28-i01-verify-spine-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -1007,6 +1017,17 @@
       "scope_id": "P27-I06",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A41-P28-i01-verify-spine": {
+      "check_results": [],
+      "created_at": "2026-05-27T00:36:23.671661Z",
+      "id": "A41-P28-i01-verify-spine",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A41-P28-i01-verify-spine-report",
+      "scope_id": "P28-I01",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -1868,7 +1889,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P28-I01",
+    "iter_id": null,
     "phase_id": "P28",
     "project_code": "EAWF",
     "subproject_id": null
@@ -4907,14 +4928,14 @@
       ]
     },
     "P28-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A41-P28-i01-verify-spine",
+      "closed_at": "2026-05-27T00:36:26.520754Z",
       "description": null,
       "estimate_id": null,
       "id": "P28-I01",
       "opened_at": "2026-05-26T18:04:28.702029Z",
       "phase_id": "P28",
-      "status": "active",
+      "status": "closed",
       "title": "verify spine + foundations",
       "wave_ids": [
         "P28-I01-W01",
@@ -5593,7 +5614,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-26T23:24:24.005783Z",
+  "updated_at": "2026-05-27T00:36:26.520923Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
