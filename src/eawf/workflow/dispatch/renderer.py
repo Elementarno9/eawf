@@ -46,6 +46,11 @@ section so the dispatched subagent reads them before starting work.
 ``.ea/local/`` is gitignored — briefs stay local-only per the
 ``spike-workflow`` AGENTS.md rule. When no brief exists (or
 ``repo_root`` is ``None``) the section is omitted.
+
+Memory recall is read-only. When ``state.memory_index`` carries active
+entries, the prompt includes a ``## Memory`` section rendered through the
+same token-budgeted context walker as ``eawf memory render-context``. The
+state object and memory store are never mutated by dispatch rendering.
 """
 
 from __future__ import annotations
@@ -55,7 +60,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.state.enums import AgentSessionRole, StoreKind
 from eawf.kernel.state.models import (
     Audit,
     Decision,
@@ -64,6 +69,8 @@ from eawf.kernel.state.models import (
     Wave,
     WorktreeRecord,
 )
+from eawf.kernel.store.paths import store_path
+from eawf.platform.memory.render_context import DEFAULT_BUDGET, render_context
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.workflow.agents.specs.models import (
     RoleContract,
@@ -168,8 +175,8 @@ def render_dispatch_envelope(
             raises :class:`ValueError` with the canonical
             ``unknown runtime ...; expected one of [...]`` format that
             matches :func:`eawf.runtime.mcp.installer._validate_runtime`.
-        repo_root: Forwarded to :func:`render_wave_prompt` for API
-            symmetry; not consumed in v0.1.
+        repo_root: Optional repo root used for spike-brief discovery and
+            memory-body lookup under ``.ea/store/memory.jsonl``.
 
     Returns:
         :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
@@ -191,7 +198,7 @@ def render_dispatch_envelope(
     # registry inside `render_wave_prompt` and the envelope would have to
     # re-project it. The shared spec keeps the two surfaces aligned.
     spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
-    prompt = spec.render()
+    prompt = _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
     if runtime == _CLI_RUNTIME_CLAUDE_CODE:
         return DispatchEnvelope(
             runtime=runtime,
@@ -446,6 +453,9 @@ def render_wave_prompt(
             for callers that have not yet plumbed the repo path
             through. ``.ea/local/`` is gitignored, so the briefs
             stay local-only per the ``spike-workflow`` rule.
+            Memory recall uses the same root for full-body lookup when
+            supplied; without it, dispatch still renders cache summaries
+            from ``state.memory_index`` and treats missing bodies as empty.
 
     Returns:
         A single string containing the full Markdown prompt. The
@@ -457,7 +467,75 @@ def render_wave_prompt(
             wave → iter → phase → scope chain has a broken link.
     """
     spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
-    return spec.render()
+    return _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
+
+
+def _render_spec_prompt(
+    state: State,
+    spec: SubagentSpec,
+    *,
+    wave_id: str,
+    repo_root: Path | None,
+) -> str:
+    """Render *spec* and splice in read-only memory recall when present."""
+    prompt = spec.render()
+    section = _render_memory_section(state, wave_id=wave_id, repo_root=repo_root)
+    if section is None:
+        return prompt
+    return _insert_section_after_heading(prompt, section, heading="## Recent audits")
+
+
+def _render_memory_section(
+    state: State,
+    *,
+    wave_id: str,
+    repo_root: Path | None,
+) -> str | None:
+    """Return the dispatch ``## Memory`` section, or ``None`` when empty."""
+    if not state.memory_index:
+        return None
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return None
+    memory_path = _memory_path_for_repo(repo_root)
+    result = render_context(
+        state=state,
+        memory_path=memory_path,
+        anchor_scope=wave.id,
+        budget=DEFAULT_BUDGET,
+        heading_level=3,
+    )
+    if not result.included_ids and not result.skipped_ids:
+        return None
+    lines = [
+        "## Memory",
+        "",
+        f"Read-only recall for {wave.id}; budget={result.budget} tokens_used={result.tokens_used}.",
+    ]
+    if result.text:
+        lines.extend(["", result.text.rstrip()])
+    else:
+        lines.extend(["", "No entries fit the token budget."])
+    if result.skipped_ids:
+        lines.extend(["", f"[skipped: {len(result.skipped_ids)}]"])
+    return "\n".join(lines)
+
+
+def _memory_path_for_repo(repo_root: Path | None) -> Path:
+    """Return the canonical memory store path for *repo_root* or the current cwd."""
+    root = repo_root if repo_root is not None else Path.cwd()
+    return store_path(root / ".ea" / "state.json", StoreKind.MEMORY)
+
+
+def _insert_section_after_heading(prompt: str, section: str, *, heading: str) -> str:
+    """Insert *section* after the Markdown section headed by *heading*."""
+    start = prompt.find(heading)
+    if start == -1:
+        return f"{prompt.rstrip()}\n\n{section.rstrip()}\n"
+    next_section = prompt.find("\n\n## ", start + len(heading))
+    if next_section == -1:
+        return f"{prompt.rstrip()}\n\n{section.rstrip()}\n"
+    return f"{prompt[:next_section]}\n\n{section.rstrip()}{prompt[next_section:]}"
 
 
 # ---- Scope resolution -------------------------------------------------------

@@ -14,12 +14,21 @@ The module is named ``iter_`` (trailing underscore) to avoid shadowing the
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from datetime import UTC, datetime
 
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
+from eawf.kernel.state.enums import (
+    Confidence,
+    IterStatus,
+    MemoryStatus,
+    MemoryTier,
+    PhaseStatus,
+    WaveStatus,
+)
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import Iter, State
+from eawf.kernel.state.models import Iter, State, Wave
+from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_add
 from eawf.workflow.lifecycle._errors import LifecycleError
 
 logger = logging.getLogger(__name__)
@@ -98,14 +107,86 @@ def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
         raise LifecycleError(
             f"iter {iter_id!r} has open waves: {sorted(open_waves, key=natural_key)}"
         )
+    closed_at = datetime.now(UTC)
     it.status = IterStatus.CLOSED
-    it.closed_at = datetime.now(UTC)
+    it.closed_at = closed_at
     it.audit_id = audit_id
+    _record_iter_close_memory(state, it=it, audit_id=audit_id, closed_at=closed_at)
     if state.current.iter_id == iter_id:
         state.current.iter_id = None
         state.current.active_wave_ids = []
     logger.info(f"close_iter id={iter_id} audit={audit_id}")
     return it
+
+
+def _record_iter_close_memory(
+    state: State,
+    *,
+    it: Iter,
+    audit_id: str,
+    closed_at: datetime,
+) -> None:
+    """Mirror an iter-close summary into ``state.memory_index``."""
+    wave_rows = sorted(
+        [wave for wave in state.waves.values() if wave.iter_id == it.id],
+        key=lambda wave: natural_key(wave.id),
+    )
+    if not wave_rows:
+        return
+    status_counts = Counter(wave.status.value for wave in wave_rows)
+    status_text = ", ".join(f"{status}={count}" for status, count in sorted(status_counts.items()))
+    outcome_text = _iter_close_outcome_text(wave_rows)
+    summary = f"iter {it.id} closed with audit {audit_id}; waves {status_text}"
+    if outcome_text:
+        summary = f"{summary}; outcomes {outcome_text}"
+    memory_id = _iter_close_memory_id(state, iter_id=it.id, audit_id=audit_id)
+    apply_memory_add(
+        state,
+        Mutation(
+            kind=MutationKind.MEMORY_ADD,
+            scope_id=it.id,
+            mutation_id=f"{memory_id}-mutation",
+            params={
+                "id": memory_id,
+                "scope_id": it.id,
+                "summary": summary,
+                "confidence": Confidence.HIGH.value,
+                "status": MemoryStatus.ACTIVE.value,
+                "store_record_id": memory_id,
+                "review_due": closed_at,
+                "tier": MemoryTier.WORKING.value,
+            },
+        ),
+    )
+    logger.info(f"record_iter_close_memory iter={it.id} memory={memory_id}")
+
+
+def _iter_close_memory_id(state: State, *, iter_id: str, audit_id: str) -> str:
+    """Return a non-conflicting iter-close memory id."""
+    base = f"MEM-{iter_id}-close-{audit_id}"
+    index = state.memory_index or {}
+    if base not in index:
+        return base
+    suffix = 2
+    while f"{base}-{suffix}" in index:
+        suffix += 1
+    return f"{base}-{suffix}"
+
+
+def _iter_close_outcome_text(wave_rows: list[Wave]) -> str:
+    """Return compact wave outcome text for the iter-close memory row."""
+    parts: list[str] = []
+    for wave in wave_rows:
+        outcome = wave.outcome
+        if not outcome:
+            continue
+        text = " ".join(str(outcome).split())
+        if len(text) > 96:
+            text = f"{text[:93]}..."
+        parts.append(f"{wave.id}: {text}")
+        if len(parts) == 3:
+            break
+    return " | ".join(parts)
 
 
 def plan_iter(

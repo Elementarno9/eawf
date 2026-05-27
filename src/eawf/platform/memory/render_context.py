@@ -88,6 +88,7 @@ def render_context(
     now: datetime | None = None,
     include_superseded: bool = False,
     max_entries: int | None = None,
+    heading_level: int = 2,
 ) -> RenderContextResult:
     """Walk memory entries, render until *budget* exhausted.
 
@@ -119,11 +120,20 @@ def render_context(
         max_entries: Optional cap on the count of included entries. The
             budget still wins on either side: an entry that would exceed
             ``budget`` is skipped even when ``len(included_ids) < max_entries``.
+        heading_level: Markdown heading depth used for each emitted entry.
+            Defaults to ``2`` to preserve the standalone CLI view; dispatch
+            prompts pass ``3`` so entries nest under their own ``## Memory``
+            section.
 
     Returns:
         :class:`RenderContextResult` with the rendered Markdown body and the
         IDs of included vs skipped entries. ``tokens_used <= budget`` always.
+
+    Raises:
+        ValueError: when ``heading_level`` is less than 1.
     """
+    if heading_level < 1:
+        raise ValueError(f"heading_level must be >= 1; got {heading_level}")
     moment = now if now is not None else datetime.now(UTC)
     index = state.memory_index or {}
     eligible_statuses: set[MemoryStatus] = {MemoryStatus.ACTIVE}
@@ -153,8 +163,9 @@ def render_context(
         if env is not None:
             body_payload = env.payload.get("body")
             body = str(body_payload) if body_payload is not None else ""
+        heading = "#" * heading_level
         block = (
-            f"## {summary.id} ({summary.scope_id}, {summary.confidence.value})\n"
+            f"{heading} {summary.id} ({summary.scope_id}, {summary.confidence.value})\n"
             f"{summary.summary}\n\n"
             f"{body}\n"
         )
