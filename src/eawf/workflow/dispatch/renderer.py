@@ -84,6 +84,7 @@ from eawf.workflow.agents.specs.models import (
     SubagentSpec,
 )
 from eawf.workflow.agents.specs.roles import RoleSpec, get_role_spec
+from eawf.workflow.lifecycle.ceremony import compute_ceremony
 
 logger = logging.getLogger(__name__)
 
@@ -505,12 +506,38 @@ def _render_spec_prompt(
     wave_id: str,
     repo_root: Path | None,
 ) -> str:
-    """Render *spec* and splice in read-only memory recall when present."""
+    """Render *spec* and splice in read-only dispatch context when present."""
     prompt = spec.render()
+    ceremony = _render_ceremony_section(state, wave_id=wave_id)
+    if ceremony is not None:
+        prompt = _insert_section_after_heading(prompt, ceremony, heading="## Wave tags")
     section = _render_memory_section(state, wave_id=wave_id, repo_root=repo_root)
     if section is None:
         return prompt
     return _insert_section_after_heading(prompt, section, heading="## Recent audits")
+
+
+def _render_ceremony_section(state: State, *, wave_id: str) -> str | None:
+    """Return the dispatch ``## Ceremony`` section when history exists."""
+    recommendation = compute_ceremony(state, wave_id=wave_id)
+    if recommendation.closed_wave_count == 0:
+        return None
+    latest = (
+        recommendation.operator_confirmed_wave_ids[0]
+        if recommendation.operator_confirmed_wave_ids
+        else "none"
+    )
+    return "\n".join(
+        [
+            "## Ceremony",
+            "",
+            f"- recommendation: mode {recommendation.mode}",
+            f"- operator_confirmed_counter: {recommendation.operator_confirmed_counter}",
+            f"- closed_wave_count: {recommendation.closed_wave_count}",
+            f"- latest_operator_confirmed_wave: {latest}",
+            f"- basis: {recommendation.reason}",
+        ]
+    )
 
 
 def _render_memory_section(

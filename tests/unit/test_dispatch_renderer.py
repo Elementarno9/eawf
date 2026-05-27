@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    AgentSessionStatus,
     AuditKind,
     AuditStatus,
     AuditVerdict,
@@ -27,6 +29,7 @@ from eawf.kernel.state.enums import (
     WorktreeStatus,
 )
 from eawf.kernel.state.models import (
+    AgentSession,
     Audit,
     CurrentPointers,
     Decision,
@@ -270,6 +273,30 @@ def test_render_wave_prompt_estimate_values() -> None:
     assert "- expected_minutes: 90.0" in block
     assert "- token_budget: 8192" in block
     assert "- parallel_siblings: P01-I01-W02" in block
+
+
+def test_render_wave_prompt_includes_ceremony_recommendation() -> None:
+    """Operator-confirmed history renders the read-only ceremony section."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.agent_sessions["SES-operator"] = AgentSession(
+        id="SES-operator",
+        role=AgentSessionRole.OPERATOR,
+        runtime="claude",
+        scope_id="QR",
+        status=AgentSessionStatus.ACTIVE,
+        started_at=_T0,
+    )
+    state.waves["P01-I01-W01"].status = WaveStatus.CLOSED
+    state.waves["P01-I01-W01"].closed_at = _T0
+    state.waves["P01-I01-W01"].claim_session_id = "SES-operator"
+
+    out = render_wave_prompt(state, "P01-I01-W02")
+
+    block = out.split("## Ceremony", 1)[1].split("## ", 1)[0]
+    assert "- recommendation: mode B" in block
+    assert "- operator_confirmed_counter: 1" in block
+    assert "- latest_operator_confirmed_wave: P01-I01-W01" in block
 
 
 def test_render_includes_dependencies_with_status() -> None:
