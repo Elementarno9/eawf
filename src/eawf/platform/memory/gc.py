@@ -19,17 +19,29 @@ Selection model:
 This module never opens locks. The caller wraps it in
 :func:`eawf.surfaces.cli._mutation.state_transaction` so the lock + atomic write
 discipline is shared with sibling memory commands.
+
+Mutation routing: state changes go through
+:func:`eawf.kernel.state.mutations.apply_memory_update` (a
+:attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_UPDATE` apply that
+flips :attr:`MemorySummary.tier` to
+:attr:`~eawf.kernel.state.enums.MemoryTier.ARCHIVAL`). The
+:func:`mutations_for_archive` helper exposes the typed
+:class:`~eawf.kernel.state.mutations.Mutation` rows so a future daemon-mediated
+GC path can replay them via :func:`state.mutate` without rebuilding the
+parameter dict.
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from eawf.kernel.state.enums import MemoryStatus, MemoryTier
 from eawf.kernel.state.models import State
+from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_update
 from eawf.platform.memory.store import find_envelope
 
 logger = logging.getLogger(__name__)
@@ -123,9 +135,8 @@ def gc_memory(
             skipped_reasons=skipped_reasons,
         )
 
-    for mid in archived_ids:
-        summary = index[mid]
-        index[mid] = summary.model_copy(update={"tier": MemoryTier.ARCHIVAL})
+    for mutation in mutations_for_archive(archived_ids):
+        apply_memory_update(state, mutation)
 
     state.memory_index = index
     logger.info(
@@ -142,8 +153,37 @@ def gc_memory(
     )
 
 
+def mutations_for_archive(ids: list[str]) -> list[Mutation]:
+    """Build typed ``MEMORY_UPDATE`` mutations that flip *ids* to ARCHIVAL.
+
+    Returns the list of :class:`~eawf.kernel.state.mutations.Mutation` payloads
+    a caller can hand to :func:`state.mutate` (or apply locally via
+    :func:`~eawf.kernel.state.mutations.apply_memory_update`) to perform the
+    tier-flip the GC pass needs. One mutation per id; the caller picks
+    the dispatch surface.
+
+    Args:
+        ids: Memory ids to archive.
+
+    Returns:
+        A list of :class:`~eawf.kernel.state.mutations.Mutation` rows, each
+        carrying a single-field :class:`~eawf.kernel.state.mutations.MemoryUpdatePayload`
+        that flips ``tier`` to :attr:`MemoryTier.ARCHIVAL`.
+    """
+    return [
+        Mutation(
+            kind=MutationKind.MEMORY_UPDATE,
+            scope_id=mid,
+            mutation_id=uuid.uuid4().hex,
+            params={"id": mid, "tier": MemoryTier.ARCHIVAL.value},
+        )
+        for mid in ids
+    ]
+
+
 __all__ = [
     "GcError",
     "GcReport",
     "gc_memory",
+    "mutations_for_archive",
 ]

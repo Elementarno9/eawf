@@ -65,7 +65,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, PhaseStatus, StoreKind
 from eawf.kernel.state.models import State
-from eawf.kernel.state.mutations import Mutation, MutationKind
+from eawf.kernel.state.mutations import (
+    MemoryMutationError,
+    Mutation,
+    MutationKind,
+    apply_memory_add,
+    apply_memory_prune,
+    apply_memory_review,
+    apply_memory_supersede,
+    apply_memory_update,
+)
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -692,6 +701,11 @@ _APPLY_REGISTRY: Final[dict[MutationKind, ApplyFunc]] = {
     MutationKind.ROADMAP_REVISE: _apply_roadmap_revise,
     MutationKind.ROADMAP_APPLY: _apply_roadmap_apply,
     MutationKind.ROADMAP_DROP: _apply_phase_archive,
+    MutationKind.MEMORY_ADD: apply_memory_add,
+    MutationKind.MEMORY_UPDATE: apply_memory_update,
+    MutationKind.MEMORY_SUPERSEDE: apply_memory_supersede,
+    MutationKind.MEMORY_PRUNE: apply_memory_prune,
+    MutationKind.MEMORY_REVIEW: apply_memory_review,
 }
 
 
@@ -908,6 +922,13 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                     MutationKind.WAVE_CLOSE,
                 ):
                     raise DaemonValidationError(f"validation_failed: {exc}") from exc
+                raise ValueError(str(exc)) from exc
+            except MemoryMutationError as exc:
+                # Memory-kind apply rejections (duplicate id, unknown id,
+                # already-pruned) surface the same way non-closure
+                # lifecycle rejections do: plain ValueError -> -32602
+                # (UserError kind="InvalidInput", exit 1). No MEMORY_* kind
+                # is a closure kind, so no -32002 mapping is needed.
                 raise ValueError(str(exc)) from exc
             except ValidationError as exc:
                 # Model-level bound rejections (e.g. the ≤500-char Wave /

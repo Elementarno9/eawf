@@ -10,6 +10,24 @@ A memory entry is considered ``stale`` when:
 
 High-confidence entries are exempt — they age out of the auto-stale list and
 must be retired explicitly via ``memory compact`` or supersession.
+
+This module is purely read-only — :func:`find_stale` never mutates
+:class:`State`. The downstream surfaces that act on the staleness report
+publish their state changes via the
+:class:`~eawf.kernel.state.mutations.MutationKind` taxonomy:
+
+- :func:`eawf.platform.memory.gc.gc_memory` flips ``tier`` to
+  :attr:`~eawf.kernel.state.enums.MemoryTier.ARCHIVAL` via
+  :attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_UPDATE`.
+- :func:`eawf.platform.memory.prune.prune_memory` flips ``status`` to
+  :attr:`~eawf.kernel.state.enums.MemoryStatus.PRUNED` via
+  :attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_PRUNE`.
+- An operator-supplied ``review`` call (``eawf memory review``) bumps
+  ``review_due`` via
+  :attr:`~eawf.kernel.state.mutations.MutationKind.MEMORY_REVIEW`.
+
+Adding a mutation surface to this module would be a YAGNI violation —
+there is no caller today that needs typed staleness-mutation rows.
 """
 
 from __future__ import annotations
