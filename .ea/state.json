@@ -1889,11 +1889,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I02-W11",
-      "P28-I02-W04",
-      "P28-I02-W21"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5724,7 +5720,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T01:47:06.019057Z",
+  "updated_at": "2026-05-27T02:23:20.043934Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -19933,7 +19929,7 @@
         "P28-I02-W05"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T02:23:14.076641Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -19948,10 +19944,10 @@
       "id": "P28-I02-W04",
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:05.607195Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "MEMORY_ADD/UPDATE/SUPERSEDE/PRUNE/REVIEW apply via MutationKind (NO MEMORY_RECALL)",
         "replay round-trips"
@@ -20186,7 +20182,7 @@
         "P28-I03-W37"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T02:23:19.364429Z",
       "commit": null,
       "deps": [
         "P28-I01-W02"
@@ -20206,10 +20202,10 @@
       "id": "P28-I02-W11",
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:09.351778Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "IntentBrief strict model lands",
         "intent nullable attached on 4 entities",
@@ -20556,7 +20552,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T02:23:08.900439Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -20573,10 +20569,10 @@
       "id": "P28-I02-W21",
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:14.581731Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "24+ callsites migrated",
         "exit_codes alias block deleted",
@@ -24005,10 +24001,10 @@
       "branch": "feature/eawf-v0.1-p28-w04",
       "created_at": "2026-05-27T01:47:04.702652Z",
       "id": "WT-P28-I02-W04-1779846424",
-      "merged_commit": null,
+      "merged_commit": "d5d7008",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w04",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W04"
     },
     "WT-P28-I02-W08-1779843447": {
@@ -24038,10 +24034,10 @@
       "branch": "feature/eawf-v0.1-p28-w11",
       "created_at": "2026-05-27T01:47:03.436839Z",
       "id": "WT-P28-I02-W11-1779846423",
-      "merged_commit": null,
+      "merged_commit": "d190def",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w11",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W11"
     },
     "WT-P28-I02-W16-1779843108": {
@@ -24071,10 +24067,10 @@
       "branch": "feature/eawf-v0.1-p28-w21",
       "created_at": "2026-05-27T01:47:06.019057Z",
       "id": "WT-P28-I02-W21-1779846426",
-      "merged_commit": null,
+      "merged_commit": "a0c87d5",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w21",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W21"
     },
     "WT-P28-I02-W22-1779843445": {
