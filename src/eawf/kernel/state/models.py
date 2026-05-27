@@ -438,7 +438,18 @@ class ActualSummary(_StrictModel):
 
 
 class AgentSession(_StrictModel):
-    """Agent work session for provenance."""
+    """Agent work session for provenance.
+
+    The ``agent_principal_id`` field is a v0.3-v0.5 placeholder mirroring
+    :attr:`eawf.kernel.store.kinds.event.EventPayload.actor_principal_id`:
+    sessions MAY carry the :class:`Principal` id of the agent that
+    drove them when known, but the load-bearing identity for backward
+    compatibility remains :attr:`runtime`. The v0.5+ governance phase
+    populates this for every dispatched session once the per-repo
+    Principal database lands; until then existing on-disk rows stay
+    valid (default ``None`` is replay-safe / additive — no schema
+    bump).
+    """
 
     id: IdStr
     role: AgentSessionRole
@@ -451,6 +462,7 @@ class AgentSession(_StrictModel):
     started_at: UtcDatetime
     ended_at: UtcDatetime | None = None
     summary: str | None = None
+    agent_principal_id: PrincipalIdStr | None = None
 
 
 class WorktreeRecord(_StrictModel):
@@ -593,11 +605,25 @@ class Principal(_StrictModel):
     ``EventPayload.actor == "cli"`` row maps onto a synthetic
     ``Principal(kind="cli")`` until v0.5+ migration assigns operator/agent
     principal ids.
+
+    Attributes:
+        id: Principal identifier matching ``^u-[0-9a-f]{8}$``.
+        kind: Identity flavour — ``operator`` (human driving the CLI),
+            ``agent`` (a runtime-backed subagent), or ``cli`` (legacy
+            CLI-dispatch sentinel).
+        display_name: Short scrubbed label for the principal (no PII).
+        runtime: Runtime adapter id when ``kind == "agent"`` — e.g.
+            ``"claude"`` / ``"codex"`` / ``"opencode"``. Optional and
+            defaulted to ``None`` so existing rows still validate without
+            backfill; the v0.5+ governance migration populates it for
+            every agent-kind principal. Operator / cli kinds leave it
+            ``None``.
     """
 
     id: PrincipalIdStr
     kind: Literal["operator", "agent", "cli"]
     display_name: str
+    runtime: str | None = None
 
 
 # ---- State root -------------------------------------------------------------

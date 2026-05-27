@@ -57,7 +57,20 @@ class AgentReportFollowup(_StrictModel):
 
 
 class AgentReportHeader(_StrictModel):
-    """Common metadata for every role report attempt."""
+    """Common metadata for every role report attempt.
+
+    The ``agent_principal_id`` field is a v0.3-v0.5 placeholder mirroring
+    :attr:`eawf.kernel.store.kinds.event.EventPayload.actor_principal_id`
+    and :attr:`eawf.kernel.state.models.AgentSession.agent_principal_id`:
+    headers MAY carry the :class:`~eawf.kernel.state.models.Principal` id
+    of the agent that produced the report when known, but the load-
+    bearing identity for backward compatibility remains
+    :attr:`session_id` + :attr:`runtime`. Default ``None`` keeps the
+    field replay-safe / additive — existing on-disk envelopes continue
+    to validate without backfill. The v0.5+ governance phase
+    populates it through the canonical agent-report writer once the
+    per-repo Principal database lands.
+    """
 
     report_id: Annotated[str, Field(min_length=1)]
     role: AgentSessionRole
@@ -70,6 +83,7 @@ class AgentReportHeader(_StrictModel):
     summary: Annotated[str, Field(min_length=1, max_length=500)]
     artifact_ids: list[str] = Field(default_factory=list)
     blob_refs: list[str] = Field(default_factory=list)
+    agent_principal_id: str | None = None
 
     @field_validator("artifact_ids", "blob_refs")
     @classmethod

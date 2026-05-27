@@ -617,6 +617,15 @@ def emit_agent_end_report(
     dispatches for the same wave append monotonic attempts under one
     ``(role, base_id)`` series.
 
+    The session's :attr:`~eawf.kernel.state.models.AgentSession.agent_principal_id`
+    (a v0.3-v0.5 placeholder for the per-repo Principal id of the agent
+    that drove the dispatch) is read and logged on emission so the
+    dispatch trace records the Principal binding for the served
+    attempt. The canonical agent-report writer plumbs the value onto
+    the persisted :attr:`AgentReportHeader.agent_principal_id` once the
+    v0.5+ governance phase lands the per-repo Principal database
+    (additive, replay-safe — no schema bump).
+
     Args:
         ctx: Daemon method context — supplies ``state_path``.
         session_id: Id of the session that ran the dispatch; must
@@ -679,10 +688,22 @@ def emit_agent_end_report(
         body=body,
         runtime=runtime,
     )
+    # Surface the Principal-linked identity of the dispatched session
+    # alongside the runtime id. The header field
+    # ``AgentReportHeader.agent_principal_id`` is a v0.3-v0.5 placeholder
+    # — populated by the canonical agent-report writer once the v0.5+
+    # governance phase plumbs the per-repo Principal database into the
+    # writer's header construction (the same migration path
+    # ``EventPayload.actor_principal_id`` follows). Until then the
+    # value is read from ``AgentSession.agent_principal_id`` (default
+    # ``None``) and logged here so the dispatch trace records the
+    # Principal binding for the served attempt, replay-safely.
+    agent_principal_id = session.agent_principal_id
     logger.info(
         f"emit_agent_end_report wave={wave_id} session={session_id!r} "
         f"role={session.role.value} verdict={resolved_verdict.value} "
-        f"store_kind={result.store_kind} report_id={result.envelope.id!r}"
+        f"store_kind={result.store_kind} report_id={result.envelope.id!r} "
+        f"agent_principal_id={agent_principal_id!r}"
     )
     return result.envelope.id
 

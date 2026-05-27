@@ -82,8 +82,21 @@
     },
     "AgentSession": {
       "additionalProperties": false,
-      "description": "Agent work session for provenance.",
+      "description": "Agent work session for provenance.\n\nThe ``agent_principal_id`` field is a v0.3-v0.5 placeholder mirroring\n:attr:`eawf.kernel.store.kinds.event.EventPayload.actor_principal_id`:\nsessions MAY carry the :class:`Principal` id of the agent that\ndrove them when known, but the load-bearing identity for backward\ncompatibility remains :attr:`runtime`. The v0.5+ governance phase\npopulates this for every dispatched session once the per-repo\nPrincipal database lands; until then existing on-disk rows stay\nvalid (default ``None`` is replay-safe / additive — no schema\nbump).",
       "properties": {
+        "agent_principal_id": {
+          "anyOf": [
+            {
+              "pattern": "^u-[0-9a-f]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Principal Id"
+        },
         "artifact_ids": {
           "items": {
             "type": "string"
