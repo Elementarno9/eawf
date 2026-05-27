@@ -1,5 +1,18 @@
 {
-  "actuals": null,
+  "actuals": {
+    "P28-I02-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W07",
+      "scope_id": "P28-I02-W07",
+      "status": "done",
+      "updated_at": "2026-05-27T15:48:36.464621Z"
+    }
+  },
   "agent_sessions": {
     "SES-20260510T214731Z-operator-claude": {
       "agent_principal_id": null,
@@ -1961,7 +1974,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I02-W07",
       "P28-I02-W23",
       "P28-I02-W13",
       "P28-I02-W15"
@@ -6037,7 +6049,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T15:45:25.495681Z",
+  "updated_at": "2026-05-27T15:48:37.302603Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20778,7 +20790,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T15:48:36.464621Z",
       "commit": null,
       "deps": [
         "P28-I01-W01"
@@ -20800,10 +20812,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:07.173623Z",
-      "outcome": null,
+      "outcome": "implemented citation floor, researcher evidence refs, and registry timeout evidence",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "citation_resolves check kind",
         "researcher pass requires non-empty evidence_refs"
@@ -24877,10 +24889,10 @@
       "branch": "feature/eawf-v0.4-p28-w07",
       "created_at": "2026-05-27T15:18:12.209802Z",
       "id": "WT-P28-I02-W07-1779895092",
-      "merged_commit": null,
+      "merged_commit": "14cdabc",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w07",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W07"
     },
     "WT-P28-I02-W08-1779843447": {
