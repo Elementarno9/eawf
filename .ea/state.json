@@ -2096,7 +2096,8 @@
     "active_wave_ids": [
       "P28-I02-W27",
       "P28-I02-W28",
-      "P28-I02-W29"
+      "P28-I02-W29",
+      "P28-I02-W30"
     ],
     "iter_id": "P28-I02",
     "phase_id": "P28",
@@ -4694,6 +4695,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P28-I02-W29",
       "updated_at": "2026-05-27T17:38:17.197021Z"
+    },
+    "P28-I02-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W30-bucket-20260527T175814Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I02-W30",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I02-W30",
+      "updated_at": "2026-05-27T17:58:14.742066Z"
     }
   },
   "goals": {
@@ -5648,7 +5662,8 @@
         "P28-I02-W26",
         "P28-I02-W27",
         "P28-I02-W28",
-        "P28-I02-W29"
+        "P28-I02-W29",
+        "P28-I02-W30"
       ]
     },
     "P28-I03": {
@@ -6305,7 +6320,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T17:55:44.034189Z",
+  "updated_at": "2026-05-27T17:58:14.742304Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21907,6 +21922,41 @@
         "test fixtures cover generated initial state and profile config"
       ],
       "title": "seed bootstrap intent and buckets",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Follow-up from W26 close verification: avoid running non-enforced profile floor checks inside the state transaction lock while preserving enforced close gating.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/verify/readiness.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/**"
+      ],
+      "id": "P28-I02-W30",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T17:58:14.171315Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "enforced profiles still run readiness before close mutation",
+        "non-enforced profile floors do not run while the state lock is held",
+        "wave close remains quick when advisory floor checks are long",
+        "focused tests cover enforced and advisory close paths"
+      ],
+      "title": "avoid advisory floor lock holds",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
