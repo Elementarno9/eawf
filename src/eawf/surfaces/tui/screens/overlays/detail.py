@@ -43,11 +43,13 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
+from eawf.surfaces.render.link_wrap import linkify_text
 from eawf.surfaces.render.narrative import (
     NarrativeNotFoundError,
     build_narrative,
     render_narrative_bundle,
 )
+from eawf.surfaces.tui.screens.overlays.reference import tooltip_for_text
 from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
@@ -595,15 +597,18 @@ class DetailModal(ModalScreen[None]):
         Binding("e", "show_tab('e')", "events", show=False),
     ]
 
-    def __init__(self, card: DetailCard) -> None:
+    def __init__(self, card: DetailCard, *, state: State | None = None) -> None:
         """Construct the modal for a pre-resolved card.
 
         Args:
             card: The detail card to render (built by the host screen from
                 the selection id + the bound state).
+            state: Optional bound state used for hover previews on
+                clickable refs found in row values.
         """
         super().__init__()
         self._card = card
+        self._state = state
         self._tab_ids = self._present_tabs(card)
 
     @staticmethod
@@ -687,7 +692,12 @@ class DetailModal(ModalScreen[None]):
         label_width = max((len(label) for label, _ in rows), default=0)
         for label, value in rows:
             padded = f"{label}:".ljust(label_width + 1)
-            yield Static(f"[$accent]{padded}[/] {escape(value)}", classes="detail-row")
+            row = Static(
+                f"[$accent]{escape(padded)}[/] {linkify_text(value)}",
+                classes="detail-row",
+            )
+            row.tooltip = tooltip_for_text(self._state, value)
+            yield row
 
     def _cycle_tab(self, step: int) -> None:
         """Move the active tab by *step* positions, wrapping around.

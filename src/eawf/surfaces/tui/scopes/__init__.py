@@ -159,9 +159,9 @@ class ScopeScreen(Screen[None]):
         card = resolve_detail(state, selection_id)
         push_modal = getattr(self.app, "push_modal", None)
         if callable(push_modal):
-            push_modal(DetailModal(card))
+            push_modal(DetailModal(card, state=state))
             return
-        self.app.push_screen(DetailModal(card))
+        self.app.push_screen(DetailModal(card, state=state))
 
     def on_backlog_table_row_activated(self, message: BacklogTable.RowActivated) -> None:
         """Route a backlog Enter-selection to the DetailModal.

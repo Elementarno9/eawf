@@ -24,6 +24,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from eawf.surfaces.render.link_wrap import ReferenceKind, iter_refs
+
 if TYPE_CHECKING:
     from textual.app import App
 
@@ -72,6 +74,14 @@ class PaletteVerb:
     requires_profile: tuple[str, ...] = field(default=())
     requires_runtime: tuple[str, ...] = field(default=())
     args_grammar: str = ""
+
+
+@dataclass(frozen=True)
+class GotoTarget:
+    """One resolved ``/goto`` target."""
+
+    kind: ReferenceKind
+    target: str
 
 
 def _handle_quit(app: App[None], args: str) -> None:
@@ -443,9 +453,98 @@ def _handle_find(app: App[None], args: str) -> None:
     logger.info(f"palette_verb_find query={query!r} hit={hits[0]!r}")
     push_modal = getattr(app, "push_modal", None)
     if callable(push_modal):
-        push_modal(DetailModal(card))
+        push_modal(DetailModal(card, state=state))
         return
-    app.push_screen(DetailModal(card))
+    app.push_screen(DetailModal(card, state=state))
+
+
+def _candidate_title(record: object) -> str:
+    """Return the best fuzzy-search title field for a state row."""
+    for field_name in ("title", "summary", "uri", "slug", "rationale"):
+        value = getattr(record, field_name, None)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _goto_candidates(state: State | None) -> list[tuple[ReferenceKind, str, str]]:
+    """Return typed ``/goto`` candidates from the bound state."""
+    if state is None:
+        return []
+    candidates: list[tuple[ReferenceKind, str, str]] = []
+    if state.project is not None:
+        title = _candidate_title(state.project)
+        candidates.append(("repo", state.project.code, title))
+        candidates.append(("project", state.project.code, title))
+    candidates.extend(("phase", row.id, row.title) for row in state.phases.values())
+    candidates.extend(("iter", row.id, row.title) for row in state.iters.values())
+    candidates.extend(("wave", row.id, row.title) for row in state.waves.values())
+    if state.hypotheses is not None:
+        candidates.extend(("hypothesis", row.id, row.title) for row in state.hypotheses.values())
+    if state.audits is not None:
+        candidates.extend(("audit", row.id, _candidate_title(row)) for row in state.audits.values())
+    if state.incidents is not None:
+        candidates.extend(("event", row.id, row.title) for row in state.incidents.values())
+    candidates.extend(
+        ("artifact", row.id, _candidate_title(row)) for row in state.artifacts.values()
+    )
+    candidates.extend(("decision", row.id, row.title) for row in state.decisions.values())
+    if state.backlog is not None:
+        candidates.extend(("event", row.id, row.title) for row in state.backlog.values())
+    candidates.extend(
+        ("report", row.id, _candidate_title(row)) for row in state.agent_sessions.values()
+    )
+    if state.plugins:
+        candidates.extend(
+            ("profile", row.id, _candidate_title(row)) for row in state.plugins.values()
+        )
+    if state.memory_index is not None:
+        candidates.extend(("memory", row.id, row.summary) for row in state.memory_index.values())
+    candidates.extend(("spec", row.id, row.title) for row in state.phases.values())
+    candidates.extend(("spec", row.id, row.title) for row in state.iters.values())
+    candidates.extend(("spec", row.id, row.title) for row in state.waves.values())
+    return candidates
+
+
+def rank_goto_refs(state: State | None, query: str) -> list[GotoTarget]:
+    """Rank typed reference targets for the ``/goto`` palette verb."""
+    trimmed = query.strip()
+    if not trimmed:
+        return []
+    explicit = iter_refs(trimmed)
+    if explicit:
+        return [GotoTarget(ref.kind, ref.target) for ref in explicit]
+    scored: list[tuple[int, str, str, GotoTarget]] = []
+    for kind, target, title in _goto_candidates(state):
+        id_score = fuzzy_score(trimmed, target)
+        title_score = fuzzy_score(trimmed, title)
+        best = _best_score(id_score, title_score)
+        if best is None:
+            continue
+        scored.append((best, kind, target, GotoTarget(kind, target)))
+    scored.sort(key=lambda row: (row[0], row[1], row[2]))
+    return [row[3] for row in scored]
+
+
+def _handle_goto(app: App[None], args: str) -> None:
+    """Open a typed reference by id, URN, or fuzzy entity title (``/goto``)."""
+    query = args.strip()
+    if not query:
+        app.notify("/goto needs a reference (e.g. /goto P28-I03-W35)", severity="warning")
+        return
+    hit = next(iter(rank_goto_refs(getattr(app, "state", None), query)), None)
+    if hit is None:
+        logger.info(f"palette_verb_goto_no_match query={query!r}")
+        app.notify(f"no reference matches {query!r}", severity="information")
+        return
+    action = getattr(app, "action_open_ref", None)
+    if callable(action):
+        action(hit.kind, hit.target)
+        return
+    from eawf.surfaces.tui.screens.overlays.reference import ReferenceModal, resolve_reference
+
+    card = resolve_reference(getattr(app, "state", None), hit.kind, hit.target)
+    app.push_screen(ReferenceModal(card))
 
 
 def _handle_filter(app: App[None], args: str) -> None:
@@ -533,6 +632,13 @@ VERBS: tuple[PaletteVerb, ...] = (
         _handle_find,
         SCOPES_ALL,
         args_grammar="<query>",
+    ),
+    PaletteVerb(
+        "/goto",
+        "open typed reference",
+        _handle_goto,
+        SCOPES_ALL,
+        args_grammar="<id|urn|query>",
     ),
     PaletteVerb(
         "/filter",
@@ -712,11 +818,13 @@ def split_verb_args(text: str) -> tuple[str, str]:
 __all__ = [
     "SCOPES_ALL",
     "VERBS",
+    "GotoTarget",
     "PaletteVerb",
     "ScopeName",
     "VerbHandler",
     "fuzzy_score",
     "rank_find_hits",
+    "rank_goto_refs",
     "rank_verbs",
     "split_verb_args",
     "visible_verbs",

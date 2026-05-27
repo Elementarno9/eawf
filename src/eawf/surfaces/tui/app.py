@@ -52,7 +52,13 @@ from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.runtime_dir import runtime_dir
+from eawf.surfaces.render.link_wrap import REFERENCE_KINDS
 from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
+from eawf.surfaces.tui.screens.overlays.reference import (
+    ReferenceModal,
+    ReferenceTarget,
+    resolve_reference,
+)
 from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
 from eawf.surfaces.tui.theme import (
     DEFAULT_THEME,
@@ -232,6 +238,8 @@ class EaApp(App[None]):
         Binding("j", "cursor_down", "down", show=False),
         Binding("k", "cursor_up", "up", show=False),
         Binding("l", "cursor_right", "right", show=False),
+        Binding("alt+left", "reference_back", "ref back", show=False),
+        Binding("alt+right", "reference_forward", "ref forward", show=False),
     ]
 
     SCREENS: ClassVar[dict[str, Callable[[], Screen[Any]]]] = {
@@ -285,6 +293,9 @@ class EaApp(App[None]):
         self._toast_emitter = ToastEmitter()
         self._last_state: State | None = None
         self._last_open_pause_count = 0
+        self._reference_back_stack: list[ReferenceTarget] = []
+        self._reference_forward_stack: list[ReferenceTarget] = []
+        self._current_reference: ReferenceTarget | None = None
         # The persisted ``ui.glyphs`` policy (auto/ascii/unicode). Read
         # once here, off the same layered-config path /config writes; the
         # MOUNT-time coverage probe combines it with FONT_NO_BRAILLE to
@@ -708,6 +719,114 @@ class EaApp(App[None]):
         from eawf.surfaces.tui.palette.command_palette import CommandPalette
 
         self.push_modal(CommandPalette())
+
+    def _navigate_reference(
+        self,
+        ref: ReferenceTarget,
+        *,
+        record_history: bool,
+    ) -> bool:
+        """Open *ref* in a reference modal and update nav state on success."""
+        card = resolve_reference(self.state, ref.kind, ref.target)
+        modal = ReferenceModal(card, state=self.state)
+        if not self.push_modal(modal):
+            return False
+        if (
+            record_history
+            and self._current_reference is not None
+            and self._current_reference != ref
+        ):
+            self._reference_back_stack.append(self._current_reference)
+            self._reference_forward_stack.clear()
+        self._current_reference = ref
+        return True
+
+    def action_open_ref(self, kind: str, target: str) -> None:
+        """Open a typed reference target from palette or action markup."""
+        if kind not in REFERENCE_KINDS:
+            logger.info(f"action_open_ref rejected kind={kind!r} target={target!r}")
+            self.notify(f"unknown reference kind: {kind}", severity="warning")
+            return
+        ref = ReferenceTarget(kind, target)
+        self._navigate_reference(ref, record_history=True)
+
+    def action_open_repo_ref(self, target: str) -> None:
+        """Open a repo reference."""
+        self.action_open_ref("repo", target)
+
+    def action_open_project_ref(self, target: str) -> None:
+        """Open a project reference."""
+        self.action_open_ref("project", target)
+
+    def action_open_phase_ref(self, target: str) -> None:
+        """Open a phase reference."""
+        self.action_open_ref("phase", target)
+
+    def action_open_iter_ref(self, target: str) -> None:
+        """Open an iter reference."""
+        self.action_open_ref("iter", target)
+
+    def action_open_wave_ref(self, target: str) -> None:
+        """Open a wave reference."""
+        self.action_open_ref("wave", target)
+
+    def action_open_hypothesis_ref(self, target: str) -> None:
+        """Open a hypothesis reference."""
+        self.action_open_ref("hypothesis", target)
+
+    def action_open_decision_ref(self, target: str) -> None:
+        """Open a decision reference."""
+        self.action_open_ref("decision", target)
+
+    def action_open_audit_ref(self, target: str) -> None:
+        """Open an audit reference."""
+        self.action_open_ref("audit", target)
+
+    def action_open_artifact_ref(self, target: str) -> None:
+        """Open an artifact reference."""
+        self.action_open_ref("artifact", target)
+
+    def action_open_memory_ref(self, target: str) -> None:
+        """Open a memory reference."""
+        self.action_open_ref("memory", target)
+
+    def action_open_report_ref(self, target: str) -> None:
+        """Open a report reference."""
+        self.action_open_ref("report", target)
+
+    def action_open_event_ref(self, target: str) -> None:
+        """Open an event reference."""
+        self.action_open_ref("event", target)
+
+    def action_open_profile_ref(self, target: str) -> None:
+        """Open a profile reference."""
+        self.action_open_ref("profile", target)
+
+    def action_open_spec_ref(self, target: str) -> None:
+        """Open a spec reference."""
+        self.action_open_ref("spec", target)
+
+    def action_reference_back(self) -> None:
+        """Navigate back through clicked reference targets."""
+        if not self._reference_back_stack:
+            self.notify("no reference back history", severity="information")
+            return
+        current = self._current_reference
+        previous = self._reference_back_stack.pop()
+        if current is not None:
+            self._reference_forward_stack.append(current)
+        self._navigate_reference(previous, record_history=False)
+
+    def action_reference_forward(self) -> None:
+        """Navigate forward through clicked reference targets."""
+        if not self._reference_forward_stack:
+            self.notify("no reference forward history", severity="information")
+            return
+        current = self._current_reference
+        nxt = self._reference_forward_stack.pop()
+        if current is not None:
+            self._reference_back_stack.append(current)
+        self._navigate_reference(nxt, record_history=False)
 
     def action_open_config(self) -> None:
         """Open the ``c`` registry-driven config window (cap-checked).

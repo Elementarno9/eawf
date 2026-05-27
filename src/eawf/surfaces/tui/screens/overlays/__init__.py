@@ -10,7 +10,8 @@ AskUserQuestion surface), :class:`AuditRunningModal` (live audit
 progress), :class:`AuditFailedModal` (the mutating repair menu),
 :class:`MetricsModal` (the ``/metrics`` 3x2 dashboard),
 :class:`PrListModal` (the ``/pr`` open-PRs list), and
-:class:`EventsModal` (the ``/events`` last-50 ring buffer). The remaining
+:class:`EventsModal` (the ``/events`` last-50 ring buffer), and
+:class:`ReferenceModal` (typed clickable refs + ``/goto``). The remaining
 config overlays land in later waves and register here as they arrive.
 """
 
@@ -67,6 +68,13 @@ from eawf.surfaces.tui.screens.overlays.pr_list import (
     open_pr_list,
     parse_pr_rows,
 )
+from eawf.surfaces.tui.screens.overlays.reference import (
+    ReferenceCard,
+    ReferenceModal,
+    ReferenceTarget,
+    reference_preview,
+    resolve_reference,
+)
 
 __all__ = [
     "AuditFailedModal",
@@ -91,6 +99,9 @@ __all__ = [
     "PlanWaveRow",
     "PrListModal",
     "PrRow",
+    "ReferenceCard",
+    "ReferenceModal",
+    "ReferenceTarget",
     "build_plan_tree",
     "format_dispatch_line",
     "load_recent_events",
@@ -105,5 +116,7 @@ __all__ = [
     "open_pr_list",
     "parse_metrics_args",
     "parse_pr_rows",
+    "reference_preview",
     "resolve_detail",
+    "resolve_reference",
 ]
