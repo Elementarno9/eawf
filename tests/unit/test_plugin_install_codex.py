@@ -11,14 +11,19 @@ install path: ``scope="project"`` writes under
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from eawf.runtime.runtimes.codex import doctor_plugin, expected_paths, install_plugin
 from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
+from eawf.runtime.runtimes.codex.skills import render_codex_agent_toml
+from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
 from eawf.surfaces.render.skills import SKILL_REGISTRY
+
+_GOLDEN_DIR = Path(__file__).parents[1] / "golden" / "plugin_install" / "codex"
 
 
 @pytest.fixture()
@@ -45,6 +50,21 @@ def _config_path(target: Path, scope: str, fake_home: Path) -> Path:
     return fake_home / ".codex" / "config.toml"
 
 
+def _agents_dir(target: Path, scope: str, fake_home: Path) -> Path:
+    if scope == "project":
+        return target / ".codex" / "agents"
+    return fake_home / ".codex" / "agents"
+
+
+def test_rendered_executor_agent_toml_matches_golden() -> None:
+    executor = next(spec for spec in AGENT_REGISTRY if spec.role == "executor")
+    expected = (_GOLDEN_DIR / "agents" / "executor.toml").read_bytes()
+    assert render_codex_agent_toml(executor).encode("utf-8") == expected
+    parsed = tomllib.loads(expected.decode("utf-8"))
+    assert parsed["name"] == "executor"
+    assert parsed["developer_instructions"].endswith("`executor_report` store.")
+
+
 @pytest.mark.parametrize("scope", ["project", "user"])
 def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: str) -> None:
     result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home))
@@ -52,18 +72,31 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
     assert (root / ".codex-plugin" / "plugin.json").is_file()
     assert (root / ".codex-plugin" / ".eawf-managed.json").is_file()
     assert len(result.skills) == len(SKILL_REGISTRY)
+    assert len(result.agents) == len(AGENT_REGISTRY)
     assert len(result.hooks) == len(HOOK_REGISTRY)
     assert result.scope == scope
     for delta in result.skills:
         assert delta.action == "created"
-    # Codex plugin.json has no top-level ``agents`` key — no agents/ dir.
+    for delta in result.agents:
+        assert delta.action == "created"
+    # Codex plugin.json has no top-level ``agents`` key, so agents are
+    # emitted at the Codex scope root rather than under plugin_root.
     assert (root / "agents").exists() is False
+    # Skills stay plugin-scoped; the scope root must not get a flat
+    # ``.codex/skills`` copy.
+    assert (_config_path(tmp_path, scope, fake_home).parent / "skills").exists() is False
     # Codex requires each skill on disk as a directory containing SKILL.md
     # (not a flat <name>.md). Verify the directory layout for every skill.
     for spec in SKILL_REGISTRY:
         skill_dir = root / "skills" / spec.skill_name
         assert skill_dir.is_dir(), skill_dir
         assert (skill_dir / "SKILL.md").is_file(), skill_dir / "SKILL.md"
+    for spec in AGENT_REGISTRY:
+        agent_path = _agents_dir(tmp_path, scope, fake_home) / f"{spec.role}.toml"
+        parsed = tomllib.loads(agent_path.read_text(encoding="utf-8"))
+        assert parsed["name"] == spec.role
+        assert parsed["description"] == spec.description
+        assert spec.body.splitlines()[0] in parsed["developer_instructions"]
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
@@ -78,7 +111,7 @@ def test_install_idempotent_second_run_unchanged(
     assert second.manifest.action == "unchanged"
     assert second.sidecar is not None
     assert second.sidecar.action == "unchanged"
-    for delta in second.skills + second.hooks:
+    for delta in second.skills + second.agents + second.hooks:
         assert delta.action == "unchanged", (delta.path, delta.action)
 
 
@@ -87,6 +120,7 @@ def test_install_dry_run_writes_nothing(tmp_path: Path, fake_home: Path, scope: 
     result = install_plugin(tmp_path, dry_run=True, **_install_kwargs(scope, fake_home))
     assert result.dry_run is True
     assert not _plugin_root(tmp_path, scope, fake_home).exists()
+    assert not _agents_dir(tmp_path, scope, fake_home).exists()
 
 
 def test_install_rejects_hand_edited_skill_without_force(tmp_path: Path) -> None:
@@ -95,6 +129,16 @@ def test_install_rejects_hand_edited_skill_without_force(tmp_path: Path) -> None
     first_skill_region = next(k for k in skill_paths if k.startswith("plugin.codex.skill."))
     first_skill = skill_paths[first_skill_region]
     first_skill.write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        install_plugin(tmp_path)
+
+
+def test_install_rejects_hand_edited_agent_without_force(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    paths, _ = expected_paths(tmp_path)
+    first_agent_region = next(k for k in paths if k.startswith("plugin.codex.agent."))
+    first_agent = paths[first_agent_region]
+    first_agent.write_text("tampered\n", encoding="utf-8")
     with pytest.raises(IntegrityViolation):
         install_plugin(tmp_path)
 
@@ -202,6 +246,17 @@ def test_doctor_flags_drift(tmp_path: Path) -> None:
     assert report.drifted
 
 
+def test_doctor_flags_agent_drift(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    paths, _ = expected_paths(tmp_path)
+    first_agent_region = next(k for k in paths if k.startswith("plugin.codex.agent."))
+    first_agent = paths[first_agent_region]
+    first_agent.write_text("tampered\n", encoding="utf-8")
+    report = doctor_plugin(tmp_path)
+    assert report.clean is False
+    assert any(e.kind == "agent" for e in report.drifted)
+
+
 def test_doctor_flags_sidecar_drift(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     sidecar = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / ".eawf-managed.json"
@@ -223,10 +278,16 @@ def test_doctor_report_plugin_root_points_at_scope_dir(tmp_path: Path, fake_home
 
 
 def test_doctor_reports_legacy_flat_paths(tmp_path: Path) -> None:
-    """Flat ``<target>/.codex/{skills,agents,hooks}/`` is reported as legacy."""
+    """Flat ``<target>/.codex/{skills,hooks}/`` is reported as legacy."""
     legacy_dir = tmp_path / ".codex" / "skills"
     legacy_dir.mkdir(parents=True)
     (legacy_dir / "stub.md").write_text("# stub\n", encoding="utf-8")
     install_plugin(tmp_path)
     report = doctor_plugin(tmp_path)
     assert legacy_dir in report.legacy_paths
+
+
+def test_doctor_does_not_report_current_agents_dir_as_legacy(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    report = doctor_plugin(tmp_path)
+    assert tmp_path / ".codex" / "agents" not in report.legacy_paths

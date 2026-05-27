@@ -12,6 +12,9 @@ agents,hooks}/`` dump. Output under *plugin_root*:
       skills/<name>/SKILL.md
       hooks/<event>.sh
 
+    <codex_root>/
+      agents/<role>.toml       # standalone custom agents, sibling to plugins/
+
 The scope-correct ``config.toml`` (``<target>/.codex/config.toml`` for
 project scope, ``<home>/.codex/config.toml`` for user scope) is patched
 between the ``# ---- __eawf_managed begin/end ----`` markers with a
@@ -20,9 +23,8 @@ outside the markers is preserved verbatim.
 
 The Codex manifest schema (``name``, ``version``, ``description``,
 ``skills``, ``hooks``) is taken from the Codex Build-plugin reference.
-Codex's ``plugin.json`` schema has no ``agents`` key — agents live
-nested inside skills (per the skill manifest), so a top-level
-``agents/<role>.md`` render is unreachable and intentionally omitted.
+Codex's ``plugin.json`` schema has no ``agents`` key; standalone custom
+agents live at the Codex config scope under ``.codex/agents/*.toml``.
 
 Public API:
 
@@ -45,7 +47,12 @@ from pathlib import Path
 from typing import Literal
 
 from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
+from eawf.runtime.runtimes.codex.skills import (
+    render_codex_agent_toml,
+    render_codex_skill,
+)
 from eawf.surfaces.render._atomic import atomic_write_text
+from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
 from eawf.surfaces.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
 from eawf.surfaces.render.manifest import (
     Manifest,
@@ -57,12 +64,7 @@ from eawf.surfaces.render.manifest import (
 from eawf.surfaces.render.manifest import (
     save_atomic as save_manifest_atomic,
 )
-from eawf.surfaces.render.skills import (
-    SKILL_REGISTRY,
-    SkillSpec,
-    SkillTemplateContext,
-    render_skill_md,
-)
+from eawf.surfaces.render.skills import SKILL_REGISTRY, SkillSpec
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,7 @@ class InstallResult:
     target_dir: Path
     scope: Scope = "project"
     skills: list[FileDelta] = field(default_factory=list)
+    agents: list[FileDelta] = field(default_factory=list)
     hooks: list[FileDelta] = field(default_factory=list)
     manifest: FileDelta | None = None
     sidecar: FileDelta | None = None
@@ -209,14 +212,29 @@ def _plugin_root(target_dir: Path, *, scope: Scope, home: Path | None = None) ->
 
 def _config_target(target_dir: Path, *, scope: Scope, home: Path | None = None) -> Path:
     """Return the scope-correct ``config.toml`` path."""
+    return _codex_root(target_dir, scope=scope, home=home) / "config.toml"
+
+
+def _codex_root(target_dir: Path, *, scope: Scope, home: Path | None = None) -> Path:
+    """Return the scope root that holds ``config.toml``, ``plugins/``, ``agents/``."""
     if scope == "project":
-        return target_dir / ".codex" / "config.toml"
+        return target_dir / ".codex"
     base = home if home is not None else Path.home()
-    return base / ".codex" / "config.toml"
+    return base / ".codex"
 
 
 def _skill_target(plugin_root: Path, spec: SkillSpec) -> Path:
     return plugin_root / "skills" / spec.skill_name.lstrip("/") / "SKILL.md"
+
+
+def _agent_target(
+    target_dir: Path,
+    spec: AgentSpec,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+) -> Path:
+    return _codex_root(target_dir, scope=scope, home=home) / "agents" / f"{spec.role}.toml"
 
 
 def _hook_target(plugin_root: Path, spec: HookSpec) -> Path:
@@ -232,16 +250,11 @@ def _sidecar_target(plugin_root: Path) -> Path:
 
 
 def _render_skill(spec: SkillSpec) -> str:
-    return render_skill_md(
-        SkillTemplateContext(
-            skill_name=spec.skill_name,
-            description=spec.description,
-            argument_hint=spec.argument_hint,
-            user_invocable=spec.user_invocable,
-            disable_model_invocation=spec.disable_model_invocation,
-            body=spec.body,
-        )
-    )
+    return render_codex_skill(spec)
+
+
+def _render_agent_toml(spec: AgentSpec) -> str:
+    return render_codex_agent_toml(spec)
 
 
 def _render_manifest() -> bytes:
@@ -251,8 +264,8 @@ def _render_manifest() -> bytes:
     ``version``, ``description``, ``skills``, ``hooks``, plus the
     ``interface`` block consumed by the Codex marketplace picker (display
     name, category, short / long descriptions, default prompt). Codex has
-    no top-level ``agents`` key in ``plugin.json`` — agents live nested
-    inside skills, so no top-level ``agents/`` directory is emitted.
+    no top-level ``agents`` key in ``plugin.json``. Custom agents are
+    emitted as standalone scope config files under ``.codex/agents``.
 
     URL fields (``websiteURL``, ``privacyPolicyURL``,
     ``termsOfServiceURL``) and asset paths (``composerIcon``, ``logo``)
@@ -292,6 +305,7 @@ def _render_manifest() -> bytes:
 
 def _build_sidecar_body(timestamp: str) -> dict[str, object]:
     skills_payload = [{"name": spec.skill_name, "version": spec.version} for spec in SKILL_REGISTRY]
+    agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     hooks_payload = [
         {
             "event_type": spec.event_type.value,
@@ -304,6 +318,7 @@ def _build_sidecar_body(timestamp: str) -> dict[str, object]:
         "generator": _GENERATOR,
         "generated_at": timestamp,
         "skills": skills_payload,
+        "agents": agents_payload,
         "hooks": hooks_payload,
     }
     body_json = json.dumps(body, sort_keys=True, separators=(",", ":"))
@@ -433,6 +448,19 @@ def _persist_manifest(
             generated_at=timestamp,
             scope=scope,
         )
+    for agent_spec in AGENT_REGISTRY:
+        path = _agent_target(target_dir, agent_spec, scope=scope, home=home)
+        body = _render_agent_toml(agent_spec).encode("utf-8")
+        region_id = f"plugin.codex.agent.{agent_spec.role}"
+        new_generated[f"{path.as_posix()}::{region_id}"] = ManifestEntry(
+            target=path.as_posix(),
+            region_id=region_id,
+            version=agent_spec.version,
+            hash=hashlib.blake2b(body, digest_size=8).hexdigest(),
+            generator=_GENERATOR,
+            generated_at=timestamp,
+            scope=scope,
+        )
     for hook_spec in HOOK_REGISTRY:
         path = _hook_target(plugin_root, hook_spec)
         body = render_hook_sh(hook_spec.event_type).encode("utf-8")
@@ -532,6 +560,15 @@ def install_plugin(
         )
         for spec in SKILL_REGISTRY
     ]
+    agent_deltas = [
+        _write_managed_file(
+            _agent_target(target_dir, spec, scope=scope, home=home),
+            _render_agent_toml(spec).encode("utf-8"),
+            force=force,
+            dry_run=dry_run,
+        )
+        for spec in AGENT_REGISTRY
+    ]
     hook_deltas = [
         _write_managed_file(
             _hook_target(plugin_root, hook_spec),
@@ -554,7 +591,7 @@ def install_plugin(
 
     logger.info(
         f"install_plugin runtime=codex scope={scope} plugin_root={plugin_root} "
-        f"skills={len(skill_deltas)} hooks={len(hook_deltas)} "
+        f"skills={len(skill_deltas)} agents={len(agent_deltas)} hooks={len(hook_deltas)} "
         f"manifest={manifest_delta.action} sidecar={sidecar_delta.action} "
         f"config={config_delta.action} dry_run={dry_run}"
     )
@@ -562,6 +599,7 @@ def install_plugin(
         target_dir=target_dir,
         scope=scope,
         skills=skill_deltas,
+        agents=agent_deltas,
         hooks=hook_deltas,
         manifest=manifest_delta,
         sidecar=sidecar_delta,
@@ -582,6 +620,10 @@ def expected_paths(
     paths: dict[str, Path] = {}
     for spec in SKILL_REGISTRY:
         paths[f"plugin.codex.skill.{spec.skill_name}"] = _skill_target(plugin_root, spec)
+    for spec in AGENT_REGISTRY:
+        paths[f"plugin.codex.agent.{spec.role}"] = _agent_target(
+            target_dir, spec, scope=scope, home=home
+        )
     for hook_spec in HOOK_REGISTRY:
         paths[f"plugin.codex.hook.{hook_spec.event_type.value}"] = _hook_target(
             plugin_root, hook_spec

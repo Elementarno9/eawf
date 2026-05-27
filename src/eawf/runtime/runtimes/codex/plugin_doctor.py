@@ -5,11 +5,10 @@ Mirrors :mod:`eawf.runtime.runtimes.claude.plugin_doctor`. Returns a structured
 aware — ``scope="project"`` inspects ``<target>/.codex/plugins/eawf/``;
 ``scope="user"`` inspects ``<home>/.codex/plugins/eawf/``.
 
-Reports legacy-layout paths under ``legacy_paths`` when the previous
-flat ``<target>/.codex/{skills,agents,hooks}/`` tree is present
-alongside the new plugin-rooted layout. Per the AGENTS.md deletion
-rule, the doctor never auto-removes legacy files; it surfaces them so
-the operator can prune manually.
+Reports legacy-layout paths under ``legacy_paths`` when previous flat
+skill/hook paths or the removed plugin-rooted ``agents/`` tree are
+present. Per the AGENTS.md deletion rule, the doctor never auto-removes
+legacy files; it surfaces them so the operator can prune manually.
 """
 
 from __future__ import annotations
@@ -21,10 +20,12 @@ from pathlib import Path
 from eawf.runtime.runtimes.codex.plugin_install import (
     _DEFAULT_TIMESTAMP,
     Scope,
+    _agent_target,
     _config_target,
     _hook_target,
     _manifest_target,
     _plugin_root,
+    _render_agent_toml,
     _render_manifest,
     _render_sidecar,
     _render_skill,
@@ -32,6 +33,7 @@ from eawf.runtime.runtimes.codex.plugin_install import (
     _sidecar_target,
     _skill_target,
 )
+from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
@@ -42,7 +44,7 @@ class DoctorEntry:
 
     region_id: str
     path: Path
-    kind: str  # Literal["skill", "hook", "config", "manifest", "sidecar"]
+    kind: str  # Literal["skill", "agent", "hook", "config", "manifest", "sidecar"]
     on_disk_hash: str | None = None
     expected_hash: str | None = None
 
@@ -105,17 +107,22 @@ def _classify_entry(
         )
 
 
-def _detect_legacy_paths(target_dir: Path) -> list[Path]:
-    """Return any flat-layout paths under ``<target>/.codex/{skills,agents,hooks}/``.
+def _detect_legacy_paths(target_dir: Path, *, plugin_root: Path) -> list[Path]:
+    """Return stale Codex plugin paths from prior installer layouts.
 
-    Reported but never auto-deleted (AGENTS.md deletion rule).
+    ``.codex/agents`` is no longer legacy: it is the current Codex
+    custom-agent surface. Reported paths are never auto-deleted
+    (AGENTS.md deletion rule).
     """
     legacy: list[Path] = []
     flat_root = target_dir / ".codex"
-    for sub in ("skills", "agents", "hooks"):
+    for sub in ("skills", "hooks"):
         candidate = flat_root / sub
         if candidate.is_dir():
             legacy.append(candidate)
+    plugin_agents = plugin_root / "agents"
+    if plugin_agents.is_dir():
+        legacy.append(plugin_agents)
     return legacy
 
 
@@ -144,6 +151,16 @@ def doctor_plugin(
             region_id=f"plugin.codex.skill.{skill_spec.skill_name}",
             kind="skill",
             expected_body=_render_skill(skill_spec).encode("utf-8"),
+            ok=ok,
+            drifted=drifted,
+            missing=missing,
+        )
+    for agent_spec in AGENT_REGISTRY:
+        _classify_entry(
+            _agent_target(target_dir, agent_spec, scope=scope, home=home),
+            region_id=f"plugin.codex.agent.{agent_spec.role}",
+            kind="agent",
+            expected_body=_render_agent_toml(agent_spec).encode("utf-8"),
             ok=ok,
             drifted=drifted,
             missing=missing,
@@ -208,7 +225,7 @@ def doctor_plugin(
             )
         )
 
-    legacy = _detect_legacy_paths(target_dir) if scope == "project" else []
+    legacy = _detect_legacy_paths(target_dir, plugin_root=plugin_root) if scope == "project" else []
     return DoctorReport(
         target_dir=target_dir,
         plugin_root=plugin_root,

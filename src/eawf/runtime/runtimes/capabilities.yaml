@@ -61,7 +61,7 @@ capabilities:
       agent / OpenCode agent file). Eawf executor + reviewer + auditor
       roles ride this surface.
     claude-code: supported    # .claude/agents/<role>.md + Task tool
-    codex: supported          # .codex/plugins/eawf/skills nests agents
+    codex: supported          # .codex/agents/<role>.toml
     opencode: supported       # .opencode/agent/<role>.md
 
   streaming:

@@ -163,6 +163,8 @@ def _flatten_codex(result: object) -> list[FileDelta]:
     deltas: list[FileDelta] = []
     for delta in result.skills:  # type: ignore[attr-defined]
         deltas.append(FileDelta(path=delta.path, action=delta.action))
+    for delta in result.agents:  # type: ignore[attr-defined]
+        deltas.append(FileDelta(path=delta.path, action=delta.action))
     for delta in result.hooks:  # type: ignore[attr-defined]
         deltas.append(FileDelta(path=delta.path, action=delta.action))
     for attr in ("manifest", "sidecar", "config"):

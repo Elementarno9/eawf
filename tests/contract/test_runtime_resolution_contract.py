@@ -169,7 +169,7 @@ def test_opencode_command_surface_omits_model_only_skills(tmp_path: Path) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Agents resolve on every runtime that hosts a top-level agent surface
+# Agents resolve on every runtime's native agent surface
 # ---------------------------------------------------------------------------
 
 
@@ -195,18 +195,19 @@ def test_opencode_installer_emits_every_agent(tmp_path: Path) -> None:
     assert emitted == _all_agent_roles()
 
 
-def test_codex_nests_agents_inside_skills_no_top_level_agent_dir(tmp_path: Path) -> None:
-    """Codex hosts ``sub_agents`` by nesting in skills, not a top-level dir.
+def test_codex_installer_emits_every_agent(tmp_path: Path) -> None:
+    """``sub_agents`` supported on codex -> one TOML file per registry role.
 
-    The matrix marks ``sub_agents`` ``supported`` for codex, but the
-    Codex-native plugin schema has no top-level ``agents`` key — agents
-    live inside skills. The contract here pins that intentional shape so
-    a future "codex grew an agents/ dir" change is a deliberate edit, not
-    an accident.
+    The Codex plugin schema still has no plugin-root ``agents`` key; the
+    native custom-agent surface is scope-level ``.codex/agents/*.toml``.
     """
     paths = _codex_paths(tmp_path)
-    agent_regions = [region for region in paths if region.startswith("plugin.codex.agent.")]
-    assert agent_regions == []
+    emitted = {
+        region.removeprefix("plugin.codex.agent.")
+        for region in paths
+        if region.startswith("plugin.codex.agent.")
+    }
+    assert emitted == _all_agent_roles()
 
 
 # ---------------------------------------------------------------------------
@@ -306,24 +307,22 @@ def test_supported_skills_capability_implies_nonempty_skill_output(tmp_path: Pat
 def test_supported_sub_agents_capability_has_agent_surface(tmp_path: Path) -> None:
     """Every runtime marked ``sub_agents``-supported exposes an agent surface.
 
-    Claude + OpenCode expose a top-level ``agents/`` surface; Codex
-    nests agents inside skills (no top-level dir) but still satisfies the
-    capability through the skill surface. The contract asserts the
-    surface exists per runtime in its native shape.
+    Claude + OpenCode expose runtime agent files; Codex exposes
+    scope-level TOML custom-agent files. The contract asserts each
+    runtime has a concrete native agent surface.
     """
     claude_agents = {r for r in _claude_paths(tmp_path) if r.startswith("plugin.claude.agent.")}
     opencode_agents = {
         r for r in _opencode_paths(tmp_path) if r.startswith("plugin.opencode.agent.")
     }
-    codex_skills = {r for r in _codex_paths(tmp_path) if r.startswith("plugin.codex.skill.")}
+    codex_agents = {r for r in _codex_paths(tmp_path) if r.startswith("plugin.codex.agent.")}
 
     assert runtime_supports("claude-code", "sub_agents") is True
     assert claude_agents
     assert runtime_supports("opencode", "sub_agents") is True
     assert opencode_agents
-    # Codex's agent surface is the (non-empty) skill surface it nests into.
     assert runtime_supports("codex", "sub_agents") is True
-    assert codex_skills
+    assert codex_agents
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +338,19 @@ def test_claude_dry_run_resolves_all_expected_skill_agent_hook_paths(tmp_path: P
     skill_paths = {p for region, p in paths.items() if region.startswith("plugin.claude.skill.")}
     agent_paths = {p for region, p in paths.items() if region.startswith("plugin.claude.agent.")}
     hook_paths = {p for region, p in paths.items() if region.startswith("plugin.claude.hook.")}
+
+    assert {d.path for d in result.skills} == skill_paths
+    assert {d.path for d in result.agents} == agent_paths
+    assert {d.path for d in result.hooks} == hook_paths
+
+
+def test_codex_dry_run_resolves_all_expected_skill_agent_hook_paths(tmp_path: Path) -> None:
+    """Codex dry-run install enumerates expected skills, agents, and hooks."""
+    result = codex_install.install_plugin(tmp_path, dry_run=True)
+    paths, _config = codex_install.expected_paths(tmp_path)
+    skill_paths = {p for region, p in paths.items() if region.startswith("plugin.codex.skill.")}
+    agent_paths = {p for region, p in paths.items() if region.startswith("plugin.codex.agent.")}
+    hook_paths = {p for region, p in paths.items() if region.startswith("plugin.codex.hook.")}
 
     assert {d.path for d in result.skills} == skill_paths
     assert {d.path for d in result.agents} == agent_paths

@@ -146,6 +146,7 @@ def test_plugin_install_codex_writes_native_layout(
     assert result.exit_code == 0, result.stdout
     assert (plugin_root / ".codex-plugin" / "plugin.json").is_file()
     assert (plugin_root / "skills").is_dir()
+    assert (config_path.parent / "agents" / "executor.toml").is_file()
     text = config_path.read_text(encoding="utf-8")
     assert "[plugins.eawf]" in text
     assert "enabled = true" in text
