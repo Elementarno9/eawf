@@ -200,6 +200,12 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
             "wave elapsed, and planned vs reactive split."
         ),
     ),
+    CommandRow(
+        "why",
+        "eawf.surfaces.cli.commands.why",
+        "why_cmd",
+        "Explain why an EAWF entity has its current trust tier.",
+    ),
     # Daemon + spec + bench + telemetry + snapshot + migrate + backup +
     # calibrate.
     GroupRow("daemon", "eawf.surfaces.cli.commands.daemon", "daemon_app"),
