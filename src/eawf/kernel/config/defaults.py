@@ -217,6 +217,11 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "time_quantum_under_2h_minutes": 15,
             "time_quantum_over_2h_minutes": 30,
         },
+        "buckets": {
+            "overrides": {},
+            "n_min": 5,
+            "high_confidence_n": 30,
+        },
     },
     "audit": {
         "default_checks": ["state", "tests", "lint", "typecheck", "docs"],

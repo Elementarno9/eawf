@@ -402,3 +402,66 @@ def test_cli_calibrate_buckets_not_found_exits_one(tmp_path: Path) -> None:
     workspace.mkdir()
     result = runner.invoke(app, ["-w", str(workspace), "calibrate", "buckets"])
     assert result.exit_code == 1
+
+
+def test_cli_calibrate_apply_writes_bucket_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``calibrate apply`` writes one fitted bucket centroid after explicit confirm."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    workspace = _write_state(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(workspace),
+            "calibrate",
+            "apply",
+            "--bucket",
+            "m",
+            "--scope",
+            "workspace",
+            "--yes",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    import json
+
+    payload = json.loads(result.stdout)
+    assert payload["bucket"] == "M"
+    assert payload["key"] == "estimation.buckets.overrides.M"
+    assert payload["value"]["expected_eu"] == pytest.approx(1.5)
+    assert payload["value"]["pessimistic_eu"] == pytest.approx(1.5)
+
+    body = yaml.safe_load((workspace / ".ea" / "config.yaml").read_text(encoding="utf-8"))
+    override = body["estimation"]["buckets"]["overrides"]["M"]
+    assert override["expected_eu"] == pytest.approx(1.5)
+    assert override["pessimistic_eu"] == pytest.approx(1.5)
+
+
+def test_cli_calibrate_apply_no_input_requires_yes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--no-input`` refuses config writes unless ``--yes`` is explicit."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    workspace = _write_state(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "--no-input",
+            "-w",
+            str(workspace),
+            "calibrate",
+            "apply",
+            "--bucket",
+            "M",
+            "--scope",
+            "workspace",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "refusing to apply bucket calibration" in result.output
+
+    body = yaml.safe_load((workspace / ".ea" / "config.yaml").read_text(encoding="utf-8"))
+    assert "estimation" not in body
