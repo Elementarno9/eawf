@@ -9,13 +9,14 @@ selection messages (:class:`BacklogTable.RowActivated` /
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import orjson
 from textual.widgets import Markdown, Static, TabbedContent
 
-from eawf.kernel.state.enums import EffortBucket
-from eawf.kernel.state.models import State
+from eawf.kernel.state.enums import DispatchNote, EffortBucket
+from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
     _TAB_LABELS,
@@ -52,6 +53,62 @@ def _state_with_bucketed_wave(bucket: EffortBucket = EffortBucket.L) -> tuple[St
     bucketed = state.waves[wave_id].model_copy(update={"effort_bucket": bucket})
     new_waves = dict(state.waves)
     new_waves[wave_id] = bucketed
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def _state_with_attempted_wave() -> tuple[State, str]:
+    """Return a state whose wave carries two dispatch attempts."""
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    now = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
+    attempted = state.waves[wave_id].model_copy(
+        update={
+            "sessions": {
+                1: SessionAttempt(
+                    attempt=1,
+                    runtime="codex",
+                    session_id="sess-1",
+                    session_log_handle="urn:eawf:v1:session-log:codex:sess-1",
+                    started_at=now,
+                    ended_at=now + timedelta(minutes=5),
+                    exit_status=0,
+                    input_tokens=10,
+                    output_tokens=5,
+                ),
+                2: SessionAttempt(
+                    attempt=2,
+                    runtime="claude-code",
+                    session_id="sess-2",
+                    session_log_handle="urn:eawf:v1:session-log:claude-code:sess-2",
+                    started_at=now + timedelta(minutes=6),
+                    ended_at=now + timedelta(minutes=10),
+                    exit_status=9,
+                    input_tokens=20,
+                    output_tokens=7,
+                    cache_creation_input_tokens=3,
+                    cache_read_input_tokens=4,
+                ),
+            },
+            "dispatch_history": [
+                DispatchAnnotation(
+                    attempt=1,
+                    note=DispatchNote.FRESH_DISPATCH,
+                    runtime_to="codex",
+                    occurred_at=now,
+                ),
+                DispatchAnnotation(
+                    attempt=2,
+                    note=DispatchNote.SWITCH_ON_ERROR,
+                    runtime_from="codex",
+                    runtime_to="claude-code",
+                    occurred_at=now + timedelta(minutes=6),
+                    reason="timeout",
+                ),
+            ],
+        }
+    )
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = attempted
     return state.model_copy(update={"waves": new_waves}), wave_id
 
 
@@ -103,6 +160,31 @@ def test_resolve_detail_wave_includes_success_criteria_rows() -> None:
     card = resolve_detail(state, wave.id)
     criterion_rows = [value for label, value in card.rows if label == "criterion"]
     assert criterion_rows == list(wave.success_criteria)
+
+
+def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(state, wave_id)
+    rows = dict(card.rows)
+
+    assert rows["attempts"] == "2 attempts, 1 retry, 0 blocked, 49 tokens"
+    assert rows["error kinds"] == "none"
+    timeline = rows["attempt timeline"]
+    lines = [line.strip() for line in timeline.splitlines() if line.strip()]
+    assert lines[0].split() == [
+        "att",
+        "runtime",
+        "started",
+        "ended",
+        "exit",
+        "retry",
+        "blocked",
+        "tokens",
+    ]
+    assert len(lines[1].split()) == 8
+    assert len(lines[2].split()) == 8
+    assert "switch" in lines[2]
+    assert "34" in lines[2]
 
 
 # --------------------------------------------------------------------------

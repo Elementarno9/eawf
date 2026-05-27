@@ -52,6 +52,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
 )
+from eawf.workflow.agent_report.rollup import PerWaveAttemptRollup, per_wave_attempt_rollup
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave
@@ -242,6 +243,8 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
         rows.append(("files", f"\n{indented}"))
     for criterion in wave.success_criteria:
         rows.append(("criterion", criterion))
+    attempt_rollup = per_wave_attempt_rollup(wave)
+    rows.extend(_attempt_rollup_rows(attempt_rollup))
 
     history: list[tuple[str, str]] = [
         ("status", wave.status.value),
@@ -264,6 +267,77 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
         events=tuple(events),
         detail_markdown=_wave_narrative_preview(state, wave),
     )
+
+
+def _attempt_rollup_rows(rollup: PerWaveAttemptRollup) -> tuple[tuple[str, str], ...]:
+    """Build detail-tab rows for a wave's per-attempt timeline.
+
+    Args:
+        rollup: The per-wave attempt rollup.
+
+    Returns:
+        Rows appended to the wave ``d`` tab.
+    """
+    return (
+        ("attempts", _attempt_summary(rollup)),
+        ("error kinds", _error_kind_breakdown(rollup)),
+        ("attempt timeline", _attempt_timeline_table(rollup)),
+    )
+
+
+def _attempt_summary(rollup: PerWaveAttemptRollup) -> str:
+    """Return compact attempt/retry/blocked/token summary text."""
+    return (
+        f"{_count_label(rollup.attempt_count, 'attempt')}, "
+        f"{_count_label(rollup.retry_count, 'retry', plural='retries')}, "
+        f"{rollup.blocked_count} blocked, "
+        f"{_count_label(rollup.token_total, 'token')}"
+    )
+
+
+def _count_label(count: int, singular: str, *, plural: str | None = None) -> str:
+    """Return a count plus singular/plural noun."""
+    noun = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {noun}"
+
+
+def _error_kind_breakdown(rollup: PerWaveAttemptRollup) -> str:
+    """Return error-kind breakdown text for the rollup."""
+    if not rollup.error_kind_breakdown:
+        return "none"
+    return ", ".join(f"{kind}={count}" for kind, count in rollup.error_kind_breakdown.items())
+
+
+def _attempt_timeline_table(rollup: PerWaveAttemptRollup) -> str:
+    """Render the 8-column per-attempt timeline table."""
+    if not rollup.attempts:
+        return "no attempts recorded"
+    columns = ("att", "runtime", "started", "ended", "exit", "retry", "blocked", "tokens")
+    raw_rows = [
+        (
+            str(row.attempt),
+            row.runtime,
+            row.started,
+            row.ended,
+            row.exit_status,
+            row.retry,
+            row.blocked,
+            row.tokens,
+        )
+        for row in rollup.attempts
+    ]
+    widths = [len(value) for value in columns]
+    for raw_row in raw_rows:
+        widths = [max(width, len(value)) for width, value in zip(widths, raw_row, strict=True)]
+    rendered = [_format_attempt_table_row(columns, widths)]
+    rendered.extend(_format_attempt_table_row(row, widths) for row in raw_rows)
+    return "\n" + "\n".join(f"  {line}" for line in rendered)
+
+
+def _format_attempt_table_row(row: tuple[str, ...], widths: list[int]) -> str:
+    """Format one attempt-table row with padded columns."""
+    cells = [value.ljust(width) for value, width in zip(row, widths, strict=True)]
+    return "  ".join(cells)
 
 
 def _wave_narrative_preview(state: State, wave: Wave) -> str:

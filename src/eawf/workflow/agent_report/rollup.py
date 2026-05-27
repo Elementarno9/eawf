@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 
-from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, DispatchNote
+from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
 from eawf.kernel.store.paths import store_path
@@ -34,6 +37,33 @@ class AgentReportRow:
             "store_kind": self.store_kind,
             "created_at": self.envelope.created_at.isoformat(),
         }
+
+
+@dataclass(frozen=True)
+class WaveAttemptTimelineRow:
+    """One row in a per-wave attempt timeline."""
+
+    attempt: int
+    runtime: str
+    started: str
+    ended: str
+    exit_status: str
+    retry: str
+    blocked: str
+    tokens: str
+
+
+@dataclass(frozen=True)
+class PerWaveAttemptRollup:
+    """Per-wave attempt/retry/block/token rollup."""
+
+    wave_id: str
+    attempts: tuple[WaveAttemptTimelineRow, ...]
+    attempt_count: int
+    retry_count: int
+    blocked_count: int
+    token_total: int
+    error_kind_breakdown: dict[str, int]
 
 
 def _report_store_kinds(role: AgentSessionRole | None = None) -> list[tuple[AgentSessionRole, str]]:
@@ -99,3 +129,187 @@ def operator_rollup(state_path: Path, phase_id: str) -> dict[str, object]:
         "by_role": dict(sorted(by_role.items())),
         "latest": latest,
     }
+
+
+def per_wave_attempt_rollup(
+    wave: Wave,
+    *,
+    reports: Iterable[AgentReportRow] = (),
+    error_kind_by_attempt: Mapping[int, Iterable[str]] | None = None,
+) -> PerWaveAttemptRollup:
+    """Return per-attempt timeline facts for *wave*.
+
+    The helper is intentionally store-agnostic: callers that have report or
+    telemetry rows pass them in, while the TUI can still render state-only
+    session/dispatch attempts.
+
+    Args:
+        wave: The wave whose attempts should be folded.
+        reports: Optional agent-report rows scoped to the wave.
+        error_kind_by_attempt: Optional tool/runtime error kinds keyed by
+            attempt number.
+
+    Returns:
+        Attempt rows plus aggregate retry/block/token/error-kind counts.
+    """
+    report_by_attempt = _latest_report_by_attempt(wave.id, reports)
+    annotation_by_attempt = _latest_annotation_by_attempt(wave.dispatch_history)
+    error_kinds = error_kind_by_attempt or {}
+    attempt_numbers = set(wave.sessions) | set(annotation_by_attempt) | set(report_by_attempt)
+    attempt_numbers.update(error_kinds)
+
+    rows: list[WaveAttemptTimelineRow] = []
+    token_total = 0
+    blocked_count = 0
+    retry_count = 0
+    error_kind_counter: Counter[str] = Counter()
+    for attempt_no in sorted(attempt_numbers):
+        session = wave.sessions.get(attempt_no)
+        report = report_by_attempt.get(attempt_no)
+        annotation = annotation_by_attempt.get(attempt_no)
+        tokens = _session_token_total(session)
+        if tokens is not None:
+            token_total += tokens
+        retry = _retry_label(attempt_no, annotation)
+        if retry != "initial":
+            retry_count += 1
+        blocked = _blocked_label(report)
+        if blocked == "yes":
+            blocked_count += 1
+        for error_kind in error_kinds.get(attempt_no, ()):
+            error_kind_counter[error_kind] += 1
+        rows.append(
+            WaveAttemptTimelineRow(
+                attempt=attempt_no,
+                runtime=_runtime_label(session, report, annotation),
+                started=_attempt_dt(getattr(session, "started_at", None)),
+                ended=_attempt_dt(getattr(session, "ended_at", None)),
+                exit_status=_exit_status_label(session),
+                retry=retry,
+                blocked=blocked,
+                tokens=str(tokens) if tokens is not None else "-",
+            )
+        )
+
+    return PerWaveAttemptRollup(
+        wave_id=wave.id,
+        attempts=tuple(rows),
+        attempt_count=len(rows),
+        retry_count=retry_count,
+        blocked_count=blocked_count,
+        token_total=token_total,
+        error_kind_breakdown=dict(sorted(error_kind_counter.items())),
+    )
+
+
+def _latest_report_by_attempt(
+    wave_id: str,
+    reports: Iterable[AgentReportRow],
+) -> dict[int, AgentReportRow]:
+    """Return latest report row per attempt for *wave_id*."""
+    latest: dict[int, AgentReportRow] = {}
+    for row in reports:
+        if row.payload.header.base_id != wave_id and row.payload.header.scope_id != wave_id:
+            continue
+        attempt = row.payload.header.attempt
+        previous = latest.get(attempt)
+        if previous is None or (previous.envelope.created_at, previous.envelope.id) < (
+            row.envelope.created_at,
+            row.envelope.id,
+        ):
+            latest[attempt] = row
+    return latest
+
+
+def _latest_annotation_by_attempt(
+    annotations: Iterable[DispatchAnnotation],
+) -> dict[int, DispatchAnnotation]:
+    """Return latest dispatch annotation per attempt."""
+    latest: dict[int, DispatchAnnotation] = {}
+    for annotation in annotations:
+        previous = latest.get(annotation.attempt)
+        if previous is None or previous.occurred_at < annotation.occurred_at:
+            latest[annotation.attempt] = annotation
+    return latest
+
+
+def _session_token_total(session: SessionAttempt | None) -> int | None:
+    """Return total tracked tokens for one session attempt."""
+    if session is None:
+        return None
+    values = (
+        session.input_tokens,
+        session.output_tokens,
+        session.cache_creation_input_tokens,
+        session.cache_read_input_tokens,
+    )
+    present = [value for value in values if value is not None]
+    if not present:
+        return None
+    return sum(present)
+
+
+def _retry_label(attempt_no: int, annotation: DispatchAnnotation | None) -> str:
+    """Return compact retry/switch label for one attempt."""
+    if annotation is None:
+        return "retry" if attempt_no > 1 else "initial"
+    if annotation.note is DispatchNote.FRESH_DISPATCH:
+        return "initial" if attempt_no == 1 else "fresh"
+    if annotation.note is DispatchNote.CONTINUE_FROM_SESSION:
+        return "continue"
+    if annotation.note is DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH:
+        return "fallback"
+    if annotation.note is DispatchNote.SWITCH_ON_ERROR:
+        return "switch"
+    if annotation.note is DispatchNote.SWITCH_MANUAL:
+        return "manual"
+    return annotation.note.value
+
+
+def _blocked_label(report: AgentReportRow | None) -> str:
+    """Return whether the report verdict marks this attempt blocked."""
+    if report is None:
+        return "no"
+    return "yes" if report.payload.body.verdict is AgentReportVerdict.BLOCKED else "no"
+
+
+def _runtime_label(
+    session: SessionAttempt | None,
+    report: AgentReportRow | None,
+    annotation: DispatchAnnotation | None,
+) -> str:
+    """Return runtime label from session, report, annotation, or fallback."""
+    if session is not None:
+        return session.runtime
+    if report is not None:
+        return report.payload.header.runtime
+    if annotation is not None:
+        return annotation.runtime_to or annotation.runtime_from or "-"
+    return "-"
+
+
+def _attempt_dt(value: object) -> str:
+    """Return compact datetime string for attempt tables."""
+    if value is None:
+        return "-"
+    if isinstance(value, datetime | date):
+        return value.isoformat()
+    return str(value)
+
+
+def _exit_status_label(session: SessionAttempt | None) -> str:
+    """Return subprocess exit status label."""
+    if session is None or session.exit_status is None:
+        return "-"
+    return str(session.exit_status)
+
+
+__all__ = [
+    "AgentReportRow",
+    "PerWaveAttemptRollup",
+    "WaveAttemptTimelineRow",
+    "find_agent_report",
+    "iter_agent_reports",
+    "operator_rollup",
+    "per_wave_attempt_rollup",
+]
