@@ -360,6 +360,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:19:36.053408Z"
     },
+    "P28-I03-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W30",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W30",
+      "scope_id": "P28-I03-W30",
+      "status": "done",
+      "updated_at": "2026-05-27T21:34:14.368923Z"
+    },
     "P28-I03-W36": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2334,7 +2346,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I03-W30",
       "P28-I03-W07",
       "P28-I03-W08",
       "P28-I03-W09",
@@ -6862,7 +6873,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:32:44.226581Z",
+  "updated_at": "2026-05-27T21:34:14.369187Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -23556,8 +23567,8 @@
         "P28-I03-W27"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:34:14.368923Z",
+      "commit": "3dd44ddeeb7af374999643989c047861035a7e85",
       "deps": [
         "P28-I02-W03"
       ],
@@ -23574,10 +23585,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:36.824878Z",
-      "outcome": null,
+      "outcome": "ActualSummary auto-write and wave telemetry rollup shipped with daemon/unit tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ActualSummary auto-written at close",
         "attention_eu from telemetry duration_ms",
@@ -26387,10 +26398,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w30",
       "created_at": "2026-05-27T21:21:28.338866Z",
       "id": "WT-P28-I03-W30-1779916888",
-      "merged_commit": null,
+      "merged_commit": "3dd44dd",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w30",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W30"
     },
     "WT-P28-I03-W36-1779916889": {
