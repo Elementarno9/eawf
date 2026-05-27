@@ -1888,9 +1888,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I02-W16"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5629,7 +5627,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T00:51:48.748982Z",
+  "updated_at": "2026-05-27T00:55:24.372159Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20280,7 +20278,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T00:55:23.843807Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -20293,10 +20291,10 @@
       "id": "P28-I02-W16",
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:12.040478Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "claim_wave raises LifecycleError when effort_bucket is None",
         "error guides operator to roadmap revise --set-bucket",
@@ -23873,10 +23871,10 @@
       "branch": "feature/eawf-v0.1-p28-w16",
       "created_at": "2026-05-27T00:51:48.748982Z",
       "id": "WT-P28-I02-W16-1779843108",
-      "merged_commit": null,
+      "merged_commit": "efc147b",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w16",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W16"
     }
   }
