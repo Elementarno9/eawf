@@ -25,3 +25,16 @@ render_blocks:
 
 skills_referenced: []
 hooks_referenced: []
+
+verify:
+  argv_allowlist:
+    - git
+  floor_checks:
+    - name: diff-check
+      cmd: ["git", "diff", "--check"]
+      scope: touched
+      cadence: every-wave
+      policy: warn
+      required: true
+      timeout_class: quick
+  waiver_mode: B

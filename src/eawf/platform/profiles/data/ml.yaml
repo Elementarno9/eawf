@@ -32,3 +32,18 @@ render_blocks:
 
 skills_referenced: []
 hooks_referenced: []
+
+verify:
+  argv_allowlist:
+    - uv
+    - run
+    - pytest
+  floor_checks:
+    - name: profile-loader-smoke
+      cmd: ["uv", "run", "pytest", "tests/unit/test_profiles_loader.py", "-q"]
+      scope: touched
+      cadence: every-wave
+      policy: warn
+      required: true
+      timeout_class: quick
+  waiver_mode: B

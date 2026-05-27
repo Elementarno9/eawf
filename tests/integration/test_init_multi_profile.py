@@ -47,6 +47,21 @@ def test_profiles_csv_writes_ordered_profile_list(tmp_path: Path) -> None:
     assert cfg["profiles"]["enabled"] == ["core", "python"]
 
 
+def test_quick_init_detects_python_and_installs_runtime_plugin(tmp_path: Path) -> None:
+    """``eawf init --quick`` skips prompts, detects Python, and installs plugin files."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+
+    res = runner.invoke(app, ["init", "--quick", "--target", str(tmp_path)])
+    assert res.exit_code == 0, res.stdout
+
+    cfg = yaml.safe_load((tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg["profiles"]["enabled"] == ["core", "python"]
+    gitignore = (tmp_path / ".gitignore").read_text(encoding="utf-8")
+    assert ".ea/local/" in gitignore
+    assert ".claude/" in gitignore
+    assert (tmp_path / ".claude" / "skills" / "research" / "SKILL.md").is_file()
+
+
 def test_profiles_csv_dedupes_and_preserves_order(tmp_path: Path) -> None:
     """Duplicate entries collapse; first-seen order wins."""
     res = _invoke(tmp_path, "--profiles", "python,core,python,core")

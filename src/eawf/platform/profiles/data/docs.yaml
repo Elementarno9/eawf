@@ -1,3 +1,18 @@
 name: docs
 version: "1.0"
 description: "Documentation-heavy project profile (stub for v0.1.1)."
+
+verify:
+  argv_allowlist:
+    - uv
+    - run
+    - pytest
+  floor_checks:
+    - name: docs-render-smoke
+      cmd: ["uv", "run", "pytest", "tests/unit/test_profile_cli.py", "-q"]
+      scope: touched
+      cadence: every-iter
+      policy: warn
+      required: true
+      timeout_class: quick
+  waiver_mode: B

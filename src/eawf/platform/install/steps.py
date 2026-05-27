@@ -1,7 +1,7 @@
 """Ordered list of wizard steps shared by the interactive and ``--no-input`` modes.
 
 Per ``docs/architecture/installation.md``, ``eawf init`` walks the
-operator through twelve decisions before materialising a fresh ``.ea/``
+operator through thirteen decisions before materialising a fresh ``.ea/``
 directory. Both the questionary TTY surface (:mod:`eawf.platform.install.wizard`)
 and the ``--no-input`` non-interactive path consume this single, ordered
 list so the two surfaces can never drift on either prompt count or prompt
@@ -23,7 +23,7 @@ Each step is described by an immutable :class:`WizardStep` carrying:
 - ``choices`` — explicit enumeration for ``kind="choice"``; ``None`` for
   free-form ``text``/``path`` and for ``bool`` (only ``True`` / ``False``).
 
-The full list is exported as :data:`WIZARD_STEPS` and pinned to length 12 by
+The full list is exported as :data:`WIZARD_STEPS` and pinned to length 13 by
 :mod:`tests.unit.test_install_wizard_steps` so a future contributor cannot
 silently add or drop a step.
 """
@@ -99,7 +99,7 @@ def _validate_project_code_input(value: str) -> bool | str:
     return "Project code must be 2-16 characters, start with A-Z, then A-Z/0-9/-/_ only."
 
 
-# The twelve canonical wizard steps. Ordering matches ``docs/architecture/installation.md``.
+# The thirteen canonical wizard steps. Ordering matches ``docs/architecture/installation.md``.
 # Each id is referenced verbatim by :class:`WizardAnswers`; renaming an id
 # is therefore a breaking change that requires a parallel edit in
 # :mod:`eawf.platform.install.wizard`.
@@ -171,6 +171,14 @@ STEP_MCP = WizardStep(
     cli_flag="--mcp",
 )
 
+STEP_AUTO_INSTALL_PLUGINS = WizardStep(
+    id="auto_install_plugins",
+    prompt="Install the runtime plugin after init?",
+    kind="bool",
+    default=False,
+    cli_flag="--auto-install-plugins/--no-auto-install-plugins",
+)
+
 STEP_ACCEPTANCE_TESTS = WizardStep(
     id="acceptance_tests",
     prompt="Require tests as an acceptance gate?",
@@ -215,6 +223,7 @@ WIZARD_STEPS: tuple[WizardStep, ...] = (
     STEP_RUNTIME,
     STEP_PLUGINS,
     STEP_MCP,
+    STEP_AUTO_INSTALL_PLUGINS,
     STEP_ACCEPTANCE_TESTS,
     STEP_ACCEPTANCE_LINT,
     STEP_ACCEPTANCE_TYPECHECK,
@@ -229,6 +238,7 @@ __all__ = [
     "STEP_ACCEPTANCE_LINT",
     "STEP_ACCEPTANCE_TESTS",
     "STEP_ACCEPTANCE_TYPECHECK",
+    "STEP_AUTO_INSTALL_PLUGINS",
     "STEP_LIFECYCLE_DEPTH",
     "STEP_MCP",
     "STEP_PLUGINS",

@@ -95,3 +95,17 @@ render_blocks:
       are passed by keyword. A function whose name implies a value but returns
       ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs
       the explicit-return contract via full type hints.
+
+verify:
+  argv_allowlist:
+    - uv
+    - run
+    - pre-commit
+  floor_checks:
+    - name: code-craft-lint
+      cmd: ["uv", "run", "pre-commit", "run", "--all-files"]
+      scope: touched
+      cadence: every-wave
+      policy: warn
+      required: true
+  waiver_mode: B

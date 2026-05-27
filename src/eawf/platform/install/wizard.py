@@ -23,7 +23,7 @@ input source (see ``tests/integration/test_cli_init_interactive.py``).
 
 Public API:
 
-- :class:`WizardAnswers` — Pydantic v2 model mirroring the 12 step ids,
+- :class:`WizardAnswers` — Pydantic v2 model mirroring the 13 step ids,
   forbidding extras and validating ``project_code`` plus ``profiles`` membership.
 - :class:`WizardResult` — Pydantic v2 model summarising the artefacts written.
 - :class:`WizardCancelled` — raised when the operator aborts a prompt
@@ -52,9 +52,10 @@ init flow.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -66,6 +67,7 @@ from eawf.kernel.state.ids import RE_PROJECT_CODE
 from eawf.kernel.state.models import Goal, Project
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.platform.install.gitignore_writer import write_gitignore
 from eawf.platform.install.steps import (
     STEP_LIFECYCLE_DEPTH,
     STEP_RUNTIME,
@@ -109,10 +111,20 @@ assert STEP_LIFECYCLE_DEPTH.choices is not None, "STEP_LIFECYCLE_DEPTH.choices m
 _RUNTIME_CHOICES: frozenset[str] = frozenset(STEP_RUNTIME.choices)
 _LIFECYCLE_DEPTH_CHOICES: frozenset[str] = frozenset(STEP_LIFECYCLE_DEPTH.choices)
 _BOOTSTRAP_GOAL_ID = "G01"
+_QUICK_PROFILE_SENTINELS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("python", ("pyproject.toml", "uv.lock", "requirements.txt", "setup.py"), (".py",)),
+    ("apps", ("package.json", "vite.config.ts", "next.config.js"), (".js", ".jsx", ".ts", ".tsx")),
+    ("docs", ("mkdocs.yml", "mkdocs.yaml", "conf.py"), ()),
+    ("infra", ("Dockerfile", "docker-compose.yml"), (".tf", ".tfvars")),
+    ("ml", ("notebook.ipynb",), (".ipynb",)),
+)
+_QUICK_SKIP_DIRS: frozenset[str] = frozenset(
+    {".git", ".ea", ".venv", "node_modules", "__pycache__", "dist", "build"}
+)
 
 
 class WizardAnswers(BaseModel):
-    """Pydantic-validated answers to all 12 wizard prompts.
+    """Pydantic-validated answers to all 13 wizard prompts.
 
     The field names match :data:`~eawf.platform.install.steps.WIZARD_STEPS` ids so the
     interactive surface can map widget values straight onto this model with
@@ -147,6 +159,7 @@ class WizardAnswers(BaseModel):
     runtime: str
     plugins: tuple[str, ...] = ()
     mcp: tuple[str, ...] = ()
+    auto_install_plugins: bool = False
     acceptance_tests: bool = True
     acceptance_lint: bool = True
     acceptance_typecheck: bool = True
@@ -231,9 +244,13 @@ class WizardResult(BaseModel):
     agents_md_path: Path
     claude_md_path: Path
     manifest_path: Path
+    gitignore_path: Path
     profiles_enabled: list[str]
     project_code: str
     materialised_state_keys: list[str]
+    gitignore_patterns: list[str]
+    auto_installed_plugins: list[str]
+    subagent_spec_preview: str
 
 
 def _pre_existing_canonical_files(ea_dir: Path) -> list[str]:
@@ -250,6 +267,75 @@ def _pre_existing_canonical_files(ea_dir: Path) -> list[str]:
         if (ea_dir / name).exists():
             found.append(name)
     return found
+
+
+def quick_project_code_for_target(target_dir: Path) -> str:
+    """Derive a valid project code from ``target_dir`` for ``init --quick``."""
+    stem = target_dir.resolve().name.upper()
+    code = re.sub(r"[^A-Z0-9_-]+", "-", stem).strip("-_")
+    if not code:
+        return "EA"
+    if not code[0].isalpha():
+        code = f"P{code}"
+    if len(code) == 1:
+        code = f"{code}A"
+    return code[:16]
+
+
+def detect_profiles_for_target(target_dir: Path) -> tuple[str, ...]:
+    """Return quick-init profile defaults from lightweight repo language hints."""
+    detected: list[str] = ["core"]
+    if not target_dir.exists():
+        return tuple(detected)
+    for path in target_dir.rglob("*"):
+        if any(part in _QUICK_SKIP_DIRS for part in path.parts):
+            continue
+        if not path.is_file():
+            continue
+        name = path.name
+        suffix = path.suffix
+        for profile_id, names, suffixes in _QUICK_PROFILE_SENTINELS:
+            if profile_id in detected:
+                continue
+            if profile_id == "docs" and "docs" in path.parts and suffix in (".md", ".rst"):
+                detected.append(profile_id)
+                continue
+            if name in names or suffix in suffixes:
+                detected.append(profile_id)
+    return tuple(detected)
+
+
+def _build_subagent_spec_preview(*, project_code: str) -> str:
+    """Render a deterministic starter dispatch preview for the init envelope."""
+    from eawf.workflow.agents.specs.models import SubagentSpec
+
+    return SubagentSpec(
+        wave_id="P00-I00-W00",
+        iter_id="P00-I00",
+        title="Bootstrap first wave",
+        scope_id=project_code,
+        agent_role="executor",
+        effort_bucket="S",
+        success_criteria=[
+            "replace this preview with the first real wave before dispatch",
+        ],
+        file_scopes=["src/**", "tests/**"],
+    ).render()
+
+
+def _auto_install_runtime_plugin(
+    *,
+    target_dir: Path,
+    runtime: str,
+    force: bool,
+) -> list[str]:
+    """Install the runtime plugin requested by the wizard, when supported."""
+    if runtime == "generic":
+        return []
+    from eawf.runtime.runtimes.plugin_sync import sync_plugins
+
+    result = sync_plugins(target_dir, runtimes=(cast(Any, runtime),), force=force)
+    return [entry.runtime for entry in result.results]
 
 
 def _build_initial_project(*, project_code: str, project_title: str) -> dict[str, Any]:
@@ -579,6 +665,8 @@ def run_wizard_no_input(
     with portalock.acquire(config_path, timeout=5.0):
         _atomic_write_yaml(config_path, _build_config_yaml(answers))
 
+    gitignore_result = write_gitignore(target_dir)
+
     # Materialise state keys per profile. We avoid ``enable_profile`` here
     # (see module docstring) and call ``_materialise_state_keys`` directly,
     # collecting the union of newly added keys for the response envelope.
@@ -605,6 +693,16 @@ def run_wizard_no_input(
     save_manifest_atomic(manifest_path, updated_manifest)
     claude_md_path = (target_dir / "CLAUDE.md").resolve()
     render_claude_md(claude_md_path)
+    auto_installed_plugins = (
+        _auto_install_runtime_plugin(
+            target_dir=target_dir,
+            runtime=answers.runtime,
+            force=force,
+        )
+        if answers.auto_install_plugins
+        else []
+    )
+    subagent_spec_preview = _build_subagent_spec_preview(project_code=answers.project_code)
 
     logger.info(
         f"run_wizard_no_input project_code={answers.project_code} "
@@ -619,9 +717,13 @@ def run_wizard_no_input(
         agents_md_path=agents_md_path,
         claude_md_path=claude_md_path,
         manifest_path=manifest_path,
+        gitignore_path=gitignore_result.path,
         profiles_enabled=list(answers.profiles),
         project_code=answers.project_code,
         materialised_state_keys=materialised,
+        gitignore_patterns=list(gitignore_result.patterns),
+        auto_installed_plugins=auto_installed_plugins,
+        subagent_spec_preview=subagent_spec_preview,
     )
 
 
@@ -826,6 +928,8 @@ __all__ = [
     "WizardAnswers",
     "WizardCancelled",
     "WizardResult",
+    "detect_profiles_for_target",
+    "quick_project_code_for_target",
     "run_wizard_interactive",
     "run_wizard_no_input",
 ]

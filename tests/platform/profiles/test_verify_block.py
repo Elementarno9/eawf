@@ -6,8 +6,8 @@ Pins the W10 success criteria:
 * :class:`VerifyBlock` + :class:`FloorCheck` accept the documented
   shape and reject unknown fields (``extra="forbid"`` per AGENTS
   rule 2).
-* The 3 built-in profiles (python / apps / robotics) parse via the
-  layered loader and each carries a non-empty floor pack.
+* The 8 built-in gate-pack profiles parse via the layered loader and
+  each carries a non-empty floor pack.
 * ``waiver_mode`` defaults to ``"B"`` on a freshly-constructed
   :class:`VerifyBlock`.
 * :func:`resolve_waiver_mode` reads from a typed :class:`VerifyBlock`
@@ -20,8 +20,9 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES
-from eawf.platform.profiles import FloorCheck, ProfileBody, VerifyBlock, load_profile
+from eawf.platform.profiles import FloorCheck, ProfileBody, VerifyBlock, list_profiles, load_profile
 from eawf.workflow.lifecycle.waivers import DEFAULT_WAIVER_MODE, resolve_waiver_mode
+from eawf.workflow.verify.compile import compile_floor_pack
 
 # ---- AuditCadence 5-value enum ---------------------------------------------
 
@@ -199,14 +200,19 @@ def test_profile_body_verify_round_trips_block() -> None:
     assert body.verify.floor_checks[0].name == "pytest"
 
 
-# ---- 3 fixture profiles -----------------------------------------------------
+# ---- 8 fixture profiles -----------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "profile_id, expected_check_count, expected_waiver_mode",
     [
+        ("docs", 1, "B"),
+        ("infra", 1, "B"),
+        ("ml", 1, "B"),
+        ("quality", 1, "B"),
         ("python", 3, "B"),
         ("apps", 4, "B"),
+        ("research", 1, "B"),
         ("robotics", 1, "A"),
     ],
 )
@@ -215,12 +221,22 @@ def test_fixture_profile_parses_with_verify_block(
     expected_check_count: int,
     expected_waiver_mode: str,
 ) -> None:
-    """Each of the 3 fixture profiles loads with the documented floor-pack size."""
+    """Each fixture profile loads with the documented floor-pack size."""
     body = load_profile(profile_id)
     assert body.verify is not None, f"profile {profile_id!r} missing verify block"
     assert len(body.verify.floor_checks) == expected_check_count
     assert body.verify.waiver_mode == expected_waiver_mode
     assert body.verify.argv_allowlist, f"profile {profile_id!r} has empty argv_allowlist"
+    assert compile_floor_pack(body.verify.floor_checks, allowlist=body.verify.argv_allowlist)
+
+
+def test_builtin_gate_pack_profile_count_is_eight() -> None:
+    """Exactly eight built-in profiles currently ship floor packs."""
+    expected = {"apps", "docs", "infra", "ml", "python", "quality", "research", "robotics"}
+    actual = {
+        profile_id for profile_id in list_profiles() if (load_profile(profile_id).verify or False)
+    }
+    assert actual == expected
 
 
 def test_robotics_floor_check_carries_hil_flags() -> None:

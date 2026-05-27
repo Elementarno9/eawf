@@ -2,7 +2,7 @@
 
 Pin the contract that:
 
-- :data:`~eawf.platform.install.steps.WIZARD_STEPS` always contains exactly twelve
+- :data:`~eawf.platform.install.steps.WIZARD_STEPS` always contains exactly thirteen
   steps (matches ``docs/architecture/installation.md`` — adding a thirteenth
   or removing one is a spec change that has to land here first).
 - All step ids are unique (so :class:`WizardAnswers` can map id → field
@@ -24,9 +24,9 @@ import pytest
 from eawf.platform.install.steps import WIZARD_STEPS, WizardKind, WizardStep
 
 
-def test_wizard_steps_count_is_12() -> None:
-    """The canonical wizard pins to exactly twelve prompts."""
-    assert len(WIZARD_STEPS) == 12
+def test_wizard_steps_count_is_13() -> None:
+    """The canonical wizard pins to exactly thirteen prompts."""
+    assert len(WIZARD_STEPS) == 13
 
 
 def test_wizard_step_ids_unique() -> None:

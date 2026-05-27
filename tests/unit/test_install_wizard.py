@@ -7,7 +7,14 @@ from pathlib import Path
 import yaml
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
-from eawf.platform.install.wizard import WizardAnswers, _build_config_yaml, run_wizard_no_input
+from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS
+from eawf.platform.install.wizard import (
+    WizardAnswers,
+    _build_config_yaml,
+    detect_profiles_for_target,
+    quick_project_code_for_target,
+    run_wizard_no_input,
+)
 from eawf.workflow.estimation.buckets import BUCKET_EU
 
 
@@ -90,3 +97,38 @@ def test_wizard_writes_disk_config_with_adapters(tmp_path: Path) -> None:
     assert loaded["schema_version"] == "1.0"
     assert "lifecycle" not in loaded
     assert "plugins" not in loaded
+
+
+def test_wizard_writes_managed_gitignore_block(tmp_path: Path) -> None:
+    target = tmp_path / "proj"
+    target.mkdir()
+    result = run_wizard_no_input(_answers(), target, force=False)
+
+    text = result.gitignore_path.read_text(encoding="utf-8")
+    assert "# BEGIN EAWF:gitignore" in text
+    assert "# END EAWF:gitignore" in text
+    assert result.gitignore_patterns == list(GITIGNORE_PATTERNS)
+    for pattern in GITIGNORE_PATTERNS:
+        assert pattern in text
+
+
+def test_wizard_result_carries_subagent_spec_preview(tmp_path: Path) -> None:
+    target = tmp_path / "proj"
+    target.mkdir()
+    result = run_wizard_no_input(_answers(), target, force=False)
+
+    assert "# Wave P00-I00-W00: Bootstrap first wave" in result.subagent_spec_preview
+    assert "## Workflow" in result.subagent_spec_preview
+
+
+def test_quick_profile_detection_adds_python_profile(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+
+    assert detect_profiles_for_target(tmp_path) == ("core", "python")
+
+
+def test_quick_project_code_sanitises_target_name(tmp_path: Path) -> None:
+    target = tmp_path / "123 demo app"
+    target.mkdir()
+
+    assert quick_project_code_for_target(target) == "P123-DEMO-APP"

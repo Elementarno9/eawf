@@ -183,6 +183,7 @@ def _build_answers(
     lifecycle_depth: str,
     plugins: list[str] | None,
     mcp: list[str] | None,
+    auto_install_plugins: bool,
     acceptance_tests: bool,
     acceptance_lint: bool,
     acceptance_typecheck: bool,
@@ -216,6 +217,7 @@ def _build_answers(
         runtime=runtime,
         plugins=tuple(plugins or ()),
         mcp=tuple(mcp or ()),
+        auto_install_plugins=auto_install_plugins,
         acceptance_tests=acceptance_tests,
         acceptance_lint=acceptance_lint,
         acceptance_typecheck=acceptance_typecheck,
@@ -238,7 +240,11 @@ def _result_to_payload(result: WizardResult) -> dict[str, object]:
         "agents_md_path": str(result.agents_md_path),
         "claude_md_path": str(result.claude_md_path),
         "manifest_path": str(result.manifest_path),
+        "gitignore_path": str(result.gitignore_path),
         "materialised_state_keys": list(result.materialised_state_keys),
+        "gitignore_patterns": list(result.gitignore_patterns),
+        "auto_installed_plugins": list(result.auto_installed_plugins),
+        "subagent_spec_preview": result.subagent_spec_preview,
     }
 
 
@@ -311,6 +317,16 @@ def init_cmd(
             ),
         ),
     ] = False,
+    quick: Annotated[
+        bool,
+        typer.Option(
+            "--quick",
+            help=(
+                "Run non-interactive init with detected profiles, an inferred "
+                "project code, managed .gitignore, and runtime-plugin install."
+            ),
+        ),
+    ] = False,
     runtime: Annotated[
         str,
         typer.Option(
@@ -333,6 +349,13 @@ def init_cmd(
         list[str] | None,
         typer.Option("--mcp", help="Optional MCP servers (repeatable)."),
     ] = None,
+    auto_install_plugins: Annotated[
+        bool,
+        typer.Option(
+            "--auto-install-plugins/--no-auto-install-plugins",
+            help="Install the selected runtime plugin after init writes the workspace files.",
+        ),
+    ] = False,
     acceptance_tests: Annotated[
         bool,
         typer.Option(
@@ -378,6 +401,8 @@ def init_cmd(
         emit_json_or_text(list_payload, text, flags=flags)
         return
 
+    from eawf.platform.install.wizard import detect_profiles_for_target
+
     try:
         resolved_profiles, template_extras = _resolve_profiles_and_template(
             profile=profile,
@@ -388,8 +413,11 @@ def init_cmd(
         cli_errors.emit_error(exc, flags=flags)
         return
 
-    if flags.no_input:
-        if not project_code:
+    if quick and resolved_profiles is None:
+        resolved_profiles = list(detect_profiles_for_target(target_dir))
+
+    if flags.no_input or quick:
+        if not project_code and not quick:
             cli_errors.emit_error(
                 cli_errors.UserError(
                     "--no-input requires --project-code; pass --project-code DEMO",
@@ -398,6 +426,10 @@ def init_cmd(
                 flags=flags,
             )
             return  # never reached — emit_error raises typer.Exit
+        if quick and not project_code:
+            from eawf.platform.install.wizard import quick_project_code_for_target
+
+            project_code = quick_project_code_for_target(target_dir)
         try:
             answers = _build_answers(
                 state_path=state_path,
@@ -408,6 +440,7 @@ def init_cmd(
                 lifecycle_depth=lifecycle_depth,
                 plugins=plugin,
                 mcp=mcp,
+                auto_install_plugins=quick or auto_install_plugins,
                 acceptance_tests=acceptance_tests,
                 acceptance_lint=acceptance_lint,
                 acceptance_typecheck=acceptance_typecheck,
