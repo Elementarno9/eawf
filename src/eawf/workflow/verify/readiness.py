@@ -585,6 +585,22 @@ def _load_active_verify_block(
     return _merge_verify_blocks(blocks)
 
 
+def load_active_verify_block(
+    scope_id: str,
+    state: State,
+    *,
+    repo_root: Path,
+    config_root: Path | None = None,
+) -> VerifyBlock | None:
+    """Return the active merged verify block without executing floor checks."""
+    return _load_active_verify_block(
+        scope_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root,
+    )
+
+
 def _build_floor_views(
     verify_block: VerifyBlock | None,
     *,
@@ -710,6 +726,7 @@ def compute(
     store_dir: Path,
     repo_root: Path,
     config_root: Path | None = None,
+    load_profile_verify: bool = True,
 ) -> CloseReadiness:
     """Return the close-readiness projection for *scope_id*.
 
@@ -761,6 +778,10 @@ def compute(
             the right tree.
         config_root: Optional root for layered config and workspace
             profile discovery. Defaults to *repo_root*.
+        load_profile_verify: When ``False``, skip active profile
+            verify loading. Close paths use this for non-enforcing
+            advisory metrics so long-running profile floor checks do
+            not run while the state lock is held.
 
     Returns:
         A :class:`CloseReadiness` view. Empty waves (no typed specs +
@@ -803,11 +824,15 @@ def compute(
         runner_cwd=repo_root,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
-    verify_block = _load_active_verify_block(
-        scope_id,
-        state,
-        repo_root=repo_root,
-        config_root=config_root,
+    verify_block = (
+        _load_active_verify_block(
+            scope_id,
+            state,
+            repo_root=repo_root,
+            config_root=config_root,
+        )
+        if load_profile_verify
+        else None
     )
 
     # Profile-fed floor pack (P28-I01-W10). Floor checks render only
@@ -856,4 +881,5 @@ def _is_ready(criteria: list[CriterionView]) -> bool:
 
 __all__ = [
     "compute",
+    "load_active_verify_block",
 ]

@@ -550,6 +550,7 @@ def wave_close_cmd(
     from eawf.workflow.lifecycle.transitions import close_wave
     from eawf.workflow.verify import compute as compute_readiness
     from eawf.workflow.verify.models import CloseReadiness
+    from eawf.workflow.verify.readiness import load_active_verify_block
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -641,24 +642,31 @@ def wave_close_cmd(
         config_root = _config_root_for_state_path(state_path)
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
         anchor_for_sha = repo_root if repo_root is not None else config_root
-        try:
-            readiness = compute_readiness(
-                wave_id,
-                state=state,
-                store_dir=evidence_store_dir,
-                repo_root=anchor_for_sha,
-                config_root=config_root,
-            )
-        except KeyError as exc:
-            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
-        else:
-            readiness_holder.append(readiness)
-            for view in readiness.criteria:
-                if view.status != "pass":
-                    logger.warning(
-                        f"close_advisory wave={wave_id!r} "
-                        f"criterion={view.id!r} status={view.status!r}"
-                    )
+        verify_block = load_active_verify_block(
+            wave_id,
+            state,
+            repo_root=anchor_for_sha,
+            config_root=config_root,
+        )
+        if verify_block is not None and verify_block.enforce:
+            try:
+                readiness = compute_readiness(
+                    wave_id,
+                    state=state,
+                    store_dir=evidence_store_dir,
+                    repo_root=anchor_for_sha,
+                    config_root=config_root,
+                )
+            except KeyError as exc:
+                logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+            else:
+                readiness_holder.append(readiness)
+                for view in readiness.criteria:
+                    if view.status != "pass":
+                        logger.warning(
+                            f"close_advisory wave={wave_id!r} "
+                            f"criterion={view.id!r} status={view.status!r}"
+                        )
         wave = close_wave(
             state,
             wave_id=wave_id,
@@ -667,6 +675,26 @@ def wave_close_cmd(
         )
         if resolved_sha is not None:
             wave.commit = resolved_sha
+        if verify_block is None or not verify_block.enforce:
+            try:
+                readiness = compute_readiness(
+                    wave_id,
+                    state=state,
+                    store_dir=evidence_store_dir,
+                    repo_root=anchor_for_sha,
+                    config_root=config_root,
+                    load_profile_verify=False,
+                )
+            except KeyError as exc:
+                logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+            else:
+                readiness_holder.append(readiness)
+                for view in readiness.criteria:
+                    if view.status != "pass":
+                        logger.warning(
+                            f"close_advisory wave={wave_id!r} "
+                            f"criterion={view.id!r} status={view.status!r}"
+                        )
         if repo_root is not None:
             drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
         close_succeeded[0] = True

@@ -463,9 +463,18 @@ def _compute_wave_close_readiness(
     """Return the pre-close readiness view for a wave-close mutation."""
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.verify import compute as compute_readiness
+    from eawf.workflow.verify.readiness import load_active_verify_block
 
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or wave_id not in state.waves:
+        return None
+    verify_block = load_active_verify_block(
+        wave_id,
+        state,
+        repo_root=repo_root,
+        config_root=_config_root_for_state_path(state_path),
+    )
+    if verify_block is None or not verify_block.enforce:
         return None
     return compute_readiness(
         wave_id,
@@ -529,7 +538,21 @@ def _compute_wave_close_extras(
             logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
             return {}
     if readiness is None:
-        return {}
+        try:
+            from eawf.kernel.store.paths import store_dir as _store_dir
+            from eawf.workflow.verify import compute as compute_readiness
+
+            readiness = compute_readiness(
+                wave_id,
+                state=state,
+                store_dir=_store_dir(state_path),
+                repo_root=repo_root,
+                config_root=_config_root_for_state_path(state_path),
+                load_profile_verify=False,
+            )
+        except KeyError as exc:
+            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+            return {}
     count = len(readiness.warnings)
     for view in readiness.criteria:
         if view.status != "pass":

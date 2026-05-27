@@ -35,7 +35,7 @@ from eawf.workflow.verify.models import (
     CriterionView,
     GateResult,
 )
-from eawf.workflow.verify.readiness import compute
+from eawf.workflow.verify.readiness import compute, load_active_verify_block
 
 __all__ = [
     "CloseReadiness",
@@ -43,4 +43,5 @@ __all__ = [
     "GateResult",
     "compile_gate",
     "compute",
+    "load_active_verify_block",
 ]
