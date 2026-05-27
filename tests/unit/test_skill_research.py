@@ -7,7 +7,7 @@ Pin the Phase 4 W02 acceptance contract for ``/research``:
 - Probe-blocked path → ``status=blocked`` with non-empty
   ``footer.repair_commands``.
 - ``--depth quick|normal|deep`` flag honoured: question-slot count
-  scales with depth and ``deep`` short-circuits to ``status=needs_user``.
+  scales with depth and ``deep`` emits a typed fan-out plan.
 - Body schema fields (``brief_id``, ``questions``, ``options``,
   ``recommendation``) populated.
 - Each algorithm step writes one ``EVENT`` row to ``store/event.jsonl``.
@@ -79,15 +79,17 @@ def test_research_quick_depth_scales_questions(state_dir: Path) -> None:
     assert len(body.questions) == 1
 
 
-def test_research_deep_depth_returns_needs_user(state_dir: Path) -> None:
+def test_research_deep_depth_returns_research_plan(state_dir: Path) -> None:
     skill = ResearchSkill()
     ctx = _ctx()
     ctx.args = {"depth": "deep"}
     env = run_skill(skill, ctx)
-    assert env.header.status == "needs_user"
+    assert env.header.status == "ok"
     body = ResearchBody.model_validate(cast(dict, env.body))
-    assert body.user_question is not None
-    assert 2 <= len(body.user_question.options) <= 4
+    assert body.user_question is None
+    assert body.research_plan is not None
+    assert body.research_plan.section_heading == "## ResearchPlan"
+    assert len(body.research_plan.fanout_envelopes) == len(body.questions)
 
 
 def test_research_invalid_depth_falls_back_to_normal(state_dir: Path) -> None:

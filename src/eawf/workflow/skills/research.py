@@ -8,8 +8,8 @@ Implements the ``/research`` algorithm per ``docs/architecture/workflow.md``:
 3. Detect continuation: open brief on the same scope → load and extend.
 4. Define questions: facts to verify, options to compare, risks to audit,
    decision needed.
-5. Dispatch parallel read-only agents (v0.1: degrade to user_question
-   placeholder).
+5. Dispatch parallel read-only agents (deep depth emits a typed
+   ResearchPlan for the caller to dispatch).
 6. Synthesize options: 2-4 solutions with tradeoffs/complexity/etc.
 7. Review findings: cross-check citations.
 8. Recommend one path with confidence and fallback.
@@ -17,9 +17,8 @@ Implements the ``/research`` algorithm per ``docs/architecture/workflow.md``:
 10. Record artefact / decision candidates in state.
 
 Each algorithm step writes one row to ``store/event.jsonl`` via
-:func:`eawf.workflow.skills._common.emit_event`. Heavy LLM-fanout steps degrade to
-``status=needs_user`` with a typed :class:`UserQuestion` populated on the
-body, per the design spec §14 degrade pattern.
+:func:`eawf.workflow.skills._common.emit_event`. Deep LLM-fanout emits a typed
+``ResearchPlan`` body instead of asking the operator to hand-author the plan.
 
 Honoured flags (per the W02 acceptance contract):
 
@@ -46,11 +45,12 @@ from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills.blitz import BlitzSkill, should_auto_invoke
 from eawf.workflow.skills.bodies.research import (
     ResearchBody,
+    ResearchFanoutEnvelope,
     ResearchOption,
+    ResearchPlan,
     ResearchQuestion,
     ResearchRecommendation,
 )
-from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.engine import ActionRun, SkillAction, SkillContext, SkillResult, run_skill
 from eawf.workflow.skills.registry import register
 
@@ -152,15 +152,17 @@ class _ResearchWork:
     Attributes:
         questions: The synthesised question slots.
         options: The synthesised options.
-        recommendation: The chosen recommendation.
+        recommendation: The chosen recommendation, or ``None`` for plan-only deep research.
         persisted_brief: The persisted-brief URN, or ``None``.
+        research_plan: The typed fan-out plan for deep research, or ``None``.
         next_actions: The accumulated next-valid-actions list.
     """
 
     questions: list[ResearchQuestion]
     options: list[ResearchOption]
-    recommendation: ResearchRecommendation
+    recommendation: ResearchRecommendation | None
     persisted_brief: str | None
+    research_plan: ResearchPlan | None = None
     next_actions: list[str] = field(default_factory=list)
 
 
@@ -204,11 +206,19 @@ class ResearchSkill(SkillAction):
         )
         # Step 4 — define questions. v0.1 emits placeholder slots scaled by depth.
         questions = self._build_questions(run, inputs.depth)
-        # Step 5 — dispatch parallel agents. v0.1: deep depth degrades to
-        # needs_user with a typed user_question so the runtime / human can
-        # supply the agent plan before re-invocation.
-        if inputs.depth == "deep":
-            return self._deep_depth_needs_user(run, inputs, questions)
+        # Step 5 — dispatch parallel agents. Deep depth emits the typed plan
+        # the runtime can fan out, while quick/normal keep the v0.1 placeholder
+        # synthesis path.
+        research_plan = self._build_research_plan(run, inputs, questions)
+        if research_plan is not None:
+            return _ResearchWork(
+                questions=questions,
+                options=[],
+                recommendation=None,
+                persisted_brief=None,
+                research_plan=research_plan,
+                next_actions=["eawf agent dispatch", "eawf prep", "eawf hypothesis define"],
+            )
         # Step 6 — synthesise options (v0.1 placeholder pair).
         options = self._build_options(run)
         # Step 7 — peer review (v0.1: skipped, leaves peer_review=None).
@@ -303,48 +313,41 @@ class ResearchSkill(SkillAction):
         run.records.append(persisted_brief)
         return persisted_brief
 
-    def _deep_depth_needs_user(
+    def _build_research_plan(
         self, run: ActionRun, inputs: _ResearchInputs, questions: list[ResearchQuestion]
-    ) -> SkillResult:
+    ) -> ResearchPlan | None:
+        if inputs.depth != "deep":
+            return None
+        fanout_envelopes = [
+            ResearchFanoutEnvelope(
+                envelope_id=f"{inputs.brief_id}-F{i + 1:02d}",
+                agent_role="researcher",
+                question=question.q,
+                prompt=(
+                    f"Investigate {question.q!r} for {run.scope_id}. "
+                    f"Return concise findings with repo-relative citations."
+                ),
+                expected_output="agent_end researcher report with cited findings",
+            )
+            for i, question in enumerate(questions)
+        ]
+        plan = ResearchPlan(
+            topic=inputs.topic,
+            fanout_envelopes=fanout_envelopes,
+        )
         self._trace(
             run,
-            "research.fanout_pending",
-            "research: deep depth requires explicit fanout decision",
-            {"depth": inputs.depth},
+            "research.fanout_plan",
+            f"research: emitted deep fanout plan with {len(fanout_envelopes)} envelope(s)",
+            {"depth": inputs.depth, "fanout_envelopes": len(fanout_envelopes)},
         )
-        body = ResearchBody(
-            brief_id=inputs.brief_id,
-            questions=questions,
-            options=[],
-            recommendation=None,
-            peer_review=None,
-            persisted_brief=None,
-            user_question=UserQuestion(
-                question=(
-                    f"Deep research on {run.scope_id} needs a fanout plan. Pick how to proceed."
-                ),
-                options=[
-                    UserQuestionOption(
-                        label="proceed_default",
-                        description="Use the built-in three-agent fanout.",
-                    ),
-                    UserQuestionOption(
-                        label="adjust_agents",
-                        description="Adjust agent assignments before fanout.",
-                    ),
-                    UserQuestionOption(label="cancel", description="Abort the research run."),
-                ],
-            ),
-        )
-        return self._needs_user(
-            run,
-            body.model_dump(mode="json"),
-            next_valid_actions=["eawf prep", "eawf hypothesis define"],
-        )
+        return plan
 
     def _maybe_blitz(
         self, run: ActionRun, inputs: _ResearchInputs, work: _ResearchWork
     ) -> SkillResult | None:
+        if work.research_plan is not None:
+            return None
         residual_unknowns = sum(1 for q in work.questions if "awaiting" in q.answer.lower())
         if not (inputs.blitz_enabled and should_auto_invoke(residual_unknowns=residual_unknowns)):
             return None
@@ -375,6 +378,7 @@ class ResearchSkill(SkillAction):
                 recommendation=work.recommendation,
                 peer_review=None,
                 persisted_brief=work.persisted_brief,
+                research_plan=work.research_plan,
             ).model_dump(mode="json"),
             persisted_store_records=run.records,
             state_mutations=run.mutations,
@@ -396,6 +400,7 @@ class ResearchSkill(SkillAction):
             recommendation=outcome.recommendation,
             peer_review=None,
             persisted_brief=outcome.persisted_brief,
+            research_plan=outcome.research_plan,
         )
         return self._ok(
             run,

@@ -12,6 +12,8 @@ Per ``docs/architecture/envelope.md``:
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.workflow.skills.bodies.user_question import UserQuestion
@@ -60,6 +62,30 @@ class ResearchPeerReview(BaseModel):
     no_flaws_checks: list[str] = Field(default_factory=list)
 
 
+class ResearchFanoutEnvelope(BaseModel):
+    """One read-only agent dispatch envelope in a deep research plan."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    envelope_id: str
+    agent_role: str
+    question: str
+    prompt: str
+    expected_output: str
+    read_only: bool = True
+
+
+class ResearchPlan(BaseModel):
+    """Typed deep-research fan-out plan."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    section_heading: Literal["## ResearchPlan"] = "## ResearchPlan"
+    depth: Literal["deep"] = "deep"
+    topic: str
+    fanout_envelopes: list[ResearchFanoutEnvelope] = Field(default_factory=list)
+
+
 class ResearchBody(BaseModel):
     """Body for ``/research``."""
 
@@ -71,13 +97,16 @@ class ResearchBody(BaseModel):
     recommendation: ResearchRecommendation | None = None
     peer_review: ResearchPeerReview | None = None
     persisted_brief: str | None = None
+    research_plan: ResearchPlan | None = None
     user_question: UserQuestion | None = None
 
 
 __all__ = [
     "ResearchBody",
+    "ResearchFanoutEnvelope",
     "ResearchOption",
     "ResearchPeerReview",
+    "ResearchPlan",
     "ResearchQuestion",
     "ResearchRecommendation",
 ]
