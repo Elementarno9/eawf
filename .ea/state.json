@@ -144,6 +144,18 @@
       "status": "done",
       "updated_at": "2026-05-27T18:02:18.604869Z"
     },
+    "P28-I02-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W28",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W28",
+      "scope_id": "P28-I02-W28",
+      "status": "done",
+      "updated_at": "2026-05-27T18:09:56.191727Z"
+    },
     "P28-I02-W30": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2118,7 +2130,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I02-W28",
       "P28-I02-W29"
     ],
     "iter_id": "P28-I02",
@@ -6342,7 +6353,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T18:02:18.605918Z",
+  "updated_at": "2026-05-27T18:09:56.192067Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21886,8 +21897,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T18:09:56.191727Z",
+      "commit": "2a9fb45e410f9acc618b25cc2af8d34a7b646898",
       "deps": [],
       "description": "Repair audit finding that BacklogItem.intent exists but backlog edit mutation path cannot update it.",
       "dispatch_history": [],
@@ -21901,10 +21912,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-27T17:38:07.401825Z",
-      "outcome": null,
+      "outcome": "backlog edit now sets, clears, and validates IntentBrief references through mutator and CLI",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "backlog edit mutation can set and clear IntentBrief reference",
         "existing title and description edits stay compatible",
