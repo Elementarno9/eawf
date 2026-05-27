@@ -48,6 +48,18 @@
       "status": "done",
       "updated_at": "2026-05-27T16:13:04.476986Z"
     },
+    "P28-I02-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W17",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W17",
+      "scope_id": "P28-I02-W17",
+      "status": "done",
+      "updated_at": "2026-05-27T16:56:36.572753Z"
+    },
     "P28-I02-W23": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2033,9 +2045,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I02-W17"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -6147,7 +6157,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T16:48:12.976055Z",
+  "updated_at": "2026-05-27T16:56:37.111500Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21289,7 +21299,7 @@
         "P28-I02-W19"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T16:56:36.572753Z",
       "commit": null,
       "deps": [
         "P28-I02-W14"
@@ -21307,10 +21317,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:12.542783Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "SubagentSpec.render emits ## Estimate after ## Out of scope",
         "section shows bucket+expected_eu+expected_minutes+token_budget+parallel_siblings",
@@ -25149,10 +25159,10 @@
       "branch": "feature/eawf-v0.4-p28-w17",
       "created_at": "2026-05-27T16:48:12.976055Z",
       "id": "WT-P28-I02-W17-1779900492",
-      "merged_commit": null,
+      "merged_commit": "b1c6ae6",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w17",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W17"
     },
     "WT-P28-I02-W18-1779843449": {
