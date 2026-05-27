@@ -9,6 +9,7 @@ verb + the modal-stack cap.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 
 import orjson
@@ -16,6 +17,14 @@ from rich.text import Text
 from textual.widgets import Static
 
 from eawf.kernel.state.models import State
+from eawf.observability.telemetry.metrics_projection import (
+    CacheHealthProjection,
+    MetricsProjection,
+    RuntimeTokensProjection,
+    SwitchoverFrequencyProjection,
+    VarianceBucketProjection,
+    VarianceWaveProjection,
+)
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.palette.verbs import split_verb_args
 from eawf.surfaces.tui.screens.overlays.metrics import (
@@ -25,7 +34,13 @@ from eawf.surfaces.tui.screens.overlays.metrics import (
     MetricsArgs,
     MetricsModal,
     parse_metrics_args,
+    render_projection_tile,
     render_wave_elapsed_tile,
+)
+from eawf.workflow.estimation.metrics import (
+    EstimateActualVarianceMetric,
+    WaveElapsedMetric,
+    WeeklyBurnMetric,
 )
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -117,6 +132,76 @@ def test_render_wave_elapsed_tile_uses_compute_wave_elapsed() -> None:
 
 def test_render_wave_elapsed_tile_none_keeps_placeholder() -> None:
     assert render_wave_elapsed_tile(None) == "[$text-muted]awaiting telemetry projection[/]"
+
+
+def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
+    projection = MetricsProjection(
+        scope="urn:eawf:v1:state:QR",
+        window="7d",
+        generated_at=datetime(2026, 5, 22, tzinfo=UTC),
+        variance=EstimateActualVarianceMetric(
+            sample_count=1,
+            planned_eu=1.0,
+            actual_eu=1.5,
+            variance_pct=50.0,
+        ),
+        variance_by_bucket=(
+            VarianceBucketProjection(
+                bucket="M",
+                sample_count=1,
+                planned_eu=1.0,
+                actual_eu=1.5,
+                delta_eu=0.5,
+                variance_pct=50.0,
+                inside_pessimistic_share=1.0,
+                waves=(
+                    VarianceWaveProjection(
+                        wave_id="P01-I01-W01",
+                        title="Wave 1",
+                        bucket="M",
+                        planned_eu=1.0,
+                        actual_eu=1.5,
+                        delta_eu=0.5,
+                        variance_pct=50.0,
+                        inside_pessimistic=True,
+                    ),
+                ),
+            ),
+        ),
+        weekly_burn=WeeklyBurnMetric(consumed_eu=1.5, target_eu=4.0, window_days=7),
+        wave_elapsed=WaveElapsedMetric(
+            sample_count=1,
+            mean_minutes=30.0,
+            median_minutes=30.0,
+            max_minutes=30.0,
+        ),
+        cache_health=(
+            CacheHealthProjection(
+                runtime="claude",
+                cache_read_tokens=80,
+                cache_create_tokens=20,
+                hit_ratio=0.8,
+            ),
+        ),
+        switchover_frequency=(SwitchoverFrequencyProjection(cause="RUNTIME_TIMEOUT", count=1),),
+        per_runtime_tokens=(
+            RuntimeTokensProjection(
+                runtime="claude",
+                input_tokens=100,
+                output_tokens=50,
+                cache_read_tokens=80,
+                cache_create_tokens=20,
+            ),
+        ),
+    )
+
+    bodies = {spec.tile_id: render_projection_tile(projection, spec.tile_id) for spec in TILE_SPECS}
+    assert "actual 1.5 EU" in bodies["tile-variance"]
+    assert "target 4.0 EU" in bodies["tile-burn"]
+    assert "median 30.0m" in bodies["tile-elapsed"]
+    assert "claude 80%" in bodies["tile-cache"]
+    assert "RUNTIME_TIMEOUT 1" in bodies["tile-switchover"]
+    assert "claude 250 tok" in bodies["tile-tokens"]
 
 
 # --------------------------------------------------------------------------

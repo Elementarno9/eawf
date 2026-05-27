@@ -11,16 +11,12 @@ the daemon's telemetry projection. The six tiles, in grid order, are:
    per cause over the rolling window.
 6. **Per-runtime tokens** (bottom-right) — token split per runtime.
 
-**Deferral seam.** The daemon telemetry-projection RPC
-(``client.telemetry_metrics(scope=..., window=...)``) lands with the
-telemetry projector + the daemon client; it does not exist on
-the read-only :class:`~eawf.surfaces.tui.state_binding.StateBinding` fallback
-this band ships. So this wave lands the **grid + tile chrome + the
-5-second refresh seam**: the modal composes the six titled tiles, renders
-each tile's "awaiting telemetry projection" placeholder, and arms the
-``set_interval(5.0, ...)`` refresh that becomes live once the telemetry
-client is wired. The tile-drill sub-overlays (per-wave variance table,
-per-cause switchover history) ride the wave that lands the telemetry data.
+The modal computes the projection from the current read-only state snapshot
+and, when present, the local telemetry DB. State-backed tiles still render
+when the telemetry DB is absent; telemetry-backed tiles show a no-data
+sentinel until the projector has written rows. The refresh cadence stays
+``set_interval(5.0, ...)`` so the same surface can switch to daemon-push
+later without changing the visible contract.
 
 The tile inventory + grid order are a pure module-level table
 (:data:`TILE_SPECS`) so the composition is unit-testable without mounting
@@ -33,7 +29,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -42,6 +39,14 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.kernel.state.models import State
+from eawf.observability.telemetry.metrics_projection import (
+    MetricsProjection,
+    MetricsWindow,
+    compute_metrics_projection,
+)
+from eawf.observability.telemetry.store import metrics_db_path, open_store
+from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.surfaces.tui.widgets.variance_tile import render_variance_markup
 from eawf.workflow.estimation.metrics import compute_wave_elapsed
 
 if TYPE_CHECKING:
@@ -50,17 +55,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: The rolling-window tokens the ``/metrics --window`` flag accepts.
-METRIC_WINDOWS: tuple[str, ...] = ("7d", "30d", "90d")
+METRIC_WINDOWS: tuple[MetricsWindow, ...] = ("7d", "30d", "90d")
 
 #: Default rolling window when ``--window`` is omitted (7-day weekly cadence).
-DEFAULT_WINDOW: str = "7d"
+DEFAULT_WINDOW: MetricsWindow = "7d"
 
 #: Telemetry-projection refresh cadence in seconds (5 s tick).
 METRICS_REFRESH_S: float = 5.0
 
-#: Placeholder body each tile shows until the telemetry-projection RPC is
-#: wired (the data seam lands with the telemetry projector + daemon client).
+#: Placeholder body when no state snapshot is available yet.
 _AWAITING: str = "[$text-muted]awaiting telemetry projection[/]"
+
+#: Empty-state body when the projection exists but a telemetry family has no rows.
+_NO_DATA: str = "[$text-muted]no data[/]"
 
 
 @dataclass(frozen=True)
@@ -100,13 +107,32 @@ class MetricsArgs:
             ``None`` for the current scope.
     """
 
-    window: str
+    window: MetricsWindow
     scope_filter: str | None
 
 
 def _format_minutes(value: float) -> str:
     """Return a compact minute value for metric tiles."""
     return f"{value:.1f}m"
+
+
+def _format_eu(value: float) -> str:
+    """Return a compact EU value for metric tiles."""
+    return f"{value:.1f} EU"
+
+
+def _format_ratio(value: float) -> str:
+    """Return a compact percentage for ratios."""
+    return f"{value * 100.0:.0f}%"
+
+
+def _format_tokens(value: int) -> str:
+    """Return a compact token count."""
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}k"
+    return str(value)
 
 
 def render_wave_elapsed_tile(state: State | None) -> str:
@@ -124,6 +150,103 @@ def render_wave_elapsed_tile(state: State | None) -> str:
     )
 
 
+def render_projection_tile(projection: MetricsProjection | None, tile_id: str) -> str:
+    """Render one dashboard tile from a computed projection."""
+    if projection is None:
+        return _AWAITING
+    if tile_id == "tile-variance":
+        return _render_variance_projection(projection)
+    if tile_id == "tile-burn":
+        return _render_weekly_burn_projection(projection)
+    if tile_id == "tile-elapsed":
+        return _render_elapsed_projection(projection)
+    if tile_id == "tile-cache":
+        return _render_cache_projection(projection)
+    if tile_id == "tile-switchover":
+        return _render_switchover_projection(projection)
+    if tile_id == "tile-tokens":
+        return _render_tokens_projection(projection)
+    return _NO_DATA
+
+
+def _render_variance_projection(projection: MetricsProjection) -> str:
+    """Render the estimate-actual variance tile."""
+    metric = projection.variance
+    if metric.sample_count == 0:
+        return _NO_DATA
+    lines = [
+        f"delta {render_variance_markup(metric.variance_pct)}",
+        f"actual {_format_eu(metric.actual_eu)}",
+        f"planned {_format_eu(metric.planned_eu)}",
+    ]
+    for row in projection.variance_by_bucket[:2]:
+        lines.append(
+            f"{row.bucket.value} {render_variance_markup(row.variance_pct)} n={row.sample_count}"
+        )
+    return "\n".join(lines)
+
+
+def _render_weekly_burn_projection(projection: MetricsProjection) -> str:
+    """Render the weekly-burn tile."""
+    metric = projection.weekly_burn
+    lines = [
+        f"consumed {_format_eu(metric.consumed_eu)}",
+        f"window {metric.window_days}d",
+    ]
+    if metric.target_eu is None:
+        lines.append("target unset")
+    else:
+        ratio = metric.consumed_eu / metric.target_eu if metric.target_eu > 0 else 0.0
+        lines.append(f"target {_format_eu(metric.target_eu)}")
+        lines.append(f"used {_format_ratio(ratio)}")
+    return "\n".join(lines)
+
+
+def _render_elapsed_projection(projection: MetricsProjection) -> str:
+    """Render the wave-elapsed tile."""
+    metric = projection.wave_elapsed
+    return "\n".join(
+        [
+            f"median {_format_minutes(metric.median_minutes)}",
+            f"mean {_format_minutes(metric.mean_minutes)}",
+            f"max {_format_minutes(metric.max_minutes)}",
+            f"samples {metric.sample_count}",
+        ]
+    )
+
+
+def _render_cache_projection(projection: MetricsProjection) -> str:
+    """Render the cache-health tile."""
+    if not projection.cache_health:
+        return _NO_DATA
+    lines: list[str] = []
+    for row in projection.cache_health[:3]:
+        lines.append(
+            f"{row.runtime} {_format_ratio(row.hit_ratio)} "
+            f"r:{_format_tokens(row.cache_read_tokens)} "
+            f"c:{_format_tokens(row.cache_create_tokens)}"
+        )
+    return "\n".join(lines)
+
+
+def _render_switchover_projection(projection: MetricsProjection) -> str:
+    """Render the switchover-frequency tile."""
+    if not projection.switchover_frequency:
+        return _NO_DATA
+    lines = [f"{row.cause.value} {row.count}" for row in projection.switchover_frequency[:4]]
+    return "\n".join(lines)
+
+
+def _render_tokens_projection(projection: MetricsProjection) -> str:
+    """Render the per-runtime-token tile."""
+    if not projection.per_runtime_tokens:
+        return _NO_DATA
+    lines: list[str] = []
+    for row in projection.per_runtime_tokens[:3]:
+        lines.append(f"{row.runtime} {_format_tokens(row.total_tokens)} tok")
+    return "\n".join(lines)
+
+
 def parse_metrics_args(args: str) -> MetricsArgs:
     """Parse the raw ``/metrics`` arg string into a typed :class:`MetricsArgs`.
 
@@ -139,7 +262,7 @@ def parse_metrics_args(args: str) -> MetricsArgs:
         The parsed window + optional scope filter.
     """
     tokens = args.split()
-    window = DEFAULT_WINDOW
+    window: MetricsWindow = DEFAULT_WINDOW
     scope_filter: str | None = None
     index = 0
     while index < len(tokens):
@@ -147,7 +270,7 @@ def parse_metrics_args(args: str) -> MetricsArgs:
         if token == "--window" and index + 1 < len(tokens):
             candidate = tokens[index + 1]
             if candidate in METRIC_WINDOWS:
-                window = candidate
+                window = cast(MetricsWindow, candidate)
             index += 2
             continue
         if token == "--scope" and index + 1 < len(tokens):
@@ -226,6 +349,7 @@ class MetricsModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Yield the titled card, the 3x2 tile grid, and the close hint."""
         scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
+        projection = self._current_projection()
         with Grid(id="metrics-card"):
             yield Static(
                 f"Metrics · window {self._args.window}{scope_suffix}",
@@ -233,26 +357,30 @@ class MetricsModal(ModalScreen[None]):
             )
             with Grid(id="metrics-grid"):
                 for spec in TILE_SPECS:
-                    tile = Static(self._tile_body(spec), id=spec.tile_id, classes="metric-tile")
+                    tile = Static(
+                        self._tile_body(spec, projection),
+                        id=spec.tile_id,
+                        classes="metric-tile",
+                    )
                     tile.border_title = spec.title
                     yield tile
             yield Static(
-                "[ tiles fill once the telemetry projection is wired · Esc to close ]",
+                "[ tiles refresh every 5s · Esc to close ]",
                 classes="metrics-hint",
             )
 
-    def _tile_body(self, spec: TileSpec) -> str:
-        """Render *spec*'s tile body (the placeholder until data is wired).
+    def _tile_body(self, spec: TileSpec, projection: MetricsProjection | None) -> str:
+        """Render *spec*'s tile body from *projection*.
 
         Args:
             spec: The tile spec to render the body for.
+            projection: The current six-tile metrics projection, or ``None``
+                before a state snapshot is available.
 
         Returns:
             The tile's content-markup body string.
         """
-        if spec.tile_id == "tile-elapsed":
-            return render_wave_elapsed_tile(self._current_state())
-        return _AWAITING
+        return render_projection_tile(projection, spec.tile_id)
 
     def on_mount(self) -> None:
         """Arm the refresh seam (live once the telemetry RPC is wired).
@@ -264,19 +392,11 @@ class MetricsModal(ModalScreen[None]):
         self.set_interval(METRICS_REFRESH_S, self._refresh_all)
 
     def _refresh_all(self) -> None:
-        """Refresh every tile from the telemetry projection (seamed).
-
-        The daemon telemetry-projection client is not reachable on the
-        read-only state-binding fallback this band ships; until the
-        telemetry projector + daemon client land, this is a no-op so the
-        tiles keep their placeholder rather than clearing to blank. The
-        per-tile ``update_from(metrics)`` fan-out slots in here when the
-        client arrives.
-        """
-        self._refresh_elapsed_tile()
-        client = self._telemetry_client()
-        if client is None:
-            return
+        """Refresh every tile from the current projection."""
+        projection = self._current_projection()
+        for spec in TILE_SPECS:
+            tile = self.query_one(f"#{spec.tile_id}", Static)
+            tile.update(self._tile_body(spec, projection))
         logger.info(
             f"metrics_refresh window={self._args.window!r} scope={self._args.scope_filter!r}"
         )
@@ -289,24 +409,49 @@ class MetricsModal(ModalScreen[None]):
             return None
         return state if isinstance(state, State) else None
 
-    def _refresh_elapsed_tile(self) -> None:
-        """Refresh the elapsed tile from the local state-binding snapshot."""
-        tile = self.query_one("#tile-elapsed", Static)
-        tile.update(render_wave_elapsed_tile(self._current_state()))
+    def _current_projection(self) -> MetricsProjection | None:
+        """Return the current six-tile projection, or ``None`` before state loads."""
+        state = self._current_state()
+        if state is None:
+            return None
+        store = self._metrics_store()
+        try:
+            return compute_metrics_projection(
+                state,
+                store=store,
+                scope=self._args.scope_filter,
+                window=self._args.window,
+            )
+        except Exception as exc:
+            if store is None:
+                raise
+            logger.debug(f"_current_projection telemetry_fallback cause={exc!r}")
+            return compute_metrics_projection(
+                state,
+                store=None,
+                scope=self._args.scope_filter,
+                window=self._args.window,
+            )
+        finally:
+            if store is not None:
+                store.close()
 
-    def _telemetry_client(self) -> object | None:
-        """Return the daemon telemetry client, or ``None`` when unwired.
-
-        Read-only probe of the App's state binder for a telemetry client.
-        The fallback binder this band ships exposes none, so this returns
-        ``None`` and the refresh stays a no-op until the daemon client
-        lands.
-
-        Returns:
-            The telemetry client when present, else ``None``.
-        """
-        binding = getattr(self.app, "_binding", None)
-        return getattr(binding, "_client", None)
+    def _metrics_store(self) -> AbstractMetricsStore | None:
+        """Open the local telemetry store read-only when it already exists."""
+        try:
+            state_path = getattr(self.app, "_state_path", None)
+        except RuntimeError:
+            return None
+        if not isinstance(state_path, Path):
+            return None
+        db_path = metrics_db_path(state_path)
+        if not db_path.is_file():
+            return None
+        try:
+            return open_store("sqlite", db_path)
+        except Exception as exc:
+            logger.debug(f"_metrics_store unavailable path={str(db_path)!r} cause={exc!r}")
+            return None
 
     def action_close(self) -> None:
         """Dismiss the dashboard (``Esc``)."""
@@ -347,5 +492,6 @@ __all__ = [
     "TileSpec",
     "open_metrics",
     "parse_metrics_args",
+    "render_projection_tile",
     "render_wave_elapsed_tile",
 ]
