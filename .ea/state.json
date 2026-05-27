@@ -5966,7 +5966,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T15:34:19.295448Z",
+  "updated_at": "2026-05-27T15:35:39.087214Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20682,7 +20682,9 @@
       "file_scopes": [
         "src/eawf/kernel/readiness.py",
         "src/eawf/platform/profiles/models.py",
-        "src/eawf/workflow/lifecycle/wave.py"
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/verify/readiness.py",
+        "tests/platform/profiles/test_verify_block.py"
       ],
       "id": "P28-I02-W06",
       "intent": null,
