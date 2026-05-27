@@ -327,6 +327,7 @@ def _wave_close_via_daemon(
     wave_id: str,
     outcome: str,
     resolved_sha: str | None,
+    tokens_consumed: int | None,
 ) -> bool:
     """Proxy a wave close through the daemon's ``state.mutate`` RPC.
 
@@ -351,12 +352,16 @@ def _wave_close_via_daemon(
         )
         return True  # error already emitted; treat as handled
 
+    params: dict[str, Any] = {"wave_id": wave_id, "outcome": outcome, "commit": resolved_sha}
+    if tokens_consumed is not None:
+        params["tokens_consumed"] = tokens_consumed
+
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
         scope_id=wave_id,
         mutation_id=uuid.uuid4().hex,
         idempotency_key=None,
-        params={"wave_id": wave_id, "outcome": outcome, "commit": resolved_sha},
+        params=params,
     )
     repo_root = str((flags.workspace or Path.cwd()).resolve())
     try:
@@ -385,6 +390,7 @@ def _wave_close_via_daemon(
         "wave": wave_id,
         "outcome": outcome,
         "commit": resolved_sha,
+        "tokens_consumed": tokens_consumed,
         "proxied": True,
         "event": result.get("event"),
         "before_version": result.get("before_version"),

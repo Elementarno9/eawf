@@ -245,6 +245,33 @@ def test_wave_close_without_commit_leaves_field_null(
     assert state["waves"]["P05-I01-W01"]["commit"] is None  # type: ignore[index]
 
 
+def test_wave_close_tokens_consumed_persists_final_tally(
+    seeded_repo: tuple[Path, Path, list[str], dict[str, str]],
+) -> None:
+    """``wave close --tokens-consumed`` persists the final wave + actual tally."""
+    _, state_path, _, _ = seeded_repo
+    res = runner.invoke(
+        app,
+        [
+            "--json",
+            "wave",
+            "close",
+            "P05-I01-W01",
+            "--outcome",
+            "ok",
+            "--tokens-consumed",
+            "1234",
+        ],
+        env={**os.environ, "EA_STATE": str(state_path)},
+    )
+    assert res.exit_code == 0, res.stdout
+    payload = orjson.loads(res.stdout)
+    assert payload["tokens_consumed"] == 1234
+    state = _read_state(state_path)
+    assert state["waves"]["P05-I01-W01"]["tokens_consumed"] == 1234  # type: ignore[index]
+    assert state["actuals"]["P05-I01-W01"]["actual_tokens"] == 1234  # type: ignore[index]
+
+
 # ---- error paths ------------------------------------------------------------
 
 

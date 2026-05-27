@@ -25,6 +25,7 @@ import pytest
 
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands import lifecycle as lifecycle_cli
+from eawf.surfaces.cli.flags import GlobalFlags
 
 
 def _patch_run(monkeypatch: pytest.MonkeyPatch, factory: Any) -> None:
@@ -158,3 +159,42 @@ def test_resolve_commit_sha_rejects_non_hex_stdout(monkeypatch: pytest.MonkeyPat
     with pytest.raises(cli_errors.UserError) as exc:
         lifecycle_cli._resolve_commit_sha("weird")
     assert "non-canonical sha" in str(exc.value)
+
+
+def test_wave_close_daemon_proxy_forwards_tokens_consumed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bespoke wave-close daemon proxy includes the final token tally."""
+    captured: dict[str, Any] = {}
+
+    class FakeClient:
+        def __enter__(self) -> FakeClient:
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def state_mutate(self, mutation: Any, *, repo_root: str | None = None) -> dict[str, Any]:
+            captured["params"] = dict(mutation.params)
+            captured["repo_root"] = repo_root
+            return {
+                "event": {"id": "EV-1"},
+                "before_version": "before",
+                "after_version": "after",
+            }
+
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda: True)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", FakeClient)
+
+    handled = lifecycle_cli._wave_close_via_daemon(
+        flags=GlobalFlags(json_output=True),
+        wave_id="P05-I01-W01",
+        outcome="ok",
+        resolved_sha=None,
+        tokens_consumed=1234,
+    )
+
+    assert handled is True
+    assert captured["params"]["tokens_consumed"] == 1234
+    assert captured["params"]["wave_id"] == "P05-I01-W01"
+    assert captured["params"]["outcome"] == "ok"

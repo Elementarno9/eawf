@@ -385,7 +385,11 @@ class SubagentSpec(_SpecModel):
             "4. Commit with prefix `"
             + commit_prefix
             + " <type>: <summary>` (3-6 bullet body) and the\n"
-            "   recognized Claude or Codex `Co-Authored-By` trailer."
+            "   recognized Claude or Codex `Co-Authored-By` trailer.\n"
+            "5. Close the wave through the CLI with the final token tally:\n"
+            "   - `uv run eawf wave close "
+            + self.wave_id
+            + ' --outcome "<summary>" --tokens-consumed <tokens>`'
         )
 
     def _render_out_of_scope(self) -> str:

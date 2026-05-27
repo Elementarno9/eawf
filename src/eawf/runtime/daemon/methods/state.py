@@ -433,10 +433,12 @@ def _apply_wave_close(state: State, mutation: Mutation) -> None:
     has to invoke git.
     """
     params = mutation.params
+    tokens_raw = params.get("tokens_consumed")
     wave = close_wave(
         state,
         wave_id=str(params["wave_id"]),
         outcome=str(params["outcome"]),
+        tokens_consumed=int(tokens_raw) if tokens_raw is not None else None,
     )
     commit = params.get("commit")
     if commit is not None:
@@ -795,10 +797,11 @@ def _resolve_apply(kind: MutationKind) -> ApplyFunc:
 #: (P28-I02-W03). Kinds not in this table land with ``event_kind=None``
 #: during the v0.3-v0.5 migration window — the field is optional on
 #: :class:`EventPayload` until every emitter is migrated, at which point
-#: v0.5+ governance flips it to non-optional. Today only ``WAVE_CLOSE``
-#: is wired; subsequent verify-spine waves extend the table as the
-#: claim / fail / phase / iter lifecycle catches up.
+#: v0.5+ governance flips it to non-optional. Wave claim/close are wired
+#: first because runtime subscribers use them to track active work and
+#: close-time actuals.
 _MUTATION_EVENT_KIND: Final[dict[MutationKind, EventKind]] = {
+    MutationKind.WAVE_CLAIM: "wave_claimed",
     MutationKind.WAVE_CLOSE: "wave_closed",
 }
 

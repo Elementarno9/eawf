@@ -178,6 +178,46 @@ def test_close_wave_upserts_actual_with_token_tally() -> None:
     assert actual.elapsed_eu == pytest.approx(0.0)
 
 
+def test_close_wave_tokens_consumed_param_sets_final_tally() -> None:
+    """The close call may set the final token tally before actual upsert."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    state.waves["P01-I01-W01"].tokens_consumed = 100
+
+    wave = close_wave(
+        state,
+        wave_id="P01-I01-W01",
+        outcome="ok",
+        tokens_consumed=4242,
+    )
+
+    assert wave.tokens_consumed == 4242
+    assert state.actuals is not None
+    assert state.actuals["P01-I01-W01"].actual_tokens == 4242
+
+
+def test_close_wave_negative_tokens_consumed_rejects_without_mutation() -> None:
+    """A negative final token tally is rejected before closing the wave."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    state.waves["P01-I01-W01"].tokens_consumed = 100
+
+    with pytest.raises(LifecycleError, match="tokens_consumed must be non-negative"):
+        close_wave(
+            state,
+            wave_id="P01-I01-W01",
+            outcome="ok",
+            tokens_consumed=-1,
+        )
+
+    wave = state.waves["P01-I01-W01"]
+    assert wave.status == WaveStatus.CLAIMED
+    assert wave.tokens_consumed == 100
+    assert state.actuals is None
+
+
 def test_close_wave_upserts_actual_zero_tokens_when_unaccrued() -> None:
     """A wave that never accrued tokens still upserts (zero token tally)."""
     state = _empty_state()

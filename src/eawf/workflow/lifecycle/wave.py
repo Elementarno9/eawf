@@ -499,6 +499,7 @@ def close_wave(
     *,
     wave_id: str,
     outcome: str,
+    tokens_consumed: int | None = None,
 ) -> Wave:
     """Close a claimed/in-progress wave with an outcome string.
 
@@ -522,6 +523,18 @@ def close_wave(
     table that turns tokens into dollars is not yet wired (the field
     exists so the post-mutation event envelope can publish a typed cost
     value once the rate table lands).
+
+    Args:
+        state: State to mutate in place.
+        wave_id: Id of the claimed/in-progress wave to close.
+        outcome: Human-readable outcome summary.
+        tokens_consumed: Optional final token tally to persist on the
+            wave before the close-time :class:`ActualSummary` upsert.
+            ``None`` preserves the wave's existing accumulated tally.
+
+    Raises:
+        LifecycleError: when *wave_id* is unknown, the wave is not
+            claimable for close, or *tokens_consumed* is negative.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -531,6 +544,10 @@ def close_wave(
             f"wave {wave_id!r} is not claimed/in_progress "
             f"(status={wave.status.value!r}); cannot close"
         )
+    if tokens_consumed is not None:
+        if tokens_consumed < 0:
+            raise LifecycleError(f"tokens_consumed must be non-negative; got {tokens_consumed}")
+        wave.tokens_consumed = tokens_consumed
     wave.status = WaveStatus.CLOSED
     wave.outcome = outcome
     now = datetime.now(UTC)

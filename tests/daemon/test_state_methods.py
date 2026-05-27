@@ -32,7 +32,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import orjson
 import pytest
@@ -40,6 +40,7 @@ import pytest
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.mutations import Mutation, MutationKind
+from eawf.kernel.store.kinds.event import EventKind
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION, recovery, wal
 from eawf.runtime.daemon.bus import EventBus
@@ -394,16 +395,16 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
     envelope ``extras`` so subscribers see the cost view without re-reading
     state.json.
     """
-    # Pre-seed the wave with a token tally so the upsert lands a non-zero
-    # rollup on the event extras.
+    # Pre-seed one tally, then override it through mutation params so
+    # the close path proves the final tally is accepted at close time.
     payload = _build_state_payload()
-    payload["waves"]["P24-I01-W09"]["tokens_consumed"] = 7777  # type: ignore[index]
+    payload["waves"]["P24-I01-W09"]["tokens_consumed"] = 111  # type: ignore[index]
     ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
         scope_id="P24-I01-W09",
         mutation_id=uuid.uuid4().hex,
-        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+        params={"wave_id": "P24-I01-W09", "outcome": "ok", "tokens_consumed": 7777},
     )
 
     async def body() -> None:
@@ -422,10 +423,53 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
     _run(body)
 
 
-def test_mutate_non_wave_close_omits_event_kind(tmp_path: Path) -> None:
-    """Mutation kinds not yet in _MUTATION_EVENT_KIND emit ``event_kind=None``.
+def test_mutate_wave_claim_publishes_wave_claimed_event_kind(tmp_path: Path) -> None:
+    """WAVE_CLAIM envelope carries ``event_kind='wave_claimed'``."""
+    payload = _build_state_payload(wave_status="pending")
+    payload["waves"]["P24-I01-W09"]["effort_bucket"] = "M"  # type: ignore[index]
+    payload["waves"]["P24-I01-W09"]["file_scopes"] = ["src/"]  # type: ignore[index]
+    ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    bus = ctx.bus
+    assert isinstance(bus, EventBus)
+    sub = bus.register(connection_id="claim-sub")
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLAIM,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "wave_id": "P24-I01-W09",
+            "session_id": "SES-2",
+            "out_of_order": False,
+        },
+    )
 
-    P28-I02-W03 wires only WAVE_CLOSE; other kinds land with the
+    async def body() -> None:
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        envelope_payload = result["event"]["payload"]
+        assert envelope_payload["event_kind"] == "wave_claimed"
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+        on_disk = orjson.loads(rows[0])
+        assert on_disk["payload"]["event_kind"] == "wave_claimed"
+        assert len(sub.queue) == 1
+        assert sub.queue[0].payload["event_kind"] == "wave_claimed"
+
+    _run(body)
+
+
+def test_daemon_wave_event_kind_table_has_no_w19_orphans() -> None:
+    """W19 mapped wave lifecycle kinds are canonical EventKind literals."""
+    from eawf.runtime.daemon.methods.state import _MUTATION_EVENT_KIND
+
+    mapped = set(_MUTATION_EVENT_KIND.values())
+    assert {"wave_claimed", "wave_closed"} <= mapped
+    assert mapped <= set(get_args(EventKind))
+
+
+def test_mutate_unmapped_event_append_omits_event_kind(tmp_path: Path) -> None:
+    """Mutation kinds not in _MUTATION_EVENT_KIND emit ``event_kind=None``.
+
+    P28-I02-W19 wires WAVE_CLAIM + WAVE_CLOSE; other kinds land with the
     discriminator left ``None`` during the v0.3-v0.5 migration window so
     on-disk rows pre-dating the typed event-kind era stay valid.
     """

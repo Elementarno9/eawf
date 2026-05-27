@@ -125,6 +125,14 @@ def test_render_estimate_lands_after_out_of_scope() -> None:
     assert out.index("## Out of scope") < out.index("## Estimate")
 
 
+def test_render_workflow_includes_wave_close_instruction() -> None:
+    """The workflow tells subagents how to close with a final token tally."""
+    out = _minimal_spec().render()
+    workflow = out.split("## Workflow", 1)[1].split("## Out of scope", 1)[0]
+    assert "uv run eawf wave close P01-I01-W01" in workflow
+    assert "--tokens-consumed <tokens>" in workflow
+
+
 def test_render_empty_file_scopes_shows_none_placeholder() -> None:
     """An empty ``file_scopes`` renders ``(none)`` in the scope section."""
     out = _minimal_spec(file_scopes=[]).render()

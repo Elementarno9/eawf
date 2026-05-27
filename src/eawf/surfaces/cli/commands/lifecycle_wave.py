@@ -458,6 +458,13 @@ def wave_close_cmd(
             ),
         ),
     ] = None,
+    tokens_consumed: Annotated[
+        int | None,
+        typer.Option(
+            "--tokens-consumed",
+            help="Final non-negative token tally to persist before closing.",
+        ),
+    ] = None,
     waive: Annotated[
         list[str] | None,
         typer.Option(
@@ -551,6 +558,15 @@ def wave_close_cmd(
             flags=flags,
         )
         return
+    if tokens_consumed is not None and tokens_consumed < 0:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"--tokens-consumed must be non-negative; got {tokens_consumed}",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
 
     # W11: parse + validate the per-gate waiver flags BEFORE the close
     # mutation lands. The persistence path runs after the input shape
@@ -604,6 +620,7 @@ def wave_close_cmd(
             wave_id=wave_id,
             outcome=outcome,
             resolved_sha=resolved_sha,
+            tokens_consumed=tokens_consumed,
         )
         if proxied:
             return
@@ -613,7 +630,12 @@ def wave_close_cmd(
     readiness_holder: list[CloseReadiness] = []
 
     def _close_and_pin(state: State) -> None:
-        wave = close_wave(state, wave_id=wave_id, outcome=outcome)
+        wave = close_wave(
+            state,
+            wave_id=wave_id,
+            outcome=outcome,
+            tokens_consumed=tokens_consumed,
+        )
         if resolved_sha is not None:
             wave.commit = resolved_sha
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
@@ -651,13 +673,19 @@ def wave_close_cmd(
     _run_mutation(
         ctx,
         command="wave close",
-        args={"id": wave_id, "outcome": outcome, "commit": resolved_sha},
+        args={
+            "id": wave_id,
+            "outcome": outcome,
+            "commit": resolved_sha,
+            "tokens_consumed": tokens_consumed,
+        },
         scope_id=wave_id,
         text=f"wave close {wave_id} outcome={outcome!r}",
         envelope=lambda: {
             "wave": wave_id,
             "outcome": outcome,
             "commit": resolved_sha,
+            "tokens_consumed": tokens_consumed,
             "readiness_warnings_count": (
                 len(readiness_holder[0].warnings) if readiness_holder else 0
             ),
