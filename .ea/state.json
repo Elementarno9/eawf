@@ -119,6 +119,18 @@
       "scope_id": "P28-I02-W25",
       "status": "done",
       "updated_at": "2026-05-27T17:35:12.040427Z"
+    },
+    "P28-I02-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W26",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W26",
+      "scope_id": "P28-I02-W26",
+      "status": "done",
+      "updated_at": "2026-05-27T17:55:44.033036Z"
     }
   },
   "agent_sessions": {
@@ -2082,7 +2094,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I02-W26",
       "P28-I02-W27",
       "P28-I02-W28",
       "P28-I02-W29"
@@ -6294,7 +6305,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T17:38:17.197286Z",
+  "updated_at": "2026-05-27T17:55:44.034189Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21771,8 +21782,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T17:55:44.033036Z",
+      "commit": "318d70a438a0440ec0673d4ebc015e9844dc3247",
       "deps": [],
       "description": "Repair audit finding that profile.verify.enforce can fail open during wave close because close paths do not load real profile verify config or gate before mutation.",
       "dispatch_history": [],
@@ -21787,10 +21798,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-27T17:38:06.300271Z",
-      "outcome": null,
+      "outcome": "loaded profile verify blocks and enforced close readiness before state mutation",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "real profile verify enforce loads before close",
         "CLI and daemon close reject unmet required gate before state persists",
