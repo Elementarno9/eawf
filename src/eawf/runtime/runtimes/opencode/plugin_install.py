@@ -41,6 +41,16 @@ from typing import Any, Literal
 
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.surfaces.render.manifest import (
+    Manifest,
+    ManifestEntry,
+)
+from eawf.surfaces.render.manifest import (
+    load as load_manifest,
+)
+from eawf.surfaces.render.manifest import (
+    save_atomic as save_manifest_atomic,
+)
 from eawf.surfaces.render.skills import SKILL_REGISTRY, SkillSpec
 
 logger = logging.getLogger(__name__)
@@ -348,6 +358,126 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def _persist_manifest(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    timestamp: str,
+    home: Path | None,
+    opencode_config_dir: str | None,
+    plugin_js_bytes: bytes,
+) -> None:
+    """Append opencode plugin entries to ``.ea/indexes/generated.json``.
+
+    The shared manifest (one file under
+    ``<target_dir>/.ea/indexes/generated.json``) is the cross-runtime
+    drift-reconciliation store consumed by ``eawf doctor`` and ``eawf
+    plugin doctor``. Every emitted opencode file (plugin.js, sidecar,
+    opencode.json patch, agent .md, command .md) lands here with
+    ``scope`` populated so the plugin-cross-scope-dup detector can
+    flag the same region_id installed at both scopes.
+    """
+    manifest_path = target_dir / ".ea" / "indexes" / "generated.json"
+    existing = load_manifest(manifest_path)
+    new_generated: dict[str, ManifestEntry] = {}
+
+    opencode_region_prefix = "plugin.opencode."
+    for key, entry in existing.generated.items():
+        if not entry.region_id.startswith(opencode_region_prefix):
+            new_generated[key] = entry
+            continue
+        if entry.scope != scope:
+            new_generated[key] = entry
+
+    plugin_js_path = _plugin_js_target(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+    sidecar_path = _sidecar_target(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+    config_path = _config_target(
+        target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
+    )
+
+    new_generated[f"{plugin_js_path.as_posix()}::plugin.opencode.plugin_js"] = ManifestEntry(
+        target=plugin_js_path.as_posix(),
+        region_id="plugin.opencode.plugin_js",
+        version=_PLUGIN_VERSION,
+        hash=hashlib.blake2b(plugin_js_bytes, digest_size=8).hexdigest(),
+        generator=_GENERATOR,
+        generated_at=timestamp,
+        scope=scope,
+    )
+    sidecar_body = _render_sidecar(timestamp, plugin_js_bytes)
+    new_generated[f"{sidecar_path.as_posix()}::plugin.opencode.sidecar"] = ManifestEntry(
+        target=sidecar_path.as_posix(),
+        region_id="plugin.opencode.sidecar",
+        version=_PLUGIN_VERSION,
+        hash=_sidecar_fingerprint(sidecar_body),
+        generator=_GENERATOR,
+        generated_at=timestamp,
+        scope=scope,
+    )
+    config_body = _patch_config_json(config_path)
+    new_generated[f"{config_path.as_posix()}::plugin.opencode.config"] = ManifestEntry(
+        target=config_path.as_posix(),
+        region_id="plugin.opencode.config",
+        version=_PLUGIN_VERSION,
+        hash=hashlib.blake2b(config_body, digest_size=8).hexdigest(),
+        generator=_GENERATOR,
+        generated_at=timestamp,
+        scope=scope,
+    )
+
+    for agent_spec in AGENT_REGISTRY:
+        agent_path = _agent_target(
+            target_dir,
+            agent_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+        agent_body = _render_opencode_agent_md(agent_spec).encode("utf-8")
+        region_id = f"plugin.opencode.agent.{agent_spec.role}"
+        new_generated[f"{agent_path.as_posix()}::{region_id}"] = ManifestEntry(
+            target=agent_path.as_posix(),
+            region_id=region_id,
+            version=agent_spec.version,
+            hash=hashlib.blake2b(agent_body, digest_size=8).hexdigest(),
+            generator=_GENERATOR,
+            generated_at=timestamp,
+            scope=scope,
+        )
+    for skill_spec in SKILL_REGISTRY:
+        if not skill_spec.user_invocable:
+            continue
+        command_path = _command_target(
+            target_dir,
+            skill_spec,
+            scope=scope,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+        )
+        command_body = _render_opencode_command_md(skill_spec).encode("utf-8")
+        region_id = f"plugin.opencode.command.{skill_spec.skill_name}"
+        new_generated[f"{command_path.as_posix()}::{region_id}"] = ManifestEntry(
+            target=command_path.as_posix(),
+            region_id=region_id,
+            version=skill_spec.version,
+            hash=hashlib.blake2b(command_body, digest_size=8).hexdigest(),
+            generator=_GENERATOR,
+            generated_at=timestamp,
+            scope=scope,
+        )
+
+    _ensure_dir(manifest_path.parent)
+    save_manifest_atomic(manifest_path, Manifest(version=existing.version, generated=new_generated))
+    logger.info(
+        f"_persist_manifest runtime=opencode scope={scope} "
+        f"manifest_path={manifest_path} entries={len(new_generated)}"
+    )
+
+
 def install_plugin(
     target_dir: Path,
     *,
@@ -462,6 +592,16 @@ def install_plugin(
             _ensure_dir(command_path.parent)
             atomic_write_text(command_path, command_payload.decode("utf-8"))
         command_deltas.append(FileDelta(path=command_path, action=command_action))
+
+    if not dry_run:
+        _persist_manifest(
+            target_dir,
+            scope=scope,
+            timestamp=ts,
+            home=home,
+            opencode_config_dir=opencode_config_dir,
+            plugin_js_bytes=plugin_js_payload,
+        )
 
     logger.info(
         f"install_plugin runtime=opencode scope={scope} plugin_js={plugin_js_action} "

@@ -17,11 +17,54 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT_SECONDS: float = 5.0
+
+
+DriftKind = Literal["pinned_but_missing", "pinned_mismatch", "closed_no_pin", "closed_unfindable"]
+
+
+@dataclass(frozen=True)
+class Drift:
+    """One git/state mismatch row surfaced by :func:`detect_git_state_drift`.
+
+    Attributes:
+        wave_id: The wave whose state-recorded commit pointer disagrees
+            with what ``git log --grep`` produces.
+        kind: Which mismatch shape we hit:
+
+            - ``pinned_but_missing`` — state has ``Wave.commit`` set, but
+              ``git log --grep`` returns no commit (commit not on any
+              reachable ref; suggests a force-push or repo-clean).
+            - ``pinned_mismatch`` — state and git both produce a SHA,
+              but they disagree (suggests a rebase that rewrote the
+              wave commit without ``eawf wave close --commit <ref>``).
+            - ``closed_no_pin`` — CLOSED wave with no ``Wave.commit``
+              and no derivable SHA from git history (no commit subject
+              carries the wave's bracketed prefix).
+            - ``closed_unfindable`` — same as ``closed_no_pin`` but the
+              git binary itself was unavailable; the drift is
+              indeterminate and the operator should re-run with a
+              working git on PATH before acting.
+        state_commit: The SHA recorded in ``Wave.commit`` (``None`` for
+            the ``closed_no_pin`` / ``closed_unfindable`` kinds).
+        git_commit: The SHA ``git log --grep`` returned (``None`` for
+            the ``pinned_but_missing`` / ``closed_no_pin`` /
+            ``closed_unfindable`` kinds).
+    """
+
+    wave_id: str
+    kind: DriftKind
+    state_commit: str | None = None
+    git_commit: str | None = None
 
 
 def _phase_and_wave(wave_id: str) -> tuple[str, str] | None:
@@ -220,3 +263,96 @@ def derive_wave_sha(wave_id: str, *, repo_root: Path | None = None) -> str | Non
         if sha:
             return sha[0]
     return None
+
+
+def detect_git_state_drift(state: State, *, repo_root: Path | None = None) -> list[Drift]:
+    """Compare every CLOSED wave's recorded commit against git history.
+
+    For each ``WaveStatus.CLOSED`` row, four mismatch shapes get
+    surfaced (see :class:`DriftKind`):
+
+    1. ``Wave.commit`` is set AND ``derive_wave_sha`` returns ``None``
+       — the pinned commit is no longer reachable from any ref.
+    2. ``Wave.commit`` is set AND ``derive_wave_sha`` returns a
+       different SHA — the wave was rebased after pinning.
+    3. ``Wave.commit`` is ``None`` AND ``derive_wave_sha`` returns
+       ``None`` because git has no matching subject — the wave closed
+       without recording its commit and git no longer carries the
+       bracketed prefix.
+    4. ``Wave.commit`` is ``None`` AND git is unavailable on PATH —
+       we cannot decide; surfaced as ``closed_unfindable`` so the
+       operator knows the gap is indeterminate.
+
+    Waves whose status is not CLOSED are ignored: only closed waves
+    have a stable expectation about which commit anchors them.
+
+    Args:
+        state: The validated :class:`State` to walk.
+        repo_root: Repository working directory; defaults to the
+            process cwd via the subprocess machinery in
+            :func:`derive_wave_sha`.
+
+    Returns:
+        List of :class:`Drift` rows, ordered by ``wave_id`` so render
+        output stays stable across runs. Empty list when every closed
+        wave reconciles cleanly.
+    """
+    from eawf.kernel.state.enums import WaveStatus
+
+    git_available = shutil.which("git") is not None
+
+    drifts: list[Drift] = []
+    for wave_id in sorted(state.waves):
+        wave = state.waves[wave_id]
+        if wave.status != WaveStatus.CLOSED:
+            continue
+        derived = derive_wave_sha(wave_id, repo_root=repo_root) if git_available else None
+        pinned = wave.commit
+        if pinned is not None:
+            if derived is None:
+                drifts.append(
+                    Drift(
+                        wave_id=wave_id,
+                        kind="pinned_but_missing",
+                        state_commit=pinned,
+                        git_commit=None,
+                    )
+                )
+            elif not _shas_match(pinned, derived):
+                drifts.append(
+                    Drift(
+                        wave_id=wave_id,
+                        kind="pinned_mismatch",
+                        state_commit=pinned,
+                        git_commit=derived,
+                    )
+                )
+            continue
+        # pinned is None
+        if not git_available:
+            drifts.append(
+                Drift(wave_id=wave_id, kind="closed_unfindable", state_commit=None, git_commit=None)
+            )
+            continue
+        if derived is None:
+            drifts.append(
+                Drift(wave_id=wave_id, kind="closed_no_pin", state_commit=None, git_commit=None)
+            )
+    logger.info(
+        f"detect_git_state_drift waves={len(state.waves)} drifts={len(drifts)} "
+        f"git_available={git_available}"
+    )
+    return drifts
+
+
+def _shas_match(a: str, b: str) -> bool:
+    """Compare two git SHAs prefix-tolerantly.
+
+    ``Wave.commit`` is validated as ``ShaStr`` (40-hex), but tests and
+    ad-hoc tools sometimes record a short prefix; ``derive_wave_sha``
+    always returns the full 40-hex. Both directions of prefix-match
+    succeed when one ref is a strict prefix of the other.
+    """
+    if a == b:
+        return True
+    return a.startswith(b) or b.startswith(a)

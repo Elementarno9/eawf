@@ -339,6 +339,48 @@ def _normalise_sync_runtimes(values: list[str]) -> list[str]:
 from eawf.surfaces.cli.commands import plugin_render as _plugin_render  # noqa: E402, F401
 from eawf.surfaces.cli.commands import plugin_verbs as _plugin_verbs  # noqa: E402, F401
 
+
+def detect_cross_scope_duplicates(workspace: Path) -> list[str]:
+    """Return region_ids installed under both ``project`` and ``user`` scope.
+
+    Reads ``<workspace>/.ea/indexes/generated.json`` (the shared
+    sidecar manifest the codex / opencode installers write via their
+    ``_persist_manifest`` helpers), groups :class:`ManifestEntry` rows
+    by ``region_id``, and surfaces any region whose ``scope`` set
+    spans more than one of ``{"project", "user"}``.
+
+    A cross-scope duplicate means the runtime (codex or opencode) will
+    see two grants of the same plugin region with undefined
+    precedence — the operator needs to pick one and uninstall the
+    other. The detector is the cross-scope twin of the in-runtime
+    drift-and-conflict gates (``_codex_user_conflict_clear`` /
+    ``_opencode_user_conflict_clear``): those run at install-time and
+    block; this one runs on demand and reports.
+
+    Returns:
+        Sorted list of duplicate region_ids. Empty when the manifest
+        is absent, unreadable, or carries no rows with ``scope`` set
+        at more than one value.
+    """
+    from eawf.surfaces.render.manifest import load as load_manifest
+
+    manifest_path = workspace / ".ea" / "indexes" / "generated.json"
+    if not manifest_path.exists():
+        return []
+    try:
+        manifest = load_manifest(manifest_path)
+    except Exception as exc:
+        logger.debug(f"detect_cross_scope_duplicates status=unreadable error={exc!r}")
+        return []
+    scopes_by_region: dict[str, set[str]] = {}
+    for entry in manifest.generated.values():
+        if entry.scope is None:
+            continue
+        scopes_by_region.setdefault(entry.region_id, set()).add(entry.scope)
+    return sorted(rid for rid, scopes in scopes_by_region.items() if len(scopes) > 1)
+
+
 __all__ = [
+    "detect_cross_scope_duplicates",
     "plugin_app",
 ]

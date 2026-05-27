@@ -50,7 +50,27 @@ logger = logging.getLogger(__name__)
 
 
 class ManifestEntry(BaseModel):
-    """One generated-region row in the manifest."""
+    """One generated-region row in the manifest.
+
+    Attributes:
+        target: Repo-relative POSIX path of the rendered file (or
+            absolute path for user-scope installs).
+        region_id: Logical region identifier; pairs with *target* to
+            form the composite manifest key ``"<target>::<region_id>"``.
+        version: Generator-declared version (``"1.0"`` for v0.1 callers).
+        hash: 16-hex blake2b-64 of the rendered body bytes — drift
+            detection compares the live file body against this value.
+        generator: Symbolic id of the generator that produced the row
+            (``"profile:python"``, ``"eawf-plugin-codex"``, ...).
+        generated_at: ISO 8601 UTC timestamp at render time.
+        scope: Optional install scope (``"project"`` or ``"user"``) for
+            entries emitted by the runtime plugin installers. ``None``
+            for back-compat with pre-P28 entries (every renderer that
+            owns a sidecar prior to P28 wrote into a single scope, so
+            the field was implicit). The plugin-cross-scope-dup detector
+            (``eawf doctor`` / ``eawf plugin doctor``) keys off this
+            field to flag the same region_id installed at both scopes.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -60,6 +80,7 @@ class ManifestEntry(BaseModel):
     hash: str
     generator: str
     generated_at: str
+    scope: str | None = None
 
 
 class Manifest(BaseModel):

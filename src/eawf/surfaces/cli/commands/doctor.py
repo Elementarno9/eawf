@@ -52,6 +52,7 @@ from eawf.platform.install.instrument_probe import resolve_cache_path
 from eawf.surfaces.cli.errors import UserError, ValidationError, emit_error
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.workflow.lifecycle.wave_sha import Drift, detect_git_state_drift
 
 if TYPE_CHECKING:
     # Annotation-only; the runtime capability/probe values are imported
@@ -224,6 +225,287 @@ def _run_user_scope_check() -> _UserScopeResult:
     )
 
 
+@dataclass(frozen=True)
+class _DriftReconcilerCheck:
+    """Stand-alone result for the git/state drift reconciler.
+
+    Surfaced as an additive doctor row so the existing W08 check set
+    stays untouched. The shape mirrors
+    :class:`_UserScopeResult` (``name`` / ``status`` / ``detail``) plus
+    a structured ``drifts`` payload so the JSON consumer can iterate
+    the per-wave rows without re-parsing the text detail.
+    """
+
+    name: str
+    status: Literal["ok", "warn"]
+    detail: str
+    drifts: list[Drift]
+
+    def as_payload(self) -> dict[str, Any]:
+        """Return the JSON-friendly envelope row."""
+        return {
+            "name": self.name,
+            "status": self.status,
+            "detail": self.detail,
+            "drifts": [
+                {
+                    "wave_id": d.wave_id,
+                    "kind": d.kind,
+                    "state_commit": d.state_commit,
+                    "git_commit": d.git_commit,
+                }
+                for d in self.drifts
+            ],
+        }
+
+    def as_text(self) -> str:
+        """Return a single-line summary suitable for the doctor table."""
+        return f"{self.status.upper():<4}  {self.name:<24}  {self.detail}"
+
+
+@dataclass(frozen=True)
+class _CrossScopeDupCheck:
+    """Stand-alone result for the plugin cross-scope duplication detector.
+
+    Surfaces region_ids that appear in the manifest under both
+    ``"project"`` and ``"user"`` scope — the same plugin file emitted
+    by both ``eawf plugin install codex`` (project) and ``eawf plugin
+    install codex --scope user``, for example. The downstream runtime
+    will see two grants with undefined precedence; the doctor warns so
+    the operator can pick one and uninstall the other.
+    """
+
+    name: str
+    status: Literal["ok", "warn"]
+    detail: str
+    duplicates: list[str]
+
+    def as_payload(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "status": self.status,
+            "detail": self.detail,
+            "duplicates": list(self.duplicates),
+        }
+
+    def as_text(self) -> str:
+        return f"{self.status.upper():<4}  {self.name:<24}  {self.detail}"
+
+
+def _run_git_state_drift_check(workspace: Path | None) -> _DriftReconcilerCheck:
+    """Reconcile every CLOSED wave's recorded commit against git history.
+
+    Returns ``ok`` when every closed wave reconciles cleanly; ``warn``
+    when at least one ``Wave.commit`` disagrees with what ``git log
+    --grep <prefix>`` would surface today. The check degrades to ``ok``
+    with an explanatory note when ``state.json`` is absent or
+    unparseable — those failure modes are surfaced by other doctor
+    rows (``state_present`` / a future ``state_valid`` check) and we
+    avoid double-flipping the overall status.
+    """
+    import json as _json
+
+    from pydantic import ValidationError as _PydanticValidationError
+
+    from eawf.kernel.state.models import State
+    from eawf.kernel.state.resolve import resolve_with_reason
+
+    name = "git_state_drift"
+    try:
+        state_path, _reason = resolve_with_reason(workspace=workspace)
+    except FileNotFoundError, ValueError:
+        return _DriftReconcilerCheck(name=name, status="ok", detail="no state.json", drifts=[])
+    if not state_path.exists():
+        return _DriftReconcilerCheck(name=name, status="ok", detail="no state.json", drifts=[])
+    try:
+        raw = _json.loads(state_path.read_text(encoding="utf-8"))
+        state = State.model_validate(raw)
+    except _json.JSONDecodeError, _PydanticValidationError:
+        return _DriftReconcilerCheck(
+            name=name, status="ok", detail="state.json unparseable", drifts=[]
+        )
+
+    repo_root = state_path.parent.parent
+    drifts = detect_git_state_drift(state, repo_root=repo_root)
+    if not drifts:
+        closed = sum(1 for w in state.waves.values() if w.status.value == "closed")
+        return _DriftReconcilerCheck(
+            name=name,
+            status="ok",
+            detail=f"{closed} closed wave(s) reconcile with git",
+            drifts=[],
+        )
+    # Cap surfaced rows in the detail line so the doctor table stays
+    # readable; the full list is recoverable via ``--json``.
+    summaries = [f"{d.wave_id}={d.kind}" for d in drifts[:5]]
+    tail = f" (+{len(drifts) - 5} more)" if len(drifts) > 5 else ""
+    return _DriftReconcilerCheck(
+        name=name,
+        status="warn",
+        detail=f"{len(drifts)} drift(s): {', '.join(summaries)}{tail}",
+        drifts=drifts,
+    )
+
+
+def _publish_git_state_drift_event(*, workspace: Path | None, drifts: list[Drift]) -> None:
+    """Publish a ``git_state_drift_detected`` event to the event store.
+
+    Best-effort: a missing state.json, an absent store path, or a
+    locked event log degrades to a debug log line so the doctor surface
+    stays useful even when the event store is unwritable. The publish
+    routes through :func:`eawf.workflow.skills._common.emit_event`
+    (the same writer the skills surface uses), which appends a single
+    ``StoreKind.EVENT`` envelope under the same scope as the state
+    file. The event_kind is the closed
+    :class:`~eawf.kernel.store.kinds.event.EventKind` literal
+    ``git_state_drift_detected``; downstream consumers (telemetry
+    projector, observability dashboards) discriminate on the kind.
+    """
+    from eawf.kernel.state.resolve import resolve_with_reason
+
+    try:
+        state_path, _reason = resolve_with_reason(workspace=workspace)
+    except FileNotFoundError, ValueError:
+        logger.debug("_publish_git_state_drift_event status=no-state-path")
+        return
+    if not state_path.exists():
+        logger.debug("_publish_git_state_drift_event status=no-state-file")
+        return
+    try:
+        from eawf.workflow.skills._common import emit_event
+
+        # Build a small structured payload — the per-drift detail rides
+        # in ``extras`` since the EventPayload schema does not have a
+        # typed slot for drift rows. Keep extras small (≤25 rows + a
+        # summary count) so the event row stays bounded.
+        sample = ",".join(f"{d.wave_id}:{d.kind}" for d in drifts[:25])
+        scope_id = f"urn:eawf:v1:state:{state_path.parent.parent.name}"
+        emit_event(
+            state_path=state_path,
+            scope_id=scope_id,
+            event_type="git_state_drift_detected",
+            summary=f"{len(drifts)} wave(s) with git/state commit drift",
+            payload={
+                "event_kind": "git_state_drift_detected",
+                "extras": {
+                    "drift_count": len(drifts),
+                    "sample": sample,
+                },
+            },
+        )
+    except Exception as exc:
+        logger.debug(f"_publish_git_state_drift_event status=publish-failed error={exc!r}")
+
+
+def _run_plugin_cross_scope_check(workspace: Path | None) -> _CrossScopeDupCheck:
+    """Flag region_ids the manifest has installed under more than one scope.
+
+    Walks ``<workspace>/.ea/indexes/generated.json`` and groups
+    :class:`~eawf.surfaces.render.manifest.ManifestEntry` rows by
+    ``region_id``. Any region_id present under both ``"project"`` and
+    ``"user"`` scope is surfaced as a duplicate — the runtime will see
+    two grants with undefined precedence and the operator needs to
+    pick one.
+    """
+    from eawf.surfaces.render.manifest import load as load_manifest
+
+    name = "plugin_cross_scope_dup"
+    if workspace is None:
+        return _CrossScopeDupCheck(
+            name=name,
+            status="ok",
+            detail="no workspace anchor; nothing to verify",
+            duplicates=[],
+        )
+    manifest_path = Path(workspace) / ".ea" / "indexes" / "generated.json"
+    if not manifest_path.exists():
+        return _CrossScopeDupCheck(
+            name=name,
+            status="ok",
+            detail="no manifest; nothing to verify",
+            duplicates=[],
+        )
+    try:
+        manifest = load_manifest(manifest_path)
+    except Exception as exc:
+        return _CrossScopeDupCheck(
+            name=name,
+            status="warn",
+            detail=f"manifest unreadable: {exc}",
+            duplicates=[],
+        )
+
+    scopes_by_region: dict[str, set[str]] = {}
+    for entry in manifest.generated.values():
+        if entry.scope is None:
+            continue
+        scopes_by_region.setdefault(entry.region_id, set()).add(entry.scope)
+    duplicates = sorted(rid for rid, scopes in scopes_by_region.items() if len(scopes) > 1)
+    if not duplicates:
+        n_scoped = sum(1 for e in manifest.generated.values() if e.scope is not None)
+        return _CrossScopeDupCheck(
+            name=name,
+            status="ok",
+            detail=f"{n_scoped} scoped region(s); no cross-scope dup",
+            duplicates=[],
+        )
+    sample = ", ".join(duplicates[:5])
+    tail = f" (+{len(duplicates) - 5} more)" if len(duplicates) > 5 else ""
+    return _CrossScopeDupCheck(
+        name=name,
+        status="warn",
+        detail=f"{len(duplicates)} region(s) in both project+user: {sample}{tail}",
+        duplicates=duplicates,
+    )
+
+
+def _append_user_scope_check(payload: dict[str, Any], text: str) -> tuple[dict[str, Any], str]:
+    """Append the ``user_scope`` row to the doctor envelope.
+
+    Extracted from the doctor callback to keep its cyclomatic complexity
+    under the project lint ceiling. The function mutates *payload* in
+    place (the checks list is grown by one) and returns it alongside the
+    text body with a single-line tail appended.
+    """
+    user_scope_result = _run_user_scope_check()
+    payload["checks"].append(user_scope_result.as_payload())
+    # ``info`` does not change ``ok`` / ``status``: a missing user-scope
+    # install is informational, not a failure.
+    if user_scope_result.status == "warn" and payload["status"] == "ok":
+        payload["ok"] = False
+        payload["status"] = "warn"
+    return payload, f"{text}\n{user_scope_result.as_text()}"
+
+
+def _append_drift_checks(
+    payload: dict[str, Any], text: str, *, workspace: Path | None
+) -> tuple[dict[str, Any], str]:
+    """Append the git/state drift + plugin cross-scope dup rows.
+
+    Wraps both P28-I02-W01 checks in a single call so the doctor
+    callback stays within its cyclomatic budget. When the drift
+    reconciler surfaces at least one row, also publishes a
+    ``git_state_drift_detected`` event via the closed
+    :class:`~eawf.kernel.store.kinds.event.EventKind` literal.
+    """
+    drift_check = _run_git_state_drift_check(workspace)
+    payload["checks"].append(drift_check.as_payload())
+    if drift_check.status == "warn" and payload["status"] == "ok":
+        payload["ok"] = False
+        payload["status"] = "warn"
+    text = f"{text}\n{drift_check.as_text()}"
+    if drift_check.drifts:
+        _publish_git_state_drift_event(workspace=workspace, drifts=drift_check.drifts)
+
+    cross_scope_check = _run_plugin_cross_scope_check(workspace)
+    payload["checks"].append(cross_scope_check.as_payload())
+    if cross_scope_check.status == "warn" and payload["status"] == "ok":
+        payload["ok"] = False
+        payload["status"] = "warn"
+    text = f"{text}\n{cross_scope_check.as_text()}"
+    return payload, text
+
+
 doctor_app = typer.Typer(
     name="doctor",
     help="Run install-readiness checks (tools, state, config).",
@@ -387,18 +669,10 @@ def doctor(
     text = to_text(results, plain=effective_flags.plain_output)
 
     if user_scope:
-        user_scope_result = _run_user_scope_check()
-        # Append to the JSON envelope (``checks`` list) so structured
-        # consumers see the probe alongside the W08 check set.
-        payload["checks"].append(user_scope_result.as_payload())
-        # ``info`` does not change ``ok`` / ``status``: a missing user-scope
-        # install is informational, not a failure.
-        if user_scope_result.status == "warn" and payload["status"] == "ok":
-            payload["ok"] = False
-            payload["status"] = "warn"
-        # Append a stable single-line tail to the text body so the operator
-        # gets the same datum in TTY output.
-        text = f"{text}\n{user_scope_result.as_text()}"
+        payload, text = _append_user_scope_check(payload, text)
+
+    # P28-I02-W01: drift reconciler — git/state + plugin cross-scope dup.
+    payload, text = _append_drift_checks(payload, text, workspace=effective_flags.workspace)
 
     emit_json_or_text(payload, text, flags=effective_flags)
     if overall_status(results) == "fail":

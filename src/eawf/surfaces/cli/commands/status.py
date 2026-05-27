@@ -327,11 +327,31 @@ def status(
         "active_sessions": _active_sessions(state),
         "last_closed_waves": _last_closed_waves(state),
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
+        "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
         "blockers": _blockers(state),
     }
 
     text = _format_text(payload)
     emit_json_or_text(payload, text, flags=effective_flags)
+
+
+def _drift_summary(state: State, *, repo_root: Path) -> dict[str, Any]:
+    """Return the git/state drift count + tier for the status envelope.
+
+    The reconciler runs lazily — we only call into ``detect_git_state_drift``
+    when there is at least one CLOSED wave to compare against. The
+    returned shape ``{"count": <int>, "tier": "ok"|"warn"}`` is the
+    minimum the operator needs in the status line; the full per-wave
+    detail stays behind ``eawf doctor``.
+    """
+    from eawf.workflow.lifecycle.wave_sha import detect_git_state_drift
+
+    closed_count = sum(1 for w in state.waves.values() if w.status == WaveStatus.CLOSED)
+    if closed_count == 0:
+        return {"count": 0, "tier": "ok"}
+    drifts = detect_git_state_drift(state, repo_root=repo_root)
+    tier = "warn" if drifts else "ok"
+    return {"count": len(drifts), "tier": tier}
 
 
 def _format_text(payload: dict[str, Any]) -> str:
@@ -354,6 +374,8 @@ def _format_text(payload: dict[str, Any]) -> str:
     git = payload["git"]
     branch = git["branch"] or "<unknown>"
     git_line = f"git: head={(git['head'] or '<unknown>')[:12]} branch={branch}"
+    drift = payload.get("drift") or {"count": 0, "tier": "ok"}
+    drift_line = f"drift: {drift['count']} ({drift['tier']})"
     blockers = payload["blockers"]
     blockers_line = f"blockers: {', '.join(blockers) if blockers else 'none'}"
-    return "\n".join([proj_line, cur_line, git_line, blockers_line])
+    return "\n".join([proj_line, cur_line, git_line, drift_line, blockers_line])

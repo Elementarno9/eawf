@@ -70,6 +70,7 @@ EventKind = Literal[
     "daemon_service_enabled",
     "daemon_service_disabled",
     "wal_recovery",
+    "git_state_drift_detected",
 ]
 """Closed ``EventKind`` literal. Adding a new kind requires a
 ``schema_version`` bump (planned for v0.5+ when the typed Mutation

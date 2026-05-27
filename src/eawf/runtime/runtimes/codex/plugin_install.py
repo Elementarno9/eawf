@@ -47,6 +47,16 @@ from typing import Literal
 from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
+from eawf.surfaces.render.manifest import (
+    Manifest,
+    ManifestEntry,
+)
+from eawf.surfaces.render.manifest import (
+    load as load_manifest,
+)
+from eawf.surfaces.render.manifest import (
+    save_atomic as save_manifest_atomic,
+)
 from eawf.surfaces.render.skills import (
     SKILL_REGISTRY,
     SkillSpec,
@@ -367,6 +377,117 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def _persist_manifest(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    timestamp: str,
+    plugin_root: Path,
+    home: Path | None,
+) -> None:
+    """Append codex plugin entries to ``.ea/indexes/generated.json``.
+
+    The manifest is the single source of truth for the cross-runtime
+    drift reconciler (``eawf doctor`` / ``eawf plugin doctor``); the
+    codex sidecar at ``.codex-plugin/.eawf-managed.json`` stays the
+    runtime-local fingerprint store, but every entry the installer
+    writes also lands in the shared manifest with ``scope`` set so the
+    plugin-cross-scope-dup detector can flag the same region_id at both
+    scopes.
+
+    The manifest lives under ``<target_dir>/.ea/indexes/generated.json``
+    regardless of *scope* — the .ea/ directory is the workspace-anchored
+    drift-reconciliation store, not a per-runtime artifact. Entries that
+    do not belong to the codex tree are carried through unchanged.
+    """
+    manifest_path = target_dir / ".ea" / "indexes" / "generated.json"
+    existing = load_manifest(manifest_path)
+    new_generated: dict[str, ManifestEntry] = {}
+
+    # Compute the codex region_id set so we can drop stale codex rows
+    # without touching unrelated entries owned by other generators.
+    codex_region_prefix = "plugin.codex."
+    for key, entry in existing.generated.items():
+        if not entry.region_id.startswith(codex_region_prefix):
+            new_generated[key] = entry
+            continue
+        # Keep codex entries that target a different scope — the same
+        # region_id can legitimately appear under both scopes; the
+        # cross-scope-dup detector consumes that state.
+        if entry.scope != scope:
+            new_generated[key] = entry
+
+    config_path = _config_target(target_dir, scope=scope, home=home)
+    sidecar_path = _sidecar_target(plugin_root)
+
+    for skill_spec in SKILL_REGISTRY:
+        path = _skill_target(plugin_root, skill_spec)
+        body = _render_skill(skill_spec).encode("utf-8")
+        region_id = f"plugin.codex.skill.{skill_spec.skill_name}"
+        new_generated[f"{path.as_posix()}::{region_id}"] = ManifestEntry(
+            target=path.as_posix(),
+            region_id=region_id,
+            version=skill_spec.version,
+            hash=hashlib.blake2b(body, digest_size=8).hexdigest(),
+            generator=_GENERATOR,
+            generated_at=timestamp,
+            scope=scope,
+        )
+    for hook_spec in HOOK_REGISTRY:
+        path = _hook_target(plugin_root, hook_spec)
+        body = render_hook_sh(hook_spec.event_type).encode("utf-8")
+        region_id = f"plugin.codex.hook.{hook_spec.event_type.value}"
+        new_generated[f"{path.as_posix()}::{region_id}"] = ManifestEntry(
+            target=path.as_posix(),
+            region_id=region_id,
+            version=hook_spec.version,
+            hash=hashlib.blake2b(body, digest_size=8).hexdigest(),
+            generator=_GENERATOR,
+            generated_at=timestamp,
+            scope=scope,
+        )
+
+    manifest_body = _render_manifest()
+    new_generated[f"{_manifest_target(plugin_root).as_posix()}::plugin.codex.manifest"] = (
+        ManifestEntry(
+            target=_manifest_target(plugin_root).as_posix(),
+            region_id="plugin.codex.manifest",
+            version=_PLUGIN_VERSION,
+            hash=hashlib.blake2b(manifest_body, digest_size=8).hexdigest(),
+            generator=_GENERATOR,
+            generated_at=timestamp,
+            scope=scope,
+        )
+    )
+    sidecar_body = _render_sidecar(timestamp)
+    new_generated[f"{sidecar_path.as_posix()}::plugin.codex.sidecar"] = ManifestEntry(
+        target=sidecar_path.as_posix(),
+        region_id="plugin.codex.sidecar",
+        version=_PLUGIN_VERSION,
+        hash=_sidecar_fingerprint(sidecar_body),
+        generator=_GENERATOR,
+        generated_at=timestamp,
+        scope=scope,
+    )
+    config_body = _patch_config_toml(config_path)
+    new_generated[f"{config_path.as_posix()}::plugin.codex.config"] = ManifestEntry(
+        target=config_path.as_posix(),
+        region_id="plugin.codex.config",
+        version=_PLUGIN_VERSION,
+        hash=hashlib.blake2b(config_body, digest_size=8).hexdigest(),
+        generator=_GENERATOR,
+        generated_at=timestamp,
+        scope=scope,
+    )
+
+    _ensure_dir(manifest_path.parent)
+    save_manifest_atomic(manifest_path, Manifest(version=existing.version, generated=new_generated))
+    logger.info(
+        f"_persist_manifest runtime=codex scope={scope} "
+        f"manifest_path={manifest_path} entries={len(new_generated)}"
+    )
+
+
 def install_plugin(
     target_dir: Path,
     *,
@@ -427,6 +548,9 @@ def install_plugin(
     )
     sidecar_delta = _write_sidecar(plugin_root, ts, force=force, dry_run=dry_run)
     config_delta = _write_config(target_dir, scope=scope, home=home, dry_run=dry_run)
+
+    if not dry_run:
+        _persist_manifest(target_dir, scope=scope, timestamp=ts, plugin_root=plugin_root, home=home)
 
     logger.info(
         f"install_plugin runtime=codex scope={scope} plugin_root={plugin_root} "
