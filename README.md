@@ -29,6 +29,11 @@ research → plan → execute (parallel waves) → cherry-pick → ship phase
 Use slash commands `/research`, `/prep`, `/audit`, `/ship`, `/review`,
 `/polish`, or `/flow` to drive the lifecycle.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup,
+harness plugin setup, and verification commands.
+
 ## What gets committed
 
 - `.ea/state.json` — canonical project ledger. The **eawfd daemon** is the
@@ -42,63 +47,6 @@ The Claude Code plugin tree (`.claude/` + `CLAUDE.md`) and any user-local
 files (`.claude/settings.local.json`) stay gitignored — they are
 machine-specific renders, not committed assets. Re-render anytime via
 `eawf plugin install claude`.
-
-## Suggested setup (Claude Code users)
-
-Pick **one** mode — running both at once makes Claude Code see every
-skill / agent / hook twice (CC dedups by name; active body is
-undefined). `eawf plugin install claude` detects an existing
-marketplace install under `~/.claude/plugins/` and prompts before
-proceeding; pass `--force` to acknowledge a duplicate render.
-
-**Project-local mode** (renders into the working repo; ideal when
-dogfooding eawf or working only on one project):
-
-```bash
-eawf plugin install claude    # render local skills/agents/hooks
-eawf doctor                   # readiness checks
-eawf plugin doctor claude     # local drift check
-```
-
-**Marketplace mode** (portable install, ideal when using eawf across
-many repos; emits the skills + agents + six session-level hooks
-`SessionStart` / `Stop` / `Pre`/`PostToolUse` filtered to bash `git
-commit`/`git push`):
-
-```bash
-eawf plugin package claude --target ./build/eawf-plugin
-```
-
-Then in Claude Code:
-
-```text
-/plugin marketplace add ./build/eawf-plugin
-/plugin install eawf@eawf-local
-```
-
-## Other harnesses
-
-`eawf plugin install` also supports two non-Claude harnesses; no
-`package` step is needed because neither has a marketplace concept —
-the renderer writes directly into the workspace root:
-
-```bash
-eawf plugin install codex      # writes .codex/{skills,agents,hooks}/ + config.toml
-eawf plugin install opencode   # writes opencode.json (managed block) + plugin.js
-eawf plugin doctor codex       # codex drift check
-eawf plugin doctor opencode    # opencode drift check
-```
-
-`plugin update` is currently Claude-only; codex / opencode update
-support ships in v0.4.
-
-## Verify
-
-```bash
-uv run pytest
-uv run pre-commit run --all-files
-uv run mypy src/
-```
 
 ## Docs
 

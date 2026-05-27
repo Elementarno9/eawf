@@ -20,6 +20,13 @@ dependencies = [
     "typer>=0.25.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Elementarno9/eawf"
+Repository = "https://github.com/Elementarno9/eawf"
+Documentation = "https://github.com/Elementarno9/eawf/tree/main/docs"
+Issues = "https://github.com/Elementarno9/eawf/issues"
+Changelog = "https://github.com/Elementarno9/eawf/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 # Windows-only: pywin32 backs the named-pipe transport in
 # ``eawf.runtime.daemon.windows_pipe`` + ``windows_security`` and the
