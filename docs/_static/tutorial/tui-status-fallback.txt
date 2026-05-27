@@ -1,0 +1,8 @@
+Eä  repo > DEMO > P01
+  project=DEMO phases_open=1 iters_open=1 iters_closed=0 waves_pending=2 audits=0
+keymap: up/down move  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit
+
+Annotations:
+  header       active scope, project code, phase id
+  counters     compact state summary from .ea/state.json
+  keymap       available actions for the active view

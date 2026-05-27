@@ -1,0 +1,19 @@
++--------------------------------------------------------------+
+| Eä  repo > DEMO > P01                                        |
++------------------------------+-------------------------------+
+| roadmap                      | status                        |
+| phase: P01 active            | project: DEMO                 |
+| iter:  P01-I01 active        | waves pending: 2              |
++------------------------------+-------------------------------+
+| git                          | backlog                       |
+| branch: feature/demo-v0.1    | open: 3                       |
+| status: clean                | ready: 1                      |
++------------------------------+-------------------------------+
+| up/down move · Enter open · w/r/u scope · F5 refresh · /      |
++--------------------------------------------------------------+
+
+Annotations:
+  roadmap   active lifecycle position
+  status    state counters and current work pressure
+  git       integration branch and cleanliness
+  backlog   planned follow-up pressure

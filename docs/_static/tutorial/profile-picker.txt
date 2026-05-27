@@ -1,0 +1,15 @@
+Profile selection
+  detected:
+    - pyproject.toml
+    - pytest config
+  recommended:
+    [x] core       required baseline
+    [x] python     Python style, uv, pytest discipline
+    [ ] research   hypotheses, audits, decisions as state
+    [ ] quality    opt-in code-craft rules
+
+Annotations:
+  detected      repository evidence found by the init wizard
+  [x] rows      profiles proposed for composition
+  [ ] rows      profiles available but not selected
+  trust prompt  appears for non-bundled workspace/user profiles

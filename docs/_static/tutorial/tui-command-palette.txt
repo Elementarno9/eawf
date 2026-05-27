@@ -1,0 +1,13 @@
++-- command palette -------------------------------------------+
+| / wave next-ready                                            |
+|   roadmap show                                               |
+|   doctor                                                     |
+|   validate                                                   |
+|   config menu                                                |
++--------------------------------------------------------------+
+
+Annotations:
+  /        opens command search
+  typing   filters visible commands
+  Enter    runs or opens the selected command
+  Esc      closes the palette

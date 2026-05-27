@@ -29,6 +29,8 @@ nav:
   - Home: README.md
   - Tutorial:
       - Quickstart: tutorial/quickstart.md
+      - Profile picker: tutorial/profile-picker.md
+      - TUI tour: tutorial/tui-tour.md
       - Troubleshooting: tutorial/troubleshooting.md
   - Concepts: concepts.md
   - Architecture:
