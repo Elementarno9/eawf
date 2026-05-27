@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.models import BacklogItem, State
 from eawf.kernel.store.envelope import Envelope
@@ -94,13 +95,14 @@ def edit_backlog(
     item_id: str,
     title: str | None = None,
     description: str | None = None,
+    intent: IntentBrief | None = None,
+    clear_intent: bool = False,
 ) -> Envelope:
-    """Edit an open backlog item's title and/or description in place.
+    """Edit an open backlog item's title, description, or intent in place.
 
-    At least one of ``title`` / ``description`` must be given. The new
-    values are re-validated through :class:`BacklogItem`, so the title
-    (1-72 chars) and description (<=500 chars) bounds are enforced without
-    duplicating the literals here.
+    At least one editable field must be given. The new values are
+    re-validated through :class:`BacklogItem`, so title / description /
+    intent bounds stay owned by the model.
 
     Raises:
         UserError: when ``item_id`` is absent (``kind="NotFound"``); when
@@ -109,8 +111,14 @@ def edit_backlog(
             a new value violates the :class:`BacklogItem` bounds
             (``kind="InvalidInput"``).
     """
-    if title is None and description is None:
-        raise UserError("no fields to edit: pass --title and/or --description", kind="InvalidInput")
+    if intent is not None and clear_intent:
+        raise UserError("cannot pass intent and clear_intent together", kind="InvalidInput")
+    intent_supplied = intent is not None or clear_intent
+    if title is None and description is None and not intent_supplied:
+        raise UserError(
+            "no fields to edit: pass --title, --description, --intent-* or --clear-intent",
+            kind="InvalidInput",
+        )
 
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id not in backlog:
@@ -120,11 +128,15 @@ def edit_backlog(
     if prior.status == BacklogStatus.CLOSED:
         raise UserError(f"backlog item {item_id!r} is closed; cannot edit", kind="InvalidInput")
 
-    changes: dict[str, str] = {}
+    changes: dict[str, object] = {}
     if title is not None:
         changes["title"] = title
     if description is not None:
         changes["description"] = description
+    if clear_intent:
+        changes["intent"] = None
+    elif intent is not None:
+        changes["intent"] = intent
 
     now = datetime.now(UTC)
     try:

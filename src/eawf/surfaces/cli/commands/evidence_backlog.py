@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from pydantic import ValidationError as PydanticValidationError
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
@@ -438,14 +440,63 @@ def backlog_edit(
         str | None,
         typer.Option("--description", help="New long-form purpose (<=500 chars)."),
     ] = None,
+    intent_goal: Annotated[
+        str | None,
+        typer.Option("--intent-goal", help="IntentBrief goal to attach (<=200 chars)."),
+    ] = None,
+    intent_motivation: Annotated[
+        str | None,
+        typer.Option("--intent-motivation", help="Optional IntentBrief motivation."),
+    ] = None,
+    intent_success_signal: Annotated[
+        str | None,
+        typer.Option("--intent-success-signal", help="Optional IntentBrief success signal."),
+    ] = None,
+    intent_evidence_refs: Annotated[
+        str | None,
+        typer.Option("--intent-evidence-refs", help="Comma-separated evidence references."),
+    ] = None,
+    intent_source_brief_ids: Annotated[
+        str | None,
+        typer.Option("--intent-source-brief-ids", help="Comma-separated source brief ids."),
+    ] = None,
+    clear_intent: Annotated[
+        bool,
+        typer.Option("--clear-intent", help="Remove any attached IntentBrief."),
+    ] = False,
 ) -> None:
-    """Edit an open backlog item's title and/or description."""
+    """Edit an open backlog item's title, description, and/or intent."""
     from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.surfaces.cli.commands.roadmap import _INTENT_FLAG_ERROR, _build_intent_from_flags
     from eawf.workflow.evidence import backlog as backlog_evi
     from eawf.workflow.evidence._io import append_jsonl, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
+    try:
+        intent_result = _build_intent_from_flags(
+            intent_goal=intent_goal,
+            intent_motivation=intent_motivation,
+            intent_success_signal=intent_success_signal,
+            intent_evidence_refs=intent_evidence_refs,
+            intent_source_brief_ids=intent_source_brief_ids,
+        )
+    except PydanticValidationError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid intent: {exc.errors()[0]['msg']}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    if intent_result is _INTENT_FLAG_ERROR:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--intent-goal is required when any --intent-* flag is passed",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    intent = intent_result if isinstance(intent_result, IntentBrief) else None
 
     try:
         with state_transaction(state_path) as state:
@@ -454,13 +505,23 @@ def backlog_edit(
                 item_id=item_id,
                 title=title,
                 description=description,
+                intent=intent,
+                clear_intent=clear_intent,
             )
             append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
 
-    fields = sorted(f for f, v in (("title", title), ("description", description)) if v is not None)
+    fields = sorted(
+        f
+        for f, changed in (
+            ("title", title is not None),
+            ("description", description is not None),
+            ("intent", intent is not None or clear_intent),
+        )
+        if changed
+    )
     _emit(
         {
             "item_id": item_id,

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditVerdict,
@@ -279,6 +280,64 @@ def test_edit_backlog_description_only_preserves_title(tmp_path: Path) -> None:
     item = state.backlog["B023"]
     assert item.title == "keep me"
     assert item.description == "added later"
+
+
+def test_edit_backlog_sets_intent(tmp_path: Path) -> None:
+    """Happy: editing intent persists the typed brief and records the field."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    event = backlog.edit_backlog(
+        state,
+        item_id="B023",
+        intent=IntentBrief(
+            goal="Retain the operator goal",
+            motivation="Planner context should survive backlog edits.",
+            success_signal="Backlog item carries an intent brief.",
+            evidence_refs=["urn:eawf:v1:artifact:QR/ART-001"],
+            source_brief_ids=[".ea/artifacts/research/bootstrap.md"],
+        ),
+    )
+    item = state.backlog["B023"]
+    assert item.intent is not None
+    assert item.intent.goal == "Retain the operator goal"
+    assert item.intent.evidence_refs == ["urn:eawf:v1:artifact:QR/ART-001"]
+    assert event.summary == "backlog B023 edited fields=intent"
+
+
+def test_edit_backlog_clears_intent(tmp_path: Path) -> None:
+    """Happy: clear_intent removes an attached brief."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    backlog.edit_backlog(
+        state,
+        item_id="B023",
+        intent=IntentBrief(goal="Retain the operator goal"),
+    )
+    event = backlog.edit_backlog(state, item_id="B023", clear_intent=True)
+    assert state.backlog["B023"].intent is None
+    assert event.summary == "backlog B023 edited fields=intent"
+
+
+def test_edit_backlog_rejects_intent_and_clear_intent(tmp_path: Path) -> None:
+    """Error: set and clear are mutually exclusive."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    with pytest.raises(cli_errors.UserError, match="cannot pass intent and clear_intent"):
+        backlog.edit_backlog(
+            state,
+            item_id="B023",
+            intent=IntentBrief(goal="Retain the operator goal"),
+            clear_intent=True,
+        )
 
 
 def test_edit_backlog_no_fields_raises(tmp_path: Path) -> None:

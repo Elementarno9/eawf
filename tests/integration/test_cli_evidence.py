@@ -809,6 +809,98 @@ def test_backlog_set_priority_happy_path(state_path: Path) -> None:
     assert any("backlog.set_priority" in line for line in events)
 
 
+def test_backlog_edit_intent_happy_path(state_path: Path) -> None:
+    """Happy path: backlog edit attaches a typed IntentBrief."""
+    runner.invoke(
+        app,
+        [
+            "backlog",
+            "add",
+            "B023",
+            "--title",
+            "Split workflow",
+            "--priority",
+            "P2",
+        ],
+    )
+    result = runner.invoke(
+        app,
+        [
+            "backlog",
+            "edit",
+            "B023",
+            "--intent-goal",
+            "Keep backlog work tied to a goal",
+            "--intent-motivation",
+            "Audit repair needs durable planner context.",
+            "--intent-success-signal",
+            "The item renders with intent.",
+            "--intent-evidence-refs",
+            "urn:eawf:v1:artifact:QR/ART-001,repo:.ea/artifacts/research/bootstrap.md",
+            "--intent-source-brief-ids",
+            ".ea/artifacts/research/bootstrap.md",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    body = json.loads(state_path.read_text())
+    intent = body["backlog"]["B023"]["intent"]
+    assert intent["goal"] == "Keep backlog work tied to a goal"
+    assert intent["evidence_refs"] == [
+        "urn:eawf:v1:artifact:QR/ART-001",
+        "repo:.ea/artifacts/research/bootstrap.md",
+    ]
+    events = (state_path.parent / "store" / "event.jsonl").read_text().splitlines()
+    assert any("backlog B023 edited fields=intent" in line for line in events)
+
+
+def test_backlog_edit_clear_intent(state_path: Path) -> None:
+    """Happy path: --clear-intent removes an attached brief."""
+    runner.invoke(
+        app,
+        [
+            "backlog",
+            "add",
+            "B023",
+            "--title",
+            "Split workflow",
+            "--priority",
+            "P2",
+        ],
+    )
+    result = runner.invoke(
+        app,
+        ["backlog", "edit", "B023", "--intent-goal", "Keep backlog work tied to a goal"],
+    )
+    assert result.exit_code == 0, result.stdout
+    result = runner.invoke(app, ["backlog", "edit", "B023", "--clear-intent"])
+    assert result.exit_code == 0, result.stdout
+    body = json.loads(state_path.read_text())
+    assert body["backlog"]["B023"]["intent"] is None
+
+
+def test_backlog_edit_intent_without_goal_exits_invalid_input(state_path: Path) -> None:
+    """Error path: optional intent flags require --intent-goal."""
+    runner.invoke(
+        app,
+        [
+            "backlog",
+            "add",
+            "B023",
+            "--title",
+            "Split workflow",
+            "--priority",
+            "P2",
+        ],
+    )
+    result = runner.invoke(
+        app,
+        ["--json", "backlog", "edit", "B023", "--intent-motivation", "missing goal"],
+    )
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["data"]["kind"] == "InvalidInput"
+
+
 def test_backlog_set_priority_unknown_exits_not_found(state_path: Path) -> None:
     """Error path: missing backlog id exits 2 (NOT_FOUND)."""
     result = runner.invoke(
