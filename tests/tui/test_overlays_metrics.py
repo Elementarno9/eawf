@@ -20,6 +20,7 @@ from eawf.kernel.state.models import State
 from eawf.observability.telemetry.metrics_projection import (
     CacheHealthProjection,
     MetricsProjection,
+    RoleCalibrationProjection,
     RuntimeTokensProjection,
     SwitchoverFrequencyProjection,
     VarianceBucketProjection,
@@ -31,12 +32,14 @@ from eawf.surfaces.tui.screens.overlays.metrics import (
     DEFAULT_WINDOW,
     METRIC_WINDOWS,
     TILE_SPECS,
+    CalibrationDrillModal,
     MetricsArgs,
     MetricsModal,
     parse_metrics_args,
     render_projection_tile,
     render_wave_elapsed_tile,
 )
+from eawf.workflow.estimation.buckets import BucketCalibration, CalibrationReport
 from eawf.workflow.estimation.metrics import (
     EstimateActualVarianceMetric,
     WaveElapsedMetric,
@@ -73,7 +76,7 @@ def test_tile_specs_ids_are_unique() -> None:
 
 def test_tile_specs_cover_the_v7_metric_surface() -> None:
     titles = " ".join(spec.title.lower() for spec in TILE_SPECS)
-    for needle in ("variance", "burn", "elapsed", "cache", "switchover", "token"):
+    for needle in ("variance", "burn", "elapsed", "cache", "switchover", "role"):
         assert needle in titles
 
 
@@ -193,6 +196,26 @@ def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
                 cache_create_tokens=20,
             ),
         ),
+        per_role_calibration=(
+            RoleCalibrationProjection(
+                agent_role="executor",
+                report=CalibrationReport(
+                    window_days=90,
+                    drift_threshold_pct=25.0,
+                    buckets=[
+                        BucketCalibration(
+                            bucket="M",
+                            configured_eu=1.0,
+                            fitted_eu=1.5,
+                            fitted_pessimistic_eu=1.5,
+                            sample_count=1,
+                            drift_pct=50.0,
+                            nudge=True,
+                        )
+                    ],
+                ),
+            ),
+        ),
     )
 
     bodies = {spec.tile_id: render_projection_tile(projection, spec.tile_id) for spec in TILE_SPECS}
@@ -201,7 +224,8 @@ def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
     assert "median 30.0m" in bodies["tile-elapsed"]
     assert "claude 80%" in bodies["tile-cache"]
     assert "RUNTIME_TIMEOUT 1" in bodies["tile-switchover"]
-    assert "claude 250 tok" in bodies["tile-tokens"]
+    assert "executor" in bodies["tile-role-calibration"]
+    assert "1.5!" in bodies["tile-role-calibration"]
 
 
 # --------------------------------------------------------------------------
@@ -220,6 +244,7 @@ def test_metrics_modal_mounts_six_tiles() -> None:
             tiles = [app.screen.query_one(f"#{spec.tile_id}", Static) for spec in TILE_SPECS]
             assert len(tiles) == 6
             assert tiles[0].border_title == TILE_SPECS[0].title
+            assert tiles[-1].border_title == "Role calibration"
             assert "median 0.0m" in _text(app.screen.query_one("#tile-elapsed", Static))
 
     asyncio.run(body())
@@ -266,6 +291,23 @@ def test_metrics_modal_esc_closes() -> None:
             await pilot.press("escape")
             await pilot.pause()
             assert app.modal_depth() == 0
+
+    asyncio.run(body())
+
+
+def test_metrics_modal_enter_opens_role_calibration_drilldown() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(MetricsModal())
+            await pilot.pause()
+            assert isinstance(app.screen, MetricsModal)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, CalibrationDrillModal)
+            assert app.modal_depth() == 2
+            assert "Role calibration" in _text(app.screen.query_one(".calibration-title", Static))
 
     asyncio.run(body())
 

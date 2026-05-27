@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.enums import EffortBucket, WaveStatus
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, WaveStatus
 from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 from eawf.observability.telemetry.models import (
     RuntimeErrorClass,
@@ -17,6 +17,7 @@ from eawf.observability.telemetry.models import (
     TelemetrySession,
 )
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.workflow.estimation.buckets import CalibrationReport, calibrate_buckets
 from eawf.workflow.estimation.metrics import (
     EstimateActualVarianceMetric,
     WaveElapsedMetric,
@@ -110,6 +111,15 @@ class VarianceBucketProjection(BaseModel):
     waves: tuple[VarianceWaveProjection, ...] = Field(default_factory=tuple)
 
 
+class RoleCalibrationProjection(BaseModel):
+    """Per-agent-role bucket calibration extension row."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    agent_role: AgentSessionRole
+    report: CalibrationReport
+
+
 class MetricsProjection(BaseModel):
     """Six-tile metrics projection consumed by the TUI overlay."""
 
@@ -126,6 +136,7 @@ class MetricsProjection(BaseModel):
     cache_health: tuple[CacheHealthProjection, ...] = Field(default_factory=tuple)
     switchover_frequency: tuple[SwitchoverFrequencyProjection, ...] = Field(default_factory=tuple)
     per_runtime_tokens: tuple[RuntimeTokensProjection, ...] = Field(default_factory=tuple)
+    per_role_calibration: tuple[RoleCalibrationProjection, ...] = Field(default_factory=tuple)
 
 
 def compute_metrics_projection(
@@ -166,6 +177,7 @@ def compute_metrics_projection(
         cache_health=_cache_health(sessions),
         switchover_frequency=_switchover_frequency(switches),
         per_runtime_tokens=_per_runtime_tokens(sessions),
+        per_role_calibration=_per_role_calibration(state, scope=scope, now=anchor),
     )
     logger.info(
         f"compute_metrics_projection scope={effective_scope!r} window={window!r} "
@@ -358,6 +370,39 @@ def _variance_by_bucket(
     return tuple(buckets)
 
 
+def _per_role_calibration(
+    state: State,
+    *,
+    scope: str | None,
+    now: datetime,
+) -> tuple[RoleCalibrationProjection, ...]:
+    """Return CalibrationReport rows for each observed agent role."""
+    actuals = state.actuals or {}
+    scoped_waves = [
+        wave
+        for wave in state.waves.values()
+        if wave.agent_role is not None and _state_wave_in_scope(wave, state, scope)
+    ]
+    rows: list[RoleCalibrationProjection] = []
+    for role in AgentSessionRole:
+        role_waves = {wave.id: wave for wave in scoped_waves if wave.agent_role == role}
+        if not role_waves:
+            continue
+        role_actuals: dict[str, ActualSummary] = {}
+        for wave_id in role_waves:
+            actual = _actual_for_wave(actuals, wave_id)
+            if actual is not None:
+                role_actuals[wave_id] = actual
+        role_state = state.model_copy(update={"waves": role_waves, "actuals": role_actuals})
+        rows.append(
+            RoleCalibrationProjection(
+                agent_role=role,
+                report=calibrate_buckets(role_state, now=now),
+            )
+        )
+    return tuple(rows)
+
+
 def _per_runtime_tokens(sessions: list[TelemetrySession]) -> tuple[RuntimeTokensProjection, ...]:
     """Aggregate token counts by runtime."""
     totals: dict[str, dict[str, int]] = defaultdict(
@@ -417,6 +462,7 @@ __all__ = [
     "CacheHealthProjection",
     "MetricsProjection",
     "MetricsWindow",
+    "RoleCalibrationProjection",
     "RuntimeTokensProjection",
     "SwitchoverFrequencyProjection",
     "VarianceBucketProjection",

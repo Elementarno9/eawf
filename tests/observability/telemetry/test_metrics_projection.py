@@ -82,6 +82,7 @@ def _state() -> State:
                 "status": "closed",
                 "deps": [],
                 "file_scopes": [],
+                "agent_role": "executor",
                 "effort_bucket": "M",
                 "opened_at": "2026-05-20T12:00:00Z",
                 "closed_at": "2026-05-20T12:30:00Z",
@@ -93,6 +94,7 @@ def _state() -> State:
                 "status": "closed",
                 "deps": [],
                 "file_scopes": [],
+                "agent_role": "auditor",
                 "effort_bucket": "L",
                 "opened_at": "2026-05-21T12:00:00Z",
                 "closed_at": "2026-05-21T13:00:00Z",
@@ -247,6 +249,10 @@ def test_compute_metrics_projection_emits_typed_projection(tmp_path: Path) -> No
     assert projection.variance.variance_pct == pytest.approx(50.0)
     assert projection.weekly_burn.consumed_eu == pytest.approx(4.5)
     assert projection.wave_elapsed.sample_count == 2
+    assert [row.agent_role.value for row in projection.per_role_calibration] == [
+        "executor",
+        "auditor",
+    ]
 
 
 def test_compute_metrics_projection_exposes_variance_by_bucket(tmp_path: Path) -> None:
@@ -262,6 +268,23 @@ def test_compute_metrics_projection_exposes_variance_by_bucket(tmp_path: Path) -
     assert buckets["M"].inside_pessimistic_share == pytest.approx(1.0)
     assert buckets["L"].inside_pessimistic_share == pytest.approx(0.0)
     assert buckets["L"].waves[0].wave_id == "P01-I01-W02"
+
+
+def test_compute_metrics_projection_exposes_per_role_calibration(tmp_path: Path) -> None:
+    store = _seed_store(tmp_path)
+    try:
+        projection = compute_metrics_projection(_state(), store=store, window="7d", now=_NOW)
+    finally:
+        store.close()
+
+    by_role = {row.agent_role.value: row.report for row in projection.per_role_calibration}
+    executor_buckets = {row.bucket.value: row for row in by_role["executor"].buckets}
+    auditor_buckets = {row.bucket.value: row for row in by_role["auditor"].buckets}
+
+    assert executor_buckets["M"].fitted_eu == pytest.approx(1.5)
+    assert executor_buckets["M"].sample_count == 1
+    assert auditor_buckets["L"].fitted_eu == pytest.approx(3.0)
+    assert auditor_buckets["L"].nudge is True
 
 
 def test_compute_metrics_projection_filters_telemetry_by_scope_and_window(tmp_path: Path) -> None:
