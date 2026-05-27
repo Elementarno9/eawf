@@ -16,14 +16,18 @@ import json
 from pathlib import Path
 
 import yaml
+from click.testing import Result
 from typer.testing import CliRunner
 
+from eawf.kernel.config.schema import EstimationConfig
+from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
+from eawf.workflow.estimation.buckets import BUCKET_EU
 
 runner = CliRunner()
 
 
-def _invoke_init(target: Path, *extra: str) -> object:
+def _invoke_init(target: Path, *extra: str) -> Result:
     """Run ``eawf --no-input init --project-code DEMO --target <tmp>`` plus *extra*."""
     args = ["--no-input", "init", "--project-code", "DEMO", "--target", str(target), *extra]
     return runner.invoke(app, args)
@@ -45,9 +49,12 @@ def test_cli_init_no_input_creates_state_and_config(tmp_path: Path) -> None:
     assert claude_md.exists(), "CLAUDE.md shim must be written"
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
+    State.model_validate(state)
     assert state["schema_version"] == "1.0"
     assert state["scope_kind"] == "repo"
     assert state["current"]["project_code"] == "DEMO"
+    assert state["goals"]["G01"]["scope_id"] == "DEMO"
+    assert state["goals"]["G01"]["title"] == "Establish DEMO project intent"
 
     text = agents_md.read_text(encoding="utf-8")
     assert "BEGIN" in text and "END" in text, "AGENTS.md must contain managed-region markers"
@@ -118,8 +125,17 @@ def test_cli_init_writes_correct_config_yaml(tmp_path: Path) -> None:
     config_text = (tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8")
     parsed = yaml.safe_load(config_text)
     assert parsed["profiles"]["enabled"] == ["core", "python"]
+    assert parsed["project"]["code"] == "DEMO"
+    assert parsed["project"]["title"] == "DEMO"
+    assert parsed["project"]["slug"] == "demo"
+    assert parsed["project"]["domains"] == ["general"]
+    assert parsed["project"]["goals"] == ["Establish DEMO project intent"]
     assert parsed["runtime"]["adapters"] == ["claude-code"]
     assert parsed["runtime"]["preference"] == ["claude-code"]
+    assert parsed["estimation"]["buckets"]["overrides"] == {
+        bucket.value: {"expected_eu": expected_eu} for bucket, expected_eu in BUCKET_EU.items()
+    }
+    EstimationConfig.model_validate(parsed["estimation"])
     assert "kind" not in parsed["runtime"]
     assert "lifecycle" not in parsed
     assert "plugins" not in parsed

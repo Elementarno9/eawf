@@ -60,9 +60,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.kernel.config.profile import _atomic_write_yaml, _materialise_state_keys
-from eawf.kernel.state.enums import ProjectStatus, ScopeKind
+from eawf.kernel.config.schema import BucketEstimateOverride
+from eawf.kernel.state.enums import GoalStatus, ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import RE_PROJECT_CODE
-from eawf.kernel.state.models import Project
+from eawf.kernel.state.models import Goal, Project
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.platform.install.steps import (
@@ -79,6 +80,7 @@ from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.claude_shim import render_claude_md
 from eawf.surfaces.render.manifest import Manifest
 from eawf.surfaces.render.manifest import save_atomic as save_manifest_atomic
+from eawf.workflow.estimation.buckets import BUCKET_EU
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,7 @@ assert STEP_RUNTIME.choices is not None, "STEP_RUNTIME.choices must be populated
 assert STEP_LIFECYCLE_DEPTH.choices is not None, "STEP_LIFECYCLE_DEPTH.choices must be populated"
 _RUNTIME_CHOICES: frozenset[str] = frozenset(STEP_RUNTIME.choices)
 _LIFECYCLE_DEPTH_CHOICES: frozenset[str] = frozenset(STEP_LIFECYCLE_DEPTH.choices)
+_BOOTSTRAP_GOAL_ID = "G01"
 
 
 class WizardAnswers(BaseModel):
@@ -264,6 +267,35 @@ def _build_initial_project(*, project_code: str, project_title: str) -> dict[str
     ).model_dump(mode="json")
 
 
+def _bootstrap_goal_title(*, project_code: str, project_title: str) -> str:
+    """Return the initial project-intent goal title for fresh init."""
+    title = project_title or project_code
+    return f"Establish {title} project intent"
+
+
+def _build_initial_goal(
+    *,
+    project_code: str,
+    project_title: str,
+    created_at: datetime,
+) -> dict[str, Any]:
+    """Build the initial goal record seeded by init."""
+    title = _bootstrap_goal_title(project_code=project_code, project_title=project_title)
+    return Goal(
+        id=_BOOTSTRAP_GOAL_ID,
+        scope_id=project_code,
+        title=title,
+        summary=(
+            "Bootstrap goal seeded by eawf init so planning, dispatch, "
+            "and evidence surfaces start with project intent."
+        ),
+        status=GoalStatus.OPEN,
+        outcome_ids=[],
+        created_at=created_at,
+        closed_at=None,
+    ).model_dump(mode="json")
+
+
 def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, Any]:
     """Build a minimal-but-valid ``state.json`` payload for a fresh init.
 
@@ -273,7 +305,8 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
     record directly; legacy init-only states can be repaired with
     ``eawf project init --upgrade``.
     """
-    timestamp = datetime.now(UTC).isoformat()
+    now = datetime.now(UTC)
+    timestamp = now.isoformat()
     return {
         "schema_version": "1.0",
         "scope_kind": ScopeKind.REPO.value,
@@ -292,6 +325,13 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
             "active_session_ids": [],
         },
         "workspace": None,
+        "goals": {
+            _BOOTSTRAP_GOAL_ID: _build_initial_goal(
+                project_code=project_code,
+                project_title=project_title,
+                created_at=now,
+            ),
+        },
         "phases": {},
         "iters": {},
         "waves": {},
@@ -331,6 +371,42 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     return base
 
 
+def _bucket_override_defaults() -> dict[str, dict[str, Any]]:
+    """Return explicit bootstrap bucket overrides from the canonical EU table."""
+    return {
+        bucket.value: BucketEstimateOverride(expected_eu=expected_eu).model_dump(
+            mode="json",
+            exclude_none=True,
+        )
+        for bucket, expected_eu in BUCKET_EU.items()
+    }
+
+
+def _ensure_bootstrap_config_defaults(
+    payload: dict[str, Any],
+    *,
+    answers: WizardAnswers,
+) -> None:
+    """Restore mandatory bootstrap defaults after template merge."""
+    project = payload.get("project")
+    if isinstance(project, dict) and not project.get("goals"):
+        project["goals"] = [
+            _bootstrap_goal_title(
+                project_code=answers.project_code,
+                project_title=answers.project_title,
+            )
+        ]
+
+    estimation = payload.get("estimation")
+    if not isinstance(estimation, dict):
+        return
+    buckets = estimation.get("buckets")
+    if not isinstance(buckets, dict):
+        return
+    if not buckets.get("overrides"):
+        buckets["overrides"] = _bucket_override_defaults()
+
+
 def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     """Serialise ``answers`` into the canonical ``.ea/config.yaml`` shape.
 
@@ -339,8 +415,10 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
         {
           "schema_version": "1.0",
           "profiles":   {"enabled": [...]},
+          "project":    {"code": "...", "title": "...", "goals": [...]},
           "runtime":    {"adapters": [...], "preference": [...]},
           "acceptance": {"tests": True, "lint": True, "typecheck": True},
+          "estimation": {"buckets": {"overrides": {...}}},
           "mcp":        {"enabled": [...]},
         }
 
@@ -362,8 +440,21 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
       of the canonical config-yaml shape.
     """
     runtime_id = answers.runtime
+    project_title = answers.project_title or answers.project_code
     base: dict[str, Any] = {
         "schema_version": CONFIG_SCHEMA_VERSION,
+        "project": {
+            "code": answers.project_code,
+            "title": project_title,
+            "slug": answers.project_code.lower(),
+            "domains": ["general"],
+            "goals": [
+                _bootstrap_goal_title(
+                    project_code=answers.project_code,
+                    project_title=answers.project_title,
+                )
+            ],
+        },
         "profiles": {"enabled": list(answers.profiles)},
         "runtime": {
             "adapters": [runtime_id],
@@ -373,6 +464,11 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
             "tests": answers.acceptance_tests,
             "lint": answers.acceptance_lint,
             "typecheck": answers.acceptance_typecheck,
+        },
+        "estimation": {
+            "buckets": {
+                "overrides": _bucket_override_defaults(),
+            },
         },
         "mcp": {"enabled": list(answers.mcp)},
     }
@@ -384,6 +480,7 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     # ``project``) land verbatim.
     if answers.template_extras:
         _deep_merge(base, answers.template_extras)
+    _ensure_bootstrap_config_defaults(base, answers=answers)
     return base
 
 
