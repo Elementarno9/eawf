@@ -786,6 +786,25 @@ _MUTATION_EVENT_KIND: Final[dict[MutationKind, EventKind]] = {
 }
 
 
+def _bucket_drift_extras(state: State) -> dict[str, str | int | float | bool]:
+    """Return bucket calibration drift extras, or empty when no drift fires."""
+    from eawf.workflow.estimation.buckets import calibrate_buckets
+
+    report = calibrate_buckets(state)
+    nudged = [row for row in report.buckets if row.nudge]
+    if not nudged:
+        return {}
+    max_drift = max(row.drift_pct or 0.0 for row in nudged)
+    sample_count = sum(row.sample_count for row in report.buckets)
+    return {
+        "bucket_drift": True,
+        "bucket_drift_count": len(nudged),
+        "bucket_drift_max_pct": max_drift,
+        "bucket_drift_samples": sample_count,
+        "bucket_drift_buckets": ",".join(row.bucket.value for row in nudged),
+    }
+
+
 def _build_event_envelope(
     *,
     mutation: Mutation,
@@ -829,6 +848,43 @@ def _build_event_envelope(
         status="ok",
         message=summary,
         extras=dict(extras) if extras else {},
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=mutation.scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def _build_bucket_drift_envelope(
+    *,
+    mutation: Mutation,
+    before_version: str,
+    after_version: str,
+    extras: dict[str, str | int | float | bool],
+) -> Envelope:
+    """Build the ``bucket_drift_detected`` event envelope."""
+    now = datetime.now(UTC)
+    summary = f"bucket_drift_detected scope={mutation.scope_id}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="bucket_drift_detected",
+        event_kind="bucket_drift_detected",
+        actor="daemon",
+        command=f"state.mutate.{mutation.kind.value}",
+        args_hash=_args_hash(mutation),
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="warn",
+        message=summary,
+        extras=extras,
     ).model_dump(mode="json")
     return Envelope(
         schema_version="1.0",
@@ -1024,6 +1080,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # extras. Wave-close only; non-wave mutations get an empty
             # extras dict so the envelope shape stays uniform.
             extras: dict[str, str | int | float | bool] = {}
+            drift_extras: dict[str, str | int | float | bool] = {}
             if mutation.kind == MutationKind.WAVE_CLOSE:
                 repo_anchor = Path(args.repo_root) if args.repo_root else state_path.parent
                 extras = _compute_wave_close_extras(
@@ -1032,12 +1089,23 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                     state_path=state_path,
                     repo_root=repo_anchor,
                 )
+                drift_extras = _bucket_drift_extras(state)
 
             envelope = _build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
                 extras=extras,
+            )
+            drift_envelope = (
+                _build_bucket_drift_envelope(
+                    mutation=mutation,
+                    before_version=before_version,
+                    after_version=after_version,
+                    extras=drift_extras,
+                )
+                if drift_extras
+                else None
             )
 
             # Outcome-WAL pending record carries the post-apply envelope
@@ -1064,10 +1132,14 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             atomic_write_json_locked(state_path, new_payload)
             wal.mark_applied(wal_path, mutation.mutation_id)
             append_envelope(event_path, envelope)
+            if drift_envelope is not None:
+                append_envelope(event_path, drift_envelope)
             wal.mark_fsynced(wal_path, mutation.mutation_id)
 
             if ctx.bus is not None and hasattr(ctx.bus, "publish"):
                 ctx.bus.publish(envelope)
+                if drift_envelope is not None:
+                    ctx.bus.publish(drift_envelope)
             ctx.last_event_id = envelope.id
 
             logger.info(
