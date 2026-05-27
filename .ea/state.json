@@ -107,6 +107,18 @@
       "scope_id": "P28-I02-W24",
       "status": "done",
       "updated_at": "2026-05-27T16:32:03.194509Z"
+    },
+    "P28-I02-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I02-W25",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I02-W25",
+      "scope_id": "P28-I02-W25",
+      "status": "done",
+      "updated_at": "2026-05-27T17:35:12.040427Z"
     }
   },
   "agent_sessions": {
@@ -2069,9 +2081,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I02-W25"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -6223,7 +6233,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T17:30:49.087437Z",
+  "updated_at": "2026-05-27T17:35:12.040969Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21665,8 +21675,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T193500Z-operator-codex",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T17:35:12.040427Z",
+      "commit": "41ddda3dfa3cdaba2c75946e186bbbcfa4112999",
       "deps": [
         "P28-I02-W09"
       ],
@@ -21682,10 +21692,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-27T17:30:42.869712Z",
-      "outcome": null,
+      "outcome": "wired DECISION_OBSOLETE daemon apply and state-methods registry test",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "DECISION_OBSOLETE has a daemon apply function",
         "obsolete mutation preserves decision lifecycle semantics",
