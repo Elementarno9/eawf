@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     ActualStatus,
     AgentSessionRole,
@@ -205,6 +206,7 @@ class Phase(_StrictModel):
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
     audit_id: str | None = None
+    intent: IntentBrief | None = None
 
 
 class Iter(_StrictModel):
@@ -220,6 +222,7 @@ class Iter(_StrictModel):
     audit_id: str | None = None
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
+    intent: IntentBrief | None = None
 
 
 class SessionAttempt(_StrictModel):
@@ -322,6 +325,7 @@ class Wave(_StrictModel):
     sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
     runtime_preference: list[str] | None = None
     dispatch_history: list[DispatchAnnotation] = Field(default_factory=list)
+    intent: IntentBrief | None = None
 
 
 class Hypothesis(_StrictModel):
@@ -406,6 +410,7 @@ class BacklogItem(_StrictModel):
     closed_at: UtcDatetime | None = None
     resolution: str | None = None
     commit: str | None = None
+    intent: IntentBrief | None = None
 
 
 class EstimateSummary(_StrictModel):

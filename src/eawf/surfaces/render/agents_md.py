@@ -52,6 +52,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.models import Decision, State
 from eawf.platform.profiles.models import ComposedProfile, RenderBlock
 from eawf.surfaces.render import regions
@@ -244,6 +245,31 @@ def render_decisions_section(
                 parts.append(f"- {consequence}")
     logger.info(f"render_decisions_section scope_id={scope_id!r} count={len(selected)} result=ok")
     return "\n".join(parts)
+
+
+def render_intent_line(intent: IntentBrief | None) -> str:
+    """Render an :class:`IntentBrief` as a single ``goal:`` line, or ``""``.
+
+    The first signal a downstream reader needs is the goal — the
+    motivation / success-signal / evidence / source-brief refs are
+    secondary detail surfaced elsewhere (TUI detail card,
+    dispatch-prompt body). A ``None`` intent returns the empty string
+    so the caller can interpolate the result unconditionally without
+    needing a branching ``if`` around the line.
+
+    Format: ``goal: <goal>`` — no trailing newline, no leading marker,
+    so the caller controls list / row framing.
+
+    Args:
+        intent: The entity's :attr:`IntentBrief` (or ``None`` when the
+            entity has not been wired with one).
+
+    Returns:
+        The rendered ``goal:`` line, or ``""`` when *intent* is ``None``.
+    """
+    if intent is None:
+        return ""
+    return f"goal: {intent.goal}"
 
 
 def lint_entity_title(title: str) -> list[str]:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import DecisionStatus, IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Phase, State
@@ -50,6 +51,7 @@ def open_phase(
     title: str,
     scope_id: str | None = None,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Phase:
     """Insert a new phase into ``state.phases`` with status ``active``.
 
@@ -80,6 +82,7 @@ def open_phase(
         opened_at=datetime.now(UTC),
         closed_at=None,
         audit_id=None,
+        intent=intent,
     )
     state.phases[phase_id] = phase
     state.current.phase_id = phase_id
@@ -214,6 +217,7 @@ def plan_phase(
     depends_on: list[str] | None = None,
     source_brief_ids: list[str] | None = None,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Phase:
     """Insert a new phase into ``state.phases`` with status ``planned``.
 
@@ -264,6 +268,7 @@ def plan_phase(
         opened_at=datetime.now(UTC),
         closed_at=None,
         audit_id=None,
+        intent=intent,
     )
     state.phases[phase_id] = phase
     logger.info(

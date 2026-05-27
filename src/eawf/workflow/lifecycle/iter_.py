@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State
@@ -31,6 +32,7 @@ def open_iter(
     phase_id: str,
     title: str,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Iter:
     """Insert a new iter under *phase_id* with status ``active``.
 
@@ -41,6 +43,9 @@ def open_iter(
         title: Bounded ≤72-char iter title.
         description: Optional bounded ≤500-char long-form description;
             persisted on :attr:`Iter.description` for downstream renderers.
+        intent: Optional typed :class:`IntentBrief`; persisted on
+            :attr:`Iter.intent` for downstream renderers. Additive +
+            replay-safe so on-disk iter rows without it re-validate.
 
     Raises:
         LifecycleError: if the phase is missing or not open, or if *iter_id*
@@ -64,6 +69,7 @@ def open_iter(
         audit_id=None,
         opened_at=datetime.now(UTC),
         closed_at=None,
+        intent=intent,
     )
     state.iters[iter_id] = it
     if iter_id not in phase.iter_ids:
@@ -109,6 +115,7 @@ def plan_iter(
     phase_id: str,
     title: str,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Iter:
     """Insert a new iter under *phase_id* with status ``planned``.
 
@@ -147,6 +154,7 @@ def plan_iter(
         audit_id=None,
         opened_at=datetime.now(UTC),
         closed_at=None,
+        intent=intent,
     )
     state.iters[iter_id] = it
     if iter_id not in phase.iter_ids:
@@ -161,6 +169,7 @@ def edit_iter_plan(
     iter_id: str,
     title: str | None = None,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Iter:
     """Rewrite an iter's ``title`` / ``description`` in place. Status-agnostic.
 
@@ -195,7 +204,13 @@ def edit_iter_plan(
         it.__pydantic_validator__.validate_assignment(it, "title", title)
     if description is not None:
         it.__pydantic_validator__.validate_assignment(it, "description", description)
-    logger.info(f"edit_iter_plan id={iter_id} title={title!r} description={description!r}")
+    if intent is not None:
+        it.__pydantic_validator__.validate_assignment(it, "intent", intent)
+    intent_goal = repr(intent.goal) if intent is not None else None
+    logger.info(
+        f"edit_iter_plan id={iter_id} title={title!r} description={description!r} "
+        f"intent_goal={intent_goal}"
+    )
     return it
 
 

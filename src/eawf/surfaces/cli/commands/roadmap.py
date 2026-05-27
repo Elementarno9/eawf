@@ -42,6 +42,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -127,6 +128,63 @@ def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+#: Sentinel returned by :func:`_build_intent_from_flags` when the caller
+#: passed an ``--intent-*`` flag without the required ``--intent-goal``.
+#: The CLI handler tests for identity and emits a clean InvalidInput
+#: error rather than letting :class:`IntentBrief` raise an opaque
+#: :class:`pydantic.ValidationError`.
+_INTENT_FLAG_ERROR: object = object()
+
+
+def _build_intent_from_flags(
+    *,
+    intent_goal: str | None,
+    intent_motivation: str | None,
+    intent_success_signal: str | None,
+    intent_evidence_refs: str | None,
+    intent_source_brief_ids: str | None,
+) -> IntentBrief | None | object:
+    """Return an :class:`IntentBrief` built from the ``--intent-*`` CLI flags.
+
+    Returns ``None`` when no ``--intent-*`` flag was passed (the caller
+    skips the intent edit). Returns :data:`_INTENT_FLAG_ERROR` when at
+    least one ``--intent-*`` flag was passed but ``--intent-goal`` is
+    missing — the goal is the only required field on the brief, so the
+    handler surfaces a clean InvalidInput rather than a Pydantic stack
+    trace. Otherwise returns a constructed :class:`IntentBrief`; a model
+    bound violation propagates as :class:`pydantic.ValidationError` and
+    is mapped to InvalidInput by the handler's existing except clause.
+
+    Args:
+        intent_goal: ``--intent-goal`` value (required field).
+        intent_motivation: ``--intent-motivation`` value (optional).
+        intent_success_signal: ``--intent-success-signal`` value (optional).
+        intent_evidence_refs: ``--intent-evidence-refs`` comma-separated list.
+        intent_source_brief_ids: ``--intent-source-brief-ids`` comma-separated list.
+    """
+    any_flag = any(
+        v is not None
+        for v in (
+            intent_goal,
+            intent_motivation,
+            intent_success_signal,
+            intent_evidence_refs,
+            intent_source_brief_ids,
+        )
+    )
+    if not any_flag:
+        return None
+    if not intent_goal:
+        return _INTENT_FLAG_ERROR
+    return IntentBrief(
+        goal=intent_goal,
+        motivation=intent_motivation,
+        success_signal=intent_success_signal,
+        evidence_refs=_split_csv(intent_evidence_refs),
+        source_brief_ids=_split_csv(intent_source_brief_ids),
+    )
 
 
 def _phase_summary(state: State, phase_id: str) -> dict[str, Any]:
@@ -480,12 +538,58 @@ def roadmap_revise_cmd(
             ),
         ),
     ] = None,
+    intent_goal: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-goal",
+            help=(
+                "Required field of an IntentBrief attached to the wave or iter "
+                "(≤200 chars). Passing any --intent-* flag activates the brief; "
+                "--intent-goal is required when other --intent-* flags are present."
+            ),
+        ),
+    ] = None,
+    intent_motivation: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-motivation",
+            help="Optional motivation text on the IntentBrief (≤1000 chars).",
+        ),
+    ] = None,
+    intent_success_signal: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-success-signal",
+            help="Optional success-signal observable on the IntentBrief (≤500 chars).",
+        ),
+    ] = None,
+    intent_evidence_refs: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-evidence-refs",
+            help="Comma-separated evidence refs (repo-relative paths / URNs / URLs).",
+        ),
+    ] = None,
+    intent_source_brief_ids: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-source-brief-ids",
+            help="Comma-separated originating research / spike brief ids or paths.",
+        ),
+    ] = None,
 ) -> None:
     """Edit a PLANNED or ACTIVE phase's wave plan via structured flags.
 
     For an ACTIVE parent only PENDING waves are mutable — the wave-level
     PENDING check inside the lifecycle transitions rejects edits aimed
     at CLOSED/CLAIMED/IN_PROGRESS waves.
+
+    Any ``--intent-*`` flag activates an :class:`~eawf.kernel.spec.intent.IntentBrief`
+    attachment on the target wave (with ``--add-wave`` / ``--retitle``)
+    or iter (with ``--retitle`` against an iter id). ``--intent-goal`` is
+    required when any ``--intent-*`` flag is present; the others are
+    optional. The brief is additive + replay-safe — entities without an
+    intent re-validate unchanged.
     """
     from pydantic import ValidationError as PydValidationError
 
@@ -516,6 +620,24 @@ def roadmap_revise_cmd(
             flags=flags,
         )
         return
+
+    intent_result = _build_intent_from_flags(
+        intent_goal=intent_goal,
+        intent_motivation=intent_motivation,
+        intent_success_signal=intent_success_signal,
+        intent_evidence_refs=intent_evidence_refs,
+        intent_source_brief_ids=intent_source_brief_ids,
+    )
+    if intent_result is _INTENT_FLAG_ERROR:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--intent-goal is required when any --intent-* flag is passed",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    intent: IntentBrief | None = intent_result if isinstance(intent_result, IntentBrief) else None
 
     try:
         state_path = resolve_state_path(flags.workspace)
@@ -554,6 +676,7 @@ def roadmap_revise_cmd(
                         agent_role=role,
                         effort_bucket=bucket,
                         description=description,
+                        intent=intent,
                     )
                     action_summary = f"added wave {full_wave_id}"
                 elif remove_wave:
@@ -577,6 +700,7 @@ def roadmap_revise_cmd(
                             iter_id=target,
                             title=new_title.strip(),
                             description=description,
+                            intent=intent,
                         )
                         action_summary = f"retitled iter {target}: {new_title.strip()!r}"
                     else:
@@ -586,6 +710,7 @@ def roadmap_revise_cmd(
                             wave_id=full_wave_id,
                             title=new_title.strip(),
                             description=description,
+                            intent=intent,
                         )
                         action_summary = f"retitled {full_wave_id}: {new_title.strip()!r}"
             except LifecycleError as exc:

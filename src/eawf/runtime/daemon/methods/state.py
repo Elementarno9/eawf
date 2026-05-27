@@ -63,6 +63,7 @@ from typing import Any, Final
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, PhaseStatus, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import (
@@ -493,15 +494,23 @@ def _apply_wave_fail(state: State, mutation: Mutation) -> None:
 
 
 def _apply_phase_open(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.PHASE_OPEN` — delegate to ``open_phase``."""
+    """Apply :attr:`MutationKind.PHASE_OPEN` — delegate to ``open_phase``.
+
+    Optionally seeds :attr:`Phase.intent` from a typed
+    :class:`IntentBrief` dict on ``params['intent']``. Additive +
+    replay-safe — omitting it leaves the phase intent unset.
+    """
     params = mutation.params
     description = params.get("description")
+    intent_raw = params.get("intent")
+    intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
     open_phase(
         state,
         phase_id=str(params["phase_id"]),
         title=str(params["title"]),
         scope_id=params.get("scope_id"),
         description=str(description) if description is not None else None,
+        intent=intent,
     )
 
 
@@ -522,15 +531,23 @@ def _apply_phase_close(state: State, mutation: Mutation) -> None:
 
 
 def _apply_iter_open(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.ITER_OPEN` — delegate to ``open_iter``."""
+    """Apply :attr:`MutationKind.ITER_OPEN` — delegate to ``open_iter``.
+
+    Optionally seeds :attr:`Iter.intent` from a typed
+    :class:`IntentBrief` dict on ``params['intent']``. Additive +
+    replay-safe — omitting it leaves the iter intent unset.
+    """
     params = mutation.params
     description = params.get("description")
+    intent_raw = params.get("intent")
+    intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
     open_iter(
         state,
         iter_id=str(params["iter_id"]),
         phase_id=str(params["phase_id"]),
         title=str(params["title"]),
         description=str(description) if description is not None else None,
+        intent=intent,
     )
 
 
@@ -587,14 +604,26 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     title). Omitting it leaves the underlying field unchanged; a supplied
     string is bound-checked at ≤500 chars by the model.
 
+    The ``intent`` param (a dict matching :class:`IntentBrief`) is also
+    wired into ``add_wave`` and ``retitle`` (both wave + iter forms).
+    Omitting it leaves the existing intent untouched; a supplied dict is
+    validated against :class:`IntentBrief` (which raises
+    :class:`pydantic.ValidationError` on a bound or unknown-field
+    failure). Additive + replay-safe per the AGENTS "state vs specs"
+    rule — on-disk state without an ``intent`` field re-validates.
+
     Raises:
         LifecycleError: when ``op`` is missing or unknown, or the
             underlying wave transition rejects the edit.
+        pydantic.ValidationError: when the ``intent`` param payload
+            fails the :class:`IntentBrief` typed contract.
     """
     params = mutation.params
     op = params.get("op")
     description = params.get("description")
     description_str = str(description) if description is not None else None
+    intent_raw = params.get("intent")
+    intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
     if op == "add_wave":
         role = AgentSessionRole(params["agent_role"]) if params.get("agent_role") else None
         bucket = EffortBucket(params["effort_bucket"]) if params.get("effort_bucket") else None
@@ -613,6 +642,7 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
             agent_role=role,
             effort_bucket=bucket,
             description=description_str,
+            intent=intent,
         )
     elif op == "remove_wave":
         remove_wave_plan(state, wave_id=str(params["wave_id"]))
@@ -627,6 +657,7 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
                 iter_id=str(params["iter_id"]),
                 title=title_str,
                 description=description_str,
+                intent=intent,
             )
         else:
             edit_wave_plan(
@@ -634,6 +665,7 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
                 wave_id=str(params["wave_id"]),
                 title=title_str,
                 description=description_str,
+                intent=intent,
             )
     else:
         raise LifecycleError(f"unknown roadmap revise op: {op!r}")

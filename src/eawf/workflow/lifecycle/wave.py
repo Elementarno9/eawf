@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, IterStatus, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State, Wave
@@ -34,6 +35,7 @@ def plan_wave(
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Wave:
     """Insert a new wave with status ``pending``.
 
@@ -49,6 +51,11 @@ def plan_wave(
         effort_bucket: Optional XS/S/M/L/XL estimate bucket.
         description: Optional bounded ≤500-char long-form description;
             persisted on :attr:`Wave.description` for downstream renderers.
+        intent: Optional typed :class:`IntentBrief` attaching the goal /
+            motivation / success-signal + evidence + source-brief refs
+            that motivated the wave. ``None`` (default) leaves the
+            wave's intent unset; the field is additive + replay-safe so
+            on-disk state without it re-validates.
 
     Raises:
         LifecycleError: if iter is missing/closed, wave id duplicates, any
@@ -95,6 +102,7 @@ def plan_wave(
         outcome=None,
         opened_at=datetime.now(UTC),
         closed_at=None,
+        intent=intent,
     )
     state.waves[wave_id] = wave
     if wave_id not in it.wave_ids:
@@ -157,11 +165,12 @@ def edit_wave_plan(
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
+    intent: IntentBrief | None = None,
 ) -> Wave:
     """Mutate a PENDING wave's plan-time fields. Rejects non-PENDING waves.
 
     Editable surface: title, file_scopes, success_criteria, agent_role,
-    effort_bucket, description. Dep mutations go through
+    effort_bucket, description, intent. Dep mutations go through
     :func:`set_wave_deps` (it maintains the reverse ``blocks`` index and
     re-runs the cycle check). The description field is routed through the
     model's assignment validator so the ≤500-character bound is re-checked
@@ -182,10 +191,15 @@ def edit_wave_plan(
         effort_bucket: Optional replacement bucket; ``None`` leaves untouched.
         description: Optional replacement description (≤500 chars);
             ``None`` leaves the existing value untouched.
+        intent: Optional replacement :class:`IntentBrief`; ``None``
+            leaves the existing intent untouched (callers cannot clear
+            an intent through this helper — the asymmetry mirrors the
+            description / title API).
 
     Raises:
         LifecycleError: when *wave_id* is unknown or not PENDING.
-        pydantic.ValidationError: when *description* exceeds 500 chars.
+        pydantic.ValidationError: when *description* exceeds 500 chars
+            or *intent* violates an :class:`IntentBrief` bound.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -206,9 +220,13 @@ def edit_wave_plan(
         wave.effort_bucket = effort_bucket
     if description is not None:
         wave.__pydantic_validator__.validate_assignment(wave, "description", description)
+    if intent is not None:
+        wave.__pydantic_validator__.validate_assignment(wave, "intent", intent)
+    intent_goal = repr(intent.goal) if intent is not None else None
     logger.info(
         f"edit_wave_plan id={wave_id} title={title!r} file_scopes={file_scopes} "
-        f"agent_role={agent_role} effort_bucket={effort_bucket} description={description!r}"
+        f"agent_role={agent_role} effort_bucket={effort_bucket} description={description!r} "
+        f"intent_goal={intent_goal}"
     )
     return wave
 

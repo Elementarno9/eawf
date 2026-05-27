@@ -222,6 +222,8 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
         ("title", wave.title),
         ("status", wave.status.value),
     ]
+    if wave.intent is not None:
+        rows.append(("intent", wave.intent.goal))
     if wave.agent_role is not None:
         rows.append(("role", wave.agent_role.value))
     if wave.effort_bucket is not None:
@@ -304,6 +306,8 @@ def _iter_card(state: State, iter_id: str) -> DetailCard | None:
         ("status", it.status.value),
         ("waves", f"{closed}/{total} closed"),
     ]
+    if it.intent is not None:
+        rows.append(("intent", it.intent.goal))
     history: list[tuple[str, str]] = [
         ("status", it.status.value),
         ("opened", _fmt_dt(it.opened_at)),
@@ -348,6 +352,8 @@ def _phase_card(state: State, phase_id: str) -> DetailCard | None:
         ("iters", str(len(phase.iter_ids))),
         ("waves", f"{closed}/{total} closed"),
     ]
+    if phase.intent is not None:
+        rows.append(("intent", phase.intent.goal))
     history: list[tuple[str, str]] = [
         ("status", phase.status.value),
         ("opened", _fmt_dt(phase.opened_at)),
@@ -408,6 +414,8 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     ]
     if item.description is not None:
         rows.append(("description", item.description))
+    if item.intent is not None:
+        rows.append(("intent", item.intent.goal))
     rows.extend(
         [
             ("priority", item.priority.value),

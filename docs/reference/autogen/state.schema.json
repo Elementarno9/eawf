@@ -82,8 +82,21 @@
     },
     "AgentSession": {
       "additionalProperties": false,
-      "description": "Agent work session for provenance.",
+      "description": "Agent work session for provenance.\n\nThe ``agent_principal_id`` field is a v0.3-v0.5 placeholder mirroring\n:attr:`eawf.kernel.store.kinds.event.EventPayload.actor_principal_id`:\nsessions MAY carry the :class:`Principal` id of the agent that\ndrove them when known, but the load-bearing identity for backward\ncompatibility remains :attr:`runtime`. The v0.5+ governance phase\npopulates this for every dispatched session once the per-repo\nPrincipal database lands; until then existing on-disk rows stay\nvalid (default ``None`` is replay-safe / additive — no schema\nbump).",
       "properties": {
+        "agent_principal_id": {
+          "anyOf": [
+            {
+              "pattern": "^u-[0-9a-f]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Principal Id"
+        },
         "artifact_ids": {
           "items": {
             "type": "string"
@@ -411,6 +424,17 @@
           "pattern": "^\\S+$",
           "title": "Id",
           "type": "string"
+        },
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntentBrief"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "priority": {
           "$ref": "#/$defs/BacklogPriority"
@@ -1160,6 +1184,65 @@
       "title": "IncidentStatus",
       "type": "string"
     },
+    "IntentBrief": {
+      "additionalProperties": false,
+      "description": "Typed intent doc carried by a lifecycle entity.\n\nAttributes:\n    goal: One-line statement of what the entity is trying to\n        accomplish — the imperative noun-phrase a planner or\n        executor reads first. Bounded at 200 characters so the\n        field fits a single rendered row in dispatch + detail\n        surfaces.\n    motivation: Optional long-form reason the goal exists — the\n        *why* a planner or auditor needs when the goal alone does\n        not explain the trade-off being made. Bounded at 1000\n        characters; ``None`` when the goal is self-evident.\n    success_signal: Optional terse observable that ratifies the\n        intent. Distinct from the wave's free-form\n        ``success_criteria`` list: this is the single\n        \"would-change-my-mind\" signal an auditor checks first.\n        Bounded at 500 characters; ``None`` when the entity's\n        success criteria fully cover it.\n    evidence_refs: Repo-relative / URN / external-URL strings that\n        ratify the goal claim. Used by the v0.4 EviBound verify\n        gate to score \"every claim resolves\" on the brief. Default\n        empty list so a brief whose claims are not yet sourced\n        still validates (the EviBound gate fails the brief at\n        promotion time, not at ingestion time).\n    source_brief_ids: Ids / repo-relative paths of the originating\n        research / spike briefs this intent was distilled from.\n        Lets the renderer surface \"see brief X\" alongside the\n        intent so the reader can follow the chain. Default empty\n        list.",
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "goal": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "motivation": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motivation"
+        },
+        "source_brief_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Source Brief Ids",
+          "type": "array"
+        },
+        "success_signal": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Signal"
+        }
+      },
+      "required": [
+        "goal"
+      ],
+      "title": "IntentBrief",
+      "type": "object"
+    },
     "Iter": {
       "additionalProperties": false,
       "description": "Lifecycle iteration.",
@@ -1218,6 +1301,17 @@
           "pattern": "^P\\d{2,}-I\\d{2,}$",
           "title": "Id",
           "type": "string"
+        },
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntentBrief"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "opened_at": {
           "format": "date-time",
@@ -1627,6 +1721,17 @@
           "pattern": "^P\\d{2,}$",
           "title": "Id",
           "type": "string"
+        },
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntentBrief"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "iter_ids": {
           "items": {
@@ -2228,6 +2333,17 @@
           "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
           "title": "Id",
           "type": "string"
+        },
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntentBrief"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "iter_id": {
           "pattern": "^P\\d{2,}-I\\d{2,}$",
