@@ -359,6 +359,18 @@
       "scope_id": "P28-I03-W25",
       "status": "done",
       "updated_at": "2026-05-27T21:19:36.053408Z"
+    },
+    "P28-I03-W36": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W36",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W36",
+      "scope_id": "P28-I03-W36",
+      "status": "done",
+      "updated_at": "2026-05-27T21:30:15.458360Z"
     }
   },
   "agent_sessions": {
@@ -2322,8 +2334,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I03-W30",
-      "P28-I03-W36"
+      "P28-I03-W30"
     ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
@@ -6767,7 +6778,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:29:14.677343Z",
+  "updated_at": "2026-05-27T21:30:15.458845Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -23696,8 +23707,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:30:15.458360Z",
+      "commit": "f8c1c22424cab19206d91fba3c7f220dc6dcd66d",
       "deps": [
         "P28-I03-W04"
       ],
@@ -23711,10 +23722,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:39.889310Z",
-      "outcome": null,
+      "outcome": "stale docstrings and provenance wording scrubbed with clarity lint verification",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "~50-100 modules swept",
         "pre-daemon state-CLI refs/drifted file:line/deprecated API examples/design-provenance leaks removed",
@@ -26237,10 +26248,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w36",
       "created_at": "2026-05-27T21:21:29.084227Z",
       "id": "WT-P28-I03-W36-1779916889",
-      "merged_commit": null,
+      "merged_commit": "f8c1c22",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w36",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W36"
     }
   }
