@@ -292,6 +292,21 @@ def _handle_config(app: App[None], args: str) -> None:
     open_config(app)
 
 
+def _handle_init(app: App[None], args: str) -> None:
+    """Open the TUI init wizard (the ``/init`` verb).
+
+    The modal returns a concrete command plan; the App owns the callback so
+    palette and auto-open paths share the same single-instance guard.
+    """
+    action = getattr(app, "action_open_init_wizard", None)
+    if callable(action):
+        action()
+        return
+    from eawf.surfaces.tui.screens.overlays.init_wizard import open_init_wizard
+
+    open_init_wizard(app)
+
+
 def _handle_events(app: App[None], args: str) -> None:
     """Open the ``/events`` last-50 event overlay (the ``/events`` verb).
 
@@ -656,6 +671,7 @@ VERBS: tuple[PaletteVerb, ...] = (
         args_grammar="<name>",
     ),
     PaletteVerb("/config", "config window (registry-driven)", _handle_config, SCOPES_ALL),
+    PaletteVerb("/init", "init wizard", _handle_init, SCOPES_ALL),
     PaletteVerb("/events", "last 50 events overlay", _handle_events, SCOPES_ALL),
     PaletteVerb(
         "/metrics",

@@ -28,6 +28,7 @@ from eawf.surfaces.tui.scopes import ScopeScreen, UserScreen
 from eawf.surfaces.tui.scopes.user import PortfolioTable, synthesize_user_state
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailModal
+from eawf.surfaces.tui.screens.overlays.init_wizard import InitWizardModal
 from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
@@ -374,15 +375,17 @@ def test_user_screen_portfolio_title_present() -> None:
     asyncio.run(body())
 
 
-def test_user_screen_none_state_first_paint_renders_brand() -> None:
+def test_user_screen_none_state_first_paint_renders_brand(tmp_path: Path) -> None:
     """The user scope launches with no resolved state (state_path=None per D10)."""
+    _write_registry(tmp_path, {"ABC": {"code": "ABC", "path": "/abs/path/abc"}})
 
     async def body() -> None:
         app = EaApp(scope="user", state_path=None)
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             await app.workers.wait_for_complete()
-            rendered = app.export_screenshot()
+            header = app.screen.query_one(Header)
+            rendered = str(header.render())
             assert BRAND in rendered
             # No resolved state => default-code breadcrumb.
             assert DEFAULT_PROJECT_CODE in rendered
@@ -424,6 +427,9 @@ def test_user_c_keypress_opens_config_modal() -> None:
         app = EaApp(scope="user", state_path=None)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            if isinstance(app.screen, InitWizardModal):
+                await pilot.press("escape")
+                await pilot.pause()
             await pilot.press("c")
             await pilot.pause()
             assert isinstance(app.screen, ConfigModal)
@@ -455,6 +461,7 @@ def test_synthesize_user_state_maps_registry_entries(tmp_path: Path) -> None:
     # Missing title falls back to the code.
     assert repos["DEF"].title == "DEF"
     assert repos["DEF"].path == "/abs/path/def"
+    assert state.indexes["init_needed"] is False
 
 
 def test_synthesize_user_state_via_explicit_registry_path(tmp_path: Path) -> None:
@@ -494,6 +501,7 @@ def test_synthesize_user_state_empty_registry_yields_zero_rows(tmp_path: Path) -
     assert state.workspace is not None
     assert state.workspace.repos == {}
     assert build_repo_rows(state) == []
+    assert state.indexes["init_needed"] is True
 
 
 def test_synthesize_user_state_missing_registry_yields_empty_repos(
@@ -505,6 +513,7 @@ def test_synthesize_user_state_missing_registry_yields_empty_repos(
     assert state.workspace is not None
     assert state.workspace.repos == {}
     assert build_repo_rows(state) == []
+    assert state.indexes["init_needed"] is True
 
 
 def test_synthesize_user_state_repo_ref_urn_is_valid(tmp_path: Path) -> None:

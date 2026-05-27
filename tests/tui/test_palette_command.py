@@ -234,9 +234,15 @@ def test_palette_esc_closes_without_running() -> None:
 def test_palette_user_scope_hides_removed_placeholder_verbs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Isolate the user registry to an empty tmp home so the synthesized
-    # portfolio is deterministic and never reads the real ~/.eawf/registry.json.
+    # Isolate the user registry to a tmp home so the synthesized portfolio
+    # is deterministic and never reads the real ~/.eawf/registry.json.
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    ea_dir = tmp_path / ".eawf"
+    ea_dir.mkdir(parents=True, exist_ok=True)
+    (ea_dir / "registry.json").write_text(
+        '{"version":"1","repos":{"ABC":{"code":"ABC","path":"/abs/path/abc"}}}',
+        encoding="utf-8",
+    )
 
     async def body() -> None:
         app = EaApp(scope="user", state_path=None)

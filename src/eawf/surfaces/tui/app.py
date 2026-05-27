@@ -290,6 +290,8 @@ class EaApp(App[None]):
         self._binding: StateBinding | None = None
         self._help_open = False
         self._needs_user_open = False
+        self._init_wizard_open = False
+        self._init_wizard_auto_opened = False
         self._toast_emitter = ToastEmitter()
         self._last_state: State | None = None
         self._last_open_pause_count = 0
@@ -366,6 +368,7 @@ class EaApp(App[None]):
         )
         self.push_screen(self._scope)
         self.call_after_refresh(self._sync_degraded_banner)
+        self._maybe_open_init_wizard()
         # Follow a live system light/dark flip for /theme auto. The OSC 11
         # background probe can only run before .run() captured stdin, so the
         # running App tracks the system theme by polling the OS appearance
@@ -396,6 +399,7 @@ class EaApp(App[None]):
         self._last_state = new_state
         self._last_open_pause_count = open_pause_count
         self._maybe_open_needs_user(new_state, pauses=pauses)
+        self._maybe_open_init_wizard(new_state)
 
     async def _on_event(self, envelope: Envelope) -> None:
         """Receive live daemon event envelopes from the binding.
@@ -523,6 +527,48 @@ class EaApp(App[None]):
             return False
         return (runtime_dir() / "eawfd.sock").exists()
 
+    def _maybe_open_init_wizard(self, state: State | None = None) -> None:
+        """Auto-open the init wizard once for an empty user-scope registry."""
+        if self._scope != "user" or self._init_wizard_open or self._init_wizard_auto_opened:
+            return
+        if state is None:
+            state = self.state
+        try:
+            from eawf.surfaces.tui.scopes.user import user_scope_init_needed
+
+            init_needed = user_scope_init_needed(state)
+        except Exception as exc:  # pragma: no cover - defensive import guard
+            logger.debug(f"_maybe_open_init_wizard flag_unavailable err={exc!r}")
+            return
+        if not init_needed:
+            return
+        self._init_wizard_auto_opened = True
+        self.call_after_refresh(self._open_init_wizard)
+
+    def _open_init_wizard(self) -> bool:
+        """Push the init wizard with the app callback and single-instance guard."""
+        if self._init_wizard_open:
+            return False
+        from eawf.surfaces.tui.screens.overlays.init_wizard import open_init_wizard
+
+        pushed = open_init_wizard(self, callback=self._on_init_wizard_closed)
+        if pushed:
+            self._init_wizard_open = True
+        return pushed
+
+    def _on_init_wizard_closed(self, result: object | None) -> None:
+        """Clear the init-wizard guard and surface the chosen command plan."""
+        self._init_wizard_open = False
+        if result is None:
+            return
+        from eawf.surfaces.tui.screens.overlays.init_wizard import InitWizardResult, format_command
+
+        if not isinstance(result, InitWizardResult):
+            return
+        command = format_command(result.command)
+        logger.info(f"_on_init_wizard_closed action={result.action!r} command={command!r}")
+        self.notify(f"init path: {command}", severity="information")
+
     async def _on_degraded(self, degraded: bool) -> None:
         """Receive a degraded-mode flip from the binder."""
         self.degraded = degraded
@@ -601,6 +647,7 @@ class EaApp(App[None]):
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
         self.call_after_refresh(self._sync_degraded_banner)
+        self._maybe_open_init_wizard()
 
     async def _poll_os_appearance(self) -> None:
         """Re-apply ``/theme auto`` when the OS light/dark appearance flips.
@@ -839,6 +886,10 @@ class EaApp(App[None]):
         from eawf.surfaces.tui.screens.overlays.config_modal import open_config
 
         open_config(self)
+
+    def action_open_init_wizard(self) -> None:
+        """Open the TUI init wizard (cap-checked, single-instance)."""
+        self._open_init_wizard()
 
     def action_open_help(self) -> None:
         """Open the ``?`` help overlay (cap-checked, single-instance).

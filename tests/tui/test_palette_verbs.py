@@ -47,6 +47,7 @@ def test_visible_verbs_repo_includes_cross_screen_verbs() -> None:
     names = {v.name for v in visible_verbs("repo")}
     assert "/find" in names  # SCOPES_ALL
     assert "/theme" in names  # SCOPES_ALL
+    assert "/init" in names  # SCOPES_ALL
 
 
 def test_visible_verbs_user_hides_removed_placeholder_verbs() -> None:

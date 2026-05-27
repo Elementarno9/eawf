@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 #: code/title rather than a per-repo anchor.
 _PORTFOLIO_CODE = "PORTFOLIO"
 _PORTFOLIO_TITLE = "Portfolio"
+USER_SCOPE_INIT_NEEDED_KEY = "init_needed"
 
 
 def synthesize_user_state(*, registry_path: Path | None = None, home: Path | None = None) -> State:
@@ -85,10 +86,12 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
         A :class:`~eawf.kernel.state.models.State` whose ``workspace.repos``
         mirrors the registry (possibly empty).
     """
+    registry_unavailable = False
     try:
         registry = read_registry(registry_path, home=home)
     except RegistryReadError as exc:
         logger.info(f"synthesize_user_state registry_unavailable cause={exc!r}")
+        registry_unavailable = True
         registry = Registry()
     repos: dict[str, WorkspaceRepoRef] = {}
     for code, entry in registry.repos.items():
@@ -106,6 +109,7 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
         repos=repos,
         current_repo_code=registry.active_code,
     )
+    init_needed = registry_unavailable or not repos
     return State(
         schema_version="1.1",
         scope_kind=ScopeKind.WORKSPACE,
@@ -120,8 +124,20 @@ def synthesize_user_state(*, registry_path: Path | None = None, home: Path | Non
         artifacts={},
         agent_sessions={},
         plugins={},
-        indexes={},
+        indexes={USER_SCOPE_INIT_NEEDED_KEY: init_needed},
     )
+
+
+def user_scope_init_needed(state: State | None) -> bool:
+    """Return whether the synthesized user scope should prompt for init.
+
+    The user portfolio carries this as an in-memory ``indexes`` flag so no
+    schema change or persisted ``state.json`` write is needed. Missing or
+    empty registries set the flag; populated registries clear it.
+    """
+    if state is None:
+        return False
+    return bool(state.indexes.get(USER_SCOPE_INIT_NEEDED_KEY))
 
 
 #: Footer hints tuned for the user portfolio screen (arrows primary; the
@@ -189,4 +205,10 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
             yield Container(id="zoom-mount")
 
 
-__all__ = ["PortfolioTable", "UserScreen", "synthesize_user_state"]
+__all__ = [
+    "USER_SCOPE_INIT_NEEDED_KEY",
+    "PortfolioTable",
+    "UserScreen",
+    "synthesize_user_state",
+    "user_scope_init_needed",
+]
