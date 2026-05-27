@@ -1,0 +1,45 @@
+name: Reviewdog
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: reviewdog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ast-grep-floor:
+    name: ast-grep visible floor
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Generate ast-grep deterministic floor
+        run: uv run python -m eawf.platform.lint.tools.astgrep_floor --config-path sgconfig.yml --output-dir .ast-grep-floor
+
+      - name: Reviewdog ast-grep visible floor
+        uses: reviewdog/action-ast-grep@v1.56.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          filter_mode: added
+          level: warning
+          fail_level: none
+          sg_config: sgconfig.yml
+          sg_flags: --no-ignore hidden
