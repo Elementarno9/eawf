@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.config.schema import EstimationConfig
 from eawf.kernel.state.enums import Confidence, EffortBucket, WaveStatus
 from eawf.kernel.state.models import EstimateSummary, State, Wave
 
@@ -34,6 +38,9 @@ CALIBRATION_WINDOW: timedelta = timedelta(days=90)
 #: this fraction (``> 25 %``) emits a nudge; at-or-below the threshold is
 #: treated as in-tolerance and stays quiet.
 DRIFT_THRESHOLD: float = 0.25
+
+FIT_N_MIN: int = 5
+HIGH_CONFIDENCE_SAMPLE_COUNT: int = 30
 
 
 def wave_estimate_eu(wave: Wave) -> float:
@@ -76,6 +83,8 @@ class BucketCalibration(BaseModel):
         configured_eu: The currently-configured centroid (:data:`BUCKET_EU`).
         fitted_eu: The mean actual EU of CLOSED, in-window waves tagged with
             *bucket*. ``None`` when the bucket has no in-window samples.
+        fitted_pessimistic_eu: The nearest-rank p90 actual EU of the same
+            samples. ``None`` when the bucket has no in-window samples.
         sample_count: Number of contributing waves.
         drift_pct: Relative drift ``|fitted - configured| / configured *
             100``, or ``None`` when ``fitted_eu`` is ``None``.
@@ -88,6 +97,7 @@ class BucketCalibration(BaseModel):
     bucket: EffortBucket
     configured_eu: float = Field(gt=0.0)
     fitted_eu: float | None
+    fitted_pessimistic_eu: float | None
     sample_count: int = Field(ge=0)
     drift_pct: float | None
     nudge: bool
@@ -139,7 +149,41 @@ def _bucket_actuals(state: State, *, now: datetime) -> dict[EffortBucket, list[f
     return grouped
 
 
-def calibrate_buckets(state: State, *, now: datetime | None = None) -> CalibrationReport:
+def _fitted_pessimistic_eu(samples: list[float]) -> float | None:
+    """Return the nearest-rank p90 from fitted actual samples."""
+    if not samples:
+        return None
+    ordered = sorted(samples)
+    index = max(0, min(len(ordered) - 1, math.ceil(len(ordered) * 0.9) - 1))
+    return ordered[index]
+
+
+def _estimation_config(config: EstimationConfig | Mapping[str, Any] | None) -> EstimationConfig:
+    """Coerce optional layered config input to strict estimation config."""
+    if config is None:
+        return EstimationConfig()
+    if isinstance(config, EstimationConfig):
+        return config
+    raw: Any = config
+    if isinstance(raw, Mapping) and isinstance(raw.get("estimation"), Mapping):
+        raw = raw["estimation"]
+    return EstimationConfig.model_validate(raw)
+
+
+def _configured_bucket_eu(bucket: EffortBucket, config: EstimationConfig) -> float:
+    """Return configured expected EU for *bucket*, falling back to ``BUCKET_EU``."""
+    override = config.buckets.overrides.get(bucket)
+    if override is not None:
+        return override.expected_eu
+    return BUCKET_EU[bucket]
+
+
+def calibrate_buckets(
+    state: State,
+    *,
+    now: datetime | None = None,
+    config: EstimationConfig | Mapping[str, Any] | None = None,
+) -> CalibrationReport:
     """Re-fit the XS..XL effort-bucket centroids from 90-day actuals.
 
     For every bucket the re-fit takes the mean elapsed EU of CLOSED, in-
@@ -158,14 +202,19 @@ def calibrate_buckets(state: State, *, now: datetime | None = None) -> Calibrati
         state: Loaded typed :class:`State` snapshot (read-only).
         now: Optional clock injection for deterministic tests. Defaults to
             :func:`datetime.now` (UTC).
+        config: Optional typed ``estimation`` config, or a merged config
+            mapping containing an ``estimation`` section. Configured bucket
+            overrides replace :data:`BUCKET_EU` for drift comparison.
 
     Returns:
         The per-bucket calibration verdict over the 90-day window.
     """
     anchor = now if now is not None else datetime.now(UTC)
+    settings = _estimation_config(config)
     grouped = _bucket_actuals(state, now=anchor)
     rows: list[BucketCalibration] = []
-    for bucket, configured in BUCKET_EU.items():
+    for bucket in BUCKET_EU:
+        configured = _configured_bucket_eu(bucket, settings)
         samples = grouped[bucket]
         if not samples:
             rows.append(
@@ -173,6 +222,7 @@ def calibrate_buckets(state: State, *, now: datetime | None = None) -> Calibrati
                     bucket=bucket,
                     configured_eu=configured,
                     fitted_eu=None,
+                    fitted_pessimistic_eu=None,
                     sample_count=0,
                     drift_pct=None,
                     nudge=False,
@@ -180,12 +230,14 @@ def calibrate_buckets(state: State, *, now: datetime | None = None) -> Calibrati
             )
             continue
         fitted = sum(samples) / len(samples)
+        fitted_pessimistic = _fitted_pessimistic_eu(samples)
         drift = abs(fitted - configured) / configured
         rows.append(
             BucketCalibration(
                 bucket=bucket,
                 configured_eu=configured,
                 fitted_eu=fitted,
+                fitted_pessimistic_eu=fitted_pessimistic,
                 sample_count=len(samples),
                 drift_pct=drift * 100.0,
                 nudge=drift > DRIFT_THRESHOLD,
@@ -198,14 +250,91 @@ def calibrate_buckets(state: State, *, now: datetime | None = None) -> Calibrati
     )
 
 
-def default_estimate_summary(wave: Wave, *, now: datetime) -> EstimateSummary | None:
+class _EstimateBasis(BaseModel):
+    """Resolved source values for a bucket-derived default estimate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_eu: float = Field(gt=0.0)
+    pessimistic_eu: float = Field(gt=0.0)
+    confidence: Confidence
+    source: str
+
+
+def _confidence_for_sample_count(sample_count: int, config: EstimationConfig) -> Confidence:
+    """Return calibrated-fit confidence for *sample_count*."""
+    if sample_count >= config.buckets.high_confidence_n:
+        return Confidence.HIGH
+    return Confidence.MEDIUM
+
+
+def _basis_from_config(bucket: EffortBucket, config: EstimationConfig) -> _EstimateBasis | None:
+    """Return explicit config override basis for *bucket*, if configured."""
+    override = config.buckets.overrides.get(bucket)
+    if override is None:
+        return None
+    pessimistic = override.pessimistic_eu
+    if pessimistic is None:
+        pessimistic = override.expected_eu * _DEFAULT_PESSIMISTIC_RATIO
+    return _EstimateBasis(
+        expected_eu=override.expected_eu,
+        pessimistic_eu=pessimistic,
+        confidence=Confidence.HIGH,
+        source="config",
+    )
+
+
+def _basis_from_fit(
+    bucket: EffortBucket,
+    *,
+    state: State | None,
+    now: datetime,
+    config: EstimationConfig,
+) -> _EstimateBasis | None:
+    """Return calibrated actuals basis when the bucket has enough samples."""
+    if state is None:
+        return None
+    report = calibrate_buckets(state, now=now, config=config)
+    row = next(row for row in report.buckets if row.bucket == bucket)
+    if row.fitted_eu is None or row.sample_count < config.buckets.n_min:
+        return None
+    pessimistic = row.fitted_pessimistic_eu
+    if pessimistic is None:
+        pessimistic = row.fitted_eu * _DEFAULT_PESSIMISTIC_RATIO
+    return _EstimateBasis(
+        expected_eu=row.fitted_eu,
+        pessimistic_eu=pessimistic,
+        confidence=_confidence_for_sample_count(row.sample_count, config),
+        source="fitted",
+    )
+
+
+def _basis_from_bucket(bucket: EffortBucket) -> _EstimateBasis:
+    """Return static built-in bucket basis."""
+    expected = BUCKET_EU[bucket]
+    return _EstimateBasis(
+        expected_eu=expected,
+        pessimistic_eu=expected * _DEFAULT_PESSIMISTIC_RATIO,
+        confidence=Confidence.LOW,
+        source="bucket",
+    )
+
+
+def default_estimate_summary(
+    wave: Wave,
+    *,
+    now: datetime,
+    state: State | None = None,
+    config: EstimationConfig | Mapping[str, Any] | None = None,
+) -> EstimateSummary | None:
     """Derive a default :class:`EstimateSummary` from ``wave.effort_bucket``.
 
-    The bucket centroid (:data:`BUCKET_EU`) is the expected EU; the
-    pessimistic figure applies :data:`_DEFAULT_PESSIMISTIC_RATIO` so the
-    spread matches an operator-set estimate. Returns ``None`` when the wave
-    carries no ``effort_bucket`` — there is no centroid to derive from, so
-    no estimate is written (the variance metric simply skips the wave).
+    Estimate selection is ordered by trust: explicit config override first,
+    then a fitted bucket centroid once the bucket has at least
+    ``estimation.buckets.n_min`` in-window samples, then the static
+    :data:`BUCKET_EU` fallback. Returns ``None`` when the wave carries no
+    ``effort_bucket`` — there is no centroid to derive from, so no estimate
+    is written (the variance metric simply skips the wave).
 
     The ``current_store_record_id`` is a synthetic, store-free id: lifecycle
     transitions are pure in-memory state mutators and never append a JSONL
@@ -215,6 +344,9 @@ def default_estimate_summary(wave: Wave, *, now: datetime) -> EstimateSummary | 
     Args:
         wave: The wave being claimed.
         now: Claim timestamp (UTC) used for ``updated_at`` and the id stamp.
+        state: Optional state snapshot used for fitted-bucket calibration.
+        config: Optional typed ``estimation`` config, or a merged config
+            mapping containing an ``estimation`` section.
 
     Returns:
         The bucket-derived estimate, or ``None`` when ``effort_bucket`` is
@@ -222,13 +354,22 @@ def default_estimate_summary(wave: Wave, *, now: datetime) -> EstimateSummary | 
     """
     if wave.effort_bucket is None:
         return None
-    expected_eu = BUCKET_EU[wave.effort_bucket]
-    pessimistic_eu = round(expected_eu * _DEFAULT_PESSIMISTIC_RATIO, 2)
-    expected_minutes = round(expected_eu * EU_MINUTES, 2)
-    pessimistic_minutes = round(pessimistic_eu * EU_MINUTES, 2)
+    settings = _estimation_config(config)
+    bucket = wave.effort_bucket
+    basis = (
+        _basis_from_config(bucket, settings)
+        or _basis_from_fit(bucket, state=state, now=now, config=settings)
+        or _basis_from_bucket(bucket)
+    )
+    expected_eu = round(basis.expected_eu, 2)
+    pessimistic_eu = round(basis.pessimistic_eu, 2)
+    eu_minutes = settings.eu_minutes
+    expected_minutes = round(expected_eu * eu_minutes, 2)
+    pessimistic_minutes = round(pessimistic_eu * eu_minutes, 2)
     estimate_id = f"EST-{wave.id}"
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     display = f"{expected_eu} EU · exp ~{expected_minutes:.0f}m · pess ~{pessimistic_minutes:.0f}m"
+    record_source = "bucket" if basis.source == "bucket" else f"bucket-{basis.source}"
     return EstimateSummary(
         id=estimate_id,
         scope_id=wave.id,
@@ -238,7 +379,7 @@ def default_estimate_summary(wave: Wave, *, now: datetime) -> EstimateSummary | 
         pessimistic_minutes=pessimistic_minutes,
         display=display,
         reference_class=f"bucket:{wave.effort_bucket.value}",
-        confidence=Confidence.LOW,
-        current_store_record_id=f"{estimate_id}-bucket-{stamp}",
+        confidence=basis.confidence,
+        current_store_record_id=f"{estimate_id}-{record_source}-{stamp}",
         updated_at=now,
     )
