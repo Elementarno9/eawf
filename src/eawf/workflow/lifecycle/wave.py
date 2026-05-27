@@ -500,6 +500,8 @@ def close_wave(
     wave_id: str,
     outcome: str,
     tokens_consumed: int | None = None,
+    actual_attention_eu: float | None = None,
+    actual_agent_runtime_eu: float | None = None,
 ) -> Wave:
     """Close a claimed/in-progress wave with an outcome string.
 
@@ -511,9 +513,14 @@ def close_wave(
     :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`, which walks
     ``git log --grep '[P##-W##]'`` against the active branch.
 
-    Telemetry handoff (P28-I02-W03): the close path upserts
+    Telemetry handoff (P28-I02-W03/P28-I03-W30): the close path upserts
     :class:`ActualSummary` for *wave_id* in ``state.actuals`` carrying
     the wave's :attr:`Wave.tokens_consumed` tally on ``actual_tokens``.
+    When daemon telemetry has a matching per-session duration rollup, the
+    auto-created summary also carries ``attention_eu`` /
+    ``agent_runtime_eu``. Existing summaries are operator-authored actuals;
+    their effort fields are preserved and only token / cost status fields
+    refresh.
     The auto-created actual leaves ``elapsed_eu=0.0`` — the open->close
     wall-clock span is not agent effort (it counts overnight,
     cross-session, and other-wave idle time, inflating consumed EU by
@@ -531,10 +538,14 @@ def close_wave(
         tokens_consumed: Optional final token tally to persist on the
             wave before the close-time :class:`ActualSummary` upsert.
             ``None`` preserves the wave's existing accumulated tally.
+        actual_attention_eu: Optional telemetry-derived attention effort
+            for an auto-created :class:`ActualSummary`.
+        actual_agent_runtime_eu: Optional telemetry-derived runtime effort
+            for an auto-created :class:`ActualSummary`.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, the wave is not
-            claimable for close, or *tokens_consumed* is negative.
+            claimable for close, or an actual value is negative.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -548,6 +559,12 @@ def close_wave(
         if tokens_consumed < 0:
             raise LifecycleError(f"tokens_consumed must be non-negative; got {tokens_consumed}")
         wave.tokens_consumed = tokens_consumed
+    if actual_attention_eu is not None and actual_attention_eu < 0.0:
+        raise LifecycleError(f"actual_attention_eu must be non-negative; got {actual_attention_eu}")
+    if actual_agent_runtime_eu is not None and actual_agent_runtime_eu < 0.0:
+        raise LifecycleError(
+            f"actual_agent_runtime_eu must be non-negative; got {actual_agent_runtime_eu}"
+        )
     wave.status = WaveStatus.CLOSED
     wave.outcome = outcome
     now = datetime.now(UTC)
@@ -569,6 +586,8 @@ def close_wave(
             scope_id=wave_id,
             status=ActualStatus.DONE,
             elapsed_eu=0.0,
+            attention_eu=actual_attention_eu,
+            agent_runtime_eu=actual_agent_runtime_eu,
             actual_tokens=wave.tokens_consumed,
             actual_cost_usd=0.0,
             current_store_record_id=f"REC-{wave_id}",
@@ -580,7 +599,8 @@ def close_wave(
         existing.updated_at = now
     logger.info(
         f"close_wave id={wave_id} outcome={outcome!r} "
-        f"actual_tokens={wave.tokens_consumed} actual_cost_usd=0.0"
+        f"actual_tokens={wave.tokens_consumed} actual_cost_usd=0.0 "
+        f"actual_attention_eu={actual_attention_eu}"
     )
     return wave
 

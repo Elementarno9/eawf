@@ -90,6 +90,12 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventKind, EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
+from eawf.observability.telemetry.join import (
+    DEFAULT_EU_MINUTES,
+    WaveSessionRollup,
+    rollup_wave_sessions,
+)
+from eawf.observability.telemetry.models import TelemetrySession
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     VALIDATION_FAILED,
@@ -427,7 +433,12 @@ def _apply_wave_claim(state: State, mutation: Mutation) -> None:
     )
 
 
-def _apply_wave_close(state: State, mutation: Mutation) -> None:
+def _apply_wave_close(
+    state: State,
+    mutation: Mutation,
+    *,
+    wave_session_rollup: WaveSessionRollup | None = None,
+) -> None:
     """Apply :attr:`MutationKind.WAVE_CLOSE` — delegate to ``close_wave``.
 
     Optionally pins ``Wave.commit`` when the params carry a resolved
@@ -442,10 +453,75 @@ def _apply_wave_close(state: State, mutation: Mutation) -> None:
         wave_id=str(params["wave_id"]),
         outcome=str(params["outcome"]),
         tokens_consumed=int(tokens_raw) if tokens_raw is not None else None,
+        actual_attention_eu=(
+            wave_session_rollup.attention_eu if wave_session_rollup is not None else None
+        ),
+        actual_agent_runtime_eu=(
+            wave_session_rollup.attention_eu if wave_session_rollup is not None else None
+        ),
     )
     commit = params.get("commit")
     if commit is not None:
         wave.commit = str(commit)
+
+
+def _wave_close_rollup_config(repo_root: Path) -> tuple[str, float]:
+    """Return ``(telemetry.db_kind, estimation.eu_minutes)`` for close rollups."""
+    try:
+        from eawf.kernel.config.layered import get_dotted, merge_config
+
+        merged, _sources = merge_config(repo=repo_root)
+        db_kind = str(get_dotted(merged, "telemetry.db_kind"))
+        eu_minutes = float(get_dotted(merged, "estimation.eu_minutes"))
+    except Exception as exc:
+        logger.warning(f"wave_close_rollup config='default' err={exc!s}")
+        return "sqlite", DEFAULT_EU_MINUTES
+    if eu_minutes <= 0.0:
+        logger.warning(f"wave_close_rollup eu_minutes={eu_minutes!r} invalid; using default")
+        eu_minutes = DEFAULT_EU_MINUTES
+    return db_kind, eu_minutes
+
+
+def _load_wave_session_rollup(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> WaveSessionRollup | None:
+    """Join projected telemetry sessions for the wave being closed."""
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id:
+        return None
+    wave = state.waves.get(wave_id)
+    if wave is None or not wave.sessions:
+        return None
+
+    from eawf.observability.telemetry.store import metrics_db_path, open_store
+
+    db_path = metrics_db_path(state_path)
+    if not db_path.exists():
+        return None
+
+    db_kind, eu_minutes = _wave_close_rollup_config(repo_root)
+    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
+    try:
+        rows = store.fetch_all("telemetry_sessions", TelemetrySession)
+    except Exception as exc:
+        logger.warning(f"wave_close_rollup wave={wave_id!r} status='skip' err={exc!s}")
+        return None
+    finally:
+        store.close()
+
+    telemetry_sessions = [row for row in rows if isinstance(row, TelemetrySession)]
+    rollup = rollup_wave_sessions(wave, telemetry_sessions, eu_minutes=eu_minutes)
+    if rollup.attention_eu is None:
+        return None
+    logger.info(
+        f"wave_close_rollup wave={wave_id!r} attempts={len(rollup.attempts)} "
+        f"duration_ms={rollup.duration_ms} attention_eu={rollup.attention_eu}"
+    )
+    return rollup
 
 
 def _config_root_for_state_path(state_path: Path) -> Path:
@@ -492,6 +568,7 @@ def _compute_wave_close_extras(
     state_path: Path,
     repo_root: Path,
     readiness: CloseReadiness | None = None,
+    actual_written_auto: bool = False,
 ) -> dict[str, str | int | float | bool]:
     """Return the W06 close-readiness advisory metrics for *mutation*.
 
@@ -512,6 +589,9 @@ def _compute_wave_close_extras(
             :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`).
         readiness: Optional pre-close readiness view. When absent, the
             helper computes an advisory view itself.
+        actual_written_auto: Whether this close created the
+            :class:`ActualSummary` row instead of refreshing an existing
+            operator-authored actual.
 
     Returns:
         Dict with the ``readiness_warnings_count`` key (always set;
@@ -567,8 +647,13 @@ def _compute_wave_close_extras(
     actuals = state.actuals or {}
     actual = actuals.get(wave_id)
     if actual is not None:
+        extras["actual_written_auto"] = actual_written_auto
         extras["actual_tokens"] = actual.actual_tokens
         extras["actual_cost_usd"] = actual.actual_cost_usd
+        if actual.attention_eu is not None:
+            extras["actual_attention_eu"] = actual.attention_eu
+        if actual.agent_runtime_eu is not None:
+            extras["actual_agent_runtime_eu"] = actual.agent_runtime_eu
     return extras
 
 
@@ -1241,6 +1326,8 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             state, payload = _read_state(state_path)
             before_version = _state_version(payload)
             wave_close_readiness: CloseReadiness | None = None
+            wave_close_rollup: WaveSessionRollup | None = None
+            actual_written_auto = False
             repo_anchor = (
                 Path(args.repo_root) if args.repo_root else _config_root_for_state_path(state_path)
             )
@@ -1253,7 +1340,17 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                         state_path=state_path,
                         repo_root=repo_anchor,
                     )
-                apply_func(state, mutation)
+                    wave_id = str(mutation.params.get("wave_id", ""))
+                    actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
+                    wave_close_rollup = _load_wave_session_rollup(
+                        state,
+                        mutation,
+                        state_path=state_path,
+                        repo_root=repo_anchor,
+                    )
+                    _apply_wave_close(state, mutation, wave_session_rollup=wave_close_rollup)
+                else:
+                    apply_func(state, mutation)
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
                 # (ValidationError, exit 2); every other lifecycle-guard
@@ -1319,6 +1416,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                     state_path=state_path,
                     repo_root=repo_anchor,
                     readiness=wave_close_readiness,
+                    actual_written_auto=actual_written_auto,
                 )
                 drift_extras = _bucket_drift_extras(state)
 

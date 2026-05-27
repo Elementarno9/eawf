@@ -178,6 +178,27 @@ def test_close_wave_upserts_actual_with_token_tally() -> None:
     assert actual.elapsed_eu == pytest.approx(0.0)
 
 
+def test_close_wave_auto_actual_accepts_telemetry_attention_eu() -> None:
+    """A telemetry rollup can populate attention/runtime EU on auto-create."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    close_wave(
+        state,
+        wave_id="P01-I01-W01",
+        outcome="ok",
+        actual_attention_eu=1.25,
+        actual_agent_runtime_eu=1.25,
+    )
+
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.attention_eu == pytest.approx(1.25)
+    assert actual.agent_runtime_eu == pytest.approx(1.25)
+    assert actual.elapsed_eu == pytest.approx(0.0)
+
+
 def test_close_wave_tokens_consumed_param_sets_final_tally() -> None:
     """The close call may set the final token tally before actual upsert."""
     state = _empty_state()
@@ -248,6 +269,8 @@ def test_close_wave_refreshes_existing_actual_tokens() -> None:
             scope_id="P01-I01-W01",
             status=ActualStatus.ACTIVE,
             elapsed_eu=1.25,
+            attention_eu=2.0,
+            agent_runtime_eu=2.0,
             actual_tokens=100,
             current_store_record_id="REC-P01-I01-W01",
             updated_at=seeded_at,
@@ -255,14 +278,22 @@ def test_close_wave_refreshes_existing_actual_tokens() -> None:
     }
     state.waves["P01-I01-W01"].tokens_consumed = 9999
 
-    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+    close_wave(
+        state,
+        wave_id="P01-I01-W01",
+        outcome="ok",
+        actual_attention_eu=9.0,
+        actual_agent_runtime_eu=9.0,
+    )
 
     actual = state.actuals["P01-I01-W01"]
     # Token tally refreshed, status flipped to DONE, but the measured
-    # elapsed_eu segment is preserved.
+    # elapsed/attention EU values are operator-authored and preserved.
     assert actual.actual_tokens == 9999
     assert actual.status == ActualStatus.DONE
     assert actual.elapsed_eu == pytest.approx(1.25)
+    assert actual.attention_eu == pytest.approx(2.0)
+    assert actual.agent_runtime_eu == pytest.approx(2.0)
     assert actual.updated_at > seeded_at
 
 

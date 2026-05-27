@@ -462,6 +462,7 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
         result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         envelope_payload = result["event"]["payload"]
         assert envelope_payload["event_kind"] == "wave_closed"
+        assert envelope_payload["extras"]["actual_written_auto"] is True
         assert envelope_payload["extras"]["actual_tokens"] == 7777
         assert envelope_payload["extras"]["actual_cost_usd"] == 0.0
         # The on-disk JSONL row carries the same typed discriminator + extras.
@@ -469,7 +470,77 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
         assert len(rows) == 1
         on_disk = orjson.loads(rows[0])
         assert on_disk["payload"]["event_kind"] == "wave_closed"
+        assert on_disk["payload"]["extras"]["actual_written_auto"] is True
         assert on_disk["payload"]["extras"]["actual_tokens"] == 7777
+
+    _run(body)
+
+
+def test_mutate_wave_close_derives_attention_eu_from_telemetry_duration(
+    tmp_path: Path,
+) -> None:
+    """Wave close auto-actual reads projected telemetry session duration."""
+    from decimal import Decimal
+
+    from eawf.observability.telemetry.models import TelemetrySession
+    from eawf.observability.telemetry.store import SqliteMetricsStore, metrics_db_path
+
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    assert isinstance(wave, dict)
+    wave["sessions"] = {
+        "1": {
+            "attempt": 1,
+            "runtime": "codex",
+            "session_id": "sess-close-1",
+            "session_log_handle": "urn:eawf:v1:session-log:codex:sess-close-1",
+            "started_at": _now().isoformat(),
+            "ended_at": (_now() + timedelta(minutes=30)).isoformat(),
+            "exit_status": 0,
+        }
+    }
+    ctx, state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    store = SqliteMetricsStore(metrics_db_path(state_path))
+    store.init_schema()
+    store.upsert(
+        "telemetry_sessions",
+        TelemetrySession(
+            session_id="sess-close-1",
+            project_id="repo/eawf",
+            runtime="codex",
+            wave_id="P24-I01-W09",
+            attempt_id="1",
+            session_log_path="opaque://sess-close-1",
+            started_at=_now(),
+            ended_at=_now() + timedelta(minutes=30),
+            duration_ms=1_800_000,
+            model_primary=None,
+            total_cost_usd=Decimal("0"),
+            end_marker="clean_stop",
+        ),
+    )
+    store.commit()
+    store.close()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        extras = result["event"]["payload"]["extras"]
+        assert extras["actual_written_auto"] is True
+        assert extras["actual_attention_eu"] == pytest.approx(1.0)
+        written = orjson.loads(state_path.read_bytes())
+        actual = written["actuals"]["P24-I01-W09"]
+        assert actual["attention_eu"] == pytest.approx(1.0)
+        assert actual["agent_runtime_eu"] == pytest.approx(1.0)
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 1
+        on_disk = orjson.loads(rows[0])
+        assert on_disk["payload"]["extras"]["actual_attention_eu"] == pytest.approx(1.0)
 
     _run(body)
 
