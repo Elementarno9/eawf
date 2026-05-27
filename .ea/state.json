@@ -5403,7 +5403,8 @@
         "P28-I02-W20",
         "P28-I02-W21",
         "P28-I02-W22",
-        "P28-I02-W23"
+        "P28-I02-W23",
+        "P28-I02-W24"
       ]
     },
     "P28-I03": {
@@ -6060,7 +6061,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T15:55:44.175026Z",
+  "updated_at": "2026-05-27T16:07:17.451610Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21348,7 +21349,9 @@
     },
     "P28-I02-W21": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P28-I02-W24"
+      ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "closed_at": "2026-05-27T02:23:08.900439Z",
       "commit": null,
@@ -21449,6 +21452,51 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P28-I02-W23-1779896359"
+    },
+    "P28-I02-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I02-W21"
+      ],
+      "description": "Prevent service startup and CLI auto-spawn from creating two canonical daemon writers. Add a lifetime runtime singleton lock held by the daemon process. Make loser exits happen before PID WAL or socket mutation. Make auto-spawn wait when startup is already in progress. Make service-enable wait for RPC readiness. Stop supervised services from idle-exit restart churn.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/main.py",
+        "src/eawf/runtime/daemon/spawn.py",
+        "src/eawf/runtime/daemon/service_install.py",
+        "src/eawf/runtime/daemon/runtime_dir.py",
+        "src/eawf/runtime/daemon/singleton.py",
+        "templates/dev.eawf.eawfd.plist.j2",
+        "templates/eawfd.service.j2",
+        "tests/daemon/test_main_boot.py",
+        "tests/daemon/test_spawn.py",
+        "tests/daemon/test_service_install.py"
+      ],
+      "id": "P28-I02-W24",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T16:07:17.451288Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "daemon boot acquires runtime singleton lock before PID WAL or socket work",
+        "second daemon attempt exits cleanly without overwriting pid file or unlinking live socket",
+        "auto-spawn waits on lock-held startup and does not fork another daemon",
+        "service-enable waits for daemon.ping readiness not PID-only",
+        "supervised services do not idle-exit restart loop",
+        "tests cover duplicate boot auto-spawn lock contention service readiness and service templates"
+      ],
+      "title": "fix: enforce daemon singleton + service readiness",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     },
     "P28-I03-W01": {
       "agent_role": "executor",
