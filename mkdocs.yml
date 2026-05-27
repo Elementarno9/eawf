@@ -27,6 +27,9 @@ markdown_extensions:
 
 nav:
   - Home: README.md
+  - Tutorial:
+      - Quickstart: tutorial/quickstart.md
+  - Concepts: concepts.md
   - Architecture:
       - Overview: architecture/overview.md
       - State model: architecture/state-model.md
