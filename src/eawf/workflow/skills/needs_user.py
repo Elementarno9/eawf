@@ -29,9 +29,10 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
@@ -61,6 +62,10 @@ _QUESTION_KEY = "user_question"
 
 #: ``extras`` key holding the originating session URN.
 _SESSION_KEY = "session"
+
+#: ``extras`` key holding the scope id on newer rows. Older rows rely on
+#: ``Envelope.scope_id`` only; the scanner accepts both.
+_SCOPE_ID_KEY = "scope_id"
 
 #: ``extras`` key holding the chosen option label on a resume row.
 _CHOICE_KEY = "choice"
@@ -135,6 +140,7 @@ def _pause_envelope(
         message=question.question,
         extras={
             _PAUSE_URN_KEY: pause_urn,
+            _SCOPE_ID_KEY: scope_id,
             _SESSION_KEY: session,
             _QUESTION_KEY: question.model_dump_json(),
         },
@@ -161,7 +167,7 @@ def _resume_envelope(*, pause_urn: str, scope_id: str, choice: str) -> Envelope:
         args_hash="",
         status="ok",
         message=f"resumed {pause_urn} with choice {choice!r}",
-        extras={_PAUSE_URN_KEY: pause_urn, _CHOICE_KEY: choice},
+        extras={_PAUSE_URN_KEY: pause_urn, _SCOPE_ID_KEY: scope_id, _CHOICE_KEY: choice},
     )
     return Envelope(
         id=f"EV-{uuid.uuid4().hex[:12]}",
@@ -180,6 +186,7 @@ def record_pause(
     scope_id: str,
     session: str,
     question: UserQuestion,
+    publish: Callable[[Envelope], None] | None = None,
 ) -> str:
     """Persist a needs_user pause and return its ``pause-urn``.
 
@@ -193,6 +200,8 @@ def record_pause(
         scope_id: Scope the pause belongs to.
         session: Originating session URN.
         question: The validated :class:`UserQuestion` to persist.
+        publish: Optional daemon bus publisher invoked after the durable
+            append succeeds.
 
     Returns:
         The fresh ``pause-urn`` recorded for the pause.
@@ -205,6 +214,8 @@ def record_pause(
         question=question,
     )
     append_envelope(store_path(state_path, StoreKind.EVENT), envelope)
+    if publish is not None:
+        publish(envelope)
     logger.info(f"record_pause scope={scope_id!r} pause_urn={pause_urn!r}")
     return pause_urn
 
@@ -240,6 +251,33 @@ def _iter_event_payloads(events_path: Path) -> list[tuple[str | None, EventPaylo
     return out
 
 
+def _payload_scope_id(env_scope: str | None, extras: dict[str, Any]) -> str:
+    """Return the scope id for a pause/resume row, accepting legacy shapes."""
+    if env_scope:
+        return env_scope
+    extra_scope = extras.get(_SCOPE_ID_KEY)
+    if isinstance(extra_scope, str):
+        return extra_scope
+    legacy_scope = extras.get("scope")
+    if isinstance(legacy_scope, str):
+        return legacy_scope
+    return ""
+
+
+def _decode_question(raw_question: object) -> UserQuestion | None:
+    """Decode a question from current JSON-string or legacy object shape."""
+    from eawf.workflow.skills.bodies.user_question import UserQuestion
+
+    try:
+        if isinstance(raw_question, str):
+            return UserQuestion.model_validate_json(raw_question)
+        if isinstance(raw_question, dict):
+            return UserQuestion.model_validate(raw_question)
+    except ValueError as exc:
+        logger.debug(f"_decode_question skip error={exc!r}")
+    return None
+
+
 def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[OpenPause]:
     """Return unresolved pauses, newest last, optionally filtered by scope.
 
@@ -255,36 +293,29 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
     Returns:
         Open :class:`OpenPause` records in append order (oldest first).
     """
-    from eawf.workflow.skills.bodies.user_question import UserQuestion
-
     resolved: set[str] = set()
     pending: list[OpenPause] = []
     for env_scope, payload in _iter_event_payloads(store_path(state_path, StoreKind.EVENT)):
         urn = payload.extras.get(_PAUSE_URN_KEY)
         if not isinstance(urn, str):
             continue
+        row_scope_id = _payload_scope_id(env_scope, payload.extras)
         if payload.event_type == RESUME_EVENT_TYPE:
             resolved.add(urn)
             continue
         if payload.event_type != PAUSE_EVENT_TYPE:
             continue
-        if scope_id is not None and env_scope != scope_id:
+        if scope_id is not None and row_scope_id != scope_id:
             continue
-        raw_question = payload.extras.get(_QUESTION_KEY)
-        if not isinstance(raw_question, str):
-            continue
-        try:
-            question = UserQuestion.model_validate_json(raw_question)
-        except ValueError as exc:
-            logger.debug(
-                f"list_open_pauses outcome=skip_undecodable pause_urn={urn!r} error={exc!r}"
-            )
+        question = _decode_question(payload.extras.get(_QUESTION_KEY))
+        if question is None:
+            logger.debug(f"list_open_pauses outcome=skip_undecodable pause_urn={urn!r}")
             continue
         session = payload.extras.get(_SESSION_KEY)
         pending.append(
             OpenPause(
                 pause_urn=urn,
-                scope_id=env_scope or "",
+                scope_id=row_scope_id,
                 session=session if isinstance(session, str) else "",
                 question=question,
             )
@@ -331,7 +362,13 @@ def validate_choice(pause: OpenPause, choice: str) -> str:
     return choice
 
 
-def resolve_pause(state_path: Path, *, pause_urn: str, choice: str) -> OpenPause:
+def resolve_pause(
+    state_path: Path,
+    *,
+    pause_urn: str,
+    choice: str,
+    publish: Callable[[Envelope], None] | None = None,
+) -> OpenPause:
     """Resolve the pause *pause_urn* with *choice* and persist the answer.
 
     Looks up the open pause, validates *choice* against its question's
@@ -342,6 +379,8 @@ def resolve_pause(state_path: Path, *, pause_urn: str, choice: str) -> OpenPause
         state_path: Absolute path to ``state.json``.
         pause_urn: The ``pause-urn`` to resolve.
         choice: The chosen option label.
+        publish: Optional daemon bus publisher invoked after the durable
+            append succeeds.
 
     Returns:
         The :class:`OpenPause` that was resolved.
@@ -354,6 +393,8 @@ def resolve_pause(state_path: Path, *, pause_urn: str, choice: str) -> OpenPause
     validate_choice(pause, choice)
     envelope = _resume_envelope(pause_urn=pause_urn, scope_id=pause.scope_id, choice=choice)
     append_envelope(store_path(state_path, StoreKind.EVENT), envelope)
+    if publish is not None:
+        publish(envelope)
     logger.info(f"resolve_pause pause_urn={pause_urn!r} choice={choice!r}")
     return pause
 

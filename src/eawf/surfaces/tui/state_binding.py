@@ -23,6 +23,7 @@ this path is read-only and never writes ``state.json``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from dataclasses import dataclass
@@ -32,7 +33,11 @@ from typing import TYPE_CHECKING
 import orjson
 from pydantic import ValidationError
 
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.runtime_dir import runtime_dir
+from eawf.surfaces.cli._daemon_client import DaemonClient
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -55,10 +60,14 @@ class StateBindingCallbacks:
         on_degraded: Awaited with the degraded flag whenever the binder
             flips between daemon-push and mtime-poll mode. ``True`` means
             the mtime-poll fallback is active (daemon unreachable).
+        on_event: Awaited with live daemon envelopes before the matching
+            state refresh is delivered. Optional because older tests only
+            care about state/degraded callbacks.
     """
 
     on_state: Callable[[State], Awaitable[None]]
     on_degraded: Callable[[bool], Awaitable[None]]
+    on_event: Callable[[Envelope], Awaitable[None]] | None = None
 
 
 def load_state(state_path: Path | None) -> State | None:
@@ -103,6 +112,7 @@ class StateBinding:
         callbacks: StateBindingCallbacks,
         *,
         poll_interval_s: float | None = None,
+        daemon_client_factory: Callable[[], DaemonClient] | None = None,
     ) -> None:
         """Construct the binder.
 
@@ -112,10 +122,18 @@ class StateBinding:
                 updates.
             poll_interval_s: Override the mtime-poll cadence. Defaults to
                 ``EAWF_POLL_INTERVAL_S`` then :data:`DEFAULT_POLL_INTERVAL_S`.
+            daemon_client_factory: Test seam for the JSON-RPC client. The
+                production default uses :class:`DaemonClient`.
         """
         self._state_path = state_path
         self._callbacks = callbacks
         self._poll_task: asyncio.Task[None] | None = None
+        self._subscribe_task: asyncio.Task[None] | None = None
+        self._client_factory = daemon_client_factory or (
+            lambda: DaemonClient(call_timeout_seconds=1.0)
+        )
+        self._stopping = False
+        self._scope_id: str | None = None
         env_interval = os.environ.get("EAWF_POLL_INTERVAL_S")
         if poll_interval_s is not None:
             self._poll_interval = poll_interval_s
@@ -126,20 +144,88 @@ class StateBinding:
         self._last_mtime = 0.0
 
     async def connect(self) -> None:
-        """Load the initial state and start the mtime-poll fallback.
-
-        The daemon-push leg (``event.subscribe``) slots in here in a
-        later wave; today the binder reads ``state.json`` once and then
-        polls. Marks the binding degraded because the push leg is not
-        yet wired — the App surfaces the degraded banner accordingly.
-        """
+        """Load initial state, then prefer daemon push with poll fallback."""
         initial = load_state(self._state_path)
         if initial is not None:
+            self._scope_id = initial.urn
             await self._callbacks.on_state(initial)
         if self._state_path is not None and self._state_path.is_file():
             self._last_mtime = self._state_path.stat().st_mtime
+        if self._daemon_socket_available():
+            self._subscribe_task = asyncio.create_task(self._subscribe_loop())
+            return
+        await self._start_poll_fallback()
+
+    def _daemon_socket_available(self) -> bool:
+        """Return whether a daemon socket exists for a cheap push attempt."""
+        if os.name == "nt":
+            return False
+        return (runtime_dir() / "eawfd.sock").exists()
+
+    async def _start_poll_fallback(self) -> None:
+        """Mark degraded and start the mtime-poll loop once."""
         await self._callbacks.on_degraded(True)
-        self._poll_task = asyncio.create_task(self._poll_loop())
+        if self._poll_task is None or self._poll_task.done():
+            self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _subscribe_loop(self) -> None:
+        """Run blocking daemon subscription off-thread and fall back on error."""
+        loop = asyncio.get_running_loop()
+        try:
+            await asyncio.to_thread(self._run_subscription, loop)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug(f"_subscribe_loop fallback cause={exc!r}")
+            if not self._stopping:
+                await self._start_poll_fallback()
+
+    def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Subscribe to ``state.subscribe`` with ``DaemonClient``."""
+        params: dict[str, object] = {"kinds": [StoreKind.EVENT.value]}
+        if self._scope_id is not None:
+            params["scope_id"] = self._scope_id
+        with self._client_factory() as client:
+            client.call("state.subscribe", params)
+            asyncio.run_coroutine_threadsafe(self._callbacks.on_degraded(False), loop)
+            while not self._stopping:
+                reader = getattr(client, "_reader", None)
+                if reader is None:
+                    return
+                try:
+                    line = reader.readline()
+                except TimeoutError:
+                    continue
+                if not line:
+                    return
+                self._handle_push_line(loop, line)
+
+    def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:
+        """Decode one ``event.push`` frame and schedule delivery."""
+        try:
+            frame = orjson.loads(line)
+            if frame.get("method") != "event.push":
+                return
+            params = frame.get("params")
+            if not isinstance(params, dict):
+                return
+            envelope = Envelope.model_validate(params.get("event"))
+        except (orjson.JSONDecodeError, ValidationError, ValueError) as exc:
+            logger.debug(f"_handle_push_line skip cause={exc!r}")
+            return
+        asyncio.run_coroutine_threadsafe(self._handle_push(envelope), loop)
+
+    async def _handle_push(self, envelope: Envelope) -> None:
+        """Forward live event envelope and refresh bound state from disk."""
+        if self._callbacks.on_event is not None:
+            await self._callbacks.on_event(envelope)
+        refreshed = load_state(self._state_path)
+        if refreshed is None:
+            return
+        if self._state_path is not None and self._state_path.is_file():
+            with contextlib.suppress(OSError):
+                self._last_mtime = self._state_path.stat().st_mtime
+        await self._callbacks.on_state(refreshed)
 
     async def _poll_loop(self) -> None:
         """Re-read ``state.json`` whenever its mtime advances.
@@ -167,9 +253,17 @@ class StateBinding:
                 await self._callbacks.on_state(refreshed)
 
     async def disconnect(self) -> None:
-        """Cancel the poll task on app teardown."""
+        """Cancel background tasks on app teardown."""
+        self._stopping = True
+        if self._subscribe_task is not None:
+            self._subscribe_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._subscribe_task
+            self._subscribe_task = None
         if self._poll_task is not None:
             self._poll_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._poll_task
             self._poll_task = None
 
 

@@ -21,6 +21,7 @@ from textual.logging import TextualHandler
 
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.tui.app import (
     BRAND,
     DEFAULT_PROJECT_CODE,
@@ -43,6 +44,50 @@ _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 
 def _load_fixture(path: Path) -> State:
     return State.model_validate(orjson.loads(path.read_bytes()))
+
+
+def _live_event() -> Envelope:
+    return Envelope(
+        id="EV-live",
+        kind="event",
+        scope_id="urn:eawf:v1:state:QR",
+        created_at="2026-05-27T00:00:00Z",
+        updated_at=None,
+        summary="live event",
+        payload={
+            "timestamp": "2026-05-27T00:00:00Z",
+            "event_type": "test",
+            "actor": "daemon",
+            "command": "test",
+            "args_hash": "",
+            "status": "ok",
+            "message": "live",
+        },
+    )
+
+
+class _PushReader:
+    def __init__(self, push: bytes) -> None:
+        self._lines = [push, b""]
+
+    def readline(self) -> bytes:
+        return self._lines.pop(0)
+
+
+class _FakeDaemonClient:
+    def __init__(self, push: bytes, calls: list[tuple[str, dict[str, object]]]) -> None:
+        self._reader = _PushReader(push)
+        self._calls = calls
+
+    def __enter__(self) -> _FakeDaemonClient:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        self._calls.append((method, params))
+        return {"ok": True}
 
 
 # --------------------------------------------------------------------------
@@ -164,7 +209,9 @@ def test_eaapp_raw_scope_switch_bindings_target_switch_scope() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_state_binding_connect_pushes_initial_state_and_degraded() -> None:
+def test_state_binding_connect_pushes_initial_state_and_degraded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen_state: list[State] = []
     seen_degraded: list[bool] = []
 
@@ -180,6 +227,7 @@ def test_state_binding_connect_pushes_initial_state_and_degraded() -> None:
             callbacks=StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
             poll_interval_s=0.01,
         )
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: False)
         await binder.connect()
         await binder.disconnect()
 
@@ -213,6 +261,7 @@ def test_state_binding_poll_loop_survives_stat_oserror(
             callbacks=StateBindingCallbacks(on_state=_noop_state, on_degraded=_noop_degraded),
             poll_interval_s=0.01,
         )
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: False)
         await binder.connect()
         # TOCTOU: is_file() sees the file but the subsequent stat() loses it.
         monkeypatch.setattr(Path, "is_file", lambda _self: True)
@@ -227,6 +276,62 @@ def test_state_binding_poll_loop_survives_stat_oserror(
         await binder.disconnect()
 
     asyncio.run(body())
+
+
+def test_state_binding_subscribes_via_daemon_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_state: list[State] = []
+    seen_degraded: list[bool] = []
+    seen_events: list[Envelope] = []
+    calls: list[tuple[str, dict[str, object]]] = []
+    event = _live_event()
+    push = (
+        orjson.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": "event.push",
+                "params": {"event": event.model_dump(mode="json")},
+            }
+        )
+        + b"\n"
+    )
+
+    async def on_state(s: State) -> None:
+        seen_state.append(s)
+
+    async def on_degraded(d: bool) -> None:
+        seen_degraded.append(d)
+
+    async def on_event(e: Envelope) -> None:
+        seen_events.append(e)
+
+    async def body() -> None:
+        binder = StateBinding(
+            state_path=_EMPTY_REPO,
+            callbacks=StateBindingCallbacks(
+                on_state=on_state,
+                on_degraded=on_degraded,
+                on_event=on_event,
+            ),
+            daemon_client_factory=lambda: _FakeDaemonClient(push, calls),  # type: ignore[arg-type]
+            poll_interval_s=0.01,
+        )
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: True)
+        await binder.connect()
+        await asyncio.sleep(0.05)
+        await binder.disconnect()
+
+    asyncio.run(body())
+    assert calls == [
+        (
+            "state.subscribe",
+            {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"},
+        )
+    ]
+    assert seen_degraded == [False]
+    assert [e.id for e in seen_events] == ["EV-live"]
+    assert len(seen_state) == 2
 
 
 # --------------------------------------------------------------------------

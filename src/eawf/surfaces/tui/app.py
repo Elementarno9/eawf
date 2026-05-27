@@ -46,9 +46,12 @@ from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
+from textual.widgets import Static
 
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
 from eawf.surfaces.tui.theme import (
@@ -59,6 +62,7 @@ from eawf.surfaces.tui.theme import (
     detect_os_appearance,
     resolve_theme_name,
 )
+from eawf.surfaces.tui.toast_emitter import ToastEmitter
 from eawf.surfaces.tui.widgets.eu_bar import EUBar, RenderMode
 from eawf.surfaces.tui.widgets.header import (
     BRAND,
@@ -68,6 +72,8 @@ from eawf.surfaces.tui.widgets.header import (
 )
 
 logger = logging.getLogger(__name__)
+
+DEGRADED_BANNER_ID = "degraded-banner"
 
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
@@ -276,6 +282,9 @@ class EaApp(App[None]):
         self._binding: StateBinding | None = None
         self._help_open = False
         self._needs_user_open = False
+        self._toast_emitter = ToastEmitter()
+        self._last_state: State | None = None
+        self._last_open_pause_count = 0
         # The persisted ``ui.glyphs`` policy (auto/ascii/unicode). Read
         # once here, off the same layered-config path /config writes; the
         # MOUNT-time coverage probe combines it with FONT_NO_BRAILLE to
@@ -324,6 +333,7 @@ class EaApp(App[None]):
             callbacks=StateBindingCallbacks(
                 on_state=self._on_state,
                 on_degraded=self._on_degraded,
+                on_event=self._on_event,
             ),
         )
         await self._binding.connect()
@@ -344,6 +354,7 @@ class EaApp(App[None]):
             self._glyphs_policy, braille_ok=probe_braille_coverage()
         )
         self.push_screen(self._scope)
+        self.call_after_refresh(self._sync_degraded_banner)
         # Follow a live system light/dark flip for /theme auto. The OSC 11
         # background probe can only run before .run() captured stdin, so the
         # running App tracks the system theme by polling the OS appearance
@@ -361,10 +372,47 @@ class EaApp(App[None]):
         :class:`~eawf.surfaces.tui.state_binding.StateBinding` refresh because
         there is no daemon push bus yet.
         """
+        pauses = self._open_pauses_for_state(new_state)
+        open_pause_count = len(pauses)
+        self._toast_emitter.emit(
+            self,
+            self._last_state,
+            new_state,
+            prev_open_pause_count=self._last_open_pause_count,
+            open_pause_count=open_pause_count,
+        )
         self.state = new_state
-        self._maybe_open_needs_user(new_state)
+        self._last_state = new_state
+        self._last_open_pause_count = open_pause_count
+        self._maybe_open_needs_user(new_state, pauses=pauses)
 
-    def _maybe_open_needs_user(self, state: State) -> None:
+    async def _on_event(self, envelope: Envelope) -> None:
+        """Receive live daemon event envelopes from the binding.
+
+        The current app logic refreshes state after every push and then
+        computes toasts / needs_user modal state from the durable stores,
+        so this hook only records the live seam for diagnostics.
+        """
+        logger.debug(f"_on_event id={envelope.id!r} kind={envelope.kind.value!r}")
+
+    def _open_pauses_for_state(self, state: State) -> list[Any]:
+        """Return open pauses for *state*; degrade to empty on read errors."""
+        if self._state_path is None:
+            return []
+        from eawf.workflow.skills.needs_user import list_open_pauses
+
+        try:
+            return list(list_open_pauses(self._state_path, scope_id=state.urn))
+        except OSError as exc:
+            logger.debug(f"_open_pauses_for_state list failed cause={exc!r}")
+            return []
+
+    def _maybe_open_needs_user(
+        self,
+        state: State,
+        *,
+        pauses: list[Any] | None = None,
+    ) -> None:
         """Auto-open the needs_user modal for the active scope's oldest pause.
 
         Reads the event store (read-only) for unresolved pauses whose
@@ -378,13 +426,8 @@ class EaApp(App[None]):
         """
         if self._needs_user_open or self._state_path is None:
             return
-        from eawf.workflow.skills.needs_user import list_open_pauses
-
-        try:
-            pauses = list_open_pauses(self._state_path, scope_id=state.urn)
-        except OSError as exc:
-            logger.debug(f"_maybe_open_needs_user list failed cause={exc!r}")
-            return
+        if pauses is None:
+            pauses = self._open_pauses_for_state(state)
         if not pauses:
             return
         pause = pauses[0]
@@ -433,17 +476,65 @@ class EaApp(App[None]):
         self._needs_user_open = False
         if label is None or self._state_path is None:
             return
-        from eawf.workflow.skills.needs_user import PauseError, resolve_pause
+        from eawf.workflow.skills.needs_user import PauseError
 
         try:
-            resolve_pause(self._state_path, pause_urn=pause_urn, choice=label)
-        except (PauseError, OSError) as exc:
+            self._resolve_needs_user_pause(pause_urn=pause_urn, choice=label)
+        except (PauseError, OSError, ValueError) as exc:
             logger.info(f"_on_needs_user_picked resume_failed pause_urn={pause_urn!r} err={exc!r}")
             self.notify(f"resume failed: {exc}", severity="error")
+
+    def _resolve_needs_user_pause(self, *, pause_urn: str, choice: str) -> None:
+        """Resolve a pause through daemon RPC, falling back to local helper."""
+        if self._daemon_socket_available():
+            from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+            try:
+                with DaemonClient(call_timeout_seconds=1.0) as client:
+                    client.call(
+                        "needs_user.resolve",
+                        {"pause_urn": pause_urn, "choice": choice},
+                    )
+                return
+            except DaemonRpcError as exc:
+                logger.debug(f"_resolve_needs_user_pause daemon_rejected message={exc.message!r}")
+            except (OSError, RuntimeError, TimeoutError) as exc:
+                logger.debug(f"_resolve_needs_user_pause daemon_fallback cause={exc!r}")
+        from eawf.workflow.skills.needs_user import resolve_pause
+
+        if self._state_path is None:
+            raise ValueError("state_path not configured")
+        resolve_pause(self._state_path, pause_urn=pause_urn, choice=choice)
+
+    def _daemon_socket_available(self) -> bool:
+        """Return whether a daemon socket is present for RPC use."""
+        if os.name == "nt":
+            return False
+        return (runtime_dir() / "eawfd.sock").exists()
 
     async def _on_degraded(self, degraded: bool) -> None:
         """Receive a degraded-mode flip from the binder."""
         self.degraded = degraded
+        self._sync_degraded_banner()
+
+    def _sync_degraded_banner(self) -> None:
+        """Mount or remove the degraded-mode banner on the active screen."""
+        if not self.screen_stack:
+            return
+        existing = list(self.screen.query(f"#{DEGRADED_BANNER_ID}"))
+        if not self.degraded:
+            for widget in existing:
+                widget.remove()
+            return
+        if existing:
+            return
+        self.screen.mount(
+            Static(
+                "daemon unreachable - polling state.json",
+                id=DEGRADED_BANNER_ID,
+                classes="degraded-banner",
+            ),
+        )
 
     def watch_render_mode(self, mode: RenderMode) -> None:
         """Propagate a bar-fill-mode flip to every mounted bar.
@@ -498,6 +589,7 @@ class EaApp(App[None]):
             self.state = load_state(self._state_path)
         self._scope = scope  # type: ignore[assignment]
         self.switch_screen(scope)
+        self.call_after_refresh(self._sync_degraded_banner)
 
     async def _poll_os_appearance(self) -> None:
         """Re-apply ``/theme auto`` when the OS light/dark appearance flips.
