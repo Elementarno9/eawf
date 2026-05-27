@@ -2081,7 +2081,12 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P28-I02-W26",
+      "P28-I02-W27",
+      "P28-I02-W28",
+      "P28-I02-W29"
+    ],
     "iter_id": "P28-I02",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -4626,6 +4631,58 @@
       "reference_class": "bucket:XS",
       "scope_id": "P28-I02-W25",
       "updated_at": "2026-05-27T17:30:49.087204Z"
+    },
+    "P28-I02-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W26-bucket-20260527T173815Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I02-W26",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I02-W26",
+      "updated_at": "2026-05-27T17:38:15.563970Z"
+    },
+    "P28-I02-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W27-bucket-20260527T173816Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I02-W27",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I02-W27",
+      "updated_at": "2026-05-27T17:38:16.114257Z"
+    },
+    "P28-I02-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W28-bucket-20260527T173816Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I02-W28",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I02-W28",
+      "updated_at": "2026-05-27T17:38:16.663711Z"
+    },
+    "P28-I02-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I02-W29-bucket-20260527T173817Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I02-W29",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I02-W29",
+      "updated_at": "2026-05-27T17:38:17.197021Z"
     }
   },
   "goals": {
@@ -5576,7 +5633,11 @@
         "P28-I02-W22",
         "P28-I02-W23",
         "P28-I02-W24",
-        "P28-I02-W25"
+        "P28-I02-W25",
+        "P28-I02-W26",
+        "P28-I02-W27",
+        "P28-I02-W28",
+        "P28-I02-W29"
       ]
     },
     "P28-I03": {
@@ -6233,7 +6294,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T17:35:12.040969Z",
+  "updated_at": "2026-05-27T17:38:17.197286Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -21702,6 +21763,139 @@
         "full state-methods registry test passes"
       ],
       "title": "fix: wire decision obsolete daemon mutation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Repair audit finding that profile.verify.enforce can fail open during wave close because close paths do not load real profile verify config or gate before mutation.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify/readiness.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/**"
+      ],
+      "id": "P28-I02-W26",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T17:38:06.300271Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "real profile verify enforce loads before close",
+        "CLI and daemon close reject unmet required gate before state persists",
+        "default enforce false remains advisory"
+      ],
+      "title": "fix close readiness enforcement",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W27": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Repair audit finding that AgentSession.agent_principal_id exists but generated agent report headers omit it.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/agent_report/store.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "tests/**"
+      ],
+      "id": "P28-I02-W27",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T17:38:06.867298Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "append_agent_report persists agent_principal_id into AgentReportHeader",
+        "dispatch runner passes AgentSession agent_principal_id",
+        "focused tests cover stored report header"
+      ],
+      "title": "persist agent principal in reports",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Repair audit finding that BacklogItem.intent exists but backlog edit mutation path cannot update it.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/backlog.py",
+        "src/eawf/surfaces/cli/commands/**",
+        "tests/**"
+      ],
+      "id": "P28-I02-W28",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T17:38:07.401825Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "backlog edit mutation can set and clear IntentBrief reference",
+        "existing title and description edits stay compatible",
+        "tests cover set clear and validation"
+      ],
+      "title": "edit backlog intent references",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I02-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Repair audit finding that bootstrap seeds Project but omits the IntentBrief and bucket-EU defaults expected by W12.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/wizard.py",
+        "src/eawf/platform/config/**",
+        "tests/**"
+      ],
+      "id": "P28-I02-W29",
+      "intent": null,
+      "iter_id": "P28-I02",
+      "opened_at": "2026-05-27T17:38:07.931007Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "repo bootstrap seeds an IntentBrief or explicit project intent reference",
+        "bucket EU defaults are written through typed config",
+        "test fixtures cover generated initial state and profile config"
+      ],
+      "title": "seed bootstrap intent and buckets",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
