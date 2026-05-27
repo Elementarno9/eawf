@@ -203,4 +203,4 @@ def profile_validate_cmd(
     )
     emit_json_or_text(payload, text, flags=flags)
     if failures:
-        raise typer.Exit(code=exit_codes.VALIDATION_FAILED)
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)

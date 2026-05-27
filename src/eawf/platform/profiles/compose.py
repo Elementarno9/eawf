@@ -96,7 +96,7 @@ class ProfileConflict(ValidationError):  # noqa: N818 — domain conflict name; 
     composition has at least one undeclared conflict edge. Subclasses
     :class:`eawf.surfaces.cli.errors.ValidationError` so callers that surface the
     error through ``emit_error`` get the canonical
-    :data:`eawf.surfaces.cli.exit_codes.VALIDATION_FAILED` exit code. Its concrete
+    :data:`eawf.surfaces.cli.exit_codes.VALIDATION_ERROR` exit code. Its concrete
     class name folds into ``ErrorEnvelope.data.kind`` as
     ``"ProfileConflict"`` via :func:`eawf.surfaces.cli.errors.build_envelope`.
     """

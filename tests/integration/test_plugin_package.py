@@ -17,7 +17,7 @@ from typer.testing import CliRunner
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION, INVALID_INPUT
+from eawf.surfaces.cli.exit_codes import STATE_CONFLICT, USER_ERROR
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 _SKILL_COUNT = len(SKILL_REGISTRY)
@@ -245,7 +245,7 @@ def test_package_cli_unknown_runtime_exits_invalid_input(tmp_path: Path) -> None
             str(tmp_path / "out"),
         ],
     )
-    assert result.exit_code == INVALID_INPUT, result.stdout
+    assert result.exit_code == USER_ERROR, result.stdout
 
 
 def test_package_cli_refuses_nonempty_target(tmp_path: Path) -> None:
@@ -263,7 +263,7 @@ def test_package_cli_refuses_nonempty_target(tmp_path: Path) -> None:
             str(target),
         ],
     )
-    assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
+    assert result.exit_code == STATE_CONFLICT, result.stdout
 
 
 def test_package_cli_json_output(tmp_path: Path) -> None:

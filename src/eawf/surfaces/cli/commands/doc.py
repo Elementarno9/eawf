@@ -170,4 +170,4 @@ def doc_verify(
         )
     emit_json_or_text(payload, text, flags=flags)
     if strict and not region_ok:
-        raise typer.Exit(code=exit_codes.VALIDATION_FAILED)
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)

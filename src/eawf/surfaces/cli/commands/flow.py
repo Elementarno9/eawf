@@ -67,10 +67,10 @@ def _exit_for_status(status: str) -> int:
     if status in {"ok", "partial"}:
         return exit_codes.OK
     if status == "needs_user":
-        return exit_codes.USER_DECLINED
+        return exit_codes.USER_ERROR
     if status == "failed":
-        return exit_codes.VALIDATION_FAILED
-    return exit_codes.INSTRUMENT_MISSING
+        return exit_codes.VALIDATION_ERROR
+    return exit_codes.USER_ERROR
 
 
 def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
@@ -270,8 +270,8 @@ def run_cmd(
             payload = {
                 "error": "IntegrityViolation",
                 "message": f"drift detected on resume of flow {target_flow_id!r}",
-                "exit_code": exit_codes.INTEGRITY_VIOLATION,
-                "exit_name": exit_codes.name_for(exit_codes.INTEGRITY_VIOLATION),
+                "exit_code": exit_codes.STATE_CONFLICT,
+                "exit_name": exit_codes.name_for(exit_codes.STATE_CONFLICT),
                 "flow_id": target_flow_id,
                 "checkpoint_id": ckpt_id,
                 "drift": drift,
@@ -287,7 +287,7 @@ def run_cmd(
                 typer.echo(f"error: drift detected for flow {target_flow_id!r}; resume refused")
                 for key, change in drift.items():
                     typer.echo(f"  {key}: {change}")
-            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+            raise typer.Exit(exit_codes.STATE_CONFLICT)
 
         # No drift — pack the checkpoint into the skill args so the
         # runner knows where to resume from.

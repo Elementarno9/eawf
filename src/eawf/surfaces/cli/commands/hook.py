@@ -671,7 +671,7 @@ def run(
     )
     _emit_envelope(envelope)
     if any(r.block for r in results):
-        raise typer.Exit(exit_codes.HOOK_BLOCKED)
+        raise typer.Exit(exit_codes.STATE_CONFLICT)
 
 
 _FilesArg = Annotated[

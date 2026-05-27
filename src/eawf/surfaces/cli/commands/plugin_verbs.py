@@ -321,8 +321,8 @@ def _doctor_single_runtime(*, runtime: str, scope: str, target: Path, flags: Glo
     claude doctor, and emits the JSON or text report.
 
     Raises:
-        typer.Exit: ``INTEGRITY_VIOLATION`` when the runtime reports
-            drift; or via :func:`emit_error` on invalid runtime / scope.
+        typer.Exit: ``STATE_CONFLICT`` when the runtime reports drift;
+            or via :func:`emit_error` on invalid runtime / scope.
     """
     from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
     from eawf.runtime.runtimes.codex import doctor_plugin as codex_doctor_plugin
@@ -343,7 +343,7 @@ def _doctor_single_runtime(*, runtime: str, scope: str, target: Path, flags: Glo
             flags=flags,
         )
         if not codex_report.clean:
-            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+            raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
     if runtime == "opencode":
         oc_report = opencode_doctor_plugin(target, scope=scope_lit)
@@ -353,12 +353,12 @@ def _doctor_single_runtime(*, runtime: str, scope: str, target: Path, flags: Glo
             flags=flags,
         )
         if not oc_report.clean:
-            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+            raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
     claude_report = doctor_plugin(target)
     emit_json_or_text(_doctor_payload(claude_report), _doctor_text(claude_report), flags=flags)
     if not claude_report.clean:
-        raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+        raise typer.Exit(exit_codes.STATE_CONFLICT)
 
 
 @plugin_app.command(name="doctor")
@@ -426,7 +426,7 @@ def doctor_cmd(
             flags=flags,
         )
         if not strict_report.clean:
-            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+            raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
     if runtime is None:
         # Multi-kind sweep (no runtime arg) — enumerates the 4 drift
@@ -440,7 +440,7 @@ def doctor_cmd(
             flags=flags,
         )
         if not report.clean:
-            raise typer.Exit(exit_codes.INTEGRITY_VIOLATION)
+            raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
 
     _doctor_single_runtime(runtime=runtime, scope=scope, target=target, flags=flags)

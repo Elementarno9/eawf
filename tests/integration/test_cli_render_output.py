@@ -12,7 +12,7 @@ import json
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.exit_codes import VALIDATION_FAILED
+from eawf.surfaces.cli.exit_codes import VALIDATION_ERROR
 
 runner = CliRunner()
 
@@ -63,7 +63,7 @@ def test_cli_render_output_strict_rejects_malformed_json() -> None:
         ["render-output", "--format", "markdown", "--strict"],
         input="this is not json {{{",
     )
-    assert result.exit_code == VALIDATION_FAILED
+    assert result.exit_code == VALIDATION_ERROR
 
 
 def test_cli_render_output_strict_rejects_malformed_markdown() -> None:
@@ -73,7 +73,7 @@ def test_cli_render_output_strict_rejects_malformed_markdown() -> None:
         ["render-output", "--format", "json", "--strict"],
         input="just some text without frontmatter\n",
     )
-    assert result.exit_code == VALIDATION_FAILED
+    assert result.exit_code == VALIDATION_ERROR
 
 
 def test_cli_render_output_default_format_is_markdown() -> None:
@@ -97,4 +97,4 @@ def test_cli_render_output_strict_rejects_envelope_missing_keys() -> None:
         ["render-output", "--format", "markdown", "--strict"],
         input=json.dumps({"header": {}, "body": "x"}),  # missing footer
     )
-    assert result.exit_code == VALIDATION_FAILED
+    assert result.exit_code == VALIDATION_ERROR

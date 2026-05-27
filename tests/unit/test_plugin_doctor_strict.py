@@ -3,10 +3,10 @@
 Three concerns are covered here:
 
 1. ``--strict`` exit-code surface — a seeded checksum drift exits
-   :data:`~eawf.surfaces.cli.exit_codes.INTEGRITY_VIOLATION` (the canonical
-   integrity-violation constant; numerically ``3`` post-C05 taxonomy
-   compression, the value the legacy "exit 8" gate maps onto), while a
-   clean tree exits ``0``. Both the library entry point
+   :data:`~eawf.surfaces.cli.exit_codes.STATE_CONFLICT` (numerically
+   ``3``; the canonical bucket the legacy "exit 8 INTEGRITY_VIOLATION"
+   gate collapsed onto in the C05 0..5 surface), while a clean tree
+   exits ``0``. Both the library entry point
    (:func:`doctor_plugin_strict`) and the Typer surface are exercised.
 
 2. Shared sync/doctor portalock — ``plugin doctor --strict`` and
@@ -48,7 +48,7 @@ from eawf.runtime.runtimes.claude.plugin_doctor import (
     plugin_sync_lock_path,
 )
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION
+from eawf.surfaces.cli.exit_codes import STATE_CONFLICT
 from eawf.workflow.dispatch import render_wave_prompt
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
@@ -122,18 +122,18 @@ def test_doctor_strict_cli_clean_exits_zero(tmp_path: Path) -> None:
     assert "drifted=0 missing=0" in result.stdout
 
 
-def test_doctor_strict_cli_drift_exits_integrity_violation(tmp_path: Path) -> None:
-    """A seeded checksum drift makes ``plugin doctor --strict`` exit 8.
+def test_doctor_strict_cli_drift_exits_state_conflict(tmp_path: Path) -> None:
+    """A seeded checksum drift makes ``plugin doctor --strict`` exit STATE_CONFLICT.
 
-    The "exit 8" gate is the canonical ``INTEGRITY_VIOLATION`` constant,
-    which aliases to ``STATE_CONFLICT`` (numerically ``3``) post-C05
-    taxonomy compression.
+    Post-C05 the legacy "exit 8 INTEGRITY_VIOLATION" gate collapsed onto
+    ``STATE_CONFLICT`` (numerically ``3``); P28-I02-W21 dropped the
+    legacy alias.
     """
     _install_claude_tree(tmp_path)
     skill_path = tmp_path / ".claude" / "skills" / "research" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# hand edit\n", encoding="utf-8")
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "--strict"])
-    assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
+    assert result.exit_code == STATE_CONFLICT, result.stdout
 
 
 def test_doctor_strict_cli_claude_arg_clean_exits_zero(tmp_path: Path) -> None:

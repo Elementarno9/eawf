@@ -15,9 +15,9 @@ Covers:
 - A happy-path menu run calls ``_save_value_to_layer`` exactly once with
   the typed value matching the registry entry.
 - Operator cancellation (questionary returns ``None``) maps to exit code
-  ``USER_DECLINED`` per the canonical CLI taxonomy.
-- An invalid out-of-range answer surfaces ``InvalidInput`` (exit 3) and
-  the save helper is never called.
+  ``USER_ERROR`` per the canonical CLI taxonomy.
+- An invalid out-of-range answer surfaces ``InvalidInput`` and exits
+  ``USER_ERROR`` (1); the save helper is never called.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from typer.testing import CliRunner
 from eawf.kernel.config import layered, registry
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import config as config_cmd
-from eawf.surfaces.cli.exit_codes import INVALID_INPUT, USER_DECLINED
+from eawf.surfaces.cli.exit_codes import USER_ERROR
 
 runner = CliRunner()
 
@@ -68,12 +68,12 @@ def test_menu_help_text_mentions_interactive_questionary(repo_root: Path) -> Non
 def test_menu_rejects_built_in_scope(repo_root: Path) -> None:
     """Built-in is read-only; the menu must mirror ``config set``'s rejection."""
     result = runner.invoke(app, ["config", "menu", "--scope", "built-in"])
-    assert result.exit_code == INVALID_INPUT, result.output
+    assert result.exit_code == USER_ERROR, result.output
 
 
 def test_menu_rejects_unknown_scope(repo_root: Path) -> None:
     result = runner.invoke(app, ["config", "menu", "--scope", "moonbase"])
-    assert result.exit_code == INVALID_INPUT, result.output
+    assert result.exit_code == USER_ERROR, result.output
 
 
 # --- happy-path menu run with questionary stubs ------------------------------
@@ -283,19 +283,19 @@ def test_menu_fields_widget_lists_keys_alphabetical(
 def test_menu_cancellation_at_tab_step_returns_user_declined(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ctrl-C / Esc at the tab picker maps to ``USER_DECLINED``."""
+    """Ctrl-C / Esc at the tab picker maps to ``USER_ERROR``."""
     _patch_questionary(monkeypatch, select_answers=[None])
     recorded = _capture_save_calls(monkeypatch)
 
     result = runner.invoke(app, ["config", "menu"])
-    assert result.exit_code == USER_DECLINED, result.output
+    assert result.exit_code == USER_ERROR, result.output
     assert recorded == []  # no save side-effect on cancellation
 
 
 def test_menu_cancellation_at_value_step_returns_user_declined(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ctrl-C at the value prompt is also ``USER_DECLINED``."""
+    """Ctrl-C at the value prompt is also ``USER_ERROR``."""
     bool_entry = next(e for e in registry.CONFIG_REGISTRY if e.type == "bool")
     _patch_questionary(
         monkeypatch,
@@ -305,7 +305,7 @@ def test_menu_cancellation_at_value_step_returns_user_declined(
     recorded = _capture_save_calls(monkeypatch)
 
     result = runner.invoke(app, ["config", "menu"])
-    assert result.exit_code == USER_DECLINED, result.output
+    assert result.exit_code == USER_ERROR, result.output
     assert recorded == []
 
 
@@ -325,5 +325,5 @@ def test_menu_invalid_int_input_rejects_with_exit_3(
     recorded = _capture_save_calls(monkeypatch)
 
     result = runner.invoke(app, ["config", "menu"])
-    assert result.exit_code == INVALID_INPUT, result.output
+    assert result.exit_code == USER_ERROR, result.output
     assert recorded == []

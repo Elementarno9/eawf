@@ -405,7 +405,7 @@ def actual_start(
 ) -> None:
     """Open a new actual segment for ``(scope, session)``.
 
-    Rejects with :data:`exit_codes.VALIDATION_FAILED` when a segment is already
+    Rejects with :data:`exit_codes.VALIDATION_ERROR` when a segment is already
     open for the same ``(scope, session)`` pair — this matches the
     *audit-evidence-style* invariant guarding actuals integrity.
     """

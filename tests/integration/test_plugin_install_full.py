@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION
+from eawf.surfaces.cli.exit_codes import STATE_CONFLICT
 
 pytestmark = pytest.mark.integration
 
@@ -79,7 +79,7 @@ def test_plugin_install_then_hand_edit_then_doctor_dirty(tmp_path: Path) -> None
     skill_path = tmp_path / ".claude" / "skills" / "research" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# user-edit\n")
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "claude"])
-    assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
+    assert result.exit_code == STATE_CONFLICT, result.stdout
 
 
 def test_plugin_update_after_hand_edit_aborts(tmp_path: Path) -> None:
@@ -89,7 +89,7 @@ def test_plugin_update_after_hand_edit_aborts(tmp_path: Path) -> None:
     skill_path = tmp_path / ".claude" / "skills" / "research" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# user-edit\n")
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "update", "claude"])
-    assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
+    assert result.exit_code == STATE_CONFLICT, result.stdout
 
 
 def test_plugin_install_idempotent_via_cli(tmp_path: Path) -> None:
@@ -123,7 +123,7 @@ def test_plugin_install_after_hand_edit_aborts(tmp_path: Path) -> None:
     skill_path = tmp_path / ".claude" / "skills" / "research" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# user-edit\n")
     result = runner.invoke(app, ["-w", str(tmp_path), "plugin", "install", "claude"])
-    assert result.exit_code == INTEGRITY_VIOLATION, result.stdout
+    assert result.exit_code == STATE_CONFLICT, result.stdout
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])

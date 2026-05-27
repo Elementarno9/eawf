@@ -17,7 +17,7 @@ import pytest
 
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation, install_plugin
 from eawf.runtime.runtimes.claude.plugin_update import update_plugin
-from eawf.surfaces.cli.exit_codes import INTEGRITY_VIOLATION
+from eawf.surfaces.cli.exit_codes import STATE_CONFLICT
 
 
 def test_update_plugin_succeeds_on_clean_tree(tmp_path: Path) -> None:
@@ -38,8 +38,8 @@ def test_update_plugin_aborts_on_hand_edit(tmp_path: Path) -> None:
 
 
 def test_update_plugin_integrity_violation_exit_code_constant() -> None:
-    """``INTEGRITY_VIOLATION`` aliases to ``STATE_CONFLICT`` (3) post C05 § 5.3."""
-    assert INTEGRITY_VIOLATION == 3
+    """The post-W21 canonical bucket for integrity-violation is ``STATE_CONFLICT`` (3)."""
+    assert STATE_CONFLICT == 3
 
 
 def test_update_plugin_aborts_on_hand_edit_in_agent(tmp_path: Path) -> None:

@@ -21,14 +21,14 @@ Surface contract:
 Exit-code mapping (per design spec §4 W07 acceptance #2):
 
 - ``status=ok`` and ``status=partial`` → exit 0 (``OK``).
-- ``status=needs_user`` → exit 7 (``USER_DECLINED`` — closest canonical
-  code; the v0.1 plan §5 reserves the lane for "user declined" which
-  semantically subsumes "the skill is waiting on a user response").
-- ``status=failed`` → exit 4 (``VALIDATION_FAILED`` — the canonical
+- ``status=needs_user`` → exit 1 (``USER_ERROR`` — closest canonical
+  code; the v0.3 surface subsumes the legacy "user declined" lane into
+  the unified user-error bucket).
+- ``status=failed`` → exit 2 (``VALIDATION_ERROR`` — the canonical
   "skill body validation failed" lane).
-- ``status=blocked`` → exit 6 (``INSTRUMENT_MISSING`` — blocked envelopes
-  always carry a probe-failure root cause; the spec only enumerates 0/4/7
-  but the runner must still emit *some* code on the blocked path).
+- ``status=blocked`` → exit 1 (``USER_ERROR`` — blocked envelopes
+  always carry a probe-failure root cause; the legacy ``INSTRUMENT_MISSING``
+  bucket collapses into the unified user-error lane).
 
 The list table includes a synthetic body-schema "fingerprint" — the
 fully-qualified class name of the body model — so an operator can
@@ -263,11 +263,11 @@ def _exit_for_status(status: EnvelopeStatus) -> int:
     if status in {"ok", "partial"}:
         return exit_codes.OK
     if status == "needs_user":
-        return exit_codes.USER_DECLINED
+        return exit_codes.USER_ERROR
     if status == "failed":
-        return exit_codes.VALIDATION_FAILED
+        return exit_codes.VALIDATION_ERROR
     # status == "blocked"
-    return exit_codes.INSTRUMENT_MISSING
+    return exit_codes.USER_ERROR
 
 
 def _emit_envelope(env: OutputEnvelope, *, as_json: bool) -> None:
