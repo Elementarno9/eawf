@@ -272,6 +272,7 @@ def _insert_new_repo_entry(
     )
 
 
+@repo_app.command(name="register")
 @repo_app.command(name="add")
 def repo_add_cmd(
     ctx: typer.Context,
@@ -320,7 +321,7 @@ def repo_add_cmd(
         ),
     ] = None,
 ) -> None:
-    """Explicitly add a repo to the user-scope registry.
+    """Explicitly add/register a repo to the user-scope registry.
 
     Behaviour:
 

@@ -292,6 +292,21 @@ class _CrossScopeDupCheck:
         return f"{self.status.upper():<4}  {self.name:<24}  {self.detail}"
 
 
+@dataclass(frozen=True)
+class _ProjectRecordCheck:
+    """Stand-alone result for the repo project-record presence check."""
+
+    name: str
+    status: Literal["ok", "warn"]
+    detail: str
+
+    def as_payload(self) -> dict[str, str]:
+        return {"name": self.name, "status": self.status, "detail": self.detail}
+
+    def as_text(self) -> str:
+        return f"{self.status.upper():<4}  {self.name:<24}  {self.detail}"
+
+
 def _run_git_state_drift_check(workspace: Path | None) -> _DriftReconcilerCheck:
     """Reconcile every CLOSED wave's recorded commit against git history.
 
@@ -459,6 +474,42 @@ def _run_plugin_cross_scope_check(workspace: Path | None) -> _CrossScopeDupCheck
     )
 
 
+def _run_project_record_check(workspace: Path | None) -> _ProjectRecordCheck:
+    """Verify repo-scoped state carries a materialised ``project`` record."""
+    import json as _json
+
+    from pydantic import ValidationError as _PydanticValidationError
+
+    from eawf.kernel.state.models import State
+    from eawf.kernel.state.resolve import resolve_with_reason
+
+    name = "project_record_present"
+    try:
+        state_path, _reason = resolve_with_reason(workspace=workspace)
+    except FileNotFoundError, ValueError:
+        return _ProjectRecordCheck(name=name, status="ok", detail="no state.json")
+    if not state_path.exists():
+        return _ProjectRecordCheck(name=name, status="ok", detail="no state.json")
+    try:
+        raw = _json.loads(state_path.read_text(encoding="utf-8"))
+        state = State.model_validate(raw)
+    except _json.JSONDecodeError, _PydanticValidationError:
+        return _ProjectRecordCheck(name=name, status="ok", detail="state.json unparseable")
+    if state.scope_kind.value != "repo":
+        return _ProjectRecordCheck(name=name, status="ok", detail="non-repo state")
+    if state.project is None:
+        return _ProjectRecordCheck(
+            name=name,
+            status="warn",
+            detail="repo state has no project record; run `eawf project init --upgrade`",
+        )
+    return _ProjectRecordCheck(
+        name=name,
+        status="ok",
+        detail=f"project {state.project.code} present",
+    )
+
+
 def _append_user_scope_check(payload: dict[str, Any], text: str) -> tuple[dict[str, Any], str]:
     """Append the ``user_scope`` row to the doctor envelope.
 
@@ -504,6 +555,18 @@ def _append_drift_checks(
         payload["status"] = "warn"
     text = f"{text}\n{cross_scope_check.as_text()}"
     return payload, text
+
+
+def _append_project_record_check(
+    payload: dict[str, Any], text: str, *, workspace: Path | None
+) -> tuple[dict[str, Any], str]:
+    """Append the repo project-record check row."""
+    check = _run_project_record_check(workspace)
+    payload["checks"].append(check.as_payload())
+    if check.status == "warn" and payload["status"] == "ok":
+        payload["ok"] = False
+        payload["status"] = "warn"
+    return payload, f"{text}\n{check.as_text()}"
 
 
 doctor_app = typer.Typer(
@@ -670,6 +733,9 @@ def doctor(
 
     if user_scope:
         payload, text = _append_user_scope_check(payload, text)
+
+    # P28-I02-W12: init should materialise repo Project; flag legacy state.
+    payload, text = _append_project_record_check(payload, text, workspace=effective_flags.workspace)
 
     # P28-I02-W01: drift reconciler — git/state + plugin cross-scope dup.
     payload, text = _append_drift_checks(payload, text, workspace=effective_flags.workspace)

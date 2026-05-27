@@ -72,8 +72,15 @@ def project_init_cmd(
     default_branch: Annotated[
         str, typer.Option("--default-branch", help="Default git branch.")
     ] = "main",
+    upgrade: Annotated[
+        bool,
+        typer.Option(
+            "--upgrade",
+            help="Fill a missing project record in an existing init-created state.",
+        ),
+    ] = False,
 ) -> None:
-    """Create a new project record at the active state path (creates the file)."""
+    """Create or upgrade a project record at the active state path."""
     from pydantic import ValidationError as PydValidationError
 
     from eawf.kernel.state.models import Project
@@ -111,15 +118,6 @@ def project_init_cmd(
         return
     try:
         with portalock.acquire(state_path, timeout=5.0):
-            if state_path.exists():
-                cli_errors.emit_error(
-                    cli_errors.UserError(
-                        f"state already exists at {state_path}; refusing to overwrite",
-                        kind="InvalidInput",
-                    ),
-                    flags=flags,
-                )
-                return
             project_payload = Project(
                 code=code,
                 slug=code.lower(),
@@ -130,6 +128,53 @@ def project_init_cmd(
                 status=ProjectStatus.ACTIVE,
                 repo_urn=build_urn("repo", owner=code),
             ).model_dump(mode="json")
+            if state_path.exists():
+                if not upgrade:
+                    cli_errors.emit_error(
+                        cli_errors.UserError(
+                            f"state already exists at {state_path}; refusing to overwrite",
+                            kind="InvalidInput",
+                        ),
+                        flags=flags,
+                    )
+                    return
+                import json
+
+                payload = json.loads(state_path.read_text(encoding="utf-8"))
+                if payload.get("project") is not None:
+                    cli_errors.emit_error(
+                        cli_errors.UserError(
+                            f"state already has project record at {state_path}",
+                            kind="InvalidInput",
+                        ),
+                        flags=flags,
+                    )
+                    return
+                payload["project"] = project_payload
+                payload.setdefault("current", {})["project_code"] = code
+                payload.setdefault("indexes", {})["project_title"] = title
+                _validate_or_raise(payload)
+                _append_event(
+                    store_path(state_path, StoreKind.EVENT),
+                    command="project init --upgrade",
+                    args={
+                        "code": code,
+                        "title": title,
+                        "domains": domains_list,
+                        "default_branch": default_branch,
+                    },
+                    scope_id=code,
+                    before_version="",
+                    after_version=_state_version(payload),
+                    summary=f"project {code} upgraded",
+                )
+                _write_state_unlocked(state_path, payload)
+                emit_json_or_text(
+                    {"project": code, "title": title, "state_path": str(state_path)},
+                    f"project init --upgrade {code} title={title!r} state={state_path}",
+                    flags=flags,
+                )
+                return
             payload = _empty_state_dict(project_code=code, project_payload=project_payload)
             _validate_or_raise(payload)
             # events-first ordering: see module docstring §6.

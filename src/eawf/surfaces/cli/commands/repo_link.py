@@ -197,6 +197,7 @@ def _persist_link_payloads(
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
 
 
+@repo_app.command(name="link-workspace")
 @repo_app.command(name="link")
 def repo_link_cmd(
     ctx: typer.Context,

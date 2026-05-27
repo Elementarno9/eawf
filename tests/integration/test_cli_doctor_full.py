@@ -76,11 +76,37 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "manifest_in_sync",
         "mcp_drift",
         "render_output_roundtrip",
+        "project_record_present",
+        "git_state_drift",
+        "plugin_cross_scope_dup",
     }
     statuses = {c["name"]: c["status"] for c in payload["checks"]}
     assert statuses["manifest_in_sync"] == "ok"
     assert statuses["render_output_roundtrip"] == "ok"
     assert statuses["mcp_drift"] == "ok"
+    assert statuses["project_record_present"] == "ok"
+    assert statuses["git_state_drift"] == "ok"
+    assert statuses["plugin_cross_scope_dup"] == "ok"
+
+
+@pytest.mark.integration
+def test_cli_doctor_warns_when_project_record_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Legacy init-only state with ``project=null`` gets a repair hint."""
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
+    _init_core(tmp_path)
+    state_path = tmp_path / ".ea" / "state.json"
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    payload["project"] = None
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    res = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    entry = next(c for c in payload["checks"] if c["name"] == "project_record_present")
+    assert entry["status"] == "warn"
+    assert "project init --upgrade" in entry["detail"]
 
 
 @pytest.mark.integration

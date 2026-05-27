@@ -60,8 +60,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.kernel.config.profile import _atomic_write_yaml, _materialise_state_keys
-from eawf.kernel.state.enums import ScopeKind
+from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import RE_PROJECT_CODE
+from eawf.kernel.state.models import Project
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.platform.install.steps import (
@@ -248,15 +249,29 @@ def _pre_existing_canonical_files(ea_dir: Path) -> list[str]:
     return found
 
 
+def _build_initial_project(*, project_code: str, project_title: str) -> dict[str, Any]:
+    """Build the repo-level project record seeded by init."""
+    title = project_title or project_code
+    return Project(
+        code=project_code,
+        slug=project_code.lower(),
+        title=title,
+        description=None,
+        domains=["general"],
+        default_branch="main",
+        status=ProjectStatus.ACTIVE,
+        repo_urn=build_urn("repo", owner=project_code),
+    ).model_dump(mode="json")
+
+
 def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, Any]:
     """Build a minimal-but-valid ``state.json`` payload for a fresh init.
 
     Mirrors the shape used by :func:`eawf.surfaces.cli.commands.lifecycle.project_init_cmd`
-    so the two entry-points produce identical state files. We deliberately
-    do NOT instantiate a :class:`~eawf.kernel.state.models.Project` here — the
-    project record requires ``domains`` which the wizard does not collect,
-    and the v0.1 init contract permits ``project = null`` (the operator can
-    follow up with ``eawf project init``).
+    so the two entry-points produce compatible state files. The wizard
+    now seeds the required :class:`~eawf.kernel.state.models.Project`
+    record directly; legacy init-only states can be repaired with
+    ``eawf project init --upgrade``.
     """
     timestamp = datetime.now(UTC).isoformat()
     return {
@@ -264,7 +279,10 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
         "scope_kind": ScopeKind.REPO.value,
         "urn": build_urn("state", owner=project_code),
         "updated_at": timestamp,
-        "project": None,
+        "project": _build_initial_project(
+            project_code=project_code,
+            project_title=project_title,
+        ),
         "current": {
             "project_code": project_code,
             "subproject_id": None,

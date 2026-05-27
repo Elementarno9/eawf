@@ -106,6 +106,9 @@ def test_run_wizard_no_input_fresh_repo(
     assert result.project_code == _PROJECT_CODE
 
     live_state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert live_state["project"]["code"] == _PROJECT_CODE
+    assert live_state["project"]["title"] == _PROJECT_TITLE
+    assert live_state["project"]["domains"] == ["general"]
     assert_or_regen_json(
         scenarios_dir / "fresh_repo" / "state.golden.json",
         project_state(live_state),
@@ -249,6 +252,8 @@ def test_lifecycle_flow_full(
             "Implement",
             "--files",
             "src/",
+            "--effort-bucket",
+            "S",
         ),
         ("wave", "claim", "P01-I01-W01", "--session", "SES-1"),
         (
