@@ -33,6 +33,7 @@ import hashlib
 import json
 import logging
 import os
+import string
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from importlib.resources import files
@@ -68,6 +69,69 @@ _PLUGIN_VERSION_PLACEHOLDER: str = "__EAWF_PLUGIN_VERSION__"
 _PLUGIN_FILENAME: str = "eawf.js"
 _SIDECAR_FILENAME: str = ".eawf-managed.json"
 _OPENCODE_CONFIG_DIR_ENV: str = "OPENCODE_CONFIG_DIR"
+_OPENCODE_PERMISSION_KEYS: tuple[str, ...] = (
+    "read",
+    "edit",
+    "glob",
+    "grep",
+    "bash",
+    "task",
+    "webfetch",
+    "websearch",
+    "skill",
+)
+_OPENCODE_LEGACY_TOOL_KEYS: tuple[str, ...] = (
+    "read",
+    "edit",
+    "write",
+    "apply_patch",
+    "glob",
+    "grep",
+    "bash",
+    "task",
+    "webfetch",
+    "websearch",
+    "skill",
+)
+_OPENCODE_TOOL_PERMISSION_MAP: Mapping[str, tuple[str, ...]] = {
+    "Read": ("read",),
+    "Edit": ("edit",),
+    "Write": ("edit",),
+    "Glob": ("glob",),
+    "Grep": ("grep",),
+    "Bash": ("bash",),
+    "WebFetch": ("webfetch",),
+    "WebSearch": ("websearch",),
+    "Skill": ("skill",),
+    "Agent": ("task",),
+    "TaskCreate": ("task",),
+    "TaskUpdate": ("task",),
+    "TaskList": ("task",),
+    "TaskGet": ("task",),
+}
+_OPENCODE_TOOL_LEGACY_MAP: Mapping[str, tuple[str, ...]] = {
+    "Read": ("read",),
+    "Edit": ("edit", "apply_patch"),
+    "Write": ("write",),
+    "Glob": ("glob",),
+    "Grep": ("grep",),
+    "Bash": ("bash",),
+    "WebFetch": ("webfetch",),
+    "WebSearch": ("websearch",),
+    "Skill": ("skill",),
+    "Agent": ("task",),
+    "TaskCreate": ("task",),
+    "TaskUpdate": ("task",),
+    "TaskList": ("task",),
+    "TaskGet": ("task",),
+}
+_OPENCODE_READ_ALLOW_RULES: Mapping[str, str] = {
+    "*": "allow",
+    "*.env": "deny",
+    "*.env.*": "deny",
+    "*.env.example": "allow",
+}
+_YAML_BARE_KEY_CHARS: frozenset[str] = frozenset(string.ascii_letters + string.digits + "_-")
 
 
 @dataclass(frozen=True)
@@ -218,24 +282,95 @@ def _command_target(
     return base / "commands" / f"{spec.skill_name}.md"
 
 
+def _allowed_opencode_permission_keys(spec: AgentSpec) -> set[str]:
+    allowed: set[str] = set()
+    for tool in spec.tools:
+        try:
+            allowed.update(_OPENCODE_TOOL_PERMISSION_MAP[tool])
+        except KeyError as exc:
+            raise ValueError(f"unknown opencode agent tool: {tool!r}") from exc
+    return allowed
+
+
+def _allowed_opencode_legacy_tool_keys(spec: AgentSpec) -> set[str]:
+    allowed: set[str] = set()
+    for tool in spec.tools:
+        try:
+            allowed.update(_OPENCODE_TOOL_LEGACY_MAP[tool])
+        except KeyError as exc:
+            raise ValueError(f"unknown opencode agent tool: {tool!r}") from exc
+    return allowed
+
+
+def _task_permission(spec: AgentSpec) -> dict[str, str]:
+    """Return ordered task-spawn rules for an OpenCode markdown agent."""
+    rules = {"*": "deny"}
+    if "task" not in _allowed_opencode_permission_keys(spec):
+        return rules
+    for agent_spec in AGENT_REGISTRY:
+        if agent_spec.role != spec.role:
+            rules[agent_spec.role] = "allow"
+    return rules
+
+
+def _yaml_key(key: str) -> str:
+    if key and all(char in _YAML_BARE_KEY_CHARS for char in key):
+        return key
+    return json.dumps(key)
+
+
+def _render_mapping_yaml(lines: list[str], key: str, mapping: Mapping[str, object]) -> None:
+    lines.append(f"{_yaml_key(key)}:")
+    for child_key, value in mapping.items():
+        if isinstance(value, Mapping):
+            lines.append(f"  {_yaml_key(child_key)}:")
+            for nested_key, nested_value in value.items():
+                lines.append(f"    {_yaml_key(nested_key)}: {nested_value}")
+            continue
+        rendered_value = ("true" if value else "false") if isinstance(value, bool) else str(value)
+        lines.append(f"  {_yaml_key(child_key)}: {rendered_value}")
+
+
+def _opencode_permission_acl(spec: AgentSpec) -> dict[str, object]:
+    allowed = _allowed_opencode_permission_keys(spec)
+    permissions: dict[str, object] = {}
+    for key in _OPENCODE_PERMISSION_KEYS:
+        if key == "read":
+            permissions[key] = dict(_OPENCODE_READ_ALLOW_RULES) if key in allowed else "deny"
+        elif key == "task":
+            permissions[key] = _task_permission(spec)
+        else:
+            permissions[key] = "allow" if key in allowed else "deny"
+    return permissions
+
+
+def _opencode_tools_acl(spec: AgentSpec) -> dict[str, bool]:
+    allowed = _allowed_opencode_legacy_tool_keys(spec)
+    return {key: key in allowed for key in _OPENCODE_LEGACY_TOOL_KEYS}
+
+
 def _render_opencode_agent_md(spec: AgentSpec) -> str:
     """Render an opencode agent file from an :class:`AgentSpec`.
 
     Uses the opencode-native frontmatter schema (``description`` / ``mode``);
-    Claude-Code ``name`` / ``tools`` keys are dropped because opencode
-    derives the agent name from the filename and uses a separate
-    ``permission`` object for tool ACLs (omitted here so the operator
-    can layer their own policy in ``opencode.json`` or
-    ``~/.config/opencode/opencode.json``).
+    opencode derives the agent name from the filename. We emit both
+    ``permission`` (current schema) and ``tools`` (legacy compatibility)
+    so the per-role ACL is explicit even under permissive global defaults.
     """
     lines = [
         "---",
         f"description: {spec.description}",
         "mode: subagent",
-        "---",
-        "",
-        spec.body.rstrip() + "\n",
     ]
+    _render_mapping_yaml(lines, "permission", _opencode_permission_acl(spec))
+    _render_mapping_yaml(lines, "tools", _opencode_tools_acl(spec))
+    lines.extend(
+        [
+            "---",
+            "",
+            spec.body.rstrip() + "\n",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -487,6 +622,7 @@ def install_plugin(
     timestamp: str | None = None,
     home: Path | None = None,
     opencode_config_dir: str | None = None,
+    persist_manifest: bool = True,
 ) -> InstallResult:
     """Render the OpenCode plugin at *scope*.
 
@@ -506,6 +642,8 @@ def install_plugin(
         home: Override for ``Path.home()`` (tests pass ``tmp_path``).
         opencode_config_dir: Override for ``$OPENCODE_CONFIG_DIR``
             (tests pass an explicit path).
+        persist_manifest: When ``False``, skip the cross-runtime manifest
+            write. Golden tests use this to avoid temp-path bytes.
 
     Raises:
         IntegrityViolation: when ``eawf.js`` has been hand-edited and
@@ -593,7 +731,7 @@ def install_plugin(
             atomic_write_text(command_path, command_payload.decode("utf-8"))
         command_deltas.append(FileDelta(path=command_path, action=command_action))
 
-    if not dry_run:
+    if not dry_run and persist_manifest:
         _persist_manifest(
             target_dir,
             scope=scope,

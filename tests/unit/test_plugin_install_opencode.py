@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from eawf.runtime.runtimes.opencode import doctor_plugin, install_plugin
 from eawf.runtime.runtimes.opencode.plugin_install import (
@@ -59,6 +60,15 @@ def _config_path(target: Path, scope: str, xdg: Path) -> Path:
     if scope == "project":
         return target / "opencode.json"
     return xdg / "opencode.json"
+
+
+def _agent_frontmatter(body: str) -> dict[str, object]:
+    marker = "---\n"
+    assert body.startswith(marker)
+    _, frontmatter, _ = body.split(marker, 2)
+    parsed = yaml.safe_load(frontmatter)
+    assert isinstance(parsed, dict)
+    return parsed
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
@@ -307,6 +317,61 @@ def test_install_emits_agents_per_registry(
         assert "mode: subagent" in body
         assert spec.description.splitlines()[0] in body
     assert len(result.agents) == len(AGENT_REGISTRY)
+
+
+def test_install_emits_agent_permission_and_legacy_tools_acls(tmp_path: Path) -> None:
+    """OpenCode agents must carry current and legacy per-agent ACLs."""
+    install_plugin(tmp_path)
+    executor_md = tmp_path / ".opencode" / "agents" / "executor.md"
+    frontmatter = _agent_frontmatter(executor_md.read_text(encoding="utf-8"))
+    permission = frontmatter["permission"]
+    tools = frontmatter["tools"]
+    assert isinstance(permission, dict)
+    assert isinstance(tools, dict)
+    assert permission["edit"] == "allow"
+    assert permission["bash"] == "allow"
+    assert permission["websearch"] == "deny"
+    assert tools["edit"] is True
+    assert tools["write"] is True
+    assert tools["websearch"] is False
+
+
+def test_install_agent_read_permission_keeps_env_denies(tmp_path: Path) -> None:
+    """Explicit read allow-list preserves OpenCode's sensitive-file defaults."""
+    install_plugin(tmp_path)
+    researcher_md = tmp_path / ".opencode" / "agents" / "researcher.md"
+    frontmatter = _agent_frontmatter(researcher_md.read_text(encoding="utf-8"))
+    permission = frontmatter["permission"]
+    assert isinstance(permission, dict)
+    read_permission = permission["read"]
+    assert read_permission == {
+        "*": "allow",
+        "*.env": "deny",
+        "*.env.*": "deny",
+        "*.env.example": "allow",
+    }
+
+
+def test_install_permission_task_gates_subagent_spawn(tmp_path: Path) -> None:
+    """Only the operator role can spawn Eä subagents through OpenCode task."""
+    install_plugin(tmp_path)
+    operator_md = tmp_path / ".opencode" / "agents" / "operator.md"
+    executor_md = tmp_path / ".opencode" / "agents" / "executor.md"
+    operator_frontmatter = _agent_frontmatter(operator_md.read_text(encoding="utf-8"))
+    executor_frontmatter = _agent_frontmatter(executor_md.read_text(encoding="utf-8"))
+    operator_permission = operator_frontmatter["permission"]
+    executor_permission = executor_frontmatter["permission"]
+    assert isinstance(operator_permission, dict)
+    assert isinstance(executor_permission, dict)
+    operator_task = operator_permission["task"]
+    executor_task = executor_permission["task"]
+    assert isinstance(operator_task, dict)
+    assert isinstance(executor_task, dict)
+    assert operator_task["*"] == "deny"
+    assert operator_task["executor"] == "allow"
+    assert operator_task["auditor"] == "allow"
+    assert "operator" not in operator_task
+    assert executor_task == {"*": "deny"}
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
