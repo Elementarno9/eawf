@@ -99,12 +99,18 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
         "estimation.eu_minutes",
         "planning.approval",
         "vcs.conventions.subject_style",
+        "vcs.conventions.release.cadence",
+        "vcs.conventions.release.agent_driven",
     ):
         assert sources[dotted] == "built-in"
     # Default values match.
     assert merged["estimation"]["eu_minutes"] == 30
     assert merged["planning"]["approval"] == "ask"
     assert merged["vcs"]["conventions"]["subject_style"] == "bracket"
+    assert merged["vcs"]["conventions"]["release"] == {
+        "cadence": "manual",
+        "agent_driven": "per-phase",
+    }
 
 
 # --- Layer precedence -------------------------------------------------------

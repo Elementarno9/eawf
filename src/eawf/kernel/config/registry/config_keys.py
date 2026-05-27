@@ -434,6 +434,27 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="vcs",
+        key="vcs.conventions.release.agent_driven",
+        label="Agent-driven release cadence",
+        type="choice",
+        default="per-phase",
+        description="Cadence used when the agent-driven profile owns release policy.",
+        choices=("manual", "per-phase"),
+    ),
+    ConfigKey(
+        tab="vcs",
+        key="vcs.conventions.release.cadence",
+        label="Release cadence",
+        type="choice",
+        default="manual",
+        description=(
+            "manual = releases ride explicit operator action; "
+            "per-phase = phase close prepares release."
+        ),
+        choices=("manual", "per-phase"),
+    ),
+    ConfigKey(
+        tab="vcs",
         key="vcs.pr_open",
         label="Open PR automatically on ship",
         type="choice",

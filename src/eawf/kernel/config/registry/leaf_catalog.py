@@ -1015,6 +1015,22 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
+        key="vcs.conventions.release.agent_driven",
+        domain="vcs",
+        type="literal",
+        default="per-phase",
+        writable_layers=_WRITABLE_GWR,
+        choices=("manual", "per-phase"),
+    ),
+    LeafKey(
+        key="vcs.conventions.release.cadence",
+        domain="vcs",
+        type="literal",
+        default="manual",
+        writable_layers=_WRITABLE_GWR,
+        choices=("manual", "per-phase"),
+    ),
+    LeafKey(
         key="vcs.coauthor.mode",
         domain="vcs",
         type="str",

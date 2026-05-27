@@ -325,6 +325,8 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
         "dispatch.session_handle_ttl_seconds",
         "language.runtime",
         "language.fast_extras",
+        "vcs.conventions.release.agent_driven",
+        "vcs.conventions.release.cadence",
     }
     missing = must_have - set(LEAF_KEY_REGISTRY)
     assert not missing, f"missing canonical C08 leaf keys: {sorted(missing)}"

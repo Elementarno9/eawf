@@ -281,6 +281,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "conventions": {
             "subject_style": "bracket",
             "wave_trailer": "Eawf-Wave",
+            "release": {
+                "cadence": "manual",
+                "agent_driven": "per-phase",
+            },
         },
         "commit_template": "state_scoped",
         "pr_template": "iter",

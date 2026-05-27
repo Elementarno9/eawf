@@ -9,6 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from eawf.kernel.state.enums import EffortBucket
 
 CommitSubjectStyle = Literal["bracket", "trailer"]
+ReleaseCadence = Literal["manual", "per-phase"]
+AgentDrivenReleasePolicy = Literal["manual", "per-phase"]
+
+
+class VcsReleaseConventionsConfig(BaseModel):
+    """Release cadence conventions under ``vcs.conventions``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cadence: ReleaseCadence = "manual"
+    agent_driven: AgentDrivenReleasePolicy = "per-phase"
 
 
 class VcsConventionsConfig(BaseModel):
@@ -18,6 +29,7 @@ class VcsConventionsConfig(BaseModel):
 
     subject_style: CommitSubjectStyle = "bracket"
     wave_trailer: str = Field(default="Eawf-Wave", min_length=1)
+    release: VcsReleaseConventionsConfig = Field(default_factory=VcsReleaseConventionsConfig)
 
 
 class BucketEstimateOverride(BaseModel):
@@ -77,10 +89,13 @@ class EstimationConfig(BaseModel):
 
 
 __all__ = [
+    "AgentDrivenReleasePolicy",
     "BucketEstimateOverride",
     "BucketFitConfig",
     "CommitSubjectStyle",
     "EstimationConfig",
     "EstimationDisplayConfig",
+    "ReleaseCadence",
     "VcsConventionsConfig",
+    "VcsReleaseConventionsConfig",
 ]

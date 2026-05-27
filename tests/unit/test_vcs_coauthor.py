@@ -61,3 +61,36 @@ def test_vcs_config_defaults_subject_style_to_bracket() -> None:
         }
     )
     assert config.conventions.subject_style == "bracket"
+    assert config.conventions.release.cadence == "manual"
+    assert config.conventions.release.agent_driven == "per-phase"
+
+
+def test_vcs_config_rejects_extra_release_convention_key() -> None:
+    with pytest.raises(ValidationError, match="extra"):
+        VcsConfig.model_validate(
+            {
+                "commit_template": "state_scoped",
+                "pr_template": "iter",
+                "branch_pattern": "eawf/{project}/{scope}-{slug}",
+                "checkpoint_requires_commit": True,
+                "protected_branches": ["main"],
+                "auto_commit": "ask",
+                "auto_push": "ask",
+                "pr_open": "ask",
+                "pr_merge_method": "merge",
+                "squash_allowed": False,
+                "delete_branch_after_merge": False,
+                "require_ci_green": True,
+                "require_review_before_merge": True,
+                "force_push": "forbidden_protected",
+                "conventions": {
+                    "subject_style": "bracket",
+                    "wave_trailer": "Eawf-Wave",
+                    "release": {
+                        "cadence": "manual",
+                        "agent_driven": "per-phase",
+                        "extra": "nope",
+                    },
+                },
+            }
+        )
