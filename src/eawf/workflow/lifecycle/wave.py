@@ -329,9 +329,9 @@ def claim_wave(
 
     Raises:
         LifecycleError: when *wave_id* is unknown, wave is not
-            PENDING, dep waves are not CLOSED, or a lower-numbered
-            sibling-ready wave is still PENDING (without
-            ``out_of_order``).
+            PENDING, ``effort_bucket`` is ``None``, dep waves are not
+            CLOSED, or a lower-numbered sibling-ready wave is still
+            PENDING (without ``out_of_order``).
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -341,6 +341,11 @@ def claim_wave(
         return wave
     if wave.status != WaveStatus.PENDING:
         raise LifecycleError(f"wave {wave_id!r} cannot be claimed (status={wave.status.value!r})")
+    if wave.effort_bucket is None:
+        raise LifecycleError(
+            f"wave {wave_id!r} has no effort_bucket; set one via "
+            f"`eawf roadmap revise --set-bucket` before claiming"
+        )
     unmet_deps = [
         dep_id
         for dep_id in wave.deps
