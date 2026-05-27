@@ -43,6 +43,8 @@ from eawf.workflow.lifecycle.phase import (
     close_phase,
     has_scope_collapse_decision,
     open_phase,
+    phase_close_readiness,
+    phase_close_readiness_blockers,
     plan_phase,
     reopen_phase,
 )
@@ -78,6 +80,8 @@ __all__ = [
     "has_scope_collapse_decision",
     "open_iter",
     "open_phase",
+    "phase_close_readiness",
+    "phase_close_readiness_blockers",
     "plan_iter",
     "plan_phase",
     "plan_wave",

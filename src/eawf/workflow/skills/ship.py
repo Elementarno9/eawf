@@ -43,6 +43,10 @@ from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
 from eawf.runtime.sandbox.cwd_guard import CwdGuardError, assert_cwd_inside
 from eawf.runtime.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
 from eawf.surfaces.render.envelope import SkillName
+from eawf.workflow.lifecycle.transitions import (
+    phase_close_readiness,
+    phase_close_readiness_blockers,
+)
 from eawf.workflow.skills.bodies.ship import (
     ShipBody,
     ShipCommitGroup,
@@ -272,7 +276,11 @@ def _latest_audit_for_phase(state: State, phase_id: str) -> Audit | None:
     Returns:
         The selected :class:`Audit`, or ``None`` when the phase has none.
     """
-    candidates = [a for a in (state.audits or {}).values() if a.scope_id == phase_id]
+    phase = state.phases.get(phase_id)
+    scope_ids = {phase_id}
+    if phase is not None:
+        scope_ids.add(phase.scope_id)
+    candidates = [a for a in (state.audits or {}).values() if a.scope_id in scope_ids]
     if not candidates:
         return None
     return max(
@@ -635,27 +643,75 @@ class ShipSkill(SkillAction):
             if inputs.state is not None and inputs.phase_id is not None
             else None
         )
-        # When state or a matching audit is unavailable we cannot gate on a
-        # verdict; degrade open rather than block (the audit row is created by
-        # /audit, which is a precondition the operator owns). When an audit
-        # *does* exist its verdict must be ship-clearing.
-        if audit is not None and audit.verdict not in _SHIP_ALLOWED_VERDICTS:
-            verdict_label = audit.verdict.value if audit.verdict is not None else "none"
+        if inputs.state is None or inputs.phase_id is None:
+            # No state file means legacy/non-eawf use of ``/ship``; keep the
+            # old degrade-open behaviour because there is no phase to close.
+            self._trace(
+                run,
+                "ship.audit_gate",
+                "ship: audit gate passed (verdict=ungated)",
+                {"audit_required": False, "passed": True, "verdict": "ungated"},
+            )
+            return None
+
+        if inputs.phase_id in inputs.state.phases:
+            readiness = phase_close_readiness(
+                inputs.state,
+                phase_id=inputs.phase_id,
+                audit_id=audit.id if audit is not None else None,
+                require_audit=True,
+                include_structure=False,
+            )
+            if not readiness.ready:
+                blockers = phase_close_readiness_blockers(readiness)
+                self._trace(
+                    run,
+                    "ship.audit_gate",
+                    "ship: phase-close readiness blocked",
+                    {
+                        "audit_required": True,
+                        "passed": False,
+                        "close_readiness_ready": readiness.ready,
+                        "blockers": blockers,
+                    },
+                )
+                return self._ship_failure(
+                    run,
+                    rollback_notes="phase-close readiness blocked: " + "; ".join(blockers),
+                    repair_commands=[f"/audit {inputs.phase_id} --kind ship-gate"],
+                )
+            verdict_label = audit.verdict.value if audit is not None and audit.verdict else "none"
+            self._trace(
+                run,
+                "ship.audit_gate",
+                f"ship: phase-close readiness passed (verdict={verdict_label})",
+                {
+                    "audit_required": True,
+                    "passed": True,
+                    "verdict": verdict_label,
+                    "close_readiness_ready": readiness.ready,
+                },
+            )
+            return None
+
+        # Back-compat for older synthetic states without a phase row: still
+        # require a matching audit verdict when state is present.
+        if audit is None or audit.verdict not in _SHIP_ALLOWED_VERDICTS:
+            verdict_label = (
+                audit.verdict.value if audit is not None and audit.verdict is not None else "none"
+            )
             self._trace(
                 run,
                 "ship.audit_gate",
                 f"ship: audit gate blocked (verdict={verdict_label})",
                 {"audit_required": True, "passed": False, "verdict": verdict_label},
             )
-            assert inputs.phase_id is not None  # narrowed: audit set only when phase_id resolved
             return self._ship_failure(
                 run,
                 rollback_notes=f"audit verdict {verdict_label!r} does not clear the ship gate",
                 repair_commands=[f"/audit {inputs.phase_id} --kind ship-gate"],
             )
-        verdict_label = (
-            audit.verdict.value if audit is not None and audit.verdict is not None else "ungated"
-        )
+        verdict_label = audit.verdict.value if audit.verdict is not None else "none"
         self._trace(
             run,
             "ship.audit_gate",

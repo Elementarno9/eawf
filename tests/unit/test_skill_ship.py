@@ -65,6 +65,8 @@ def _write_state_with_audit(
     audit_scope: str,
     verdict: str | None,
     kind: str = "ship-gate",
+    include_phase: bool = False,
+    phase_id: str | None = None,
 ) -> None:
     """Write a minimal valid ``state.json`` carrying one audit row.
 
@@ -73,6 +75,7 @@ def _write_state_with_audit(
     so the ship audit-verdict gate has a row to consult.
     """
     created = datetime(2026, 5, 1, tzinfo=UTC).isoformat()
+    phase_key = phase_id or audit_scope
     payload = {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -96,7 +99,26 @@ def _write_state_with_audit(
             "active_session_ids": [],
         },
         "workspace": None,
-        "phases": {},
+        "phases": {
+            phase_key: {
+                "id": phase_key,
+                "scope_id": "QR",
+                "subproject_id": None,
+                "title": "Phase",
+                "description": None,
+                "status": "active",
+                "iter_ids": [],
+                "outcome_ids": [],
+                "depends_on": [],
+                "source_brief_ids": [],
+                "opened_at": created,
+                "closed_at": None,
+                "audit_id": None,
+                "intent": None,
+            }
+        }
+        if include_phase
+        else {},
         "iters": {},
         "waves": {},
         "audits": {
@@ -307,7 +329,34 @@ def test_ship_audit_gate_ignores_audit_for_other_phase(state_dir: Path) -> None:
     """An audit scoped to a different phase does not gate this ship."""
     _write_state_with_audit(state_dir, audit_scope="P99", verdict="major")
     env = run_skill(ShipSkill(), _ctx())
-    # P00 has no audit row → gate degrades open even though P99 failed.
+    assert env.header.status == "failed"
+    assert env.footer.repair_commands == ["/audit P00 --kind ship-gate"]
+
+
+def test_ship_phase_close_readiness_requires_matching_audit(state_dir: Path) -> None:
+    """When the phase exists, ship uses phase-close readiness for audit evidence."""
+    _write_state_with_audit(
+        state_dir,
+        audit_scope="P99",
+        verdict="pass",
+        include_phase=True,
+        phase_id="P00",
+    )
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "failed"
+    body = ShipBody.model_validate(cast(dict, env.body))
+    assert body.rollback_notes == "phase-close readiness blocked: close audit required"
+
+
+def test_ship_phase_close_readiness_accepts_pass_audit(state_dir: Path) -> None:
+    """A complete pass ship-gate audit clears ship's phase-close readiness gate."""
+    _write_state_with_audit(
+        state_dir,
+        audit_scope="P00",
+        verdict="pass",
+        include_phase=True,
+    )
+    env = run_skill(ShipSkill(), _ctx())
     assert env.header.status == "ok"
 
 

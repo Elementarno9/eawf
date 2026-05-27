@@ -125,6 +125,11 @@ def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         ],
     )
     assert r.exit_code == 0, r.output
+    r = runner.invoke(
+        app,
+        ["audit", "run", "AUD-PH-1", "--scope-id", "P01", "--kind", "ship-gate"],
+    )
+    assert r.exit_code == 0, r.output
     r = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-PH-1"])
     assert r.exit_code == 0, r.output
 

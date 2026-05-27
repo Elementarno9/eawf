@@ -168,7 +168,7 @@ class PolishSkill(Skill):
             status="ok",
             body=body.model_dump(mode="json"),
             persisted_store_records=persisted_records,
-            next_valid_actions=["eawf audit", "eawf ship"],
+            next_valid_actions=["eawf audit", "eawf phase prepare-close", "eawf ship"],
         )
 
 

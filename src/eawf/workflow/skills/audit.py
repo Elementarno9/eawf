@@ -273,7 +273,7 @@ class AuditSkill(Skill):
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
-        next_actions: list[str] = ["eawf ship", "eawf audit show"]
+        next_actions: list[str] = ["eawf phase prepare-close", "eawf ship", "eawf audit show"]
         evidence_refs: list[str] = []
 
         # Step 1 — probe ran. Step 2: resolve scope.

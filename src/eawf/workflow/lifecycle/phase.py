@@ -11,12 +11,24 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.enums import DecisionStatus, IterStatus, PhaseStatus, WaveStatus
+from eawf.kernel.state.enums import (
+    AuditKind,
+    AuditStatus,
+    AuditVerdict,
+    DecisionStatus,
+    IterStatus,
+    PhaseStatus,
+    WaveStatus,
+)
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Phase, State
 from eawf.workflow.lifecycle._errors import LifecycleError
+
+if TYPE_CHECKING:
+    from eawf.workflow.verify.models import CloseReadiness, CriterionView
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +53,10 @@ _TERMINAL_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
 #: these untouched when cascading to ABANDONED.
 _TERMINAL_ITER_STATUSES: frozenset[IterStatus] = frozenset(
     {IterStatus.CLOSED, IterStatus.ABANDONED}
+)
+
+_PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS: frozenset[AuditVerdict] = frozenset(
+    {AuditVerdict.PASS, AuditVerdict.MINOR}
 )
 
 
@@ -112,7 +128,186 @@ def has_scope_collapse_decision(state: State, *, phase_id: str) -> bool:
     return False
 
 
-def _validate_phase_closable(state: State, *, phase_id: str) -> Phase:
+def _phase_close_view(
+    criterion_id: str,
+    *,
+    passed: bool,
+) -> CriterionView:
+    """Build one phase-close readiness criterion view."""
+    from eawf.workflow.verify.models import CriterionView, GateResult
+
+    status = "pass" if passed else "blocked"
+    return CriterionView(
+        id=criterion_id,
+        source="floor",
+        status=status,  # type: ignore[arg-type]
+        gate_results=[
+            GateResult(
+                gate_id=criterion_id,
+                status="pass" if passed else "blocked",
+            )
+        ],
+    )
+
+
+def _phase_close_iter_ids(state: State, *, phase_id: str) -> set[str]:
+    """Return ids of iters attached to *phase_id*."""
+    return {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+
+
+def _phase_close_audit_warning(
+    state: State,
+    *,
+    phase: Phase,
+    audit_id: str | None,
+) -> str | None:
+    """Return the close-audit blocker text, or ``None`` when it clears."""
+    if audit_id is None:
+        return "close audit required"
+    audit = (state.audits or {}).get(audit_id)
+    if audit is None:
+        return f"close audit {audit_id!r} not found"
+    if audit.status != AuditStatus.COMPLETE:
+        return f"close audit {audit_id!r} must be complete"
+    if audit.kind != AuditKind.SHIP_GATE:
+        return f"close audit {audit_id!r} must be ship-gate"
+    if audit.scope_id not in {phase.id, phase.scope_id}:
+        return f"close audit {audit_id!r} must be scoped to phase {phase.id!r}"
+    if audit.verdict not in _PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS:
+        return f"close audit {audit_id!r} verdict must be pass or minor"
+    return None
+
+
+def _extend_phase_close_structure(
+    state: State,
+    *,
+    phase: Phase,
+    criteria: list[CriterionView],
+    warnings: list[str],
+) -> None:
+    """Append structural phase-close criteria + warnings."""
+    phase_id = phase.id
+    phase_status_ready = phase.status in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}
+    criteria.append(_phase_close_view("phase-status", passed=phase_status_ready))
+    if not phase_status_ready:
+        warnings.append(f"phase {phase_id!r} has status {phase.status.value!r}; cannot close")
+
+    iter_ids_in_phase = _phase_close_iter_ids(state, phase_id=phase_id)
+    open_iters = sorted(
+        (
+            iid
+            for iid, it in state.iters.items()
+            if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
+        ),
+        key=natural_key,
+    )
+    criteria.append(_phase_close_view("open-iters", passed=not open_iters))
+    if open_iters:
+        warnings.append(f"open iters: {', '.join(open_iters)}")
+
+    open_waves = sorted(
+        (
+            wid
+            for wid, wave in state.waves.items()
+            if wave.iter_id in iter_ids_in_phase
+            and wave.status in {WaveStatus.PENDING, WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
+        ),
+        key=natural_key,
+    )
+    criteria.append(_phase_close_view("open-waves", passed=not open_waves))
+    if open_waves:
+        warnings.append(f"open waves: {', '.join(open_waves)}")
+
+    closed_wave_count = sum(
+        1
+        for wave in state.waves.values()
+        if wave.iter_id in iter_ids_in_phase and wave.status == WaveStatus.CLOSED
+    )
+    criteria.append(_phase_close_view("closed-waves", passed=closed_wave_count > 0))
+    if closed_wave_count == 0:
+        warnings.append(
+            f"phase {phase_id!r} has no closed waves; close_phase requires at least one closed wave"
+        )
+
+    iters_without_audit = sorted(
+        (
+            iid
+            for iid, it in state.iters.items()
+            if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
+        ),
+        key=natural_key,
+    )
+    criteria.append(_phase_close_view("iter-audits", passed=not iters_without_audit))
+    if iters_without_audit:
+        warnings.append(f"closed iters missing audit: {iters_without_audit}")
+
+    scope_collapse_ready = closed_wave_count != 1 or has_scope_collapse_decision(
+        state, phase_id=phase_id
+    )
+    criteria.append(_phase_close_view("scope-collapse", passed=scope_collapse_ready))
+    if not scope_collapse_ready:
+        warnings.append(
+            f"phase {phase_id!r} has a single closed wave; close_phase requires an active "
+            "phase decision documenting scope collapse"
+        )
+
+
+def phase_close_readiness(
+    state: State,
+    *,
+    phase_id: str,
+    audit_id: str | None = None,
+    require_audit: bool = False,
+    include_structure: bool = True,
+) -> CloseReadiness:
+    """Return phase-level close readiness derived from state.
+
+    The projection deliberately reuses :class:`CloseReadiness` so phase
+    close, ``/ship``, and operator renderers share the same status shape
+    that wave close already uses. The helper is read-only and does not
+    persist evidence; the audit row named by *audit_id* is the evidence
+    anchor.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    from eawf.workflow.verify.models import CloseReadiness
+
+    criteria: list[CriterionView] = []
+    warnings: list[str] = []
+
+    if include_structure:
+        _extend_phase_close_structure(
+            state,
+            phase=phase,
+            criteria=criteria,
+            warnings=warnings,
+        )
+
+    if require_audit or audit_id is not None:
+        audit_warning = _phase_close_audit_warning(state, phase=phase, audit_id=audit_id)
+        criteria.append(_phase_close_view("close-audit", passed=audit_warning is None))
+        if audit_warning is not None:
+            warnings.append(audit_warning)
+
+    ready = all(view.status in ("pass", "waived") for view in criteria)
+    return CloseReadiness(
+        ready=ready,
+        criteria=criteria,
+        warnings=warnings,
+        waived_gate_ids=[],
+    )
+
+
+def phase_close_readiness_blockers(readiness: CloseReadiness) -> list[str]:
+    """Render blocker strings from a phase-close readiness view."""
+    return list(readiness.warnings)
+
+
+def _validate_phase_closable(state: State, *, phase_id: str, audit_id: str) -> Phase:
     """Run the close-phase gates and return the closable phase.
 
     Raises:
@@ -124,44 +319,15 @@ def _validate_phase_closable(state: State, *, phase_id: str) -> Phase:
     phase = state.phases.get(phase_id)
     if phase is None:
         raise LifecycleError(f"unknown phase {phase_id!r}")
-    if phase.status not in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}:
-        raise LifecycleError(f"phase {phase_id!r} has status {phase.status.value!r}; cannot close")
-    open_children = [
-        iid
-        for iid, it in state.iters.items()
-        if it.phase_id == phase_id and it.status in {IterStatus.PLANNED, IterStatus.ACTIVE}
-    ]
-    if open_children:
-        raise LifecycleError(
-            f"phase {phase_id!r} has open iters: {sorted(open_children, key=natural_key)}"
-        )
-    iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
-    closed_wave_count = sum(
-        1
-        for w in state.waves.values()
-        if w.iter_id in iter_ids_in_phase and w.status == WaveStatus.CLOSED
+    readiness = phase_close_readiness(
+        state,
+        phase_id=phase_id,
+        audit_id=audit_id,
+        require_audit=True,
     )
-    if closed_wave_count == 0:
-        raise LifecycleError(
-            f"phase {phase_id!r} has no closed waves; close_phase requires at least one closed wave"
-        )
-    iters_without_audit = sorted(
-        (
-            iid
-            for iid, it in state.iters.items()
-            if it.phase_id == phase_id and it.status == IterStatus.CLOSED and not it.audit_id
-        ),
-        key=natural_key,
-    )
-    if iters_without_audit:
-        raise LifecycleError(
-            f"phase {phase_id!r} has closed iters missing audit: {iters_without_audit}"
-        )
-    if closed_wave_count == 1 and not has_scope_collapse_decision(state, phase_id=phase_id):
-        raise LifecycleError(
-            f"phase {phase_id!r} has a single closed wave; close_phase requires an active "
-            "phase decision documenting scope collapse"
-        )
+    if not readiness.ready:
+        details = "; ".join(phase_close_readiness_blockers(readiness))
+        raise LifecycleError(f"phase {phase_id!r} not ready to close: {details}")
     return phase
 
 
@@ -196,7 +362,7 @@ def close_phase(
             a CLOSED child iter is missing its audit, or a single-wave phase
             lacks its scope-collapse decision.
     """
-    phase = _validate_phase_closable(state, phase_id=phase_id)
+    phase = _validate_phase_closable(state, phase_id=phase_id, audit_id=audit_id)
     phase.status = PhaseStatus.CLOSED
     phase.closed_at = datetime.now(UTC)
     phase.audit_id = audit_id

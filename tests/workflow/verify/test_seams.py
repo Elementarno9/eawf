@@ -11,10 +11,8 @@ Per the W06 success criteria:
 * sc #5 — the close envelope grows a ``readiness_warnings_count``
   field; additive so existing callers stay green. Verified for the
   daemon seam directly against the on-disk envelope.
-* sc #6 — no close path BLOCKS on a non-ready readiness in W06; a
-  wave with a failing synthetic criterion still closes. Verified at
-  the ``wave_land`` seam (the readiness compute is wrapped in a
-  try/except that demotes to a warning log).
+* sc #6 — ``wave_land`` runs readiness before auto-close and leaves
+  the wave open when the projection is non-ready.
 """
 
 from __future__ import annotations
@@ -343,14 +341,14 @@ def _make_repo(repo_root: Path, *, feature_branch: str = "feature/eawf-v0.1") ->
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is required")
-def test_wave_land_does_not_block_on_failing_readiness(
+def test_wave_land_leaves_wave_open_on_failing_readiness(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``wave_land`` closes the wave even when readiness reports non-ready (sc #6).
+    """``wave_land`` lands commits but skips auto-close on non-ready readiness.
 
-    Pins the W06 advisory contract: a non-ready readiness must NOT
-    raise out of the close seam. We monkeypatch ``compute`` to return a
-    failing readiness and assert ``close_wave`` still lands.
+    We monkeypatch ``compute`` to return a failing readiness and assert
+    ``close_wave`` does not run; merge-back evidence stays available for
+    a later retry after evidence is fixed.
     """
     # Build a minimal repo + worktree with one commit on a feature branch.
     from eawf.runtime.worktree.create import create_worktree
@@ -399,6 +397,7 @@ def test_wave_land_does_not_block_on_failing_readiness(
 
     result = wave_land(state, repo_root=repo, wave_id=WAVE_ID, keep_worktree=True)
 
-    # The wave closed despite the non-ready readiness — W06 contract.
-    assert state.waves[WAVE_ID].status == WaveStatus.CLOSED
+    # The commit landed, but the wave remains open until readiness clears.
+    assert state.waves[WAVE_ID].status == WaveStatus.CLAIMED
+    assert result.closed is False
     assert result.commits  # cherry-pick landed.

@@ -590,6 +590,47 @@ def test_mutate_wave_close_failing_readiness_without_enforce_is_advisory(
     _run(body)
 
 
+def test_mutate_phase_close_requires_close_audit_before_write(tmp_path: Path) -> None:
+    """Daemon PHASE_CLOSE goes through phase-close readiness before persistence."""
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
+    payload = _build_state_payload(wave_status="closed")
+    payload["iters"]["P24-I01"]["status"] = "closed"  # type: ignore[index]
+    payload["iters"]["P24-I01"]["closed_at"] = _now().isoformat()  # type: ignore[index]
+    payload["iters"]["P24-I01"]["audit_id"] = "AUD-ITER"  # type: ignore[index]
+    payload["waves"]["P24-I01-W09"]["claim_session_id"] = None  # type: ignore[index]
+    payload["waves"]["P24-I01-W09"]["closed_at"] = _now().isoformat()  # type: ignore[index]
+    payload["waves"]["P24-I01-W09"]["outcome"] = "ok"  # type: ignore[index]
+    payload["iters"]["P24-I01"]["wave_ids"].append("P24-I01-W10")  # type: ignore[index]
+    payload["waves"]["P24-I01-W10"] = {  # type: ignore[index]
+        "id": "P24-I01-W10",
+        "iter_id": "P24-I01",
+        "title": "second wave",
+        "status": "closed",
+        "claim_session_id": None,
+        "outcome": "ok",
+        "opened_at": _now().isoformat(),
+        "closed_at": _now().isoformat(),
+        "sessions": {},
+    }
+    ctx, state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.PHASE_CLOSE,
+        scope_id="P24",
+        mutation_id=uuid.uuid4().hex,
+        params={"phase_id": "P24", "audit_id": "AUD-PH-1"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="close audit 'AUD-PH-1' not found"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["phases"]["P24"]["status"] == "active"
+        assert not event_path.exists() or not event_path.read_text(encoding="utf-8").strip()
+
+    _run(body)
+
+
 def test_mutate_wave_claim_publishes_wave_claimed_event_kind(tmp_path: Path) -> None:
     """WAVE_CLAIM envelope carries ``event_kind='wave_claimed'``."""
     payload = _build_state_payload(wave_status="pending")

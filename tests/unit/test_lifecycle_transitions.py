@@ -13,6 +13,9 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
+    AuditKind,
+    AuditStatus,
+    AuditVerdict,
     DecisionStatus,
     IterStatus,
     PhaseStatus,
@@ -21,6 +24,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.models import (
+    Audit,
     CurrentPointers,
     Decision,
     Project,
@@ -79,6 +83,26 @@ def _empty_state() -> State:
             "plugins": {},
             "indexes": {},
         }
+    )
+
+
+def _add_ship_gate_audit(
+    state: State,
+    *,
+    audit_id: str,
+    scope_id: str,
+    verdict: AuditVerdict | None = AuditVerdict.PASS,
+    status: AuditStatus = AuditStatus.COMPLETE,
+    kind: AuditKind = AuditKind.SHIP_GATE,
+) -> None:
+    state.audits = dict(state.audits or {})
+    state.audits[audit_id] = Audit(
+        id=audit_id,
+        scope_id=scope_id,
+        kind=kind,
+        status=status,
+        created_at=datetime.now(UTC),
+        verdict=verdict,
     )
 
 
@@ -175,6 +199,7 @@ def _seed_closed_wave(state: State, phase_id: str, iter_id: str | None = None) -
         status=DecisionStatus.ACTIVE,
         created_at=datetime.now(UTC),
     )
+    _add_ship_gate_audit(state, audit_id="AUD-1", scope_id=phase_id)
 
 
 def test_close_phase_happy_clears_current() -> None:
@@ -877,6 +902,7 @@ def test_plan_iter_under_closed_phase_rejected() -> None:
         status=DecisionStatus.ACTIVE,
         created_at=datetime.now(UTC),
     )
+    _add_ship_gate_audit(state, audit_id="AUD-2", scope_id="P01")
     close_phase(state, phase_id="P01", audit_id="AUD-2")
     with pytest.raises(LifecycleError, match="not open"):
         plan_iter(state, iter_id="P01-I02", phase_id="P01", title="i2")
@@ -1179,6 +1205,7 @@ def test_close_phase_rejects_when_no_closed_wave() -> None:
     state.waves["P10-I01-W01"].status = WaveStatus.ABANDONED
     state.iters["P10-I01"].status = IterStatus.CLOSED
     state.iters["P10-I01"].closed_at = datetime.now(UTC)
+    _add_ship_gate_audit(state, audit_id="AUD-1", scope_id="P10")
     with pytest.raises(LifecycleError, match="no closed waves"):
         close_phase(state, phase_id="P10", audit_id="AUD-1")
 
@@ -1208,8 +1235,32 @@ def test_close_phase_accepts_when_one_wave_closed() -> None:
         status=DecisionStatus.ACTIVE,
         created_at=datetime.now(UTC),
     )
+    _add_ship_gate_audit(state, audit_id="AUD-2", scope_id="P11")
     p = close_phase(state, phase_id="P11", audit_id="AUD-2")
     assert p.status == PhaseStatus.CLOSED
+
+
+def test_close_phase_rejects_missing_close_audit_evidence() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P11", title="t")
+    open_iter(state, iter_id="P11-I01", phase_id="P11", title="i")
+    for n in (1, 2):
+        wave_id = f"P11-I01-W0{n}"
+        plan_wave(
+            state,
+            wave_id=wave_id,
+            iter_id="P11-I01",
+            title="w",
+            file_scopes=["x"],
+            effort_bucket="M",
+        )
+        claim_wave(state, wave_id=wave_id, session_id=f"SES-{n}")
+        close_wave(state, wave_id=wave_id, outcome="ok")
+    state.iters["P11-I01"].status = IterStatus.CLOSED
+    state.iters["P11-I01"].closed_at = datetime.now(UTC)
+    state.iters["P11-I01"].audit_id = "AUD-iter"
+    with pytest.raises(LifecycleError, match="close audit 'AUD-2' not found"):
+        close_phase(state, phase_id="P11", audit_id="AUD-2")
 
 
 def test_close_phase_rejects_closed_iter_missing_audit() -> None:
@@ -1232,6 +1283,7 @@ def test_close_phase_rejects_closed_iter_missing_audit() -> None:
     # Close the iter WITHOUT an audit_id — the transition must reject.
     state.iters["P12-I01"].status = IterStatus.CLOSED
     state.iters["P12-I01"].closed_at = datetime.now(UTC)
+    _add_ship_gate_audit(state, audit_id="AUD-1", scope_id="P12")
     with pytest.raises(LifecycleError, match="closed iters missing audit"):
         close_phase(state, phase_id="P12", audit_id="AUD-1")
 
@@ -1253,6 +1305,7 @@ def test_close_phase_rejects_single_wave_without_decision() -> None:
     state.iters["P13-I01"].status = IterStatus.CLOSED
     state.iters["P13-I01"].closed_at = datetime.now(UTC)
     state.iters["P13-I01"].audit_id = "AUD-iter"
+    _add_ship_gate_audit(state, audit_id="AUD-1", scope_id="P13")
     # Single closed wave, no scope-collapse decision — the transition rejects.
     with pytest.raises(LifecycleError, match="single closed wave"):
         close_phase(state, phase_id="P13", audit_id="AUD-1")
@@ -1283,6 +1336,7 @@ def test_close_phase_allows_single_wave_with_scope_collapse_decision() -> None:
         status=DecisionStatus.ACTIVE,
         created_at=datetime.now(UTC),
     )
+    _add_ship_gate_audit(state, audit_id="AUD-1", scope_id="P14")
     p = close_phase(state, phase_id="P14", audit_id="AUD-1")
     assert p.status == PhaseStatus.CLOSED
 
@@ -1313,6 +1367,7 @@ def test_close_phase_rejects_single_wave_when_decision_superseded() -> None:
         status=DecisionStatus.SUPERSEDED,
         created_at=datetime.now(UTC),
     )
+    _add_ship_gate_audit(state, audit_id="AUD-1", scope_id="P15")
     with pytest.raises(LifecycleError, match="single closed wave"):
         close_phase(state, phase_id="P15", audit_id="AUD-1")
 

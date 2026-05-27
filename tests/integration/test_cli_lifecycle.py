@@ -244,6 +244,11 @@ def test_phase_close_happy(workspace: Path) -> None:
             "plan more waves",
         ],
     )
+    audit = runner.invoke(
+        app,
+        ["audit", "run", "AUD-1", "--scope-id", "P01", "--kind", "ship-gate"],
+    )
+    assert audit.exit_code == 0, audit.stdout
     res = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
     assert res.exit_code == 0, res.stdout
 
@@ -326,7 +331,13 @@ def test_phase_reopen_happy_allows_followup_iter(workspace: Path) -> None:
             "plan more waves",
         ],
     )
-    runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
+    audit = runner.invoke(
+        app,
+        ["audit", "run", "AUD-1", "--scope-id", "P01", "--kind", "ship-gate"],
+    )
+    assert audit.exit_code == 0, audit.stdout
+    close = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
+    assert close.exit_code == 0, close.stdout
     res = runner.invoke(app, ["phase", "reopen", "P01"])
     assert res.exit_code == 0, res.stdout
     res = runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "follow-up"])

@@ -168,7 +168,12 @@ def phase_close_cmd(
         return
     preflight_state, _ = loaded
     try:
-        checklist = _phase_prepare_close_checklist(preflight_state, phase_id=phase_id)
+        checklist = _phase_prepare_close_checklist(
+            preflight_state,
+            phase_id=phase_id,
+            audit_id=audit,
+            require_audit=True,
+        )
     except LifecycleError as exc:
         cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
         return
@@ -585,7 +590,13 @@ def _closed_wave_commit_summary(
     }
 
 
-def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, Any]:
+def _phase_prepare_close_checklist(
+    state: State,
+    *,
+    phase_id: str,
+    audit_id: str | None = None,
+    require_audit: bool = False,
+) -> dict[str, Any]:
     """Compute a structured pre-close checklist for *phase_id*.
 
     Items: open iters, open waves, audit linkage, waves missing commit/outcome.
@@ -595,6 +606,7 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
         has_scope_collapse_decision,
+        phase_close_readiness,
     )
     from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
@@ -638,6 +650,7 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
     checklist = {
         "phase": phase_id,
         "phase_status": phase.status.value,
+        "close_audit": audit_id,
         "open_iters": open_iters,
         "open_waves": open_waves,
         "closed_wave_count": commit_summary["closed_wave_count"],
@@ -647,6 +660,18 @@ def _phase_prepare_close_checklist(state: State, *, phase_id: str) -> dict[str, 
         "scope_collapse_decision": scope_collapse_decision,
         "single_wave_without_decision": single_wave_without_decision,
     }
+    readiness = phase_close_readiness(
+        state,
+        phase_id=phase_id,
+        audit_id=audit_id,
+        require_audit=require_audit,
+    )
+    checklist["close_readiness_ready"] = readiness.ready
+    checklist["close_readiness_warnings"] = list(readiness.warnings)
+    checklist["close_readiness_warnings_count"] = len(readiness.warnings)
+    checklist["close_audit_blockers"] = [
+        warning for warning in readiness.warnings if warning.startswith("close audit")
+    ]
     blockers = _phase_close_blockers(checklist)
     checklist["blockers"] = blockers
     checklist["ok"] = not blockers
@@ -668,6 +693,9 @@ def _phase_close_blockers(checklist: dict[str, Any]) -> list[str]:
         blockers.append(
             "single closed wave requires an active phase decision documenting scope collapse"
         )
+    for warning in checklist.get("close_readiness_warnings", []):
+        if warning not in blockers:
+            blockers.append(warning)
     return blockers
 
 
@@ -675,6 +703,10 @@ def _phase_close_blockers(checklist: dict[str, Any]) -> list[str]:
 def phase_prepare_close_cmd(
     ctx: typer.Context,
     phase_id: Annotated[str, typer.Argument(help="Phase ID to prepare for close.")],
+    audit: Annotated[
+        str | None,
+        typer.Option("--audit", help="Optional close audit ID to validate."),
+    ] = None,
     dry_run: Annotated[
         bool, typer.Option("--dry-run/--no-dry-run", help="Skip event emission.")
     ] = True,
@@ -723,7 +755,12 @@ def phase_prepare_close_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
     try:
-        checklist = _phase_prepare_close_checklist(state, phase_id=phase_id)
+        checklist = _phase_prepare_close_checklist(
+            state,
+            phase_id=phase_id,
+            audit_id=audit,
+            require_audit=audit is not None,
+        )
     except LifecycleError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
         return
@@ -733,7 +770,7 @@ def phase_prepare_close_cmd(
         _append_event(
             events_path,
             command="phase prepare-close",
-            args={"phase_id": phase_id, "dry_run": False},
+            args={"phase_id": phase_id, "audit": audit, "dry_run": False},
             scope_id=phase_id,
             before_version=version,
             after_version=version,

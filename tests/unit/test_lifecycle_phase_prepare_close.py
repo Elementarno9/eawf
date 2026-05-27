@@ -7,6 +7,9 @@ from datetime import UTC, datetime
 import pytest
 
 from eawf.kernel.state.enums import (
+    AuditKind,
+    AuditStatus,
+    AuditVerdict,
     DecisionStatus,
     IterStatus,
     PhaseStatus,
@@ -15,6 +18,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.models import (
+    Audit,
     CurrentPointers,
     Decision,
     Project,
@@ -59,22 +63,35 @@ def _empty_state() -> State:
     )
 
 
+def _add_ship_gate_audit(state: State, *, audit_id: str = "AUD-1", phase_id: str = "P03") -> None:
+    state.audits = dict(state.audits or {})
+    state.audits[audit_id] = Audit(
+        id=audit_id,
+        scope_id=phase_id,
+        kind=AuditKind.SHIP_GATE,
+        status=AuditStatus.COMPLETE,
+        created_at=datetime.now(UTC),
+        verdict=AuditVerdict.PASS,
+    )
+
+
 def test_prepare_close_unknown_phase_raises() -> None:
     state = _empty_state()
     with pytest.raises(LifecycleError, match="unknown phase"):
         _phase_prepare_close_checklist(state, phase_id="P99")
 
 
-def test_prepare_close_empty_phase_ok() -> None:
+def test_prepare_close_empty_phase_not_ready() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P03", title="t")
     out = _phase_prepare_close_checklist(state, phase_id="P03")
-    assert out["ok"] is True
+    assert out["ok"] is False
     assert out["open_iters"] == []
     assert out["open_waves"] == []
     assert out["closed_waves_missing_commit"] == []
     assert out["iters_without_audit"] == []
     assert out["phase_status"] == PhaseStatus.ACTIVE.value
+    assert "no closed waves" in "; ".join(out["blockers"])
 
 
 def test_prepare_close_flags_open_iter() -> None:
@@ -219,3 +236,36 @@ def test_prepare_close_allows_single_wave_with_scope_collapse_decision(
     assert out["scope_collapse_decision"] is True
     assert out["blockers"] == []
     assert out["ok"] is True
+
+
+def test_prepare_close_validates_required_close_audit() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P03", title="t")
+
+    out = _phase_prepare_close_checklist(
+        state,
+        phase_id="P03",
+        audit_id="AUD-1",
+        require_audit=True,
+    )
+
+    assert out["close_audit"] == "AUD-1"
+    assert out["close_readiness_ready"] is False
+    assert out["close_audit_blockers"] == ["close audit 'AUD-1' not found"]
+    assert out["ok"] is False
+
+
+def test_prepare_close_accepts_complete_ship_gate_close_audit() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P03", title="t")
+    _add_ship_gate_audit(state, audit_id="AUD-1", phase_id="P03")
+
+    out = _phase_prepare_close_checklist(
+        state,
+        phase_id="P03",
+        audit_id="AUD-1",
+        require_audit=True,
+    )
+
+    assert out["close_readiness_ready"] is False
+    assert out["close_audit_blockers"] == []
