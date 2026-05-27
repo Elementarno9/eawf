@@ -29,6 +29,10 @@ The check kinds frozen for v0.3:
   ``file_scopes``; fails with the offending criterion text in
   ``details`` when the pattern is absent. Drives the criterion-vs-diff
   half of the ``/audit`` gate.
+* ``citation_resolves`` — ``args`` validated by
+  :class:`CitationResolvesArgs`: ``{path: str}`` or ``{text: str}``,
+  plus optional typed ``references`` rows. Verifies dense ``[N]`` prose
+  citations resolve to portable citation rows.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -42,6 +46,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from eawf.platform.artifacts.references import Citation
+
 logger = logging.getLogger(__name__)
 
 CheckKind = Literal[
@@ -52,6 +58,7 @@ CheckKind = Literal[
     "command_exit_zero",
     "verify_implements",
     "criterion_in_diff",
+    "citation_resolves",
 ]
 
 
@@ -198,6 +205,29 @@ class CommandExitZeroArgs(BaseModel):
         return self
 
 
+class CitationResolvesArgs(BaseModel):
+    """Strict args schema for the ``citation_resolves`` check kind."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str | None = None
+    text: str | None = None
+    references: list[Citation] | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> CitationResolvesArgs:
+        """Require exactly one citation source.
+
+        Raises:
+            ValueError: when both or neither of ``path`` and ``text`` are set.
+        """
+        has_path = self.path is not None
+        has_text = self.text is not None
+        if has_path == has_text:
+            raise ValueError("exactly one of path or text is required")
+        return self
+
+
 class CheckFile(BaseModel):
     """Top-level yaml document validated by :func:`load_spec`."""
 
@@ -213,6 +243,7 @@ __all__ = [
     "CheckResult",
     "CheckSpec",
     "CheckStatus",
+    "CitationResolvesArgs",
     "CommandExitZeroArgs",
     "Scope",
     "TimeoutClass",

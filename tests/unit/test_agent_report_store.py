@@ -11,7 +11,12 @@ from pydantic import ValidationError
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ExecutorReportBody
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportEvidenceRef,
+    AgentReportPayload,
+    ExecutorReportBody,
+    ResearcherReportBody,
+)
 from eawf.kernel.store.paths import store_path
 from eawf.workflow.agent_report.store import (
     AgentReportRoleMismatchError,
@@ -20,7 +25,7 @@ from eawf.workflow.agent_report.store import (
 )
 
 
-def _state() -> State:
+def _state(*, role: AgentSessionRole = AgentSessionRole.EXECUTOR) -> State:
     return State.model_validate(
         {
             "schema_version": "1.0",
@@ -52,7 +57,7 @@ def _state() -> State:
             "agent_sessions": {
                 "SES-001": {
                     "id": "SES-001",
-                    "role": "executor",
+                    "role": role.value,
                     "runtime": "codex",
                     "scope_id": "P18-I01-W04",
                     "status": "active",
@@ -78,6 +83,29 @@ def _body(summary: str = "implemented report writer") -> ExecutorReportBody:
         summary=summary,
         wave_id="P18-I01-W04",
         outcome="done",
+    )
+
+
+def _researcher_body() -> ResearcherReportBody:
+    return ResearcherReportBody(
+        role="researcher",
+        verdict=AgentReportVerdict.PASS,
+        confidence=Confidence.HIGH,
+        summary="researched report writer evidence",
+        evidence_refs=[AgentReportEvidenceRef(kind="artifact", ref="docs/source.md")],
+        question="which writer path?",
+        recommendation="use the append-only writer",
+    )
+
+
+def _researcher_body_without_evidence() -> ResearcherReportBody:
+    return ResearcherReportBody(
+        role="researcher",
+        verdict=AgentReportVerdict.PASS,
+        confidence=Confidence.HIGH,
+        summary="researched report writer evidence",
+        question="which writer path?",
+        recommendation="use the append-only writer",
     )
 
 
@@ -136,6 +164,36 @@ def test_append_agent_report_rejects_role_mismatch(tmp_path: Path) -> None:
             session_id="SES-001",
             base_id="P18-I01-W04",
             body=body,
+        )
+
+
+def test_append_agent_report_writes_researcher_report_with_evidence_refs(tmp_path: Path) -> None:
+    result = append_agent_report(
+        state=_state(role=AgentSessionRole.RESEARCHER),
+        state_path=_state_path(tmp_path),
+        session_id="SES-001",
+        base_id="P18-I01-W04",
+        body=_researcher_body(),
+        generated_at=datetime(2026, 5, 14, tzinfo=UTC),
+    )
+    assert result.store_kind == "researcher_report"
+    path = store_path(tmp_path / ".ea" / "state.json", result.envelope.kind)
+    parsed = Envelope.model_validate_json(path.read_text(encoding="utf-8").splitlines()[0])
+    payload = AgentReportPayload.model_validate(parsed.payload)
+    assert payload.header.role is AgentSessionRole.RESEARCHER
+    assert payload.body.evidence_refs
+
+
+def test_append_agent_report_rejects_researcher_pass_without_evidence_refs(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValidationError, match="researcher pass requires non-empty"):
+        append_agent_report(
+            state=_state(role=AgentSessionRole.RESEARCHER),
+            state_path=_state_path(tmp_path),
+            session_id="SES-001",
+            base_id="P18-I01-W04",
+            body=_researcher_body_without_evidence(),
         )
 
 

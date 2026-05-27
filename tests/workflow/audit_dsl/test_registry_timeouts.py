@@ -51,6 +51,11 @@ def _run_command_check(args: dict[str, Any], cwd: Path, *, name: str = "x") -> C
     return CHECK_REGISTRY["command_exit_zero"](spec, cwd.resolve())
 
 
+def _run_citation_check(args: dict[str, Any], cwd: Path, *, name: str = "cit") -> CheckResult:
+    spec = CheckSpec(kind="citation_resolves", name=name, args=args)
+    return CHECK_REGISTRY["citation_resolves"](spec, cwd.resolve())
+
+
 def _echo_env_argv(var: str) -> list[str]:
     """Argv that prints the value of *var* to stdout."""
     return [
@@ -69,6 +74,60 @@ def test_timeout_class_seconds_has_four_canonical_keys() -> None:
     assert _TIMEOUT_CLASS_SECONDS["standard"] == 300
     assert _TIMEOUT_CLASS_SECONDS["slow"] == 900
     assert _TIMEOUT_CLASS_SECONDS["very_slow"] == 3600
+
+
+# ---- citation_resolves -----------------------------------------------------
+
+
+def test_citation_resolves_accepts_markdown_reference_rows(tmp_path: Path) -> None:
+    artifact = tmp_path / "brief.md"
+    artifact.write_text(
+        "\n".join(
+            [
+                "# Brief",
+                "",
+                "## Summary",
+                "",
+                "Finding uses source [1].",
+                "",
+                "## References",
+                "",
+                "[1] docs/source.md",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = _run_citation_check({"path": "brief.md"}, tmp_path)
+    assert result.passed is True
+    assert result.status == "pass"
+    assert "citations=1" in (result.details or "")
+
+
+def test_citation_resolves_rejects_missing_reference_rows(tmp_path: Path) -> None:
+    artifact = tmp_path / "brief.md"
+    artifact.write_text("Finding uses source [1].\n", encoding="utf-8")
+    result = _run_citation_check({"path": "brief.md"}, tmp_path)
+    assert result.passed is False
+    assert result.status == "fail"
+    assert "citation references missing rows: [1]" in (result.details or "")
+
+
+def test_citation_resolves_accepts_typed_reference_rows(tmp_path: Path) -> None:
+    result = _run_citation_check(
+        {
+            "text": "Typed rows can be passed in args [1].",
+            "references": [{"n": 1, "ref": "docs/source.md", "kind": "repo"}],
+        },
+        tmp_path,
+    )
+    assert result.passed is True
+    assert result.status == "pass"
+
+
+def test_citation_resolves_rejects_invalid_args(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="exactly one of path or text is required"):
+        _run_citation_check({"path": "brief.md", "text": "duplicate"}, tmp_path)
 
 
 # ---- CommandExitZeroArgs schema -------------------------------------------

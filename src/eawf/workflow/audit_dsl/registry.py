@@ -57,12 +57,19 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from eawf.platform.artifacts.references import (
+    Citation,
+    CitationValidationError,
+    citation_numbers_in_text,
+    validate_dense_citation_refs,
+)
 from eawf.platform.lint._conditional import changed_files
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
     CheckResult,
     CheckSpec,
+    CitationResolvesArgs,
     CommandExitZeroArgs,
     Scope,
     TimeoutClass,
@@ -97,6 +104,9 @@ _GATE_FILES_ENV: str = "EAWF_GATE_FILES"
 #: Joiner used inside :data:`_GATE_FILES_ENV`. Newline-not-NUL — see
 #: :data:`_GATE_FILES_ENV` for the OS-level constraint.
 _GATE_FILES_SEPARATOR: str = "\n"
+
+_SECTION_HEADING_RE = re.compile(r"^## (?P<title>[^\n#]+)\s*$", re.MULTILINE)
+_REFERENCE_ROW_RE = re.compile(r"^\[(?P<n>[1-9][0-9]*)\]\s+(?P<ref>\S+)")
 
 
 def _require_str(args: dict[str, Any], key: str, *, name: str, kind: str) -> str:
@@ -198,6 +208,82 @@ def _check_state_field_equals(spec: CheckSpec, cwd: Path) -> CheckResult:
     passed = actual == expected
     details = f"field={field} expected={expected!r} actual={actual!r}"
     return CheckResult(name=spec.name, kind=spec.kind, passed=passed, details=details)
+
+
+def _prose_without_references_section(text: str) -> str:
+    matches = list(_SECTION_HEADING_RE.finditer(text))
+    if not matches:
+        return text
+    chunks: list[str] = []
+    cursor = 0
+    for index, match in enumerate(matches):
+        heading = f"## {match.group('title').strip()}"
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        if heading == "## References":
+            chunks.append(text[cursor:start])
+            cursor = end
+    chunks.append(text[cursor:])
+    return "".join(chunks)
+
+
+def _citation_rows_from_markdown(text: str) -> list[Citation]:
+    rows: list[Citation] = []
+    in_references = False
+    for line in text.splitlines():
+        heading = _SECTION_HEADING_RE.match(line.strip())
+        if heading is not None:
+            in_references = heading.group("title").strip() == "References"
+            continue
+        if not in_references:
+            continue
+        match = _REFERENCE_ROW_RE.match(line.strip())
+        if match is None:
+            continue
+        rows.append(Citation.from_legacy_source(int(match.group("n")), match.group("ref")))
+    return rows
+
+
+def _check_citation_resolves(spec: CheckSpec, cwd: Path) -> CheckResult:
+    try:
+        args = CitationResolvesArgs.model_validate(spec.args)
+    except ValidationError as exc:
+        raise ValueError(
+            f"check {spec.name!r} kind=citation_resolves: invalid args: {exc}"
+        ) from exc
+
+    path_arg = args.path
+    if path_arg is not None:
+        target = (cwd / path_arg).resolve() if not Path(path_arg).is_absolute() else Path(path_arg)
+        if not target.is_file():
+            return CheckResult(
+                name=spec.name,
+                kind=spec.kind,
+                passed=False,
+                details=f"path={path_arg} not found",
+            )
+        text = target.read_text(encoding="utf-8")
+        source = f"path={path_arg}"
+    else:
+        text = args.text or ""
+        source = "text=<inline>"
+
+    try:
+        references = (
+            args.references if args.references is not None else _citation_rows_from_markdown(text)
+        )
+        validate_dense_citation_refs(_prose_without_references_section(text), references)
+    except (CitationValidationError, ValueError) as exc:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            details=f"{source} {exc}",
+        )
+
+    used = citation_numbers_in_text(_prose_without_references_section(text))
+    details = f"{source} citations={len(set(used))} references={len(references)}"
+    return CheckResult(name=spec.name, kind=spec.kind, passed=True, details=details)
 
 
 def _resolve_scope_files(
@@ -302,6 +388,7 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "command_exit_zero": _check_command_exit_zero,
     "verify_implements": check_verify_implements,
     "criterion_in_diff": check_criterion_in_diff,
+    "citation_resolves": _check_citation_resolves,
 }
 
 

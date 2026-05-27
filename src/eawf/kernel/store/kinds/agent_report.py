@@ -236,6 +236,19 @@ class AgentReportPayload(_StrictModel):
                 f"body role {self.body.role!r} does not match header role "
                 f"{self.header.role.value!r}"
             )
+        if (
+            self.header.role is AgentSessionRole.RESEARCHER
+            and self.header.report_id
+            == report_record_id(
+                role=self.header.role,
+                base_id=self.header.base_id,
+                attempt=self.header.attempt,
+            )
+            and isinstance(self.body, ResearcherReportBody)
+            and self.body.verdict is AgentReportVerdict.PASS
+            and not self.body.evidence_refs
+        ):
+            raise ValueError("researcher pass requires non-empty evidence_refs")
         return self
 
 
