@@ -124,6 +124,14 @@ _SUBJECT_BARE_RE = re.compile(
 )
 _SUBJECT_BARE_CONVENTIONAL_RE = re.compile(rf"^(?P<type>{_TYPES}):\s+\S.*$")
 _CORE_TAG_RE = re.compile(r"^\[P\d{2,}(-I(?!00)\d{2,})?-CORE\]\s+")
+_WAVE_TRAILER_NAME = "Eawf-Wave"
+_WAVE_TRAILER_RE = re.compile(
+    rf"^{_WAVE_TRAILER_NAME}:\s+"
+    r"(?P<wave>P\d{2,}(?:-I(?!00)\d{2,})?-W(?!00)\d{2,})\s*$",
+    re.MULTILINE,
+)
+_SUBJECT_STYLE_BRACKET = "bracket"
+_SUBJECT_STYLE_TRAILER = "trailer"
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
     ".ea/store/event.jsonl",
@@ -145,6 +153,71 @@ _STATE_ONLY_PREFIXES = (".ea/specs/",)
 # the promoted-artifact tree; wave-produced docs use the
 # ``[P##-W##] docs:`` wave form, which accepts any path.
 _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
+
+
+def _find_repo_root(start: Path | None = None) -> Path:
+    """Return nearest ancestor with ``.ea`` or ``.git``; cwd fallback."""
+    cwd = Path.cwd() if start is None else start
+    for parent in [cwd, *cwd.parents]:
+        if (parent / ".ea").exists() or (parent / ".git").exists():
+            return parent
+    return cwd
+
+
+def _configured_subject_style(repo_root: Path | None = None) -> str:
+    """Return ``vcs.conventions.subject_style`` from repo/local config.
+
+    The hook runs under system Python, so this intentionally avoids importing
+    package YAML dependencies. It reads the two file-backed repo layers the
+    hook can see directly; missing or malformed values fall back to
+    ``bracket``.
+    """
+    root = _find_repo_root(repo_root)
+    style = _SUBJECT_STYLE_BRACKET
+    for config_path in (root / ".ea" / "config.yaml", root / ".ea" / "local" / "config.yaml"):
+        candidate = _subject_style_from_config(config_path)
+        if candidate is not None:
+            style = candidate
+    return style
+
+
+def _subject_style_from_config(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    in_vcs = False
+    in_conventions = False
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        if indent == 0:
+            in_vcs = stripped == "vcs:"
+            in_conventions = False
+            continue
+        if in_vcs and indent == 2:
+            in_conventions = stripped == "conventions:"
+            continue
+        if in_vcs and in_conventions and indent == 4 and stripped.startswith("subject_style:"):
+            value = _strip_yaml_scalar(stripped.split(":", 1)[1])
+            if value in {_SUBJECT_STYLE_BRACKET, _SUBJECT_STYLE_TRAILER}:
+                return value
+    return None
+
+
+def _strip_yaml_scalar(value: str) -> str:
+    value = value.split("#", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].strip()
+    return value
+
+
+def _has_wave_trailer(text: str) -> bool:
+    return _WAVE_TRAILER_RE.search(text) is not None
 
 
 def _current_phase_active(state_path: Path | None = None) -> bool:
@@ -248,7 +321,13 @@ def _extract_subject(text: str) -> str:
     return ""
 
 
-def _match_subject(subject: str, state_path: Path | None) -> tuple[re.Match[str] | None, bool, str]:
+def _match_subject(
+    subject: str,
+    state_path: Path | None,
+    *,
+    subject_style: str,
+    has_wave_trailer: bool,
+) -> tuple[re.Match[str] | None, bool, str]:
     """Return (match, is_bare_state_or_docs, error_diag).
 
     Tries the three accepted forms in order. The bare conventional-commits
@@ -265,6 +344,18 @@ def _match_subject(subject: str, state_path: Path | None) -> tuple[re.Match[str]
         return bracketed, bare_match is not None, ""
     bare_conventional = _SUBJECT_BARE_CONVENTIONAL_RE.match(subject)
     if bare_conventional is not None:
+        if subject_style == _SUBJECT_STYLE_TRAILER:
+            if has_wave_trailer:
+                return bare_conventional, False, ""
+            return (
+                None,
+                False,
+                (
+                    f"trailer-style commit missing {_WAVE_TRAILER_NAME} trailer: {subject!r}\n"
+                    f"set '{_WAVE_TRAILER_NAME}: P##-I##-W##' in the commit body, "
+                    "or switch vcs.conventions.subject_style back to 'bracket'"
+                ),
+            )
         if _current_phase_active(state_path):
             return (
                 None,
@@ -317,6 +408,8 @@ def lint(
     staged: list[str],
     env: Mapping[str, str] | None = None,
     state_path: Path | None = None,
+    repo_root: Path | None = None,
+    subject_style: str | None = None,
 ) -> tuple[int, str]:
     """Run both checks against *message_path* + *staged* paths.
 
@@ -328,7 +421,13 @@ def lint(
     subject = _extract_subject(text)
     if not subject:
         return 1, "empty commit subject"
-    match, is_bare_bracketed, err = _match_subject(subject, state_path)
+    configured_style = subject_style or _configured_subject_style(repo_root)
+    match, is_bare_bracketed, err = _match_subject(
+        subject,
+        state_path,
+        subject_style=configured_style,
+        has_wave_trailer=_has_wave_trailer(text),
+    )
     if match is None:
         return 1, err
     # Bare conventional-commits (no bracket prefix) has no path whitelist;

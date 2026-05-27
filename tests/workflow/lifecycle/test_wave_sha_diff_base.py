@@ -22,8 +22,45 @@ import pytest
 
 from eawf.workflow.lifecycle.wave_sha import (
     _git_merge_base_head_main,
+    commit_wave_trailer,
     derive_diff_base,
+    derive_wave_sha,
 )
+
+
+def test_commit_wave_trailer_emits_eawf_wave() -> None:
+    assert commit_wave_trailer("P28-I03-W02") == "Eawf-Wave: P28-I03-W02"
+    assert commit_wave_trailer("bad") is None
+
+
+def test_derive_wave_sha_searches_eawf_wave_trailer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    class _FakeCompleted:
+        returncode = 0
+        stderr = ""
+
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    def _fake_run(cmd: list[str], **_kwargs: Any) -> _FakeCompleted:
+        calls.append(cmd)
+        if "--grep=Eawf-Wave: P28-I03-W02" in cmd:
+            return _FakeCompleted("abc123\n")
+        return _FakeCompleted("")
+
+    monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
+    monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.subprocess.run", _fake_run)
+
+    assert derive_wave_sha("P28-I03-W02", repo_root=tmp_path) == "abc123"
+    assert [cmd[3] for cmd in calls] == [
+        "--grep=[P28-I03-W02]",
+        "--grep=[P28-W02]",
+        "--grep=Eawf-Wave: P28-I03-W02",
+    ]
+
 
 # ---- derive_diff_base ------------------------------------------------------
 

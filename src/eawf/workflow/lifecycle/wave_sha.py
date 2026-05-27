@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _TIMEOUT_SECONDS: float = 5.0
+_WAVE_TRAILER_NAME = "Eawf-Wave"
 
 
 DriftKind = Literal["pinned_but_missing", "pinned_mismatch", "closed_no_pin", "closed_unfindable"]
@@ -99,6 +100,16 @@ def commit_prefix(wave_id: str) -> str | None:
     return f"[{phase}-{iter_token}-{wave}]"
 
 
+def commit_wave_trailer(wave_id: str) -> str | None:
+    """Return the trailer-mode wave marker for *wave_id*.
+
+    ``P19-I02-W01`` -> ``"Eawf-Wave: P19-I02-W01"``.
+    """
+    if _phase_and_wave(wave_id) is None:
+        return None
+    return f"{_WAVE_TRAILER_NAME}: {wave_id}"
+
+
 def _candidate_prefixes(wave_id: str) -> list[str]:
     """Return the prefix forms to grep for, in priority order.
 
@@ -119,6 +130,14 @@ def _candidate_prefixes(wave_id: str) -> list[str]:
     if iter_token == "I01":
         return [canonical, f"[{phase}-{iter_token}-{wave}]"]
     return [canonical, f"[{phase}-{wave}]"]
+
+
+def _candidate_grep_terms(wave_id: str) -> list[str]:
+    terms = _candidate_prefixes(wave_id)
+    trailer = commit_wave_trailer(wave_id)
+    if trailer is not None:
+        terms.append(trailer)
+    return terms
 
 
 def _git_merge_base_head_main(
@@ -219,7 +238,7 @@ def derive_wave_sha(wave_id: str, *, repo_root: Path | None = None) -> str | Non
     Logs a debug line on failure rather than raising — renderers should
     degrade to an empty SHA, not crash.
     """
-    candidates = _candidate_prefixes(wave_id)
+    candidates = _candidate_grep_terms(wave_id)
     if not candidates:
         return None
     if shutil.which("git") is None:

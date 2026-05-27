@@ -386,6 +386,47 @@ def test_accepts_bare_conventional_when_no_active_phase(tmp_path: Path, mod) -> 
     assert code == 0, diag
 
 
+def test_accepts_trailer_style_wave_commit_when_configured(tmp_path: Path, mod) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".ea").mkdir(parents=True)
+    (repo / ".ea" / "config.yaml").write_text(
+        "vcs:\n  conventions:\n    subject_style: trailer\n",
+        encoding="utf-8",
+    )
+    msg = _write_msg(
+        tmp_path,
+        "feat: add trailer-style wave commit\n\nEawf-Wave: P28-I03-W02\n",
+    )
+    state = _write_state(tmp_path, phase_id="P28")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state, repo_root=repo)
+    assert code == 0, diag
+
+
+def test_trailer_style_rejects_missing_wave_trailer(tmp_path: Path, mod) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".ea").mkdir(parents=True)
+    (repo / ".ea" / "config.yaml").write_text(
+        "vcs:\n  conventions:\n    subject_style: trailer\n",
+        encoding="utf-8",
+    )
+    msg = _write_msg(tmp_path, "feat: missing wave trailer\n\nbody\n")
+    state = _write_state(tmp_path, phase_id="P28")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state, repo_root=repo)
+    assert code == 1
+    assert "missing Eawf-Wave trailer" in diag
+
+
+def test_bracket_default_still_rejects_active_bare_conventional(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "feat: bracket mode ignores trailer escape\n\nEawf-Wave: P28-I03-W02\n",
+    )
+    state = _write_state(tmp_path, phase_id="P28")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state)
+    assert code == 1
+    assert "bare conventional-commits subject rejected" in diag
+
+
 def test_rejects_bare_conventional_when_active_phase(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "chore: pre-flight scrub for v0.4 design\n\nbody\n")
     state = _write_state(tmp_path, phase_id="P28")

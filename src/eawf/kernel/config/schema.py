@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import EffortBucket
+
+CommitSubjectStyle = Literal["bracket", "trailer"]
+
+
+class VcsConventionsConfig(BaseModel):
+    """VCS commit-message convention preferences."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject_style: CommitSubjectStyle = "bracket"
+    wave_trailer: str = Field(default="Eawf-Wave", min_length=1)
 
 
 class BucketEstimateOverride(BaseModel):
@@ -66,6 +79,8 @@ class EstimationConfig(BaseModel):
 __all__ = [
     "BucketEstimateOverride",
     "BucketFitConfig",
+    "CommitSubjectStyle",
     "EstimationConfig",
     "EstimationDisplayConfig",
+    "VcsConventionsConfig",
 ]

@@ -94,11 +94,17 @@ def test_built_in_defaults_have_every_required_top_level_section() -> None:
 def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     merged, sources = merge_config(workspace=None, repo=None, env={}, cli_overrides={})
     # Sample several keys.
-    for dotted in ("cli.canonical_command", "estimation.eu_minutes", "planning.approval"):
+    for dotted in (
+        "cli.canonical_command",
+        "estimation.eu_minutes",
+        "planning.approval",
+        "vcs.conventions.subject_style",
+    ):
         assert sources[dotted] == "built-in"
     # Default values match.
     assert merged["estimation"]["eu_minutes"] == 30
     assert merged["planning"]["approval"] == "ask"
+    assert merged["vcs"]["conventions"]["subject_style"] == "bracket"
 
 
 # --- Layer precedence -------------------------------------------------------
@@ -146,6 +152,21 @@ def test_local_overrides_repo(tmp_path: Path) -> None:
     merged, sources = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
     assert merged["planning"]["approval"] == "local"
     assert sources["planning.approval"] == "local"
+
+
+def test_vcs_conventions_subject_style_overlays_across_repo_and_local(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _write_yaml(
+        repo / ".ea" / "config.yaml",
+        "vcs:\n  conventions:\n    subject_style: trailer\n",
+    )
+    _write_yaml(
+        repo / ".ea" / "local" / "config.yaml",
+        "vcs:\n  conventions:\n    subject_style: bracket\n",
+    )
+    merged, sources = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
+    assert merged["vcs"]["conventions"]["subject_style"] == "bracket"
+    assert sources["vcs.conventions.subject_style"] == "local"
 
 
 def test_env_overrides_local(tmp_path: Path) -> None:

@@ -273,6 +273,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "max_injected_tokens": 2000,
     },
     "vcs": {
+        "conventions": {
+            "subject_style": "bracket",
+            "wave_trailer": "Eawf-Wave",
+        },
         "commit_template": "state_scoped",
         "pr_template": "iter",
         "branch_pattern": "eawf/{project}/{scope}-{slug}",
