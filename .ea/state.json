@@ -360,6 +360,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:19:33.049556Z"
     },
+    "P28-I03-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W16",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W16",
+      "scope_id": "P28-I03-W16",
+      "status": "done",
+      "updated_at": "2026-05-27T22:03:52.747963Z"
+    },
     "P28-I03-W18": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2454,7 +2466,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I03-W16",
       "P28-I03-W17",
       "P28-I03-W31",
       "P28-I03-W21",
@@ -7140,7 +7151,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T22:03:18.642617Z",
+  "updated_at": "2026-05-27T22:03:52.748472Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -23343,8 +23354,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T22:03:52.747963Z",
+      "commit": "ec31de5febaa30eeac462093a05f6d5294b4e8c2",
       "deps": [
         "P28-I03-W11"
       ],
@@ -23360,10 +23371,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:29.927114Z",
-      "outcome": null,
+      "outcome": "ast-grep visible-floor lint and reviewdog workflow shipped with lint tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ast-grep rules scoped to floor",
         "reviewdog on PR",
@@ -26599,10 +26610,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w16",
       "created_at": "2026-05-27T21:50:12.685398Z",
       "id": "WT-P28-I03-W16-1779918612",
-      "merged_commit": null,
+      "merged_commit": "ec31de5",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w16",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W16"
     },
     "WT-P28-I03-W17-1779918614": {
