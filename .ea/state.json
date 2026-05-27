@@ -192,6 +192,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:19:36.655867Z"
     },
+    "P28-I03-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W02",
+      "scope_id": "P28-I03-W02",
+      "status": "done",
+      "updated_at": "2026-05-27T21:29:14.676851Z"
+    },
     "P28-I03-W03": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2310,7 +2322,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P28-I03-W02",
       "P28-I03-W30",
       "P28-I03-W36"
     ],
@@ -6756,7 +6767,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T21:26:46.603111Z",
+  "updated_at": "2026-05-27T21:29:14.677343Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -22446,8 +22457,8 @@
         "P28-I03-W33"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T21:29:14.676851Z",
+      "commit": "be2520351bd588d883edffeb2a00536ce340a5da",
       "deps": [
         "P28-I03-W01"
       ],
@@ -22464,10 +22475,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:22.385868Z",
-      "outcome": null,
+      "outcome": "VCS convention config and subject-style SHA recovery shipped with focused tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "subject_style=bracket default",
         "trailer mode emits Eawf-Wave",
@@ -26061,10 +26072,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w02",
       "created_at": "2026-05-27T21:21:26.840882Z",
       "id": "WT-P28-I03-W02-1779916886",
-      "merged_commit": null,
+      "merged_commit": "be25203",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w02",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W02"
     },
     "WT-P28-I03-W03-1779916032": {
