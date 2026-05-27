@@ -1962,7 +1962,6 @@
     ],
     "active_wave_ids": [
       "P28-I02-W03",
-      "P28-I02-W09",
       "P28-I02-W07"
     ],
     "iter_id": "P28-I02",
@@ -5964,7 +5963,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T15:37:05.934453Z",
+  "updated_at": "2026-05-27T15:38:15.452735Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20784,7 +20783,7 @@
         "P28-I03-W21"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-27T15:38:16.263964Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -20801,10 +20800,10 @@
       "intent": null,
       "iter_id": "P28-I02",
       "opened_at": "2026-05-26T18:14:08.219965Z",
-      "outcome": null,
+      "outcome": "landed 1 commit(s) via wave land",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "ScopeTier added",
         "OBSOLETE+obsoleted_at",
@@ -24826,10 +24825,10 @@
       "branch": "feature/eawf-v0.1-p28-w09",
       "created_at": "2026-05-27T02:24:00.401084Z",
       "id": "WT-P28-I02-W09-1779848640",
-      "merged_commit": null,
+      "merged_commit": "ecb2a07",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w09",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I02-W09"
     },
     "WT-P28-I02-W10-1779843446": {
