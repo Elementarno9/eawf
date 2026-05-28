@@ -12,8 +12,10 @@ This module owns nine evidence Typer apps:
   v0.4 verify-spine attestation surface — ``eawf evidence attest``
   proxies a typed :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord`
   through the daemon ``evidence.append`` RPC and (under the
-  ``EAWF_EVIDENCE_DIRECT_WRITE=1`` recovery gate) falls back to a
-  direct ``evidence.jsonl`` append. The verb is the operator-facing
+  ``EAWF_EVIDENCE_DIRECT_WRITE=1`` plus
+  ``EAWF_EVIDENCE_DIRECT_WRITE_MODE=ci|recovery`` recovery gate) falls
+  back to a direct ``evidence.jsonl`` append when the daemon is
+  unavailable. The verb is the operator-facing
   attestation entry point; deterministic + jury appends will land
   through library entry points in later waves (W06 / W08 / W11).
 
@@ -78,9 +80,12 @@ logger = logging.getLogger(__name__)
 #: unset (the default) ``eawf evidence attest`` proxies through the
 #: daemon ``evidence.append`` RPC, satisfying AGENTS rule 4
 #: (daemon is the canonical writer). Setting ``EAWF_EVIDENCE_DIRECT_WRITE=1``
-#: opts into the per-file portalock append used by CI / recovery shell
-#: when the daemon is intentionally unavailable.
+#: plus ``EAWF_EVIDENCE_DIRECT_WRITE_MODE=ci|recovery`` opts into the
+#: per-file portalock append used by CI / recovery shell when the
+#: daemon is intentionally unavailable.
 EVIDENCE_DIRECT_WRITE_ENV: str = "EAWF_EVIDENCE_DIRECT_WRITE"
+EVIDENCE_DIRECT_WRITE_MODE_ENV: str = "EAWF_EVIDENCE_DIRECT_WRITE_MODE"
+_DIRECT_WRITE_MODES: frozenset[str] = frozenset({"ci", "recovery"})
 
 
 # ---- Shared helpers --------------------------------------------------------
@@ -184,13 +189,26 @@ evidence_app = typer.Typer(
 
 
 def _direct_write_enabled() -> bool:
-    """Return ``True`` when the direct-JSONL append fallback is opted in.
+    """Return ``True`` when the direct-JSONL fallback is explicitly opted in.
 
-    Reads :data:`EVIDENCE_DIRECT_WRITE_ENV` from the environment; any
-    value other than ``"1"`` is treated as off so the operator must
-    affirmatively opt in.
+    Requires both :data:`EVIDENCE_DIRECT_WRITE_ENV` ``=1`` and
+    :data:`EVIDENCE_DIRECT_WRITE_MODE_ENV` in ``{"ci", "recovery"}``;
+    the fallback still only runs after the daemon proves unavailable.
     """
-    return os.environ.get(EVIDENCE_DIRECT_WRITE_ENV) == "1"
+    if os.environ.get(EVIDENCE_DIRECT_WRITE_ENV) != "1":
+        return False
+    return os.environ.get(EVIDENCE_DIRECT_WRITE_MODE_ENV, "").strip().lower() in (
+        _DIRECT_WRITE_MODES
+    )
+
+
+def _direct_write_hint() -> str:
+    """Return the operator-facing direct-write recovery hint."""
+    return (
+        f"set {EVIDENCE_DIRECT_WRITE_ENV}=1 and "
+        f"{EVIDENCE_DIRECT_WRITE_MODE_ENV}=ci|recovery to fall back to a "
+        "direct evidence.jsonl append (CI / recovery shell only)"
+    )
 
 
 def _build_record(
@@ -355,10 +373,9 @@ def evidence_attest(
     """Append a typed verify-spine evidence row.
 
     Default path proxies through the daemon ``evidence.append`` RPC so
-    the daemon-canonical-writer invariant (AGENTS rule 4) holds. Setting
-    :data:`EVIDENCE_DIRECT_WRITE_ENV` ``=1`` opts into a direct
-    ``evidence.jsonl`` append; without the env var a direct write is
-    refused with a clear error pointing at the daemon RPC.
+    the daemon-canonical-writer invariant (AGENTS rule 4) holds. Direct
+    ``evidence.jsonl`` append is allowed only when the daemon is
+    unavailable and the CI / recovery marker is explicit.
     """
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -380,48 +397,40 @@ def evidence_attest(
 
     appended_at: str
     via_direct = False
-    if _direct_write_enabled():
+    try:
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        with DaemonClient() as client:
+            result = client.call(
+                "evidence.append",
+                {"record": record.model_dump(mode="json")},
+            )
+        appended_at = str(result.get("appended_at", ""))
+    except DaemonRpcError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"daemon rejected evidence.append: code={exc.code} {exc.message}",
+                kind="DaemonError",
+            ),
+            flags=flags,
+        )
+        return
+    except (OSError, RuntimeError) as exc:
+        if not _direct_write_enabled():
+            cli_errors.emit_error(
+                cli_errors.UserError(
+                    f"daemon unavailable for evidence.append: {exc}; {_direct_write_hint()}",
+                    kind="DaemonError",
+                ),
+                flags=flags,
+            )
+            return
         try:
             appended_at = _append_direct(record, state_path=state_path)
         except cli_errors.CliError as err:
             cli_errors.emit_error(err, flags=flags)
             return
         via_direct = True
-    else:
-        try:
-            from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
-            with DaemonClient() as client:
-                result = client.call(
-                    "evidence.append",
-                    {"record": record.model_dump(mode="json")},
-                )
-            appended_at = str(result.get("appended_at", ""))
-        except DaemonRpcError as exc:
-            cli_errors.emit_error(
-                cli_errors.UserError(
-                    f"daemon rejected evidence.append: code={exc.code} {exc.message}",
-                    kind="DaemonError",
-                ),
-                flags=flags,
-            )
-            return
-        except (OSError, RuntimeError) as exc:
-            # Daemon unreachable: refuse direct write unless the env gate
-            # is opted in. The error name-checks the env var so the
-            # operator knows the documented recovery hatch.
-            cli_errors.emit_error(
-                cli_errors.UserError(
-                    (
-                        f"daemon unavailable for evidence.append: {exc}; "
-                        f"set {EVIDENCE_DIRECT_WRITE_ENV}=1 to fall back to a "
-                        "direct evidence.jsonl append (CI / recovery shell only)"
-                    ),
-                    kind="DaemonError",
-                ),
-                flags=flags,
-            )
-            return
 
     logger.info(
         f"evidence_attest id={record.id!r} scope={record.scope_id!r} "
@@ -463,6 +472,7 @@ install_promote_command(incident_app, "incident")
 
 __all__ = [
     "EVIDENCE_DIRECT_WRITE_ENV",
+    "EVIDENCE_DIRECT_WRITE_MODE_ENV",
     "artifact_app",
     "audit_app",
     "backlog_app",

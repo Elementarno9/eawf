@@ -240,6 +240,48 @@ class DigestResult(BaseModel):
     version: str
 
 
+class WaveLandParams(BaseModel):
+    """Params for :func:`wave_land_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str
+    wave_id: str
+    outcome: str | None = None
+    keep_worktree: bool = False
+
+
+class WaveLandRpcResult(BaseModel):
+    """Result of :func:`wave_land_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    wave: str
+    commits: list[str]
+    outcome: str
+    closed: bool
+    worktree_cleaned: bool
+    merged_commit: str
+
+
+class WaveLandBatchParams(BaseModel):
+    """Params for :func:`wave_land_batch_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str
+    iter_id: str | None = None
+    ready_only: bool = False
+    keep_worktree: bool = False
+
+
+class WaveLandBatchRpcResult(BaseModel):
+    """Result of :func:`wave_land_batch_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    landed: list[dict[str, Any]]
+    failed_wave: str | None
+    error: str | None
+    skipped: list[str]
+
+
 # ---- Idempotency cache ------------------------------------------------------
 
 
@@ -1182,6 +1224,159 @@ def _build_bucket_drift_envelope(
     )
 
 
+def _wave_land_payload(result: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for one wave-land result."""
+    return WaveLandRpcResult(
+        wave=result.wave_id,
+        commits=list(result.commits),
+        outcome=result.outcome,
+        closed=result.closed,
+        worktree_cleaned=result.worktree_cleaned,
+        merged_commit=result.merged_commit,
+    ).model_dump(mode="json")
+
+
+def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for a wave-land-batch result."""
+    return WaveLandBatchRpcResult(
+        landed=[_wave_land_payload(row) for row in result.landed],
+        failed_wave=result.failed_wave,
+        error=result.error,
+        skipped=list(result.skipped),
+    ).model_dump(mode="json")
+
+
+def _build_worktree_event_envelope(
+    *,
+    command: str,
+    scope_id: str | None,
+    params: dict[str, Any],
+    result: dict[str, Any],
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build the canonical event row for daemon-owned worktree mutations."""
+    now = datetime.now(UTC)
+    summary = f"{command} scope={scope_id}"
+    args_raw = orjson.dumps(params, option=orjson.OPT_SORT_KEYS)
+    extras: dict[str, str | int | float | bool] = {}
+    if command == "state.wave_land":
+        extras = {
+            "closed": bool(result.get("closed", False)),
+            "worktree_cleaned": bool(result.get("worktree_cleaned", False)),
+            "commit_count": len(result.get("commits", [])),
+        }
+    elif command == "state.wave_land_batch":
+        extras = {
+            "landed_count": len(result.get("landed", [])),
+            "failed": result.get("failed_wave") is not None,
+            "skipped_count": len(result.get("skipped", [])),
+        }
+    payload = EventPayload(
+        timestamp=now,
+        event_type=command,
+        event_kind=None,
+        actor="daemon",
+        command=command,
+        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="warn" if result.get("failed_wave") is not None else "ok",
+        message=summary,
+        extras=extras,
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def _commit_worktree_state(
+    *,
+    ctx: MethodContext,
+    repo_root: Path,
+    params: dict[str, Any],
+    command: str,
+    scope_id: str | None,
+    apply_func: Callable[[State], dict[str, Any]],
+) -> dict[str, Any]:
+    """Run a worktree mutator under daemon-owned state persistence."""
+    from eawf.runtime.lock import portalock
+    from eawf.surfaces.cli import errors as cli_errors
+
+    state_path, event_path, wal_path = _resolve_mutator_paths(
+        repo_root=str(repo_root),
+        ctx=ctx,
+    )
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(state_path, timeout=5.0):
+            state, payload = _read_state(state_path)
+            before_version = _state_version(payload)
+            try:
+                result = apply_func(state)
+            except cli_errors.ValidationError as exc:
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
+            except cli_errors.CliError as exc:
+                raise ValueError(str(exc)) from exc
+
+            state.updated_at = datetime.now(UTC)
+            new_payload = state.model_dump(mode="json")
+            post = validate_state(new_payload, strict_optional=False)
+            if post.state is None:
+                raise DaemonValidationError(
+                    "validation_failed: post-mutation schema invalid: "
+                    + "; ".join(post.schema_errors[:3])
+                )
+            if post.violations:
+                violation_codes = ",".join(v.code for v in post.violations)
+                raise DaemonValidationError(
+                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
+                )
+            after_version = _state_version(new_payload)
+            envelope = _build_worktree_event_envelope(
+                command=command,
+                scope_id=scope_id,
+                params=params,
+                result=result,
+                before_version=before_version,
+                after_version=after_version,
+            )
+            record_id = uuid.uuid4().hex
+            record = WalRecord(
+                record_id=record_id,
+                envelope=envelope,
+                idempotency_key=None,
+                written_at=datetime.now(UTC),
+                before_state_version=before_version,
+                after_state_version=after_version,
+            )
+            wal.write_pending(wal_path, record)
+            atomic_write_json_locked(state_path, new_payload)
+            wal.mark_applied(wal_path, record_id)
+            append_envelope(event_path, envelope)
+            wal.mark_fsynced(wal_path, record_id)
+            if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+                ctx.bus.publish(envelope)
+            ctx.last_event_id = envelope.id
+            logger.info(
+                f"_commit_worktree_state command={command!r} scope={scope_id!r} "
+                f"before={before_version} "
+                f"after={after_version} envelope_id={envelope.id!r}"
+            )
+            return result
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
 # ---- Handlers ---------------------------------------------------------------
 
 
@@ -1493,6 +1688,60 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
 
 
+@register("state.wave_land")
+async def wave_land_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Daemon-owned implementation of ``eawf wave land``."""
+    args = WaveLandParams.model_validate(params)
+    repo_root = Path(args.repo_root)
+
+    from eawf.runtime.worktree import wave_land, worktree_registry_lock
+
+    with worktree_registry_lock(repo_root, timeout=5.0):
+        return _commit_worktree_state(
+            ctx=ctx,
+            repo_root=repo_root,
+            params=params,
+            command="state.wave_land",
+            scope_id=args.wave_id,
+            apply_func=lambda state: _wave_land_payload(
+                wave_land(
+                    state,
+                    repo_root=repo_root,
+                    wave_id=args.wave_id,
+                    outcome=args.outcome,
+                    keep_worktree=args.keep_worktree,
+                )
+            ),
+        )
+
+
+@register("state.wave_land_batch")
+async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Daemon-owned implementation of ``eawf wave land-batch``."""
+    args = WaveLandBatchParams.model_validate(params)
+    repo_root = Path(args.repo_root)
+
+    from eawf.runtime.worktree import wave_land_batch, worktree_registry_lock
+
+    with worktree_registry_lock(repo_root, timeout=5.0):
+        return _commit_worktree_state(
+            ctx=ctx,
+            repo_root=repo_root,
+            params=params,
+            command="state.wave_land_batch",
+            scope_id=args.iter_id,
+            apply_func=lambda state: _wave_land_batch_payload(
+                wave_land_batch(
+                    state,
+                    repo_root=repo_root,
+                    iter_id=args.iter_id,
+                    ready_only=args.ready_only,
+                    keep_worktree=args.keep_worktree,
+                )
+            ),
+        )
+
+
 def event_store_path_for(state_path: Path) -> Path:
     """Return the ``event.jsonl`` path that pairs with *state_path*.
 
@@ -1508,4 +1757,6 @@ __all__ = [
     "VALIDATION_FAILED",
     "_APPLY_REGISTRY",
     "event_store_path_for",
+    "wave_land_batch_rpc",
+    "wave_land_rpc",
 ]

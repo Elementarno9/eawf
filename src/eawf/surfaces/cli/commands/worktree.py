@@ -23,12 +23,15 @@ This module also wires the wave-centric automation verbs onto the
 - ``wave land-batch`` — apply ``wave land`` to every eligible wave in
   dep order; stop on the first failure.
 
-Every mutating handler runs inside
+Most mutating handlers run inside
 :func:`eawf.surfaces.cli._mutation.state_transaction` (state-side serialisation)
 *and* :func:`eawf.runtime.worktree.locks.worktree_registry_lock` (git-side
 registry serialisation). The two locks compose without re-entry: the
 state lock guards ``state.json`` and the registry lock guards
 ``.git/worktrees/<name>``; they target disjoint paths.
+``wave land`` and ``wave land-batch`` are daemon-owned exceptions:
+their state writes route through ``state.wave_land`` / ``state.wave_land_batch``
+so the daemon remains the canonical state mutator.
 """
 
 from __future__ import annotations
@@ -528,6 +531,29 @@ def worktree_cleanup_cmd(
 # worktree.py.
 
 
+def _call_worktree_daemon(
+    *,
+    method: str,
+    params: dict[str, Any],
+    flags: GlobalFlags,
+    verb: str,
+) -> dict[str, Any]:
+    """Call one daemon-owned worktree mutator and map RPC errors to CLI errors."""
+    from eawf.surfaces.cli import _dispatch
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        _dispatch.escalate_mutation(verb, flags=flags)
+        with DaemonClient() as client:
+            return client.call(method, params)
+    except DaemonRpcError as exc:
+        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
+
+
 @wave_app.command(name="land")
 def wave_land_cmd(
     ctx: typer.Context,
@@ -556,9 +582,6 @@ def wave_land_cmd(
     wave is *not* closed and the on-disk repo state is preserved so the
     operator can resolve and re-run.
     """
-    from eawf.runtime.worktree import wave_land, worktree_registry_lock
-    from eawf.surfaces.cli._mutation import state_transaction
-
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
@@ -573,35 +596,32 @@ def wave_land_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
 
-    result = None
-    # Lock ordering invariant: registry → state (see module docstring).
     try:
-        with (
-            worktree_registry_lock(repo_root, timeout=5.0),
-            state_transaction(state_path) as state,
-        ):
-            result = wave_land(
-                state,
-                repo_root=repo_root,
-                wave_id=wave_id,
-                outcome=outcome,
-                keep_worktree=keep_worktree,
-            )
+        result = _call_worktree_daemon(
+            method="state.wave_land",
+            params={
+                "repo_root": str(repo_root),
+                "wave_id": wave_id,
+                "outcome": outcome,
+                "keep_worktree": keep_worktree,
+            },
+            flags=flags,
+            verb="wave land",
+        )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
 
-    assert result is not None
     payload: dict[str, Any] = {
-        "wave": result.wave_id,
-        "commits": list(result.commits),
-        "outcome": result.outcome,
-        "worktree_cleaned": result.worktree_cleaned,
-        "merged_commit": result.merged_commit,
+        "wave": result["wave"],
+        "commits": list(result["commits"]),
+        "outcome": result["outcome"],
+        "worktree_cleaned": result["worktree_cleaned"],
+        "merged_commit": result["merged_commit"],
     }
     text = (
-        f"wave land {wave_id} commits={result.commits} "
-        f"outcome={result.outcome!r} cleaned={result.worktree_cleaned}"
+        f"wave land {wave_id} commits={payload['commits']} "
+        f"outcome={payload['outcome']!r} cleaned={payload['worktree_cleaned']}"
     )
     emit_json_or_text(payload, text, flags=flags)
 
@@ -632,9 +652,6 @@ def wave_land_batch_cmd(
     ] = False,
 ) -> None:
     """Apply ``wave land`` to every eligible wave in dep order; stop on failure."""
-    from eawf.runtime.worktree import wave_land_batch, worktree_registry_lock
-    from eawf.surfaces.cli._mutation import state_transaction
-
     flags: GlobalFlags = ctx.obj
     if iter_flag is not None and not is_iter_id(iter_flag):
         cli_errors.emit_error(
@@ -649,43 +666,41 @@ def wave_land_batch_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
 
-    batch_result = None
     try:
-        with (
-            worktree_registry_lock(repo_root, timeout=5.0),
-            state_transaction(state_path) as state,
-        ):
-            batch_result = wave_land_batch(
-                state,
-                repo_root=repo_root,
-                iter_id=iter_flag,
-                ready_only=ready_only,
-                keep_worktree=keep_worktree,
-            )
+        batch_result = _call_worktree_daemon(
+            method="state.wave_land_batch",
+            params={
+                "repo_root": str(repo_root),
+                "iter_id": iter_flag,
+                "ready_only": ready_only,
+                "keep_worktree": keep_worktree,
+            },
+            flags=flags,
+            verb="wave land-batch",
+        )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
 
-    assert batch_result is not None
     landed_payload = [
         {
-            "wave": r.wave_id,
-            "commits": list(r.commits),
-            "outcome": r.outcome,
-            "worktree_cleaned": r.worktree_cleaned,
-            "merged_commit": r.merged_commit,
+            "wave": r["wave"],
+            "commits": list(r["commits"]),
+            "outcome": r["outcome"],
+            "worktree_cleaned": r["worktree_cleaned"],
+            "merged_commit": r["merged_commit"],
         }
-        for r in batch_result.landed
+        for r in batch_result["landed"]
     ]
     payload: dict[str, Any] = {
         "landed": landed_payload,
-        "failed_wave": batch_result.failed_wave,
-        "error": batch_result.error,
-        "skipped": list(batch_result.skipped),
+        "failed_wave": batch_result["failed_wave"],
+        "error": batch_result["error"],
+        "skipped": list(batch_result["skipped"]),
     }
-    landed_count = len(batch_result.landed)
-    if batch_result.failed_wave is None:
-        text = f"wave land-batch landed={landed_count} skipped={batch_result.skipped}"
+    landed_count = len(batch_result["landed"])
+    if batch_result["failed_wave"] is None:
+        text = f"wave land-batch landed={landed_count} skipped={batch_result['skipped']}"
         emit_json_or_text(payload, text, flags=flags)
         return
 
@@ -697,8 +712,8 @@ def wave_land_batch_cmd(
     # was not satisfied — and matches how individual ``wave land``
     # surfaces close-time failures.
     text = (
-        f"wave land-batch landed={landed_count} failed_at={batch_result.failed_wave} "
-        f"error={batch_result.error!r}"
+        f"wave land-batch landed={landed_count} failed_at={batch_result['failed_wave']} "
+        f"error={batch_result['error']!r}"
     )
     emit_json_or_text(payload, text, flags=flags)
     raise typer.Exit(cli_errors.ValidationError.exit_code)

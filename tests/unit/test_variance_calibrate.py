@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -407,8 +408,44 @@ def test_cli_calibrate_buckets_not_found_exits_one(tmp_path: Path) -> None:
 def test_cli_calibrate_apply_writes_bucket_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``calibrate apply`` writes one fitted bucket centroid after explicit confirm."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    """``calibrate apply`` routes the fitted centroid through config RPC."""
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
+    from eawf.surfaces.cli import _daemon_client as dc
+    from eawf.surfaces.cli import _dispatch
+
+    captured: dict[str, Any] = {}
+
+    class _FakeConfigClient:
+        def __enter__(self) -> _FakeConfigClient:
+            return self
+
+        def __exit__(self, *exc: Any) -> None:
+            return None
+
+        def config_set_layer_value(
+            self,
+            *,
+            layer: str,
+            key_path: list[str],
+            value: Any,
+            idempotency_key: str | None = None,
+            repo_root: str | None = None,
+        ) -> dict[str, Any]:
+            captured["layer"] = layer
+            captured["key_path"] = list(key_path)
+            captured["value"] = value
+            captured["repo_root"] = repo_root
+            return {
+                "layer": layer,
+                "layer_path": "fake-path",
+                "key_path": list(key_path),
+                "value": value,
+                "envelope": {"id": "CFG-calibrate"},
+                "idempotent_replay": False,
+            }
+
+    monkeypatch.setattr(_dispatch, "ensure_daemon", lambda _runtime=None: 4242)
+    monkeypatch.setattr(dc, "DaemonClient", _FakeConfigClient)
     workspace = _write_state(tmp_path)
     result = runner.invoke(
         app,
@@ -433,11 +470,14 @@ def test_cli_calibrate_apply_writes_bucket_override(
     assert payload["key"] == "estimation.buckets.overrides.M"
     assert payload["value"]["expected_eu"] == pytest.approx(1.5)
     assert payload["value"]["pessimistic_eu"] == pytest.approx(1.5)
-
+    assert captured == {
+        "layer": "workspace",
+        "key_path": ["estimation", "buckets", "overrides", "M"],
+        "value": {"expected_eu": 1.5, "pessimistic_eu": 1.5},
+        "repo_root": str(workspace),
+    }
     body = yaml.safe_load((workspace / ".ea" / "config.yaml").read_text(encoding="utf-8"))
-    override = body["estimation"]["buckets"]["overrides"]["M"]
-    assert override["expected_eu"] == pytest.approx(1.5)
-    assert override["pessimistic_eu"] == pytest.approx(1.5)
+    assert "estimation" not in body
 
 
 def test_cli_calibrate_apply_no_input_requires_yes(

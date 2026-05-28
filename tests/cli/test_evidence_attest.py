@@ -51,9 +51,25 @@ def _read_envelopes(workspace: Path) -> list[Envelope]:
     ]
 
 
+def _daemon_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch the daemon client so the connect phase fails."""
+    from eawf.surfaces.cli import _daemon_client as dc
+
+    class _DownClient:
+        def __enter__(self) -> _DownClient:
+            raise OSError("simulated daemon unavailable")
+
+        def __exit__(self, *exc: Any) -> None:
+            return None
+
+    monkeypatch.setattr(dc, "DaemonClient", _DownClient)
+
+
 def test_attest_direct_write_appends_row(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """With ``EAWF_EVIDENCE_DIRECT_WRITE=1`` the verb writes one JSONL row."""
+    """Direct write requires daemon-down plus explicit CI/recovery marker."""
     monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_ENV, "1")
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_MODE_ENV, "ci")
+    _daemon_unavailable(monkeypatch)
     result = runner.invoke(
         app,
         [
@@ -89,6 +105,8 @@ def test_attest_direct_write_repeated_refs_and_metrics(
 ) -> None:
     """``--ref`` repeats and ``--metrics`` JSON round-trip cleanly."""
     monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_ENV, "1")
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_MODE_ENV, "recovery")
+    _daemon_unavailable(monkeypatch)
     result = runner.invoke(
         app,
         [
@@ -161,15 +179,47 @@ def test_attest_default_without_daemon_rejects_clearly(
     )
     assert result.exit_code != 0
     assert "EAWF_EVIDENCE_DIRECT_WRITE" in result.output
+    assert "EAWF_EVIDENCE_DIRECT_WRITE_MODE" in result.output
     # No row should have been appended on the rejection path.
+    assert _read_envelopes(workspace) == []
+
+
+def test_attest_env_only_direct_write_rejects_when_daemon_down(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Env-only direct-write opt-in is insufficient without CI/recovery mode."""
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_ENV, "1")
+    monkeypatch.delenv(evidence_cli.EVIDENCE_DIRECT_WRITE_MODE_ENV, raising=False)
+    _daemon_unavailable(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "evidence",
+            "attest",
+            "--scope-id",
+            "P28-I01-W04",
+            "--produced-by",
+            "tool",
+            "--evidence-kind",
+            "deterministic",
+            "--status",
+            "pass",
+            "--summary",
+            "env only",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "EAWF_EVIDENCE_DIRECT_WRITE_MODE" in result.output
     assert _read_envelopes(workspace) == []
 
 
 def test_attest_default_proxies_through_daemon_client(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Without the env var, the verb calls ``evidence.append`` over the daemon client."""
-    monkeypatch.delenv(evidence_cli.EVIDENCE_DIRECT_WRITE_ENV, raising=False)
+    """Even with direct-write envs set, reachable daemon path wins."""
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_ENV, "1")
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_MODE_ENV, "ci")
     captured: dict[str, Any] = {}
 
     from eawf.surfaces.cli import _daemon_client as dc

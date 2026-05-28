@@ -3,8 +3,8 @@
 CLI dispatch only (AGENTS rule 1): the handler resolves the state path,
 reads the typed :class:`~eawf.kernel.state.models.State`, and routes the re-fit
 into :mod:`eawf.workflow.estimation.buckets`. ``buckets`` is read-only;
-``apply`` writes one explicit bucket override through the layered-config
-writer after an operator confirmation gate.
+``apply`` writes one explicit bucket override through the daemon
+``config.set_layer_value`` RPC after an operator confirmation gate.
 
 Verbs:
 
@@ -103,9 +103,6 @@ def calibrate_apply_cmd(
     ] = False,
 ) -> None:
     """Apply one fitted bucket centroid to layered config after confirmation."""
-    import yaml
-
-    from eawf.surfaces.cli.commands.config import _save_value_to_layer
     from eawf.workflow.estimation.buckets import calibrate_buckets
     from eawf.workflow.evidence._io import load_state
 
@@ -148,21 +145,20 @@ def calibrate_apply_cmd(
     value = _override_value(row)
     key = f"estimation.buckets.overrides.{parsed_bucket.value}"
     try:
-        _save_value_to_layer(target_path=target_path, key=key, value=value, repo_root=repo)
-    except cli_errors.ValidationError as exc:
+        rpc_repo = _repo_anchor_for_layer_path(
+            scope=scope,
+            target_path=target_path,
+            repo=repo,
+        )
+        _apply_config_override_via_daemon(
+            scope=scope,
+            key=key,
+            value=value,
+            repo=rpc_repo,
+            flags=flags,
+        )
+    except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
-        return
-    except yaml.YAMLError as exc:
-        cli_errors.emit_error(
-            cli_errors.ValidationError(f"config layer is not valid YAML: {exc}"),
-            flags=flags,
-        )
-        return
-    except OSError as exc:
-        cli_errors.emit_error(
-            cli_errors.UserError(f"cannot read or write {target_path}: {exc}", kind="InvalidInput"),
-            flags=flags,
-        )
         return
 
     payload = {
@@ -204,6 +200,51 @@ def _target_path_for_scope(scope: str, *, flags: GlobalFlags) -> tuple[Path, Pat
     except ValueError as exc:
         raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
     return target_path, repo
+
+
+def _repo_anchor_for_layer_path(*, scope: str, target_path: Path, repo: Path) -> Path:
+    """Return the repo-root anchor the daemon config RPC needs for *scope*."""
+    if scope in {"repo", "workspace"} and target_path.parent.name == ".ea":
+        return target_path.parent.parent
+    if scope == "local" and target_path.parent.name == "local":
+        return target_path.parent.parent.parent
+    return repo
+
+
+def _apply_config_override_via_daemon(
+    *,
+    scope: str,
+    key: str,
+    value: dict[str, float],
+    repo: Path,
+    flags: GlobalFlags,
+) -> None:
+    """Persist one calibration override through daemon-owned config RPC.
+
+    Raises:
+        CliError: When daemon escalation, transport, or RPC validation
+            rejects the write.
+    """
+    from eawf.surfaces.cli import _dispatch
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        _dispatch.escalate_mutation("calibrate apply", flags=flags)
+        with DaemonClient() as client:
+            client.config_set_layer_value(
+                layer=scope,
+                key_path=key.split("."),
+                value=value,
+                repo_root=str(repo),
+            )
+    except DaemonRpcError as exc:
+        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        raise cli_errors.DaemonUnreachable(
+            f"daemon unavailable for config.set_layer_value: {exc}"
+        ) from exc
 
 
 def _parse_bucket(raw: str) -> EffortBucket:

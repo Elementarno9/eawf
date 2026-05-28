@@ -157,6 +157,49 @@ class _CapturingClient:
         }
 
 
+class _CapturingWorktreeClient:
+    """DaemonClient stand-in that records daemon-owned worktree calls."""
+
+    last_method: str | None = None
+    last_params: dict[str, Any] | None = None
+    call_count: int = 0
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        pass
+
+    def __enter__(self) -> _CapturingWorktreeClient:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        _CapturingWorktreeClient.last_method = method
+        _CapturingWorktreeClient.last_params = dict(params or {})
+        _CapturingWorktreeClient.call_count += 1
+        if method == "state.wave_land_batch":
+            return {
+                "landed": [],
+                "failed_wave": None,
+                "error": None,
+                "skipped": [],
+            }
+        return {
+            "wave": params["wave_id"] if params else "P01-I01-W01",
+            "commits": ["abc123"],
+            "outcome": "landed 1 commit(s) via wave land",
+            "closed": True,
+            "worktree_cleaned": False,
+            "merged_commit": "abc123",
+        }
+
+
 def _enable_proxy(monkeypatch: pytest.MonkeyPatch, *, client: type) -> None:
     """Switch from the daemonless bootstrap to a proxy-up scenario."""
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
@@ -259,6 +302,62 @@ def test_iter_close_proxies_to_daemon_when_up(
     assert _CapturingClient.call_count == 1
     assert _CapturingClient.last_kind is MutationKind.ITER_CLOSE
     assert _CapturingClient.last_params == {"iter_id": "P01-I01", "audit_id": "AUD-1"}
+
+
+def test_wave_land_proxies_to_daemon_owned_method(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave land`` routes the whole state write through daemon-owned RPC."""
+    from eawf.surfaces.cli.commands import worktree as worktree_cmd
+
+    _bootstrap_to_pending_wave(workspace)
+    monkeypatch.setattr(worktree_cmd, "_resolve_repo_root", lambda _state_path: workspace)
+    _enable_proxy(monkeypatch, client=_CapturingWorktreeClient)
+    _CapturingWorktreeClient.last_method = None
+    _CapturingWorktreeClient.last_params = None
+    _CapturingWorktreeClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(app, ["wave", "land", "P01-I01-W01", "--keep-worktree"])
+
+    assert res.exit_code == 0, res.stdout
+    assert _CapturingWorktreeClient.call_count == 1
+    assert _CapturingWorktreeClient.last_method == "state.wave_land"
+    assert _CapturingWorktreeClient.last_params == {
+        "repo_root": str(workspace),
+        "wave_id": "P01-I01-W01",
+        "outcome": None,
+        "keep_worktree": True,
+    }
+    assert _state_path(workspace).read_bytes() == state_before
+
+
+def test_wave_land_batch_proxies_to_daemon_owned_method(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave land-batch`` also routes through daemon-owned RPC."""
+    from eawf.surfaces.cli.commands import worktree as worktree_cmd
+
+    _bootstrap_to_pending_wave(workspace)
+    monkeypatch.setattr(worktree_cmd, "_resolve_repo_root", lambda _state_path: workspace)
+    _enable_proxy(monkeypatch, client=_CapturingWorktreeClient)
+    _CapturingWorktreeClient.last_method = None
+    _CapturingWorktreeClient.last_params = None
+    _CapturingWorktreeClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(app, ["wave", "land-batch", "--iter", "P01-I01", "--ready-only"])
+
+    assert res.exit_code == 0, res.stdout
+    assert _CapturingWorktreeClient.call_count == 1
+    assert _CapturingWorktreeClient.last_method == "state.wave_land_batch"
+    assert _CapturingWorktreeClient.last_params == {
+        "repo_root": str(workspace),
+        "iter_id": "P01-I01",
+        "ready_only": True,
+        "keep_worktree": False,
+    }
+    assert _state_path(workspace).read_bytes() == state_before
 
 
 # ---- plane 2: registry ------------------------------------------------------
