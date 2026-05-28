@@ -474,3 +474,22 @@ def test_accepts_three_digit_phase_id(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "[P100-W01] feat: distant phase\n\nbody\n")
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 0, diag
+
+
+def test_accepts_release_annotation_on_phase_close_state_commit(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "[P28] state: close iter + phase (audit=A44-P28) (release=v0.4.0)\n\nbody\n",
+    )
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 0, diag
+
+
+def test_rejects_malformed_release_annotation(tmp_path: Path, mod) -> None:
+    msg = _write_msg(
+        tmp_path,
+        "[P28] state: close iter + phase (audit=A44-P28) (release=0.4)\n\nbody\n",
+    )
+    code, diag = mod.lint(msg, [".ea/state.json"])
+    assert code == 1
+    assert "release annotation rejected" in diag

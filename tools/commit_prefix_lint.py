@@ -130,6 +130,8 @@ _WAVE_TRAILER_RE = re.compile(
     r"(?P<wave>P\d{2,}(?:-I(?!00)\d{2,})?-W(?!00)\d{2,})\s*$",
     re.MULTILINE,
 )
+_RELEASE_ANNOTATION_RE = re.compile(r"\(release=v(?P<version>\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
+_RELEASE_ANNOTATION_PREFIX_RE = re.compile(r"\(release=")
 _SUBJECT_STYLE_BRACKET = "bracket"
 _SUBJECT_STYLE_TRAILER = "trailer"
 _STATE_ONLY_ALLOWED = (
@@ -403,6 +405,22 @@ def _check_coauthor(text: str, env: Mapping[str, str]) -> tuple[int, str]:
     return 0, ""
 
 
+def _check_release_annotation(subject: str) -> tuple[int, str] | None:
+    """Validate optional ``(release=vX.Y.Z)`` subject annotation."""
+    if not _RELEASE_ANNOTATION_PREFIX_RE.search(subject):
+        return None
+    if _RELEASE_ANNOTATION_RE.search(subject):
+        return None
+    return (
+        1,
+        (
+            f"release annotation rejected: {subject!r}\n"
+            "commit lint accepts (release=v...) annotation only when it is shaped "
+            "as '(release=v<MAJOR>.<MINOR>.<PATCH>[aN|bN|rcN])'"
+        ),
+    )
+
+
 def lint(
     message_path: Path,
     staged: list[str],
@@ -430,6 +448,9 @@ def lint(
     )
     if match is None:
         return 1, err
+    release_annotation = _check_release_annotation(subject)
+    if release_annotation is not None:
+        return release_annotation
     # Bare conventional-commits (no bracket prefix) has no path whitelist;
     # bracketed forms (wave/CORE + bare state/docs) route through the
     # scoped-path check, which internally gates on commit_type / CORE tag

@@ -63,7 +63,13 @@ def _empty_state() -> State:
     )
 
 
-def _add_ship_gate_audit(state: State, *, audit_id: str = "AUD-1", phase_id: str = "P03") -> None:
+def _add_ship_gate_audit(
+    state: State,
+    *,
+    audit_id: str = "AUD-1",
+    phase_id: str = "P03",
+    check_results: list[dict[str, object]] | None = None,
+) -> None:
     state.audits = dict(state.audits or {})
     state.audits[audit_id] = Audit(
         id=audit_id,
@@ -72,6 +78,7 @@ def _add_ship_gate_audit(state: State, *, audit_id: str = "AUD-1", phase_id: str
         status=AuditStatus.COMPLETE,
         created_at=datetime.now(UTC),
         verdict=AuditVerdict.PASS,
+        check_results=list(check_results or []),
     )
 
 
@@ -269,3 +276,51 @@ def test_prepare_close_accepts_complete_ship_gate_close_audit() -> None:
 
     assert out["close_readiness_ready"] is False
     assert out["close_audit_blockers"] == []
+
+
+def test_prepare_close_blocks_missing_release_preflight_when_required() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P03", title="t")
+    _add_ship_gate_audit(state, audit_id="AUD-1", phase_id="P03")
+
+    out = _phase_prepare_close_checklist(
+        state,
+        phase_id="P03",
+        audit_id="AUD-1",
+        require_audit=True,
+        require_release_preflight=True,
+    )
+
+    assert out["release_preflight_required"] is True
+    assert out["release_preflight_blockers"] == [
+        "release preflight required: audit 'AUD-1' for phase 'P03' must include "
+        "a passing release-preflight check"
+    ]
+    assert out["ok"] is False
+
+
+def test_prepare_close_accepts_release_preflight_check_when_required() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P03", title="t")
+    _add_ship_gate_audit(
+        state,
+        audit_id="AUD-1",
+        phase_id="P03",
+        check_results=[
+            {
+                "name": "release-preflight",
+                "passed": True,
+                "details": "phase-release.yaml ships; ci.yaml release-readiness matrix job",
+            }
+        ],
+    )
+
+    out = _phase_prepare_close_checklist(
+        state,
+        phase_id="P03",
+        audit_id="AUD-1",
+        require_audit=True,
+        require_release_preflight=True,
+    )
+
+    assert out["release_preflight_blockers"] == []

@@ -52,6 +52,19 @@ def _wrap_no_return(_value: object) -> None:
     return None
 
 
+def _phase_close_requires_release_preflight(ctx: typer.Context) -> bool:
+    """Return whether release cadence config gates ``phase close``."""
+    from eawf.kernel.config.layered import merge_config
+    from eawf.runtime.vcs.coauthor import VcsConfig
+
+    flags: GlobalFlags = ctx.obj
+    state_path = resolve_state_path(flags.workspace)
+    anchor = state_path.parent.parent
+    merged, _sources = merge_config(repo=anchor, workspace=anchor)
+    vcs_config = VcsConfig.model_validate(merged.get("vcs", {}))
+    return vcs_config.conventions.release.cadence == "per-phase"
+
+
 # ---- Phase handlers ---------------------------------------------------------
 
 
@@ -167,12 +180,14 @@ def phase_close_cmd(
     if loaded is None:
         return
     preflight_state, _ = loaded
+    require_release_preflight = _phase_close_requires_release_preflight(ctx)
     try:
         checklist = _phase_prepare_close_checklist(
             preflight_state,
             phase_id=phase_id,
             audit_id=audit,
             require_audit=True,
+            require_release_preflight=require_release_preflight,
         )
     except LifecycleError as exc:
         cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
@@ -190,6 +205,7 @@ def phase_close_cmd(
             phase_id=phase_id,
             audit_id=audit,
             checkpoint=checkpoint,
+            require_release_preflight=require_release_preflight,
         )
 
     _run_mutation(
@@ -596,6 +612,7 @@ def _phase_prepare_close_checklist(
     phase_id: str,
     audit_id: str | None = None,
     require_audit: bool = False,
+    require_release_preflight: bool = False,
 ) -> dict[str, Any]:
     """Compute a structured pre-close checklist for *phase_id*.
 
@@ -665,12 +682,17 @@ def _phase_prepare_close_checklist(
         phase_id=phase_id,
         audit_id=audit_id,
         require_audit=require_audit,
+        require_release_preflight=require_release_preflight,
     )
     checklist["close_readiness_ready"] = readiness.ready
     checklist["close_readiness_warnings"] = list(readiness.warnings)
     checklist["close_readiness_warnings_count"] = len(readiness.warnings)
     checklist["close_audit_blockers"] = [
         warning for warning in readiness.warnings if warning.startswith("close audit")
+    ]
+    checklist["release_preflight_required"] = require_release_preflight
+    checklist["release_preflight_blockers"] = [
+        warning for warning in readiness.warnings if warning.startswith("release preflight")
     ]
     blockers = _phase_close_blockers(checklist)
     checklist["blockers"] = blockers
@@ -710,6 +732,13 @@ def phase_prepare_close_cmd(
     dry_run: Annotated[
         bool, typer.Option("--dry-run/--no-dry-run", help="Skip event emission.")
     ] = True,
+    release_preflight: Annotated[
+        bool,
+        typer.Option(
+            "--release-preflight/--no-release-preflight",
+            help="Require the ship-gate audit to contain a passing release-preflight check.",
+        ),
+    ] = False,
 ) -> None:
     """Compute a pre-close checklist for *phase_id* without closing it.
 
@@ -760,6 +789,7 @@ def phase_prepare_close_cmd(
             phase_id=phase_id,
             audit_id=audit,
             require_audit=audit is not None,
+            require_release_preflight=release_preflight,
         )
     except LifecycleError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)

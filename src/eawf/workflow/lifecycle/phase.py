@@ -58,6 +58,9 @@ _TERMINAL_ITER_STATUSES: frozenset[IterStatus] = frozenset(
 _PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS: frozenset[AuditVerdict] = frozenset(
     {AuditVerdict.PASS, AuditVerdict.MINOR}
 )
+_RELEASE_PREFLIGHT_CHECK_IDS: frozenset[str] = frozenset(
+    {"release-preflight", "release_readiness", "release-readiness"}
+)
 
 
 def open_phase(
@@ -178,6 +181,53 @@ def _phase_close_audit_warning(
     return None
 
 
+def _audit_row_get(row: object, key: str) -> object:
+    """Read one audit check field from dict-like or model-like rows."""
+    if isinstance(row, dict):
+        return row.get(key)
+    return getattr(row, key, None)
+
+
+def _audit_check_passed(row: object, *, accepted_ids: frozenset[str]) -> bool:
+    """Return whether one audit check row is a passing accepted gate."""
+    raw_id = (
+        _audit_row_get(row, "id")
+        or _audit_row_get(row, "name")
+        or _audit_row_get(row, "check_id")
+        or _audit_row_get(row, "gate_id")
+    )
+    if not isinstance(raw_id, str) or raw_id not in accepted_ids:
+        return False
+    if _audit_row_get(row, "passed") is True:
+        return True
+    raw_status = _audit_row_get(row, "status") or _audit_row_get(row, "conclusion")
+    return isinstance(raw_status, str) and raw_status.lower() in {"pass", "passed", "ok", "success"}
+
+
+def _phase_close_release_preflight_warning(
+    state: State,
+    *,
+    phase: Phase,
+    audit_id: str | None,
+) -> str | None:
+    """Return release-preflight blocker text, or ``None`` when it clears."""
+    if audit_id is None:
+        return "release preflight required"
+    audit = (state.audits or {}).get(audit_id)
+    if audit is None:
+        return f"release preflight audit {audit_id!r} not found"
+    passed_release_check = any(
+        _audit_check_passed(row, accepted_ids=_RELEASE_PREFLIGHT_CHECK_IDS)
+        for row in audit.check_results
+    )
+    if passed_release_check:
+        return None
+    return (
+        f"release preflight required: audit {audit_id!r} for phase {phase.id!r} must include "
+        "a passing release-preflight check"
+    )
+
+
 def _extend_phase_close_structure(
     state: State,
     *,
@@ -259,6 +309,7 @@ def phase_close_readiness(
     audit_id: str | None = None,
     require_audit: bool = False,
     include_structure: bool = True,
+    require_release_preflight: bool = False,
 ) -> CloseReadiness:
     """Return phase-level close readiness derived from state.
 
@@ -293,6 +344,15 @@ def phase_close_readiness(
         if audit_warning is not None:
             warnings.append(audit_warning)
 
+    if require_release_preflight:
+        # _validate_phase_closable extended: phase close enforces release preflight.
+        release_warning = _phase_close_release_preflight_warning(
+            state, phase=phase, audit_id=audit_id
+        )
+        criteria.append(_phase_close_view("release-preflight", passed=release_warning is None))
+        if release_warning is not None:
+            warnings.append(release_warning)
+
     ready = all(view.status in ("pass", "waived") for view in criteria)
     return CloseReadiness(
         ready=ready,
@@ -307,7 +367,13 @@ def phase_close_readiness_blockers(readiness: CloseReadiness) -> list[str]:
     return list(readiness.warnings)
 
 
-def _validate_phase_closable(state: State, *, phase_id: str, audit_id: str) -> Phase:
+def _validate_phase_closable(
+    state: State,
+    *,
+    phase_id: str,
+    audit_id: str,
+    require_release_preflight: bool = False,
+) -> Phase:
     """Run the close-phase gates and return the closable phase.
 
     Raises:
@@ -324,6 +390,7 @@ def _validate_phase_closable(state: State, *, phase_id: str, audit_id: str) -> P
         phase_id=phase_id,
         audit_id=audit_id,
         require_audit=True,
+        require_release_preflight=require_release_preflight,
     )
     if not readiness.ready:
         details = "; ".join(phase_close_readiness_blockers(readiness))
@@ -337,6 +404,7 @@ def close_phase(
     phase_id: str,
     audit_id: str,
     checkpoint: str | None = None,
+    require_release_preflight: bool = False,
 ) -> Phase:
     """Close an active phase.
 
@@ -362,7 +430,12 @@ def close_phase(
             a CLOSED child iter is missing its audit, or a single-wave phase
             lacks its scope-collapse decision.
     """
-    phase = _validate_phase_closable(state, phase_id=phase_id, audit_id=audit_id)
+    phase = _validate_phase_closable(
+        state,
+        phase_id=phase_id,
+        audit_id=audit_id,
+        require_release_preflight=require_release_preflight,
+    )
     phase.status = PhaseStatus.CLOSED
     phase.closed_at = datetime.now(UTC)
     phase.audit_id = audit_id

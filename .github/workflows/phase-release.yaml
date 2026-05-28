@@ -1,0 +1,104 @@
+name: Phase Release
+
+# phase-release.yaml ships: post-merge per-phase release automation.
+# Reads a phase-close commit subject annotation like ``(release=v0.4.0)``,
+# verifies the source version matches, creates the annotated tag, and publishes
+# release notes from the merged phase PR body. The tag push then triggers the
+# existing Release workflow for package build / publish.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: phase-release-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  phase-release:
+    name: Tag phase release
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Extract release annotation
+        id: annotation
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+          subject="$(git log -1 --pretty=%s "$MERGE_SHA")"
+          python - "$subject" <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          import sys
+
+          subject = sys.argv[1]
+          match = re.search(r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)", subject)
+          if match is None:
+              print("release_required=false")
+              raise SystemExit(0)
+          print("release_required=true")
+          print(f"tag={match.group(1)}")
+          print(f"version={match.group(1)[1:]}")
+          PY
+
+      - name: Stop when PR has no release annotation
+        if: steps.annotation.outputs.release_required != 'true'
+        run: echo "no (release=vX.Y.Z) annotation; skipping phase release"
+
+      - name: Verify version source matches annotation
+        if: steps.annotation.outputs.release_required == 'true'
+        env:
+          EXPECTED_VERSION: ${{ steps.annotation.outputs.version }}
+        run: |
+          set -euo pipefail
+          actual="$(python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path("src/eawf/_version.py").read_text(encoding="utf-8")
+          match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
+          if match is None:
+              raise SystemExit("no __version__ assignment in src/eawf/_version.py")
+          print(match.group(1))
+          PY
+          )"
+          if [ "$actual" != "$EXPECTED_VERSION" ]; then
+            echo "version mismatch: annotation=$EXPECTED_VERSION source=$actual" >&2
+            exit 1
+          fi
+
+      - name: Create annotated tag
+        if: steps.annotation.outputs.release_required == 'true'
+        env:
+          TAG: ${{ steps.annotation.outputs.tag }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "tag $TAG already exists" >&2
+            exit 1
+          fi
+          git tag -a "$TAG" "$MERGE_SHA" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Publish phase release notes
+        if: steps.annotation.outputs.release_required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.annotation.outputs.tag }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$PR_BODY" > release-notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
