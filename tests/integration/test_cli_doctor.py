@@ -72,6 +72,9 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "manifest_in_sync",
         "mcp_drift",
         "render_output_roundtrip",
+        "project_record_present",
+        "plugin_cross_scope_dup",
+        "git_state_drift",
     }
 
 

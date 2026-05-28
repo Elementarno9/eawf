@@ -233,6 +233,9 @@ def test_u_switch_empty_registry_renders_no_rows(tmp_path: Path) -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             await pilot.pause()
+            assert app.screen.__class__.__name__ == "InitWizardModal"
+            await pilot.press("escape")
+            await pilot.pause()
             assert isinstance(app.screen, UserScreen)
             assert build_repo_rows(app.state) == []
             table = app.screen.query_one(PortfolioTable)

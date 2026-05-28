@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -48,6 +49,13 @@ logger = logging.getLogger(__name__)
 #: leg. Overridable via ``EAWF_POLL_INTERVAL_S`` so tests can drive a
 #: tight loop without sleeping for the full production interval.
 DEFAULT_POLL_INTERVAL_S: float = 2.0
+
+#: Minimum number of consecutive socket-probe failures before the binding
+#: enters degraded mode and starts the mtime-poll fallback.
+DEFAULT_DAEMON_FAILURE_THRESHOLD: int = 3
+
+#: Default cadence in seconds for repeated daemon-socket reconnect probes.
+DEFAULT_DAEMON_PROBE_INTERVAL_S: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -112,6 +120,8 @@ class StateBinding:
         callbacks: StateBindingCallbacks,
         *,
         poll_interval_s: float | None = None,
+        daemon_probe_interval_s: float | None = None,
+        daemon_failure_threshold: int = DEFAULT_DAEMON_FAILURE_THRESHOLD,
         daemon_client_factory: Callable[[], DaemonClient] | None = None,
     ) -> None:
         """Construct the binder.
@@ -129,19 +139,29 @@ class StateBinding:
         self._callbacks = callbacks
         self._poll_task: asyncio.Task[None] | None = None
         self._subscribe_task: asyncio.Task[None] | None = None
+        self._probe_task: asyncio.Task[None] | None = None
         self._client_factory = daemon_client_factory or (
             lambda: DaemonClient(call_timeout_seconds=1.0)
         )
         self._stopping = False
         self._scope_id: str | None = None
         self._is_degraded = False
+        self._consecutive_failures = 0
+        self._daemon_failure_threshold = max(1, int(daemon_failure_threshold))
         env_interval = os.environ.get("EAWF_POLL_INTERVAL_S")
+        probe_env = os.environ.get("EAWF_DAEMON_PROBE_INTERVAL_S")
         if poll_interval_s is not None:
             self._poll_interval = poll_interval_s
         elif env_interval is not None:
             self._poll_interval = float(env_interval)
         else:
             self._poll_interval = DEFAULT_POLL_INTERVAL_S
+        if daemon_probe_interval_s is not None:
+            self._daemon_probe_interval = daemon_probe_interval_s
+        elif probe_env is not None:
+            self._daemon_probe_interval = float(probe_env)
+        else:
+            self._daemon_probe_interval = DEFAULT_DAEMON_PROBE_INTERVAL_S
         self._last_mtime = 0.0
 
     async def connect(self) -> None:
@@ -151,23 +171,79 @@ class StateBinding:
             self._scope_id = initial.urn
             await self._callbacks.on_state(initial)
         if self._state_path is not None and self._state_path.is_file():
-            self._last_mtime = self._state_path.stat().st_mtime
-        if self._daemon_socket_available():
-            await self._start_subscribe_loop()
-            return
-        await self._start_poll_fallback()
+            with contextlib.suppress(OSError):
+                self._last_mtime = self._state_path.stat().st_mtime
+        await self._process_daemon_probe()
+        await self._start_probe_loop()
 
     def _daemon_socket_available(self) -> bool:
         """Return whether a daemon socket exists for a cheap push attempt."""
         if os.name == "nt":
             return False
-        return (runtime_dir() / "eawfd.sock").exists()
+        sock_path = runtime_dir() / "eawfd.sock"
+        eawf_runtime_dir = os.environ.get("EAWF_RUNTIME_DIR")
+        xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+        logger.debug(
+            f"_daemon_socket_available probing path={sock_path!s}"
+            f" EAWF_RUNTIME_DIR={eawf_runtime_dir!r}"
+            f" XDG_RUNTIME_DIR={xdg_runtime_dir!r}"
+        )
+        if not sock_path.exists():
+            logger.debug(f"_daemon_socket_available socket_missing path={sock_path!s}")
+            return False
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.settimeout(0.25)
+                probe.connect(str(sock_path))
+            return True
+        except OSError as exc:
+            logger.debug(f"_daemon_socket_available probe failed path={sock_path!s} cause={exc!r}")
+            return False
+
+    async def _process_daemon_probe(self) -> None:
+        """Evaluate one socket-probe tick and transition degraded state."""
+        if self._daemon_socket_available():
+            self._consecutive_failures = 0
+            await self._start_subscribe_loop()
+            return
+        self._consecutive_failures += 1
+        logger.debug(
+            f"_process_daemon_probe failure={self._consecutive_failures}"
+            f" threshold={self._daemon_failure_threshold}"
+        )
+        if self._consecutive_failures < self._daemon_failure_threshold:
+            return
+        await self._start_poll_fallback()
+
+    async def _start_probe_loop(self) -> None:
+        """Start periodic socket probes and reconnect attempts."""
+        if self._probe_task is not None and not self._probe_task.done():
+            return
+        self._probe_task = asyncio.create_task(self._probe_loop())
+
+    async def _probe_loop(self) -> None:
+        """Repeat socket probe/reconnect attempts on a short backoff."""
+        while True:
+            if self._stopping:
+                return
+            await self._process_daemon_probe()
+            if self._stopping:
+                return
+            await asyncio.sleep(self._daemon_probe_interval)
 
     async def _start_poll_fallback(self) -> None:
         """Mark degraded and start the mtime-poll loop once."""
         await self._set_degraded(True)
         if self._poll_task is None or self._poll_task.done():
             self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _stop_poll_loop(self) -> None:
+        if self._poll_task is None:
+            return
+        self._poll_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._poll_task
+        self._poll_task = None
 
     async def _start_subscribe_loop(self) -> None:
         """Start the daemon subscription loop when not already running."""
@@ -190,12 +266,20 @@ class StateBinding:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.debug(f"_subscribe_loop fallback cause={exc!r}")
-            if not self._stopping:
+            logger.debug(f"_subscribe_loop cause={exc!r}")
+            if self._stopping:
+                return
+            self._consecutive_failures += 1
+            logger.debug(
+                f"_subscribe_loop failure={self._consecutive_failures}"
+                f" threshold={self._daemon_failure_threshold}"
+            )
+            if self._consecutive_failures >= self._daemon_failure_threshold:
                 await self._start_poll_fallback()
         else:
             if not self._stopping:
-                await self._start_poll_fallback()
+                self._consecutive_failures = 0
+                await self._stop_poll_loop()
 
     def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
         """Subscribe to ``state.subscribe`` with ``DaemonClient``."""
@@ -204,7 +288,8 @@ class StateBinding:
             params["scope_id"] = self._scope_id
         with self._client_factory() as client:
             client.call("state.subscribe", params)
-            asyncio.run_coroutine_threadsafe(self._set_degraded(False), loop)
+            self._consecutive_failures = 0
+            asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
             while not self._stopping:
                 reader = getattr(client, "_reader", None)
                 if reader is None:
@@ -216,6 +301,11 @@ class StateBinding:
                 if not line:
                     raise RuntimeError("daemon subscribe stream ended")
                 self._handle_push_line(loop, line)
+
+    async def _on_subscription_connected(self) -> None:
+        self._consecutive_failures = 0
+        await self._stop_poll_loop()
+        await self._set_degraded(False)
 
     def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:
         """Decode one ``event.push`` frame and schedule delivery."""
@@ -255,9 +345,6 @@ class StateBinding:
             await asyncio.sleep(self._poll_interval)
             if self._stopping:
                 return
-            if self._daemon_socket_available():
-                await self._start_subscribe_loop()
-                return
             if self._state_path is None or not self._state_path.is_file():
                 continue
             try:
@@ -282,6 +369,11 @@ class StateBinding:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._subscribe_task
             self._subscribe_task = None
+        if self._probe_task is not None:
+            self._probe_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._probe_task
+            self._probe_task = None
         if self._poll_task is not None:
             self._poll_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

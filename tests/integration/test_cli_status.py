@@ -253,6 +253,7 @@ def test_status_payload_keys_documented_set(
         "active_sessions",
         "last_closed_waves",
         "git",
+        "drift",
         "blockers",
     }
     assert set(payload.keys()) == expected_keys

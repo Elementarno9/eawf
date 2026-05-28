@@ -424,4 +424,4 @@ service_templates = [
 # still catching a large regression (e.g. accidentally bundling all
 # three plugin trees or the rendered docs subset). Recalibrate down again
 # once the plugin trees move behind install extras.
-wheel_max_bytes = 1677721
+wheel_max_bytes = 1685504

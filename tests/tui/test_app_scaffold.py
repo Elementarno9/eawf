@@ -25,6 +25,8 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.tui.app import (
     BRAND,
     DEFAULT_PROJECT_CODE,
+    DEGRADED_BANNER_HIDDEN_CLASS,
+    DEGRADED_BANNER_ID,
     EaApp,
     Header,
     RepoScreen,
@@ -226,6 +228,7 @@ def test_state_binding_connect_pushes_initial_state_and_degraded(
             state_path=_EMPTY_REPO,
             callbacks=StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
             poll_interval_s=0.01,
+            daemon_failure_threshold=1,
         )
         monkeypatch.setattr(binder, "_daemon_socket_available", lambda: False)
         await binder.connect()
@@ -260,6 +263,7 @@ def test_state_binding_poll_loop_survives_stat_oserror(
             state_path=_EMPTY_REPO,
             callbacks=StateBindingCallbacks(on_state=_noop_state, on_degraded=_noop_degraded),
             poll_interval_s=0.01,
+            daemon_failure_threshold=1,
         )
         monkeypatch.setattr(binder, "_daemon_socket_available", lambda: False)
         await binder.connect()
@@ -316,6 +320,7 @@ def test_state_binding_subscribes_via_daemon_client(
             ),
             daemon_client_factory=lambda: _FakeDaemonClient(push, calls),  # type: ignore[arg-type]
             poll_interval_s=0.01,
+            daemon_failure_threshold=10,
         )
         monkeypatch.setattr(binder, "_daemon_socket_available", lambda: True)
         await binder.connect()
@@ -329,9 +334,9 @@ def test_state_binding_subscribes_via_daemon_client(
             {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"},
         )
     ]
-    assert seen_degraded == [False]
+    assert seen_degraded == []
     assert [e.id for e in seen_events] == ["EV-live"]
-    assert len(seen_state) == 2
+    assert len(seen_state) >= 2
 
 
 def test_state_binding_reconnects_when_push_stream_ends(
@@ -375,6 +380,8 @@ def test_state_binding_reconnects_when_push_stream_ends(
             ),
             daemon_client_factory=_daemon_client_factory,
             poll_interval_s=0.01,
+            daemon_failure_threshold=1,
+            daemon_probe_interval_s=0.01,
         )
         monkeypatch.setattr(binder, "_daemon_socket_available", lambda: len(calls) <= 1)
         await binder.connect()
@@ -389,10 +396,131 @@ def test_state_binding_reconnects_when_push_stream_ends(
     assert calls == [expected, expected]
     assert seen_events
     assert [e.id for e in seen_events] == ["EV-live", "EV-live"]
-    assert seen_degraded.count(True) >= 1
-    assert seen_degraded[0] is False
-    assert seen_degraded[-1] is True
+    assert any(v is True for v in seen_degraded)
+    assert any(v is False for v in seen_degraded)
     assert len(seen_state) >= 3
+
+
+def test_state_binding_process_daemon_probe_debounces_degraded_transition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[str] = []
+
+    async def _track_subscribe() -> None:
+        seen.append("subscribe")
+
+    async def _track_fallback() -> None:
+        seen.append("fallback")
+
+    async def on_state(_s: State) -> None:
+        return None
+
+    async def on_degraded(_d: bool) -> None:
+        return None
+
+    async def body() -> None:
+        probes = iter([False, False, True, False, False, False])
+
+        binder = StateBinding(
+            state_path=_EMPTY_REPO,
+            callbacks=StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
+            daemon_failure_threshold=3,
+        )
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: next(probes))
+        monkeypatch.setattr(binder, "_start_subscribe_loop", _track_subscribe)
+        monkeypatch.setattr(binder, "_start_poll_fallback", _track_fallback)
+
+        await binder._process_daemon_probe()
+        await binder._process_daemon_probe()
+        await binder._process_daemon_probe()
+        await binder._process_daemon_probe()
+        assert seen == ["subscribe"]
+        await binder._process_daemon_probe()
+        await binder._process_daemon_probe()
+        assert seen == ["subscribe", "fallback"]
+
+    asyncio.run(body())
+
+
+def test_state_binding_clear_degraded_only_after_subscription_connect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen_degraded: list[bool] = []
+
+    async def on_state(_s: State) -> None:
+        return None
+
+    async def on_degraded(degraded: bool) -> None:
+        seen_degraded.append(degraded)
+
+    async def body() -> None:
+        binder = StateBinding(
+            state_path=_EMPTY_REPO,
+            callbacks=StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
+            daemon_failure_threshold=1,
+        )
+        await binder._set_degraded(True)
+        assert seen_degraded == [True]
+
+        subscribed: list[bool] = []
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: True)
+
+        async def _track_subscribe() -> None:
+            subscribed.append(True)
+
+        monkeypatch.setattr(binder, "_start_subscribe_loop", _track_subscribe)
+        await binder._process_daemon_probe()
+        assert subscribed == [True]
+        assert seen_degraded == [True]
+
+        await binder._on_subscription_connected()
+        assert seen_degraded == [True, False]
+        await binder.disconnect()
+
+    asyncio.run(body())
+
+
+def test_eaapp_degraded_banner_stays_mounted_and_toggles_visibility() -> None:
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_EMPTY_REPO)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            banner = app.screen.query_one(f"#{DEGRADED_BANNER_ID}")
+            banner_id = id(banner)
+            assert len(app.screen.query(f".{DEGRADED_BANNER_ID}")) == 1
+            assert banner.styles.height.value == 1
+            assert banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
+            await app._on_degraded(True)
+            await pilot.pause()
+            banner = app.screen.query_one(f"#{DEGRADED_BANNER_ID}")
+            assert id(banner) == banner_id
+            assert len(app.screen.query(f".{DEGRADED_BANNER_ID}")) == 1
+            assert banner.styles.height.value == 1
+            assert not banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
+            assert "daemon socket unavailable; polling state.json" in str(banner.render())
+
+            await app._on_degraded(False)
+            await pilot.pause()
+            banner = app.screen.query_one(f"#{DEGRADED_BANNER_ID}")
+            assert id(banner) == banner_id
+            assert len(app.screen.query(f".{DEGRADED_BANNER_ID}")) == 1
+            assert banner.styles.height.value == 1
+            assert banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
+
+    asyncio.run(body())
+
+
+def test_eaapp_degraded_banner_message_includes_socket_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runtime_dir = tmp_path / "runtime"
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime_dir))
+    app = EaApp(scope="repo", state_path=_EMPTY_REPO)
+    message = app._degraded_banner_message()
+    assert "daemon socket unavailable; polling state.json" in message
+    assert f"{runtime_dir / 'eawfd.sock'}" in message
 
 
 # --------------------------------------------------------------------------

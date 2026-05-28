@@ -77,17 +77,21 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert (target / "hooks" / "post_commit.sh").exists()
     assert (target / "hooks" / "pre_push.sh").exists()
     assert (target / "hooks" / "post_push.sh").exists()
-    # Only the six session-level events appear — workflow-internal
+    assert (target / "hooks" / "pre_compact.sh").exists()
+    assert (target / "hooks" / "subagent_stop.sh").exists()
+    # Only the eight plugin-level hook wrappers appear — workflow-internal
     # lifecycle events (wave_*, iter_*, phase_*, *_audit) stay fired by
     # the state CLI through ``eawf hook run``, not by the CC plugin
     # manifest.
-    assert len(list((target / "hooks").iterdir())) == 6
+    assert len(list((target / "hooks").iterdir())) == 8
     hooks_manifest = json.loads((target / "hooks.json").read_text())
     assert set(hooks_manifest["hooks"].keys()) == {
+        "PreCompact",
         "SessionStart",
         "Stop",
         "PreToolUse",
         "PostToolUse",
+        "SubagentStop",
     }
     # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
     # variable so the manifest installs cleanly regardless of where CC

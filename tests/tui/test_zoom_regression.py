@@ -156,6 +156,9 @@ def test_zoom_does_not_leak_across_scope_switch() -> None:
             await pilot.press("u")
             await pilot.pause()
             await app.workers.wait_for_complete()
+            assert app.screen.__class__.__name__ == "InitWizardModal"
+            await pilot.press("escape")
+            await pilot.pause()
             back = app.screen
             assert isinstance(back, UserScreen)
             assert back is user_screen  # the cached instance is reused

@@ -228,6 +228,20 @@ def test_lifecycle_flow_full(
     keyset (which stays the same shape across the walk).
     """
     state_path = flow_target / ".ea" / "state.json"
+    audit_fixture = flow_target / "audit-checks.json"
+    audit_fixture.write_text(
+        json.dumps(
+            [
+                {
+                    "details": "golden scenario close evidence",
+                    "name": "scenario-close-evidence",
+                    "passed": True,
+                }
+            ],
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("EA_STATE", str(state_path))
     runner = CliRunner()
 
@@ -278,7 +292,17 @@ def test_lifecycle_flow_full(
             "--alternative",
             "plan a second wave",
         ),
-        ("audit", "run", "AUD-1", "--scope-id", "P01", "--kind", "ship-gate"),
+        (
+            "audit",
+            "run",
+            "AUD-1",
+            "--scope-id",
+            "P01",
+            "--kind",
+            "ship-gate",
+            "--fixture",
+            str(audit_fixture),
+        ),
         ("phase", "close", "P01", "--audit", "AUD-1"),
     ]
     for step_args in steps:

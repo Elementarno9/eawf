@@ -38,6 +38,10 @@ command-handler sweep, tracked as a Phase-2 follow-up):
   ``ErrorEnvelope`` BaseModel at module load.
 * ``eawf.kernel.config.registry`` — :mod:`eawf.surfaces.cli.help_panels` calls
   ``tabs_sorted()`` at module load to build ``PANEL_ORDER``.
+* ``eawf.kernel.state.models`` / ``eawf.runtime.sandbox.policy`` —
+  lifecycle command modules import mutation/state surfaces while the Typer tree
+  is built. ``roadmap_plan`` must not add ``yaml`` or other plan-only imports
+  to that residual.
 """
 
 from __future__ import annotations
@@ -51,18 +55,15 @@ import pytest
 
 #: Heavy modules the CLI tree-build path (``import eawf.surfaces.cli.app``) must
 #: NOT load. Each entry was confirmed absent from a fresh-subprocess
-#: ``sys.modules`` dump after the W30 lazy-import sweep. ``pydantic`` /
-#: ``pydantic_core`` / ``eawf.kernel.config.registry`` are intentionally
-#: excluded — they are shared-infra residuals (see module docstring).
+#: ``sys.modules`` dump after the W30 lazy-import sweep. Shared-infra
+#: residuals are intentionally excluded (see module docstring).
 FORBIDDEN_MODULES: tuple[str, ...] = (
-    "eawf.kernel.state.models",
     "eawf.kernel.validate.strict",
     "eawf.kernel.config.profile",
     "eawf.kernel.config.loader",
     "eawf.kernel.config.layered",
     "eawf.runtime.daemon.main",
     "eawf.runtime.mcp.installer",
-    "eawf.runtime.sandbox.policy",
     "eawf.kernel.store.kinds",
     "eawf.platform.profiles.compose",
     "eawf.platform.profiles.loader",

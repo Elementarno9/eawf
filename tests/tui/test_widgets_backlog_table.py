@@ -161,9 +161,12 @@ def test_table_rebuilds_rows_from_state() -> None:
             table = app.query_one("#bt", BacklogTable)
             table.state = _state_with_backlog(_items())
             await pilot.pause()
-            assert table.row_count == 3
+            assert table.row_count == 2
             # Default sort is priority -> P0 (BL-001) first.
             assert next(it.id for it in table.visible_items()) == "BL-001"
+            table.show_closed = True
+            await pilot.pause()
+            assert table.row_count == 3
 
     asyncio.run(body())
 
@@ -177,6 +180,10 @@ def test_table_apply_filter_narrows_rows() -> None:
             table.state = _state_with_backlog(_items())
             await pilot.pause()
             table.apply_filter("metrics")
+            await pilot.pause()
+            assert table.row_count == 0
+            assert table.visible_items() == []
+            table.show_closed = True
             await pilot.pause()
             assert table.row_count == 1
             assert [it.id for it in table.visible_items()] == ["BL-002"]

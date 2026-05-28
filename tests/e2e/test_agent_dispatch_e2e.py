@@ -113,14 +113,30 @@ def _rpc(sock_path: Path, method: str, params: dict[str, Any]) -> dict[str, Any]
     return parsed
 
 
-def _read_event_payloads(event_path: Path) -> list[dict[str, Any]]:
-    """Return the ``payload`` dict of every ``event.jsonl`` row in order."""
+def _read_event_payloads(
+    event_path: Path,
+    *,
+    event_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return selected ``event.jsonl`` payload dicts in append order.
+
+    Args:
+        event_path: Path to the live event store.
+        event_ids: Optional envelope ids to keep. When supplied, setup
+            events already present in the log stay out of dispatch-specific
+            assertions.
+
+    Returns:
+        Matching payload dicts in on-disk append order.
+    """
     payloads: list[dict[str, Any]] = []
     with event_path.open("r", encoding="utf-8") as fh:
         for raw in fh:
             raw = raw.strip()
             if raw:
-                payloads.append(json.loads(raw)["payload"])
+                row = json.loads(raw)
+                if event_ids is None or row["id"] in event_ids:
+                    payloads.append(row["payload"])
     return payloads
 
 
@@ -188,7 +204,7 @@ def test_real_dispatch_emits_runtime_switched_and_cost_to_live_log(e2e_env: E2EE
     assert len(plan["event_ids"]) == 2
 
     assert event_path.exists(), "daemon never wrote an event.jsonl"
-    payloads = _read_event_payloads(event_path)
+    payloads = _read_event_payloads(event_path, event_ids=set(plan["event_ids"]))
     assert [p["event_type"] for p in payloads] == ["runtime_switched", "dispatch_cost"]
     switched, cost = payloads
     assert switched["wave_id"] == _WAVE_ID
@@ -225,7 +241,8 @@ def test_real_dispatch_no_error_emits_only_dispatch_cost(e2e_env: E2EEnv) -> Non
     )
 
     assert "error" not in reply, reply
-    assert len(reply["result"]["event_ids"]) == 1
-    payloads = _read_event_payloads(event_path)
+    plan = reply["result"]
+    assert len(plan["event_ids"]) == 1
+    payloads = _read_event_payloads(event_path, event_ids=set(plan["event_ids"]))
     assert [p["event_type"] for p in payloads] == ["dispatch_cost"]
     assert payloads[0]["runtime"] == "claude"

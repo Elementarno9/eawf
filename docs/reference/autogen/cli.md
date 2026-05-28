@@ -18,6 +18,7 @@ not hand-edit — regenerate via `eawf doc verify --strict`.
 | `tui` | Open the Eä Textual TUI (or deterministic status fallback off-TTY). |
 | `validate` | Validate a state or envelope document. |
 | `version` | Show the eawf version (text or JSON envelope). |
+| `why` | Explain why an EAWF entity has its current trust tier. |
 
 ## Command groups
 
@@ -75,7 +76,7 @@ Manage backlog items (add / close).
 |---|---|
 | `add` | Add a new backlog item. |
 | `close` | Close a backlog item; requires --audit of a complete audit. |
-| `edit` | Edit an open backlog item's title and/or description. |
+| `edit` | Edit an open backlog item's title, description, and/or intent. |
 | `set-priority` | Update the priority of an open backlog item. |
 
 ### `eawf backup`
@@ -105,6 +106,7 @@ Re-fit estimation parameters from recorded actuals.
 
 | Verb | Summary |
 |---|---|
+| `apply` | Apply one fitted bucket centroid to layered config after confirmation. |
 | `buckets` | Re-fit the XS..XL effort buckets from 90-day actuals and nudge on drift. |
 
 ### `eawf cc`
@@ -239,6 +241,10 @@ Dispatch hook events through the Eä hook runner.
 
 | Verb | Summary |
 |---|---|
+| `eawf012-design-provenance` | Reject design/audit/agent provenance breadcrumbs in source comments. |
+| `eawf013-bracket-position` | Reject detached or post-punctuation numeric citation brackets. |
+| `eawf014-no-manual-wrap` | Reject manually wrapped rendered Markdown paragraphs. |
+| `eawf015-ears-advisory` | Warn on requirement-like prose outside EARS shape without blocking. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
@@ -390,7 +396,7 @@ Project-level lifecycle (init).
 
 | Verb | Summary |
 |---|---|
-| `init` | Create a new project record at the active state path (creates the file). |
+| `init` | Create or upgrade a project record at the active state path. |
 
 ### `eawf release`
 
@@ -408,10 +414,12 @@ Repo-scoped init + workspace linkage.
 
 | Verb | Summary |
 |---|---|
-| `add` | Explicitly add a repo to the user-scope registry. |
+| `add` | Explicitly add/register a repo to the user-scope registry. |
 | `init` | Initialise a repo-scoped workspace at *target*. |
 | `link` | Cross-link a repo state and a workspace state. |
+| `link-workspace` | Cross-link a repo state and a workspace state. |
 | `prune` | Drop registry entries whose on-disk paths no longer exist. |
+| `register` | Explicitly add/register a repo to the user-scope registry. |
 | `remove` | Drop the entry whose ``code == <code>`` from the registry. |
 
 ### `eawf research`
@@ -431,7 +439,7 @@ Roadmap planner (propose / revise / apply / drop / show).
 |---|---|
 | `apply` | Confirm a PLANNED phase's wave DAG before handing off to ``/prep``. |
 | `drop` | Archive a PLANNED phase (PLANNED → ARCHIVED). Irreversible via the |
-| `propose` | Propose a new PLANNED phase + I01 iter; emits needs_user envelope. |
+| `propose` | Propose a PLANNED phase from flags or a strict roadmap plan file. |
 | `revise` | Edit a PLANNED or ACTIVE phase's wave plan via structured flags. |
 | `show` | Render the PLANNED queue plus the ACTIVE phase summary. |
 
@@ -540,7 +548,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 | `next-ready` | List pending waves whose every dep is ``closed``. |
 | `plan` | Plan a new pending wave under an open iter. |
 | `review` | Attach review findings to a wave, or render a reviewer prompt. |
-| `show` | Inspect a wave. ``--commit`` prints the pinned-or-derived SHA. |
+| `show` | Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt. |
 | `update` | Mutate a PENDING/CLAIMED wave's ``file_scopes``. |
 
 ### `eawf wiki`

@@ -269,6 +269,7 @@ def _plan_follow_up(
     """
     from pydantic import ValidationError as PydValidationError
 
+    from eawf.kernel.state.enums import EffortBucket
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.allocator import allocate_wave_id
     from eawf.workflow.lifecycle.transitions import LifecycleError, plan_wave
@@ -297,6 +298,7 @@ def _plan_follow_up(
                     title=title,
                     file_scopes=file_scope,
                     deps=[parent_wave_id],
+                    effort_bucket=EffortBucket.M,
                 )
             except LifecycleError as exc:
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc

@@ -16,7 +16,7 @@
     },
     "ActualSummary": {
       "additionalProperties": false,
-      "description": "Latest actual (segments in store).\n\n``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the M26\nvariance / cost view has the close-time token tally without\nre-reading the wave record. ``actual_cost_usd`` is the per-token\ncost rollup; v0.4 leaves it at ``0.0`` until a per-model rate table\nwires in (see :func:`eawf.workflow.lifecycle.wave.close_wave`).\nBoth fields default to ``0`` / ``0.0`` so existing on-disk rows\nstay valid without a schema bump.",
+      "description": "Latest actual (segments in store).\n\n``attention_eu`` may be auto-derived at wave close from telemetry\nsession ``duration_ms`` when no operator-authored actual already\nexists. ``actual_tokens`` mirrors :attr:`Wave.tokens_consumed` so the\nM26 variance / cost view has the close-time token tally without\nre-reading the wave record. ``actual_cost_usd`` is the per-token cost\nrollup; v0.4 leaves it at ``0.0`` until a per-model rate table wires\nin (see :func:`eawf.workflow.lifecycle.wave.close_wave`).\nBoth fields default to ``0`` / ``0.0`` so existing on-disk rows\nstay valid without a schema bump.",
       "properties": {
         "actual_cost_usd": {
           "default": 0.0,
@@ -633,6 +633,19 @@
           "title": "Id",
           "type": "string"
         },
+        "obsoleted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Obsoleted At"
+        },
         "rationale": {
           "title": "Rationale",
           "type": "string"
@@ -678,7 +691,8 @@
       "enum": [
         "active",
         "superseded",
-        "reversed"
+        "reversed",
+        "obsolete"
       ],
       "title": "DecisionStatus",
       "type": "string"

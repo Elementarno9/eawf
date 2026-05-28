@@ -6,44 +6,90 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import orjson
-import yaml
-from pydantic import Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
-from eawf.kernel.state.models import IterIdStr, PhaseIdStr, WaveIdStr
+from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
+
+
+class _StrictModel(BaseModel):
+    """Roadmap-plan strict model base."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class RoadmapPlanWave(_StrictModel):
     """One PENDING wave to stage from a roadmap plan file."""
 
-    id: WaveIdStr
+    id: str
     title: Annotated[str, Field(min_length=1, max_length=72)]
     description: Annotated[str, Field(max_length=500)] | None = None
-    deps: list[WaveIdStr] = Field(default_factory=list)
+    deps: list[str] = Field(default_factory=list)
     file_scopes: list[Annotated[str, Field(min_length=1)]] = Field(min_length=1)
     success_criteria: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     agent_role: AgentSessionRole | None = None
     effort_bucket: EffortBucket
 
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str) -> str:
+        """Validate wave id grammar."""
+        if not is_wave_id(value):
+            raise ValueError(f"invalid wave id: {value!r}")
+        return value
+
+    @field_validator("deps")
+    @classmethod
+    def _validate_deps(cls, value: list[str]) -> list[str]:
+        """Validate wave dep id grammar."""
+        invalid = [dep for dep in value if not is_wave_id(dep)]
+        if invalid:
+            raise ValueError(f"invalid wave dep id(s): {invalid}")
+        return value
+
 
 class RoadmapPlanIter(_StrictModel):
     """One PLANNED iter and its child waves."""
 
-    id: IterIdStr
+    id: str
     title: Annotated[str, Field(min_length=1, max_length=72)]
     description: Annotated[str, Field(max_length=500)] | None = None
     waves: list[RoadmapPlanWave] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str) -> str:
+        """Validate iter id grammar."""
+        if not is_iter_id(value):
+            raise ValueError(f"invalid iter id: {value!r}")
+        return value
 
 
 class RoadmapPlanPhase(_StrictModel):
     """PLANNED phase metadata staged by a roadmap plan file."""
 
-    id: PhaseIdStr
+    id: str
     title: Annotated[str, Field(min_length=1, max_length=72)]
     description: Annotated[str, Field(max_length=500)] | None = None
-    depends_on: list[PhaseIdStr] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
     source_brief_ids: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str) -> str:
+        """Validate phase id grammar."""
+        if not is_phase_id(value):
+            raise ValueError(f"invalid phase id: {value!r}")
+        return value
+
+    @field_validator("depends_on")
+    @classmethod
+    def _validate_depends_on(cls, value: list[str]) -> list[str]:
+        """Validate phase dep id grammar."""
+        invalid = [dep for dep in value if not is_phase_id(dep)]
+        if invalid:
+            raise ValueError(f"invalid phase dep id(s): {invalid}")
+        return value
 
 
 class RoadmapPlan(_StrictModel):
@@ -112,6 +158,8 @@ def load_roadmap_plan(path: Path) -> RoadmapPlan:
     if path.suffix.lower() == ".json":
         payload: Any = orjson.loads(raw.encode("utf-8"))
     else:
+        import yaml
+
         payload = yaml.safe_load(raw)
     if not isinstance(payload, dict):
         raise ValueError("roadmap plan must be a mapping")

@@ -188,7 +188,7 @@ def test_audit_verdict_full_values() -> None:
 
 
 def test_decision_status_values() -> None:
-    expected = {"active", "superseded", "reversed"}
+    expected = {"active", "obsolete", "superseded", "reversed"}
     actual = {m.value for m in enums.DecisionStatus}
     assert actual == expected
 

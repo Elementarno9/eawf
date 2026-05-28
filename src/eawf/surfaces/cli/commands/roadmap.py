@@ -42,7 +42,6 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -58,6 +57,7 @@ from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
+    from eawf.kernel.spec.intent import IntentBrief
     from eawf.kernel.state.models import Iter, Phase, State
 
 logger = logging.getLogger(__name__)
@@ -178,6 +178,8 @@ def _build_intent_from_flags(
         return None
     if not intent_goal:
         return _INTENT_FLAG_ERROR
+    from eawf.kernel.spec.intent import IntentBrief
+
     return IntentBrief(
         goal=intent_goal,
         motivation=intent_motivation,
@@ -742,7 +744,7 @@ def roadmap_revise_cmd(
             flags=flags,
         )
         return
-    intent: IntentBrief | None = intent_result if isinstance(intent_result, IntentBrief) else None
+    intent = intent_result if intent_result is not None else None
 
     try:
         state_path = resolve_state_path(flags.workspace)

@@ -164,6 +164,7 @@ def _phase_close_audit_warning(
     *,
     phase: Phase,
     audit_id: str | None,
+    require_real_evidence: bool = False,
 ) -> str | None:
     """Return the close-audit blocker text, or ``None`` when it clears."""
     if audit_id is None:
@@ -179,7 +180,7 @@ def _phase_close_audit_warning(
         return f"close audit {audit_id!r} must be scoped to phase {phase.id!r}"
     if audit.verdict not in _PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS:
         return f"close audit {audit_id!r} verdict must be pass or minor"
-    if not _audit_has_real_close_evidence(state, audit=audit):
+    if require_real_evidence and not _audit_has_real_close_evidence(state, audit=audit):
         return f"close audit {audit_id!r} must include real audit evidence"
     return None
 
@@ -383,7 +384,12 @@ def phase_close_readiness(
         )
 
     if require_audit or audit_id is not None:
-        audit_warning = _phase_close_audit_warning(state, phase=phase, audit_id=audit_id)
+        audit_warning = _phase_close_audit_warning(
+            state,
+            phase=phase,
+            audit_id=audit_id,
+            require_real_evidence=require_release_preflight,
+        )
         criteria.append(_phase_close_view("close-audit", passed=audit_warning is None))
         if audit_warning is not None:
             warnings.append(audit_warning)

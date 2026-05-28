@@ -16,7 +16,7 @@ that module is listed with its members.
 | `BacklogPriority` | `P0`, `P1`, `P2`, `P3` |
 | `BacklogStatus` | `open`, `in_progress`, `closed`, `deferred` |
 | `Confidence` | `high`, `medium`, `low` |
-| `DecisionStatus` | `active`, `superseded`, `reversed` |
+| `DecisionStatus` | `active`, `superseded`, `reversed`, `obsolete` |
 | `DispatchNote` | `fresh_dispatch`, `continue_from_session`, `continue_failed_fell_back_to_fresh`, `switch_on_error`, `switch_manual` |
 | `EffortBucket` | `XS`, `S`, `M`, `L`, `XL` |
 | `FlowStatus` | `pending`, `in_progress`, `paused`, `blocked`, `done`, `abandoned`, `superseded` |
@@ -38,6 +38,7 @@ that module is listed with its members.
 | `PluginInstallStatus` | `installed`, `drifted`, `conflicted`, `disabled` |
 | `ProjectStatus` | `active`, `archived`, `retired` |
 | `ScopeKind` | `repo`, `workspace` |
+| `ScopeTier` | `workspace`, `repo`, `phase`, `iter`, `wave` |
 | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` |
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
 | `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated` |

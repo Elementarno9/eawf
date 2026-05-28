@@ -93,7 +93,11 @@
                 "subprocess_oom_killed",
                 "daemon_service_enabled",
                 "daemon_service_disabled",
-                "wal_recovery"
+                "wal_recovery",
+                "git_state_drift_detected",
+                "bucket_drift_detected",
+                "wave_elapsed_update",
+                "stale_wave_detected"
               ],
               "type": "string"
             },

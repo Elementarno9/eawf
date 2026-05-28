@@ -1,3 +1,4 @@
+Commands: why
 audit: audit, backup, doc, doctor, evidence, migrate, schema, snapshot, validate
 estimation: actual, bench, calibrate, estimate, impact, metrics, telemetry
 planning: agent-report, artifact, backlog, decision, draft, goal, hypothesis, incident, iter, memory, operator, outcome, phase, plan, project, research, roadmap, session, spec, subproject, wave

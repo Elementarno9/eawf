@@ -106,6 +106,7 @@ def _seed_state(state_path: Path) -> None:
                 "iter_id": "P01-I01",
                 "title": "W1",
                 "status": "pending",
+                "effort_bucket": "M",
                 "deps": [],
                 "file_scopes": ["src/"],
                 "claim_session_id": None,

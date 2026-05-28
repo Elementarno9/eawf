@@ -542,6 +542,9 @@ def _call_worktree_daemon(
     from eawf.surfaces.cli import _dispatch
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
+    if _dispatch.daemonless_requested(flags):
+        return _call_worktree_daemonless(method=method, params=params, flags=flags)
+
     try:
         _dispatch.escalate_mutation(verb, flags=flags)
         with DaemonClient() as client:
@@ -552,6 +555,71 @@ def _call_worktree_daemon(
         raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     except (OSError, RuntimeError, TimeoutError) as exc:
         raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
+
+
+def _wave_land_payload(result: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for one wave-land result."""
+    return {
+        "wave": result.wave_id,
+        "commits": list(result.commits),
+        "outcome": result.outcome,
+        "closed": result.closed,
+        "worktree_cleaned": result.worktree_cleaned,
+        "merged_commit": result.merged_commit,
+    }
+
+
+def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for one wave-land-batch result."""
+    return {
+        "landed": [_wave_land_payload(row) for row in result.landed],
+        "failed_wave": result.failed_wave,
+        "error": result.error,
+        "skipped": list(result.skipped),
+    }
+
+
+def _call_worktree_daemonless(
+    *,
+    method: str,
+    params: dict[str, Any],
+    flags: GlobalFlags,
+) -> dict[str, Any]:
+    """Run the worktree mutator locally under the legacy daemonless carve-out."""
+    from eawf.runtime.worktree import wave_land, wave_land_batch, worktree_registry_lock
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.lifecycle.transitions import LifecycleError
+
+    state_path = _resolve_state_path(flags)
+    repo_root = Path(str(params["repo_root"]))
+    try:
+        with (
+            worktree_registry_lock(repo_root, timeout=5.0),
+            state_transaction(state_path) as state,
+        ):
+            if method == "state.wave_land":
+                return _wave_land_payload(
+                    wave_land(
+                        state,
+                        repo_root=repo_root,
+                        wave_id=str(params["wave_id"]),
+                        outcome=params.get("outcome"),
+                        keep_worktree=bool(params.get("keep_worktree", False)),
+                    )
+                )
+            if method == "state.wave_land_batch":
+                return _wave_land_batch_payload(
+                    wave_land_batch(
+                        state,
+                        repo_root=repo_root,
+                        iter_id=params.get("iter_id"),
+                        ready_only=bool(params.get("ready_only", False)),
+                        keep_worktree=bool(params.get("keep_worktree", False)),
+                    )
+                )
+    except LifecycleError as exc:
+        raise cli_errors.ValidationError(str(exc)) from exc
+    raise cli_errors.UserError(f"unknown worktree daemon method: {method}", kind="InvalidInput")
 
 
 @wave_app.command(name="land")
