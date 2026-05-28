@@ -7708,7 +7708,8 @@
         "P28-I03-W60",
         "P28-I03-W61",
         "P28-I03-W62",
-        "P28-I03-W63"
+        "P28-I03-W63",
+        "P28-I03-W64"
       ]
     }
   },
@@ -8314,7 +8315,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T21:22:06.102660Z",
+  "updated_at": "2026-05-28T22:15:06.859869Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -26310,6 +26311,40 @@
         "CEILING_COLD_IMPORT_MS raised from 400 to 500;structural FORBIDDEN_MODULES gate still triggers on real heavy-module leaks;CI perf budget test green on all OS runners"
       ],
       "title": "fix: bump CLI cold-import ceiling to absorb CI jitter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W64": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Reactive wave from W63 follow-up: CI per-package coverage gates fail on state branch (91.67<95) + telemetry branch (84.74<86). Operator picked test additions over gate bump. Local uncovered state branches: ids.py 54+153->152; io.py 364-366; mutations.py 330,334,338,342,343->345,499,501; urn.py 112. Telemetry branches: probe via coverage report -m in worktree (CI runs broader suite). Target floors: state branch >=95, telemetry branch >=86.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/unit/test_state_ids.py",
+        "tests/unit/test_state_io.py",
+        "tests/unit/test_state_mutations.py",
+        "tests/unit/test_state_urn.py",
+        "tests/unit/test_telemetry_*.py",
+        "tests/daemon/test_telemetry_*.py"
+      ],
+      "id": "P28-I03-W64",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T22:15:06.859694Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "state package branch coverage >=95%;telemetry package branch coverage >=86%;new tests target only uncovered branches surfaced by ;no source edits;mypy + pre-commit clean"
+      ],
+      "title": "test: lift state + telemetry branch coverage above gates",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
