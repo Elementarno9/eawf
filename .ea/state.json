@@ -1286,6 +1286,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-20-p26-i01-surfaces.md",
       "urn": "urn:eawf:v1:artifact:P26-I01/ART-A32-P26"
     },
+    "ART-A43-P28-ship-gate": {
+      "created_at": "2026-05-28T23:30:30.944849Z",
+      "id": "ART-A43-P28-ship-gate",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/store/audit.jsonl#A43-P28-ship-gate",
+      "urn": "urn:eawf:v1:artifact:P28/ART-A43-P28-ship-gate"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -2036,6 +2046,24 @@
       "scope_id": "P28-I03",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A43-P28-ship-gate": {
+      "check_results": [],
+      "created_at": "2026-05-28T23:30:10.137180Z",
+      "id": "A43-P28-ship-gate",
+      "integrity_results": [
+        {
+          "added_at": "2026-05-28T23:30:31.390548+00:00",
+          "check": "release-preflight",
+          "details": "v0.4.0: CHANGELOG section dated 2026-05-29 with W54-W62 + W63-W65 entries; __version__ advanced 0.3.0 to 0.4.0; schema_version unchanged; wheel under 2 MiB ceiling",
+          "passed": true
+        }
+      ],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-A43-P28-ship-gate",
+      "scope_id": "P28",
+      "status": "complete",
+      "verdict": "pass"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -3241,8 +3269,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P28-I03",
-    "phase_id": "P28",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -7641,15 +7669,15 @@
       ]
     },
     "P28-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A42-P28-i03-deep",
+      "closed_at": "2026-05-28T23:28:28.223485Z",
       "description": null,
       "estimate_id": null,
       "id": "P28-I02",
       "intent": null,
       "opened_at": "2026-05-26T18:07:39.063122Z",
       "phase_id": "P28",
-      "status": "active",
+      "status": "closed",
       "title": "lifecycle / EU / memory / IDs / observability",
       "wave_ids": [
         "P28-I02-W01",
@@ -7685,15 +7713,15 @@
       ]
     },
     "P28-I03": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A42-P28-i03-deep",
+      "closed_at": "2026-05-28T23:28:32.144907Z",
       "description": null,
       "estimate_id": null,
       "id": "P28-I03",
       "intent": null,
       "opened_at": "2026-05-26T18:07:39.541874Z",
       "phase_id": "P28",
-      "status": "active",
+      "status": "closed",
       "title": "clarity / TUI / plugins / trust / eval / docs / release",
       "wave_ids": [
         "P28-I03-W01",
@@ -7766,7 +7794,30 @@
   },
   "mcp_grants": null,
   "mcp_servers": null,
-  "memory_index": null,
+  "memory_index": {
+    "MEM-P28-I02-close-A42-P28-i03-deep": {
+      "confidence": "high",
+      "id": "MEM-P28-I02-close-A42-P28-i03-deep",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-05-28T23:28:28.223485Z",
+      "scope_id": "P28-I02",
+      "status": "active",
+      "store_record_id": "MEM-P28-I02-close-A42-P28-i03-deep",
+      "summary": "iter P28-I02 closed with audit A42-P28-i03-deep; waves closed=30; outcomes P28-I02-W01: landed 1 commit(s) via wave land | P28-I02-W02: landed 1 commit(s) via wave land | P28-I02-W03: landed 1 commit(s) via wave land",
+      "tier": "working"
+    },
+    "MEM-P28-I03-close-A42-P28-i03-deep": {
+      "confidence": "high",
+      "id": "MEM-P28-I03-close-A42-P28-i03-deep",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-05-28T23:28:32.144907Z",
+      "scope_id": "P28-I03",
+      "status": "active",
+      "store_record_id": "MEM-P28-I03-close-A42-P28-i03-deep",
+      "summary": "iter P28-I03 closed with audit A42-P28-i03-deep; waves closed=64, failed=1; outcomes P28-I03-W01: narrative bundle renderers landed | P28-I03-W02: VCS convention config and subject-style SHA recovery shipped with focused tests | P28-I03-W03: render block tiers and AGENTS budget gate landed",
+      "tier": "working"
+    }
+  },
   "outcomes": null,
   "phases": {
     "P00": {
@@ -8311,8 +8362,8 @@
       "title": "C09+C10 observability + operations: quality DSL + telemetry +"
     },
     "P28": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A43-P28-ship-gate",
+      "closed_at": "2026-05-28T23:30:51.888734Z",
       "depends_on": [],
       "description": null,
       "id": "P28",
@@ -8328,7 +8379,7 @@
       "source_brief_ids": [
         "2026-05-26-v04-roadmap.md"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "Build v0.4 verify spine + lifecycle + clarity + plugins + trust + eval"
     }
@@ -8366,7 +8417,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T23:16:51.203350Z",
+  "updated_at": "2026-05-28T23:30:51.888883Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
