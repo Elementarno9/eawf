@@ -779,6 +779,18 @@
       "scope_id": "P28-I03-W50",
       "status": "done",
       "updated_at": "2026-05-28T12:09:39.568803Z"
+    },
+    "P28-I03-W51": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W51",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W51",
+      "scope_id": "P28-I03-W51",
+      "status": "done",
+      "updated_at": "2026-05-28T12:27:35.932165Z"
     }
   },
   "agent_sessions": {
@@ -2758,9 +2770,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I03-W51"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I03",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -7659,7 +7669,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T12:23:13.651580Z",
+  "updated_at": "2026-05-28T12:27:35.932461Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25182,8 +25192,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "codex-p28-i03-w51",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-28T12:27:35.932165Z",
+      "commit": "f3676a4259870cc15360fca75074b63573e61329",
       "deps": [
         "P28-I03-W50"
       ],
@@ -25204,10 +25214,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T12:23:13.111249Z",
-      "outcome": null,
+      "outcome": "fixed mypy verification errors; pre-commit and mypy pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "mypy src passes",
         "full pytest remains green"
