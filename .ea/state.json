@@ -7294,7 +7294,8 @@
         "P28-I03-W58",
         "P28-I03-W59",
         "P28-I03-W60",
-        "P28-I03-W61"
+        "P28-I03-W61",
+        "P28-I03-W62"
       ]
     }
   },
@@ -7900,7 +7901,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:35:12.763115Z",
+  "updated_at": "2026-05-28T18:35:39.083733Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25833,6 +25834,40 @@
         "priority_rationale} only;old fields + old --intent-* CLI flags + back-compat fallbacks removed;CHANGELOG entry for breaking CLI flag rename;Decision row added via state CLI;mypy+pytest clean"
       ],
       "title": "fix: drop legacy IntentBrief fields + CLI flags after consumer migration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W62": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Reactive wave from W60 followups: W59 schema additions never regenerated schemas/state.schema.json + docs/reference/autogen, and W60 CLI flag additions pushed wheel past the ceiling. Run eawf schema dump + docs autogen + raise wheel_max_bytes. Parallel-safe with W61 (zero file overlap).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "schemas/state.schema.json",
+        "docs/reference/autogen/**",
+        "pyproject.toml",
+        "tests/unit/test_schema.py",
+        "tests/unit/test_docs_autogen.py",
+        "tests/unit/test_packaging.py"
+      ],
+      "id": "P28-I03-W62",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T18:35:39.083437Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "schemas/state.schema.json regenerated to include W59 fields;docs/reference/autogen tree regenerated;pyproject.toml wheel_max_bytes raised to restore >=14 percent headroom over current size;test_state_schema_committed_matches_generated + test_committed_autogen_tree_matches_regeneration + test_wheel_bundles_service_templates_under_size_ceiling pass;mypy clean"
+      ],
+      "title": "fix: regenerate state schema + autogen + raise wheel ceiling",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
