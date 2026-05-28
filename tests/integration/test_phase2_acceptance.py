@@ -36,6 +36,23 @@ runner = CliRunner()
 pytestmark = pytest.mark.acceptance
 
 
+def _write_ship_gate_fixture(workspace: Path) -> Path:
+    fixture = workspace / "ship-gate-audit.json"
+    fixture.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "ship-gate",
+                    "passed": True,
+                    "details": "verified close readiness evidence",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return fixture
+
+
 def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Drive the full Phase 2 happy path against a fresh state.json."""
     state_path = tmp_path / ".ea" / "state.json"
@@ -127,7 +144,17 @@ def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert r.exit_code == 0, r.output
     r = runner.invoke(
         app,
-        ["audit", "run", "AUD-PH-1", "--scope-id", "P01", "--kind", "ship-gate"],
+        [
+            "audit",
+            "run",
+            "AUD-PH-1",
+            "--scope-id",
+            "P01",
+            "--kind",
+            "ship-gate",
+            "--fixture",
+            str(_write_ship_gate_fixture(tmp_path)),
+        ],
     )
     assert r.exit_code == 0, r.output
     r = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-PH-1"])

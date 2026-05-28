@@ -31,6 +31,7 @@ from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import store_kind_for_role
 from eawf.runtime.runtimes.manifest import RuntimeId
 from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.workflow.agents.specs.models import _unwrap_markdown_soft_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ class RoleSpec(BaseModel):
             "",
             placement,
             "",
-            self.system_prompt.rstrip("\n"),
+            _unwrap_markdown_soft_wraps(self.system_prompt).rstrip("\n"),
             "",
             report_line,
         ]

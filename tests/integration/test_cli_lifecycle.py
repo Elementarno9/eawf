@@ -33,6 +33,23 @@ def _read_state(workspace: Path) -> dict[str, object]:
     return orjson.loads(state_path.read_bytes())  # type: ignore[no-any-return]
 
 
+def _write_ship_gate_fixture(workspace: Path) -> Path:
+    fixture = workspace / "ship-gate-audit.json"
+    fixture.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "ship-gate",
+                    "passed": True,
+                    "details": "verified close readiness evidence",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return fixture
+
+
 # ---- project init -----------------------------------------------------------
 
 
@@ -246,7 +263,17 @@ def test_phase_close_happy(workspace: Path) -> None:
     )
     audit = runner.invoke(
         app,
-        ["audit", "run", "AUD-1", "--scope-id", "P01", "--kind", "ship-gate"],
+        [
+            "audit",
+            "run",
+            "AUD-1",
+            "--scope-id",
+            "P01",
+            "--kind",
+            "ship-gate",
+            "--fixture",
+            str(_write_ship_gate_fixture(workspace)),
+        ],
     )
     assert audit.exit_code == 0, audit.stdout
     res = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
@@ -333,7 +360,17 @@ def test_phase_reopen_happy_allows_followup_iter(workspace: Path) -> None:
     )
     audit = runner.invoke(
         app,
-        ["audit", "run", "AUD-1", "--scope-id", "P01", "--kind", "ship-gate"],
+        [
+            "audit",
+            "run",
+            "AUD-1",
+            "--scope-id",
+            "P01",
+            "--kind",
+            "ship-gate",
+            "--fixture",
+            str(_write_ship_gate_fixture(workspace)),
+        ],
     )
     assert audit.exit_code == 0, audit.stdout
     close = runner.invoke(app, ["phase", "close", "P01", "--audit", "AUD-1"])
