@@ -386,7 +386,7 @@
     },
     "BacklogItem": {
       "additionalProperties": false,
-      "description": "Triaged backlog entry.",
+      "description": "Triaged backlog entry.\n\nThe optional :attr:`description` carries the long-form purpose. When\npresent, it is bounded at 500 characters and rejected when empty:\na zero-length description is the W56 audit's \"no signal\" trap (a\nsurviving item without a problem statement is indistinguishable\nfrom one that was never triaged), so the model refuses\n``description=\"\"`` at ingestion. ``None`` remains valid for a\ntitle-only item; pass ``--description`` only when the field has\nsubstantive prose.",
       "properties": {
         "closed_at": {
           "anyOf": [
@@ -422,6 +422,7 @@
           "anyOf": [
             {
               "maxLength": 500,
+              "minLength": 1,
               "type": "string"
             },
             {

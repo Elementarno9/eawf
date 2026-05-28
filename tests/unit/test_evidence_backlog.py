@@ -474,3 +474,34 @@ def test_state_transaction_persists_close_backlog(tmp_path: Path) -> None:
     assert body["backlog"]["B023"]["status"] == "closed"
     event_lines = paths[StoreKind.EVENT].read_text().splitlines()
     assert len(event_lines) == 3
+
+
+def test_add_backlog_empty_description_raises(tmp_path: Path) -> None:
+    """Error: a zero-length ``description`` is rejected at ingestion (W56)."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    with pytest.raises(cli_errors.UserError, match="invalid backlog item"):
+        backlog.add_backlog(
+            state,
+            item_id="B023",
+            title="t",
+            priority=BacklogPriority.P2,
+            scope_id="QR",
+            description="",
+        )
+
+
+def test_edit_backlog_empty_description_raises(tmp_path: Path) -> None:
+    """Error: editing to a zero-length ``description`` is rejected (W56)."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state,
+        item_id="B023",
+        title="t",
+        priority=BacklogPriority.P2,
+        scope_id="QR",
+        description="seed",
+    )
+    with pytest.raises(cli_errors.UserError, match="invalid backlog edit"):
+        backlog.edit_backlog(state, item_id="B023", description="")

@@ -403,12 +403,22 @@ class Decision(_StrictModel):
 
 
 class BacklogItem(_StrictModel):
-    """Triaged backlog entry."""
+    """Triaged backlog entry.
+
+    The optional :attr:`description` carries the long-form purpose. When
+    present, it is bounded at 500 characters and rejected when empty:
+    a zero-length description is the W56 audit's "no signal" trap (a
+    surviving item without a problem statement is indistinguishable
+    from one that was never triaged), so the model refuses
+    ``description=""`` at ingestion. ``None`` remains valid for a
+    title-only item; pass ``--description`` only when the field has
+    substantive prose.
+    """
 
     id: IdStr
     scope_id: str
     title: Annotated[str, Field(min_length=1, max_length=72)]
-    description: Annotated[str, Field(max_length=500)] | None = None
+    description: Annotated[str, Field(min_length=1, max_length=500)] | None = None
     priority: BacklogPriority
     status: BacklogStatus
     created_at: UtcDatetime
