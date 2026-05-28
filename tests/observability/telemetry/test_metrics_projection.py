@@ -232,8 +232,76 @@ def _seed_store(tmp_path: Path) -> SqliteMetricsStore:
             ts=_NOW - timedelta(days=40),
         ),
     )
+    store.upsert(
+        "telemetry_runtime_switches",
+        TelemetryRuntimeSwitch(
+            wave_id="P99-I01-W01",
+            attempt_id_from="a1",
+            attempt_id_to="a2",
+            runtime_from="claude",
+            runtime_to="codex",
+            cause="RUNTIME_AUTH_ERROR",
+            ts=_NOW - timedelta(days=1),
+        ),
+    )
     store.commit()
     return store
+
+
+def _state_with_second_phase() -> State:
+    payload = _state().model_dump(mode="json")
+    payload["phases"]["P02"] = {
+        "id": "P02",
+        "scope_id": "QR",
+        "title": "Phase 2",
+        "status": "closed",
+        "iter_ids": ["P02-I01"],
+        "outcome_ids": [],
+        "opened_at": "2026-05-20T12:00:00Z",
+        "closed_at": "2026-05-22T12:00:00Z",
+    }
+    payload["iters"]["P02-I01"] = {
+        "id": "P02-I01",
+        "phase_id": "P02",
+        "title": "Iter 2",
+        "status": "closed",
+        "wave_ids": ["P02-I01-W01"],
+        "opened_at": "2026-05-20T12:00:00Z",
+        "closed_at": "2026-05-22T12:00:00Z",
+    }
+    payload["waves"]["P02-I01-W01"] = {
+        "id": "P02-I01-W01",
+        "iter_id": "P02-I01",
+        "title": "Wave 3",
+        "status": "closed",
+        "deps": [],
+        "file_scopes": [],
+        "agent_role": "executor",
+        "effort_bucket": "M",
+        "opened_at": "2026-05-22T10:00:00Z",
+        "closed_at": "2026-05-22T12:00:00Z",
+    }
+    payload["estimates"]["P02-I01-W01"] = {
+        "id": "EST-P02-I01-W01",
+        "scope_id": "P02-I01-W01",
+        "expected_eu": 10.0,
+        "pessimistic_eu": 12.0,
+        "expected_minutes": 600.0,
+        "pessimistic_minutes": 720.0,
+        "display": "10.0 EU",
+        "confidence": "medium",
+        "current_store_record_id": "EST-REC-3",
+        "updated_at": "2026-05-22T12:00:00Z",
+    }
+    payload["actuals"]["P02-I01-W01"] = {
+        "id": "ACT-P02-I01-W01",
+        "scope_id": "P02-I01-W01",
+        "status": "done",
+        "elapsed_eu": 10.0,
+        "current_store_record_id": "ACT-REC-3",
+        "updated_at": "2026-05-22T12:00:00Z",
+    }
+    return State.model_validate(payload)
 
 
 def test_compute_metrics_projection_emits_typed_projection(tmp_path: Path) -> None:
@@ -300,6 +368,20 @@ def test_compute_metrics_projection_filters_telemetry_by_scope_and_window(tmp_pa
     assert [(row.cause.value, row.count) for row in projection.switchover_frequency] == [
         ("RUNTIME_TIMEOUT", 1)
     ]
+
+
+def test_compute_metrics_projection_scopes_state_backed_tiles() -> None:
+    projection = compute_metrics_projection(
+        _state_with_second_phase(),
+        store=None,
+        scope="P01",
+        window="7d",
+        now=_NOW,
+    )
+
+    assert projection.weekly_burn.consumed_eu == pytest.approx(4.5)
+    assert projection.wave_elapsed.sample_count == 2
+    assert projection.wave_elapsed.max_minutes == pytest.approx(60.0)
 
 
 def test_compute_metrics_projection_without_store_keeps_state_tiles() -> None:

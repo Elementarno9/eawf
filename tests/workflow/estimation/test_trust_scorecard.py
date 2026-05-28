@@ -397,9 +397,31 @@ def test_scorecard_supports_30d_and_n_wave_windows(tmp_path: Path) -> None:
 
     assert recent.window == "30d"
     assert recent.store_record_counts["evidence"] == 4
+    assert [label.scope_id for label in recent.output_labels] == [
+        "P01-I01-W01",
+        "P01-I01-W02",
+    ]
     assert last_wave.window == "1-waves"
     assert [label.scope_id for label in last_wave.output_labels] == ["P01-I01-W02"]
     assert last_wave.output_labels[0].tier == "attested"
+
+
+def test_scorecard_treats_state_actual_as_closed_outcome() -> None:
+    state = _state_with_entities()
+    state.actuals["P01-I01-W02"] = ActualSummary(
+        id="ACT-P01-I01-W02",
+        scope_id="P01-I01-W02",
+        status=ActualStatus.DONE,
+        elapsed_eu=0.0,
+        current_store_record_id="REC-P01-I01-W02",
+        updated_at=_T0,
+    )
+
+    scorecard = compute_trust_scorecard(state, store_projection=None, window="all", now=_T0)
+
+    labels = {label.scope_id: label for label in scorecard.output_labels}
+    assert labels["P01-I01-W02"].tier == "unavailable"
+    assert labels["P01-I01-W02"].reason == "no verifier or attestation evidence"
 
 
 @pytest.mark.parametrize(

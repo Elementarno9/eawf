@@ -163,21 +163,26 @@ def compute_metrics_projection(
     """
     anchor = now if now is not None else datetime.now(UTC)
     effective_scope = scope or state.urn
+    scoped_state = _state_for_scope(state, scope=scope)
     sessions, switches = _fetch_telemetry_rows(
-        store, scope=effective_scope, window=window, now=anchor
+        store,
+        state=state,
+        scope=effective_scope,
+        window=window,
+        now=anchor,
     )
     projection = MetricsProjection(
         scope=effective_scope,
         window=window,
         generated_at=anchor,
-        variance=_compute_variance(state, scope=scope),
-        variance_by_bucket=_variance_by_bucket(state, scope=scope),
-        weekly_burn=compute_weekly_burn(state, now=anchor),
-        wave_elapsed=compute_wave_elapsed(state),
+        variance=_compute_variance(scoped_state, scope=None),
+        variance_by_bucket=_variance_by_bucket(scoped_state, scope=None),
+        weekly_burn=compute_weekly_burn(scoped_state, now=anchor),
+        wave_elapsed=compute_wave_elapsed(scoped_state),
         cache_health=_cache_health(sessions),
         switchover_frequency=_switchover_frequency(switches),
         per_runtime_tokens=_per_runtime_tokens(sessions),
-        per_role_calibration=_per_role_calibration(state, scope=scope, now=anchor),
+        per_role_calibration=_per_role_calibration(scoped_state, scope=None, now=anchor),
     )
     logger.info(
         f"compute_metrics_projection scope={effective_scope!r} window={window!r} "
@@ -189,6 +194,7 @@ def compute_metrics_projection(
 def _fetch_telemetry_rows(
     store: AbstractMetricsStore | None,
     *,
+    state: State,
     scope: str,
     window: MetricsWindow,
     now: datetime,
@@ -215,7 +221,10 @@ def _fetch_telemetry_rows(
         [
             row
             for row in switches
-            if _wave_in_scope(row.wave_id, scope) and _in_window(row.ts, window, now)
+            if (
+                _state_wave_id_in_scope(row.wave_id, state, scope)
+                and _in_window(row.ts, window, now)
+            )
         ],
     )
 
@@ -248,7 +257,7 @@ def _wave_in_scope(wave_id: str, scope: str) -> bool:
     if scope in {"user", "workspace", "all"}:
         return True
     if scope.startswith("urn:"):
-        return True
+        return False
     if wave_id == scope:
         return True
     parts = wave_id.split("-")
@@ -264,6 +273,43 @@ def _state_wave_in_scope(wave: Wave, state: State, scope: str | None) -> bool:
     if state.project is not None and scope == state.project.repo_urn:
         return True
     return _wave_in_scope(wave.id, scope)
+
+
+def _state_wave_id_in_scope(wave_id: str, state: State, scope: str) -> bool:
+    """Return whether a telemetry wave id belongs to a state-backed scope."""
+    wave = state.waves.get(wave_id)
+    if wave is not None:
+        return _state_wave_in_scope(wave, state, scope)
+    if scope in {state.urn, "user", "workspace", "all"}:
+        return scope != state.urn
+    if state.project is not None and scope == state.project.repo_urn:
+        return False
+    return _wave_in_scope(wave_id, scope)
+
+
+def _state_for_scope(state: State, *, scope: str | None) -> State:
+    """Return a state copy with waves and wave-keyed actuals filtered by scope."""
+    scoped_waves = {
+        wave_id: wave
+        for wave_id, wave in state.waves.items()
+        if _state_wave_in_scope(wave, state, scope)
+    }
+    scoped_wave_ids = set(scoped_waves)
+    scoped_actuals: dict[str, ActualSummary] = {}
+    for key, actual in (state.actuals or {}).items():
+        if key in scoped_wave_ids or actual.scope_id in scoped_wave_ids:
+            scoped_actuals[key] = actual
+    scoped_estimates: dict[str, EstimateSummary] = {}
+    for key, estimate in (state.estimates or {}).items():
+        if key in scoped_wave_ids or estimate.scope_id in scoped_wave_ids:
+            scoped_estimates[key] = estimate
+    return state.model_copy(
+        update={
+            "waves": scoped_waves,
+            "actuals": scoped_actuals,
+            "estimates": scoped_estimates,
+        }
+    )
 
 
 def _variance_rows(state: State, *, scope: str | None) -> list[VarianceWaveProjection]:

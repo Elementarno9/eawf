@@ -307,12 +307,16 @@ def _evidence_for_scope(
     return rows
 
 
-def _latest_actual_scopes(projection: StoreProjection) -> set[str]:
-    return {
+def _actual_scopes(state: State, projection: StoreProjection) -> set[str]:
+    store_scopes = {
         row.envelope.scope_id
         for row in projection.actuals
         if row.envelope.scope_id is not None and isinstance(row.payload, ActualPayload)
     }
+    state_scopes = {
+        actual.scope_id for actual in (state.actuals or {}).values() if actual.scope_id is not None
+    }
+    return store_scopes | state_scopes
 
 
 def _tier_from_evidence(evidence: Iterable[EvidenceRecord]) -> tuple[TrustTier | None, list[str]]:
@@ -341,7 +345,7 @@ def _label_wave(state: State, wave: Wave, projection: StoreProjection) -> Output
             evidence_refs=refs,
             reason=reason,
         )
-    if wave.status != WaveStatus.CLOSED or wave.id not in _latest_actual_scopes(projection):
+    if wave.status != WaveStatus.CLOSED or wave.id not in _actual_scopes(state, projection):
         return OutputTrustLabel(
             urn=_wave_urn(state, wave.id),
             scope_id=wave.id,
@@ -440,7 +444,7 @@ def compute_trust_scorecard(
     labels = [
         _label_wave(state, wave, scoped_projection)
         for wave_id, wave in sorted(state.waves.items())
-        if parsed_window.kind != "waves" or wave_id in wave_ids
+        if parsed_window.kind == "all" or wave_id in wave_ids
     ]
     return TrustScorecard(
         schema_version=SCORECARD_SCHEMA_VERSION,
