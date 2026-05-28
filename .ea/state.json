@@ -923,6 +923,18 @@
       "scope_id": "P28-I03-W63",
       "status": "done",
       "updated_at": "2026-05-28T21:22:06.102339Z"
+    },
+    "P28-I03-W64": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 168243,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W64",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W64",
+      "scope_id": "P28-I03-W64",
+      "status": "done",
+      "updated_at": "2026-05-28T23:02:53.855366Z"
     }
   },
   "agent_sessions": {
@@ -6676,6 +6688,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P28-I03-W63",
       "updated_at": "2026-05-28T21:21:41.518773Z"
+    },
+    "P28-I03-W64": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W64-bucket-20260528T230253Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W64",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W64",
+      "updated_at": "2026-05-28T23:02:53.280336Z"
     }
   },
   "goals": {
@@ -8315,7 +8340,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T22:15:06.859869Z",
+  "updated_at": "2026-05-28T23:02:53.855656Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -26318,8 +26343,8 @@
     "P28-I03-W64": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T23:02:53.855366Z",
       "commit": null,
       "deps": [],
       "description": "Reactive wave from W63 follow-up: CI per-package coverage gates fail on state branch (91.67<95) + telemetry branch (84.74<86). Operator picked test additions over gate bump. Local uncovered state branches: ids.py 54+153->152; io.py 364-366; mutations.py 330,334,338,342,343->345,499,501; urn.py 112. Telemetry branches: probe via coverage report -m in worktree (CI runs broader suite). Target floors: state branch >=95, telemetry branch >=86.",
@@ -26337,16 +26362,16 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T22:15:06.859694Z",
-      "outcome": null,
+      "outcome": "state pkg branch cov 100% (was 91.67%, gate 95%); telemetry pkg branch cov 88.95% (was 84.74%, gate 86%); 27 helper tests + 11 mutation tests + 5 ids/urn/io tests added; no src/ edits; 5518 pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "state package branch coverage >=95%;telemetry package branch coverage >=86%;new tests target only uncovered branches surfaced by ;no source edits;mypy + pre-commit clean"
       ],
       "title": "test: lift state + telemetry branch coverage above gates",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 168243,
       "worktree_id": null
     }
   },
