@@ -262,10 +262,10 @@ install only ships the dispatcher.
 ### Install
 
 ```bash
-# From a local clone (D09: PyPI publication deferred to v0.3):
+# From a local clone (D09: PyPI publication deferred to v0.4):
 uv tool install --from . eawf
 
-# Once published on PyPI (post-v0.3):
+# Once published on PyPI (post-v0.4):
 uv tool install eawf
 ```
 

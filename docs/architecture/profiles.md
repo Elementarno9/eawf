@@ -10,11 +10,8 @@ commands, state extensions, memory policies, and installer questions.
 ## v0.1 profile shipping status
 
 - **Functional**: `core`, `python`, `research`.
-- **Catalog stub** (rule text only, profile body pending): `quant`,
-  `ml`. The audit-check DSL skeleton landed in v0.2 (P13 W04); the
-  profile bodies (B006/B007) are still on the v0.3 backlog.
-- **Catalog stub** (no body): `re`, `game`, `apps`, `infra`, `docs`,
-  `robotics`.
+- **Catalog stub** (rule text only, profile body pending): `quant`, `ml`. The audit-check DSL skeleton landed in v0.2 (P13 W04); the profile bodies (B006/B007) are still on the v0.4 backlog.
+- **Catalog stub** (no body): `re`, `game`, `apps`, `infra`, `docs`, `robotics`.
 
 Profile combinations example:
 

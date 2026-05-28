@@ -777,7 +777,7 @@ this rule: a skill that emits markdown emits unwrapped paragraphs.
 Releases are opt-in per repo via
 ``vcs.conventions.release.cadence``. The two supported cadences:
 
-- ``per_phase`` — agent-driven profile default; each phase PR
+- ``per-phase`` — agent-driven profile default; each phase PR
   closes with a release-readiness pre-flight gate and a
   post-merge auto-tag. Phase close = at least one minor version
   bump.

@@ -180,8 +180,8 @@ def _stale_wave_question(plan: StaleWave, *, stale_window_seconds: int) -> UserQ
     window_minutes = int(stale_window_seconds // 60)
     return UserQuestion(
         question=(
-            f"Wave {plan.wave_id} has been active for {elapsed_minutes:g} minutes "
-            f"(stale after {window_minutes} minutes)."
+            f"stale-wave advisory: Wave {plan.wave_id} has been active for {elapsed_minutes:g} "
+            f"minutes (stale after {window_minutes} minutes)."
         ),
         options=[
             UserQuestionOption(

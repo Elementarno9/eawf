@@ -1,9 +1,6 @@
 # Doctor
 
-`eawf doctor` is the first diagnostic command for an eawf workspace. It runs
-install-readiness checks, state / config probes, the repo project-record check,
-and drift checks that compare state and generated artifacts with the current
-workspace.
+`eawf doctor` is the first diagnostic command for an eawf workspace. It runs install-readiness checks, state / config probes, the repo project-record check, and drift checks that compare state and generated artifacts with the current workspace.
 
 ```text
 eawf doctor
@@ -11,8 +8,7 @@ eawf doctor --reprobe
 eawf --json doctor
 ```
 
-Text output is for operators. JSON output is for scripts and includes a
-top-level `checks` list with stable `name`, `status`, and `detail` fields.
+Text output is for operators. JSON output is for scripts and includes a top-level `checks` list with stable `name`, `status`, and `detail` fields.
 
 ## Options
 
@@ -25,11 +21,7 @@ top-level `checks` list with stable `name`, `status`, and `detail` fields.
 
 ## Reading results
 
-Doctor rows are checks, not repairs. `OK` rows mean the probe reconciled with
-the current workspace. `WARN` rows mean the command stayed useful but found
-operator work. Hard failures use the standard error envelope and exit-code
-surface documented in [exit-codes.md](exit-codes.md) and
-[error-codes.md](error-codes.md).
+Doctor rows are checks, not repairs. `OK` rows mean the probe reconciled with the current workspace. `WARN` rows mean the command stayed useful but found operator work. Hard failures use the standard error envelope and exit-code surface documented in [exit-codes.md](exit-codes.md) and [error-codes.md](error-codes.md).
 
 The normal workflow is:
 
@@ -41,15 +33,10 @@ eawf doctor --reprobe     # after installing tools or changing runtime setup
 
 ## Git/state drift reconciler
 
-The `git_state_drift` row reconciles lifecycle state with git history. It
-loads `.ea/state.json`, walks CLOSED waves, and compares each wave's pinned
-`Wave.commit` with the commit derived from the wave's bracketed commit prefix.
-The derived commit comes from git history, so cherry-picked commits remain
-discoverable when their subject prefix is intact.
+The `git_state_drift` row reconciles lifecycle state with git history. It loads `.ea/state.json`, walks CLOSED waves, and compares each wave's pinned `Wave.commit` with the commit derived from the wave's bracketed commit prefix.
+The derived commit comes from git history, so cherry-picked commits remain discoverable when their subject prefix is intact.
 
-`status="ok"` means every CLOSED wave reconciles, or state is absent /
-unparseable and another doctor row owns that failure. `status="warn"` means
-the row includes one or more drift records.
+`status="ok"` means every CLOSED wave reconciles, or state is absent / unparseable and another doctor row owns that failure. `status="warn"` means the row includes one or more drift records.
 
 JSON shape:
 
@@ -78,18 +65,12 @@ Drift kinds:
 | `closed_no_pin` | A CLOSED wave has no pinned commit and no derivable commit prefix in git history. |
 | `closed_unfindable` | Git is unavailable, so the check cannot decide whether history reconciles. |
 
-When the reconciler warns, `eawf doctor` also emits a bounded
-`git_state_drift_detected` event for downstream telemetry. Use
-`eawf --json doctor` to see every drift row; the text table summarizes only
-the first few rows.
+When the reconciler warns, `eawf doctor` also emits a bounded `git_state_drift_detected` event for downstream telemetry. Use `eawf --json doctor` to see every drift row; the text table summarizes only the first few rows.
 
 ## Plugin cross-scope duplicates
 
-The `plugin_cross_scope_dup` row inspects `.ea/indexes/generated.json` and
-groups generated entries by `region_id`. A warning means the same generated
-plugin region appears under more than one scope, commonly project and user.
-Runtime precedence is intentionally not guessed by doctor; pick one scope and
-repair through the plugin command.
+The `plugin_cross_scope_dup` row inspects `.ea/indexes/generated.json` and groups generated entries by `region_id`. A warning means the same generated plugin region appears under more than one scope, commonly project and user.
+Runtime precedence is intentionally not guessed by doctor; pick one scope and repair through the plugin command.
 
 ```text
 eawf plugin doctor --strict
@@ -99,9 +80,7 @@ eawf doctor
 
 ## Runtime capability drift
 
-`eawf doctor --runtime <id>` bypasses the general check set and reports
-capability-matrix drift for one runtime adapter. Use it when dispatch behavior
-does not match the runtime surface you expect.
+`eawf doctor --runtime <id>` bypasses the general check set and reports capability-matrix drift for one runtime adapter. Use it when dispatch behavior does not match the runtime surface you expect.
 
 ```text
 eawf doctor --runtime codex
@@ -109,15 +88,11 @@ eawf doctor --runtime claude-code
 eawf doctor --runtime opencode
 ```
 
-Rows marked `DRIFT` mean declared capabilities and observed probe flags
-disagree. `MISSING` means the runtime is not installed or not discoverable by
-the probe.
+Rows marked `DRIFT` mean declared capabilities and observed probe flags disagree. `MISSING` means the runtime is not installed or not discoverable by the probe.
 
 ## Prune verbs
 
-Eawf uses explicit prune verbs for stale operator-owned records. A prune
-command should report what it will drop and require an explicit confirmation
-path before it writes.
+Eawf uses explicit prune verbs for stale operator-owned records. A prune command should report what it will drop and require an explicit confirmation path before it writes.
 
 Common prune surfaces:
 
@@ -127,8 +102,7 @@ Common prune surfaces:
 | `eawf memory prune` | Soft-deletes matching memory rows by flipping status to `PRUNED`. |
 | `eawf backup prune --keep <N>` | Keeps the newest backup snapshots and removes older snapshots. |
 
-When troubleshooting, prefer prune verbs over manual JSON edits because they
-preserve schema validation, event emission, and confirmation gates.
+When troubleshooting, prefer prune verbs over manual JSON edits because they preserve schema validation, event emission, and confirmation gates.
 
 ## Related pages
 

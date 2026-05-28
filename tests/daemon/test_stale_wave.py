@@ -148,6 +148,7 @@ def test_build_stale_wave_envelope_is_needs_user_pause(tmp_path: Path) -> None:
     assert envelope.payload["event_kind"] == "stale_wave_detected"
     assert envelope.payload["status"] == "needs_user"
     assert envelope.payload["extras"]["wave_id"] == "P28-I02-W20"
+    assert envelope.payload["message"].startswith("stale-wave advisory:")
     assert "user_question" in envelope.payload["extras"]
 
 

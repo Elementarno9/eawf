@@ -114,4 +114,9 @@ Heartbeat.-degraded {
     background: $err;
     color: $text;
     text-style: bold;
+    visibility: visible;
+}
+
+.degraded-banner.degraded-banner--hidden {
+    visibility: hidden;
 }

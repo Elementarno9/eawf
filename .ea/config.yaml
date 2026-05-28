@@ -1,7 +1,11 @@
 acceptance:
-  lint: true
-  tests: true
-  typecheck: true
+  commands:
+    build: null
+    lint: null
+    tests: null
+    typecheck: null
+  required_before_ship:
+  - state
 audit:
   fix_safe: true
 flow:
