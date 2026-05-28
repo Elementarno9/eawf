@@ -490,17 +490,22 @@ def _apply_wave_close(
     """
     params = mutation.params
     tokens_raw = params.get("tokens_consumed")
+    # WaveSessionRollup only carries ``attention_eu`` today (see
+    # :class:`eawf.observability.telemetry.join.WaveSessionRollup`). Until the
+    # rollup gains a separate runtime-EU column, runtime EU stays ``None`` so
+    # the close path never substitutes attention for runtime — the two metrics
+    # measure different things and a conflated value would mis-rollup the
+    # WaveSessionRollup variance / velocity numbers downstream.
+    rollup_attention_eu = (
+        wave_session_rollup.attention_eu if wave_session_rollup is not None else None
+    )
     wave = close_wave(
         state,
         wave_id=str(params["wave_id"]),
         outcome=str(params["outcome"]),
         tokens_consumed=int(tokens_raw) if tokens_raw is not None else None,
-        actual_attention_eu=(
-            wave_session_rollup.attention_eu if wave_session_rollup is not None else None
-        ),
-        actual_agent_runtime_eu=(
-            wave_session_rollup.attention_eu if wave_session_rollup is not None else None
-        ),
+        actual_attention_eu=rollup_attention_eu,
+        actual_agent_runtime_eu=None,
     )
     commit = params.get("commit")
     if commit is not None:

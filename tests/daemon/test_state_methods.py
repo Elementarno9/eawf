@@ -536,11 +536,91 @@ def test_mutate_wave_close_derives_attention_eu_from_telemetry_duration(
         written = orjson.loads(state_path.read_bytes())
         actual = written["actuals"]["P24-I01-W09"]
         assert actual["attention_eu"] == pytest.approx(1.0)
-        assert actual["agent_runtime_eu"] == pytest.approx(1.0)
+        # ``agent_runtime_eu`` is None until WaveSessionRollup grows its own
+        # runtime-EU column; the close path never substitutes attention for
+        # runtime (the two metrics measure different things).
+        assert actual["agent_runtime_eu"] is None
         rows = event_path.read_text().strip().splitlines()
         assert len(rows) == 1
         on_disk = orjson.loads(rows[0])
         assert on_disk["payload"]["extras"]["actual_attention_eu"] == pytest.approx(1.0)
+
+    _run(body)
+
+
+def test_mutate_wave_close_does_not_conflate_attention_and_runtime_eu(
+    tmp_path: Path,
+) -> None:
+    """Wave close separates ``attention_eu`` and ``agent_runtime_eu`` rollups.
+
+    A42 surfaced the daemon close path reading
+    ``wave_session_rollup.attention_eu`` for *both* the attention and
+    runtime EU fields on the persisted :class:`ActualSummary`. Until the
+    rollup model gains its own runtime-EU column the runtime field stays
+    ``None`` rather than echoing attention — the two metrics measure
+    different things and a substituted value would mis-rollup the
+    downstream variance / velocity numbers. This pins the symptom fix so a
+    future regression cannot quietly conflate them again.
+    """
+    from decimal import Decimal
+
+    from eawf.observability.telemetry.models import TelemetrySession
+    from eawf.observability.telemetry.store import SqliteMetricsStore, metrics_db_path
+
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    assert isinstance(wave, dict)
+    wave["sessions"] = {
+        "1": {
+            "attempt": 1,
+            "runtime": "codex",
+            "session_id": "sess-no-conflate-1",
+            "session_log_handle": "urn:eawf:v1:session-log:codex:sess-no-conflate-1",
+            "started_at": _now().isoformat(),
+            "ended_at": (_now() + timedelta(minutes=45)).isoformat(),
+            "exit_status": 0,
+        }
+    }
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    store = SqliteMetricsStore(metrics_db_path(state_path))
+    store.init_schema()
+    store.upsert(
+        "telemetry_sessions",
+        TelemetrySession(
+            session_id="sess-no-conflate-1",
+            project_id="repo/eawf",
+            runtime="codex",
+            wave_id="P24-I01-W09",
+            attempt_id="1",
+            session_log_path="opaque://sess-no-conflate-1",
+            started_at=_now(),
+            ended_at=_now() + timedelta(minutes=45),
+            duration_ms=2_700_000,  # 45 min → 1.5 EU at 30 min/EU.
+            model_primary=None,
+            total_cost_usd=Decimal("0"),
+            end_marker="clean_stop",
+        ),
+    )
+    store.commit()
+    store.close()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        actual = written["actuals"]["P24-I01-W09"]
+        # Attention EU lands as the telemetry-derived value (1.5 EU).
+        assert actual["attention_eu"] == pytest.approx(1.5)
+        # Runtime EU is *not* substituted from attention; the deferred
+        # WaveSessionRollup runtime-EU column carries the real signal once
+        # that wave lands. Until then the field stays ``None``.
+        assert actual["agent_runtime_eu"] is None
+        assert actual["attention_eu"] != actual["agent_runtime_eu"]
 
     _run(body)
 

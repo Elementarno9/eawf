@@ -492,10 +492,18 @@ def _effort_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     # actuals come from measured sources only (the wall-clock auto-record was
     # retired in P27-I05-W28).
     has_actuals = _has_effort_actuals(state)
-    effort = render_eu_bar_plain(consumed, estimate, mode=mode)
-    if estimate > 0:
-        consumed_txt = f"{consumed:.1f}" if has_actuals else DASH
-        effort = f"{consumed_txt}/{estimate:.1f}  {effort}"
+    # When the wave-session rollup is empty or telemetry is unhealthy the
+    # ``effort`` line collapses to :data:`EMPTY_STATE` rather than rendering a
+    # ``-/<estimate>  ----- 0%`` row — a 0 % bar reads as "no work done" when
+    # the real signal is "no rollup yet". The variance / velocity / ETA rows
+    # already empty-state on the same condition; this keeps the four EFFORT
+    # rows consistent.
+    if has_actuals:
+        effort = render_eu_bar_plain(consumed, estimate, mode=mode)
+        if estimate > 0:
+            effort = f"{consumed:.1f}/{estimate:.1f}  {effort}"
+    else:
+        effort = EMPTY_STATE
     variance = render_variance_plain(_variance_pct(consumed, estimate) if has_actuals else None)
     series = build_velocity_eu_per_day(state)
     velocity = _render_sparkline(series, mode=mode)

@@ -796,6 +796,34 @@ def test_build_status_lines_effort_no_data_empty_state() -> None:
     assert eta.split("eta:")[1].strip() == DASH
 
 
+def test_build_status_lines_effort_estimate_only_no_actuals_empty_state() -> None:
+    """Estimate present but no measured actual → ``— no data`` on every EFFORT row.
+
+    The regression A42 surfaced: when the WaveSessionRollup is empty or
+    telemetry is unhealthy the bar used to render ``-/<estimate>  ----- 0%``,
+    which reads as "no work done" rather than "no rollup yet". The fix
+    collapses the ``effort:`` line to the same empty-state sentinel the
+    variance / velocity / ETA rows already use so the four EFFORT rows stay
+    consistent.
+    """
+    # Splice an effort_bucket onto fixture-03's wave so the live denominator
+    # is positive (XL == 3.5 EU) but no actual exists — the gap A42 flagged.
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["effort_bucket"] = "XL"
+    state = State.model_validate(payload)
+    lines = build_status_lines(state)
+    effort = next(line for line in lines if line.startswith("effort:"))
+    variance = next(line for line in lines if line.startswith("variance:"))
+    velocity = next(line for line in lines if line.startswith("velocity:"))
+    eta = next(line for line in lines if line.startswith("eta:"))
+    assert EMPTY_STATE in effort
+    assert "0%" not in effort  # not a fake 0 % bar against the live estimate
+    assert "/" not in effort.split("effort:")[1]  # no ``-/3.5`` prefix either
+    assert EMPTY_STATE in variance
+    assert EMPTY_STATE in velocity
+    assert eta.split("eta:")[1].strip() == DASH
+
+
 def test_build_status_lines_effort_ascii_mode() -> None:
     """ASCII mode renders the EU bar with ``#``/``-`` and ASCII spark glyphs."""
     lines = build_status_lines(_state_estimates_with_bucket(), mode="ascii")
