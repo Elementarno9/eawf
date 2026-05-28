@@ -147,6 +147,89 @@ def test_roadmap_propose_with_source_briefs_and_deps(workspace: Path) -> None:
     ]
 
 
+def test_roadmap_propose_from_plan_stages_phase_iters_waves(workspace: Path) -> None:
+    plan_path = workspace / "roadmap-plan.yaml"
+    plan_path.write_text(
+        """
+schema_version: "1.0"
+kind: RoadmapPlan
+phase:
+  id: P22
+  title: Plan import
+  description: phase narrative
+  source_brief_ids:
+    - RES-2026-05-14-001
+iters:
+  - id: P22-I01
+    title: First iter
+    description: iter narrative
+    waves:
+      - id: P22-I01-W02
+        title: "feat: second"
+        file_scopes:
+          - src/b
+        deps:
+          - P22-I01-W01
+        success_criteria:
+          - second criterion
+        effort_bucket: S
+      - id: P22-I01-W01
+        title: "feat: first"
+        file_scopes:
+          - src/a
+        agent_role: executor
+        effort_bucket: XS
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    res = runner.invoke(app, ["--json", "roadmap", "propose", "--from-plan", str(plan_path)])
+
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["status"] == "needs_user"
+    assert body["phase_id"] == "P22"
+    assert body["iter_ids"] == ["P22-I01"]
+    assert body["wave_count"] == 2
+    state = _read_state(workspace)
+    assert state["phases"]["P22"]["status"] == "planned"
+    assert state["phases"]["P22"]["source_brief_ids"] == ["RES-2026-05-14-001"]
+    assert state["iters"]["P22-I01"]["description"] == "iter narrative"
+    assert state["iters"]["P22-I01"]["wave_ids"] == ["P22-I01-W01", "P22-I01-W02"]
+    assert state["waves"]["P22-I01-W01"]["blocks"] == ["P22-I01-W02"]
+    assert state["waves"]["P22-I01-W02"]["deps"] == ["P22-I01-W01"]
+    assert state["waves"]["P22-I01-W02"]["success_criteria"] == ["second criterion"]
+
+
+def test_roadmap_propose_from_plan_validation_failure_is_all_or_nothing(
+    workspace: Path,
+) -> None:
+    plan_path = workspace / "bad-roadmap-plan.yaml"
+    plan_path.write_text(
+        """
+schema_version: "1.0"
+kind: RoadmapPlan
+phase:
+  id: P22
+  title: Bad plan
+  unexpected: no
+iters:
+  - id: P22-I01
+    title: First iter
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    res = runner.invoke(app, ["roadmap", "propose", "--from-plan", str(plan_path)])
+
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "invalid roadmap plan" in combined
+    state = _read_state(workspace)
+    assert "P22" not in state["phases"]
+    assert "P22-I01" not in state["iters"]
+
+
 def test_roadmap_propose_duplicate_phase_rejected(workspace: Path) -> None:
     runner.invoke(
         app,

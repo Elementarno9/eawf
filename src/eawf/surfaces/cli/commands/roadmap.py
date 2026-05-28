@@ -308,8 +308,18 @@ def _render_propose_plan_text(state: State, phase_id: str) -> str:
 @roadmap_app.command("propose")
 def roadmap_propose_cmd(
     ctx: typer.Context,
-    phase_id: Annotated[str, typer.Option("--phase", help="Phase id like P21.")],
-    title: Annotated[str, typer.Option("--title", help="Phase title.")],
+    phase_id: Annotated[str | None, typer.Option("--phase", help="Phase id like P21.")] = None,
+    title: Annotated[str | None, typer.Option("--title", help="Phase title.")] = None,
+    from_plan: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-plan",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Strict YAML/JSON RoadmapPlan file to stage in one transaction.",
+        ),
+    ] = None,
     from_briefs: Annotated[
         str | None,
         typer.Option(
@@ -343,13 +353,29 @@ def roadmap_propose_cmd(
         ),
     ] = None,
 ) -> None:
-    """Propose a new PLANNED phase + I01 iter; emits needs_user envelope."""
+    """Propose a PLANNED phase from flags or a strict roadmap plan file."""
     from pydantic import ValidationError as PydValidationError
 
     from eawf.surfaces.cli._mutation import state_transaction
-    from eawf.workflow.lifecycle.transitions import LifecycleError, plan_iter, plan_phase
+    from eawf.workflow.lifecycle.transitions import (
+        LifecycleError,
+        plan_iter,
+        plan_phase,
+    )
 
     flags: GlobalFlags = ctx.obj
+    if from_plan is not None:
+        _roadmap_propose_from_plan(ctx, from_plan=from_plan)
+        return
+    if phase_id is None or title is None:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--phase and --title are required unless --from-plan is passed",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
     if not is_phase_id(phase_id):
         cli_errors.emit_error(
             cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
@@ -438,6 +464,85 @@ def roadmap_propose_cmd(
                 "label": "drop",
                 "next": f"eawf roadmap drop {phase_id}",
             },
+        ],
+    }
+    emit_json_or_text(envelope, plan_text, flags=flags)
+
+
+def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
+    """Stage a strict roadmap plan file and emit the normal needs_user envelope."""
+    from pydantic import ValidationError as PydValidationError
+    from yaml import YAMLError
+
+    from eawf.kernel.spec.roadmap_plan import load_roadmap_plan
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.lifecycle.transitions import LifecycleError, plan_roadmap
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        plan = load_roadmap_plan(from_plan)
+    except (OSError, ValueError, YAMLError, orjson.JSONDecodeError, PydValidationError) as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid roadmap plan: {exc}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+        return
+
+    phase_id = plan.phase.id
+    plan_text = ""
+    iter_ids: list[str] = []
+    wave_ids: list[str] = []
+    try:
+        with state_transaction(state_path) as state:
+            try:
+                planned = plan_roadmap(state, plan=plan)
+            except LifecycleError as exc:
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+            except PydValidationError as exc:
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+            iter_ids = planned.iter_ids
+            wave_ids = planned.wave_ids
+            state.updated_at = datetime.now(UTC)
+            plan_text = _render_propose_plan_text(state, phase_id)
+            _append_roadmap_event(
+                state_path,
+                command="roadmap propose",
+                args={
+                    "phase_id": phase_id,
+                    "from_plan": True,
+                    "iter_ids": iter_ids,
+                    "wave_ids": wave_ids,
+                },
+                scope_id=phase_id,
+                summary=f"roadmap propose {phase_id} from_plan=True",
+            )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    first_iter_id = iter_ids[0] if iter_ids else None
+    envelope = {
+        "status": "needs_user",
+        "decision_kind": "approve_plan",
+        "phase_id": phase_id,
+        "iter_id": first_iter_id,
+        "iter_ids": iter_ids,
+        "wave_ids": wave_ids,
+        "wave_count": len(wave_ids),
+        "title": plan.phase.title,
+        "depends_on": list(plan.phase.depends_on),
+        "source_brief_ids": list(plan.phase.source_brief_ids),
+        "plan_text": plan_text,
+        "description": plan.phase.description,
+        "options": [
+            {"label": "approve", "next": f"eawf roadmap apply {phase_id}"},
+            {"label": "revise", "next": f"eawf roadmap revise {phase_id} --add-wave WNN ..."},
+            {"label": "drop", "next": f"eawf roadmap drop {phase_id}"},
         ],
     }
     emit_json_or_text(envelope, plan_text, flags=flags)

@@ -29,6 +29,10 @@ under the Q25 LOC cap; this module re-exports the full surface so the
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
+from eawf.kernel.spec.roadmap_plan import RoadmapPlan, RoadmapPlanWave
+from eawf.kernel.state.models import State
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.iter_ import (
     activate_iter,
@@ -64,8 +68,99 @@ from eawf.workflow.lifecycle.wave import (
     start_wave,
 )
 
+
+class PlannedRoadmap(NamedTuple):
+    """Ids inserted by :func:`plan_roadmap`."""
+
+    phase_id: str
+    iter_ids: list[str]
+    wave_ids: list[str]
+
+
+def plan_roadmap(state: State, *, plan: RoadmapPlan) -> PlannedRoadmap:
+    """Stage a whole roadmap plan into ``state``.
+
+    The strict :class:`RoadmapPlan` loader owns schema validation. This
+    transition owns state mutation: phase first, iters second, waves last.
+    Waves are planned in dependency order so the plan file need not sort a
+    child after every prerequisite.
+
+    Args:
+        state: State to mutate in place.
+        plan: Already-validated roadmap plan.
+
+    Returns:
+        Inserted phase, iter, and wave ids.
+
+    Raises:
+        LifecycleError: when a lifecycle guard rejects an insert.
+    """
+    phase = plan.phase
+    plan_phase(
+        state,
+        phase_id=phase.id,
+        title=phase.title,
+        depends_on=list(phase.depends_on),
+        source_brief_ids=list(phase.source_brief_ids),
+        description=phase.description,
+    )
+    iter_ids: list[str] = []
+    for iter_plan in plan.iters:
+        plan_iter(
+            state,
+            iter_id=iter_plan.id,
+            phase_id=phase.id,
+            title=iter_plan.title,
+            description=iter_plan.description,
+        )
+        iter_ids.append(iter_plan.id)
+
+    wave_ids: list[str] = []
+    for iter_id, wave_plan in _roadmap_waves_in_dep_order(plan):
+        plan_wave(
+            state,
+            wave_id=wave_plan.id,
+            iter_id=iter_id,
+            title=wave_plan.title,
+            file_scopes=list(wave_plan.file_scopes),
+            deps=list(wave_plan.deps),
+            success_criteria=list(wave_plan.success_criteria),
+            agent_role=wave_plan.agent_role,
+            effort_bucket=wave_plan.effort_bucket,
+            description=wave_plan.description,
+        )
+        wave_ids.append(wave_plan.id)
+    return PlannedRoadmap(phase_id=phase.id, iter_ids=iter_ids, wave_ids=wave_ids)
+
+
+def _roadmap_waves_in_dep_order(plan: RoadmapPlan) -> list[tuple[str, RoadmapPlanWave]]:
+    """Return plan waves topologically sorted with file order as tie-breaker."""
+    by_wave: dict[str, tuple[int, str, RoadmapPlanWave]] = {}
+    order = 0
+    for iter_plan in plan.iters:
+        for wave_plan in iter_plan.waves:
+            by_wave[wave_plan.id] = (order, iter_plan.id, wave_plan)
+            order += 1
+    remaining = set(by_wave)
+    planned: list[tuple[str, RoadmapPlanWave]] = []
+    while remaining:
+        ready = [
+            wave_id
+            for wave_id in remaining
+            if all(dep not in remaining for dep in by_wave[wave_id][2].deps)
+        ]
+        if not ready:
+            raise LifecycleError("roadmap plan wave deps contain a cycle")
+        for wave_id in sorted(ready, key=lambda item: by_wave[item][0]):
+            _order, iter_id, wave_plan = by_wave[wave_id]
+            planned.append((iter_id, wave_plan))
+            remaining.remove(wave_id)
+    return planned
+
+
 __all__ = [
     "LifecycleError",
+    "PlannedRoadmap",
     "activate_iter",
     "activate_phase",
     "add_subproject",
@@ -84,6 +179,7 @@ __all__ = [
     "phase_close_readiness_blockers",
     "plan_iter",
     "plan_phase",
+    "plan_roadmap",
     "plan_wave",
     "release_wave",
     "remove_wave_plan",
