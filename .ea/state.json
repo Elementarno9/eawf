@@ -863,6 +863,18 @@
       "scope_id": "P28-I03-W60",
       "status": "done",
       "updated_at": "2026-05-28T18:35:12.762787Z"
+    },
+    "P28-I03-W62": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 58400,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W62",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W62",
+      "scope_id": "P28-I03-W62",
+      "status": "done",
+      "updated_at": "2026-05-28T18:41:04.426447Z"
     }
   },
   "agent_sessions": {
@@ -6264,6 +6276,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P28-I03-W60",
       "updated_at": "2026-05-28T18:35:12.174256Z"
+    },
+    "P28-I03-W62": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W62-bucket-20260528T184103Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W62",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W62",
+      "updated_at": "2026-05-28T18:41:03.831554Z"
     }
   },
   "goals": {
@@ -7901,7 +7926,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:35:39.083733Z",
+  "updated_at": "2026-05-28T18:41:04.426757Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25841,8 +25866,8 @@
     "P28-I03-W62": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:41:04.426447Z",
       "commit": null,
       "deps": [],
       "description": "Reactive wave from W60 followups: W59 schema additions never regenerated schemas/state.schema.json + docs/reference/autogen, and W60 CLI flag additions pushed wheel past the ceiling. Run eawf schema dump + docs autogen + raise wheel_max_bytes. Parallel-safe with W61 (zero file overlap).",
@@ -25860,16 +25885,16 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T18:35:39.083437Z",
-      "outcome": null,
+      "outcome": "schema autogen regenerated for W59 fields (src/eawf/schemas/state.schema.json + docs/reference/autogen/state.schema.json); wheel_max_bytes 1685504 to 2097152 restoring 19 percent headroom; 195 sanity tests pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "schemas/state.schema.json regenerated to include W59 fields;docs/reference/autogen tree regenerated;pyproject.toml wheel_max_bytes raised to restore >=14 percent headroom over current size;test_state_schema_committed_matches_generated + test_committed_autogen_tree_matches_regeneration + test_wheel_bundles_service_templates_under_size_ceiling pass;mypy clean"
       ],
       "title": "fix: regenerate state schema + autogen + raise wheel ceiling",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 58400,
       "worktree_id": null
     }
   },
