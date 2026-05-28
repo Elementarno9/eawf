@@ -168,3 +168,32 @@ def test_natural_key_handles_empty_and_pure_alpha() -> None:
     # No digit runs: the key is a single lower-cased string chunk.
     assert ids.natural_key("") == ("",)
     assert ids.natural_key("ABC") == ("abc",)
+
+
+# ---- normalize_to_project_code ---------------------------------------------
+
+
+def test_normalize_to_project_code_uppercases_and_dashes() -> None:
+    # Successful normalization: lowercase, spaces, and underscores collapse to
+    # an uppercase dash-canonical project code (covers the success-return).
+    assert ids.normalize_to_project_code("ao_server") == "AO-SERVER"
+    assert ids.normalize_to_project_code("cp patch") == "CP-PATCH"
+    assert ids.normalize_to_project_code("QR") == "QR"
+
+
+def test_normalize_to_project_code_rejects_invalid() -> None:
+    # Names that survive normalization but fail the project-code grammar
+    # raise ``ValueError`` with the offending candidate in the message.
+    with pytest.raises(ValueError, match="cannot derive valid project_code"):
+        ids.normalize_to_project_code("1q")
+    with pytest.raises(ValueError, match="cannot derive valid project_code"):
+        ids.normalize_to_project_code("")
+
+
+def test_allocate_next_phase_id_ignores_non_phase_strings() -> None:
+    # The ``existing`` set may contain non-phase ids (the caller passes
+    # ``state.phases`` keys which are pure phase ids, but the contract is
+    # forgiving). Strings that fail :data:`RE_PHASE` are skipped so
+    # allocation still picks the smallest free phase id.
+    existing = {"P01", "P02", "not-a-phase", "P13-I04-W01"}
+    assert ids.allocate_next_phase_id(existing) == "P03"

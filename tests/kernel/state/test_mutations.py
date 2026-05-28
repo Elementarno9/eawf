@@ -26,13 +26,20 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.enums import Confidence, MemoryStatus, MemoryTier
-from eawf.kernel.state.models import MemorySummary, State
+from eawf.kernel.state.enums import (
+    Confidence,
+    DecisionStatus,
+    MemoryStatus,
+    MemoryTier,
+)
+from eawf.kernel.state.models import Decision, MemorySummary, State
 from eawf.kernel.state.mutations import (
+    DecisionMutationError,
     MemoryAddPayload,
     MemoryMutationError,
     Mutation,
     MutationKind,
+    apply_decision_obsolete,
     apply_memory_add,
     apply_memory_prune,
     apply_memory_review,
@@ -519,3 +526,172 @@ def test_replay_round_trips_five_memory_mutations() -> None:
     assert revalidated.memory_index["MEM-A2"].promoted_to_artifact_id == "MEM-A"
     assert revalidated.memory_index["MEM-B"].status == MemoryStatus.PRUNED
     assert revalidated.memory_index["MEM-A"].tier == MemoryTier.ARCHIVAL
+
+
+# ---- MEMORY_UPDATE branch coverage -----------------------------------------
+
+
+def test_memory_update_summary_field_patched() -> None:
+    # ``summary`` is the first conditional branch in ``apply_memory_update``;
+    # the existing patches-fields test covers ``confidence`` + ``tier`` only.
+    state = _state()
+    _seed_entry(state)
+    mutation = _mutation(
+        MutationKind.MEMORY_UPDATE,
+        scope_id="MEM-20260527-01",
+        id="MEM-20260527-01",
+        summary="updated summary text",
+    )
+    apply_memory_update(state, mutation)
+    assert state.memory_index is not None
+    assert state.memory_index["MEM-20260527-01"].summary == "updated summary text"
+
+
+def test_memory_update_status_field_patched() -> None:
+    # Pins the ``payload.status is not None`` branch (line 333-334).
+    state = _state()
+    _seed_entry(state, status=MemoryStatus.ACTIVE)
+    mutation = _mutation(
+        MutationKind.MEMORY_UPDATE,
+        scope_id="MEM-20260527-01",
+        id="MEM-20260527-01",
+        status=MemoryStatus.STALE.value,
+    )
+    apply_memory_update(state, mutation)
+    assert state.memory_index is not None
+    assert state.memory_index["MEM-20260527-01"].status == MemoryStatus.STALE
+
+
+def test_memory_update_review_due_set_without_clear() -> None:
+    # Pins the ``elif payload.review_due is not None`` branch (line 337-338);
+    # the existing test only covers the ``review_due_clear=True`` arm.
+    state = _state()
+    _seed_entry(state, review_due=None)
+    future = datetime(2026, 9, 1, tzinfo=UTC)
+    mutation = _mutation(
+        MutationKind.MEMORY_UPDATE,
+        scope_id="MEM-20260527-01",
+        id="MEM-20260527-01",
+        review_due=future.isoformat(),
+    )
+    apply_memory_update(state, mutation)
+    assert state.memory_index is not None
+    assert state.memory_index["MEM-20260527-01"].review_due == future
+
+
+def test_memory_update_promoted_to_artifact_id_patched() -> None:
+    # Pins the ``payload.promoted_to_artifact_id is not None`` branch
+    # (line 341-342) — the last optional field in ``apply_memory_update``.
+    state = _state()
+    _seed_entry(state)
+    mutation = _mutation(
+        MutationKind.MEMORY_UPDATE,
+        scope_id="MEM-20260527-01",
+        id="MEM-20260527-01",
+        promoted_to_artifact_id="ART-20260528-promoted",
+    )
+    apply_memory_update(state, mutation)
+    assert state.memory_index is not None
+    entry = state.memory_index["MEM-20260527-01"]
+    assert entry.promoted_to_artifact_id == "ART-20260528-promoted"
+
+
+def test_memory_update_with_no_supplied_fields_is_noop() -> None:
+    """Pins the ``if updates:`` False branch (line 343->345) — no patch."""
+    state = _state()
+    original = _seed_entry(state, confidence=Confidence.MEDIUM)
+    # Only ``id`` supplied; every optional field defaults to ``None``, so
+    # ``updates`` is empty and the index entry is not rewritten.
+    mutation = _mutation(
+        MutationKind.MEMORY_UPDATE,
+        scope_id="MEM-20260527-01",
+        id="MEM-20260527-01",
+    )
+    apply_memory_update(state, mutation)
+    assert state.memory_index is not None
+    entry = state.memory_index["MEM-20260527-01"]
+    # Same object identity preserved — model_copy was not invoked.
+    assert entry is original
+    assert entry.confidence == Confidence.MEDIUM
+
+
+# ---- DECISION_OBSOLETE ------------------------------------------------------
+
+
+def _seed_decision(
+    state: State,
+    *,
+    decision_id: str = "D01",
+    status: DecisionStatus = DecisionStatus.ACTIVE,
+) -> Decision:
+    """Seed *state* with one :class:`Decision` and return it."""
+    decision = Decision(
+        id=decision_id,
+        scope_id="ABC",
+        title=f"{decision_id} title",
+        rationale="why",
+        status=status,
+        created_at=_now(),
+    )
+    if state.decisions is None:
+        state.decisions = {}
+    state.decisions[decision_id] = decision
+    return decision
+
+
+def test_decision_obsolete_flips_active_to_obsolete() -> None:
+    state = _state()
+    _seed_decision(state)
+    obsoleted_at = datetime(2026, 6, 1, tzinfo=UTC)
+    mutation = _mutation(
+        MutationKind.DECISION_OBSOLETE,
+        scope_id="D01",
+        id="D01",
+        obsoleted_at=obsoleted_at.isoformat(),
+    )
+    apply_decision_obsolete(state, mutation)
+    assert state.decisions is not None
+    row = state.decisions["D01"]
+    assert row.status == DecisionStatus.OBSOLETE
+    assert row.obsoleted_at == obsoleted_at
+
+
+def test_decision_obsolete_rejects_unknown_id() -> None:
+    """Pins line 499 — ``existing is None`` raises ``DecisionMutationError``."""
+    state = _state()
+    mutation = _mutation(
+        MutationKind.DECISION_OBSOLETE,
+        scope_id="D-missing",
+        id="D-missing",
+        obsoleted_at=_now().isoformat(),
+    )
+    with pytest.raises(DecisionMutationError, match="unknown decision"):
+        apply_decision_obsolete(state, mutation)
+
+
+def test_decision_obsolete_rejects_already_obsolete() -> None:
+    """Pins line 501 — already-OBSOLETE row rejects with a distinct error."""
+    state = _state()
+    _seed_decision(state, status=DecisionStatus.OBSOLETE)
+    mutation = _mutation(
+        MutationKind.DECISION_OBSOLETE,
+        scope_id="D01",
+        id="D01",
+        obsoleted_at=_now().isoformat(),
+    )
+    with pytest.raises(DecisionMutationError, match="already obsolete"):
+        apply_decision_obsolete(state, mutation)
+
+
+def test_decision_obsolete_rejects_non_active_status() -> None:
+    """Pins the ``status != ACTIVE`` branch (the SUPERSEDED / REVERSED arm)."""
+    state = _state()
+    _seed_decision(state, status=DecisionStatus.SUPERSEDED)
+    mutation = _mutation(
+        MutationKind.DECISION_OBSOLETE,
+        scope_id="D01",
+        id="D01",
+        obsoleted_at=_now().isoformat(),
+    )
+    with pytest.raises(DecisionMutationError, match="cannot obsolete decision"):
+        apply_decision_obsolete(state, mutation)

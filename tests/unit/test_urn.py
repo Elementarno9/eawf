@@ -203,3 +203,16 @@ def test_build_artifact_id_with_slash_allowed() -> None:
 def test_build_store_id_with_slash_allowed() -> None:
     built = urn.build("store", owner="QR", id="executor_report/AR-001")
     assert built == "urn:eawf:v1:store:QR/executor_report/AR-001"
+
+
+def test_parse_rejects_empty_owner_before_slash() -> None:
+    """A URN whose owner is empty BEFORE the ``/`` is rejected.
+
+    Distinct from the ``empty URN owner (no rest segment)`` error: this
+    URN has a non-empty ``rest`` (``/SOMETHING``) so the regex matches,
+    but the ``rest.partition("/")`` yields an empty owner string. The
+    error message marks the empty-before-slash branch so callers can
+    distinguish it from the no-rest variant.
+    """
+    with pytest.raises(ValueError, match="empty before slash"):
+        urn.parse("urn:eawf:v1:repo:/something")
