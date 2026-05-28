@@ -139,6 +139,8 @@ def check_source(source: str) -> list[DesignProvenanceViolation]:
             context="comment",
         )
     for node in _docstring_nodes(source):
+        if not isinstance(node.value, str):
+            continue
         _append_violation(
             violations,
             text=node.value,

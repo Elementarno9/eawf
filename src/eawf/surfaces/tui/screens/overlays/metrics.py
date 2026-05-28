@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -309,7 +309,7 @@ def parse_metrics_args(args: str) -> MetricsArgs:
         if token == "--window" and index + 1 < len(tokens):
             candidate = tokens[index + 1]
             if candidate in METRIC_WINDOWS:
-                window = cast(MetricsWindow, candidate)
+                window = candidate
             index += 2
             continue
         if token == "--scope" and index + 1 < len(tokens):

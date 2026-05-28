@@ -620,9 +620,9 @@ def expected_paths(
     paths: dict[str, Path] = {}
     for spec in SKILL_REGISTRY:
         paths[f"plugin.codex.skill.{spec.skill_name}"] = _skill_target(plugin_root, spec)
-    for spec in AGENT_REGISTRY:
-        paths[f"plugin.codex.agent.{spec.role}"] = _agent_target(
-            target_dir, spec, scope=scope, home=home
+    for agent_spec in AGENT_REGISTRY:
+        paths[f"plugin.codex.agent.{agent_spec.role}"] = _agent_target(
+            target_dir, agent_spec, scope=scope, home=home
         )
     for hook_spec in HOOK_REGISTRY:
         paths[f"plugin.codex.hook.{hook_spec.event_type.value}"] = _hook_target(

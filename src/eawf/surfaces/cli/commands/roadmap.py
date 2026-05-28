@@ -35,7 +35,7 @@ import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import orjson
 import typer
@@ -744,7 +744,7 @@ def roadmap_revise_cmd(
             flags=flags,
         )
         return
-    intent = intent_result if intent_result is not None else None
+    intent = cast("IntentBrief | None", intent_result)
 
     try:
         state_path = resolve_state_path(flags.workspace)

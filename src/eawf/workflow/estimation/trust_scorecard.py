@@ -238,7 +238,12 @@ def _closed_waves_for_window(state: State, window: TrustWindow, *, now: datetime
     ]
     if window.kind == "30d":
         cutoff = now - timedelta(days=30)
-        return {wave.id for wave in closed if wave.closed_at >= cutoff}
+        recent: set[str] = set()
+        for wave in closed:
+            closed_at = wave.closed_at
+            if closed_at is not None and closed_at >= cutoff:
+                recent.add(wave.id)
+        return recent
     if window.kind == "waves":
         earliest = datetime.min.replace(tzinfo=UTC)
         ordered = sorted(closed, key=lambda wave: wave.closed_at or earliest)

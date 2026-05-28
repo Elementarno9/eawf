@@ -41,7 +41,7 @@ import os
 import socket
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 
 from textual.app import App
 from textual.binding import Binding, BindingType
@@ -391,7 +391,7 @@ class EaApp(App[None]):
         pauses = self._open_pauses_for_state(new_state)
         open_pause_count = len(pauses)
         self._toast_emitter.emit(
-            self,
+            cast(Any, self),
             self._last_state,
             new_state,
             prev_open_pause_count=self._last_open_pause_count,
@@ -622,7 +622,7 @@ class EaApp(App[None]):
         matched = list(matches)
         if not matched:
             return
-        banner = matched[0]
+        banner = cast(Static, matched[0])
         if self.degraded:
             banner.set_class(False, DEGRADED_BANNER_HIDDEN_CLASS)
             banner.update(self._degraded_banner_message())

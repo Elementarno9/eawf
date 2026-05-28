@@ -7,6 +7,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import cast
 
 from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, DispatchNote
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
@@ -214,8 +215,11 @@ def error_kind_by_attempt_from_store(
         for attempt_no, session in wave.sessions.items()
         if session.session_id
     }
-    for row in store.fetch_all("telemetry_sessions", TelemetrySession):
-        session = row
+    telemetry_sessions = cast(
+        list[TelemetrySession],
+        store.fetch_all("telemetry_sessions", TelemetrySession),
+    )
+    for session in telemetry_sessions:
         if session.wave_id != wave.id:
             continue
         attempt_no = _parse_attempt_id(session.attempt_id)
@@ -225,8 +229,11 @@ def error_kind_by_attempt_from_store(
     kinds_by_attempt: dict[int, list[str]] = {}
     if not attempt_by_session_id:
         return {}
-    for row in store.fetch_all("telemetry_tool_calls", TelemetryToolCall):
-        call = row
+    telemetry_tool_calls = cast(
+        list[TelemetryToolCall],
+        store.fetch_all("telemetry_tool_calls", TelemetryToolCall),
+    )
+    for call in telemetry_tool_calls:
         if not call.is_error:
             continue
         attempt_no = attempt_by_session_id.get(call.session_id)
