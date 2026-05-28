@@ -2746,7 +2746,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P28-I03-W50"
+    ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5993,6 +5995,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W49",
       "updated_at": "2026-05-28T11:48:41.922885Z"
+    },
+    "P28-I03-W50": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W50-bucket-20260528T120420Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W50",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W50",
+      "updated_at": "2026-05-28T12:04:20.419531Z"
     }
   },
   "goals": {
@@ -7011,7 +7026,8 @@
         "P28-I03-W47",
         "P28-I03-W39",
         "P28-I03-W48",
-        "P28-I03-W49"
+        "P28-I03-W49",
+        "P28-I03-W50"
       ]
     }
   },
@@ -7617,7 +7633,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T11:50:45.374266Z",
+  "updated_at": "2026-05-28T12:04:20.419840Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25058,7 +25074,9 @@
     },
     "P28-I03-W49": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P28-I03-W50"
+      ],
       "claim_session_id": "codex-p28-i03-w49",
       "closed_at": "2026-05-28T11:50:45.373947Z",
       "commit": "cc9044e6daa3b375153f5bfeaae30442e780ad86",
@@ -25090,6 +25108,43 @@
         "full pytest and mypy unblock"
       ],
       "title": "finish verification repairs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "codex-p28-i03-w50",
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W49"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/phase.py",
+        "tests/golden/subagent_spec/**",
+        "tests/unit/test_plugin_doctor_strict.py",
+        "tests/integration/test_cli_lifecycle.py",
+        "tests/integration/test_phase2_acceptance.py"
+      ],
+      "id": "P28-I03-W50",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T12:04:19.869551Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "full pytest passes",
+        "role contract goldens are unwrapped",
+        "ship gate audit evidence is accepted"
+      ],
+      "title": "finish full-suite repairs",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
