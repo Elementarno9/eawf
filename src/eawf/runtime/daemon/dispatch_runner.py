@@ -84,6 +84,10 @@ from eawf.runtime.lock import portalock
 from eawf.workflow.agent_report.store import append_agent_report
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle.wave import start_wave
+from eawf.workflow.verify.dispatch_close import (
+    DispatchCloseBlockedError,
+    verify_close_readiness,
+)
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods import MethodContext
@@ -660,6 +664,13 @@ def emit_agent_end_report(
             keys off the session role).
         eawf.workflow.agent_report.store.AgentReportScrubError: When the report
             body text contains local or sensitive tokens.
+        DispatchCloseBlockedError: When the post-execution verify gate
+            (:func:`~eawf.workflow.verify.dispatch_close.verify_close_readiness`)
+            refuses the report — e.g. a ``FAIL`` / ``BLOCKED`` verdict
+            or an executor body whose ``wave_id`` disagrees with the
+            dispatched wave. The report has already been persisted at
+            this point; the raise prevents the close path from
+            advancing on an unverified attempt.
     """
     if ctx.state_path is None:
         raise RuntimeError("state_path not configured on daemon context")
@@ -697,6 +708,13 @@ def emit_agent_end_report(
         f"store_kind={result.store_kind} report_id={result.envelope.id!r} "
         f"agent_principal_id={agent_principal_id!r}"
     )
+    # Post-execution verify gate: the report is persisted (so the failed
+    # attempt is recorded on disk), then the runner refuses to advance
+    # the close path when the gate fires. A clean pass returns the
+    # report id; a blocked close raises with the structured reasons.
+    verify_result = verify_close_readiness(wave_id, body)
+    if not verify_result.passed:
+        raise DispatchCloseBlockedError(wave_id=wave_id, result=verify_result)
     return result.envelope.id
 
 
@@ -821,6 +839,15 @@ def run_dispatch(
         A :class:`DispatchResult` naming the serving runtime, its attempt
         id, whether a fallback fired, the emitted C09 event ids, and the
         ``agent_end`` report id (``None`` when no report was emitted).
+
+    Raises:
+        DispatchCloseBlockedError: Propagated from
+            :func:`emit_agent_end_report` when the post-execution
+            verify gate refuses the persisted report (W57). The
+            failure is fail-fast: the C09 events have already been
+            persisted, the token tally has already accrued, and the
+            report row is on disk; the raise stops the close path
+            from advancing past an unverified attempt.
     """
     # Head transition: a dispatched wave moves CLAIMED -> IN_PROGRESS the
     # moment the runner starts driving it, so the wave's persisted status

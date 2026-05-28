@@ -97,7 +97,7 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
    - `uv run pre-commit run --all-files`
    - `uv run mypy src/`
    - `uv run pytest tests/ -q`
-4. Commit with prefix `[P27-W14] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
+4. Commit with prefix `[P27-I03-W14] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
 5. Close the wave through the CLI with the final token tally:
    - `uv run eawf wave close P27-I03-W14 --outcome "<summary>" --tokens-consumed <tokens>`
 

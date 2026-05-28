@@ -94,12 +94,17 @@ logger = logging.getLogger(__name__)
 # settings.json writes; the dispatch adapter exposes ``"claude-code"``
 # at the CLI surface so the two SDK-vs-CLI cousins read symmetrically.
 # This tuple is the source of truth — the CLI layer imports it directly
-# rather than re-declaring the allow-list.
+# rather than re-declaring the allow-list. ``codex`` (D12) shares the
+# claude-code envelope shape: ``prompt`` carries the full Markdown body
+# and MCP wiring rides through the runtime's own config file rather than
+# the envelope, so the dispatch surface stays symmetric.
 _CLI_RUNTIME_CLAUDE_CODE: str = "claude-code"
 _CLI_RUNTIME_CLAUDE_AGENT_SDK: str = "claude-agent-sdk"
+_CLI_RUNTIME_CODEX: str = "codex"
 DISPATCH_RUNTIMES: tuple[str, ...] = (
     _CLI_RUNTIME_CLAUDE_CODE,
     _CLI_RUNTIME_CLAUDE_AGENT_SDK,
+    _CLI_RUNTIME_CODEX,
 )
 _HIDDEN_DECISION_STATUSES: frozenset[DecisionStatus] = frozenset(
     {DecisionStatus.OBSOLETE, DecisionStatus.SUPERSEDED}
@@ -205,7 +210,12 @@ def render_dispatch_envelope(
     # re-project it. The shared spec keeps the two surfaces aligned.
     spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
     prompt = _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
-    if runtime == _CLI_RUNTIME_CLAUDE_CODE:
+    if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX}:
+        # codex shares the claude-code envelope shape: ``prompt`` carries
+        # the full Markdown body and the runtime reads MCP wiring from its
+        # own config file (``.codex/config.toml``, per D12) rather than the
+        # envelope, mirroring how the claude-code agent reads
+        # ``settings.json`` on disk.
         return DispatchEnvelope(
             runtime=runtime,
             wave_id=wave_id,

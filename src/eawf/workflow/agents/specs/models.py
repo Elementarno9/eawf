@@ -371,8 +371,7 @@ class SubagentSpec(_SpecModel):
         return "\n".join(lines)
 
     def _render_workflow(self) -> str:
-        phase_segment, wave_segment = _phase_wave_segments(self.wave_id)
-        commit_prefix = f"[{phase_segment}-{wave_segment}]"
+        commit_prefix = _commit_prefix_for_wave(self.wave_id, self.iter_id)
         return (
             "## Workflow\n"
             "\n"
@@ -509,6 +508,45 @@ def _phase_wave_segments(wave_id: str) -> tuple[str, str]:
     if len(parts) < 3:
         return wave_id, "WXX"
     return parts[0], parts[2]
+
+
+def _commit_prefix_for_wave(wave_id: str, iter_id: str) -> str:
+    """Return the commit prefix bracket for *wave_id* under *iter_id*.
+
+    Implements the AGENTS ``commit-prefix`` rule: iter ``I01`` drops the
+    iter segment to read ``[P<NN>-W<NN>]``; iter ``I02`` and later carry
+    the iter segment as ``[P<NN>-I<NN>-W<NN>]`` so the bracket attribution
+    is unambiguous once a phase opens its second iter.
+
+    The helper reads :attr:`SubagentSpec.iter_id` rather than re-splitting
+    the wave id because the wave id alone cannot disambiguate
+    ``P10-I02-W03`` from a (hand-crafted) ``P10-X-W03`` whose iter is
+    actually I04 — the iter id is the canonical source.
+
+    Args:
+        wave_id: The wave id. A malformed id (fewer than three
+            ``-``-joined parts) falls back to the bare wave id.
+        iter_id: The wave's parent iter id (``P<NN>-I<NN>``). A
+            malformed id falls back to ``I01`` semantics so the prefix
+            stays valid against the lint.
+
+    Returns:
+        The bracketed commit prefix, e.g. ``"[P28-W57]"`` for an
+        I01 wave or ``"[P28-I03-W57]"`` for an I03 wave.
+    """
+    phase_segment, wave_segment = _phase_wave_segments(wave_id)
+    iter_segment = _iter_segment(iter_id)
+    if iter_segment is None or iter_segment == "I01":
+        return f"[{phase_segment}-{wave_segment}]"
+    return f"[{phase_segment}-{iter_segment}-{wave_segment}]"
+
+
+def _iter_segment(iter_id: str) -> str | None:
+    """Return the ``I<NN>`` segment of *iter_id*, or ``None`` when malformed."""
+    parts = iter_id.split("-")
+    if len(parts) < 2:
+        return None
+    return parts[1]
 
 
 def _display_value(value: object | None) -> str:

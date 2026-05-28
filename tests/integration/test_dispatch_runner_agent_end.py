@@ -39,6 +39,7 @@ from eawf.runtime.daemon.dispatch_runner import (
     run_dispatch,
 )
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
 pytestmark = pytest.mark.integration
 
@@ -324,21 +325,31 @@ def test_emit_agent_end_report_unknown_session_raises(tmp_path: Path) -> None:
 
 
 def test_emit_agent_end_report_explicit_verdict_override(tmp_path: Path) -> None:
-    """An explicit verdict overrides the switched-derived default."""
+    """An explicit verdict overrides the switched-derived default.
+
+    The W57 post-execution verify gate refuses a ``BLOCKED`` verdict,
+    so the call raises :class:`DispatchCloseBlockedError` AFTER the
+    report has been persisted. The persisted row still carries the
+    operator's explicit verdict + confidence — the gate only stops the
+    close path from advancing, it does not unwind the on-disk record.
+    """
     state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
 
-    emit_agent_end_report(
-        ctx,
-        session_id=_SESSION_ID,
-        wave_id=_WAVE_ID,
-        commit_sha="abcdef1",
-        outcome="blocked on missing fixture",
-        runtime="claude",
-        verdict=AgentReportVerdict.BLOCKED,
-        confidence=Confidence.LOW,
-        switched=False,
-    )
+    with pytest.raises(DispatchCloseBlockedError) as excinfo:
+        emit_agent_end_report(
+            ctx,
+            session_id=_SESSION_ID,
+            wave_id=_WAVE_ID,
+            commit_sha="abcdef1",
+            outcome="blocked on missing fixture",
+            runtime="claude",
+            verdict=AgentReportVerdict.BLOCKED,
+            confidence=Confidence.LOW,
+            switched=False,
+        )
+    assert excinfo.value.wave_id == _WAVE_ID
+    assert excinfo.value.result.verdict is AgentReportVerdict.BLOCKED
 
     payload = AgentReportPayload.model_validate(_report_envelope(state_path).payload)
     assert payload.body.verdict is AgentReportVerdict.BLOCKED
