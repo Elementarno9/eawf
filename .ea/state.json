@@ -420,6 +420,18 @@
       "status": "done",
       "updated_at": "2026-05-27T21:19:34.251870Z"
     },
+    "P28-I03-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W21",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W21",
+      "scope_id": "P28-I03-W21",
+      "status": "done",
+      "updated_at": "2026-05-27T22:51:56.477521Z"
+    },
     "P28-I03-W22": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -480,6 +492,42 @@
       "status": "done",
       "updated_at": "2026-05-27T21:42:27.619362Z"
     },
+    "P28-I03-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W27",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W27",
+      "scope_id": "P28-I03-W27",
+      "status": "done",
+      "updated_at": "2026-05-27T22:51:57.203833Z"
+    },
+    "P28-I03-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W28",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W28",
+      "scope_id": "P28-I03-W28",
+      "status": "done",
+      "updated_at": "2026-05-27T22:51:57.897812Z"
+    },
+    "P28-I03-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W29",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W29",
+      "scope_id": "P28-I03-W29",
+      "status": "done",
+      "updated_at": "2026-05-27T23:02:48.319109Z"
+    },
     "P28-I03-W30": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -504,6 +552,18 @@
       "status": "done",
       "updated_at": "2026-05-27T22:05:04.138718Z"
     },
+    "P28-I03-W32": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W32",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W32",
+      "scope_id": "P28-I03-W32",
+      "status": "done",
+      "updated_at": "2026-05-27T22:51:58.581475Z"
+    },
     "P28-I03-W33": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -516,6 +576,30 @@
       "status": "done",
       "updated_at": "2026-05-27T22:01:34.737012Z"
     },
+    "P28-I03-W34": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W34",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W34",
+      "scope_id": "P28-I03-W34",
+      "status": "done",
+      "updated_at": "2026-05-28T00:52:28.705745Z"
+    },
+    "P28-I03-W35": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W35",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W35",
+      "scope_id": "P28-I03-W35",
+      "status": "done",
+      "updated_at": "2026-05-27T22:51:59.264917Z"
+    },
     "P28-I03-W36": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -527,6 +611,138 @@
       "scope_id": "P28-I03-W36",
       "status": "done",
       "updated_at": "2026-05-27T21:30:15.458360Z"
+    },
+    "P28-I03-W37": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W37",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W37",
+      "scope_id": "P28-I03-W37",
+      "status": "done",
+      "updated_at": "2026-05-28T00:52:30.819513Z"
+    },
+    "P28-I03-W38": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W38",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W38",
+      "scope_id": "P28-I03-W38",
+      "status": "done",
+      "updated_at": "2026-05-28T10:58:57.238954Z"
+    },
+    "P28-I03-W39": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W39",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W39",
+      "scope_id": "P28-I03-W39",
+      "status": "done",
+      "updated_at": "2026-05-28T11:07:27.231651Z"
+    },
+    "P28-I03-W40": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W40",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W40",
+      "scope_id": "P28-I03-W40",
+      "status": "done",
+      "updated_at": "2026-05-28T11:00:08.790295Z"
+    },
+    "P28-I03-W41": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W41",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W41",
+      "scope_id": "P28-I03-W41",
+      "status": "done",
+      "updated_at": "2026-05-28T10:56:16.030559Z"
+    },
+    "P28-I03-W42": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W42",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W42",
+      "scope_id": "P28-I03-W42",
+      "status": "done",
+      "updated_at": "2026-05-28T10:56:55.668410Z"
+    },
+    "P28-I03-W43": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W43",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W43",
+      "scope_id": "P28-I03-W43",
+      "status": "done",
+      "updated_at": "2026-05-28T11:00:22.572614Z"
+    },
+    "P28-I03-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W44",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W44",
+      "scope_id": "P28-I03-W44",
+      "status": "done",
+      "updated_at": "2026-05-28T11:00:35.549319Z"
+    },
+    "P28-I03-W45": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W45",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W45",
+      "scope_id": "P28-I03-W45",
+      "status": "done",
+      "updated_at": "2026-05-28T10:57:40.372635Z"
+    },
+    "P28-I03-W46": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W46",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W46",
+      "scope_id": "P28-I03-W46",
+      "status": "done",
+      "updated_at": "2026-05-28T10:57:54.642543Z"
+    },
+    "P28-I03-W47": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W47",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W47",
+      "scope_id": "P28-I03-W47",
+      "status": "done",
+      "updated_at": "2026-05-28T10:58:56.549484Z"
     }
   },
   "agent_sessions": {
@@ -1558,6 +1774,23 @@
       "scope_id": "P28-I01",
       "status": "complete",
       "verdict": "pass"
+    },
+    "P28-I03-audit": {
+      "check_results": [
+        {
+          "details": "Phase 2 stub",
+          "name": "stub",
+          "passed": true
+        }
+      ],
+      "created_at": "2026-05-28T00:57:32.195985Z",
+      "id": "P28-I03-audit",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "P28-I03",
+      "status": "complete",
+      "verdict": "pass"
     }
   },
   "backlog": {
@@ -2489,16 +2722,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I03-W21",
-      "P28-I03-W27",
-      "P28-I03-W28",
-      "P28-I03-W29",
-      "P28-I03-W32",
-      "P28-I03-W35",
-      "P28-I03-W34",
-      "P28-I03-W37"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I03",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5540,7 +5764,7 @@
     },
     "P28-I03-W34": {
       "confidence": "low",
-      "current_store_record_id": "EST-P28-I03-W34-bucket-20260527T224414Z",
+      "current_store_record_id": "EST-P28-I03-W34-bucket-20260527T224921Z",
       "display": "1.0 EU · exp ~30m · pess ~108m",
       "expected_eu": 1.0,
       "expected_minutes": 30.0,
@@ -5549,7 +5773,7 @@
       "pessimistic_minutes": 108.0,
       "reference_class": "bucket:M",
       "scope_id": "P28-I03-W34",
-      "updated_at": "2026-05-27T22:44:14.631756Z"
+      "updated_at": "2026-05-27T22:49:21.925256Z"
     },
     "P28-I03-W35": {
       "confidence": "low",
@@ -5579,7 +5803,7 @@
     },
     "P28-I03-W37": {
       "confidence": "low",
-      "current_store_record_id": "EST-P28-I03-W37-bucket-20260527T224415Z",
+      "current_store_record_id": "EST-P28-I03-W37-bucket-20260527T224922Z",
       "display": "1.0 EU · exp ~30m · pess ~108m",
       "expected_eu": 1.0,
       "expected_minutes": 30.0,
@@ -5588,7 +5812,137 @@
       "pessimistic_minutes": 108.0,
       "reference_class": "bucket:M",
       "scope_id": "P28-I03-W37",
-      "updated_at": "2026-05-27T22:44:15.185318Z"
+      "updated_at": "2026-05-27T22:49:22.458740Z"
+    },
+    "P28-I03-W38": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W38-bucket-20260528T104356Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P28-I03-W38",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P28-I03-W38",
+      "updated_at": "2026-05-28T10:43:56.247450Z"
+    },
+    "P28-I03-W39": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W39-bucket-20260528T110726Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P28-I03-W39",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P28-I03-W39",
+      "updated_at": "2026-05-28T11:07:26.599862Z"
+    },
+    "P28-I03-W40": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W40-bucket-20260528T104438Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P28-I03-W40",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P28-I03-W40",
+      "updated_at": "2026-05-28T10:44:38.655403Z"
+    },
+    "P28-I03-W41": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W41-bucket-20260528T104439Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W41",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W41",
+      "updated_at": "2026-05-28T10:44:39.176894Z"
+    },
+    "P28-I03-W42": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W42-bucket-20260528T104439Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P28-I03-W42",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P28-I03-W42",
+      "updated_at": "2026-05-28T10:44:39.686579Z"
+    },
+    "P28-I03-W43": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W43-bucket-20260528T104440Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P28-I03-W43",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P28-I03-W43",
+      "updated_at": "2026-05-28T10:44:40.190490Z"
+    },
+    "P28-I03-W44": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W44-bucket-20260528T104440Z",
+      "display": "3.5 EU · exp ~105m · pess ~378m",
+      "expected_eu": 3.5,
+      "expected_minutes": 105.0,
+      "id": "EST-P28-I03-W44",
+      "pessimistic_eu": 12.6,
+      "pessimistic_minutes": 378.0,
+      "reference_class": "bucket:XL",
+      "scope_id": "P28-I03-W44",
+      "updated_at": "2026-05-28T10:44:40.694780Z"
+    },
+    "P28-I03-W45": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W45-bucket-20260528T104441Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W45",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W45",
+      "updated_at": "2026-05-28T10:44:41.213642Z"
+    },
+    "P28-I03-W46": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W46-bucket-20260528T104441Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W46",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W46",
+      "updated_at": "2026-05-28T10:44:41.728861Z"
+    },
+    "P28-I03-W47": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W47-bucket-20260528T104442Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W47",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W47",
+      "updated_at": "2026-05-28T10:44:42.226580Z"
     }
   },
   "goals": {
@@ -6595,7 +6949,17 @@
         "P28-I03-W35",
         "P28-I03-W36",
         "P28-I03-W37",
-        "P28-I03-W27"
+        "P28-I03-W27",
+        "P28-I03-W38",
+        "P28-I03-W40",
+        "P28-I03-W41",
+        "P28-I03-W42",
+        "P28-I03-W43",
+        "P28-I03-W44",
+        "P28-I03-W45",
+        "P28-I03-W46",
+        "P28-I03-W47",
+        "P28-I03-W39"
       ]
     }
   },
@@ -7201,7 +7565,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-27T22:45:40.760137Z",
+  "updated_at": "2026-05-28T11:07:27.231950Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -23581,8 +23945,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T22:51:56.477521Z",
+      "commit": "43879882553f7914748c0a0c66505f23701196e5",
       "deps": [
         "P28-I02-W09",
         "P28-I03-W01"
@@ -23601,10 +23965,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:32.380002Z",
-      "outcome": null,
+      "outcome": "implemented on current branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "dp tab dropped",
         "d-tab renders NarrativeBundle",
@@ -23783,8 +24147,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T22:51:57.203833Z",
+      "commit": "367faa8406460bed06822d61c3a298cf6af6730b",
       "deps": [
         "P28-I02-W03",
         "P28-I02-W10",
@@ -23802,10 +24166,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:15:00.234934Z",
-      "outcome": null,
+      "outcome": "implemented on current branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "detail-pane d tab shows per-attempt timeline 8 cols",
         "per_wave_attempt_rollup helper added",
@@ -23820,8 +24184,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T22:51:57.897812Z",
+      "commit": "eeb8daf953fd01e968fb8cf1379a50767df9bbb6",
       "deps": [
         "P28-I03-W13",
         "P28-I03-W18"
@@ -23838,10 +24202,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:35.839350Z",
-      "outcome": null,
+      "outcome": "implemented on current branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "roadmap show --md emits 4 EU/hour rows",
         "compute_realistic_wall_clock uses critical-path+queue+inside_pessimistic_share",
@@ -23856,8 +24220,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T23:02:48.319109Z",
+      "commit": "a622e0868146e377e39d98088db94b06968b9fc6",
       "deps": [
         "P28-I03-W13",
         "P28-I03-W18"
@@ -23874,10 +24238,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:36.327683Z",
-      "outcome": null,
+      "outcome": "implemented on current branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "6th tile per-role fit grid",
         "Enter opens drill modal",
@@ -23971,8 +24335,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T22:51:58.581475Z",
+      "commit": "ea0e609c9b6f7c599f84cec1fd2d17a94ea8778d",
       "deps": [
         "P28-I03-W10",
         "P28-I02-W12"
@@ -23991,10 +24355,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:37.846266Z",
-      "outcome": null,
+      "outcome": "implemented on current branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "init wizard overlay lands",
         "init-needed flag on user scope",
@@ -24051,7 +24415,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260528T000000Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-28T00:52:28.705745Z",
       "commit": null,
       "deps": [
         "P28-I03-W33",
@@ -24071,10 +24435,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:38.881901Z",
-      "outcome": null,
+      "outcome": "implemented",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "_validate_phase_closable extended",
         "commit lint accepts (release=v...) annotation",
@@ -24084,14 +24448,14 @@
       "title": "feat: phase-close release pre-flight gate + post-merge auto-tag",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P28-I03-W34-1779921939"
+      "worktree_id": "WT-P28-I03-W34-1779922304"
     },
     "P28-I03-W35": {
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-27T22:51:59.264917Z",
+      "commit": "0f6730ef08d876db7e579328473fe9b154da004d",
       "deps": [
         "P28-I03-W13"
       ],
@@ -24109,10 +24473,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:39.384396Z",
-      "outcome": null,
+      "outcome": "implemented on current branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "link_wrap module ships 14 per-type regex",
         "14 action handlers",
@@ -24163,7 +24527,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260528T000000Z-operator-claude",
-      "closed_at": null,
+      "closed_at": "2026-05-28T00:52:30.819513Z",
       "commit": null,
       "deps": [
         "P28-I02-W11",
@@ -24183,10 +24547,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-26T18:14:40.376171Z",
-      "outcome": null,
+      "outcome": "implemented",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "RoadmapPlan strict pydantic model lands",
         "--from-plan accepts YAML/JSON manifest",
@@ -24197,7 +24561,389 @@
       "title": "feat: roadmap propose --from-plan stages iters+waves atomically",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P28-I03-W37-1779921940"
+      "worktree_id": "WT-P28-I03-W37-1779922314"
+    },
+    "P28-I03-W38": {
+      "agent_role": "reviewer",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T10:58:57.238954Z",
+      "commit": "f9ac16f89995e5d64b6260ca0542241ec4ceb557",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "docs/*"
+      ],
+      "id": "P28-I03-W38",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T01:07:29.831506Z",
+      "outcome": "docs under docs refreshed for current TUI architecture and config.yaml init output",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "docs under docs/* are fresh and current; stale entries are updated or removed"
+      ],
+      "title": "chore: review stale docs in I03 scope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T11:07:27.231651Z",
+      "commit": "6a84c8e57cb818ee191f37274fd37fc2f88ee452",
+      "deps": [
+        "P28-I03-W38",
+        "P28-I03-W40",
+        "P28-I03-W41",
+        "P28-I03-W42",
+        "P28-I03-W43",
+        "P28-I03-W44",
+        "P28-I03-W45",
+        "P28-I03-W46",
+        "P28-I03-W47"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/skills/ship.py",
+        "src/eawf/workflow/lifecycle/phase.py",
+        "src/eawf/workflow/skills/audit.py",
+        ".ea/state.json",
+        ".ea/store/audit.jsonl"
+      ],
+      "id": "P28-I03-W39",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:38.144293Z",
+      "outcome": "lifecycle close blockers fixed; targeted ship audit and phase tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "ship cannot pass with open iters or waves",
+        "P28 I02 and I03 have real audit evidence",
+        "phase close requires real audit artifact"
+      ],
+      "title": "fix: close P28 lifecycle blockers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W40": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T11:00:08.790295Z",
+      "commit": "06f8b9919639a668c074d7dc44a5906596a78a99",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/worktree.py",
+        "src/eawf/runtime/worktree/wave_land.py",
+        "src/eawf/surfaces/cli/commands/evidence.py",
+        "src/eawf/surfaces/cli/commands/calibrate.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/methods/evidence.py",
+        "tests/cli/test_evidence_attest.py",
+        "tests/cli/test_lifecycle_daemon_routing.py",
+        "tests/unit/test_variance_calibrate.py"
+      ],
+      "id": "P28-I03-W40",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:33.985261Z",
+      "outcome": "daemon-authority write paths routed through daemon surfaces; targeted daemon and evidence tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "wave land state mutations use daemon RPC",
+        "evidence direct write requires CI or recovery",
+        "calibrate apply writes through daemon config path"
+      ],
+      "title": "fix: route daemon-authority writes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W41": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T10:56:16.030559Z",
+      "commit": "1ae94cb9f7bd3f65a48f5fa6ec5fc9f7b1040aef",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/argv_policy.py",
+        "tests/runtime/sandbox/test_argv_policy.py"
+      ],
+      "id": "P28-I03-W41",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:34.505719Z",
+      "outcome": "sandbox wrapper argv policy now validates effective commands; targeted argv policy tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "uv run bash -c is rejected",
+        "uv run npm run denied wrappers are scoped correctly",
+        "wrapper recursion validates effective command"
+      ],
+      "title": "fix: harden sandbox wrapper argv policy",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W42": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T10:56:55.668410Z",
+      "commit": "7783d068557a5db5790482b52af50e4e0160c45f",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/estimation/trust_scorecard.py",
+        "src/eawf/observability/telemetry/metrics_projection.py",
+        "tests/workflow/estimation/test_trust_scorecard.py",
+        "tests/observability/telemetry/test_metrics_projection.py"
+      ],
+      "id": "P28-I03-W42",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:35.030831Z",
+      "outcome": "actuals trust scorecard and metrics scope consistency fixed; targeted trust and telemetry tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "auto actuals are visible to trust readers",
+        "trust scorecard 30d filters labels",
+        "metrics scope filters switchover burn and elapsed consistently"
+      ],
+      "title": "fix: reconcile actuals trust metrics scope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W43": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T11:00:22.572614Z",
+      "commit": "69eadef2f948908f6d0f4ec30f1f23ba48d6aa01",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/phase.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_phase.py",
+        "src/eawf/surfaces/cli/commands/release.py",
+        ".github/workflows/phase-release.yaml",
+        ".github/workflows/ci.yaml",
+        "tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "tests/unit/test_lifecycle_phase_prepare_close.py",
+        "tests/integration/test_cli_lifecycle.py"
+      ],
+      "id": "P28-I03-W43",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:35.555137Z",
+      "outcome": "release close automation completed; lifecycle commit-lint and workflow tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "phase close enforces release preflight",
+        "release annotation or version check is tested",
+        "phase-release workflow and CI release-readiness job ship"
+      ],
+      "title": "feat: complete release close automation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W44": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T11:00:35.549319Z",
+      "commit": "d773be7af24e36e87eb55ca8db99f5f96a6cc556",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/kernel/spec/roadmap_plan.py",
+        "src/eawf/workflow/lifecycle/transitions.py",
+        "tests/integration/test_cli_roadmap.py",
+        "tests/workflow/lifecycle/test_transitions.py"
+      ],
+      "id": "P28-I03-W44",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:36.064814Z",
+      "outcome": "roadmap propose from-plan implemented; targeted roadmap and transition tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "RoadmapPlan strict model lands",
+        "--from-plan accepts YAML and JSON",
+        "single transaction stages phase iters and waves",
+        "validation failure leaves state unchanged"
+      ],
+      "title": "feat: implement roadmap propose from plan",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W45": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T10:57:40.372635Z",
+      "commit": "a02c383cdfe4dba229ae1a6c2d98f55877bc7798",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/opencode/plugin_install.py",
+        "src/eawf/runtime/runtimes/codex/plugin_install.py",
+        "src/eawf/workflow/agents/specs/roles.py",
+        "src/eawf/workflow/agents/specs/models.py",
+        "tests/unit/test_plugin_install_opencode.py",
+        "tests/unit/test_role_contract_projection.py",
+        "tests/unit/test_subagent_roles.py",
+        "tests/golden/subagent_spec/**"
+      ],
+      "id": "P28-I03-W45",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:36.594106Z",
+      "outcome": "runtime plugin role contracts polished; targeted plugin and role contract tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "OpenCode managed agents and commands protect drift",
+        "role placement text matches emitted paths",
+        "SubagentSpec renders model tools memory and report schema"
+      ],
+      "title": "fix: polish runtime plugin role contracts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W46": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T10:57:54.642543Z",
+      "commit": "99be761db4ba50d13c8d729dca916ab4778be8ce",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/workflow/agent_report/rollup.py",
+        "tests/tui/test_overlays_metrics.py",
+        "tests/tui/test_reference_links.py",
+        "tests/tui/test_overlays_detail.py"
+      ],
+      "id": "P28-I03-W46",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:37.106215Z",
+      "outcome": "TUI interaction polish shipped; targeted metrics reference and detail tests passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "variance tile opens bucket drilldown",
+        "reference back forward keeps modal depth stable",
+        "wave detail shows blocked attempts and error kinds"
+      ],
+      "title": "fix: polish TUI interactions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W47": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W39"
+      ],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T10:58:56.549484Z",
+      "commit": "f9ac16f89995e5d64b6260ca0542241ec4ceb557",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/architecture/tui.md",
+        "docs/tutorial/quickstart.md",
+        "docs/reference/**/*.md",
+        "docs/reference/autogen/**/*.json"
+      ],
+      "id": "P28-I03-W47",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T10:44:37.628240Z",
+      "outcome": "P28 docs freshness polished; stale TUI and profile.yaml references refreshed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "TUI architecture docs reference current surfaces package",
+        "quickstart references config.yaml not profile.yaml",
+        "docs freshness wave W38 criteria are satisfied"
+      ],
+      "title": "docs: polish P28 docs freshness",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
@@ -26792,10 +27538,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w29",
       "created_at": "2026-05-27T22:03:16.323091Z",
       "id": "WT-P28-I03-W29-1779919396",
-      "merged_commit": null,
+      "merged_commit": "a622e08",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w29",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W29"
     },
     "WT-P28-I03-W30-1779916888": {
@@ -26825,10 +27571,10 @@
       "branch": "feature/eawf-v0.4-p28-i03-w32",
       "created_at": "2026-05-27T22:03:17.529130Z",
       "id": "WT-P28-I03-W32-1779919397",
-      "merged_commit": null,
+      "merged_commit": "ea0e609",
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w32",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P28-I03-W32"
     },
     "WT-P28-I03-W33-1779918616": {
@@ -26842,26 +27588,15 @@
       "status": "merged",
       "wave_id": "P28-I03-W33"
     },
-    "WT-P28-I03-W34-1779921874": {
+    "WT-P28-I03-W34-1779922304": {
       "base_branch": "feature/eawf-v0.4-p28",
       "branch": "feature/eawf-v0.1-p28-w34",
-      "created_at": "2026-05-27T22:44:34.615445Z",
-      "id": "WT-P28-I03-W34-1779921874",
-      "merged_commit": "ea0e609",
-      "owner_session_id": "SES-20260528T000000Z-operator-claude",
+      "created_at": "2026-05-27T22:51:44.934262Z",
+      "id": "WT-P28-I03-W34-1779922304",
+      "merged_commit": "a622e08",
+      "owner_session_id": null,
       "path": ".ea/worktrees/p28-w34",
       "status": "merged",
-      "wave_id": "P28-I03-W34"
-    },
-    "WT-P28-I03-W34-1779921939": {
-      "base_branch": "feature/eawf-v0.4-p28",
-      "branch": "feature/eawf-v0.4-p28-i03-w34",
-      "created_at": "2026-05-27T22:45:39.912098Z",
-      "id": "WT-P28-I03-W34-1779921939",
-      "merged_commit": null,
-      "owner_session_id": "SES-20260528T000000Z-operator-claude",
-      "path": ".ea/worktrees/p28-i03-w34",
-      "status": "active",
       "wave_id": "P28-I03-W34"
     },
     "WT-P28-I03-W35-1779919398": {
@@ -26886,26 +27621,15 @@
       "status": "merged",
       "wave_id": "P28-I03-W36"
     },
-    "WT-P28-I03-W37-1779921875": {
+    "WT-P28-I03-W37-1779922314": {
       "base_branch": "feature/eawf-v0.4-p28",
       "branch": "feature/eawf-v0.1-p28-w37",
-      "created_at": "2026-05-27T22:44:35.555693Z",
-      "id": "WT-P28-I03-W37-1779921875",
-      "merged_commit": "ea0e609",
-      "owner_session_id": "SES-20260528T000000Z-operator-claude",
+      "created_at": "2026-05-27T22:51:54.149305Z",
+      "id": "WT-P28-I03-W37-1779922314",
+      "merged_commit": "a622e08",
+      "owner_session_id": null,
       "path": ".ea/worktrees/p28-w37",
       "status": "merged",
-      "wave_id": "P28-I03-W37"
-    },
-    "WT-P28-I03-W37-1779921940": {
-      "base_branch": "feature/eawf-v0.4-p28",
-      "branch": "feature/eawf-v0.4-p28-i03-w37",
-      "created_at": "2026-05-27T22:45:40.760137Z",
-      "id": "WT-P28-I03-W37-1779921940",
-      "merged_commit": null,
-      "owner_session_id": "SES-20260528T000000Z-operator-claude",
-      "path": ".ea/worktrees/p28-i03-w37",
-      "status": "active",
       "wave_id": "P28-I03-W37"
     }
   }
