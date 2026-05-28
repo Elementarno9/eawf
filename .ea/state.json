@@ -743,6 +743,18 @@
       "scope_id": "P28-I03-W47",
       "status": "done",
       "updated_at": "2026-05-28T10:58:56.549484Z"
+    },
+    "P28-I03-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W48",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W48",
+      "scope_id": "P28-I03-W48",
+      "status": "done",
+      "updated_at": "2026-05-28T11:28:59.109423Z"
     }
   },
   "agent_sessions": {
@@ -5943,6 +5955,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W47",
       "updated_at": "2026-05-28T10:44:42.226580Z"
+    },
+    "P28-I03-W48": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W48-bucket-20260528T112756Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W48",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W48",
+      "updated_at": "2026-05-28T11:27:56.604910Z"
     }
   },
   "goals": {
@@ -6959,7 +6984,8 @@
         "P28-I03-W45",
         "P28-I03-W46",
         "P28-I03-W47",
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ]
     }
   },
@@ -7565,7 +7591,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T11:07:27.231950Z",
+  "updated_at": "2026-05-28T11:28:59.109750Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -24596,7 +24622,9 @@
     },
     "P28-I03-W39": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P28-I03-W48"
+      ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T11:07:27.231651Z",
       "commit": "6a84c8e57cb818ee191f37274fd37fc2f88ee452",
@@ -24642,7 +24670,8 @@
     "P28-I03-W40": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T11:00:08.790295Z",
@@ -24683,7 +24712,8 @@
     "P28-I03-W41": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T10:56:16.030559Z",
@@ -24717,7 +24747,8 @@
     "P28-I03-W42": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T10:56:55.668410Z",
@@ -24754,7 +24785,8 @@
     "P28-I03-W43": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T11:00:22.572614Z",
@@ -24795,7 +24827,8 @@
     "P28-I03-W44": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T11:00:35.549319Z",
@@ -24833,7 +24866,8 @@
     "P28-I03-W45": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T10:57:40.372635Z",
@@ -24873,7 +24907,8 @@
     "P28-I03-W46": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T10:57:54.642543Z",
@@ -24912,7 +24947,8 @@
     "P28-I03-W47": {
       "agent_role": "executor",
       "blocks": [
-        "P28-I03-W39"
+        "P28-I03-W39",
+        "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T10:58:56.549484Z",
@@ -24941,6 +24977,53 @@
         "docs freshness wave W38 criteria are satisfied"
       ],
       "title": "docs: polish P28 docs freshness",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W48": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "closed_at": "2026-05-28T11:28:59.109423Z",
+      "commit": "3b88c8c73fea723b4c4654f54554ce7cd177c016",
+      "deps": [
+        "P28-I03-W39",
+        "P28-I03-W40",
+        "P28-I03-W41",
+        "P28-I03-W42",
+        "P28-I03-W43",
+        "P28-I03-W44",
+        "P28-I03-W45",
+        "P28-I03-W46",
+        "P28-I03-W47"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/**",
+        "docs/reference/autogen/**",
+        "src/eawf/schemas/state.schema.json",
+        "src/eawf/surfaces/cli/commands/*.py",
+        "src/eawf/workflow/lifecycle/phase.py",
+        "src/eawf/kernel/spec/roadmap_plan.py",
+        "pyproject.toml"
+      ],
+      "id": "P28-I03-W48",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T11:27:56.055976Z",
+      "outcome": "full pytest remediation clusters fixed; targeted failing clusters and pre-commit passed",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "full pytest remediation failures addressed",
+        "pre-commit passes",
+        "targeted failing clusters pass"
+      ],
+      "title": "fix: green polish remediation suite",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
