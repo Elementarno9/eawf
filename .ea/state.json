@@ -2758,7 +2758,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P28-I03-W51"
+    ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -6018,6 +6020,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W50",
       "updated_at": "2026-05-28T12:04:20.419531Z"
+    },
+    "P28-I03-W51": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W51-bucket-20260528T122313Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W51",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W51",
+      "updated_at": "2026-05-28T12:23:13.651296Z"
     }
   },
   "goals": {
@@ -7037,7 +7052,8 @@
         "P28-I03-W39",
         "P28-I03-W48",
         "P28-I03-W49",
-        "P28-I03-W50"
+        "P28-I03-W50",
+        "P28-I03-W51"
       ]
     }
   },
@@ -7643,7 +7659,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T12:09:39.569116Z",
+  "updated_at": "2026-05-28T12:23:13.651580Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25124,7 +25140,9 @@
     },
     "P28-I03-W50": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P28-I03-W51"
+      ],
       "claim_session_id": "codex-p28-i03-w50",
       "closed_at": "2026-05-28T12:09:39.568803Z",
       "commit": "0184347693b6ca87c69016aa8d4f7f35027d757d",
@@ -25156,6 +25174,45 @@
         "ship gate audit evidence is accepted"
       ],
       "title": "finish full-suite repairs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W51": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "codex-p28-i03-w51",
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W50"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/lint/eawf012_design_provenance.py",
+        "src/eawf/runtime/runtimes/codex/plugin_install.py",
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "src/eawf/surfaces/tui/scopes/_zoom.py",
+        "src/eawf/workflow/agent_report/rollup.py",
+        "src/eawf/workflow/estimation/trust_scorecard.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "id": "P28-I03-W51",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T12:23:13.111249Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "mypy src passes",
+        "full pytest remains green"
+      ],
+      "title": "fix mypy verification errors",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
