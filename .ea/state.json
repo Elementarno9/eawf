@@ -804,6 +804,18 @@
       "status": "done",
       "updated_at": "2026-05-28T17:29:32.689559Z"
     },
+    "P28-I03-W54": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 112175,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W54",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W54",
+      "scope_id": "P28-I03-W54",
+      "status": "done",
+      "updated_at": "2026-05-28T18:09:53.046596Z"
+    },
     "P28-I03-W58": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 77492,
@@ -815,6 +827,18 @@
       "scope_id": "P28-I03-W58",
       "status": "done",
       "updated_at": "2026-05-28T18:04:46.342160Z"
+    },
+    "P28-I03-W59": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 54685,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W59",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W59",
+      "scope_id": "P28-I03-W59",
+      "status": "done",
+      "updated_at": "2026-05-28T18:09:47.153003Z"
     }
   },
   "agent_sessions": {
@@ -6152,6 +6176,19 @@
       "scope_id": "P28-I03-W53",
       "updated_at": "2026-05-28T17:23:04.150689Z"
     },
+    "P28-I03-W54": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W54-bucket-20260528T180952Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P28-I03-W54",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P28-I03-W54",
+      "updated_at": "2026-05-28T18:09:52.431070Z"
+    },
     "P28-I03-W58": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I03-W58-bucket-20260528T180445Z",
@@ -6164,6 +6201,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P28-I03-W58",
       "updated_at": "2026-05-28T18:04:45.739690Z"
+    },
+    "P28-I03-W59": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W59-bucket-20260528T180946Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W59",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W59",
+      "updated_at": "2026-05-28T18:09:46.553006Z"
     }
   },
   "goals": {
@@ -7800,7 +7850,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:04:46.342470Z",
+  "updated_at": "2026-05-28T18:09:53.047003Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25440,8 +25490,8 @@
     "P28-I03-W54": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:09:53.046596Z",
       "commit": null,
       "deps": [],
       "description": "P28 status-pane fix per operator review 2026-05-28. D-path (empty-state render) chosen over backfill or full telemetry wiring.",
@@ -25457,16 +25507,16 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T17:49:23.635146Z",
-      "outcome": null,
+      "outcome": "status_pane EFFORT empty-state collapse fixed + daemon WAVE_CLOSE no longer conflates attention_eu/agent_runtime_eu; 132 targeted tests pass; 1223 daemon+tui suite pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "status_pane renders EFFORT --/<planned> when consumed==0 AND every attention_eu/agent_runtime_eu is None;variance line suppressed in empty-state;state.py:498-503 stops conflating attention_eu->agent_runtime_eu (agent_runtime_eu stays None until separate source exists);tests cover both empty-state and populated-state branches"
       ],
       "title": "fix: honest empty-state for actuals/variance + state.py EU conflation",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 112175,
       "worktree_id": null
     },
     "P28-I03-W55": {
@@ -25613,8 +25663,8 @@
       "blocks": [
         "P28-I03-W60"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:09:47.153003Z",
       "commit": null,
       "deps": [],
       "description": "First wave of W52 split: add W24-audited fields as Optional alongside the shipped 5 fields. No consumer changes. Sets the schema base for W60/W61.",
@@ -25628,10 +25678,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T18:03:39.541241Z",
-      "outcome": null,
+      "outcome": "additive IntentBrief schema: 5 W24-audited Optional fields alongside legacy 5; 16 new tests; mypy + intent suite clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "IntentBrief gains 5 optional fields (problem",
         "desired_outcome",
@@ -25641,7 +25691,7 @@
       ],
       "title": "fix: extend IntentBrief schema with W24 audited fields (additive)",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 54685,
       "worktree_id": null
     },
     "P28-I03-W60": {
