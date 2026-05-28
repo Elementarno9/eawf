@@ -851,6 +851,18 @@
       "scope_id": "P28-I03-W59",
       "status": "done",
       "updated_at": "2026-05-28T18:09:47.153003Z"
+    },
+    "P28-I03-W60": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 172686,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W60",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W60",
+      "scope_id": "P28-I03-W60",
+      "status": "done",
+      "updated_at": "2026-05-28T18:35:12.762787Z"
     }
   },
   "agent_sessions": {
@@ -6239,6 +6251,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W59",
       "updated_at": "2026-05-28T18:09:46.553006Z"
+    },
+    "P28-I03-W60": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W60-bucket-20260528T183512Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P28-I03-W60",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P28-I03-W60",
+      "updated_at": "2026-05-28T18:35:12.174256Z"
     }
   },
   "goals": {
@@ -7875,7 +7900,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:25:57.687646Z",
+  "updated_at": "2026-05-28T18:35:12.763115Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25724,8 +25749,8 @@
       "blocks": [
         "P28-I03-W61"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:35:12.762787Z",
       "commit": null,
       "deps": [
         "P28-I03-W59"
@@ -25750,16 +25775,16 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T18:03:53.724641Z",
-      "outcome": null,
+      "outcome": "11 consumers migrated to W24 fields with legacy fallback; back-compat held: 141 in-scope + 279 intent-scope tests pass, full unit+integration 5029 pass with 3 pre-existing failures (schema autogen drift from W59, wheel ceiling +0.08%, both tracked W62)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "render_intent_line + detail rows + lifecycle loggers prefer new fields with fallback to old;new --intent-problem/--intent-desired-outcome/--intent-planned-steps/--intent-risks/--intent-priority-rationale flags added alongside existing --intent-* flags;mypy+pytest clean;backward-compat tests still pass"
       ],
       "title": "fix: migrate IntentBrief consumers to W24 fields with back-compat",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 172686,
       "worktree_id": null
     },
     "P28-I03-W61": {
