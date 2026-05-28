@@ -1,7 +1,6 @@
 
 
 
-
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
             │                                                                                              │
             │  wave P01-I01-W01                                                                            │
@@ -11,8 +10,7 @@
             │                                                                                              │
             │    What                                                                                      │
             │                                                                                              │
-            │    • P01 Bootstrap (active).                                                                 │
-            │    • P01-I01-W01 Implement validate.                                                         │
+            │    • P01-I01-W01 Implement validate (in_progress).                                           │
             │                                                                                              │
             │                                                                                              │
             │    Why                                                                                       │
@@ -22,13 +20,15 @@
             │                                                                                              │
             │    Validation                                                                                │
             │                                                                                              │
-            │    • 0/1 wave(s) closed.                                                                     │
+            │    • No commit pinned.                                                                       │
+            │    • No claim attempts recorded.                                                             │
+            │    • no rollup yet                                                                           │
             │                                                                                              │
             │                                                                                              │
             │    Risks                                                                                     │
             │                                                                                              │
-            │    • Open wave(s): P01-I01-W01.                                                              │
-            │    • No phase audit recorded.                                                                │
+            │    • Dispatch errors: 0.                                                                     │
+            │    • Blocked agent reports: 0.                                                               │
             │                                                                                              │
             │                                                                                              │
             │  [ Tab/Shift+Tab cycle · Esc close ]                                                         │
