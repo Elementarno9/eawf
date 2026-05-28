@@ -158,3 +158,43 @@ def test_generated_changelog_lines_prefixes_bullets() -> None:
     bundle = build_narrative(state, "P28")
 
     assert generated_changelog_lines(bundle)[0] == "- Render narrative."
+
+
+def test_build_narrative_prefers_w24_audited_intent_fields() -> None:
+    """W60: ``priority_rationale`` + ``problem`` + ``desired_outcome`` lead the why list.
+
+    The legacy ``motivation`` / ``goal`` / ``success_signal`` triad
+    still flows in as fallback content so pre-W59 briefs are unchanged,
+    but the audited fields rank first when both are present.
+    """
+    payload = _state_payload()
+    payload["phases"]["P28"]["intent"] = {
+        "goal": "share release prose",
+        "motivation": "Keep PR and release output aligned.",
+        "success_signal": "Both surfaces render the same validation facts.",
+        "problem": "Release narratives drift from PR text.",
+        "desired_outcome": "PR and release ship identical validation prose.",
+        "priority_rationale": "W24 audit ranked unified narrative above polish.",
+    }
+    state = State.model_validate(payload)
+    bundle = build_narrative(state, "P28")
+
+    # The first 3 entries come from the audited triad in priority,
+    # problem, desired_outcome order; legacy entries follow as
+    # fallbacks within the 6-line bound.
+    assert bundle.why[0] == "W24 audit ranked unified narrative above polish."
+    assert bundle.why[1] == "Release narratives drift from PR text."
+    assert bundle.why[2] == "PR and release ship identical validation prose."
+    # Legacy entries are still present as fallback within the cap.
+    assert "Keep PR and release output aligned." in bundle.why
+
+
+def test_build_narrative_legacy_only_intent_unchanged() -> None:
+    """Pre-W59 briefs (audited fields unset) keep their original why ordering."""
+    payload = _state_payload()
+    # Default payload only has legacy fields.
+    state = State.model_validate(payload)
+    bundle = build_narrative(state, "P28")
+    # First non-fallback entry is the legacy motivation, matching the
+    # pre-W60 behaviour pinned by ``test_build_narrative_emits_required_sections``.
+    assert bundle.why[0] == "Keep PR and release output aligned."

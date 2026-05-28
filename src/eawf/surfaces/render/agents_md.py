@@ -248,27 +248,43 @@ def render_decisions_section(
 
 
 def render_intent_line(intent: IntentBrief | None) -> str:
-    """Render an :class:`IntentBrief` as a single ``goal:`` line, or ``""``.
+    """Render an :class:`IntentBrief` as a single intent line, or ``""``.
 
-    The first signal a downstream reader needs is the goal — the
-    motivation / success-signal / evidence / source-brief refs are
-    secondary detail surfaced elsewhere (TUI detail card,
-    dispatch-prompt body). A ``None`` intent returns the empty string
-    so the caller can interpolate the result unconditionally without
-    needing a branching ``if`` around the line.
+    Prefers the W24-audited :attr:`IntentBrief.problem` +
+    :attr:`IntentBrief.desired_outcome` pair over the legacy
+    :attr:`IntentBrief.goal` so consumers see the structured
+    "current problem → target state" split first. Falls back to the
+    legacy ``goal`` field when neither audited field is populated, so
+    pre-W59 briefs render unchanged. A ``None`` intent returns the empty
+    string so the caller can interpolate the result unconditionally
+    without needing a branching ``if`` around the line.
 
-    Format: ``goal: <goal>`` — no trailing newline, no leading marker,
-    so the caller controls list / row framing.
+    Format precedence:
+
+    - both ``problem`` and ``desired_outcome`` set →
+      ``problem: <problem> -> desired_outcome: <desired_outcome>``
+    - only ``problem`` set → ``problem: <problem>``
+    - only ``desired_outcome`` set → ``desired_outcome: <desired_outcome>``
+    - neither set → ``goal: <goal>`` (legacy fallback)
+
+    No trailing newline, no leading marker, so the caller controls
+    list / row framing.
 
     Args:
         intent: The entity's :attr:`IntentBrief` (or ``None`` when the
             entity has not been wired with one).
 
     Returns:
-        The rendered ``goal:`` line, or ``""`` when *intent* is ``None``.
+        The rendered intent line, or ``""`` when *intent* is ``None``.
     """
     if intent is None:
         return ""
+    if intent.problem is not None and intent.desired_outcome is not None:
+        return f"problem: {intent.problem} -> desired_outcome: {intent.desired_outcome}"
+    if intent.problem is not None:
+        return f"problem: {intent.problem}"
+    if intent.desired_outcome is not None:
+        return f"desired_outcome: {intent.desired_outcome}"
     return f"goal: {intent.goal}"
 
 

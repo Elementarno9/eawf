@@ -282,6 +282,43 @@ def test_edit_backlog_description_only_preserves_title(tmp_path: Path) -> None:
     assert item.description == "added later"
 
 
+def test_edit_backlog_sets_w24_audited_intent(tmp_path: Path) -> None:
+    """W60: ``edit_backlog`` accepts a brief carrying the W24-audited fields.
+
+    The persisted ``BacklogItem.intent`` exposes the new audited fields
+    (``problem`` / ``desired_outcome`` / ``planned_steps`` / ``risks``
+    / ``priority_rationale``) alongside the legacy goal so consumers
+    can prefer the audited surface and fall back when absent.
+    """
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    event = backlog.edit_backlog(
+        state,
+        item_id="B023",
+        intent=IntentBrief(
+            goal="legacy",
+            problem="backlog has no structured intent",
+            desired_outcome="backlog carries typed brief",
+            planned_steps=["draft", "ratify"],
+            risks=["scope creep"],
+            priority_rationale="audit ranked it above polish",
+        ),
+    )
+    item = state.backlog["B023"]
+    assert item.intent is not None
+    assert item.intent.problem == "backlog has no structured intent"
+    assert item.intent.desired_outcome == "backlog carries typed brief"
+    assert item.intent.planned_steps == ["draft", "ratify"]
+    assert item.intent.risks == ["scope creep"]
+    assert item.intent.priority_rationale == "audit ranked it above polish"
+    # Legacy goal stays populated; W61 swaps the requirement.
+    assert item.intent.goal == "legacy"
+    assert event.summary == "backlog B023 edited fields=intent"
+
+
 def test_edit_backlog_sets_intent(tmp_path: Path) -> None:
     """Happy: editing intent persists the typed brief and records the field."""
     state_path = _state_path(tmp_path)

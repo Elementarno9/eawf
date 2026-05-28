@@ -45,6 +45,7 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
 from eawf.surfaces.render.narrative import (
@@ -112,6 +113,46 @@ class DetailCard:
     history: tuple[tuple[str, str], ...] = ()
     events: tuple[tuple[str, str], ...] = ()
     detail_markdown: str | None = None
+
+
+def _intent_rows(intent: IntentBrief | None) -> list[tuple[str, str]]:
+    """Project an :class:`IntentBrief` (or ``None``) into detail-card rows.
+
+    Prefers the W24-audited fields (``problem`` / ``desired_outcome`` /
+    ``priority_rationale`` / ``planned_steps`` / ``risks``) over the
+    legacy ``goal`` / ``motivation`` triad so the operator sees the
+    structured intent first. The legacy ``goal`` row is emitted only
+    when neither ``problem`` nor ``desired_outcome`` is populated, so
+    pre-W59 briefs still surface a single ``intent`` row unchanged.
+
+    Args:
+        intent: The entity's :attr:`IntentBrief` (or ``None`` when the
+            entity has not been wired with one).
+
+    Returns:
+        Ordered ``(label, value)`` rows. Empty list when *intent* is
+        ``None``; a legacy-only brief returns the single ``intent``
+        row; a W24-audited brief returns rows for every populated
+        audited field.
+    """
+    if intent is None:
+        return []
+    rows: list[tuple[str, str]] = []
+    if intent.problem is not None:
+        rows.append(("problem", intent.problem))
+    if intent.desired_outcome is not None:
+        rows.append(("desired outcome", intent.desired_outcome))
+    if intent.problem is None and intent.desired_outcome is None:
+        # Legacy fallback: surface the bare goal row so pre-W59 briefs
+        # render unchanged. Tests pin this row label as ``intent``.
+        rows.append(("intent", intent.goal))
+    if intent.planned_steps:
+        rows.append(("planned steps", "; ".join(intent.planned_steps)))
+    if intent.risks:
+        rows.append(("risks", "; ".join(intent.risks)))
+    if intent.priority_rationale is not None:
+        rows.append(("priority rationale", intent.priority_rationale))
+    return rows
 
 
 def _fmt_dt(value: object) -> str:
@@ -243,8 +284,7 @@ def _wave_card(
         ("title", wave.title),
         ("status", wave.status.value),
     ]
-    if wave.intent is not None:
-        rows.append(("intent", wave.intent.goal))
+    rows.extend(_intent_rows(wave.intent))
     if wave.agent_role is not None:
         rows.append(("role", wave.agent_role.value))
     if wave.effort_bucket is not None:
@@ -408,8 +448,7 @@ def _iter_card(state: State, iter_id: str) -> DetailCard | None:
         ("status", it.status.value),
         ("waves", f"{closed}/{total} closed"),
     ]
-    if it.intent is not None:
-        rows.append(("intent", it.intent.goal))
+    rows.extend(_intent_rows(it.intent))
     history: list[tuple[str, str]] = [
         ("status", it.status.value),
         ("opened", _fmt_dt(it.opened_at)),
@@ -453,8 +492,7 @@ def _phase_card(state: State, phase_id: str) -> DetailCard | None:
         ("iters", str(len(phase.iter_ids))),
         ("waves", f"{closed}/{total} closed"),
     ]
-    if phase.intent is not None:
-        rows.append(("intent", phase.intent.goal))
+    rows.extend(_intent_rows(phase.intent))
     history: list[tuple[str, str]] = [
         ("status", phase.status.value),
         ("opened", _fmt_dt(phase.opened_at)),
@@ -514,8 +552,7 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     ]
     if item.description is not None:
         rows.append(("description", item.description))
-    if item.intent is not None:
-        rows.append(("intent", item.intent.goal))
+    rows.extend(_intent_rows(item.intent))
     rows.extend(
         [
             ("priority", item.priority.value),

@@ -145,17 +145,30 @@ def _build_intent_from_flags(
     intent_success_signal: str | None,
     intent_evidence_refs: str | None,
     intent_source_brief_ids: str | None,
+    intent_problem: str | None = None,
+    intent_desired_outcome: str | None = None,
+    intent_priority_rationale: str | None = None,
+    intent_planned_steps: str | None = None,
+    intent_risks: str | None = None,
 ) -> IntentBrief | None | object:
     """Return an :class:`IntentBrief` built from the ``--intent-*`` CLI flags.
 
     Returns ``None`` when no ``--intent-*`` flag was passed (the caller
     skips the intent edit). Returns :data:`_INTENT_FLAG_ERROR` when at
     least one ``--intent-*`` flag was passed but ``--intent-goal`` is
-    missing — the goal is the only required field on the brief, so the
+    missing — the goal is the only required field on the brief (W60
+    keeps it required for back-compat; W61 will retire it), so the
     handler surfaces a clean InvalidInput rather than a Pydantic stack
     trace. Otherwise returns a constructed :class:`IntentBrief`; a model
     bound violation propagates as :class:`pydantic.ValidationError` and
     is mapped to InvalidInput by the handler's existing except clause.
+
+    W60 adds the five W24-audited flags (``--intent-problem``,
+    ``--intent-desired-outcome``, ``--intent-priority-rationale``,
+    ``--intent-planned-steps``, ``--intent-risks``) alongside the
+    legacy five. Both flag sets are accepted; the legacy
+    ``--intent-goal`` stays required so pre-W59 callers continue to
+    validate. W61 will swap the requirement.
 
     Args:
         intent_goal: ``--intent-goal`` value (required field).
@@ -163,6 +176,15 @@ def _build_intent_from_flags(
         intent_success_signal: ``--intent-success-signal`` value (optional).
         intent_evidence_refs: ``--intent-evidence-refs`` comma-separated list.
         intent_source_brief_ids: ``--intent-source-brief-ids`` comma-separated list.
+        intent_problem: ``--intent-problem`` value (W24 audited; ≤200 chars).
+        intent_desired_outcome: ``--intent-desired-outcome`` value
+            (W24 audited; ≤200 chars).
+        intent_priority_rationale: ``--intent-priority-rationale``
+            value (W24 audited; ≤1000 chars).
+        intent_planned_steps: ``--intent-planned-steps`` comma-separated
+            list, max 10 entries; each entry ≤500 chars.
+        intent_risks: ``--intent-risks`` comma-separated list, max 10
+            entries; each entry ≤500 chars.
     """
     any_flag = any(
         v is not None
@@ -172,6 +194,11 @@ def _build_intent_from_flags(
             intent_success_signal,
             intent_evidence_refs,
             intent_source_brief_ids,
+            intent_problem,
+            intent_desired_outcome,
+            intent_priority_rationale,
+            intent_planned_steps,
+            intent_risks,
         )
     )
     if not any_flag:
@@ -186,6 +213,11 @@ def _build_intent_from_flags(
         success_signal=intent_success_signal,
         evidence_refs=_split_csv(intent_evidence_refs),
         source_brief_ids=_split_csv(intent_source_brief_ids),
+        problem=intent_problem,
+        desired_outcome=intent_desired_outcome,
+        priority_rationale=intent_priority_rationale,
+        planned_steps=_split_csv(intent_planned_steps),
+        risks=_split_csv(intent_risks),
     )
 
 
@@ -684,6 +716,51 @@ def roadmap_revise_cmd(
             help="Comma-separated originating research / spike brief ids or paths.",
         ),
     ] = None,
+    intent_problem: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-problem",
+            help=(
+                "W24-audited problem statement on the IntentBrief (≤200 chars). "
+                "Preferred over --intent-goal for new briefs; legacy --intent-goal "
+                "remains accepted as a back-compat fallback."
+            ),
+        ),
+    ] = None,
+    intent_desired_outcome: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-desired-outcome",
+            help=("W24-audited desired-outcome statement on the IntentBrief (≤200 chars)."),
+        ),
+    ] = None,
+    intent_priority_rationale: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-priority-rationale",
+            help=(
+                "W24-audited priority rationale on the IntentBrief (≤1000 chars). "
+                "Preferred over --intent-motivation for new briefs."
+            ),
+        ),
+    ] = None,
+    intent_planned_steps: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-planned-steps",
+            help=(
+                "Comma-separated planner steps on the IntentBrief "
+                "(max 10 entries, each ≤500 chars)."
+            ),
+        ),
+    ] = None,
+    intent_risks: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-risks",
+            help=("Comma-separated risks on the IntentBrief (max 10 entries, each ≤500 chars)."),
+        ),
+    ] = None,
 ) -> None:
     """Edit a PLANNED or ACTIVE phase's wave plan via structured flags.
 
@@ -734,6 +811,11 @@ def roadmap_revise_cmd(
         intent_success_signal=intent_success_signal,
         intent_evidence_refs=intent_evidence_refs,
         intent_source_brief_ids=intent_source_brief_ids,
+        intent_problem=intent_problem,
+        intent_desired_outcome=intent_desired_outcome,
+        intent_priority_rationale=intent_priority_rationale,
+        intent_planned_steps=intent_planned_steps,
+        intent_risks=intent_risks,
     )
     if intent_result is _INTENT_FLAG_ERROR:
         cli_errors.emit_error(

@@ -901,6 +901,91 @@ def test_backlog_edit_intent_without_goal_exits_invalid_input(state_path: Path) 
     assert payload["data"]["kind"] == "InvalidInput"
 
 
+def test_backlog_edit_w24_audited_intent_flags(state_path: Path) -> None:
+    """W60: the W24-audited ``--intent-*`` flags persist into the brief.
+
+    Exercises ``--intent-problem``, ``--intent-desired-outcome``,
+    ``--intent-priority-rationale``, ``--intent-planned-steps``, and
+    ``--intent-risks`` on the ``backlog edit`` Typer surface; verifies
+    the resulting ``state.backlog[id].intent`` carries every populated
+    field while the legacy ``goal`` stays set (W60 keeps ``goal``
+    required; W61 swaps the requirement).
+    """
+    runner.invoke(
+        app,
+        [
+            "backlog",
+            "add",
+            "B023",
+            "--title",
+            "Split workflow",
+            "--priority",
+            "P2",
+        ],
+    )
+    result = runner.invoke(
+        app,
+        [
+            "backlog",
+            "edit",
+            "B023",
+            "--intent-goal",
+            "legacy goal",
+            "--intent-problem",
+            "backlog lacks structured intent",
+            "--intent-desired-outcome",
+            "backlog carries typed brief",
+            "--intent-priority-rationale",
+            "audit ranked it above polish",
+            "--intent-planned-steps",
+            "draft brief,ratify,promote",
+            "--intent-risks",
+            "scope creep,renderer regression",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    body = json.loads(state_path.read_text())
+    intent = body["backlog"]["B023"]["intent"]
+    assert intent["goal"] == "legacy goal"
+    assert intent["problem"] == "backlog lacks structured intent"
+    assert intent["desired_outcome"] == "backlog carries typed brief"
+    assert intent["priority_rationale"] == "audit ranked it above polish"
+    assert intent["planned_steps"] == ["draft brief", "ratify", "promote"]
+    assert intent["risks"] == ["scope creep", "renderer regression"]
+
+
+def test_backlog_edit_audited_flag_without_goal_exits_invalid_input(
+    state_path: Path,
+) -> None:
+    """W60: passing an audited ``--intent-*`` flag without ``--intent-goal`` fails clean."""
+    runner.invoke(
+        app,
+        [
+            "backlog",
+            "add",
+            "B023",
+            "--title",
+            "Split workflow",
+            "--priority",
+            "P2",
+        ],
+    )
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "backlog",
+            "edit",
+            "B023",
+            "--intent-problem",
+            "problem without a goal",
+        ],
+    )
+    assert result.exit_code == 1, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["data"]["kind"] == "InvalidInput"
+
+
 def test_backlog_set_priority_unknown_exits_not_found(state_path: Path) -> None:
     """Error path: missing backlog id exits 2 (NOT_FOUND)."""
     result = runner.invoke(

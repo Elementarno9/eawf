@@ -287,10 +287,21 @@ def edit_iter_plan(
         it.__pydantic_validator__.validate_assignment(it, "description", description)
     if intent is not None:
         it.__pydantic_validator__.validate_assignment(it, "intent", intent)
-    intent_goal = repr(intent.goal) if intent is not None else None
+    # Prefer the W24-audited ``problem`` field for the intent log key
+    # when set (post-W59 briefs); fall back to the legacy ``goal`` so
+    # pre-W59 briefs still surface a single intent value. Exactly one
+    # of intent_problem / intent_goal is non-None — the other stays
+    # None so the log line keeps a fixed key shape for the linter.
+    intent_problem: str | None = None
+    intent_goal: str | None = None
+    if intent is not None:
+        if intent.problem is not None:
+            intent_problem = repr(intent.problem)
+        else:
+            intent_goal = repr(intent.goal)
     logger.info(
         f"edit_iter_plan id={iter_id} title={title!r} description={description!r} "
-        f"intent_goal={intent_goal}"
+        f"intent_problem={intent_problem} intent_goal={intent_goal}"
     )
     return it
 

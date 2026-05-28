@@ -641,6 +641,45 @@ def test_render_intent_line_emits_goal_row() -> None:
     assert render_intent_line(brief) == "goal: ship intent on entities"
 
 
+def test_render_intent_line_prefers_problem_and_desired_outcome() -> None:
+    """W60 migration: ``problem`` + ``desired_outcome`` outrank ``goal``."""
+    brief = IntentBrief(
+        goal="legacy goal that should be hidden",
+        problem="executors lack a structured intent surface",
+        desired_outcome="every entity carries a typed intent the renderer reads",
+    )
+    assert render_intent_line(brief) == (
+        "problem: executors lack a structured intent surface -> "
+        "desired_outcome: every entity carries a typed intent the renderer reads"
+    )
+
+
+def test_render_intent_line_problem_only_falls_through() -> None:
+    """Only ``problem`` set → emit a single ``problem:`` row, ignoring ``goal``."""
+    brief = IntentBrief(
+        goal="legacy goal that should be hidden",
+        problem="executors lack a structured intent surface",
+    )
+    assert render_intent_line(brief) == ("problem: executors lack a structured intent surface")
+
+
+def test_render_intent_line_desired_outcome_only_falls_through() -> None:
+    """Only ``desired_outcome`` set → emit a single ``desired_outcome:`` row."""
+    brief = IntentBrief(
+        goal="legacy goal that should be hidden",
+        desired_outcome="every entity carries a typed intent the renderer reads",
+    )
+    assert render_intent_line(brief) == (
+        "desired_outcome: every entity carries a typed intent the renderer reads"
+    )
+
+
+def test_render_intent_line_legacy_only_falls_back_to_goal() -> None:
+    """Neither audited field set → fall back to the legacy ``goal:`` row."""
+    brief = IntentBrief(goal="ship the wave", motivation="planner needs context")
+    assert render_intent_line(brief) == "goal: ship the wave"
+
+
 def test_detail_overlay_wave_card_surfaces_intent() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
@@ -722,6 +761,140 @@ def test_detail_overlay_backlog_card_surfaces_intent() -> None:
     assert labels.get("intent") == "backlog goal"
 
 
+def test_detail_overlay_wave_card_surfaces_w24_audited_fields() -> None:
+    """W60: W24-audited brief surfaces audited rows.
+
+    The legacy ``intent`` row is suppressed when ``problem`` or
+    ``desired_outcome`` is set so the renderer does not duplicate the
+    information across two rows.
+    """
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    brief = IntentBrief(
+        goal="legacy goal hidden by audited fields",
+        problem="executors lack a structured intent surface",
+        desired_outcome="every entity carries a typed intent the renderer reads",
+        planned_steps=["wire schema", "wire renderer"],
+        risks=["consumers may drift"],
+        priority_rationale="W24 audit ranked structured intent above the polish backlog",
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/a.py"],
+        effort_bucket=EffortBucket.S,
+        intent=brief,
+    )
+    card = resolve_detail(state, "P01-I01-W01")
+    labels = dict(card.rows)
+    assert labels.get("problem") == "executors lack a structured intent surface"
+    assert labels.get("desired outcome") == "every entity carries a typed intent the renderer reads"
+    assert labels.get("planned steps") == "wire schema; wire renderer"
+    assert labels.get("risks") == "consumers may drift"
+    assert (
+        labels.get("priority rationale")
+        == "W24 audit ranked structured intent above the polish backlog"
+    )
+    # Legacy intent row is suppressed once an audited field is set so
+    # the goal is not double-rendered.
+    assert "intent" not in labels
+
+
+def test_detail_overlay_wave_card_partial_audited_keeps_legacy_intent_hidden() -> None:
+    """Setting only ``problem`` still suppresses the legacy ``intent`` row."""
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/a.py"],
+        effort_bucket=EffortBucket.S,
+        intent=IntentBrief(
+            goal="legacy goal",
+            problem="executors lack a structured intent surface",
+        ),
+    )
+    card = resolve_detail(state, "P01-I01-W01")
+    labels = dict(card.rows)
+    assert labels.get("problem") == "executors lack a structured intent surface"
+    assert "desired outcome" not in labels
+    assert "intent" not in labels
+
+
+def test_detail_overlay_iter_card_surfaces_w24_audited_fields() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(
+        state,
+        iter_id="P01-I01",
+        phase_id="P01",
+        title="y",
+        intent=IntentBrief(
+            goal="legacy",
+            problem="iter has no structured intent",
+            desired_outcome="iter carries a typed brief",
+        ),
+    )
+    card = resolve_detail(state, "P01-I01")
+    labels = dict(card.rows)
+    assert labels.get("problem") == "iter has no structured intent"
+    assert labels.get("desired outcome") == "iter carries a typed brief"
+    assert "intent" not in labels
+
+
+def test_detail_overlay_phase_card_surfaces_w24_audited_fields() -> None:
+    state = _empty_state()
+    open_phase(
+        state,
+        phase_id="P01",
+        title="x",
+        intent=IntentBrief(
+            goal="legacy",
+            priority_rationale="phase ranked above polish backlog",
+        ),
+    )
+    card = resolve_detail(state, "P01")
+    labels = dict(card.rows)
+    # Only priority_rationale set: legacy ``intent`` row still renders
+    # because neither ``problem`` nor ``desired_outcome`` is populated.
+    assert labels.get("intent") == "legacy"
+    assert labels.get("priority rationale") == "phase ranked above polish backlog"
+
+
+def test_detail_overlay_backlog_card_surfaces_w24_audited_fields() -> None:
+    state = _empty_state()
+    state.backlog = {
+        "B001": BacklogItem(
+            id="B001",
+            scope_id="QR",
+            title="t",
+            priority=BacklogPriority.P2,
+            status=BacklogStatus.OPEN,
+            created_at=_now(),
+            intent=IntentBrief(
+                goal="legacy",
+                problem="backlog has no structured intent",
+                desired_outcome="backlog carries a typed brief",
+                planned_steps=["draft brief", "ratify"],
+                risks=["scope creep"],
+            ),
+        ),
+    }
+    card = resolve_detail(state, "B001")
+    labels = dict(card.rows)
+    assert labels.get("problem") == "backlog has no structured intent"
+    assert labels.get("desired outcome") == "backlog carries a typed brief"
+    assert labels.get("planned steps") == "draft brief; ratify"
+    assert labels.get("risks") == "scope creep"
+    assert "intent" not in labels
+
+
 # ---- CLI plumbing -----------------------------------------------------------
 
 
@@ -780,3 +953,180 @@ def test_cli_build_intent_full_payload() -> None:
     assert result.success_signal == "s"
     assert result.evidence_refs == ["a", "b", "c"]
     assert result.source_brief_ids == ["x", "y"]
+
+
+def test_cli_build_intent_w24_audited_fields_only() -> None:
+    """W60: the 5 new audited flags alone (+ required goal) construct a brief."""
+    from eawf.surfaces.cli.commands.roadmap import _build_intent_from_flags
+
+    result = _build_intent_from_flags(
+        intent_goal="g",
+        intent_motivation=None,
+        intent_success_signal=None,
+        intent_evidence_refs=None,
+        intent_source_brief_ids=None,
+        intent_problem="executors lack structured intent",
+        intent_desired_outcome="every entity carries a typed intent",
+        intent_priority_rationale="audit ranked it above polish",
+        intent_planned_steps="wire schema,wire renderer,wire consumers",
+        intent_risks="consumers may drift,renderer may regress",
+    )
+    assert isinstance(result, IntentBrief)
+    assert result.problem == "executors lack structured intent"
+    assert result.desired_outcome == "every entity carries a typed intent"
+    assert result.priority_rationale == "audit ranked it above polish"
+    assert result.planned_steps == ["wire schema", "wire renderer", "wire consumers"]
+    assert result.risks == ["consumers may drift", "renderer may regress"]
+    # Legacy fields stay at their defaults.
+    assert result.motivation is None
+    assert result.success_signal is None
+
+
+def test_cli_build_intent_mixed_legacy_and_audited() -> None:
+    """W60: both legacy and audited flags coexist on a single brief."""
+    from eawf.surfaces.cli.commands.roadmap import _build_intent_from_flags
+
+    result = _build_intent_from_flags(
+        intent_goal="g",
+        intent_motivation="m",
+        intent_success_signal="s",
+        intent_evidence_refs="a,b",
+        intent_source_brief_ids="x",
+        intent_problem="p",
+        intent_desired_outcome="d",
+        intent_priority_rationale="pr",
+        intent_planned_steps="step1,step2",
+        intent_risks="risk1",
+    )
+    assert isinstance(result, IntentBrief)
+    assert result.goal == "g"
+    assert result.motivation == "m"
+    assert result.problem == "p"
+    assert result.desired_outcome == "d"
+    assert result.priority_rationale == "pr"
+    assert result.planned_steps == ["step1", "step2"]
+    assert result.risks == ["risk1"]
+
+
+def test_cli_build_intent_problem_without_goal_errors() -> None:
+    """W60: passing a new flag without --intent-goal still emits the sentinel."""
+    from eawf.surfaces.cli.commands.roadmap import _INTENT_FLAG_ERROR, _build_intent_from_flags
+
+    result = _build_intent_from_flags(
+        intent_goal=None,
+        intent_motivation=None,
+        intent_success_signal=None,
+        intent_evidence_refs=None,
+        intent_source_brief_ids=None,
+        intent_problem="problem statement without a goal",
+    )
+    assert result is _INTENT_FLAG_ERROR
+
+
+def test_cli_build_intent_planned_steps_empty_string_yields_empty_list() -> None:
+    """Empty string for the comma-separated lists yields an empty list, not [""].
+
+    The any-flag gate fires off ``v is not None`` (so the empty string
+    counts as a passed flag), but ``_split_csv`` strips it down to an
+    empty list rather than ``[""]``. The brief still validates because
+    the model treats an empty list as the default.
+    """
+    from eawf.surfaces.cli.commands.roadmap import _build_intent_from_flags
+
+    result = _build_intent_from_flags(
+        intent_goal="g",
+        intent_motivation=None,
+        intent_success_signal=None,
+        intent_evidence_refs=None,
+        intent_source_brief_ids=None,
+        intent_planned_steps="",
+        intent_risks="",
+    )
+    assert isinstance(result, IntentBrief)
+    assert result.planned_steps == []
+    assert result.risks == []
+
+
+# ---- Lifecycle logger preference (W60) --------------------------------------
+
+
+def test_edit_wave_plan_logs_intent_problem_when_set(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Setting ``problem`` populates ``intent_problem=`` and leaves ``intent_goal=None``.
+
+    The log line carries both keys at fixed positions so the
+    log-format linter sees a stable ``<funcname> key=value`` shape;
+    exactly one of the two values is the repr of a populated field,
+    the other stays ``None``.
+    """
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/a.py"],
+        effort_bucket=EffortBucket.S,
+    )
+    brief = IntentBrief(goal="legacy", problem="structured intent missing")
+    with caplog.at_level("INFO", logger="eawf.workflow.lifecycle.wave"):
+        edit_wave_plan(state, wave_id="P01-I01-W01", intent=brief)
+    matching = [record for record in caplog.records if "edit_wave_plan" in record.message]
+    assert matching, "expected an edit_wave_plan log record"
+    assert "intent_problem='structured intent missing'" in matching[-1].message
+    assert "intent_goal=None" in matching[-1].message
+
+
+def test_edit_wave_plan_falls_back_to_intent_goal_log_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Legacy brief populates ``intent_goal=`` and leaves ``intent_problem=None``."""
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/a.py"],
+        effort_bucket=EffortBucket.S,
+    )
+    with caplog.at_level("INFO", logger="eawf.workflow.lifecycle.wave"):
+        edit_wave_plan(state, wave_id="P01-I01-W01", intent=IntentBrief(goal="ship it"))
+    matching = [record for record in caplog.records if "edit_wave_plan" in record.message]
+    assert matching, "expected an edit_wave_plan log record"
+    assert "intent_problem=None" in matching[-1].message
+    assert "intent_goal='ship it'" in matching[-1].message
+
+
+def test_edit_iter_plan_logs_intent_problem_when_set(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    brief = IntentBrief(goal="legacy", problem="iter intent missing")
+    with caplog.at_level("INFO", logger="eawf.workflow.lifecycle.iter_"):
+        edit_iter_plan(state, iter_id="P01-I01", intent=brief)
+    matching = [record for record in caplog.records if "edit_iter_plan" in record.message]
+    assert matching, "expected an edit_iter_plan log record"
+    assert "intent_problem='iter intent missing'" in matching[-1].message
+    assert "intent_goal=None" in matching[-1].message
+
+
+def test_edit_iter_plan_falls_back_to_intent_goal_log_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    with caplog.at_level("INFO", logger="eawf.workflow.lifecycle.iter_"):
+        edit_iter_plan(state, iter_id="P01-I01", intent=IntentBrief(goal="iter goal"))
+    matching = [record for record in caplog.records if "edit_iter_plan" in record.message]
+    assert matching, "expected an edit_iter_plan log record"
+    assert "intent_problem=None" in matching[-1].message
+    assert "intent_goal='iter goal'" in matching[-1].message

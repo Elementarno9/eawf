@@ -460,6 +460,51 @@ def backlog_edit(
         str | None,
         typer.Option("--intent-source-brief-ids", help="Comma-separated source brief ids."),
     ] = None,
+    intent_problem: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-problem",
+            help=(
+                "W24-audited problem statement on the IntentBrief (<=200 chars). "
+                "Preferred over --intent-goal for new briefs; legacy --intent-goal "
+                "remains accepted as a back-compat fallback."
+            ),
+        ),
+    ] = None,
+    intent_desired_outcome: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-desired-outcome",
+            help=("W24-audited desired-outcome statement on the IntentBrief (<=200 chars)."),
+        ),
+    ] = None,
+    intent_priority_rationale: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-priority-rationale",
+            help=(
+                "W24-audited priority rationale on the IntentBrief (<=1000 chars). "
+                "Preferred over --intent-motivation for new briefs."
+            ),
+        ),
+    ] = None,
+    intent_planned_steps: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-planned-steps",
+            help=(
+                "Comma-separated planner steps on the IntentBrief "
+                "(max 10 entries, each <=500 chars)."
+            ),
+        ),
+    ] = None,
+    intent_risks: Annotated[
+        str | None,
+        typer.Option(
+            "--intent-risks",
+            help=("Comma-separated risks on the IntentBrief (max 10 entries, each <=500 chars)."),
+        ),
+    ] = None,
     clear_intent: Annotated[
         bool,
         typer.Option("--clear-intent", help="Remove any attached IntentBrief."),
@@ -480,6 +525,11 @@ def backlog_edit(
             intent_success_signal=intent_success_signal,
             intent_evidence_refs=intent_evidence_refs,
             intent_source_brief_ids=intent_source_brief_ids,
+            intent_problem=intent_problem,
+            intent_desired_outcome=intent_desired_outcome,
+            intent_priority_rationale=intent_priority_rationale,
+            intent_planned_steps=intent_planned_steps,
+            intent_risks=intent_risks,
         )
     except PydanticValidationError as exc:
         cli_errors.emit_error(
