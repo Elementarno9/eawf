@@ -6114,6 +6114,19 @@
       "scope_id": "P28-I03-W51",
       "updated_at": "2026-05-28T12:23:13.651296Z"
     },
+    "P28-I03-W52": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W52-bucket-20260528T180328Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W52",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W52",
+      "updated_at": "2026-05-28T18:03:28.844165Z"
+    },
     "P28-I03-W53": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I03-W53-bucket-20260528T172304Z",
@@ -7153,7 +7166,10 @@
         "P28-I03-W55",
         "P28-I03-W56",
         "P28-I03-W57",
-        "P28-I03-W58"
+        "P28-I03-W58",
+        "P28-I03-W59",
+        "P28-I03-W60",
+        "P28-I03-W61"
       ]
     }
   },
@@ -7759,7 +7775,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T17:50:05.212732Z",
+  "updated_at": "2026-05-28T18:03:58.517668Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25319,11 +25335,9 @@
     },
     "P28-I03-W52": {
       "agent_role": "executor",
-      "blocks": [
-        "P28-I03-W56"
-      ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "blocks": [],
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:03:33.673835Z",
       "commit": null,
       "deps": [],
       "description": "W24 audit verdict (2026-05-28 deep audit) found shipped IntentBrief diverges from roadmap-brief criterion. Operator decision: migrate code to criterion. v0.4.1+ scope has zero IntentBrief references so the audited shape is the canonical target.",
@@ -25340,10 +25354,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T17:17:54.793899Z",
-      "outcome": null,
+      "outcome": "scope insufficient: 8 dependents outside file_scopes (CLI flag taxonomy, TUI detail rows, render_intent_line, lifecycle loggers, 3 test files). Operator AUQ 2026-05-28 picked staged split into W59/W60/W61.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "failed",
       "success_criteria": [
         "IntentBrief fields = {problem",
         "desired_outcome",
@@ -25436,7 +25450,9 @@
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
-      "deps": [],
+      "deps": [
+        "P28-I03-W61"
+      ],
       "description": "Wave modal currently shows identical phase rollup for every wave (detail.py:383 substitutes it.phase_id). Operator picked richer fix over cheapest rows-group fallback.",
       "dispatch_history": [],
       "effort_bucket": "M",
@@ -25470,7 +25486,7 @@
       "closed_at": null,
       "commit": null,
       "deps": [
-        "P28-I03-W52"
+        "P28-I03-W61"
       ],
       "description": "36 open backlog items avg 179 chars; 1 zero-desc. Operator picked triage wave first then IntentBrief attach (deferred until W52 schema migration lands).",
       "dispatch_history": [],
@@ -25563,6 +25579,135 @@
         "path}] list matching sidecar payload at :309-315;Codex TUI 'Is a directory (os error 21)' warning resolved;golden plugin.json updated;test asserts hooks field is list shape"
       ],
       "title": "fix: Codex plugin.json hooks field shape (list not dir string)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W59": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W60"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "First wave of W52 split: add W24-audited fields as Optional alongside the shipped 5 fields. No consumer changes. Sets the schema base for W60/W61.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/intent.py",
+        "tests/unit/test_intent_brief.py"
+      ],
+      "id": "P28-I03-W59",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T18:03:39.541241Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "IntentBrief gains 5 optional fields (problem",
+        "desired_outcome",
+        "planned_steps<=10",
+        "risks<=10",
+        "priority_rationale);existing 5 fields unchanged;model strict-mode preserved;mypy+pytest clean;old + new shapes coexist in tests"
+      ],
+      "title": "fix: extend IntentBrief schema with W24 audited fields (additive)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W60": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W61"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W59"
+      ],
+      "description": "Second wave of W52 split: migrate every consumer to read the new W24 fields with explicit fallback to old fields. Add new CLI flags. Old flags + old field reads still work — atomic flip happens in W61.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/render/agents_md.py",
+        "src/eawf/surfaces/render/narrative.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/lifecycle/iter_.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/surfaces/cli/commands/evidence_backlog.py",
+        "tests/unit/test_intent_brief.py",
+        "tests/unit/test_evidence_backlog.py",
+        "tests/unit/test_render_narrative.py",
+        "tests/integration/test_cli_evidence.py"
+      ],
+      "id": "P28-I03-W60",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T18:03:53.724641Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "render_intent_line + detail rows + lifecycle loggers prefer new fields with fallback to old;new --intent-problem/--intent-desired-outcome/--intent-planned-steps/--intent-risks/--intent-priority-rationale flags added alongside existing --intent-* flags;mypy+pytest clean;backward-compat tests still pass"
+      ],
+      "title": "fix: migrate IntentBrief consumers to W24 fields with back-compat",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W61": {
+      "agent_role": "executor",
+      "blocks": [
+        "P28-I03-W55",
+        "P28-I03-W56"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W60"
+      ],
+      "description": "Third wave of W52 split: atomic breaking change. Drop the 5 legacy fields + legacy CLI flags + back-compat reads from W60. Add Decision row + CHANGELOG entry for the user-facing flag rename.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/intent.py",
+        "src/eawf/surfaces/render/agents_md.py",
+        "src/eawf/surfaces/render/narrative.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/lifecycle/iter_.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py",
+        "src/eawf/surfaces/cli/commands/evidence_backlog.py",
+        "tests/unit/test_intent_brief.py",
+        "tests/unit/test_evidence_backlog.py",
+        "tests/unit/test_render_narrative.py",
+        "tests/integration/test_cli_evidence.py",
+        "CHANGELOG.md"
+      ],
+      "id": "P28-I03-W61",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T18:03:54.231926Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "IntentBrief fields = {problem",
+        "desired_outcome",
+        "planned_steps<=10",
+        "risks<=10",
+        "priority_rationale} only;old fields + old --intent-* CLI flags + back-compat fallbacks removed;CHANGELOG entry for breaking CLI flag rename;Decision row added via state CLI;mypy+pytest clean"
+      ],
+      "title": "fix: drop legacy IntentBrief fields + CLI flags after consumer migration",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
