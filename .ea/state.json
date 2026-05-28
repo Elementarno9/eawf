@@ -7633,7 +7633,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T12:04:20.419840Z",
+  "updated_at": "2026-05-28T12:08:08.300148Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25129,7 +25129,8 @@
         "tests/golden/subagent_spec/**",
         "tests/unit/test_plugin_doctor_strict.py",
         "tests/integration/test_cli_lifecycle.py",
-        "tests/integration/test_phase2_acceptance.py"
+        "tests/integration/test_phase2_acceptance.py",
+        "tests/golden/dispatch/**"
       ],
       "id": "P28-I03-W50",
       "intent": null,
