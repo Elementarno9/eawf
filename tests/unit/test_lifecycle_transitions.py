@@ -94,6 +94,7 @@ def _add_ship_gate_audit(
     verdict: AuditVerdict | None = AuditVerdict.PASS,
     status: AuditStatus = AuditStatus.COMPLETE,
     kind: AuditKind = AuditKind.SHIP_GATE,
+    check_results: list[dict[str, object]] | None = None,
 ) -> None:
     state.audits = dict(state.audits or {})
     state.audits[audit_id] = Audit(
@@ -101,6 +102,11 @@ def _add_ship_gate_audit(
         scope_id=scope_id,
         kind=kind,
         status=status,
+        check_results=list(
+            check_results
+            if check_results is not None
+            else [{"name": "tests", "passed": True, "details": "focused tests passed"}]
+        ),
         created_at=datetime.now(UTC),
         verdict=verdict,
     )
@@ -210,6 +216,20 @@ def test_close_phase_happy_clears_current() -> None:
     assert p.status == PhaseStatus.CLOSED
     assert p.audit_id == "AUD-1"
     assert state.current.phase_id is None
+
+
+def test_close_phase_rejects_stub_audit_row() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    _seed_closed_wave(state, "P01")
+    _add_ship_gate_audit(
+        state,
+        audit_id="AUD-1",
+        scope_id="P01",
+        check_results=[{"name": "stub", "passed": True, "details": "Phase 2 stub"}],
+    )
+    with pytest.raises(LifecycleError, match="real audit evidence"):
+        close_phase(state, phase_id="P01", audit_id="AUD-1")
 
 
 def test_close_phase_unknown_raises() -> None:

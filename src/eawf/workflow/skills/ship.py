@@ -660,7 +660,7 @@ class ShipSkill(SkillAction):
                 phase_id=inputs.phase_id,
                 audit_id=audit.id if audit is not None else None,
                 require_audit=True,
-                include_structure=False,
+                include_structure=True,
             )
             if not readiness.ready:
                 blockers = phase_close_readiness_blockers(readiness)

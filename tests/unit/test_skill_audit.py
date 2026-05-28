@@ -75,6 +75,8 @@ def test_audit_default_branch_is_ship_gate(state_dir: Path) -> None:
     assert env.header.status == "ok"
     body = AuditBody.model_validate(cast(dict, env.body))
     assert body.kind == "ship-gate"
+    assert body.audit_artifact_urn is not None
+    assert body.audit_artifact_urn in env.footer.evidence_refs
 
 
 def test_audit_research_profile_branches_to_evaluation(

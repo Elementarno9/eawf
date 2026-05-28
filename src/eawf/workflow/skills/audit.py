@@ -410,6 +410,9 @@ class AuditSkill(Skill):
             payload={"kind": kind, "check_count": len(runs)},
         )
         persisted_records.append(evt_id)
+        scope_owner = scope_id.rsplit("/", 1)[-1]
+        audit_artifact_urn = f"urn:eawf:v1:event:{scope_owner}/{evt_id}"
+        evidence_refs.append(audit_artifact_urn)
 
         # Step 11 — update outcomes/hypotheses only from audit evidence
         # (verdict-bearing state path runs through ``eawf audit run``).
@@ -421,7 +424,7 @@ class AuditSkill(Skill):
             outcomes_measured=[],
             hypothesis_verdicts=[],
             findings=findings,
-            audit_artifact_urn=None,
+            audit_artifact_urn=audit_artifact_urn,
             auditor_dispatch=auditor_dispatch,
         )
 

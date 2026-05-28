@@ -61,6 +61,7 @@ _PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS: frozenset[AuditVerdict] = frozenset(
 _RELEASE_PREFLIGHT_CHECK_IDS: frozenset[str] = frozenset(
     {"release-preflight", "release_readiness", "release-readiness"}
 )
+_LEGACY_STUB_CHECK_IDS: frozenset[str] = frozenset({"stub"})
 
 
 def open_phase(
@@ -178,6 +179,8 @@ def _phase_close_audit_warning(
         return f"close audit {audit_id!r} must be scoped to phase {phase.id!r}"
     if audit.verdict not in _PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS:
         return f"close audit {audit_id!r} verdict must be pass or minor"
+    if not _audit_has_real_close_evidence(state, audit=audit):
+        return f"close audit {audit_id!r} must include real audit evidence"
     return None
 
 
@@ -202,6 +205,47 @@ def _audit_check_passed(row: object, *, accepted_ids: frozenset[str]) -> bool:
         return True
     raw_status = _audit_row_get(row, "status") or _audit_row_get(row, "conclusion")
     return isinstance(raw_status, str) and raw_status.lower() in {"pass", "passed", "ok", "success"}
+
+
+def _audit_row_has_result(row: object) -> bool:
+    """Return whether one audit check row carries an explicit result."""
+    raw_id = (
+        _audit_row_get(row, "id")
+        or _audit_row_get(row, "name")
+        or _audit_row_get(row, "check_id")
+        or _audit_row_get(row, "gate_id")
+    )
+    if not isinstance(raw_id, str) or not raw_id:
+        return False
+    raw_details = _audit_row_get(row, "details")
+    if raw_id in _LEGACY_STUB_CHECK_IDS and raw_details == "Phase 2 stub":
+        return False
+    if isinstance(_audit_row_get(row, "passed"), bool):
+        return True
+    raw_status = _audit_row_get(row, "status") or _audit_row_get(row, "conclusion")
+    return isinstance(raw_status, str) and raw_status.lower() in {
+        "fail",
+        "failed",
+        "pass",
+        "passed",
+        "ok",
+        "success",
+    }
+
+
+def _audit_has_real_close_evidence(state: State, *, audit: object) -> bool:
+    """Return whether *audit* carries durable close evidence.
+
+    A real close audit is anchored either by a report artifact recorded in
+    state, or by at least one non-legacy check result. The old Phase-2
+    ``stub`` audit row is intentionally rejected so phase close cannot be
+    satisfied by a placeholder verdict alone.
+    """
+    report_artifact_id = getattr(audit, "report_artifact_id", None)
+    if isinstance(report_artifact_id, str) and report_artifact_id:
+        return report_artifact_id in state.artifacts
+    check_results = getattr(audit, "check_results", [])
+    return any(_audit_row_has_result(row) for row in check_results)
 
 
 def _phase_close_release_preflight_warning(

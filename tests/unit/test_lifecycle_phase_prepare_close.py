@@ -78,7 +78,11 @@ def _add_ship_gate_audit(
         status=AuditStatus.COMPLETE,
         created_at=datetime.now(UTC),
         verdict=AuditVerdict.PASS,
-        check_results=list(check_results or []),
+        check_results=list(
+            check_results
+            if check_results is not None
+            else [{"name": "tests", "passed": True, "details": "focused tests passed"}]
+        ),
     )
 
 
@@ -276,6 +280,27 @@ def test_prepare_close_accepts_complete_ship_gate_close_audit() -> None:
 
     assert out["close_readiness_ready"] is False
     assert out["close_audit_blockers"] == []
+
+
+def test_prepare_close_blocks_stub_close_audit() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P03", title="t")
+    _add_ship_gate_audit(
+        state,
+        audit_id="AUD-1",
+        phase_id="P03",
+        check_results=[{"name": "stub", "passed": True, "details": "Phase 2 stub"}],
+    )
+
+    out = _phase_prepare_close_checklist(
+        state,
+        phase_id="P03",
+        audit_id="AUD-1",
+        require_audit=True,
+    )
+
+    assert out["close_audit_blockers"] == ["close audit 'AUD-1' must include real audit evidence"]
+    assert out["ok"] is False
 
 
 def test_prepare_close_blocks_missing_release_preflight_when_required() -> None:

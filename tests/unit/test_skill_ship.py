@@ -67,6 +67,7 @@ def _write_state_with_audit(
     kind: str = "ship-gate",
     include_phase: bool = False,
     phase_id: str | None = None,
+    phase_structure: str = "closed",
 ) -> None:
     """Write a minimal valid ``state.json`` carrying one audit row.
 
@@ -76,6 +77,91 @@ def _write_state_with_audit(
     """
     created = datetime(2026, 5, 1, tzinfo=UTC).isoformat()
     phase_key = phase_id or audit_scope
+    iter_id = f"{phase_key}-I01"
+    closed_wave_1 = f"{iter_id}-W01"
+    closed_wave_2 = f"{iter_id}-W02"
+    open_wave = f"{iter_id}-W03"
+    iter_status = "active" if phase_structure == "open_iter" else "closed"
+    wave_ids = [closed_wave_1, closed_wave_2]
+    waves = {
+        closed_wave_1: {
+            "id": closed_wave_1,
+            "iter_id": iter_id,
+            "title": "closed wave one",
+            "description": None,
+            "status": "closed",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": ["src/"],
+            "success_criteria": [],
+            "agent_role": None,
+            "effort_bucket": "M",
+            "claim_session_id": None,
+            "worktree_id": None,
+            "token_budget": None,
+            "tokens_consumed": 0,
+            "outcome": "ok",
+            "commit": None,
+            "opened_at": created,
+            "closed_at": created,
+            "sessions": {},
+            "runtime_preference": None,
+            "dispatch_history": [],
+            "intent": None,
+        },
+        closed_wave_2: {
+            "id": closed_wave_2,
+            "iter_id": iter_id,
+            "title": "closed wave two",
+            "description": None,
+            "status": "closed",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": ["src/"],
+            "success_criteria": [],
+            "agent_role": None,
+            "effort_bucket": "M",
+            "claim_session_id": None,
+            "worktree_id": None,
+            "token_budget": None,
+            "tokens_consumed": 0,
+            "outcome": "ok",
+            "commit": None,
+            "opened_at": created,
+            "closed_at": created,
+            "sessions": {},
+            "runtime_preference": None,
+            "dispatch_history": [],
+            "intent": None,
+        },
+    }
+    if phase_structure == "open_wave":
+        wave_ids.append(open_wave)
+        waves[open_wave] = {
+            "id": open_wave,
+            "iter_id": iter_id,
+            "title": "open wave",
+            "description": None,
+            "status": "pending",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": ["src/"],
+            "success_criteria": [],
+            "agent_role": None,
+            "effort_bucket": "M",
+            "claim_session_id": None,
+            "worktree_id": None,
+            "token_budget": None,
+            "tokens_consumed": 0,
+            "outcome": None,
+            "commit": None,
+            "opened_at": created,
+            "closed_at": None,
+            "sessions": {},
+            "runtime_preference": None,
+            "dispatch_history": [],
+            "intent": None,
+        }
     payload = {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -107,7 +193,7 @@ def _write_state_with_audit(
                 "title": "Phase",
                 "description": None,
                 "status": "active",
-                "iter_ids": [],
+                "iter_ids": [iter_id],
                 "outcome_ids": [],
                 "depends_on": [],
                 "source_brief_ids": [],
@@ -119,8 +205,24 @@ def _write_state_with_audit(
         }
         if include_phase
         else {},
-        "iters": {},
-        "waves": {},
+        "iters": {
+            iter_id: {
+                "id": iter_id,
+                "phase_id": phase_key,
+                "title": "iter",
+                "description": None,
+                "status": iter_status,
+                "wave_ids": wave_ids,
+                "estimate_id": None,
+                "audit_id": "AUD-ITER",
+                "opened_at": created,
+                "closed_at": None if iter_status == "active" else created,
+                "intent": None,
+            }
+        }
+        if include_phase
+        else {},
+        "waves": waves if include_phase else {},
         "audits": {
             "A01-P00": {
                 "id": "A01-P00",
@@ -129,6 +231,11 @@ def _write_state_with_audit(
                 "status": "complete",
                 "created_at": created,
                 "verdict": verdict,
+                "report_artifact_id": None,
+                "check_results": [
+                    {"name": "tests", "passed": True, "details": "focused tests passed"}
+                ],
+                "integrity_results": [],
             }
         },
         "artifacts": {},
@@ -345,7 +452,7 @@ def test_ship_phase_close_readiness_requires_matching_audit(state_dir: Path) -> 
     env = run_skill(ShipSkill(), _ctx())
     assert env.header.status == "failed"
     body = ShipBody.model_validate(cast(dict, env.body))
-    assert body.rollback_notes == "phase-close readiness blocked: close audit required"
+    assert "close audit required" in str(body.rollback_notes)
 
 
 def test_ship_phase_close_readiness_accepts_pass_audit(state_dir: Path) -> None:
@@ -358,6 +465,36 @@ def test_ship_phase_close_readiness_accepts_pass_audit(state_dir: Path) -> None:
     )
     env = run_skill(ShipSkill(), _ctx())
     assert env.header.status == "ok"
+
+
+def test_ship_phase_close_readiness_blocks_open_iter(state_dir: Path) -> None:
+    """Ship cannot pass while the phase still has an open iter."""
+    _write_state_with_audit(
+        state_dir,
+        audit_scope="P00",
+        verdict="pass",
+        include_phase=True,
+        phase_structure="open_iter",
+    )
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "failed"
+    body = ShipBody.model_validate(cast(dict, env.body))
+    assert "open iters: P00-I01" in str(body.rollback_notes)
+
+
+def test_ship_phase_close_readiness_blocks_open_wave(state_dir: Path) -> None:
+    """Ship cannot pass while the phase still has an open wave."""
+    _write_state_with_audit(
+        state_dir,
+        audit_scope="P00",
+        verdict="pass",
+        include_phase=True,
+        phase_structure="open_wave",
+    )
+    env = run_skill(ShipSkill(), _ctx())
+    assert env.header.status == "failed"
+    body = ShipBody.model_validate(cast(dict, env.body))
+    assert "open waves: P00-I01-W03" in str(body.rollback_notes)
 
 
 # ---- C04a: co-author trailer ------------------------------------------------
@@ -763,6 +900,6 @@ def test_run_gate_command_zero_exit_is_green(tmp_path: Path) -> None:
     """A real subprocess exiting zero is reported as a green gate."""
     from eawf.workflow.skills.ship import _run_gate_command
 
-    result = _run_gate_command("tests", 'uv run python -c "pass"', tmp_path)
+    result = _run_gate_command("tests", "pytest --version", tmp_path)
     assert result.passed is True
     assert result.returncode == 0
