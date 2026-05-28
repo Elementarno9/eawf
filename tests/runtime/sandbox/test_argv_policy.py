@@ -10,8 +10,9 @@ Pin the L0 reject classes the gate-runner sandbox boundary enforces:
 5. Shell metacharacters — none of :data:`SHELL_METACHARS` may appear
    anywhere in *argv*.
 6. ``git`` sub-allowlist — read-only verbs only, denied verbs explicit.
-7. Wrapper depth-1 recursion — ``uv run X`` validates ``X`` against the
-   same allowlist; ``uv run npm run X`` rejects as nested wrapper.
+7. Wrapper recursion — wrapper control tokens are scoped before
+   recursion, so ``uv run X`` validates ``X`` and
+   ``uv run npm run X`` validates ``X`` as the effective script.
 """
 
 from __future__ import annotations
@@ -25,7 +26,6 @@ from eawf.runtime.sandbox.argv_policy import (
     GIT_DENIED_SUBVERBS,
     SHELL_DENY_HEADS,
     SHELL_METACHARS,
-    WRAPPER_HEADS,
     ArgvPolicyError,
     validate_gate_argv,
 )
@@ -51,30 +51,30 @@ def test_validate_gate_argv_accepts_allowlisted_bare_command(
 
 
 def test_validate_gate_argv_accepts_uv_run_wrapper() -> None:
-    """``uv run pre-commit ...`` passes with depth-1 recursion."""
+    """``uv run pre-commit ...`` passes with wrapper recursion."""
     argv = ["uv", "run", "pre-commit", "run", "--all-files"]
-    allowlist = ["uv", "run", "pre-commit"]
+    allowlist = ["uv", "pre-commit"]
     assert validate_gate_argv(argv, allowlist=allowlist) is argv
 
 
 def test_validate_gate_argv_accepts_uv_run_pytest() -> None:
     """The canonical ``uv run pytest`` default-gate shape passes."""
     argv = ["uv", "run", "pytest"]
-    allowlist = ["uv", "run", "pytest"]
+    allowlist = ["uv", "pytest"]
     assert validate_gate_argv(argv, allowlist=allowlist) is argv
 
 
 def test_validate_gate_argv_accepts_uv_run_ruff_with_dot() -> None:
     """``uv run ruff check .`` passes (dot is not a shell metachar)."""
     argv = ["uv", "run", "ruff", "check", "."]
-    allowlist = ["uv", "run", "ruff"]
+    allowlist = ["uv", "ruff"]
     assert validate_gate_argv(argv, allowlist=allowlist) is argv
 
 
 def test_validate_gate_argv_accepts_uv_run_mypy_with_dot() -> None:
     """``uv run mypy .`` passes."""
     argv = ["uv", "run", "mypy", "."]
-    allowlist = ["uv", "run", "mypy"]
+    allowlist = ["uv", "mypy"]
     assert validate_gate_argv(argv, allowlist=allowlist) is argv
 
 
@@ -221,46 +221,98 @@ def test_validate_gate_argv_rejects_bare_git_without_subverb() -> None:
         validate_gate_argv(["git"], allowlist=["git"])
 
 
-# ---- wrapper depth-1 recursion -----------------------------------------------
+# ---- wrapper recursion -------------------------------------------------------
 
 
-@pytest.mark.parametrize("wrapper", sorted(WRAPPER_HEADS))
-def test_validate_gate_argv_recurses_into_each_wrapper_head(wrapper: str) -> None:
-    """For every wrapper head, the recursion validates argv[1:]."""
-    # The inner head is allowlisted so the recursion passes on the happy path.
-    argv = [wrapper, "pre-commit"]
-    allowlist = [wrapper, "pre-commit"]
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["uv", "run", "pre-commit"],
+        ["uvx", "pre-commit"],
+        ["npm", "run", "pre-commit"],
+        ["npm", "exec", "pre-commit"],
+        ["pnpm", "run", "pre-commit"],
+        ["pnpm", "exec", "pre-commit"],
+        ["pnpm", "dlx", "pre-commit"],
+        ["yarn", "run", "pre-commit"],
+        ["yarn", "exec", "pre-commit"],
+        ["yarn", "dlx", "pre-commit"],
+        ["npx", "pre-commit"],
+        ["python", "-m", "pre-commit"],
+        ["python3", "-m", "pre-commit"],
+        ["poetry", "run", "pre-commit"],
+        ["pdm", "run", "pre-commit"],
+        ["hatch", "run", "pre-commit"],
+        ["tox", "pre-commit"],
+        ["nox", "pre-commit"],
+        ["pipx", "run", "pre-commit"],
+    ],
+)
+def test_validate_gate_argv_recurses_into_wrapper_execution_forms(argv: list[str]) -> None:
+    """For every wrapper head, recursion validates the scoped command."""
+    allowlist = [argv[0], "pre-commit"]
     assert validate_gate_argv(argv, allowlist=allowlist) is argv
 
 
-def test_validate_gate_argv_rejects_nested_wrapper() -> None:
-    """``uv run npm run x`` rejects: ``npm`` is a wrapper inside recursion."""
-    # The inner argv[1:] = ["run", "npm", "run", "x"]. The depth-1 recursion
-    # validates ["run", "npm", ...] — and "run" is the head. But "npm" still
-    # surfaces because the recursion validates argv[0] of the slice, which
-    # IS "run", which is NOT a wrapper. To trigger the nested-wrapper reject
-    # the spec's example needs the inner *head* to be a wrapper, e.g.
-    # ``uv npm`` (no intermediate ``run`` sub-verb).
-    with pytest.raises(ArgvPolicyError, match="nested wrapper"):
-        validate_gate_argv(["uv", "npm", "run", "x"], allowlist=["uv", "npm", "run"])
+def test_validate_gate_argv_accepts_uv_run_npm_run_script() -> None:
+    """``uv run npm run lint`` validates ``lint`` rather than ``run``."""
+    argv = ["uv", "run", "npm", "run", "lint"]
+    assert validate_gate_argv(argv, allowlist=["uv", "npm", "lint"]) is argv
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["uv", "run", "npm", "run", "lint"],
+        ["uv", "run", "pnpm", "run", "lint"],
+        ["uv", "run", "yarn", "run", "lint"],
+        ["uv", "run", "npx", "lint"],
+        ["uv", "run", "python", "-m", "pytest"],
+    ],
+)
+def test_validate_gate_argv_accepts_nested_wrapper_variants(argv: list[str]) -> None:
+    """Nested wrappers recurse to the final effective command."""
+    allowlist = ["uv", "npm", "pnpm", "yarn", "npx", "python", "lint", "pytest"]
+    assert validate_gate_argv(argv, allowlist=allowlist) is argv
+
+
+def test_validate_gate_argv_rejects_uv_run_npm_run_script_allowlist_miss() -> None:
+    """``run`` allowlisting cannot hide a disallowed npm script command."""
+    with pytest.raises(ArgvPolicyError, match="allowlist"):
+        validate_gate_argv(["uv", "run", "npm", "run", "lint"], allowlist=["uv", "npm", "run"])
+
+
+def test_validate_gate_argv_rejects_uv_run_bash_c() -> None:
+    """``uv run bash -c ...`` rejects on the effective shell head."""
+    with pytest.raises(ArgvPolicyError, match="shell-deny"):
+        validate_gate_argv(["uv", "run", "bash", "-c", "echo ok"], allowlist=["uv", "bash"])
+
+
+def test_validate_gate_argv_rejects_unsupported_uv_wrapper_subcommand() -> None:
+    """``uv npm ...`` is not scoped as an execution form."""
+    with pytest.raises(ArgvPolicyError, match="does not expose"):
+        validate_gate_argv(["uv", "npm", "run", "lint"], allowlist=["uv", "npm", "lint"])
 
 
 def test_validate_gate_argv_rejects_recursion_inner_shell_deny() -> None:
-    """``uv bash -c ...`` rejects on the inner shell-deny floor."""
+    """``uv run bash -c ...`` rejects on the inner shell-deny floor."""
     with pytest.raises(ArgvPolicyError, match="shell-deny"):
-        validate_gate_argv(["uv", "bash", "-c", "echo ok"], allowlist=["uv", "bash"])
+        validate_gate_argv(["uv", "run", "bash", "-c", "echo ok"], allowlist=["uv", "bash"])
 
 
 def test_validate_gate_argv_rejects_recursion_inner_path_qualified() -> None:
-    """``uv /usr/bin/x`` rejects on the inner path-qualified head check."""
+    """``uv run /usr/bin/x`` rejects on the inner path-qualified head check."""
     with pytest.raises(ArgvPolicyError, match="bare command"):
-        validate_gate_argv(["uv", "/usr/bin/pre-commit"], allowlist=["uv", "/usr/bin/pre-commit"])
+        validate_gate_argv(
+            ["uv", "run", "/usr/bin/pre-commit"],
+            allowlist=["uv", "/usr/bin/pre-commit"],
+        )
 
 
 def test_validate_gate_argv_rejects_recursion_inner_allowlist_miss() -> None:
-    """``uv unknown-tool`` rejects: inner head not in allowlist."""
+    """``uv run unknown-tool`` rejects: inner head not in allowlist."""
     with pytest.raises(ArgvPolicyError, match="allowlist"):
-        validate_gate_argv(["uv", "curl"], allowlist=["uv"])
+        validate_gate_argv(["uv", "run", "curl"], allowlist=["uv"])
 
 
 def test_validate_gate_argv_rejects_recursion_inner_metachar() -> None:

@@ -28,15 +28,16 @@ Two special cases extend the floor:
   be in :data:`GIT_ALLOWED_SUBVERBS` (read-only verbs only); any
   member of :data:`GIT_DENIED_SUBVERBS` or an unknown sub-verb is
   rejected even if ``git`` itself is allowlisted.
-- Depth-1 wrapper recursion — when ``argv[0]`` is in
+- Wrapper recursion — when ``argv[0]`` is in
   :data:`WRAPPER_HEADS` (``uv``, ``uvx``, ``npm``, ``pnpm``, ``yarn``,
   ``npx``, ``cargo``, ``python``, ``python3``, ``poetry``, ``pdm``,
-  ``hatch``, ``tox``, ``nox``, ``pipx``), the validator re-applies
-  the same rules to ``argv[1:]`` exactly once. Inside that recursion
-  any further wrapper head is rejected as a "nested wrapper" — so
-  ``uv run npm run x`` fails while ``uv run pre-commit run
-  --all-files`` passes (assuming ``uv``, ``run``, ``pre-commit`` are
-  all in the caller's allowlist).
+  ``hatch``, ``tox``, ``nox``, ``pipx``), the validator resolves the
+  wrapper's execution form and re-applies the same rules to the
+  effective nested command. Wrapper control tokens such as ``uv run``
+  and ``npm run`` are scoped to their wrapper; they are not treated as
+  the nested executable head. Thus ``uv run bash -c ...`` rejects on
+  ``bash`` while ``uv run npm run lint`` validates ``lint`` as the
+  effective script command.
 
 Reject decisions emit a structured log line at WARNING; never raw-log
 the offending argv (rule 16) when the caller cannot vouch for its
@@ -83,12 +84,10 @@ SHELL_DENY_HEADS: frozenset[str] = frozenset(
 #: future ``shell=True`` regression.
 SHELL_METACHARS: frozenset[str] = frozenset({"|", ";", "&", "$", "`", ">", "<", "(", ")", "*", "?"})
 
-#: Wrapper heads whose ``argv[1:]`` runs the real command. Validated
-#: with depth-1 recursion so the inner command (``uv run pre-commit
-#: ...``) is checked against the same rules without the outer wrapper
-#: providing a sandbox bypass. Nested wrappers (``uv run npm ...``)
-#: reject inside the recursion because they would otherwise hide the
-#: inner-most head from policy.
+#: Wrapper heads that can run an effective nested command. The
+#: wrapper-specific control tokens are resolved before recursion so
+#: policy applies to the executable or package-script name rather than
+#: to a literal wrapper token such as ``run``.
 WRAPPER_HEADS: frozenset[str] = frozenset(
     {
         "uv",
@@ -108,6 +107,24 @@ WRAPPER_HEADS: frozenset[str] = frozenset(
         "pipx",
     }
 )
+
+#: Wrappers whose nested command appears after a scoped sub-command.
+WRAPPER_SCOPED_SUBCOMMANDS: dict[str, frozenset[str]] = {
+    "uv": frozenset({"run"}),
+    "npm": frozenset({"exec", "run"}),
+    "pnpm": frozenset({"dlx", "exec", "run"}),
+    "yarn": frozenset({"dlx", "exec", "run"}),
+    "poetry": frozenset({"run"}),
+    "pdm": frozenset({"run"}),
+    "hatch": frozenset({"run"}),
+    "pipx": frozenset({"run"}),
+}
+
+#: Wrappers whose nested command starts immediately after the wrapper head.
+WRAPPER_DIRECT_HEADS: frozenset[str] = frozenset({"uvx", "npx", "tox", "nox"})
+
+#: Python module execution is a wrapper form only for ``python -m <module>``.
+PYTHON_MODULE_WRAPPERS: frozenset[str] = frozenset({"python", "python3"})
 
 #: Git sub-verbs that read-only inspect the repository state. The ship
 #: gauntlet, the audit-DSL runner, and the worktree helpers all need to
@@ -222,25 +239,74 @@ def _check_list_of_str(argv: object) -> list[str]:
     return argv
 
 
-def _validate_one_level(argv: list[str], *, allowlist: frozenset[str], depth: int) -> None:
-    """Apply the single-level rules to *argv* at recursion *depth*.
+def _validate_one_level(argv: list[str], *, allowlist: frozenset[str]) -> None:
+    """Apply the single-level rules to *argv*.
 
     Internal helper extracted so :func:`validate_gate_argv` can recurse
-    exactly once for wrapper heads without duplicating the per-level
-    rule sequence.
+    for wrapper heads without duplicating the per-level rule sequence.
     """
     head = argv[0]
     _check_head_path_qualified(head)
     _check_head_shell_deny(head)
-    if depth >= 1 and head in WRAPPER_HEADS:
-        logger.warning(
-            f"validate_gate_argv reject head={head!r} reason=nested-wrapper depth={depth}"
-        )
-        raise ArgvPolicyError(f"nested wrapper {head!r} inside wrapper recursion (depth-1 limit)")
     _check_head_allowlisted(head, allowlist=allowlist)
     _check_metachars(argv)
     if head == "git":
         _check_git_subverb(argv)
+
+
+def _effective_wrapper_argv(argv: list[str]) -> list[str] | None:
+    """Return the effective nested command for a wrapper invocation.
+
+    ``None`` means the wrapper invocation does not expose an inner
+    command that this policy can validate. An empty list means the
+    wrapper form expects an inner command but none was supplied.
+    """
+    head = argv[0]
+    if head in WRAPPER_SCOPED_SUBCOMMANDS:
+        if len(argv) == 1:
+            return None
+        subcommand = argv[1]
+        if subcommand not in WRAPPER_SCOPED_SUBCOMMANDS[head]:
+            logger.warning(
+                f"validate_gate_argv reject head={head!r} "
+                f"subcommand={subcommand!r} reason=unsupported-wrapper-subcommand"
+            )
+            raise ArgvPolicyError(
+                f"wrapper {head!r} subcommand {subcommand!r} does not expose a scoped command"
+            )
+        return argv[2:]
+    if head in WRAPPER_DIRECT_HEADS:
+        if len(argv) == 1:
+            return None
+        return argv[1:]
+    if head in PYTHON_MODULE_WRAPPERS:
+        if len(argv) == 1:
+            return None
+        if len(argv) >= 3 and argv[1] == "-m":
+            return argv[2:]
+        logger.warning(
+            f"validate_gate_argv reject head={head!r} reason=unsupported-python-wrapper-form"
+        )
+        raise ArgvPolicyError(f"python wrapper {head!r} must use -m to expose a scoped command")
+    if len(argv) == 1:
+        return None
+    return argv[1:]
+
+
+def _validate_effective_wrappers(argv: list[str], *, allowlist: frozenset[str]) -> None:
+    """Recurse through wrapper layers and validate the effective command."""
+    current = argv
+    while current[0] in WRAPPER_HEADS:
+        effective = _effective_wrapper_argv(current)
+        if effective is None:
+            return
+        if not effective:
+            logger.warning(
+                f"validate_gate_argv reject head={current[0]!r} reason=wrapper-missing-command"
+            )
+            raise ArgvPolicyError(f"wrapper {current[0]!r} invocation must include a command")
+        _validate_one_level(effective, allowlist=allowlist)
+        current = effective
 
 
 def validate_gate_argv(argv: list[str], *, allowlist: list[str]) -> list[str]:
@@ -272,10 +338,8 @@ def validate_gate_argv(argv: list[str], *, allowlist: list[str]) -> list[str]:
     """
     checked = _check_list_of_str(argv)
     allowlist_set = frozenset(allowlist)
-    _validate_one_level(checked, allowlist=allowlist_set, depth=0)
-    head = checked[0]
-    if head in WRAPPER_HEADS and len(checked) > 1:
-        _validate_one_level(checked[1:], allowlist=allowlist_set, depth=1)
+    _validate_one_level(checked, allowlist=allowlist_set)
+    _validate_effective_wrappers(checked, allowlist=allowlist_set)
     return checked
 
 
