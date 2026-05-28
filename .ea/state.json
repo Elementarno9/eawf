@@ -1130,6 +1130,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-20-p26-i01-surfaces.md",
       "urn": "urn:eawf:v1:artifact:P26-I01/ART-A32-P26"
     },
+    "ART-audit-2026-05-28-p28-i03-deep-audit": {
+      "created_at": "2026-05-28T17:20:28.291247Z",
+      "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audit-2026-05-28-p28-i03-deep-audit.md",
+      "urn": "urn:eawf:v1:artifact:EAWF/ART-audit-2026-05-28-p28-i03-deep-audit"
+    },
     "ART-research-2026-05-24-python-package-structure": {
       "created_at": "2026-05-24T00:47:22.443335Z",
       "id": "ART-research-2026-05-24-python-package-structure",
@@ -1822,6 +1832,54 @@
       "scope_id": "P28-I01",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A42-P28-i03-deep": {
+      "check_results": [],
+      "created_at": "2026-05-28T17:17:59.230110Z",
+      "id": "A42-P28-i03-deep",
+      "integrity_results": [
+        {
+          "added_at": "2026-05-28T17:18:05.832066+00:00",
+          "check": "verify-spine-cluster",
+          "details": "W01-W11,W17,W19,W20 — 13/13 criteria pass; 323 tests green; B074 nit only",
+          "passed": true
+        },
+        {
+          "added_at": "2026-05-28T17:18:06.277965+00:00",
+          "check": "lifecycle-commits-cluster",
+          "details": "W24 IntentBrief schema drift; remediation wave P28-I03-W52 planned; other 10 criteria pass",
+          "passed": false
+        },
+        {
+          "added_at": "2026-05-28T17:18:06.728008+00:00",
+          "check": "clarity-docs-cluster",
+          "details": "W04,W11,W16,W22-25,W36,W47 pass; 5 stale v0.3 refs + 4 hard-wrapped docs for /polish",
+          "passed": true
+        },
+        {
+          "added_at": "2026-05-28T17:18:12.820300+00:00",
+          "check": "plugins-harness-cluster",
+          "details": "W07-10,W32,W45 6/6 pass; 457 tests green",
+          "passed": true
+        },
+        {
+          "added_at": "2026-05-28T17:18:13.268557+00:00",
+          "check": "trust-eval-observ-cluster",
+          "details": "W11-15,W27-30,W42 10/10 pass; ActualSummary EU conflation follow-up for /polish",
+          "passed": true
+        },
+        {
+          "added_at": "2026-05-28T17:18:13.714652+00:00",
+          "check": "polish-remediation-tail",
+          "details": "W38-W51 verified: pytest 7130 pass, mypy clean, pre-commit clean; uncommitted touch-ups verified non-dead",
+          "passed": true
+        }
+      ],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-audit-2026-05-28-p28-i03-deep-audit",
+      "scope_id": "P28-I03",
+      "status": "complete",
+      "verdict": "minor"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -7063,7 +7121,8 @@
         "P28-I03-W48",
         "P28-I03-W49",
         "P28-I03-W50",
-        "P28-I03-W51"
+        "P28-I03-W51",
+        "P28-I03-W52"
       ]
     }
   },
@@ -7669,7 +7728,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T12:27:35.932461Z",
+  "updated_at": "2026-05-28T17:20:32.046227Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25223,6 +25282,43 @@
         "full pytest remains green"
       ],
       "title": "fix mypy verification errors",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W52": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "W24 audit verdict (2026-05-28 deep audit) found shipped IntentBrief diverges from roadmap-brief criterion. Operator decision: migrate code to criterion. v0.4.1+ scope has zero IntentBrief references so the audited shape is the canonical target.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/intent.py",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/surfaces/render/narrative.py",
+        "tests/kernel/spec/test_intent.py",
+        "tests/surfaces/render/test_narrative.py"
+      ],
+      "id": "P28-I03-W52",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:17:54.793899Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "IntentBrief fields = {problem",
+        "desired_outcome",
+        "planned_steps<=10",
+        "risks<=10",
+        "priority_rationale};Wave/Iter/Phase/BacklogItem.intent stays Optional;narrative renderer consumes new shape;mypy+pytest clean;state.json migration writes back nothing (intent currently None on all entities)"
+      ],
+      "title": "fix: migrate IntentBrief to W24 audited field-set",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
