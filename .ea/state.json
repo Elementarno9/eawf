@@ -803,6 +803,18 @@
       "scope_id": "P28-I03-W53",
       "status": "done",
       "updated_at": "2026-05-28T17:29:32.689559Z"
+    },
+    "P28-I03-W58": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 77492,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W58",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W58",
+      "scope_id": "P28-I03-W58",
+      "status": "done",
+      "updated_at": "2026-05-28T18:04:46.342160Z"
     }
   },
   "agent_sessions": {
@@ -6139,6 +6151,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W53",
       "updated_at": "2026-05-28T17:23:04.150689Z"
+    },
+    "P28-I03-W58": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W58-bucket-20260528T180445Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P28-I03-W58",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P28-I03-W58",
+      "updated_at": "2026-05-28T18:04:45.739690Z"
     }
   },
   "goals": {
@@ -7775,7 +7800,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:03:58.517668Z",
+  "updated_at": "2026-05-28T18:04:46.342470Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25554,8 +25579,8 @@
     "P28-I03-W58": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:04:46.342160Z",
       "commit": null,
       "deps": [],
       "description": "Codex plugin install emits hooks dir but writes literal './hooks/' string in plugin.json; Codex reads as config file.",
@@ -25570,17 +25595,17 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T17:50:05.212561Z",
-      "outcome": null,
+      "outcome": "codex plugin.json hooks field shape fixed: replaced dir-string with [{event_type, path}] list matching sidecar payload; 308 plugin-related tests pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "plugin.json hooks field replaces './hooks/' directory-string with [{event_type",
         "path}] list matching sidecar payload at :309-315;Codex TUI 'Is a directory (os error 21)' warning resolved;golden plugin.json updated;test asserts hooks field is list shape"
       ],
       "title": "fix: Codex plugin.json hooks field shape (list not dir string)",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 77492,
       "worktree_id": null
     },
     "P28-I03-W59": {
