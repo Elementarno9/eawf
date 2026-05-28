@@ -829,12 +829,10 @@ def test_backlog_edit_intent_happy_path(state_path: Path) -> None:
             "backlog",
             "edit",
             "B023",
-            "--intent-goal",
-            "Keep backlog work tied to a goal",
-            "--intent-motivation",
-            "Audit repair needs durable planner context.",
-            "--intent-success-signal",
-            "The item renders with intent.",
+            "--intent-problem",
+            "backlog lacks structured intent",
+            "--intent-desired-outcome",
+            "backlog item renders with intent",
             "--intent-evidence-refs",
             "urn:eawf:v1:artifact:QR/ART-001,repo:.ea/artifacts/research/bootstrap.md",
             "--intent-source-brief-ids",
@@ -844,7 +842,8 @@ def test_backlog_edit_intent_happy_path(state_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     body = json.loads(state_path.read_text())
     intent = body["backlog"]["B023"]["intent"]
-    assert intent["goal"] == "Keep backlog work tied to a goal"
+    assert intent["problem"] == "backlog lacks structured intent"
+    assert intent["desired_outcome"] == "backlog item renders with intent"
     assert intent["evidence_refs"] == [
         "urn:eawf:v1:artifact:QR/ART-001",
         "repo:.ea/artifacts/research/bootstrap.md",
@@ -869,7 +868,15 @@ def test_backlog_edit_clear_intent(state_path: Path) -> None:
     )
     result = runner.invoke(
         app,
-        ["backlog", "edit", "B023", "--intent-goal", "Keep backlog work tied to a goal"],
+        [
+            "backlog",
+            "edit",
+            "B023",
+            "--intent-problem",
+            "backlog lacks structured intent",
+            "--intent-desired-outcome",
+            "backlog item renders with intent",
+        ],
     )
     assert result.exit_code == 0, result.stdout
     result = runner.invoke(app, ["backlog", "edit", "B023", "--clear-intent"])
@@ -878,8 +885,10 @@ def test_backlog_edit_clear_intent(state_path: Path) -> None:
     assert body["backlog"]["B023"]["intent"] is None
 
 
-def test_backlog_edit_intent_without_goal_exits_invalid_input(state_path: Path) -> None:
-    """Error path: optional intent flags require --intent-goal."""
+def test_backlog_edit_intent_without_required_pair_exits_invalid_input(
+    state_path: Path,
+) -> None:
+    """Error path: optional intent flags require both required flags."""
     runner.invoke(
         app,
         [
@@ -894,7 +903,14 @@ def test_backlog_edit_intent_without_goal_exits_invalid_input(state_path: Path) 
     )
     result = runner.invoke(
         app,
-        ["--json", "backlog", "edit", "B023", "--intent-motivation", "missing goal"],
+        [
+            "--json",
+            "backlog",
+            "edit",
+            "B023",
+            "--intent-priority-rationale",
+            "missing required pair",
+        ],
     )
     assert result.exit_code == 1, result.stdout
     payload = json.loads(result.stdout)
@@ -902,14 +918,13 @@ def test_backlog_edit_intent_without_goal_exits_invalid_input(state_path: Path) 
 
 
 def test_backlog_edit_w24_audited_intent_flags(state_path: Path) -> None:
-    """W60: the W24-audited ``--intent-*`` flags persist into the brief.
+    """The W24-audited ``--intent-*`` flags persist into the brief.
 
     Exercises ``--intent-problem``, ``--intent-desired-outcome``,
     ``--intent-priority-rationale``, ``--intent-planned-steps``, and
     ``--intent-risks`` on the ``backlog edit`` Typer surface; verifies
     the resulting ``state.backlog[id].intent`` carries every populated
-    field while the legacy ``goal`` stays set (W60 keeps ``goal``
-    required; W61 swaps the requirement).
+    field.
     """
     runner.invoke(
         app,
@@ -929,8 +944,6 @@ def test_backlog_edit_w24_audited_intent_flags(state_path: Path) -> None:
             "backlog",
             "edit",
             "B023",
-            "--intent-goal",
-            "legacy goal",
             "--intent-problem",
             "backlog lacks structured intent",
             "--intent-desired-outcome",
@@ -946,7 +959,6 @@ def test_backlog_edit_w24_audited_intent_flags(state_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     body = json.loads(state_path.read_text())
     intent = body["backlog"]["B023"]["intent"]
-    assert intent["goal"] == "legacy goal"
     assert intent["problem"] == "backlog lacks structured intent"
     assert intent["desired_outcome"] == "backlog carries typed brief"
     assert intent["priority_rationale"] == "audit ranked it above polish"
@@ -954,10 +966,10 @@ def test_backlog_edit_w24_audited_intent_flags(state_path: Path) -> None:
     assert intent["risks"] == ["scope creep", "renderer regression"]
 
 
-def test_backlog_edit_audited_flag_without_goal_exits_invalid_input(
+def test_backlog_edit_audited_flag_without_required_pair_exits_invalid_input(
     state_path: Path,
 ) -> None:
-    """W60: passing an audited ``--intent-*`` flag without ``--intent-goal`` fails clean."""
+    """Passing an audited ``--intent-*`` flag without both required flags fails clean."""
     runner.invoke(
         app,
         [
@@ -978,7 +990,7 @@ def test_backlog_edit_audited_flag_without_goal_exits_invalid_input(
             "edit",
             "B023",
             "--intent-problem",
-            "problem without a goal",
+            "problem without desired-outcome",
         ],
     )
     assert result.exit_code == 1, result.stdout

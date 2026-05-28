@@ -118,12 +118,10 @@ class DetailCard:
 def _intent_rows(intent: IntentBrief | None) -> list[tuple[str, str]]:
     """Project an :class:`IntentBrief` (or ``None``) into detail-card rows.
 
-    Prefers the W24-audited fields (``problem`` / ``desired_outcome`` /
-    ``priority_rationale`` / ``planned_steps`` / ``risks``) over the
-    legacy ``goal`` / ``motivation`` triad so the operator sees the
-    structured intent first. The legacy ``goal`` row is emitted only
-    when neither ``problem`` nor ``desired_outcome`` is populated, so
-    pre-W59 briefs still surface a single ``intent`` row unchanged.
+    Emits the W24-audited fields (``problem`` / ``desired_outcome``
+    plus the optional ``planned_steps`` / ``risks`` /
+    ``priority_rationale``) so the operator sees the structured intent
+    every time.
 
     Args:
         intent: The entity's :attr:`IntentBrief` (or ``None`` when the
@@ -131,21 +129,15 @@ def _intent_rows(intent: IntentBrief | None) -> list[tuple[str, str]]:
 
     Returns:
         Ordered ``(label, value)`` rows. Empty list when *intent* is
-        ``None``; a legacy-only brief returns the single ``intent``
-        row; a W24-audited brief returns rows for every populated
-        audited field.
+        ``None``; otherwise the two required rows plus a row for each
+        populated optional field.
     """
     if intent is None:
         return []
-    rows: list[tuple[str, str]] = []
-    if intent.problem is not None:
-        rows.append(("problem", intent.problem))
-    if intent.desired_outcome is not None:
-        rows.append(("desired outcome", intent.desired_outcome))
-    if intent.problem is None and intent.desired_outcome is None:
-        # Legacy fallback: surface the bare goal row so pre-W59 briefs
-        # render unchanged. Tests pin this row label as ``intent``.
-        rows.append(("intent", intent.goal))
+    rows: list[tuple[str, str]] = [
+        ("problem", intent.problem),
+        ("desired outcome", intent.desired_outcome),
+    ]
     if intent.planned_steps:
         rows.append(("planned steps", "; ".join(intent.planned_steps)))
     if intent.risks:

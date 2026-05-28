@@ -250,22 +250,16 @@ def render_decisions_section(
 def render_intent_line(intent: IntentBrief | None) -> str:
     """Render an :class:`IntentBrief` as a single intent line, or ``""``.
 
-    Prefers the W24-audited :attr:`IntentBrief.problem` +
-    :attr:`IntentBrief.desired_outcome` pair over the legacy
-    :attr:`IntentBrief.goal` so consumers see the structured
-    "current problem → target state" split first. Falls back to the
-    legacy ``goal`` field when neither audited field is populated, so
-    pre-W59 briefs render unchanged. A ``None`` intent returns the empty
-    string so the caller can interpolate the result unconditionally
-    without needing a branching ``if`` around the line.
+    Emits the W24-audited :attr:`IntentBrief.problem` +
+    :attr:`IntentBrief.desired_outcome` pair so consumers see the
+    structured "current problem -> target state" split. A ``None``
+    intent returns the empty string so the caller can interpolate the
+    result unconditionally without needing a branching ``if`` around
+    the line.
 
-    Format precedence:
+    Format::
 
-    - both ``problem`` and ``desired_outcome`` set →
-      ``problem: <problem> -> desired_outcome: <desired_outcome>``
-    - only ``problem`` set → ``problem: <problem>``
-    - only ``desired_outcome`` set → ``desired_outcome: <desired_outcome>``
-    - neither set → ``goal: <goal>`` (legacy fallback)
+        problem: <problem> -> desired_outcome: <desired_outcome>
 
     No trailing newline, no leading marker, so the caller controls
     list / row framing.
@@ -279,13 +273,7 @@ def render_intent_line(intent: IntentBrief | None) -> str:
     """
     if intent is None:
         return ""
-    if intent.problem is not None and intent.desired_outcome is not None:
-        return f"problem: {intent.problem} -> desired_outcome: {intent.desired_outcome}"
-    if intent.problem is not None:
-        return f"problem: {intent.problem}"
-    if intent.desired_outcome is not None:
-        return f"desired_outcome: {intent.desired_outcome}"
-    return f"goal: {intent.goal}"
+    return f"problem: {intent.problem} -> desired_outcome: {intent.desired_outcome}"
 
 
 def lint_entity_title(title: str) -> list[str]:

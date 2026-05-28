@@ -56,9 +56,9 @@ def _state_payload() -> dict[str, Any]:
                 "closed_at": "2026-05-08T00:01:00Z",
                 "audit_id": "A28",
                 "intent": {
-                    "goal": "share release prose",
-                    "motivation": "Keep PR and release output aligned.",
-                    "success_signal": "Both surfaces render the same validation facts.",
+                    "problem": "Release narratives drift from PR text.",
+                    "desired_outcome": "PR and release ship identical validation prose.",
+                    "priority_rationale": "Keep PR and release output aligned.",
                 },
             }
         },
@@ -119,7 +119,11 @@ def test_build_narrative_emits_required_sections() -> None:
     bundle = build_narrative(state, "P28")
 
     assert bundle.what[0] == "`P28` Render narrative (closed)."
+    # The W24-audited triad leads the why list: priority_rationale,
+    # then problem, then desired_outcome.
     assert bundle.why[0] == "Keep PR and release output aligned."
+    assert bundle.why[1] == "Release narratives drift from PR text."
+    assert bundle.why[2] == "PR and release ship identical validation prose."
     assert bundle.validation == [
         "Audit `A28` verdict: pass.",
         "1/1 wave(s) closed.",
@@ -160,18 +164,15 @@ def test_generated_changelog_lines_prefixes_bullets() -> None:
     assert generated_changelog_lines(bundle)[0] == "- Render narrative."
 
 
-def test_build_narrative_prefers_w24_audited_intent_fields() -> None:
-    """W60: ``priority_rationale`` + ``problem`` + ``desired_outcome`` lead the why list.
+def test_build_narrative_w24_audited_intent_drives_why_list() -> None:
+    """The W24-audited triad drives the why list in priority order.
 
-    The legacy ``motivation`` / ``goal`` / ``success_signal`` triad
-    still flows in as fallback content so pre-W59 briefs are unchanged,
-    but the audited fields rank first when both are present.
+    Post-W61 the brief only carries the audited fields; the why list
+    leads with ``priority_rationale``, then ``problem``, then
+    ``desired_outcome``.
     """
     payload = _state_payload()
     payload["phases"]["P28"]["intent"] = {
-        "goal": "share release prose",
-        "motivation": "Keep PR and release output aligned.",
-        "success_signal": "Both surfaces render the same validation facts.",
         "problem": "Release narratives drift from PR text.",
         "desired_outcome": "PR and release ship identical validation prose.",
         "priority_rationale": "W24 audit ranked unified narrative above polish.",
@@ -179,22 +180,19 @@ def test_build_narrative_prefers_w24_audited_intent_fields() -> None:
     state = State.model_validate(payload)
     bundle = build_narrative(state, "P28")
 
-    # The first 3 entries come from the audited triad in priority,
-    # problem, desired_outcome order; legacy entries follow as
-    # fallbacks within the 6-line bound.
     assert bundle.why[0] == "W24 audit ranked unified narrative above polish."
     assert bundle.why[1] == "Release narratives drift from PR text."
     assert bundle.why[2] == "PR and release ship identical validation prose."
-    # Legacy entries are still present as fallback within the cap.
-    assert "Keep PR and release output aligned." in bundle.why
 
 
-def test_build_narrative_legacy_only_intent_unchanged() -> None:
-    """Pre-W59 briefs (audited fields unset) keep their original why ordering."""
+def test_build_narrative_intent_without_priority_rationale() -> None:
+    """When priority_rationale is unset the why list leads with the problem."""
     payload = _state_payload()
-    # Default payload only has legacy fields.
+    payload["phases"]["P28"]["intent"] = {
+        "problem": "Release narratives drift from PR text.",
+        "desired_outcome": "PR and release ship identical validation prose.",
+    }
     state = State.model_validate(payload)
     bundle = build_narrative(state, "P28")
-    # First non-fallback entry is the legacy motivation, matching the
-    # pre-W60 behaviour pinned by ``test_build_narrative_emits_required_sections``.
-    assert bundle.why[0] == "Keep PR and release output aligned."
+    assert bundle.why[0] == "Release narratives drift from PR text."
+    assert bundle.why[1] == "PR and release ship identical validation prose."

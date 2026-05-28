@@ -70,21 +70,13 @@ def _why_lines(phase: Phase) -> list[str]:
     intent = phase.intent
     candidates: list[str] = []
     if intent is not None:
-        # Prefer the W24-audited fields (priority_rationale / problem /
-        # desired_outcome) over the legacy goal / motivation /
-        # success_signal triad so consumers see the structured intent
-        # first; legacy fields stay as fallbacks for pre-W59 briefs.
-        primary = (
-            intent.priority_rationale,
-            intent.problem,
-            intent.desired_outcome,
-        )
-        legacy = (
-            intent.motivation,
-            intent.goal,
-            intent.success_signal,
-        )
-        candidates.extend(item for item in (*primary, *legacy) if item)
+        # W24-audited intent fields drive the why list: the optional
+        # priority_rationale leads (it names the prioritization
+        # trade-off), then the required problem and desired_outcome
+        # pair frame the gap and target state.
+        for item in (intent.priority_rationale, intent.problem, intent.desired_outcome):
+            if item:
+                candidates.append(item)
     if phase.description:
         candidates.append(phase.description)
     candidates.append("No explicit motivation recorded.")

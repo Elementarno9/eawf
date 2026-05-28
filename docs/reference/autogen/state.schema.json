@@ -1212,21 +1212,13 @@
     },
     "IntentBrief": {
       "additionalProperties": false,
-      "description": "Typed intent doc carried by a lifecycle entity.\n\nAttributes:\n    goal: One-line statement of what the entity is trying to\n        accomplish — the imperative noun-phrase a planner or\n        executor reads first. Bounded at 200 characters so the\n        field fits a single rendered row in dispatch + detail\n        surfaces.\n    motivation: Optional long-form reason the goal exists — the\n        *why* a planner or auditor needs when the goal alone does\n        not explain the trade-off being made. Bounded at 1000\n        characters; ``None`` when the goal is self-evident.\n    success_signal: Optional terse observable that ratifies the\n        intent. Distinct from the wave's free-form\n        ``success_criteria`` list: this is the single\n        \"would-change-my-mind\" signal an auditor checks first.\n        Bounded at 500 characters; ``None`` when the entity's\n        success criteria fully cover it.\n    evidence_refs: Repo-relative / URN / external-URL strings that\n        ratify the goal claim. Used by the v0.4 EviBound verify\n        gate to score \"every claim resolves\" on the brief. Default\n        empty list so a brief whose claims are not yet sourced\n        still validates (the EviBound gate fails the brief at\n        promotion time, not at ingestion time).\n    source_brief_ids: Ids / repo-relative paths of the originating\n        research / spike briefs this intent was distilled from.\n        Lets the renderer surface \"see brief X\" alongside the\n        intent so the reader can follow the chain. Default empty\n        list.\n    problem: Optional one-line statement of the problem the entity\n        is solving — the W24-audited counterpart to ``goal`` that\n        names the gap, not the action. Bounded at 200 characters\n        so it fits the same single-row render slot as ``goal``;\n        ``None`` until a consumer (W60) populates it.\n    desired_outcome: Optional one-line description of the state of\n        the world after the intent is satisfied — the W24-audited\n        counterpart to ``success_signal`` that names the steady\n        state, not the observable. Bounded at 200 characters;\n        ``None`` until a consumer (W60) populates it.\n    planned_steps: Ordered list of the planner's intended steps\n        toward the desired outcome. Each step is bounded at 500\n        characters and the list itself is bounded at 10 entries so\n        a brief stays scannable in the dispatch / detail surfaces.\n        Default empty list; the EviBound gate is not applied here.\n    risks: Known risks or trade-offs the planner accepted. Each\n        risk is bounded at 500 characters and the list at 10\n        entries with the same scannability rationale as\n        ``planned_steps``. Default empty list.\n    priority_rationale: Optional long-form explanation of why this\n        intent earned its slot — the W24-audited counterpart to\n        ``motivation`` that names the prioritization trade-off\n        rather than the underlying *why*. Bounded at 1000\n        characters; ``None`` until a consumer (W60) populates it.",
+      "description": "Typed intent doc carried by a lifecycle entity.\n\nAttributes:\n    problem: One-line statement of the problem the entity is\n        solving — the W24-audited counterpart to the prior\n        ``goal`` field that names the gap, not the action.\n        Bounded at 200 characters so the field fits a single\n        rendered row in dispatch + detail surfaces.\n    desired_outcome: One-line description of the state of the\n        world after the intent is satisfied — the W24-audited\n        counterpart to the prior ``success_signal`` field that\n        names the steady state, not the observable. Bounded at\n        200 characters so the field fits the same single-row\n        render slot as ``problem``.\n    planned_steps: Ordered list of the planner's intended steps\n        toward the desired outcome. Each step is bounded at 500\n        characters and the list itself is bounded at 10 entries so\n        a brief stays scannable in the dispatch / detail surfaces.\n        Default empty list; the EviBound gate is not applied here.\n    risks: Known risks or trade-offs the planner accepted. Each\n        risk is bounded at 500 characters and the list at 10\n        entries with the same scannability rationale as\n        ``planned_steps``. Default empty list.\n    priority_rationale: Optional long-form explanation of why this\n        intent earned its slot — the W24-audited counterpart to\n        the prior ``motivation`` field that names the prioritization\n        trade-off rather than the underlying *why*. Bounded at 1000\n        characters; ``None`` when the prioritization is self-evident.\n    evidence_refs: Repo-relative / URN / external-URL strings that\n        ratify the brief's claims. Used by the v0.4 EviBound verify\n        gate to score \"every claim resolves\" on the brief. Default\n        empty list so a brief whose claims are not yet sourced\n        still validates (the EviBound gate fails the brief at\n        promotion time, not at ingestion time).\n    source_brief_ids: Ids / repo-relative paths of the originating\n        research / spike briefs this intent was distilled from.\n        Lets the renderer surface \"see brief X\" alongside the\n        intent so the reader can follow the chain. Default empty\n        list.",
       "properties": {
         "desired_outcome": {
-          "anyOf": [
-            {
-              "maxLength": 200,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Desired Outcome"
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Desired Outcome",
+          "type": "string"
         },
         "evidence_refs": {
           "items": {
@@ -1235,25 +1227,6 @@
           },
           "title": "Evidence Refs",
           "type": "array"
-        },
-        "goal": {
-          "maxLength": 200,
-          "minLength": 1,
-          "title": "Goal",
-          "type": "string"
-        },
-        "motivation": {
-          "anyOf": [
-            {
-              "maxLength": 1000,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Motivation"
         },
         "planned_steps": {
           "items": {
@@ -1279,18 +1252,10 @@
           "title": "Priority Rationale"
         },
         "problem": {
-          "anyOf": [
-            {
-              "maxLength": 200,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Problem"
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Problem",
+          "type": "string"
         },
         "risks": {
           "items": {
@@ -1309,23 +1274,11 @@
           },
           "title": "Source Brief Ids",
           "type": "array"
-        },
-        "success_signal": {
-          "anyOf": [
-            {
-              "maxLength": 500,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Success Signal"
         }
       },
       "required": [
-        "goal"
+        "problem",
+        "desired_outcome"
       ],
       "title": "IntentBrief",
       "type": "object"

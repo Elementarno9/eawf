@@ -282,13 +282,22 @@ def test_edit_backlog_description_only_preserves_title(tmp_path: Path) -> None:
     assert item.description == "added later"
 
 
-def test_edit_backlog_sets_w24_audited_intent(tmp_path: Path) -> None:
-    """W60: ``edit_backlog`` accepts a brief carrying the W24-audited fields.
+def _audited_intent(**overrides: object) -> IntentBrief:
+    """Build a minimum-valid W24-audited :class:`IntentBrief` for tests."""
+    payload: dict[str, object] = {
+        "problem": "backlog has no structured intent",
+        "desired_outcome": "backlog carries typed brief",
+    }
+    payload.update(overrides)
+    return IntentBrief.model_validate(payload)
 
-    The persisted ``BacklogItem.intent`` exposes the new audited fields
+
+def test_edit_backlog_sets_w24_audited_intent(tmp_path: Path) -> None:
+    """``edit_backlog`` accepts the W24-audited brief shape.
+
+    The persisted ``BacklogItem.intent`` exposes the canonical fields
     (``problem`` / ``desired_outcome`` / ``planned_steps`` / ``risks``
-    / ``priority_rationale``) alongside the legacy goal so consumers
-    can prefer the audited surface and fall back when absent.
+    / ``priority_rationale``) — the legacy ``goal`` triad is gone post-W61.
     """
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
@@ -298,10 +307,7 @@ def test_edit_backlog_sets_w24_audited_intent(tmp_path: Path) -> None:
     event = backlog.edit_backlog(
         state,
         item_id="B023",
-        intent=IntentBrief(
-            goal="legacy",
-            problem="backlog has no structured intent",
-            desired_outcome="backlog carries typed brief",
+        intent=_audited_intent(
             planned_steps=["draft", "ratify"],
             risks=["scope creep"],
             priority_rationale="audit ranked it above polish",
@@ -314,8 +320,6 @@ def test_edit_backlog_sets_w24_audited_intent(tmp_path: Path) -> None:
     assert item.intent.planned_steps == ["draft", "ratify"]
     assert item.intent.risks == ["scope creep"]
     assert item.intent.priority_rationale == "audit ranked it above polish"
-    # Legacy goal stays populated; W61 swaps the requirement.
-    assert item.intent.goal == "legacy"
     assert event.summary == "backlog B023 edited fields=intent"
 
 
@@ -329,17 +333,16 @@ def test_edit_backlog_sets_intent(tmp_path: Path) -> None:
     event = backlog.edit_backlog(
         state,
         item_id="B023",
-        intent=IntentBrief(
-            goal="Retain the operator goal",
-            motivation="Planner context should survive backlog edits.",
-            success_signal="Backlog item carries an intent brief.",
+        intent=_audited_intent(
+            problem="Retain the operator problem",
+            desired_outcome="Planner context survives backlog edits.",
             evidence_refs=["urn:eawf:v1:artifact:QR/ART-001"],
             source_brief_ids=[".ea/artifacts/research/bootstrap.md"],
         ),
     )
     item = state.backlog["B023"]
     assert item.intent is not None
-    assert item.intent.goal == "Retain the operator goal"
+    assert item.intent.problem == "Retain the operator problem"
     assert item.intent.evidence_refs == ["urn:eawf:v1:artifact:QR/ART-001"]
     assert event.summary == "backlog B023 edited fields=intent"
 
@@ -351,11 +354,7 @@ def test_edit_backlog_clears_intent(tmp_path: Path) -> None:
     backlog.add_backlog(
         state, item_id="B023", title="t", priority=BacklogPriority.P2, scope_id="QR"
     )
-    backlog.edit_backlog(
-        state,
-        item_id="B023",
-        intent=IntentBrief(goal="Retain the operator goal"),
-    )
+    backlog.edit_backlog(state, item_id="B023", intent=_audited_intent())
     event = backlog.edit_backlog(state, item_id="B023", clear_intent=True)
     assert state.backlog["B023"].intent is None
     assert event.summary == "backlog B023 edited fields=intent"
@@ -372,7 +371,7 @@ def test_edit_backlog_rejects_intent_and_clear_intent(tmp_path: Path) -> None:
         backlog.edit_backlog(
             state,
             item_id="B023",
-            intent=IntentBrief(goal="Retain the operator goal"),
+            intent=_audited_intent(),
             clear_intent=True,
         )
 
