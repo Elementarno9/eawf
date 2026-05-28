@@ -15,6 +15,7 @@ from pathlib import Path
 import orjson
 from textual.widgets import Markdown, Static, TabbedContent
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
@@ -829,3 +830,142 @@ def test_detail_modal_backlog_shows_description_block() -> None:
             assert "Persist cost rows regardless" in rendered
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Wave card divergence (W55) — two waves under one phase render distinct d-tabs
+# --------------------------------------------------------------------------
+
+
+def _state_with_two_distinct_waves() -> tuple[State, str, str]:
+    """Return a state carrying two waves under one phase with distinct intents.
+
+    The phase + iter under :data:`_PHASE_ITER_WAVE` already has one wave;
+    this helper appends a second wave to the same iter and decorates both
+    with their own :class:`IntentBrief`, so the rendered ``d`` tabs can be
+    compared for divergence.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    existing_id = next(iter(state.waves))
+    existing = state.waves[existing_id]
+    second_id = "P01-I01-W02"
+    decorated_first = existing.model_copy(
+        update={
+            "intent": IntentBrief(
+                problem="Wave detail body re-runs the phase rollup.",
+                desired_outcome="Wave d-tab quotes the wave's own intent.",
+                planned_steps=["Add wave-specific narrative builder"],
+                risks=["NarrativeBundle shape change breaks PR tests"],
+                priority_rationale="Pre-ship blocker for the v0.4 PR text.",
+            ),
+        }
+    )
+    second_wave = existing.model_copy(
+        update={
+            "id": second_id,
+            "title": "Wave card divergence",
+            "intent": IntentBrief(
+                problem="Sibling waves still share the phase rollup body.",
+                desired_outcome="Each sibling wave d-tab is provably distinct.",
+                planned_steps=["Dispatch by scope kind in build_narrative"],
+                risks=["Sibling waves still collide on rollup"],
+                priority_rationale="Operator audit ranked divergence above polish.",
+            ),
+        }
+    )
+    new_waves = dict(state.waves)
+    new_waves[existing_id] = decorated_first
+    new_waves[second_id] = second_wave
+    return state.model_copy(update={"waves": new_waves}), existing_id, second_id
+
+
+def test_resolve_detail_two_waves_under_one_phase_have_distinct_d_tabs() -> None:
+    """The wave ``d`` tab Markdown for two sibling waves diverges (pure path)."""
+    state, first_id, second_id = _state_with_two_distinct_waves()
+    first = resolve_detail(state, first_id)
+    second = resolve_detail(state, second_id)
+
+    assert first.detail_markdown is not None
+    assert second.detail_markdown is not None
+    assert first.detail_markdown != second.detail_markdown
+    # Each preview quotes its own wave's intent in the What block.
+    assert "Wave detail body re-runs" in first.detail_markdown
+    assert "Sibling waves still share" in second.detail_markdown
+    # Each card carries its wave id in the title metadata.
+    assert first.title == f"wave {first_id}"
+    assert second.title == f"wave {second_id}"
+
+
+def test_detail_modal_two_waves_render_distinct_d_tab_bodies() -> None:
+    """Two sibling waves under one phase paint different ``d`` tab bodies."""
+
+    async def body() -> None:
+        state, first_id, second_id = _state_with_two_distinct_waves()
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+
+            first_modal = DetailModal(resolve_detail(state, first_id))
+            app.push_screen(first_modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            first_rendered = capture_screen_text(app)
+            first_modal.dismiss(None)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+
+            second_modal = DetailModal(resolve_detail(state, second_id))
+            app.push_screen(second_modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            second_rendered = capture_screen_text(app)
+
+            assert first_rendered != second_rendered
+            assert first_id in first_rendered
+            assert second_id in second_rendered
+            # The two sibling intents land in their own renders.
+            assert "Sibling waves still share" in second_rendered
+            assert "Wave detail body re-runs" in first_rendered
+
+    asyncio.run(body())
+
+
+_GOLDEN_NARRATIVE = Path(__file__).resolve().parents[1] / "golden" / "narrative"
+
+
+def _wave_narrative_markdown(state: State, wave_id: str) -> str:
+    """Return the wave ``d`` tab markdown body for *wave_id* (pure path)."""
+    card = resolve_detail(state, wave_id)
+    assert card.detail_markdown is not None
+    return card.detail_markdown
+
+
+def test_wave_narrative_golden_first_wave() -> None:
+    """Golden-pinned first-wave markdown body (W55 divergence anchor)."""
+    state, first_id, _ = _state_with_two_distinct_waves()
+    actual = _wave_narrative_markdown(state, first_id) + "\n"
+    golden_path = _GOLDEN_NARRATIVE / "wave_first.md"
+    _assert_golden(golden_path, actual)
+
+
+def test_wave_narrative_golden_second_wave() -> None:
+    """Golden-pinned second-wave markdown body — must differ from the first."""
+    state, _, second_id = _state_with_two_distinct_waves()
+    actual = _wave_narrative_markdown(state, second_id) + "\n"
+    golden_path = _GOLDEN_NARRATIVE / "wave_second.md"
+    _assert_golden(golden_path, actual)
+
+
+def _assert_golden(golden_path: Path, actual: str) -> None:
+    """Compare *actual* to *golden_path* with the standard regen toggle."""
+    import os
+
+    from eawf.surfaces.tui.snapshot.pilot_harness import SNAPSHOT_REGEN_ENV
+
+    if os.environ.get(SNAPSHOT_REGEN_ENV) == "1":
+        golden_path.parent.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(actual, encoding="utf-8")
+        return
+    expected = golden_path.read_text(encoding="utf-8")
+    assert actual == expected, f"golden drift at {golden_path}"

@@ -136,9 +136,9 @@ def test_build_narrative_emits_required_sections() -> None:
         assert heading in rendered
 
 
-def test_build_narrative_unknown_phase_raises() -> None:
+def test_build_narrative_unknown_scope_raises() -> None:
     state = State.model_validate(_state_payload())
-    with pytest.raises(NarrativeNotFoundError, match="phase not found"):
+    with pytest.raises(NarrativeNotFoundError, match="scope not found"):
         build_narrative(state, "P99")
 
 
@@ -196,3 +196,141 @@ def test_build_narrative_intent_without_priority_rationale() -> None:
     bundle = build_narrative(state, "P28")
     assert bundle.why[0] == "Release narratives drift from PR text."
     assert bundle.why[1] == "PR and release ship identical validation prose."
+
+
+# ---------------------------------------------------------------------------
+# Per-scope-kind dispatch (W55)
+# ---------------------------------------------------------------------------
+
+
+def _two_wave_payload() -> dict[str, Any]:
+    """Return a state payload with two distinct waves under one iter."""
+    payload = _state_payload()
+    payload["waves"]["P28-I03-W02"] = {
+        "id": "P28-I03-W02",
+        "iter_id": "P28-I03",
+        "title": "Wave card divergence",
+        "status": "in_progress",
+        "deps": [],
+        "blocks": [],
+        "file_scopes": [],
+        "claim_session_id": None,
+        "worktree_id": None,
+        "token_budget": None,
+        "tokens_consumed": 0,
+        "outcome": None,
+        "commit": None,
+        "opened_at": "2026-05-08T00:00:00Z",
+        "closed_at": None,
+        "intent": {
+            "problem": "Two waves share the phase rollup body.",
+            "desired_outcome": "Each wave's d-tab quotes its own intent.",
+            "planned_steps": ["Dispatch by scope kind"],
+            "risks": ["Sibling waves still collide on rollup"],
+            "priority_rationale": "Operator audit ranked divergence above polish.",
+        },
+    }
+    # Decorate W01 with its own intent so the two waves diverge.
+    payload["waves"]["P28-I03-W01"]["intent"] = {
+        "problem": "Wave detail body re-runs the phase rollup.",
+        "desired_outcome": "Wave detail body quotes the wave's own intent.",
+        "planned_steps": ["Add wave-specific narrative builder"],
+        "risks": ["NarrativeBundle shape change breaks PR/release tests"],
+        "priority_rationale": "Pre-ship blocker for the v0.4 PR text.",
+    }
+    return payload
+
+
+def test_build_narrative_wave_id_dispatches_to_wave_builder() -> None:
+    """A wave id resolves to the wave-shaped bundle, not the phase rollup."""
+    payload = _two_wave_payload()
+    state = State.model_validate(payload)
+
+    bundle = build_narrative(state, "P28-I03-W01")
+    assert bundle.scope_id == "P28-I03-W01"
+    assert bundle.title.startswith("P28-I03-W01:")
+    # The wave bundle quotes the wave's IntentBrief problem/outcome.
+    assert "Wave detail body re-runs the phase rollup." in bundle.what
+    assert "Wave detail body quotes the wave's own intent." in bundle.what
+
+
+def test_build_narrative_two_waves_under_one_phase_diverge() -> None:
+    """Two sibling waves under one phase yield demonstrably different bodies."""
+    payload = _two_wave_payload()
+    state = State.model_validate(payload)
+
+    bundle_one = build_narrative(state, "P28-I03-W01")
+    bundle_two = build_narrative(state, "P28-I03-W02")
+
+    assert bundle_one.scope_id != bundle_two.scope_id
+    assert bundle_one.what != bundle_two.what
+    assert bundle_one.why != bundle_two.why
+
+
+def test_build_narrative_wave_validation_quotes_pinned_commit() -> None:
+    """The wave bundle's validation list quotes the pinned ``commit`` SHA."""
+    payload = _two_wave_payload()
+    state = State.model_validate(payload)
+    bundle = build_narrative(state, "P28-I03-W01")
+    sha_prefix = ("a" * 40)[:12]
+    assert any(sha_prefix in line for line in bundle.validation)
+
+
+def test_build_narrative_wave_validation_marks_no_actuals() -> None:
+    """When no ActualSummary is scoped to the wave the empty-state token surfaces."""
+    payload = _two_wave_payload()
+    state = State.model_validate(payload)
+    bundle = build_narrative(state, "P28-I03-W01")
+    assert "no rollup yet" in bundle.validation
+
+
+def test_build_narrative_iter_id_dispatches_to_iter_builder() -> None:
+    """An iter id resolves to an iter-shaped bundle (not the phase one)."""
+    payload = _two_wave_payload()
+    state = State.model_validate(payload)
+    bundle = build_narrative(state, "P28-I03")
+    assert bundle.scope_id == "P28-I03"
+    assert bundle.title.startswith("P28-I03:")
+    # The iter bundle lists each child wave by id.
+    assert any("`P28-I03-W01`" in line for line in bundle.what)
+    assert any("`P28-I03-W02`" in line for line in bundle.what)
+
+
+def test_build_narrative_iter_and_phase_bundles_diverge() -> None:
+    """The iter bundle differs from the parent phase rollup."""
+    payload = _two_wave_payload()
+    state = State.model_validate(payload)
+    iter_bundle = build_narrative(state, "P28-I03")
+    phase_bundle = build_narrative(state, "P28")
+    assert iter_bundle.scope_id != phase_bundle.scope_id
+    assert iter_bundle.title != phase_bundle.title
+
+
+def test_build_narrative_backlog_id_dispatches_to_backlog_builder() -> None:
+    """A backlog id resolves to a backlog-shaped bundle."""
+    payload = _two_wave_payload()
+    payload["backlog"] = {
+        "B001": {
+            "id": "B001",
+            "scope_id": "P28",
+            "title": "Drop legacy phase substitution",
+            "description": "Audit-tracked follow-up to the rollup divergence.",
+            "priority": "P2",
+            "status": "open",
+            "created_at": "2026-05-08T00:00:00Z",
+            "closed_at": None,
+            "resolution": None,
+            "commit": None,
+        }
+    }
+    state = State.model_validate(payload)
+    bundle = build_narrative(state, "B001")
+    assert bundle.scope_id == "B001"
+    assert bundle.title.startswith("B001:")
+    # The backlog bundle leads with priority.
+    assert any("Priority: P2." in line for line in bundle.why)
+    # And the backlog bundle is distinct from the phase / iter bundles.
+    iter_bundle = build_narrative(state, "P28-I03")
+    phase_bundle = build_narrative(state, "P28")
+    assert bundle.what != iter_bundle.what
+    assert bundle.what != phase_bundle.what

@@ -318,7 +318,7 @@ def _wave_card(
         metrics=_wave_metrics(wave),
         history=tuple(history),
         events=tuple(events),
-        detail_markdown=_wave_narrative_preview(state, wave),
+        detail_markdown=_wave_narrative_preview(state, wave, reports=reports),
     )
 
 
@@ -393,26 +393,33 @@ def _format_attempt_table_row(row: tuple[str, ...], widths: list[int]) -> str:
     return "  ".join(cells)
 
 
-def _wave_narrative_preview(state: State, wave: Wave) -> str:
-    """Render the wave's phase NarrativeBundle for the ``d`` tab.
-    The narrative builder targets a phase id. A broken wave → iter → phase
-    chain degrades to a short note rather than propagating so the drill-in
-    seam stays total.
+def _wave_narrative_preview(
+    state: State,
+    wave: Wave,
+    *,
+    reports: Iterable[AgentReportRow] = (),
+) -> str:
+    """Render the wave's own NarrativeBundle preview for the ``d`` tab.
+
+    Dispatches the wave id through :func:`build_narrative`, which fans
+    out to the wave-specific bundle (post-W55: the wave bundle quotes
+    the wave's :class:`IntentBrief` + commit + claim attempts + the
+    latest :class:`ActualSummary` rather than re-rendering the parent
+    phase rollup). An unresolved wave degrades to a short note so the
+    drill-in seam stays total.
 
     Args:
         state: The bound state.
-        wave: The wave whose parent phase narrative to preview.
+        wave: The wave whose own narrative to preview.
+        reports: Optional agent-report rows scoped to the wave, used by
+            the wave builder to count blocked-attempt verdicts.
 
     Returns:
-        The rendered Markdown narrative, or a fallback note when the scope
-        chain cannot be resolved.
+        The rendered Markdown narrative, or a fallback note when the
+        wave id cannot be resolved through the narrative builder.
     """
-    it = state.iters.get(wave.iter_id)
-    if it is None:
-        logger.info(f"_wave_narrative_preview unresolved iter={wave.iter_id!r} wave={wave.id!r}")
-        return "narrative preview unavailable (scope chain unresolved)"
     try:
-        bundle = build_narrative(state, it.phase_id)
+        bundle = build_narrative(state, wave.id, reports=reports)
     except NarrativeNotFoundError as exc:
         logger.info(f"_wave_narrative_preview unresolved wave={wave.id!r} reason={exc}")
         return "narrative preview unavailable (scope chain unresolved)"
